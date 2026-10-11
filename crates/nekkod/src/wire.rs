@@ -87,7 +87,9 @@ async fn health() -> impl IntoResponse {
 
 // An inline image expands to base64 in a transcript. The full transcript is
 // needed to save checkpoints, even if the model later uses a smaller window.
-const CALL_BODY_LIMIT: usize = 2 * 1024 * 1024;
+// Other calls match the web edition's public limit (apps/server, 25 MB): it
+// forwards every channel here, image attachments included.
+const CALL_BODY_LIMIT: usize = 25 * 1024 * 1024;
 const LOOP_RUN_BODY_LIMIT: usize = 64 * 1024 * 1024;
 
 /// `chat:turn` carries the user's attached images in its send options.

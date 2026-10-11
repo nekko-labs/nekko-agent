@@ -270,11 +270,12 @@ async fn authenticated_loop_run_http_body_exceeds_old_limit_without_truncation()
     assert_eq!(status, 401, "{body}");
     assert_eq!(body["error"], "unauthorized");
 
-    // Send exactly one byte beyond the 2 MiB limit, then read the actual HTTP
+    // Send exactly one byte beyond the call limit, then read the actual HTTP
     // response. A larger reqwest upload can race the early 413 and fail with
     // BrokenPipe on Linux before reqwest exposes the response at all.
     use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
-    let limit = 2 * 1024 * 1024;
+    // Other calls are capped at 25 MiB, the web edition's public limit (wire.rs).
+    let limit = 25 * 1024 * 1024;
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", d.port)).await.unwrap();
     stream
         .write_all(

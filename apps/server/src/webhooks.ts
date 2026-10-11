@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import type { Host } from '@nekko-agent/host';
 
 /**
  * Registers `POST /api/hooks/:slug` on a Fastify instance.
@@ -56,7 +55,12 @@ export function parseWebhookPayload(raw: string): Record<string, unknown> {
   return { __raw: raw };
 }
 
-export function registerWebhookRoutes(app: FastifyInstance, host: Host): void {
+/** What the route starts runs on: the in-process host, or nekkod's backend through a channel. */
+export interface WebhookTarget {
+  dispatchWebhook(slug: string, secret: string, payload: Record<string, unknown>): Promise<{ length: number }>;
+}
+
+export function registerWebhookRoutes(app: FastifyInstance, host: WebhookTarget): void {
   app.post<{ Params: { slug: string } }>('/api/hooks/:slug', { bodyLimit: BODY_LIMIT }, async (req, reply) => {
     const slug = req.params.slug;
     const secret = (req.query as Record<string, string> | undefined)?.key ?? '';
