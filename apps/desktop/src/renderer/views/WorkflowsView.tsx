@@ -30,6 +30,7 @@ import { WorkflowCanvas } from '../components/WorkflowCanvas.js';
 import { WorkflowEditor } from '../components/WorkflowEditor.js';
 import { PlusIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
+import { hasAppChrome } from '../chrome.js';
 
 /**
  * The Workflows tab: automation modelled on GitHub Actions, where a step can be
@@ -235,7 +236,7 @@ export function WorkflowsView() {
       <div className="min-w-0 flex-1 overflow-y-auto p-4">
         <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
-            <h1 className="view-title">Workflows</h1>
+            {!hasAppChrome && <h1 className="view-title">Workflows</h1>}
             <span className="text-[12px] text-ink-faint">
               {visible.length === workflows.length
                 ? `${workflows.length} total`

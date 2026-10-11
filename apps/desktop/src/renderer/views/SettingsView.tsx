@@ -13,6 +13,7 @@ import { RemoteAccess } from '../components/RemoteAccess.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
+import { hasAppChrome } from '../chrome.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
   { value: 'workspace-jail', label: 'Workspace jail', desc: 'File access is confined to your added folders.' },
@@ -73,7 +74,7 @@ export function SettingsView() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl px-8 py-8">
-        <h1 className="view-title">{tr('settings.title')}</h1>
+        {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
 
         {/* Appearance */}
         <section className="card mt-6 p-5">
