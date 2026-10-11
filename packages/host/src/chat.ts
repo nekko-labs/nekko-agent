@@ -1,6 +1,6 @@
 import { getExecutionMode } from '@nekko-agent/shared';
 import { executeSandboxTool, sandboxWorkspaces, SANDBOX_TOOLS } from './execution-router.js';
-import { canResumeChildFailure, MAX_CHILD_RESUMES } from './delegation-recovery.js';
+import { canResumeChildFailure, childInterruptedMessage, MAX_CHILD_RESUMES, subAgentAnswer, subAgentFailure } from './delegation-recovery.js';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { AgentEvent, AskAnswer, ChatMessage, ContextBundle, PendingInput, ProviderConfig, QueuedPrompt, ReplySuggestions, SendOptions, Session, ToolCall, ToolResult, TurnStats } from '@nekko-agent/shared';
@@ -54,7 +54,7 @@ import { buildSpec } from './spec.js';
 import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool, DAEMON_MCP } from './mcp.js';
 import { daemonCall } from './engine/daemon.js';
 import { daemonOwns, daemonRunsLoops, runAgentViaDaemon } from './daemon-loop.js';
-import { answerInDaemon, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
+import { adoptTurn, answerInDaemon, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
 import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
 import { applyTurnInput, cleanTitle, hostToolApproval, sendOptionsForQueuedItem, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
 import { killSessionProcesses } from './processes.js';
@@ -647,6 +647,47 @@ async function runSubAgent(
   send: Sender,
   signal?: AbortSignal,
 ): Promise<string> {
+  const { child, targetProviderId, targetModelId, task } = await prepareSubAgent(parent, providerId, modelId, input, signal);
+  let failure: string | undefined;
+  // Stopping the parent stops the child: otherwise the parent's turn sat on
+  // this await until the orphaned sub-agent finished on its own.
+  const stopChild = () => abortChat(child.id);
+  signal?.addEventListener('abort', stopChild, { once: true });
+  try {
+    for (let attempt = 0; attempt <= MAX_CHILD_RESUMES; attempt++) {
+      failure = undefined;
+      await sendChat(childSendOptions(child.id, targetProviderId, targetModelId, task, attempt), (event) => {
+        if (event.sessionId === child.id && event.type === 'error') failure = event.message;
+        send(event);
+      });
+      if (signal?.aborted || !failure || !canResumeChildFailure(failure)) break;
+    }
+  } finally {
+    signal?.removeEventListener('abort', stopChild);
+  }
+  if (signal?.aborted) throw new Error('Stopped with the chat.');
+  if (failure) throw new Error(childInterruptedMessage(child.id, failure, getSession(child.id)?.messages));
+  return subAgentAnswer(getSession(child.id)?.messages);
+}
+
+/** A child's turn: the task first, then a resume after a recoverable failure. */
+function childSendOptions(childId: string, providerId: string, modelId: string, task: string, attempt: number): SendOptions {
+  return { sessionId: childId, providerId, modelId, text: attempt ? '' : task, ...(attempt ? { resume: true } : {}) };
+}
+
+/**
+ * Check a `spawn_agent` call against the chat, the settings and the target
+ * provider, and create the child session; throws, with nothing created, when
+ * it cannot be delegated. Shared by the TS route and the daemon's
+ * (`spawn:prepare`).
+ */
+async function prepareSubAgent(
+  parent: Session,
+  providerId: string,
+  modelId: string,
+  input: unknown,
+  signal?: AbortSignal,
+): Promise<{ child: Session; targetProviderId: string; targetModelId: string; task: string }> {
   const parentId = parent.id;
   const settings = getSettings();
   const maxDepth = settings.orchestration?.maxDepth ?? DEFAULT_ORCHESTRATION.maxDepth;
@@ -703,32 +744,7 @@ async function runSubAgent(
   child.offline = parent.offline;
   child.incognito = parent.incognito;
   saveSession(child);
-  let failure: string | undefined;
-  // Stopping the parent stops the child: otherwise the parent's turn sat on
-  // this await until the orphaned sub-agent finished on its own.
-  const stopChild = () => abortChat(child.id);
-  signal?.addEventListener('abort', stopChild, { once: true });
-  try {
-    for (let attempt = 0; attempt <= MAX_CHILD_RESUMES; attempt++) {
-      failure = undefined;
-      await sendChat({ sessionId: child.id, providerId: targetProviderId, modelId: targetModelId, text: attempt ? '' : task, ...(attempt ? { resume: true } : {}) }, (event) => {
-        if (event.sessionId === child.id && event.type === 'error') failure = event.message;
-        send(event);
-      });
-      if (signal?.aborted || !failure || !canResumeChildFailure(failure)) break;
-    }
-  } finally {
-    signal?.removeEventListener('abort', stopChild);
-  }
-  if (signal?.aborted) throw new Error('Stopped with the chat.');
-  if (failure) {
-    const checkpoint = getSession(child.id);
-    const progress = [...(checkpoint?.messages ?? [])].reverse().find(m => m.role === 'assistant' && m.content.trim())?.content.slice(-2000);
-    throw new Error(`Child session ${child.id} interrupted: ${failure}. Saved work remains in the shared project. No provider/model fallback was used. Continue the delegated task directly from its checkpoint, or explain the concrete blocker; do not assume it is complete.${progress ? '\nLast saved progress:\n' + progress : ''}`);
-  }
-  const done = getSession(child.id);
-  const last = [...(done?.messages ?? [])].reverse().find((m) => m.role === 'assistant' && m.content.trim());
-  return last?.content ?? 'Sub-agent finished without producing a written answer.';
+  return { child, targetProviderId, targetModelId, task };
 }
 
 type Severity = 'low' | 'medium' | 'high';
@@ -867,16 +883,7 @@ async function runHostTool(ctx: HostToolContext, call: ToolCall): Promise<ToolRe
   if (call.name === 'spawn_agent') {
     return runSubAgent({ ...session, mode }, opts.providerId, opts.modelId, call.input, send, ctx.signal)
       .then((output) => ({ toolCallId: call.id, output }))
-      .catch((e) => {
-        const message = (e as Error).message;
-        const code = message.includes('exact model ID is not available') ? 'model_unavailable'
-          : message.includes('not a chat model') ? 'not_chat_model'
-          : message.includes('model list') ? 'model_list_unavailable'
-          : message.includes('unknown or disabled') ? 'provider_unavailable'
-          : message.includes('endpoint') ? 'invalid_endpoint'
-          : message.includes('cancelled') ? 'cancelled' : 'delegation_failed';
-        return { toolCallId: call.id, output: JSON.stringify({ ok: false, code, message: `Sub-agent failed: ${message}`, fallbackUsed: false }), isError: true };
-      });
+      .catch((e) => subAgentFailure(call.id, (e as Error).message));
   }
   return isMcpTool(call.name)
     ? callMcpTool(call)
@@ -1447,6 +1454,8 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
       ...(resolvedProvider ? { provider: config(resolvedProvider) } : {}),
       ...(providerError !== undefined ? { providerError } : {}),
       headers: provider.kind === 'anthropic' && provider.auth === 'subscription' && !!provider.tokenKey,
+      // This host can make a `spawn_agent` child for the daemon to drive (`spawn:prepare`).
+      spawn: true,
       account: {
         auth: provider.auth,
         kind: provider.kind,
@@ -1479,6 +1488,38 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
     },
     headers: (pairs) => {
       if (!daemonAccounts && provider.tokenKey) LimitsService.recordFromHeaders(provider.tokenKey, provider.kind, pairs);
+    },
+    // `spawn_agent` in the daemon (`turn:spawn`): the checks and the child are
+    // made here, the child's turn admitted here, and the daemon drives it.
+    spawn: async (call, attempt, childId) => {
+      let child: { id: string; providerId: string; modelId: string; task: string };
+      if (!childId) {
+        try {
+          const made = await prepareSubAgent({ ...snapshot, mode: t.mode }, opts.providerId, opts.modelId, call.input, abort.signal);
+          child = { id: made.child.id, providerId: made.targetProviderId, modelId: made.targetModelId, task: made.task };
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      } else {
+        const saved = getSession(childId);
+        if (!saved?.parentSessionId || saved.parentSessionId !== opts.sessionId) return { error: 'Unknown child session.' };
+        child = { id: childId, providerId: saved.providerId ?? opts.providerId, modelId: saved.modelId ?? opts.modelId, task: '' };
+      }
+      let failure: string | undefined;
+      const childSend: Sender = (event) => {
+        if (event.sessionId === child.id && event.type === 'error') failure = event.message;
+        send(event);
+      };
+      const childOpts = childSendOptions(child.id, child.providerId, child.modelId, child.task, attempt);
+      const childChain: TurnChain = { send: childSend, allowBrowserControl: false, abort: new AbortController() };
+      const admitted = await admitTurn(childOpts, childSend, false, childChain.abort);
+      if (!admitted) return { childId: child.id, failure: failure ?? 'The sub-agent could not start.' };
+      const built = await buildDaemonTurn({ ...admitted, opts: childOpts, send: childSend, allowBrowserControl: false });
+      adoptTurn(built.spec.turnId, built.hostTurn, childChain, () => {
+        if (abortControllers.get(child.id) === childChain.abort) abortControllers.delete(child.id);
+        releasePending(child.id);
+      });
+      return { childId: child.id, spec: built.spec };
     },
     // The title and the queue are the daemon's; the rest of what follows a turn is here.
     afterEach: (summary) => {

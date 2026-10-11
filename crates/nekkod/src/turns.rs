@@ -209,6 +209,19 @@ struct Shared {
     events: mpsc::UnboundedSender<Out>,
     /// `settings.defaultChatMode`, for the live policy check on each approval.
     default_mode: Option<String>,
+    /// The message of the last `error` event the turn sent, for a parent that
+    /// drives it as a sub-agent (the TS route reads it off the events).
+    last_error: Arc<Mutex<Option<String>>>,
+}
+
+/// How a launched turn ended: its summary and the last error it reported.
+type Ended = oneshot::Receiver<(Value, Option<String>)>;
+
+/// Note an `error` event's message.
+fn note_error(slot: &Mutex<Option<String>>, event: &Value) {
+    if str_at(event, "type") == Some("error") {
+        *lock(slot) = Some(event.get("message").map(js::display).unwrap_or_default());
+    }
 }
 
 impl Shared {
@@ -351,6 +364,13 @@ impl Turns {
 
     /// `chat:turn`: start driving a turn; `turn:end` tells the host when it is over.
     pub fn start(self: &Arc<Self>, backend: Arc<Backend>, hub: Hub, spec: Value) -> Result<Value, String> {
+        self.launch(backend, hub, spec).map(|_| json!({ "started": true }))
+    }
+
+    /// Start a turn and hear how it ended (its summary, after what follows
+    /// it here, and the last error it reported), with its id: a `spawn_agent`
+    /// child the parent turn waits on.
+    fn launch(self: &Arc<Self>, backend: Arc<Backend>, hub: Hub, spec: Value) -> Result<(String, Ended), String> {
         let store = self.store.clone().ok_or("chat:turn needs the daemon to know the data directory")?;
         let turn_id = str_at(&spec, "turnId").ok_or("chat:turn needs a turnId")?.to_string();
         let opts = spec.get("opts").cloned().ok_or("chat:turn needs the send options")?;
@@ -366,17 +386,21 @@ impl Turns {
             steering: Arc::default(),
             events: tx,
             default_mode: spec.pointer("/settings/defaultChatMode").and_then(Value::as_str).map(str::to_string),
+            last_error: Arc::default(),
         });
         lock(&self.running).insert(turn_id.clone(), shared.clone());
         let me = self.clone();
+        let (ended_tx, ended_rx) = oneshot::channel();
+        let id = turn_id.clone();
         tokio::spawn(async move {
             let summary = me.drive(&backend, hub.clone(), store.clone(), &spec, shared.clone(), rx).await;
             lock(&me.running).remove(&turn_id);
             me.pending.release(&shared.session_id);
             let summary = me.after_turn(&backend, &hub, &store, &spec, &turn_id, summary).await;
-            let _ = backend.call("turn:end", json!([turn_id, summary])).await;
+            let _ = backend.call("turn:end", json!([turn_id, summary.clone()])).await;
+            let _ = ended_tx.send((summary, lock(&shared.last_error).clone()));
         });
-        Ok(json!({ "started": true }))
+        Ok((id, ended_rx))
     }
 
     /// What follows a turn here (PF14 step 4): the chat's generated title,
@@ -478,6 +502,7 @@ impl Turns {
         let facts = &spec["facts"];
         let session_id = shared.session_id.clone();
         let say = |event: Value| {
+            note_error(&shared.last_error, &event);
             hub.publish("agent:event", event.clone(), false);
             let _ = host_tx.send(HostMsg { event, extra: None });
         };
@@ -617,6 +642,7 @@ impl Turns {
                 stats: turn::TurnStats::new(identity, started_at as f64),
                 turn_from,
                 started_at,
+                last_error: shared.last_error.clone(),
             },
         ));
 
@@ -656,6 +682,8 @@ impl Turns {
         let native =
             if hooks { None } else { native_context(self, shared, backend, settings, &workspaces, &mode, &session_id) };
         let runner = TurnTools {
+            hub: hub.clone(),
+            spawn: facts.get("spawn") == Some(&Value::Bool(true)),
             mcp: own_mcp.is_some().then(|| self.mcp.clone()),
             mode: mode.clone(),
             sandbox_mode: settings.get("sandboxMode").and_then(Value::as_str).map(str::to_string),
@@ -900,6 +928,7 @@ struct Forward {
     stats: turn::TurnStats,
     turn_from: usize,
     started_at: u64,
+    last_error: Arc<Mutex<Option<String>>>,
 }
 
 /// The turn's events, in order: checkpoints saved first, then the UI told,
@@ -910,6 +939,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
         let (event, snapshot) = match out {
             Out::End => break,
             Out::Event(e) => {
+                note_error(&f.last_error, &e);
                 f.hub.publish("agent:event", e.clone(), false);
                 let _ = f.host.send(HostMsg { event: e, extra: None });
                 continue;
@@ -951,6 +981,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             persist(&f.store, &f.session, f.incognito).await;
         }
         let steered = str_at(&event, "type") == Some("steered");
+        note_error(&f.last_error, &event);
         f.hub.publish("agent:event", event.clone(), false);
         let _ = f.host.send(HostMsg { event, extra });
         if steered {
@@ -1082,6 +1113,10 @@ fn native_context(
 
 /// A turn's tool calls: where each runs, with hooks around them.
 struct TurnTools {
+    hub: Hub,
+    /// `spawn_agent` children are driven here; the host only checks the call,
+    /// makes the child and admits its turns (`spawn:prepare`).
+    spawn: bool,
     /// MCP calls run here when the host handed over the servers.
     mcp: Option<Arc<Mcp>>,
     /// The chat's mode at the turn's start and `settings.sandboxMode`, for the
@@ -1158,6 +1193,9 @@ impl TurnTools {
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
             _ => {}
         }
+        if self.spawn && name == "spawn_agent" {
+            return Ok(self.spawn_agent(call).await);
+        }
         if let Some(mcp) = &self.mcp
             && name.starts_with("mcp__")
         {
@@ -1184,6 +1222,76 @@ impl TurnTools {
             self.shared.emit(json!({ "type": "session_meta", "sessionId": self.shared.session_id }));
         }
         Ok(reply.get("result").cloned().unwrap_or_else(|| error(id, "The host returned no result.")))
+    }
+
+    /// `spawn_agent` (chat.ts `runSubAgent`): ask first when the policy says
+    /// so; the host checks the call and makes the child; this daemon drives
+    /// the child's turn, resumes it once after a recoverable failure, and
+    /// answers with its last written message. Stopping the parent stops it.
+    async fn spawn_agent(&self, call: &Value) -> Value {
+        use turn::delegate::{
+            MAX_CHILD_RESUMES, can_resume_child_failure, child_interrupted_message, sub_agent_answer, sub_agent_failure,
+        };
+        let id = str_at(call, "id").unwrap_or_default().to_string();
+        if let Some(reason) = turn::host_tool_approval("spawn_agent", Some(&self.mode), self.sandbox_mode.as_deref())
+            && !self.turns.request_approval(&self.shared, call, &reason, &json!("medium")).await
+        {
+            return error(&id, "Call not approved by user.");
+        }
+        let mut child: Option<String> = None;
+        let mut failure: Option<String> = None;
+        for attempt in 0..=MAX_CHILD_RESUMES {
+            failure = None;
+            let args = json!([self.shared.turn_id, call, attempt, child]);
+            let prepared = match self.backend.call("spawn:prepare", args).await {
+                Ok(v) => v,
+                Err(e) => return sub_agent_failure(&id, &e),
+            };
+            if let Some(e) = prepared.get("error") {
+                return sub_agent_failure(&id, &js::display(e));
+            }
+            child = str_at(&prepared, "childId").map(str::to_string).or(child);
+            if let Some(f) = prepared.get("failure") {
+                failure = Some(js::display(f));
+            } else if let Some(spec) = prepared.get("spec").filter(|s| s.is_object()) {
+                match self.turns.launch(self.backend.clone(), self.hub.clone(), spec.clone()) {
+                    Ok((child_turn, ended)) => {
+                        let turns = self.turns.clone();
+                        self.shared.cancel.on_cancel(move || {
+                            turns.abort(&child_turn);
+                        });
+                        let (_, last_error) =
+                            ended.await.unwrap_or((Value::Null, Some("The sub-agent's turn was lost.".into())));
+                        failure = last_error;
+                    }
+                    Err(e) => failure = Some(e),
+                }
+            }
+            if self.shared.cancel.is_cancelled() || !failure.as_deref().is_some_and(can_resume_child_failure) {
+                break;
+            }
+        }
+        if self.shared.cancel.is_cancelled() {
+            return sub_agent_failure(&id, "Stopped with the chat.");
+        }
+        let messages = match &child {
+            Some(c) => {
+                let (st, c) = (self.store.clone(), c.clone());
+                tokio::task::spawn_blocking(move || st.get(&c))
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|s| s.get("messages").and_then(Value::as_array).cloned())
+            }
+            None => None,
+        };
+        match failure {
+            Some(f) => sub_agent_failure(
+                &id,
+                &child_interrupted_message(child.as_deref().unwrap_or_default(), &f, messages.as_deref()),
+            ),
+            None => result(&id, sub_agent_answer(messages.as_deref())),
+        }
     }
 
     /// An MCP call in the daemon: ask first when the policy says so, then run it.

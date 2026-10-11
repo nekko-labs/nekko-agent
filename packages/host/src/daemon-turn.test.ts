@@ -265,6 +265,34 @@ describe('a daemon-driven turn', () => {
     expect(specs).toHaveLength(1);
   });
 
+  it('makes a spawn_agent child for the daemon and admits its turns, or says why not', async () => {
+    const s = named();
+    let made: any;
+    let refused: any;
+    let resumed: any;
+    let parentSpec: Spec | undefined;
+    fakeDaemon(async (spec) => {
+      if (spec.opts.sessionId !== s.id) return; // the child's own turn: nothing to play
+      parentSpec = spec;
+      refused = await turnCallback('spawn:prepare', [spec.turnId, { id: 'c0', name: 'spawn_agent', input: { task: '  ' } }, 0]);
+      made = await turnCallback('spawn:prepare', [spec.turnId, { id: 'c1', name: 'spawn_agent', input: { task: 'count the files', title: 'Counter' } }, 0]);
+      resumed = await turnCallback('spawn:prepare', [spec.turnId, { id: 'c1', name: 'spawn_agent', input: {} }, 1, made.childId]);
+      await turnCallback('turn:end', [made.spec.turnId, { stop: 'complete', aborted: false }]);
+      await turnCallback('turn:end', [resumed.spec.turnId, { stop: 'complete', aborted: false }]);
+      await turnCallback('turn:end', [spec.turnId, { stop: 'complete', aborted: false }]);
+    });
+    await sendChat({ sessionId: s.id, providerId: 'p1', modelId: 'm', text: 'delegate' }, () => {});
+    expect(parentSpec!.facts.spawn).toBe(true);
+    expect(refused).toEqual({ error: 'A nonblank task is required for the sub-agent.' });
+    const child = getSession(made.childId)!;
+    expect(child.parentSessionId).toBe(s.id);
+    expect(child.title).toBe('Counter');
+    expect(made.spec.opts).toMatchObject({ sessionId: made.childId, providerId: 'p1', modelId: 'm', text: 'count the files' });
+    expect(made.spec.turnId).not.toBe(parentSpec!.turnId);
+    expect(resumed.childId).toBe(made.childId);
+    expect(resumed.spec.opts).toMatchObject({ sessionId: made.childId, text: '', resume: true });
+  });
+
   it('runs the turn here when the daemon will not take it', async () => {
     const s = named();
     saveSettings({ defaultChatMode: 'yolo' });

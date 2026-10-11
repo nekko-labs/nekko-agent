@@ -11,4 +11,5 @@ publish.workspace = true
 nekko-context = { path = "../nekko-context" }
 nekko-js = { path = "../nekko-js" }
 nekko-loop = { path = "../nekko-loop" }
+nekko-tools = { path = "../nekko-tools" }
 serde_json.workspace = true

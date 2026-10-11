@@ -187,3 +187,32 @@ fn indirect_tool_approvals_match() {
         assert_eq!(got.map(Value::String).unwrap_or(Value::Null), c["output"], "approval case {i}: {inp}");
     }
 }
+
+#[test]
+fn delegation_results_match() {
+    use nekko_turn::delegate::*;
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden").join("delegation.json");
+    let all: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+    assert_eq!(all["maxChildResumes"], json!(MAX_CHILD_RESUMES));
+    for c in cases(&all, "resume") {
+        assert_eq!(json!(can_resume_child_failure(c["input"].as_str().unwrap())), c["output"], "resume {}", c["input"]);
+    }
+    fn list(v: &Value) -> Option<&[Value]> {
+        v.as_array().map(Vec::as_slice)
+    }
+    for (i, c) in cases(&all, "answers").iter().enumerate() {
+        assert_eq!(json!(sub_agent_answer(list(&c["input"]))), c["output"], "answer {i}");
+    }
+    for (i, c) in cases(&all, "interrupted").iter().enumerate() {
+        let inp = &c["input"];
+        let got = child_interrupted_message(
+            inp["childId"].as_str().unwrap(),
+            inp["failure"].as_str().unwrap(),
+            list(&inp["messages"]),
+        );
+        assert_eq!(json!(got), c["output"], "interrupted {i}");
+    }
+    for c in cases(&all, "failures") {
+        same_text(&sub_agent_failure("call_1", c["input"].as_str().unwrap()), &c["output"], "failure");
+    }
+}

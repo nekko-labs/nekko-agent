@@ -335,6 +335,9 @@ pub const OWNED: &[&str] = &[
     // Not a channel: a turn whose spec carries `facts.mcpServers` syncs and
     // calls its MCP servers here (turns.rs), approvals included.
     "turn:mcp",
+    // Not a channel: a turn whose spec says `facts.spawn` drives its
+    // `spawn_agent` children here, the host making them (`spawn:prepare`).
+    "turn:spawn",
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",

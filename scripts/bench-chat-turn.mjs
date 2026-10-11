@@ -25,6 +25,10 @@
 // `tool:approve` to its `tool_result` (in the daemon when it runs the turn's
 // MCP servers, through the TS host otherwise).
 //
+// `--spawn` adds a turn per run that delegates to a sub-agent (`spawn_agent`,
+// approved), timed from `tool:approve` to the parent's `tool_result`, which
+// spans the whole child turn.
+//
 // `--route ts` sets NEKKO_AGENT_LOOP=ts on the backend: every turn runs in
 // the TS host, the escape hatch. Nothing touches the user's data directory or
 // a running app; every spawned process is ended on exit.
@@ -66,7 +70,9 @@ if (args.fake) {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const send = (chunk) => res.write(`data: ${JSON.stringify(chunk)}\n\n`);
       const text = typeof lastUser?.content === 'string' ? lastUser.content : JSON.stringify(lastUser?.content ?? '');
-      if (!afterTool && text.includes('mcp__bench__lookup')) {
+      if (!afterTool && text.includes('spawn_agent')) {
+        send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'spawn_agent', arguments: JSON.stringify({ task: 'Write four short sentences about dogs.', title: 'Dogs' }) } }] }, finish_reason: 'tool_calls' }] });
+      } else if (!afterTool && text.includes('mcp__bench__lookup')) {
         send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'mcp__bench__lookup', arguments: JSON.stringify({ key: 'cats' }) } }] }, finish_reason: 'tool_calls' }] });
       } else if (!afterTool && text.includes('write_file')) {
         const file = text.match(/create (\S+) /)?.[1] ?? 'note.txt';
@@ -294,10 +300,12 @@ try {
     const tool = await turn(sid, `Use the write_file tool to create note${i}.txt in the project containing exactly: hello ${i}. Then reply "done".`, { approve: true });
     const drain = await queuedFollowUp(sid);
     await new Promise((r) => setTimeout(r, 1000)); // let the follow-up finish
+    const spawnTurn = args.spawn ? await turn(sid, 'Use the spawn_agent tool to delegate: write four short sentences about dogs. Then reply with what it said.', { approve: true }) : null;
     const mcpTurn = mcpUrl ? await turn(sid, 'Call the mcp__bench__lookup tool with the key "cats", then say what it returned.', { approve: true }) : null;
-    const r = { firstText: text.firstText, gaps: text.gaps, error: text.error ?? tool.error ?? mcpTurn?.error, approvals: tool.approvals, drain, mcp: mcpTurn?.approvals ?? [] };
+    const r = { firstText: text.firstText, gaps: text.gaps, error: text.error ?? tool.error ?? mcpTurn?.error, approvals: tool.approvals, drain, mcp: mcpTurn?.approvals ?? [], spawn: spawnTurn?.approvals ?? [] };
+    if (spawnTurn?.error) r.error = r.error ?? spawnTurn.error;
     results.runs.push(r);
-    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms,${mcpUrl ? ` mcp ${r.mcp.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''} approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
+    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms,${args.spawn ? ` spawn ${r.spawn.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''}${mcpUrl ? ` mcp ${r.mcp.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''} approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
   }
   if (args.usage) {
     const lines = (f) => (existsSync(join(data, f)) ? readFileSync(join(data, f), 'utf8').trim().split('\n').filter(Boolean) : []);
@@ -327,6 +335,7 @@ try {
     approvalToResultMedian: pct(all((r) => r.approvals.map((a) => a.toResult)), 0.5),
     approvalAnswerMedian: pct(all((r) => r.approvals.map((a) => a.seenToAnswered)), 0.5),
     mcpToResultMedian: pct(all((r) => (r.mcp ?? []).map((a) => a.toResult)), 0.5),
+    spawnToResultMedian: pct(all((r) => (r.spawn ?? []).map((a) => a.toResult)), 0.5),
     queueDrainMedian: pct(all((r) => [r.drain]), 0.5),
     loadCalls,
     loadCallMedian: pct(loadMs, 0.5),
