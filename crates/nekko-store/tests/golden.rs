@@ -202,7 +202,8 @@ fn a_running_turn_saves_exactly_as_save_turn_session_does() {
         let queued = c.get("queued").map(|q| (q["index"].as_u64().unwrap() as usize, &q["item"]));
         let error = store.save_turn(&mut copy, queued).err();
         assert_eq!(error.map(Value::String).unwrap_or(Value::Null), want["error"], "{name}: error");
-        let written = std::fs::read_to_string(&path).ok().map(|t| normalize(&t));
+        // A save that failed leaves the fixture as checked out, which may have CRLF line ends.
+        let written = std::fs::read_to_string(&path).ok().map(|t| normalize(&t.replace("\r\n", "\n")));
         assert_eq!(written.map(Value::String).unwrap_or(Value::Null), want["written"], "{name}: file");
         assert_eq!(Value::String(normalize(&pretty(&copy))), want["memory"], "{name}: memory");
         std::fs::remove_dir_all(data).ok();

@@ -765,7 +765,7 @@ async fn wait_pending(port: u16, session_id: &str, key: &str, call_id: &str) -> 
         }
     })
     .await
-    .unwrap_or_else(|_| panic!("no pending {key} {call_id} for {session_id}"))
+    .unwrap_or_else(|_| panic!("no pending {key} {call_id}"))
 }
 
 fn event_types(events: &[Value]) -> Vec<String> {

@@ -86,7 +86,8 @@ describe('turn save golden set', () => {
           error = (e as Error).message;
         }
         let written: string | null = null;
-        try { written = normalize(readFileSync(file, 'utf8')); } catch { /* none */ }
+        // A save that failed leaves the fixture as checked out, which may have CRLF line ends.
+        try { written = normalize(readFileSync(file, 'utf8').replace(/\r\n/g, '\n')); } catch { /* none */ }
         actual[c.name] = { error, written, memory: normalize(JSON.stringify(copy, null, 2)) };
       } finally {
         rmSync(dir, { recursive: true, force: true });
