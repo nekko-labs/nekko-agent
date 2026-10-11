@@ -38,6 +38,46 @@ const OPTION_KEYS: &[&str] = &[
     "archivedAt",
 ];
 
+/// What a running turn's save takes from disk rather than from memory
+/// (`USER_FIELDS` in sessions.ts): the user may change them mid-turn.
+const USER_FIELDS: &[&str] = &[
+    "pinned",
+    "tags",
+    "order",
+    "mode",
+    "disabledTools",
+    "offline",
+    "incognito",
+    "executionMode",
+    "gitIsolation",
+    "sandbox",
+    "autoModel",
+    "autoQuality",
+    "autoProviderSwitch",
+    "thinking",
+    "chatType",
+    "imageParams",
+    "workspaceId",
+    "supportingWorkspaceIds",
+    "attachedPaths",
+    "specLinked",
+    "queue",
+    "archivedAt",
+];
+
+/// `queueItemPayload`: a queued prompt as `{ text, images?, skill? }`.
+fn queue_payload(item: &Value) -> Value {
+    match item {
+        Value::String(s) => json!({ "text": s }),
+        other => other.clone(),
+    }
+}
+
+/// `queueItemsEqual`: the same payload, as `JSON.stringify` prints it.
+fn queue_items_equal(a: &Value, b: &Value) -> bool {
+    js::stringify(&queue_payload(a)) == js::stringify(&queue_payload(b))
+}
+
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
@@ -153,6 +193,49 @@ impl SessionStore {
             self.save(&mut s)?;
         }
         Ok(Some(Value::Object(s)))
+    }
+
+    /// `saveTurnSession(s, queued)`: save a chat a running turn holds in
+    /// memory, keeping whatever the user changed on disk since: the fields in
+    /// [`USER_FIELDS`] as they are on disk, and the title when the user named
+    /// the chat (`titleAuto === false`). With `queued`, the queue entry the
+    /// turn runs is claimed in the same write, or the save fails if the queue
+    /// changed meanwhile. `s` is updated to what was written.
+    pub fn save_turn(&self, s: &mut Value, queued: Option<(usize, &Value)>) -> Result<(), String> {
+        let Value::Object(target) = s else { return Err("a session that is not an object".into()) };
+        let id = target.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        match self.get(&id) {
+            Some(Value::Object(disk)) => {
+                for key in USER_FIELDS {
+                    match disk.get(*key) {
+                        Some(v) => {
+                            target.insert((*key).into(), v.clone());
+                        }
+                        None => {
+                            target.shift_remove(*key);
+                        }
+                    }
+                }
+                if disk.get("titleAuto") == Some(&Value::Bool(false)) {
+                    target.insert("title".into(), disk.get("title").cloned().unwrap_or(Value::Null));
+                    target.insert("titleAuto".into(), json!(false));
+                }
+                if let Some((index, item)) = queued {
+                    let queue = disk.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
+                    match queue.get(index) {
+                        Some(on_disk) if queue_items_equal(on_disk, item) => {}
+                        _ => return Err("Queued prompt changed before it could start.".into()),
+                    }
+                    let rest: Vec<Value> =
+                        queue.into_iter().enumerate().filter(|(i, _)| *i != index).map(|(_, v)| v).collect();
+                    target.insert("queue".into(), Value::Array(rest));
+                }
+            }
+            _ if queued.is_some() => return Err("Session not found.".into()),
+            _ => {}
+        }
+        self.save(target)
     }
 
     /// `createSession(workspaceId)`.

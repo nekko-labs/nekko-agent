@@ -1,0 +1,234 @@
+{
+  "cases": [
+    {
+      "name": "plain",
+      "fixture": "s_tools",
+      "disk": [],
+      "turn": {
+        "messagesAppend": [
+          {
+            "id": "a_new",
+            "role": "assistant",
+            "content": "Done.",
+            "createdAt": 5
+          }
+        ],
+        "activeRun": {
+          "startedAt": 1
+        }
+      }
+    },
+    {
+      "name": "user renamed and changed options",
+      "fixture": "s_tools",
+      "disk": [
+        [
+          "setOptions",
+          {
+            "title": "Mine",
+            "pinned": true,
+            "mode": "ask",
+            "thinking": false
+          }
+        ],
+        [
+          "setSpecLinked",
+          true
+        ]
+      ],
+      "turn": {
+        "title": "Auto title",
+        "titleAuto": true,
+        "messagesAppend": [
+          {
+            "id": "a_new",
+            "role": "assistant",
+            "content": "Done.",
+            "createdAt": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "turn set fields the disk lacks",
+      "fixture": "s_plain",
+      "disk": [],
+      "turn": {
+        "pinned": true,
+        "tags": [
+          "x"
+        ],
+        "queue": [
+          "stale"
+        ],
+        "agentPlan": [
+          {
+            "id": "step_1",
+            "title": "a",
+            "status": "pending",
+            "createdAt": 1,
+            "updatedAt": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "queued claim",
+      "fixture": "s_extra",
+      "disk": [
+        [
+          "queue",
+          "first"
+        ],
+        [
+          "queue",
+          {
+            "text": "second",
+            "images": [
+              "i"
+            ]
+          }
+        ],
+        [
+          "queue",
+          "third"
+        ]
+      ],
+      "turn": {
+        "messagesAppend": [
+          {
+            "id": "u_q",
+            "role": "user",
+            "content": "second",
+            "createdAt": 6
+          }
+        ]
+      },
+      "queued": {
+        "index": 2,
+        "item": {
+          "text": "second",
+          "images": [
+            "i"
+          ]
+        }
+      }
+    },
+    {
+      "name": "queued string claim",
+      "fixture": "s_extra",
+      "disk": [
+        [
+          "queue",
+          "only"
+        ]
+      ],
+      "turn": {},
+      "queued": {
+        "index": 1,
+        "item": {
+          "text": "only"
+        }
+      }
+    },
+    {
+      "name": "queued changed",
+      "fixture": "s_extra",
+      "disk": [
+        [
+          "queue",
+          "first"
+        ]
+      ],
+      "turn": {},
+      "queued": {
+        "index": 0,
+        "item": "other"
+      }
+    },
+    {
+      "name": "queued gone",
+      "fixture": "s_extra",
+      "disk": [],
+      "turn": {},
+      "queued": {
+        "index": 5,
+        "item": "x"
+      }
+    },
+    {
+      "name": "deleted mid-turn",
+      "fixture": "s_plain",
+      "disk": [],
+      "turn": {
+        "messagesAppend": [
+          {
+            "id": "a_new",
+            "role": "assistant",
+            "content": "Done.",
+            "createdAt": 5
+          }
+        ]
+      },
+      "deleted": true
+    },
+    {
+      "name": "deleted mid-turn queued",
+      "fixture": "s_plain",
+      "disk": [],
+      "turn": {},
+      "queued": {
+        "index": 0,
+        "item": "x"
+      },
+      "deleted": true
+    }
+  ],
+  "expected": {
+    "plain": {
+      "error": null,
+      "written": "{\n  \"id\": \"s_tools\",\n  \"title\": \"Chat s_tools\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"Open a PR for https://github.com/nekko-labs/nekko-agent/pull/219 follow-up\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a1\",\n      \"role\": \"assistant\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolCalls\": [\n        {\n          \"id\": \"c1\",\n          \"name\": \"bash\",\n          \"input\": {\n            \"command\": \"gh pr create\",\n            \"retries\": 1,\n            \"ratio\": 0.25,\n            \"big\": 1e+21,\n            \"tiny\": 1e-7,\n            \"list\": [\n              1,\n              \"two\",\n              null,\n              true\n            ],\n            \"nested\": {\n              \"b\": 2,\n              \"a\": 1\n            }\n          }\n        },\n        {\n          \"id\": \"c2\",\n          \"name\": \"noop\",\n          \"input\": null\n        },\n        {\n          \"id\": \"c3\",\n          \"name\": \"noinput\"\n        }\n      ]\n    },\n    {\n      \"id\": \"t1\",\n      \"role\": \"tool\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolResult\": {\n        \"toolCallId\": \"c1\",\n        \"output\": \"Created https://github.com/o/r/pull/7 and (https://github.com/o/r/pull/7).\"\n      }\n    },\n    {\n      \"id\": \"t2\",\n      \"role\": \"tool\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolResult\": {\n        \"toolCallId\": \"c2\",\n        \"output\": \"\"\n      }\n    },\n    {\n      \"id\": \"a2\",\n      \"role\": \"assistant\",\n      \"content\": \"Opened https://github.com/o/r/pull/8.\",\n      \"createdAt\": 1790000000002,\n      \"reasoning\": \"thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it \"\n    },\n    {\n      \"id\": \"a_new\",\n      \"role\": \"assistant\",\n      \"content\": \"Done.\",\n      \"createdAt\": 5\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"activeRun\": {\n    \"startedAt\": 1\n  }\n}",
+      "memory": "{\n  \"id\": \"s_tools\",\n  \"title\": \"Chat s_tools\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"Open a PR for https://github.com/nekko-labs/nekko-agent/pull/219 follow-up\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a1\",\n      \"role\": \"assistant\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolCalls\": [\n        {\n          \"id\": \"c1\",\n          \"name\": \"bash\",\n          \"input\": {\n            \"command\": \"gh pr create\",\n            \"retries\": 1,\n            \"ratio\": 0.25,\n            \"big\": 1e+21,\n            \"tiny\": 1e-7,\n            \"list\": [\n              1,\n              \"two\",\n              null,\n              true\n            ],\n            \"nested\": {\n              \"b\": 2,\n              \"a\": 1\n            }\n          }\n        },\n        {\n          \"id\": \"c2\",\n          \"name\": \"noop\",\n          \"input\": null\n        },\n        {\n          \"id\": \"c3\",\n          \"name\": \"noinput\"\n        }\n      ]\n    },\n    {\n      \"id\": \"t1\",\n      \"role\": \"tool\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolResult\": {\n        \"toolCallId\": \"c1\",\n        \"output\": \"Created https://github.com/o/r/pull/7 and (https://github.com/o/r/pull/7).\"\n      }\n    },\n    {\n      \"id\": \"t2\",\n      \"role\": \"tool\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolResult\": {\n        \"toolCallId\": \"c2\",\n        \"output\": \"\"\n      }\n    },\n    {\n      \"id\": \"a2\",\n      \"role\": \"assistant\",\n      \"content\": \"Opened https://github.com/o/r/pull/8.\",\n      \"createdAt\": 1790000000002,\n      \"reasoning\": \"thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it \"\n    },\n    {\n      \"id\": \"a_new\",\n      \"role\": \"assistant\",\n      \"content\": \"Done.\",\n      \"createdAt\": 5\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"activeRun\": {\n    \"startedAt\": 1\n  }\n}"
+    },
+    "user renamed and changed options": {
+      "error": null,
+      "written": "{\n  \"id\": \"s_tools\",\n  \"title\": \"Mine\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"Open a PR for https://github.com/nekko-labs/nekko-agent/pull/219 follow-up\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a1\",\n      \"role\": \"assistant\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolCalls\": [\n        {\n          \"id\": \"c1\",\n          \"name\": \"bash\",\n          \"input\": {\n            \"command\": \"gh pr create\",\n            \"retries\": 1,\n            \"ratio\": 0.25,\n            \"big\": 1e+21,\n            \"tiny\": 1e-7,\n            \"list\": [\n              1,\n              \"two\",\n              null,\n              true\n            ],\n            \"nested\": {\n              \"b\": 2,\n              \"a\": 1\n            }\n          }\n        },\n        {\n          \"id\": \"c2\",\n          \"name\": \"noop\",\n          \"input\": null\n        },\n        {\n          \"id\": \"c3\",\n          \"name\": \"noinput\"\n        }\n      ]\n    },\n    {\n      \"id\": \"t1\",\n      \"role\": \"tool\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolResult\": {\n        \"toolCallId\": \"c1\",\n        \"output\": \"Created https://github.com/o/r/pull/7 and (https://github.com/o/r/pull/7).\"\n      }\n    },\n    {\n      \"id\": \"t2\",\n      \"role\": \"tool\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolResult\": {\n        \"toolCallId\": \"c2\",\n        \"output\": \"\"\n      }\n    },\n    {\n      \"id\": \"a2\",\n      \"role\": \"assistant\",\n      \"content\": \"Opened https://github.com/o/r/pull/8.\",\n      \"createdAt\": 1790000000002,\n      \"reasoning\": \"thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it \"\n    },\n    {\n      \"id\": \"a_new\",\n      \"role\": \"assistant\",\n      \"content\": \"Done.\",\n      \"createdAt\": 5\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"titleAuto\": false,\n  \"pinned\": true,\n  \"mode\": \"ask\",\n  \"thinking\": false,\n  \"specLinked\": true\n}",
+      "memory": "{\n  \"id\": \"s_tools\",\n  \"title\": \"Mine\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"Open a PR for https://github.com/nekko-labs/nekko-agent/pull/219 follow-up\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a1\",\n      \"role\": \"assistant\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolCalls\": [\n        {\n          \"id\": \"c1\",\n          \"name\": \"bash\",\n          \"input\": {\n            \"command\": \"gh pr create\",\n            \"retries\": 1,\n            \"ratio\": 0.25,\n            \"big\": 1e+21,\n            \"tiny\": 1e-7,\n            \"list\": [\n              1,\n              \"two\",\n              null,\n              true\n            ],\n            \"nested\": {\n              \"b\": 2,\n              \"a\": 1\n            }\n          }\n        },\n        {\n          \"id\": \"c2\",\n          \"name\": \"noop\",\n          \"input\": null\n        },\n        {\n          \"id\": \"c3\",\n          \"name\": \"noinput\"\n        }\n      ]\n    },\n    {\n      \"id\": \"t1\",\n      \"role\": \"tool\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolResult\": {\n        \"toolCallId\": \"c1\",\n        \"output\": \"Created https://github.com/o/r/pull/7 and (https://github.com/o/r/pull/7).\"\n      }\n    },\n    {\n      \"id\": \"t2\",\n      \"role\": \"tool\",\n      \"content\": \"\",\n      \"createdAt\": 1790000000002,\n      \"toolResult\": {\n        \"toolCallId\": \"c2\",\n        \"output\": \"\"\n      }\n    },\n    {\n      \"id\": \"a2\",\n      \"role\": \"assistant\",\n      \"content\": \"Opened https://github.com/o/r/pull/8.\",\n      \"createdAt\": 1790000000002,\n      \"reasoning\": \"thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it thinking about it \"\n    },\n    {\n      \"id\": \"a_new\",\n      \"role\": \"assistant\",\n      \"content\": \"Done.\",\n      \"createdAt\": 5\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"titleAuto\": false,\n  \"pinned\": true,\n  \"mode\": \"ask\",\n  \"thinking\": false,\n  \"specLinked\": true\n}"
+    },
+    "turn set fields the disk lacks": {
+      "error": null,
+      "written": "{\n  \"id\": \"s_plain\",\n  \"title\": \"Chat s_plain\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"Refactor the parser\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a1\",\n      \"role\": \"assistant\",\n      \"content\": \"  Done.\\n\\nAll   green.  \",\n      \"createdAt\": 1790000000002\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"agentPlan\": [\n    {\n      \"id\": \"step_1\",\n      \"title\": \"a\",\n      \"status\": \"pending\",\n      \"createdAt\": 1,\n      \"updatedAt\": 0\n    }\n  ]\n}",
+      "memory": "{\n  \"id\": \"s_plain\",\n  \"title\": \"Chat s_plain\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"Refactor the parser\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a1\",\n      \"role\": \"assistant\",\n      \"content\": \"  Done.\\n\\nAll   green.  \",\n      \"createdAt\": 1790000000002\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"agentPlan\": [\n    {\n      \"id\": \"step_1\",\n      \"title\": \"a\",\n      \"status\": \"pending\",\n      \"createdAt\": 1,\n      \"updatedAt\": 0\n    }\n  ]\n}"
+    },
+    "queued claim": {
+      "error": null,
+      "written": "{\n  \"id\": \"s_extra\",\n  \"title\": \"Chat s_extra\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"hi\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"u_q\",\n      \"role\": \"user\",\n      \"content\": \"second\",\n      \"createdAt\": 6\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"zeta\": 1,\n  \"alpha\": {\n    \"nested\": [\n      1,\n      2\n    ]\n  },\n  \"pinned\": true,\n  \"tags\": [\n    \"a\",\n    \"b\"\n  ],\n  \"autoModel\": false,\n  \"queue\": [\n    \"next\",\n    \"first\",\n    \"third\"\n  ]\n}",
+      "memory": "{\n  \"id\": \"s_extra\",\n  \"title\": \"Chat s_extra\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"hi\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"u_q\",\n      \"role\": \"user\",\n      \"content\": \"second\",\n      \"createdAt\": 6\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"zeta\": 1,\n  \"alpha\": {\n    \"nested\": [\n      1,\n      2\n    ]\n  },\n  \"pinned\": true,\n  \"tags\": [\n    \"a\",\n    \"b\"\n  ],\n  \"autoModel\": false,\n  \"queue\": [\n    \"next\",\n    \"first\",\n    \"third\"\n  ]\n}"
+    },
+    "queued string claim": {
+      "error": null,
+      "written": "{\n  \"id\": \"s_extra\",\n  \"title\": \"Chat s_extra\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"hi\",\n      \"createdAt\": 1790000000002\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"zeta\": 1,\n  \"alpha\": {\n    \"nested\": [\n      1,\n      2\n    ]\n  },\n  \"pinned\": true,\n  \"tags\": [\n    \"a\",\n    \"b\"\n  ],\n  \"autoModel\": false,\n  \"queue\": [\n    \"next\"\n  ]\n}",
+      "memory": "{\n  \"id\": \"s_extra\",\n  \"title\": \"Chat s_extra\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"hi\",\n      \"createdAt\": 1790000000002\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"zeta\": 1,\n  \"alpha\": {\n    \"nested\": [\n      1,\n      2\n    ]\n  },\n  \"pinned\": true,\n  \"tags\": [\n    \"a\",\n    \"b\"\n  ],\n  \"autoModel\": false,\n  \"queue\": [\n    \"next\"\n  ]\n}"
+    },
+    "queued changed": {
+      "error": "Queued prompt changed before it could start.",
+      "written": "{\n  \"id\": \"s_extra\",\n  \"title\": \"Chat s_extra\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"hi\",\n      \"createdAt\": 1790000000002\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"zeta\": 1,\n  \"alpha\": {\n    \"nested\": [\n      1,\n      2\n    ]\n  },\n  \"pinned\": true,\n  \"tags\": [\n    \"a\",\n    \"b\"\n  ],\n  \"autoModel\": false,\n  \"queue\": [\n    \"next\",\n    \"first\"\n  ]\n}",
+      "memory": "{\n  \"id\": \"s_extra\",\n  \"title\": \"Chat s_extra\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"hi\",\n      \"createdAt\": 1790000000002\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"zeta\": 1,\n  \"alpha\": {\n    \"nested\": [\n      1,\n      2\n    ]\n  },\n  \"pinned\": true,\n  \"tags\": [\n    \"a\",\n    \"b\"\n  ],\n  \"autoModel\": false,\n  \"queue\": [\n    \"next\",\n    \"first\"\n  ]\n}"
+    },
+    "queued gone": {
+      "error": "Queued prompt changed before it could start.",
+      "written": "{\n  \"id\": \"s_extra\",\n  \"title\": \"Chat s_extra\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"hi\",\n      \"createdAt\": 1790000000002\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"zeta\": 1,\n  \"alpha\": {\n    \"nested\": [\n      1,\n      2\n    ]\n  },\n  \"pinned\": true,\n  \"tags\": [\n    \"a\",\n    \"b\"\n  ],\n  \"autoModel\": false,\n  \"queue\": [\n    \"next\"\n  ]\n}",
+      "memory": "{\n  \"id\": \"s_extra\",\n  \"title\": \"Chat s_extra\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"hi\",\n      \"createdAt\": 1790000000002\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0,\n  \"zeta\": 1,\n  \"alpha\": {\n    \"nested\": [\n      1,\n      2\n    ]\n  },\n  \"pinned\": true,\n  \"tags\": [\n    \"a\",\n    \"b\"\n  ],\n  \"autoModel\": false,\n  \"queue\": [\n    \"next\"\n  ]\n}"
+    },
+    "deleted mid-turn": {
+      "error": null,
+      "written": "{\n  \"id\": \"s_plain\",\n  \"title\": \"Chat s_plain\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"Refactor the parser\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a1\",\n      \"role\": \"assistant\",\n      \"content\": \"  Done.\\n\\nAll   green.  \",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a_new\",\n      \"role\": \"assistant\",\n      \"content\": \"Done.\",\n      \"createdAt\": 5\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0\n}",
+      "memory": "{\n  \"id\": \"s_plain\",\n  \"title\": \"Chat s_plain\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"Refactor the parser\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a1\",\n      \"role\": \"assistant\",\n      \"content\": \"  Done.\\n\\nAll   green.  \",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a_new\",\n      \"role\": \"assistant\",\n      \"content\": \"Done.\",\n      \"createdAt\": 5\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0\n}"
+    },
+    "deleted mid-turn queued": {
+      "error": "Session not found.",
+      "written": null,
+      "memory": "{\n  \"id\": \"s_plain\",\n  \"title\": \"Chat s_plain\",\n  \"workspaceId\": \"w1\",\n  \"messages\": [\n    {\n      \"id\": \"u1\",\n      \"role\": \"user\",\n      \"content\": \"Refactor the parser\",\n      \"createdAt\": 1790000000002\n    },\n    {\n      \"id\": \"a1\",\n      \"role\": \"assistant\",\n      \"content\": \"  Done.\\n\\nAll   green.  \",\n      \"createdAt\": 1790000000002\n    }\n  ],\n  \"createdAt\": 1790000000000,\n  \"updatedAt\": 0\n}"
+    }
+  }
+}

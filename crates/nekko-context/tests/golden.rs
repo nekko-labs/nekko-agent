@@ -144,6 +144,10 @@ fn builds_the_turn_context_exactly_as_the_ts_host_does() {
                 orchestration_hint: p["orchestrationHint"].as_str().unwrap_or(""),
                 can_ask: p["canAsk"] == true,
                 can_plan: p["canPlan"] == true,
+                system_instructions: p["systemInstructions"].as_str(),
+                turn_wrapper: p["turnWrapper"].as_str(),
+                about_user: p["aboutUser"].as_str(),
+                checkout_notice: p["checkoutNotice"].as_str(),
             })
         })
         .collect();

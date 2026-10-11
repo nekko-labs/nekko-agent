@@ -14,6 +14,7 @@ mod mcp;
 mod procgroup;
 mod routes;
 mod sideband;
+mod turns;
 mod wire;
 
 use backend::Backend;
@@ -83,8 +84,13 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         backend: backend.clone(),
         hub,
         engine: engine.clone(),
-        sessions,
-        loops: Arc::new(loops::Loops::new(changes)),
+        sessions: sessions.clone(),
+        loops: Arc::new(loops::Loops::new(changes.clone())),
+        turns: Arc::new(turns::Turns::new(
+            sessions.clone(),
+            cfg.data_dir.clone().map(std::path::PathBuf::from),
+            changes,
+        )),
         mcp: mcp.clone(),
     };
     routes::forward_terminal_events(&ctx);

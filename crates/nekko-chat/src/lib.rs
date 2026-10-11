@@ -9,7 +9,7 @@
 //! at the next chunk.
 
 use nekko_agent::{
-    AbortController, AnyProvider, ChatMessage, ChatRequest, EffortLevel, Provider, ProviderChunk, ToolSpec,
+    AbortController, AnyProvider, ChatMessage, ChatRequest, EffortLevel, HeadersHook, Provider, ProviderChunk, ToolSpec,
 };
 use nekko_loop::{Cancel, Chunk, ChunkStream, ModelClient};
 use serde_json::Value;
@@ -18,11 +18,17 @@ use serde_json::Value;
 #[derive(Clone)]
 pub struct ProviderClient {
     provider: AnyProvider,
+    on_headers: Option<HeadersHook>,
 }
 
 impl ProviderClient {
     pub fn new(provider: AnyProvider) -> Self {
-        Self { provider }
+        Self { provider, on_headers: None }
+    }
+
+    /// Hand every response's headers to `hook` (an Anthropic subscription's rate limits).
+    pub fn with_headers(provider: AnyProvider, hook: HeadersHook) -> Self {
+        Self { provider, on_headers: Some(hook) }
     }
 }
 
@@ -85,6 +91,7 @@ impl ModelClient for ProviderClient {
             prompt_caching: Some(req.prompt_caching.unwrap_or(true)),
             max_output_tokens: req.max_output_tokens,
             signal: Some(signal),
+            on_headers: self.on_headers.clone(),
             ..Default::default()
         };
         Ok(ProviderStream(self.provider.chat(request)))
