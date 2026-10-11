@@ -34,9 +34,12 @@ describe('Agents header placement', () => {
     expect(toolbar()).not.toContain('<h1');
     expect(title).not.toContain('pr-[150px]');
   });
-  it('does not label other desktop views as Agents', () => {
-    state.view = 'settings';
-    expect(renderToStaticMarkup(<TitleBar />)).not.toContain('<h1');
+  it.each([['settings', 'Settings'], ['models', 'Model Providers'], ['skills', 'Skills']])('names the %s view in the title bar, not Agents', (view, label) => {
+    state.view = view;
+    const title = renderToStaticMarkup(<TitleBar />);
+    expect(title).toContain('>' + label + '</h1>');
+    expect(title).not.toContain('>Agents</h1>');
+    expect(title.match(/<h1/g)).toHaveLength(1);
   });
   it('keeps the in-view heading when there is no desktop title bar', () => {
     state.chrome = false;

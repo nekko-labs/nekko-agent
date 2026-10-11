@@ -3,6 +3,7 @@ import { UpdateControl } from './UpdateBanner.js';
 import { DeveloperServerControls } from './DeveloperServerControls.js';
 import { BrandMark } from './BrandMark.js';
 import { useStore } from '../store.js';
+import { useT } from '../i18n.js';
 
 /**
  * The window's title bar, drawn by the app.
@@ -20,11 +21,12 @@ import { useStore } from '../store.js';
  */
 export function TitleBar() {
   const view = useStore((s) => s.view);
+  const t = useT();
   if (!hasAppChrome) return null;
   return (
     <div className={`titlebar ${isMacChrome ? 'titlebar-mac' : ''}`}>
       <BrandMark size={28} className="titlebar-mark" title="Nekko Agent" />
-      {view === 'command' && <h1 className="titlebar-heading text-gradient">Agents</h1>}
+      <h1 className="titlebar-heading text-gradient">{t(`nav.${view}`)}</h1>
       <UpdateControl />
       {/* Layout controls follow the heading and version in the same row. */}
       <div id="command-titlebar-slot" className="ml-4 flex min-w-0 flex-1 items-center gap-3" />
