@@ -92,7 +92,7 @@ const timer=setInterval(async()=>{
   clearInterval(timer);win.setBounds({x:40,y:50,width:940,height:700});win.show();app.focus({steal:true});
   await win.webContents.executeJavaScript("document.querySelector('nav button[aria-label=\\\"Agents\\\"]').click()");
   setTimeout(async()=>{
-   const state=await win.webContents.executeJavaScript("({title:document.querySelector('h1')?.textContent,headerTop:document.querySelector('h1')?.getBoundingClientRect().top,text:document.body.innerText})");
+   const state=await win.webContents.executeJavaScript("({title:document.querySelector('h1')?.textContent,headerTop:document.querySelector('h1')?.getBoundingClientRect().top,headerLeft:document.querySelector('h1')?.getBoundingClientRect().left,inTitleBar:!!document.querySelector('.titlebar-mac h1'),text:document.body.innerText})");
    fs.writeFileSync(path.join(process.env.NEKKO_DATA_DIR,'native-full-state.json'),JSON.stringify({pid:process.pid,...state}));
    fs.writeFileSync(path.join(process.env.NEKKO_DATA_DIR,'native-full.png'),(await win.webContents.capturePage()).toPNG());
   },1500);
@@ -102,7 +102,9 @@ const timer=setInterval(async()=>{
   child = spawn(launcher, [fullEntry], { env: { ...env, NEKKO_DATA_DIR: seeded.dir }, stdio: 'inherit' });
   await waitFor(() => existsSync(join(seeded.dir, 'native-full.png')), 'full Agents renderer');
   const fullState = JSON.parse(readFileSync(join(seeded.dir, 'native-full-state.json'), 'utf8'));
-  if (fullState.title !== 'Agents' || fullState.headerTop < 30) throw Error('Native header clearance mismatch');
+  // The heading sits in the app's own title strip, beside the traffic lights
+  // (x 14..~66), so clearance is horizontal rather than below a native bar.
+  if (fullState.title !== 'Agents' || !fullState.inTitleBar || fullState.headerLeft < 72) throw Error(`Native header clearance mismatch: ${JSON.stringify({ title: fullState.title, inTitleBar: fullState.inTitleBar, headerTop: fullState.headerTop, headerLeft: fullState.headerLeft })}`);
   writeFileSync(join(out, 'native-full-state.json'), JSON.stringify(fullState, null, 2));
   writeFileSync(join(out, 'native-full-renderer.png'), readFileSync(join(seeded.dir, 'native-full.png')));
   if (spawnSync('/usr/sbin/screencapture', ['-x', join(out, 'native-full-window.png')]).status !== 0) throw Error('Full native screenshot unavailable');

@@ -10,6 +10,7 @@ import {
   type ChatOutputEvent,
 } from './lib.js';
 import { runMcpServer } from './mcp.js';
+import { migrateCommand } from './migrate.js';
 import { resolveInstall } from './skills.js';
 import { VERSION } from './version.js';
 import { cliCommand, normalizeInstallTarget, triggerLabel } from '@nekko-agent/shared';
@@ -59,6 +60,7 @@ Usage:
   nekko-agent workflow list|run <name>|trigger <command>|runs [--json]
   nekko-agent train start|status|hint|stop [opts]
   nekko-agent mcp
+  nekko-agent migrate [--dry-run] [--yes] [--keep-old]   Merge data from earlier installs
   nekko-agent --help | --version
 
 Install: shipped with the Nekko Agent app, or npm install -g nekko-agent
@@ -180,6 +182,8 @@ export async function runCli(argv: string[]): Promise<void> {
   if (flags.version || cmd === 'version') return void print(VERSION, !!flags.json);
   if (!cmd || flags.help || cmd === 'help') return void console.log(HELP);
   if (cmd === 'mcp') return runMcpServer({ url: value(flags, 'url'), token: value(flags, 'token') });
+  // Before getClient: building a client opens the data root, which refuses to start while an earlier profile is unmerged.
+  if (cmd === 'migrate') { process.exitCode = await migrateCommand(flags); return; }
   if (!['status', 'sessions', 'chat', 'watch', 'workspace', 'prompts', 'tasks', 'workflow', 'workflows', 'skills', 'tools', 'models', 'train'].includes(cmd)) throw new CliError(`Unknown command: ${cmd}`, EXIT_CODES.usage);
   const client = getClient({ url: value(flags, 'url'), token: value(flags, 'token') });
   const json = isMachine(flags);

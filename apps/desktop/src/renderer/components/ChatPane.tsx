@@ -59,6 +59,7 @@ import { NekkoAvatar } from './Mascot.js';
 import { Modal } from './primitives/index.js';
 import { WorktreeChip } from './WorktreeChip.js';
 import { FolderPicker } from './FolderPicker.js';
+import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
 import { PanelIcon, DownloadIcon, PlusIcon, CloseIcon, BoltIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon, QuestionIcon } from '../icons.js';
 
@@ -2095,15 +2096,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {session && <WorktreeChip session={session} git={git} disabled={hasLive} onChange={setSession} />}
               </span>
             )}>
-            {changeCount > 0 && (
-              <button
-                className="btn btn-ghost px-2 py-1 text-[12px] font-medium text-accent"
-                onClick={() => useStore.getState().openDiffPane(sessionId)}
-                title="Review the agent's file changes"
-              >
-                {changeCount} change{changeCount === 1 ? '' : 's'}
-              </button>
-            )}
+            {/* This agent's companions sit with its other tools (Logs) rather
+                than in the wall's title bar, where they needed an agent to be
+                selected first. On the wall they open beside the window; in
+                the Chat view, as windows of the workspace. */}
+            <AgentCompanionButtons sessionId={sessionId} changeCount={changeCount} commandCenter={commandCenter} compact={compact} />
             <button
               className="btn btn-ghost shrink-0 px-2 py-1 text-[11px]"
               aria-label="Open agent logs"

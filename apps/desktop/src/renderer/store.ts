@@ -38,6 +38,30 @@ export const EXPERIMENTAL_VIEWS = ['training', 'design', 'memory'] as const;
 export type ExperimentalView = (typeof EXPERIMENTAL_VIEWS)[number];
 
 /**
+ * The folder a chat works in, as the Files companion should open it: the
+ * chat's own checkout of its primary folder when it has one (that is where the
+ * agent is editing), else the primary folder, else its first supporting
+ * folder. Empty when the chat has no folder, which the explorer turns into a
+ * folder chooser.
+ */
+export function chatFolderPath(s: { sessions: SessionSummary[]; settings: AppSettings | null }, sessionId: string, full?: Pick<Session, 'workspaceId' | 'supportingWorkspaceIds' | 'gitWorktrees'> | null): string {
+  const chat = full ?? s.sessions.find((x) => x.id === sessionId);
+  const folders = s.settings?.workspaces ?? [];
+  const primary = chat?.workspaceId;
+  if (primary) {
+    const checkout = chat?.gitWorktrees?.[primary]?.path;
+    if (checkout) return checkout;
+    const path = folders.find((w) => w.id === primary)?.path;
+    if (path) return path;
+  }
+  for (const id of chat?.supportingWorkspaceIds ?? []) {
+    const path = folders.find((w) => w.id === id)?.path;
+    if (path) return path;
+  }
+  return '';
+}
+
+/**
  * Whether a nav destination is reachable. Chat needs its Developer flag and
  * experimental views need their flag on; everything else is always available.
  * Settings that haven't loaded yet
@@ -444,9 +468,17 @@ function addWorkspace(s: UiState, pane: WbPane): Partial<UiState> {
 
 /** Rewrite one workspace's tree, dropping it entirely once it holds nothing. */
 function updateWorkspace(s: UiState, id: string, fn: (w: Workspace) => Workspace): Partial<UiState> {
-  const workspaces = s.workspaces
-    .map((w) => (w.id === id ? fn(w) : w))
-    .filter((w) => w.root !== null);
+  let changed = false;
+  const mapped = s.workspaces.map((w) => {
+    if (w.id !== id) return w;
+    const next = fn(w);
+    if (next !== w) changed = true;
+    return next;
+  });
+  // Nothing moved: keep the same array so every wall window subscribed to
+  // `workspaces` does not re-render (and re-measure) for a no-op.
+  if (!changed) return {};
+  const workspaces = mapped.filter((w) => w.root !== null);
   return {
     workspaces,
     activeWorkspaceId: workspaces.some((w) => w.id === s.activeWorkspaceId)
@@ -905,6 +937,16 @@ export const useStore = create<UiState>((set, get) => ({
   },
 
   openCompanion: (sessionId, kind) => {
+    // A chat's own folder companion follows the chat's folder: opening Files
+    // for a chat whose folder has since changed points the existing one there.
+    if (kind === 'files') {
+      const s = get();
+      const hit = locatePane(s.workspaces, 'chat', sessionId);
+      const ws = hit && s.workspaces.find((w) => w.id === hit.workspaceId);
+      const existing = ws && allPanes(ws.root).find((p) => p.kind === 'files');
+      const path = chatFolderPath(s, sessionId);
+      if (existing && path && existing.refId !== path) get().retargetPane(existing.id, path);
+    }
     let opened = false;
     set((s) => {
       // The chat's own workspace, made if the chat has none yet. Never the
@@ -918,7 +960,7 @@ export const useStore = create<UiState>((set, get) => ({
       }
       const ws = hit && workspaces.find((w) => w.id === hit!.workspaceId);
       if (!hit || !ws?.root) return {};
-      const refId = kind === 'diff' ? sessionId : kind === 'browser' ? 'about:blank' : '';
+      const refId = kind === 'diff' ? sessionId : kind === 'browser' ? 'about:blank' : chatFolderPath(s, sessionId);
       // One of each per chat: asking again just keeps the one already there.
       if (allPanes(ws.root).some((p) => p.kind === kind && (kind !== 'diff' || p.refId === sessionId))) {
         opened = true;

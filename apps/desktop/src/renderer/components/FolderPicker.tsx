@@ -1,6 +1,6 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Session, SessionMeta, WorkspaceFolder } from '@nekko-agent/shared';
+import { uniqueFolders, type Session, type SessionMeta, type WorkspaceFolder } from '@nekko-agent/shared';
 import { CloseIcon, FolderIcon, PlusIcon } from '../icons.js';
 import { useStore } from '../store.js';
 import { addFolderToChat, applyFolderSelection, withoutPrimary, withPrimary } from '../sessionFolders.js';
@@ -61,7 +61,9 @@ export function FolderPicker({ sessionId, session, disabled, onChange }: {
   disabled?: boolean;
   onChange: (session: Session) => void;
 }) {
-  const folders = useStore((s) => s.settings?.workspaces) ?? [];
+  // Older profiles can still hold one folder under two ids; show it once.
+  const saved = useStore((s) => s.settings?.workspaces);
+  const folders = useMemo(() => uniqueFolders(saved ?? []).folders, [saved]);
   // The store's summary sees Context Inspector edits the pane's own copy misses.
   const summary = useStore((s) => s.sessions.find((x) => x.id === sessionId));
   const chat: ChatFolders | null = summary ?? session;
@@ -117,13 +119,18 @@ export function FolderPicker({ sessionId, session, disabled, onChange }: {
   const clear = () => { if (chat?.workspaceId) run(() => applyFolderSelection(sessionId, withoutPrimary(chat))); else { useStore.getState().setActiveProject(null); setOpen(false); } };
   const add = () => run(() => addFolderToChat(sessionId, chat, 'primary'));
 
-  const remove = (id: string) => run(async () => {
-    await window.nekko.removeWorkspace(id);
-    if (useStore.getState().activeProjectId === id) useStore.getState().setActiveProject(null);
-    await useStore.getState().refreshSettings();
-    await useStore.getState().refreshSessions();
-    return window.nekko.getSession(sessionId);
-  });
+  // Revoking one folder is housekeeping inside the list, not a choice that
+  // ends the menu: it stays open so several can be cleared in a row.
+  const remove = (id: string) => {
+    void (async () => {
+      await window.nekko.removeWorkspace(id);
+      if (useStore.getState().activeProjectId === id) useStore.getState().setActiveProject(null);
+      await useStore.getState().refreshSettings();
+      await useStore.getState().refreshSessions();
+      const s = await window.nekko.getSession(sessionId);
+      if (s) onChange(s);
+    })().catch((e) => useStore.getState().pushToast('error', String(e)));
+  };
 
   return (
     <div className="relative min-w-0 shrink">

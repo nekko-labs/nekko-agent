@@ -102,7 +102,8 @@ export class ChatGptProvider implements Provider {
     const url = `${this.base()}/codex/models?client_version=${CODEX_CLIENT_VERSION}`;
     let res: Response;
     try {
-      res = await fetch(url, { headers: this.catalogHeaders() });
+      // Falls back to the curated list, so a slow catalog costs seconds, not the picker.
+      res = await fetch(url, { headers: this.catalogHeaders(), signal: AbortSignal.timeout(8000) });
     } catch {
       return null;
     }

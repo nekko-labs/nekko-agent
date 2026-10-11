@@ -27,6 +27,23 @@ describe('composer folder picker', () => {
     } finally { useStore.setState({ settings: prev.settings, sessions: prev.sessions }); }
   });
 
+  it('lists a folder saved twice (any case or trailing slash) once', () => {
+    const prev = useStore.getState();
+    const dupes = [...folders, { id: 'c', name: 'code', path: 'C:\\Users\\p\\code', addedAt: 0 }, { id: 'd', name: 'code', path: 'c:\\users\\p\\code\\', addedAt: 0 }];
+    useStore.setState({ settings: { ...prev.settings, workspaces: dupes } as any, sessions: [{ id: 's', workspaceId: 'c' } as any] });
+    try {
+      const out = renderToStaticMarkup(<FolderPicker sessionId="s" session={null} onChange={() => {}} />);
+      expect(out).toContain('>code<');
+    } finally { useStore.setState({ settings: prev.settings, sessions: prev.sessions }); }
+  });
+
+  it('keeps the menu open when a folder is revoked', async () => {
+    const source = (await import('node:fs')).readFileSync(new URL('./FolderPicker.tsx', import.meta.url), 'utf8');
+    const remove = source.slice(source.indexOf('const remove = '), source.indexOf('return (', source.indexOf('const remove = ')));
+    expect(remove).not.toContain('setOpen(false)');
+    expect(remove).not.toContain('run(');
+  });
+
   it('checks the primary and marks supporting folders', () => {
     const out = renderToStaticMarkup(<FolderPickerMenu folders={folders} chat={{ workspaceId: 'a', supportingWorkspaceIds: ['b'] }} onPick={() => {}} onClear={() => {}} onAdd={() => {}} onRemove={() => {}} />);
     expect(out.match(/aria-checked="true"/g)).toHaveLength(1);

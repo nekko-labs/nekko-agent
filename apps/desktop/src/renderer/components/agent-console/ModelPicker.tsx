@@ -12,6 +12,16 @@ import { useAllProviderLimits } from '../../useLimits.js';
 import { ContextMenu, ContextAction } from '../ContextMenu.js';
 import { StarIcon } from '../../icons.js';
 
+/** How long one provider's model list may take before it is shown as unreachable. */
+export const MODEL_LIST_TIMEOUT_MS = 6000;
+
+export function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out')), ms);
+    work.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+  });
+}
+
 /**
  * Provider + model as one legible control (instead of two microscopic selects):
  * a chip naming the current model that opens a flat picker of every provider's
@@ -93,18 +103,20 @@ export function ModelPicker({
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open, expanded]);
 
+  // Each provider fills in as it answers. Waiting for all of them let one
+  // unreachable server (a LAN box that is off) hold every other list, the
+  // default model included, at "loading…" for as long as its connect hung.
   useEffect(() => {
     if (!open && !expanded) return;
     let live = true;
-    Promise.all(
-      providers.map((p) =>
-        window.nekko.listModels(p.id)
-          .then((m) => [p.id, m] as const)
-          .catch(() => [p.id, null] as const),
-      ),
-    ).then((entries) => { if (live) setByProvider(Object.fromEntries(entries)); });
+    for (const p of providers) {
+      void withTimeout(window.nekko.listModels(p.id), MODEL_LIST_TIMEOUT_MS)
+        .then((m) => m, () => null)
+        .then((m) => { if (live) setByProvider((prev) => ({ ...prev, [p.id]: m })); });
+    }
     return () => { live = false; };
   }, [open, expanded, providers]);
+  const pending = providers.some((p) => byProvider[p.id] === undefined && p.id !== providerId);
 
   const favSet = new Set(settings?.favoriteModels ?? []);
   const toggleFavorite = async (key: string) => {
@@ -250,7 +262,7 @@ export function ModelPicker({
             {defaultKey && !q && (defaultProvider && defaultModel ? row(defaultProvider, defaultModel, true) : <button role="option" disabled aria-disabled="true" className="w-full px-2.5 py-2 text-left text-[12px] text-ink-faint">{settings?.defaultModelId} <span className="text-[10px]">Default · {defaultStatus}</span></button>)}
             {providers.length === 0 && <p className="px-2.5 py-1.5 text-[11px] text-ink-faint">No provider configured.</p>}
             {providers.length > 0 && groups.length === 0 && (
-              <p className="px-2.5 py-1.5 text-[11px] text-ink-faint">{q ? 'No models match.' : 'No models available.'}</p>
+              <p className="px-2.5 py-1.5 text-[11px] text-ink-faint">{q ? 'No models match.' : pending ? 'Loading models…' : 'No models available.'}</p>
             )}
             {total > 1 && !q && (
               <button

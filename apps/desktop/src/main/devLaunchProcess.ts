@@ -18,6 +18,19 @@ export function registerDevLaunch(app: DevApp): void {
 }
 
 /**
+ * Tell the `npm run dev` launcher the app is up and where, so it can say so in
+ * its terminal. Only under that launcher (it sets NEKKO_DEV_READY_FILE); a
+ * packaged app never writes this.
+ */
+export function reportDevReady(info: { version: string; api: { url: string; enabled: boolean } | null; dataDir: string }): void {
+  const file = process.env.NEKKO_DEV_READY_FILE;
+  if (!file) return;
+  try {
+    writeFileSync(file, JSON.stringify({ ...info, pid: process.pid, renderer: process.env.ELECTRON_RENDERER_URL }));
+  } catch { /* the banner is a nicety; never block startup on it */ }
+}
+
+/**
  * `npm run dev` asks for a clean stop by creating this file (Enter, q or
  * Ctrl+C in its terminal). A signal can't do it on Windows, where killing a
  * process is always abrupt; a normal quit stops the engine and its model

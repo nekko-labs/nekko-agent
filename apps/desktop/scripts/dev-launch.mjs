@@ -6,6 +6,7 @@ import { cpSync, existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync, spawn, execFileSync } from 'node:child_process';
+import { devBanner } from './dev-banner.mjs';
 const require = createRequire(import.meta.url);
 const electron = require('electron');
 if (process.env.ELECTRON_RUN_AS_NODE) throw new Error('Unset ELECTRON_RUN_AS_NODE before launching Nekko Agent');
@@ -13,6 +14,9 @@ const env = { ...process.env, NEKKO_DEV_OWNER: randomUUID() };
 // The app quits itself cleanly when this file appears (see devLaunchProcess.ts).
 const stopFile = join(tmpdir(), `nekko-dev-stop-${env.NEKKO_DEV_OWNER}`);
 env.NEKKO_DEV_STOP_FILE = stopFile;
+// The app writes this once its engine and API are up (see reportDevReady).
+const readyFile = join(tmpdir(), `nekko-dev-ready-${env.NEKKO_DEV_OWNER}`);
+env.NEKKO_DEV_READY_FILE = readyFile;
 let ownedCache;
 export function prepareMacBundle() {
 
@@ -59,6 +63,7 @@ const child = spawn(process.execPath, [cli, process.argv[2] || 'dev'], {
 let stopping = false;
 const cleanup = () => {
   try { rmSync(stopFile, { force: true }); } catch {}
+  try { rmSync(readyFile, { force: true }); } catch {}
   if (keys) try { process.stdin.setRawMode(false); } catch {}
 };
 child.on('exit', code => { cleanup(); process.exit(stopping ? 0 : code ?? 1); });
@@ -106,4 +111,19 @@ if (keys) {
   });
   console.log('[nekko] Press Enter or q to stop Nekko Agent cleanly (twice to force).');
 }
+
+// Once the app reports in, say what is running and how to stop it, after
+// electron-vite's build chatter rather than lost in the middle of it.
+const READY_WAIT_MS = 120_000;
+const startedAt = Date.now();
+const readyPoll = setInterval(() => {
+  if (stopping || child.exitCode !== null) { clearInterval(readyPoll); return; }
+  let info = null;
+  try { info = JSON.parse(readFileSync(readyFile, 'utf8')); } catch {}
+  if (!info && Date.now() - startedAt < READY_WAIT_MS) return;
+  clearInterval(readyPoll);
+  if (!info) { console.log('[nekko] The app has not reported in yet. Press q or Enter to stop it.'); return; }
+  console.log(devBanner({ ...info, color: process.stdout.isTTY && !process.env.NO_COLOR }));
+}, 300);
+readyPoll.unref();
 }

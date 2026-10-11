@@ -65,6 +65,51 @@ export function TerminalExcerpt({ terminalId }: { terminalId: string }) {
   return <span className="font-mono whitespace-pre-wrap">{text}</span>;
 }
 
+/**
+ * The drag handle between an agent and its companions. Sets a CSS variable on
+ * the window's content box while dragging (no React render per pointer move),
+ * then saves the share for that chat. Arrow keys nudge it; double-click resets.
+ */
+function CompanionResizer({ sessionId }: { sessionId: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const apply = (share: number) => ref.current?.parentElement?.style.setProperty('--companion-share', `${(share * 100).toFixed(1)}%`);
+  useLayoutEffect(() => { apply(readCompanionWidth(sessionId)); }, [sessionId]);
+  const [share, setShare] = useState(() => readCompanionWidth(sessionId));
+  const commit = (next: number) => { apply(next); setShare(next); saveCompanionWidth(sessionId, next); };
+  const onPointerDown = (e: React.PointerEvent) => {
+    const box = ref.current?.parentElement?.getBoundingClientRect();
+    if (!box) return;
+    e.preventDefault();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    let last = share;
+    const move = (ev: PointerEvent) => { last = shareFromPointer(ev.clientX, box.left, box.width); apply(last); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); document.body.classList.remove('wall-resizing'); commit(last); };
+    document.body.classList.add('wall-resizing');
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  return (
+    <div
+      ref={ref}
+      className="command-wall-companion-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize companions"
+      aria-valuemin={20}
+      aria-valuemax={75}
+      aria-valuenow={Math.round(share * 100)}
+      tabIndex={0}
+      title="Drag to resize · double-click to reset"
+      onPointerDown={onPointerDown}
+      onDoubleClick={() => commit(0.38)}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); commit(Math.min(0.75, share + 0.04)); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); commit(Math.max(0.2, share - 0.04)); }
+      }}
+    />
+  );
+}
+
 function CompanionBody({ pane }: { pane: WbPane }) {
   switch (pane.kind) {
     case 'file': return <FilePane path={pane.refId} />;
@@ -81,7 +126,8 @@ import { Divider } from './Divider.js';
 import { WallEmptyIllustration } from './WallEmptyIllustration.js';
 import { AgentLogsDrawer } from './AgentLogsDrawer.js';
 import { layoutWithLogsDrawer, overlayLogsDrawer, useWallLogs } from '../wallLogs.js';
-import { BoltIcon, ChatIcon, ExternalIcon, LayoutIcon, TerminalIcon } from '../icons.js';
+import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, TerminalIcon } from '../icons.js';
+import { readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
 
 /** The kinds the wall's compass offers, in order. */
@@ -480,11 +526,16 @@ export function CommandWall({
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : null}
            </div>
+            {pane.kind === 'chat' && showCompanions && companions.length > 0 && <CompanionResizer sessionId={pane.refId} />}
             <div className="command-wall-companions" inert={!showCompanions || !rect} aria-hidden={!showCompanions || !rect || undefined}>
-              {companions.map((companion) => <section key={companion.id} className="command-wall-companion" data-companion-kind={companion.kind}>
-                <header><span>{companion.kind === 'diff' ? 'Changes' : companion.kind === 'files' ? 'Files' : companion.refId}</span><button aria-label={`Close ${companion.refId}`} onClick={() => useStore.getState().closePane(companion.id)}>×</button></header>
-                <div className="command-wall-companion-body"><CompanionBody pane={companion} /></div>
-              </section>)}
+              {/* Kept mounted while folded so a browser keeps its page; see the stable-bodies test. */}
+              {companions.map((companion) => {
+                const label = companion.kind === 'diff' ? 'Changes' : companion.kind === 'files' ? 'Files' : companion.kind === 'browser' ? 'Browser' : companion.refId;
+                return <section key={companion.id} className="command-wall-companion" data-companion-kind={companion.kind}>
+                  <header><span title={companion.refId}>{label}</span><button type="button" className="command-wall-companion-close" aria-label={`Close ${label}`} title={`Close ${label}`} onClick={() => useStore.getState().closePane(companion.id)}><CloseIcon className="h-4 w-4" /></button></header>
+                  <div className="command-wall-companion-body"><CompanionBody pane={companion} /></div>
+                </section>;
+              })}
             </div>
           </div>
           {session && <WorkingSubagents children={childrenOf.get(session.id) ?? []} running={running} pending={pending} onOpen={(id) => { update((root) => allPanes(root).some(p => p.kind === 'chat' && p.refId === id) ? root : addPane(root, wallPane('chat', id), aspect)); onSelect(id); }} />}

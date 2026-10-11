@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { AppSettings } from '@nekko-agent/shared';
-import { DEFAULT_PROMPTS, DEFAULT_SPEC_METHODOLOGY, DEFAULT_ORCHESTRATION, DEFAULT_ACCENT, LEGACY_ACCENTS } from '@nekko-agent/shared';
+import { DEFAULT_PROMPTS, DEFAULT_SPEC_METHODOLOGY, DEFAULT_ORCHESTRATION, DEFAULT_ACCENT, LEGACY_ACCENTS, uniqueFolders } from '@nekko-agent/shared';
 import { DEFAULT_GUARDRAILS } from '@nekko-agent/core';
 import { dataDir } from './paths.js';
 import { ensurePrivateFile, writeJsonAtomic } from './secure-file.js';
@@ -72,6 +72,9 @@ export function getSettings(): AppSettings {
 
 export function saveSettings(patch: Partial<AppSettings>): AppSettings {
   const next = { ...getSettings(), ...patch };
+  // Every writer (add, reorder, import, a merge) goes through here, so this is
+  // where one folder can never be listed twice.
+  if (patch.workspaces) next.workspaces = uniqueFolders(patch.workspaces).folders;
   cache.set(dataDir(), next);
   writeJsonAtomic(SETTINGS_PATH(), next);
   return next;

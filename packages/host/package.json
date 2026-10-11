@@ -13,6 +13,10 @@
     "./user-data": {
       "types": "./dist/user-data.d.ts",
       "import": "./dist/user-data.js"
+    },
+    "./legacy-profiles": {
+      "types": "./dist/legacy-profiles.d.ts",
+      "import": "./dist/legacy-profiles.js"
     }
   },
   "scripts": {

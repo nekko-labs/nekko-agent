@@ -9,7 +9,8 @@ import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD, summarizeSess
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { DiffIcon, FolderIcon, GlobeIcon, GridIcon, MoreVerticalIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
+import { GridIcon, MoreVerticalIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
+import { COMPANION_OPENED_EVENT } from '../components/AgentCompanionButtons.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -366,16 +367,21 @@ export function CommandCenterView() {
   const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
   // Changes, Browser and Files open in the selected agent's workspace, which
   // the wall shows as companions under its window: unfold them so they show.
-  const openCompanion = (kind: 'diff' | 'browser' | 'files') => {
-    if (!selected) return;
-    if (useStore.getState().openCompanion(selected, kind)) setWall((w) => ({ ...w, folded: { ...w.folded, [selected]: false } }));
-  };
+  // Companions open from each agent's own header now; unfold that agent's
+  // companions on the wall so the one just opened is visible.
+  useEffect(() => {
+    const opened = (e: Event) => {
+      const id = (e as CustomEvent<{ sessionId: string }>).detail?.sessionId;
+      if (id) setWall((w) => (w.folded[id] === false ? w : { ...w, folded: { ...w.folded, [id]: false } }));
+    };
+    window.addEventListener(COMPANION_OPENED_EVENT, opened);
+    return () => window.removeEventListener(COMPANION_OPENED_EVENT, opened);
+  }, [setWall]);
 
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-3 px-4 pb-4 pt-1 xl:px-6">
       <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen}
-        onAdd={(kind) => { setCompletedId(null); void addFromToolbar(kind); }}
-        onCompanion={openCompanion} companionFor={completedId ? null : selectedAgent?.session.title ?? null} />
+        onAdd={(kind) => { setCompletedId(null); void addFromToolbar(kind); }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <WallDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
         <div className="wall-agent-workspace" data-tabs={panel.show && panel.orientation === 'horizontal' ? 'top' : 'left'}>
@@ -445,13 +451,6 @@ const FILTERS: Array<{ key: WallFilter; label: string }> = [
   { key: 'terminal', label: 'Terminals' },
 ];
 
-type CompanionKind = 'diff' | 'browser' | 'files';
-const COMPANIONS: Array<{ kind: CompanionKind; label: string; Icon: (p: { className?: string }) => React.JSX.Element }> = [
-  { kind: 'diff', label: 'Changes', Icon: DiffIcon },
-  { kind: 'browser', label: 'Browser', Icon: GlobeIcon },
-  { kind: 'files', label: 'Files', Icon: FolderIcon },
-];
-
 export function WallToolbar({
   wall,
   setWall,
@@ -459,8 +458,6 @@ export function WallToolbar({
   addOpen,
   setAddOpen,
   onAdd,
-  onCompanion,
-  companionFor,
 }: {
   wall: CommandWallState;
   setWall: (update: (s: CommandWallState) => CommandWallState) => void;
@@ -469,10 +466,6 @@ export function WallToolbar({
   setAddOpen: React.Dispatch<React.SetStateAction<boolean>>;
   /** A new agent or terminal window on the wall. */
   onAdd: (kind: 'chat' | 'terminal') => void;
-  /** A companion window for the selected agent. */
-  onCompanion: (kind: CompanionKind) => void;
-  /** The selected agent's title; companions are off without one. */
-  companionFor: string | null;
 }) {
   const [fixedOpen, setFixedOpen] = useState(false);
   const [hoverSize, setHoverSize] = useState({ rows: wall.layout.rows, cols: wall.layout.cols });
@@ -518,17 +511,12 @@ export function WallToolbar({
       {!hasAppChrome && <h1 className="view-title text-gradient">Agents</h1>}
       <div className={`ml-auto flex flex-wrap items-center ${slot ? 'gap-2' : 'gap-3'}`}>
 
-        {/* Adding to the wall, first in the row: an agent or a terminal of its own, or a
-            companion (Changes, Browser, Files) under the selected agent. More
-            opens the full picker: chats already running, image sessions. */}
+        {/* Adding to the wall, first in the row: an agent or a terminal of its
+            own. An agent's Changes, Files and Browser live in that agent's own
+            header beside Logs. More opens the full picker. */}
         <div className="wall-add-bar" role="group" aria-label="Add to the wall">
           <button type="button" className="wall-add-icon" title="New agent" aria-label="New agent" onClick={() => onAdd('chat')}><NekkoAvatar size={16} stationary eyes={false} /></button>
           <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
-          {COMPANIONS.map(({ kind, label, Icon }) => (
-            <button key={kind} type="button" className="wall-add-icon" disabled={!companionFor}
-              title={companionFor ? `${label} for ${companionFor}` : `${label}: select an agent first`}
-              aria-label={label} onClick={() => onCompanion(kind)}><Icon className="h-4 w-4" /></button>
-          ))}
           <button
             type="button"
             className="wall-add-icon"
