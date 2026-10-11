@@ -174,7 +174,7 @@ import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
 import { isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
 import { loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
-import { turnCallback } from './daemon-turn.js';
+import { setTurnNotifier, turnCallback } from './daemon-turn.js';
 import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
 import { initLimits, getLimits, clearLimits, getLimitsProblem } from './limits.js';
 import { startWorkflowListeners } from './listeners.js';
@@ -589,6 +589,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // Automation tasks: fired-task agent events ride the same bus as live chats;
   // task-list changes get their own event. Start the periodic scheduler.
   setTaskSender((e) => events.emit('agentEvent', e));
+  // What the daemon says after a turn it drove has ended (its generated title).
+  setTurnNotifier((e) => events.emit('agentEvent', e));
   setCompactionSender((e) => events.emit('agentEvent', e));
   setDecisionRunner({
     available: async () => {

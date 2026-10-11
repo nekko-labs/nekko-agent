@@ -154,6 +154,20 @@ export function saveTurnSession(s: Session, queued?: { index: number; item: Queu
   saveSession(s);
 }
 
+/**
+ * Land a generated title, unless the user named the chat meanwhile (the
+ * title is only the app's while `titleAuto` is true). Landing it also ends
+ * generation: the flag stays the "may generate" gate. True when written.
+ */
+export function applyAutoTitle(id: string, title: string): boolean {
+  const fresh = getSession(id);
+  if (!fresh || fresh.titleAuto !== true) return false;
+  fresh.title = title;
+  fresh.titleAuto = false;
+  saveSession(fresh);
+  return true;
+}
+
 export function saveSession(s: Session): void {
   s.updatedAt = Date.now();
   const file = pathFor(s.id);

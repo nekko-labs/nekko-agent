@@ -84,6 +84,7 @@ fn every_write_leaves_the_file_the_ts_host_would() {
                 "truncate" => store.truncate(fixture, &arg),
                 "queue" => store.queue(fixture, &arg),
                 "dequeue" => store.dequeue(fixture, &arg),
+                "autoTitle" => store.set_auto_title(fixture, arg.as_str().unwrap()).map(|_| Some(Value::Null)),
                 other => panic!("unknown op {other}"),
             };
             assert!(r.unwrap().is_some(), "{fixture}: the chat vanished");

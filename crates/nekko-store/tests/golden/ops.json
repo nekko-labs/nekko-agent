@@ -14,7 +14,8 @@
     ["setWorkspace", "w2"],
     ["setAttachments", ["C:/src/a.ts", "/tmp/b.md"]],
     ["setSpecLinked", true],
-    ["setWorkspace", null]
+    ["setWorkspace", null],
+    ["autoTitle", "Not the app's to name"]
   ] },
   { "fixture": "s_plain", "ops": [
     ["dequeue", 0],

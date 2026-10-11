@@ -205,7 +205,34 @@ describe('a daemon-driven turn', () => {
     expect(isChatRunning(s.id)).toBe(false);
   });
 
-  it('runs the next queued prompt after the turn, claiming it in the daemon', async () => {
+  it('admits the queued prompt the daemon goes on to, and waits for it as part of the same send', async () => {
+    const s = named();
+    s.queue = ['next one'];
+    saveSession(s);
+    const specs: Spec[] = [];
+    const events: AgentEvent[] = [];
+    const { calls } = fakeDaemon(async (first) => {
+      specs.push(first);
+      await turnCallback('turn:event', [first.turnId, { events: [event(first, { type: 'done', messageId: 'x', stop: 'complete', steps: 0 })], stats: null, startedAt: 1 }]);
+      // Like the daemon after a turn: the host admits the next queued prompt.
+      const prepared = await turnCallback('turn:prepare', [first.turnId, { opts: { sessionId: s.id, providerId: 'p1', modelId: 'm', text: 'next one' }, queued: { index: 0, item: 'next one' } }]) as { spec: Spec };
+      expect(prepared.spec.turnId).not.toBe(first.turnId);
+      specs.push(prepared.spec);
+      await turnCallback('turn:end', [first.turnId, { stop: 'complete', aborted: false, next: prepared.spec.turnId }]);
+      // The follow-up runs; its events reach the same listener.
+      await turnCallback('turn:event', [prepared.spec.turnId, { events: [event(prepared.spec, { type: 'text', delta: 'second' })] }]);
+      await turnCallback('turn:end', [prepared.spec.turnId, { stop: 'complete', aborted: false }]);
+    });
+    await sendChat({ sessionId: s.id, providerId: 'p1', modelId: 'm', text: 'first' }, (e) => events.push(e));
+    expect(specs.map((x) => x.opts.text)).toEqual(['first', 'next one']);
+    expect(specs[1].queued).toEqual({ index: 0, item: 'next one' });
+    expect(events.some((e) => e.type === 'text' && (e as { delta: string }).delta === 'second')).toBe(true);
+    // The host neither titles nor drains a daemon turn itself: one chat:turn, the follow-up came from turn:prepare.
+    expect(calls.filter(([c]) => c === 'chat:turn')).toHaveLength(1);
+    expect(isChatRunning(s.id)).toBe(false);
+  });
+
+  it('runs the queued prompt here when the daemon hands it back', async () => {
     const s = named();
     s.queue = ['next one'];
     saveSession(s);
@@ -213,17 +240,16 @@ describe('a daemon-driven turn', () => {
     fakeDaemon(async (spec) => {
       specs.push(spec);
       if (spec.queued) {
-        // The daemon claims the entry when it saves the user's message.
         const fresh = getSession(s.id)!;
         fresh.queue = [];
         saveSession(fresh);
+        await turnCallback('turn:end', [spec.turnId, { stop: 'complete', aborted: false }]);
+        return;
       }
-      await turnCallback('turn:event', [spec.turnId, { events: [event(spec, { type: 'done', messageId: 'x', stop: 'complete', steps: 0 })], stats: null, startedAt: 1 }]);
-      await turnCallback('turn:end', [spec.turnId, { stop: 'complete', aborted: false }]);
+      await turnCallback('turn:end', [spec.turnId, { stop: 'complete', aborted: false, drain: 'host' }]);
     });
     await sendChat({ sessionId: s.id, providerId: 'p1', modelId: 'm', text: 'first' }, () => {});
     expect(specs.map((x) => x.opts.text)).toEqual(['first', 'next one']);
-    expect(specs[1].queued).toEqual({ index: 0, item: 'next one' });
   });
 
   it('skips what follows a turn that never started', async () => {
@@ -262,6 +288,19 @@ describe('a daemon-driven turn', () => {
     }
     expect(calls.some(([c]) => c === 'chat:turn')).toBe(false);
     expect(getSession(s.id)!.messages.at(-1)!.content).toBe('escape hatch');
+  });
+});
+
+describe('after a daemon turn', () => {
+  it('logs the title call\'s usage and relays its session_meta', async () => {
+    const { setTurnNotifier } = await import('./daemon-turn.js');
+    const relayed: AgentEvent[] = [];
+    setTurnNotifier((e) => relayed.push(e));
+    await turnCallback('turn:usage', [{ provider: { id: 'p1', kind: 'llamacpp' }, modelId: 'm', sessionId: 's_t', usage: [{ type: 'usage', inputTokens: 40, outputTokens: 6 }] }]);
+    await turnCallback('turn:notify', [{ type: 'session_meta', sessionId: 's_t' }]);
+    const log = readFileSync(join(dir, 'usage.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    expect(log.at(-1)).toMatchObject({ providerId: 'p1', modelId: 'm', sessionId: 's_t', inputTokens: 40, outputTokens: 6, local: true });
+    expect(relayed).toEqual([{ type: 'session_meta', sessionId: 's_t', relayOnly: true }]);
   });
 });
 

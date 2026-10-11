@@ -26,6 +26,11 @@
 //! limits), `loop:log` (the agent terminal); and it sends the host every
 //! event (`turn:event`, deltas batched) for the phone relay and usage and
 //! reply accounting, then `turn:end`.
+//!
+//! After a turn (step 4) the daemon starts the chat's generated title and
+//! runs its next queued prompt: the host admits that prompt (`turn:prepare`)
+//! and the daemon drives it as the next turn of the same chain, so the
+//! host's `sendChat` resolves once the queue is worked through, as it did.
 
 use crate::backend::Backend;
 use crate::hub::Hub;
@@ -352,12 +357,76 @@ impl Turns {
         lock(&self.running).insert(turn_id.clone(), shared.clone());
         let me = self.clone();
         tokio::spawn(async move {
-            let summary = me.drive(&backend, hub, store, &spec, shared.clone(), rx).await;
+            let summary = me.drive(&backend, hub.clone(), store.clone(), &spec, shared.clone(), rx).await;
             lock(&me.running).remove(&turn_id);
             me.pending.release(&shared.session_id);
+            let summary = me.after_turn(&backend, &hub, &store, &spec, &turn_id, summary).await;
             let _ = backend.call("turn:end", json!([turn_id, summary])).await;
         });
         Ok(json!({ "started": true }))
+    }
+
+    /// What follows a turn here (PF14 step 4): the chat's generated title,
+    /// started and left to land on its own, and the next queued prompt, run
+    /// as the next turn of the chain (`summary.next`) once the host has
+    /// admitted it (`turn:prepare`), or handed back to the host to run
+    /// (`summary.drain`). A turn that never started has nothing after it.
+    async fn after_turn(
+        self: &Arc<Self>,
+        backend: &Arc<Backend>,
+        hub: &Hub,
+        store: &Arc<SessionStore>,
+        spec: &Value,
+        turn_id: &str,
+        mut summary: Value,
+    ) -> Value {
+        if summary.get("early") == Some(&Value::Bool(true)) {
+            return summary;
+        }
+        let opts = &spec["opts"];
+        let session_id = str_at(opts, "sessionId").unwrap_or_default().to_string();
+        let (st, id) = (store.clone(), session_id.clone());
+        let Some(fresh) = tokio::task::spawn_blocking(move || st.get(&id)).await.ok().flatten() else {
+            return summary;
+        };
+        // titleAuto guards a name the user typed; incognito and offline chats
+        // skip the extra call, as does a turn whose provider never resolved.
+        if !js::truthy(fresh.get("incognito"))
+            && !js::truthy(fresh.get("offline"))
+            && fresh.get("titleAuto") == Some(&Value::Bool(true))
+            && spec.pointer("/facts/provider").is_some_and(Value::is_object)
+        {
+            let messages = fresh.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
+            tokio::spawn(generate_title(backend.clone(), hub.clone(), store.clone(), spec.clone(), messages));
+        }
+        if summary.get("aborted") == Some(&Value::Bool(true)) || js::truthy(fresh.get("archivedAt")) {
+            return summary;
+        }
+        let Some(next) = fresh.get("queue").and_then(Value::as_array).and_then(|q| q.first()).cloned() else {
+            return summary;
+        };
+        let base = json!({
+            "sessionId": session_id,
+            "providerId": opts.get("providerId").cloned().unwrap_or(Value::Null),
+            "modelId": opts.get("modelId").cloned().unwrap_or(Value::Null),
+            "text": "",
+        });
+        let payload =
+            json!({ "opts": turn::send_options_for_queued_item(&base, &next), "queued": { "index": 0, "item": next } });
+        match backend.call("turn:prepare", json!([turn_id, payload])).await {
+            Ok(reply) if reply.get("spec").is_some_and(Value::is_object) => {
+                let next_spec = reply["spec"].clone();
+                let next_id = next_spec.get("turnId").cloned().unwrap_or(Value::Null);
+                match self.start(backend.clone(), hub.clone(), next_spec) {
+                    Ok(_) => summary["next"] = next_id,
+                    Err(e) => eprintln!("nekkod: could not start the next queued turn: {e}"),
+                }
+            }
+            Ok(reply) if reply.get("inProcess") == Some(&Value::Bool(true)) => summary["drain"] = json!("host"),
+            Ok(_) => {}
+            Err(e) => eprintln!("nekkod: the host could not admit the next queued turn: {e}"),
+        }
+        summary
     }
 
     async fn drive(
@@ -615,6 +684,54 @@ impl Turns {
             summary["stop"] = stop;
         }
         summary
+    }
+}
+
+/// `titleSession`: ask the turn's own provider and model for a short title
+/// once a chat's turn has content, and land it unless the user named the
+/// chat meanwhile. A failure just leaves the prompt-prefix placeholder. The
+/// call's usage goes to the host's usage log (`turn:usage`), and the title's
+/// `session_meta` to the UI and the host's listeners (`turn:notify`).
+async fn generate_title(backend: Arc<Backend>, hub: Hub, store: Arc<SessionStore>, spec: Value, messages: Vec<Value>) {
+    let Some(content) = turn::title_prompt(&messages) else { return };
+    let opts = &spec["opts"];
+    let facts = &spec["facts"];
+    let session_id = str_at(opts, "sessionId").unwrap_or_default().to_string();
+    let request = json!({
+        "provider": facts["provider"],
+        "request": {
+            "model": opts.get("modelId").cloned().unwrap_or(Value::Null),
+            "messages": [{ "id": "title", "role": "user", "createdAt": now_ms(), "content": content }],
+            "temperature": 0.2,
+            "maxOutputTokens": 24,
+            "think": false,
+            "purpose": "title",
+            "promptCaching": facts.get("promptCaching").cloned().unwrap_or(json!(true)),
+        },
+        "timeoutMs": 30_000,
+        "usageOnFailure": true,
+    });
+    let Ok(out) = crate::sideband::complete(&request).await else { return };
+    if let Some(usage) = out.get("usage").filter(|u| u.as_array().is_some_and(|a| !a.is_empty())) {
+        let provider = &facts["provider"];
+        let who = json!({ "id": provider.get("id"), "kind": provider.get("kind"), "auth": provider.get("auth") });
+        let record =
+            json!({ "provider": who, "modelId": opts.get("modelId"), "sessionId": session_id, "usage": usage });
+        let _ = backend.call("turn:usage", json!([record])).await;
+    }
+    if out.get("error").is_some() {
+        return;
+    }
+    let title = turn::clean_title(out.get("text").and_then(Value::as_str).unwrap_or_default());
+    if title.is_empty() {
+        return;
+    }
+    let (st, id) = (store.clone(), session_id.clone());
+    let landed = tokio::task::spawn_blocking(move || st.set_auto_title(&id, &title)).await;
+    if matches!(landed, Ok(Ok(true))) {
+        let meta = json!({ "type": "session_meta", "sessionId": session_id });
+        hub.publish("agent:event", meta.clone(), false);
+        let _ = backend.call("turn:notify", json!([meta])).await;
     }
 }
 
