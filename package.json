@@ -30,6 +30,7 @@
     "test": "node --test scripts/pr-media.test.mjs scripts/electron-downloader.test.mjs scripts/update-runtime-releases.test.mjs scripts/build-commands.test.mjs && npm run test -w @nekko-agent/shared && npm run test -w @nekko-agent/core && npm run test -w @nekko-agent/desktop && npm run test -w @nekko-agent/cloud && npm run test -w @nekko-agent/host && npm run test -w @nekko-agent/server && npm run test -w @nekko-agent/relay && npm run test --workspace=apps/cli",
     "typecheck": "npm run build:core && npm run typecheck -w @nekko-agent/shared && npm run typecheck -w @nekko-agent/core && npm run typecheck -w @nekko-agent/host && npm run build --workspace=apps/cli && npm run typecheck --workspace=apps/cli && npm run typecheck -w @nekko-agent/desktop && npm run typecheck -w @nekko-agent/server && npm run typecheck -w @nekko-agent/relay && npm run typecheck -w @nekko-agent/cloud",
     "relay": "npm run build -w @nekko-agent/relay && npm run start -w @nekko-agent/relay",
+    "relay:tailscale": "pwsh -File scripts/private-relay.ps1",
     "dist": "npm run build && npm run dist -w @nekko-agent/desktop",
     "test:daemon": "cargo test --workspace --locked",
     "build:nekkod": "node apps/desktop/scripts/stage-daemon.mjs",

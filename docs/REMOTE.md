@@ -73,6 +73,34 @@ Zero setup; free during beta with per-connection rate limits. When Nekko Agent C
 managed relay becomes part of the paid plans (it already supports gating via
 `NEKKO_RELAY_AUTHZ_URL`), while self-hosting stays free forever.
 
+### Private relay over Tailscale (free, no account, nothing hosted)
+
+If your phone and computer are both on a [Tailscale](https://tailscale.com) network, you do not
+need a hosted relay at all: run the relay **on the computer** and bind it to the computer's
+Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts the hop
+(WireGuard), and the app's end-to-end layer still sits on top. This is how free remote-desktop
+tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
+network you already own.
+
+```bash
+npm run relay:tailscale        # Windows (PowerShell); or scripts/private-relay.sh on macOS/Linux
+```
+
+The script prints the URL to paste into **Settings → Remote access** (for example
+`ws://gomi.tailfd6474.ts.net:4400`; the MagicDNS name resolves on any device in the tailnet, the
+`100.x.y.z` address works too). Enable, **Pair a device**, scan the QR from the phone with
+Tailscale switched on. The relay only listens on the Tailscale interface, so
+`NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` is safe here; never use that flag on a public bind.
+
+Plain `ws://` is fine on a tailnet: the transport is already encrypted end to end by WireGuard and
+the iOS app ships with Expo's default App Transport Security (arbitrary loads allowed). If you
+prefer `wss://`, enable **HTTPS certificates** in the tailnet's DNS settings and either put
+`tailscale serve --bg 4400` in front (needs Serve enabled once per tailnet) or terminate TLS with
+`tailscale cert` on your own proxy.
+
+Trade-offs: the computer must be awake and Tailscale running; push notifications need APNs/FCM
+keys on this relay like any other; Tailscale's free plan covers up to 100 devices and 3 users.
+
 ### Self-host (free forever, one command)
 
 The relay is a tiny stateless Node service; anything that runs a container can host it.

@@ -12,18 +12,70 @@ owner:
 
 ---
 
-## Native phone migration — iOS first (2026-10-07)
+## Phone: what ships now, what the native port owes (consolidated 2026-10-12)
 
-Product decision: platform-native **SwiftUI iOS**, then **Kotlin / Jetpack Compose Android**. Expo in apps/mobile remains a reference and fallback during migration; do not delete it until native parity is verified. Native app code lives outside that Expo tree in apps/ios and later apps/android.
+**Two phone codebases exist.** The Expo / React Native app in `apps/mobile` is the complete phone
+client and is the one that installs on a phone today. The SwiftUI app in `apps/ios` is a read-only
+foundation (connection form, chat list, transcript snapshots over direct HTTPS) with no pairing,
+relay, sending, approvals or on-device models. Decision: **ship the Expo app via EAS now; the native
+port continues behind it and replaces it only once the parity gates below pass.** Nothing in
+`apps/mobile` is deleted or frozen until then.
 
-### Ordered implementation and acceptance gates
+### What the Expo app already does on the phone (reference inventory for the port)
+
+- **Remote control of the computer** over the E2E relay (v2 protocol, PBKDF2 → AES-GCM, sealed HELLO
+  against the host's device registry): QR / paste / deep-link pairing (`nekko-agent-pair:` scheme),
+  one-time pair codes, multi-computer list with live connection state, reconnect, revocation.
+- **Chat operations**: chats list with Working / Needs-you badges, new chat on the computer's models and
+  folders, streamed replies, Markdown rendering, tool approvals, the agent's questions, queued
+  follow-ups, Stop. Terminal / changes / tasks / training events ride the same relay.
+- **On-device models** through llama.rn (llama.cpp): memory-fit GGUF catalog, Hugging Face downloads,
+  offline local chats, one loaded model.
+- **Push** (relay-sent APNs / FCM; content-free body), Keychain / Keystore secret storage, JSON file
+  state, haptics, light/dark theme matching the desktop palette.
+- **Tests**: unit tests pin the Hermes crypto and relay client to the shared implementation; the
+  phone ↔ relay ↔ computer integration test (`npm run test:relay`) passes against current builds
+  (re-verified 2026-10-12; it needs fresh `dist/` for shared, core, host, cli, server and relay).
+
+### Distribution (Expo app): in progress
+
+- [x] EAS project linked: `@nekkodev/nekko-agent` (`app.json` → `extra.eas.projectId`; owner changed
+  from the non-existent Expo org `nekkolabs` to the `nekkodev` account). `eas.json` with
+  development / preview / production profiles. · 2026-10-12
+- [ ] **iOS TestFlight build.** Blocked on a one-time Apple credential step on the build machine:
+  either an interactive `eas build -p ios --profile production` (Apple ID + 2FA) or the team's App
+  Store Connect API key (id `9RRP3RJ85L`, lives on the MacBook under `~/.credentials`) exported as
+  `EXPO_ASC_*` env. After that: `eas submit -p ios --latest`, add the Apple ID as an internal tester.
+- [ ] Android: EAS `preview` APK build started 2026-10-12 to validate the cloud pipeline (llama.rn
+  native build); result in the EAS dashboard.
+- [ ] Push credentials on the relay (APNs key, FCM service account); the app works without them.
+
+### Connectivity: Tailscale first, hosted relay second
+
+- [x] **Private relay over Tailscale**: `npm run relay:tailscale` (`scripts/private-relay.ps1` /
+  `.sh`) runs `apps/relay` bound to the computer's Tailscale address and prints the
+  `ws://<magicdns>:4400` URL for Settings → Remote access. Verified reachable by tailnet IP and MagicDNS
+  name from this machine; plain `ws://` is acceptable because WireGuard already encrypts the hop
+  and the E2E layer sits on top, and Expo's default ATS allows it. Documented in docs/REMOTE.md. ·
+  2026-10-12
+- [ ] The hosted relay `wss://nekko-agent-relay.fly.dev` **does not resolve** (the Fly app is gone
+  after the rename cleanup) while it is still the default URL in `RemoteAccess.tsx` and the docs.
+  Either redeploy it under the new name (`fly deploy -c apps/relay/fly.toml`, one machine, needs a
+  Fly login) or change the default to "private relay on this computer" and treat hosting as the
+  Cloud-plan feature it was always meant to be. Decide before the next desktop release.
+- [ ] Follow-up: let the desktop app host the private relay itself (a "Relay on this computer
+  (Tailscale)" option in Remote access that spawns `apps/relay` on the tailnet address), so the
+  script is not needed. Optional `wss://` via `tailscale cert` once HTTPS certificates are enabled
+  on the tailnet.
+
+### Native port (SwiftUI iOS, then Kotlin / Compose Android): ordered gates, unchanged
 
 1. **Foundation (implemented; simulator build, protocol and credential tests verified):** SwiftUI shell, Foundation protocol package and tests, HTTPS-only direct-host chat reader, explicit Connect, device-only Keychain bearer, Disconnect/Forget. XcodeGen and macOS CI build/test workflow. No provider settings requests, insecure transport exceptions, or automatic connection on launch.
-2. **iOS validation (partially verified):** Foundation tests, simulator build, two device-Keychain/host-binding tests and a first-run UI test pass in CI. Full-height light/dark simulator captures inspected. XcodeGen preserves the launch storyboard; simulator runtime tests use ad hoc signing for Keychain access. Still pending: authenticated live host, iPad/physical device, accessibility/Dynamic Type and signed distribution acceptance.
-3. **Encrypted remote access (planned):** port PBKDF2/AES-GCM wire and relay v2 state machine from shared/mobile references; fixture parity tests; QR/paste pairing, one-time code consumption, Keychain identity, reconnect/revocation, multi-computer switching. No insecure direct-host fallback.
+2. **iOS validation (partially verified):** Foundation tests, simulator build, two device-Keychain/host-binding tests and a first-run UI test pass in CI. Full-height light/dark simulator captures inspected. Still pending: authenticated live host, iPad/physical device, accessibility/Dynamic Type and signed distribution acceptance.
+3. **Encrypted remote access (planned):** port PBKDF2/AES-GCM wire and relay v2 state machine from shared/mobile references; fixture parity tests; QR/paste pairing, one-time code consumption, Keychain identity, reconnect/revocation, multi-computer switching. No insecure direct-host fallback. The Tailscale private relay above is the first transport to support.
 4. **Chat operations (planned):** streaming events, transcript reconciliation after sleep, new chat/provider model/project choice, queue/stop, pending approvals/questions and exact risk payloads. Sending stays disabled until approvals and event lifecycle are proven.
 5. **On-device models (planned):** audited llama.cpp Swift bridge with Metal, memory-fit catalog, cancel/resume downloads with integrity validation, backup-excluded model storage, offline phone chat persistence, one loaded model and thermal/background handling. No remote fallback.
-6. **Distribution (planned):** signing/team and bundle ID confirmation, physical-device/security testing, privacy manifest review, notification permission after pairing, APNs credentials, TestFlight then App Store. Requires owner Apple account and macOS/device access.
+6. **Distribution (planned):** signing/team and bundle ID confirmation (the Expo app already owns `dev.nekkolabs.nekkoagent`; the native app must take it over, not sit beside it), physical-device/security testing, privacy manifest review, notification permission after pairing, APNs credentials, TestFlight then App Store.
 7. **Android (planned after iOS gates):** standalone Kotlin/Compose app, Keystore, matching protocol fixtures, lifecycle/approval parity, then local inference and Play distribution; preserve Expo Android until verified.
 
 ### Wall creation placement
