@@ -70,7 +70,15 @@ export interface HostTurn {
   headers: (pairs: Array<[string, string]>) => void;
   /** What still follows a turn here once it has ended: the agent terminal, TurnEnd hooks, the linked spec. */
   afterEach: (summary: TurnSummary) => void;
+  /**
+   * `spawn:prepare`: check a `spawn_agent` call and make its child (attempt 0),
+   * or admit the child's resume (a later attempt), for the daemon to drive.
+   */
+  spawn?: (call: ToolCall, attempt: number, childId?: string) => Promise<SpawnPrepared>;
 }
+
+/** What `spawn:prepare` hands the daemon: the child's turn, a failure to start it, or why it was refused. */
+export type SpawnPrepared = { childId: string; spec: TurnSpec } | { childId: string; failure: string } | { error: string };
 
 /** What the turns of one `sendChat` share: its listener, its Stop, its browser permission. */
 export interface TurnChain {
@@ -96,6 +104,32 @@ export function registerTurn(turnId: string, turn: HostTurn, chain: TurnChain): 
   let end!: (summary: TurnSummary) => void;
   const ended = new Promise<TurnSummary>((resolve) => { end = resolve; });
   turns.set(turnId, { ...turn, chain, end, ended, heard: false });
+}
+
+/**
+ * Register a turn the daemon drives on its own (a `spawn_agent` child), with
+ * nobody here waiting on it: its callbacks find it, and when it ends (or the
+ * daemon moves on to its next queued turn) its after-work runs and it is
+ * dropped. `done` runs once the last of them has ended.
+ */
+export function adoptTurn(turnId: string, turn: HostTurn, chain: TurnChain, done?: () => void): void {
+  registerTurn(turnId, turn, chain);
+  void (async () => {
+    let current = turnId;
+    for (;;) {
+      const registered = turns.get(current);
+      if (!registered) break;
+      const summary = await registered.ended;
+      turns.delete(current);
+      if (!summary.early) registered.afterEach(summary);
+      if (summary.next && turns.has(summary.next)) {
+        current = summary.next;
+        continue;
+      }
+      break;
+    }
+    done?.();
+  })();
 }
 
 /**
@@ -201,6 +235,12 @@ export async function turnCallback(channel: string, args: unknown[]): Promise<un
     case 'turn:headers':
       turn?.headers((args[1] ?? []) as Array<[string, string]>);
       return;
+    case 'spawn:prepare': {
+      const call = args[1] as ToolCall;
+      if (!turn?.spawn || turn.chain.abort.signal.aborted) return { error: 'This run has already ended.' };
+      turn.heard = true;
+      return turn.spawn(call, Number(args[2] ?? 0), typeof args[3] === 'string' ? args[3] : undefined);
+    }
     case 'turn:prepare': {
       // The previous turn of the chain is still registered: its turn:end comes after this.
       if (!turn || !preparer || turn.chain.abort.signal.aborted) return { ended: true };

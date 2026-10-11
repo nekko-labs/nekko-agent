@@ -7,7 +7,8 @@
 //!   title prompt and its cleaning, and the options a queued prompt runs with;
 //! - `ask`: reading an `ask_user` call and writing back the answers;
 //! - `plan_update`: `update_plan` on a chat's live plan;
-//! - `stats`: a reply's totals, kept on its last message.
+//! - `stats`: a reply's totals, kept on its last message;
+//! - `delegate`: what a `spawn_agent` child's run comes back as.
 //!
 //! The tool specs and the fixed text a turn uses come from the TS sources
 //! through `src/catalog.json`, which `turn-plan.golden.test.ts` writes and
@@ -16,6 +17,7 @@
 
 pub mod ask;
 pub mod catalog;
+pub mod delegate;
 pub mod input;
 pub mod plan;
 pub mod plan_update;

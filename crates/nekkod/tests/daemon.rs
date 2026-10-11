@@ -76,6 +76,23 @@ fn fake_backend() {
                                 *template.lock().unwrap() = Some(body.0["args"][0].clone());
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
                             }
+                            // A spawn_agent child: made on disk, its first turn from the template.
+                            "spawn:prepare" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                let Some(mut spec) = template.lock().unwrap().clone() else {
+                                    return (axum::http::StatusCode::OK, axum::Json(json!({ "error": "no template" })));
+                                };
+                                let parent = spec["opts"]["sessionId"].clone();
+                                let task = body.0["args"][1]["input"]["task"].clone();
+                                let child = json!({ "id": "s_child", "title": "Sub-agent", "workspaceId": "w1", "parentSessionId": parent, "messages": [], "createdAt": 1, "updatedAt": 1 });
+                                if let Ok(dir) = std::env::var("FAKE_DATA_DIR") {
+                                    std::fs::write(std::path::Path::new(&dir).join("sessions/s_child.json"), child.to_string()).unwrap();
+                                }
+                                spec["turnId"] = json!("turn_child");
+                                spec["opts"] = json!({ "sessionId": "s_child", "providerId": "p1", "modelId": "synthetic", "text": task });
+                                spec["facts"]["spawn"] = json!(false);
+                                (axum::http::StatusCode::OK, axum::Json(json!({ "childId": "s_child", "spec": spec })))
+                            }
                             "turn:prepare" => {
                                 recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
                                 let Some(mut spec) = template.lock().unwrap().clone() else {
@@ -1270,4 +1287,86 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
     let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
     let (status, none) = post(d.port, "mcp:hypergate", json!([free]), Some(TOKEN)).await;
     assert_eq!((status, none), (200, Value::Null));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
+    let session = json!({
+        "id": "s_turn_p", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("spawn", session);
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().iter().any(|o| o == "turn:spawn"), "{info}");
+    let model = scripted_model(vec![
+        call_tool("c_spawn", "spawn_agent", json!({ "task": "count the files" })),
+        say_text("there are 2 files"),
+        say_text("parent done"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_p", "s_turn_p", json!({}));
+    // The child's turn is admitted by the host from this template.
+    let (status, _) = post(rig.d.port, "test:prepareTemplate", json!([spec.clone()]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let mut spec = spec;
+    spec["facts"]["spawn"] = json!(true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, end) = turn_record(rig.d.port, "turn_p").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let all = all.as_array().unwrap().clone();
+    let prepare = all.iter().find(|e| e[0] == "spawn:prepare").expect("the host was asked to make the child");
+    assert_eq!(prepare[1][0], "turn_p");
+    assert_eq!(prepare[1][2], 0, "first attempt");
+    assert!(!all.iter().any(|e| e[0] == "turn:tool"), "spawn_agent never ran in the host");
+    assert!(all.iter().any(|e| e[0] == "turn:end" && e[1][0] == "turn_child"), "the child ran as its own daemon turn");
+
+    let child = saved_session(&rig, "s_child");
+    assert_eq!(child["messages"][0]["content"], "count the files");
+    assert_eq!(child["messages"].as_array().unwrap().last().unwrap()["content"], "there are 2 files");
+    let parent = saved_session(&rig, "s_turn_p");
+    let result = parent["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == "c_spawn")
+        .unwrap()
+        .clone();
+    assert_eq!(result["toolResult"]["output"], "there are 2 files");
+    assert_eq!(parent["messages"].as_array().unwrap().last().unwrap()["content"], "parent done");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stopping_the_parent_stops_its_sub_agent() {
+    let session = json!({
+        "id": "s_turn_ps", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("spawn-stop", session);
+    let model =
+        scripted_model(vec![call_tool("c_spawn", "spawn_agent", json!({ "task": "wait forever" })), HANG.to_string()])
+            .await;
+    let spec = turn_spec(&rig, &model, "turn_ps", "s_turn_ps", json!({}));
+    post(rig.d.port, "test:prepareTemplate", json!([spec.clone()]), Some(TOKEN)).await;
+    let mut spec = spec;
+    spec["facts"]["spawn"] = json!(true);
+    post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    // Wait for the child to be running, then stop the parent.
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            let (_, alive) = post(rig.d.port, "turn:alive", json!(["turn_child"]), Some(TOKEN)).await;
+            if alive == json!(true) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("the child started");
+    let (_, stopped) = post(rig.d.port, "turn:abort", json!(["turn_ps"]), Some(TOKEN)).await;
+    assert_eq!(stopped, json!(true));
+    let (_, end) = turn_record(rig.d.port, "turn_ps").await;
+    assert_eq!(end["aborted"], true, "{end}");
+    let (_, child_alive) = post(rig.d.port, "turn:alive", json!(["turn_child"]), Some(TOKEN)).await;
+    assert_eq!(child_alive, json!(false), "the child stopped with its parent");
 }
