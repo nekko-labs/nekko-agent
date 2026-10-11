@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findRunningApp, splitCommand, stopApp, type ProcInfo } from './app-control.js';
+import { findRunningApp, splitCommand, stopApp, taskkillArgs, type ProcInfo } from './app-control.js';
 
 const dirs: string[] = [];
 afterEach(async () => { for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true }); });
@@ -72,6 +72,13 @@ describe('stopApp', () => {
     expect(result.graceful).toBe(false);
     expect(sent[0]).toEqual([100, false]);
     expect(sent.filter(([, hard]) => hard).map(([p]) => p).sort()).toEqual([100, 101, 102, 103]);
+  });
+
+  it('asks only the main process politely on Windows; /T is for the forced close', () => {
+    // With /T, taskkill refuses the main process while its window-less children
+    // run, so the app never got the request and every close timed out.
+    expect(taskkillArgs(100, false)).toEqual(['/PID', '100']);
+    expect(taskkillArgs(100, true)).toEqual(['/PID', '100', '/T', '/F']);
   });
 
   it('reports a process that will not die', async () => {

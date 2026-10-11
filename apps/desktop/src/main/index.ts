@@ -16,6 +16,7 @@ import { createDesktopTray } from './tray.js';
 import { startAgentBrowser } from './agentBrowser.js';
 import { registerArtifactPreview } from './artifactPreview.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
+import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
 const applicationWindows = new Set<number>();
 
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
@@ -145,9 +146,19 @@ function createWindow(): void {
   });
 
   win.on('ready-to-show', () => win.show());
+  const closeIntent = createCloseIntent();
+  if (process.platform === 'win32') {
+    win.hookWindowMessage(WM_SYSCOMMAND, (wParam) => closeIntent.sysCommand(readWParam(wParam)));
+    win.hookWindowMessage(WM_CLOSE, () => closeIntent.closeMessage());
+  }
   win.on('close', event => {
+    const external = closeIntent.takeExternal();
     if (quitting || !desktopTray) return;
     event.preventDefault();
+    // Another program asked the app to exit (`taskkill` without /F, as
+    // `nekko-agent migrate` and installers do): quit for real, through the
+    // clean engine shutdown, rather than hide into the tray.
+    if (external) { app.quit(); return; }
     saveWindowBounds(win.getBounds());
     win.hide();
   });
@@ -346,6 +357,7 @@ app.whenReady().then(async () => {
   // in on every launch while any remain; the engine is not running yet, so the
   // data folder is quiet.
   offerLegacyCleanup({
+    dataDirOverridden: Boolean(brandEnv('DATA_DIR')),
     ask: (message, detail) => {
       const pick = dialog.showMessageBoxSync({ type: 'question', title: 'Nekko Agent', message, detail, buttons: ['Merge and clean up', 'Merge, keep old copies', 'Not now'], defaultId: 0, cancelId: 2, noLink: true });
       return pick === 0 ? 'merge-clean' : pick === 1 ? 'merge-keep' : 'later';
