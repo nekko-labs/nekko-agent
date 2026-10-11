@@ -5,7 +5,9 @@ import { IpcChannels, IpcEvents } from '@nekko-agent/shared';
  * The channels the web edition answers differently from the shared
  * dispatcher, whether the host runs in this process or as nekkod's backend.
  */
-export type ChannelOverrides = Record<string, (args: unknown[]) => unknown>;
+export type ChannelHandler = (args: unknown[]) => unknown;
+/** A Map, so a channel named `constructor` or `__proto__` can never reach Object.prototype. */
+export type ChannelOverrides = Map<string, ChannelHandler>;
 
 export const OAUTH_UNSUPPORTED_MESSAGE = 'OAuth sign-in is only available in the desktop app.';
 
@@ -23,7 +25,7 @@ export const WEBHOOK_DISPATCH = 'web:dispatchWebhook';
 export type WebhookDispatchResult = { started: number } | { unauthorized: true };
 
 export function webChannelOverrides(host: Host): ChannelOverrides {
-  const out: ChannelOverrides = {
+  const out: Record<string, ChannelHandler> = {
     [IpcChannels.oauthStatus]: ([providerConfigId]) => ({
       tokenKey: (providerConfigId as string) ?? '',
       connected: false,
@@ -47,12 +49,11 @@ export function webChannelOverrides(host: Host): ChannelOverrides {
       throw new Error(OAUTH_UNSUPPORTED_MESSAGE);
     };
   }
-  return out;
+  return new Map(Object.entries(out));
 }
 
-/** The override for `channel`, never one inherited from Object.prototype (`constructor`, `__proto__`). */
-export function overrideFor(overrides: ChannelOverrides, channel: string): ((args: unknown[]) => unknown) | undefined {
-  return Object.prototype.hasOwnProperty.call(overrides, channel) ? overrides[channel] : undefined;
+export function overrideFor(overrides: ChannelOverrides, channel: string): ChannelHandler | undefined {
+  return overrides.get(channel);
 }
 
 /** Every host event, keyed by the host's event name, with the channel clients know it by. */
