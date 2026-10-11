@@ -704,7 +704,8 @@ fn turn_spec(rig: &TurnRig, model: &ScriptedModel, turn_id: &str, session_id: &s
         "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
         "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
     });
-    let mut opts = json!({ "sessionId": session_id, "providerId": "p1", "modelId": "synthetic", "text": "Fix the bug" });
+    let mut opts =
+        json!({ "sessionId": session_id, "providerId": "p1", "modelId": "synthetic", "text": "Fix the bug" });
     for (k, v) in extra_opts.as_object().unwrap() {
         opts[k] = v.clone();
     }
@@ -787,7 +788,11 @@ async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
     });
     let rig = turn_rig("ask", session);
     let model = scripted_model(vec![
-        call_tool("c_ask", "ask_user", json!({ "questions": [{ "question": "Which bug?", "options": ["Login", "Logout"] }] })),
+        call_tool(
+            "c_ask",
+            "ask_user",
+            json!({ "questions": [{ "question": "Which bug?", "options": ["Login", "Logout"] }] }),
+        ),
         call_tool("c_read", "read_file", json!({ "path": "app.ts" })),
         call_tool("c_host", "fetch_url", json!({ "url": "https://example.invalid" })),
         say_text("all done"),

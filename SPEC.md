@@ -420,23 +420,22 @@ On the desktop, Nekko Agent runs as three processes:
 - The short side calls after a reply: the chat's title, suggested replies, and filling in part of a prompt (2026-10-01).
 - MCP servers (2026-10-01).
 - The built-in file and shell tools (read, write, edit, list, glob, grep, bash), their guardrails, and the list of pending file changes (2026-10-01).
+- The whole chat turn (2026-10-12): the tools on offer, the system prompt, the context read from disk (guidelines, memory, attachments), saving the user's message and every step, the agent's questions, setting the chat's title, completing it, an ordinary chat's plan, and Claude subscription turns (their rate-limit headers are passed to the TS host). Anything waiting on a person, tool approvals and the agent's questions, is held and answered in the daemon, so the board, the chat and the phone all answer it there; with the TS host busy, approving a tool went from 451 ms to 6 ms.
 
 **Still in the TS host:**
 
-- Setting up each turn: which provider and model, a fresh sign-in token, the system prompt, the context (guidelines, memory, attachments, connector and workspace-search snippets) and which tools are on offer. The daemon then runs the turn.
-- Anything waiting on a person: tool approvals and the agent's questions. The daemon asks the TS host, which shows the prompt, so the board, notifications and the phone relay work as before.
-- The tools not rebuilt yet: sub-agents, plans, `decide`, the browser, training reports.
-- After a turn: recording usage and starting the next queued message.
+- Admitting each turn: checking the provider and chat, setting up a chat's worktree, syncing MCP servers, a fresh sign-in token, and the connector and workspace-search snippets. The daemon then runs the turn, so a turn's first text still waits on a busy TS host.
+- The tools not rebuilt yet: sub-agents, MCP calls, `decide`, the browser, processes, web fetch, agent watches, training reports. The daemon calls the TS host for them; their approvals are held in the daemon too.
+- After a turn: recording usage and the reply log, tool hooks, the chat's generated title and starting the next queued message.
 - Settings, connectors, messaging, workflows, training runs, the phone relay, Hypergate discovery and model downloads.
-- Turns on a Claude subscription, end to end, because only the TS host records the rate-limit headers they carry.
 
 **Session clearing.** The daemon now implements clear today, this month and all when configured with a data directory. Date windows use inclusive local calendar boundaries against the chat's last update, not its creation date; archived and pinned chats are not exempt. Clear and single-session delete coordinate command-log removal through the host callback before deleting chat files, preserving the host's queued removal and process-lifetime append tombstone. Callback failures stop deletion rather than bypassing the queue. TS-generated parity fixtures verify deletion counts, retained files and summary-cache refresh; focused host tests verify queued-write removal and later append suppression, and daemon HTTP tests verify callback IDs. Month cutoffs resolve today's midnight before changing the date to day 1, matching TS setter order. Deterministic JS/Rust timezone fixtures verify midnight gaps, repeated midnight, skipped calendar days and month setter order. An isolated real-daemon/real-host-dispatcher HTTP harness verifies queued writes and racing appends cannot recreate removed logs. The host callback awaits queued unlink and propagates failure; daemon tests verify failed callbacks and disabled backends preserve JSON for both delete and clear. Deletion requires the host backend to be available because it owns the log queue and tombstone; unavailable backends fail closed. Non-Windows execution remains unverified. Without a daemon data directory, the TS host remains the fallback. This does not complete PF14.
 
 **Editions.** Only the desktop app runs behind the daemon today. The web, npx and Docker editions run the TS host on its own, so everything above is still TypeScript there until they move behind the daemon too.
 
-**Falling back.** If the daemon binary is missing, the desktop app still starts and runs the TS host directly. For diagnosing a problem, setting `NEKKO_AGENT_LOOP=ts` keeps agent runs, side calls, MCP servers and the built-in tools in the TS host; chats and pending changes stay in the daemon.
+**Falling back.** If the daemon binary is missing, the desktop app still starts and runs the TS host directly. For diagnosing a problem, setting `NEKKO_AGENT_LOOP=ts` keeps whole turns, side calls, MCP servers and the built-in tools in the TS host; chats and pending changes stay in the daemon. Sandbox chats always run their turns in the TS host, with its container router.
 
-**The end state.** Everything moves, the TS host is retired, and the web, npx and Docker editions ship the daemon too. Remaining in order: the rest of a turn (its setup, approvals and questions, the queue), then connectors, messaging and workflows, the phone relay's agent, and training. The plan and each step's details are in `TASKS.md` (PF14).
+**The end state.** Everything moves, the TS host is retired, and the web, npx and Docker editions ship the daemon too. Remaining in order: the rest of a turn (admitting it, the title and the queue after it), then connectors, messaging and workflows, the phone relay's agent, and training. The plan and each step's details are in `TASKS.md` (PF14).
 
 ### Models & providers
 

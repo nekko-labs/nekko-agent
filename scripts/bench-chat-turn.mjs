@@ -20,7 +20,7 @@
 // a running app; every spawned process is ended on exit.
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
@@ -48,6 +48,8 @@ if (args.fake) {
     req.on('end', async () => {
       if (!req.url?.endsWith('/chat/completions')) { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data: [{ id: model }] })); return; }
       const request = JSON.parse(body);
+      // `--dump-requests <file>`: what the model was sent, to compare the routes' requests.
+      if (args['dump-requests']) appendFileSync(args['dump-requests'], `${JSON.stringify(request)}\n`);
       const messages = request.messages ?? [];
       const lastUser = [...messages].reverse().find((m) => m.role === 'user');
       const afterTool = messages.at(-1)?.role === 'tool';
@@ -78,6 +80,12 @@ const workspace = join(data, 'project');
 mkdirSync(workspace, { recursive: true });
 writeFileSync(join(workspace, 'AGENTS.md'), 'Keep answers short.\n');
 for (let i = 0; i < 400; i++) writeFileSync(join(workspace, `file${i}.ts`), `export const value${i} = ${i};\n`);
+// The load's own project: an index search over it reads every file on the
+// host's event loop (workspace.ts searchWorkspace), a realistic way to keep it busy.
+const loadProject = join(data, 'load-project');
+mkdirSync(loadProject, { recursive: true });
+const filler = 'const nothing = "here";\n'.repeat(80);
+for (let i = 0; i < 2500; i++) writeFileSync(join(loadProject, `f${i}.ts`), filler);
 const token = randomBytes(24).toString('hex');
 const children = [];
 
@@ -137,18 +145,31 @@ for (let i = 0; ; i++) {
   try { await call('settings:get'); break; } catch (e) { if (i > 120) throw e; await new Promise((r) => setTimeout(r, 500)); }
 }
 await call('settings:update', {
-  workspaces: [{ id: 'w1', name: 'project', path: workspace, addedAt: Date.now() }],
+  workspaces: [{ id: 'w1', name: 'project', path: workspace, addedAt: Date.now() }, { id: 'w2', name: 'load', path: loadProject, addedAt: Date.now() }],
   providers: [{ id: 'local', kind: 'llamacpp', label: 'Local', baseUrl: modelUrl, enabled: true }],
   defaultChatMode: 'ask',
 });
+if (load > 0) {
+  await call('workspace:index', 'w2');
+  for (let i = 0; i < 240; i++) {
+    const st = await call('workspace:indexStatus', 'w2').catch(() => null);
+    if (st?.state === 'ready' && st.fileCount > 0) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
 const info = await call('daemon:info');
 console.log(`route=${route} daemon owns chat:turn=${info.owned.includes('chat:turn')} load=${load}`);
 
 let busy = load > 0;
 let loadCalls = 0;
+const loadMs = [];
 async function loadLoop(sessionId) {
   while (busy) {
-    await Promise.all([call('context:preview', sessionId, []).catch(() => {}), call('engine:folders').catch(() => {})]);
+    const t0 = performance.now();
+    const kind = args['load-kind'] ?? 'search';
+    if (kind === 'search') await call('workspace:search', 'w2', 'zzz-no-match').catch(() => {});
+    else await Promise.all([kind !== 'folders' ? call('context:preview', sessionId, []).catch(() => {}) : null, kind !== 'preview' ? call('engine:folders').catch(() => {}) : null]);
+    loadMs.push(performance.now() - t0);
     loadCalls++;
   }
 }
@@ -225,6 +246,7 @@ try {
     approvalToResultMedian: pct(all((r) => r.approvals.map((a) => a.toResult)), 0.5),
     approvalAnswerMedian: pct(all((r) => r.approvals.map((a) => a.seenToAnswered)), 0.5),
     loadCalls,
+    loadCallMedian: pct(loadMs, 0.5),
   };
   console.log(JSON.stringify(results.summary));
   if (args.json) writeFileSync(args.json, JSON.stringify(results, null, 2));
