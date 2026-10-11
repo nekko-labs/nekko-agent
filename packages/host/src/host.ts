@@ -176,7 +176,7 @@ import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.j
 import { loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
 import { setTurnNotifier, turnCallback } from './daemon-turn.js';
 import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
-import { initLimits, getLimits, clearLimits, getLimitsProblem } from './limits.js';
+import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemon as notifyLimits } from './limits.js';
 import { startWorkflowListeners } from './listeners.js';
 import {
   initOAuth,
@@ -187,6 +187,7 @@ import {
   signOut as signOutOAuth,
   importCliAuth,
   resolveSubscriptionProvider,
+  ensureFreshToken,
 } from './oauth.js';
 import { buildSpec, buildSpecDoc, readSpecDocs, setSpecMethodology, toggleSpecTask, specPathForSession } from './spec.js';
 import { createRemoteService } from './remote.js';
@@ -277,6 +278,15 @@ export interface Host {
   /** A daemon-driven chat turn's callbacks (daemon-turn.ts `turn:*`). */
   turnCallback(channel: string, args: unknown[]): Promise<unknown>;
   changesNotify(sessionId: string): void;
+  /** The daemon changed a limits snapshot (`limits:notify`): the phone relay hears it. */
+  limitsNotify(payload: { tokenKey: string; limits: SubscriptionLimits }): void;
+  /**
+   * Renew a sign-in when it is due (`oauth:refresh`), for the daemon's quota
+   * polls. The daemon asks rather than refreshing itself, since a refresh
+   * rotates the refresh token and so must have exactly one writer, and it reads
+   * the renewed token from `tokens.json` itself: no token crosses the wire.
+   */
+  oauthRefresh(tokenKey: string): Promise<void>;
   /** For the engine daemon's router: `GET /v1/models`. */
   engineRouterModels(): Promise<unknown>;
   engineRouterModel(modelId: string): Promise<unknown>;
@@ -851,6 +861,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     loopLog,
     turnCallback,
     changesNotify: notifyChanges,
+    limitsNotify: notifyLimits,
+    oauthRefresh: async (tokenKey) => { await ensureFreshToken(tokenKey); },
     engineRouterModels: () => engine.routerModels(),
     engineRouterModel: (modelId) => engine.routerModel(modelId),
     engineInstall: (buildId, runtime) => engine.installEngine(buildId, runtime),
@@ -1164,8 +1176,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
 
     classifyCommand: (command) => classifyCommand(command, getSettings().guardrails),
     usageSummary,
-    getLimits: (tokenKey, refresh) => getLimits(tokenKey, refresh),
-    getLimitsProblem: async (tokenKey) => getLimitsProblem(tokenKey),
+    getLimits: (tokenKey, refresh) => readLimits(tokenKey, refresh),
+    getLimitsProblem: (tokenKey) => readLimitsProblem(tokenKey),
 
     enableRemote: (relayUrl) => host.remote.enable(relayUrl),
     disableRemote: () => host.remote.disable(),

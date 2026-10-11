@@ -32,6 +32,7 @@
 //! and the daemon drives it as the next turn of the same chain, so the
 //! host's `sendChat` resolves once the queue is worked through, as it did.
 
+use crate::accounts::{Accounts, TurnAccount};
 use crate::backend::Backend;
 use crate::hub::Hub;
 use nekko_agent::{ProviderConfig, create_provider};
@@ -219,6 +220,8 @@ pub struct Turns {
     store: Option<Arc<SessionStore>>,
     data_dir: Option<PathBuf>,
     changes: Arc<ChangeTracker>,
+    /// The usage and reply logs and the limit state (accounts.rs).
+    accounts: Arc<Accounts>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
 }
@@ -226,8 +229,13 @@ pub struct Turns {
 static STEER_SEQ: AtomicU64 = AtomicU64::new(0);
 
 impl Turns {
-    pub fn new(store: Option<Arc<SessionStore>>, data_dir: Option<PathBuf>, changes: Arc<ChangeTracker>) -> Self {
-        Self { store, data_dir, changes, running: Mutex::default(), pending: Pending::default() }
+    pub fn new(
+        store: Option<Arc<SessionStore>>,
+        data_dir: Option<PathBuf>,
+        changes: Arc<ChangeTracker>,
+        accounts: Arc<Accounts>,
+    ) -> Self {
+        Self { store, data_dir, changes, accounts, running: Mutex::default(), pending: Pending::default() }
     }
 
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
@@ -397,7 +405,8 @@ impl Turns {
             && spec.pointer("/facts/provider").is_some_and(Value::is_object)
         {
             let messages = fresh.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
-            tokio::spawn(generate_title(backend.clone(), hub.clone(), store.clone(), spec.clone(), messages));
+            let accounts = self.accounts.enabled().then(|| self.accounts.clone());
+            tokio::spawn(generate_title(backend.clone(), hub.clone(), store.clone(), accounts, spec.clone(), messages));
         }
         if summary.get("aborted") == Some(&Value::Bool(true)) || js::truthy(fresh.get("archivedAt")) {
             return summary;
@@ -576,9 +585,13 @@ impl Turns {
         if let Some(e) = facts.get("statsEffort").filter(|v| !v.is_null()) {
             identity.insert("effort".into(), e.clone());
         }
+        // The host sends its accounting facts when this daemon keeps the logs
+        // (`turn:account`); an older host leaves them out and accounts itself.
+        let account = TurnAccount::from_facts(facts).filter(|_| self.accounts.enabled());
         let forwarder = tokio::spawn(forward(
             rx,
             Forward {
+                account: account.clone().map(|a| (self.accounts.clone(), a, opts.clone())),
                 hub: hub.clone(),
                 host: host_tx.clone(),
                 store: store.clone(),
@@ -592,7 +605,19 @@ impl Turns {
         ));
 
         let provider = create_provider(config);
-        let client = if facts.get("headers") == Some(&Value::Bool(true)) {
+        let headers_key = account.as_ref().and_then(|a| a.token_key.clone());
+        let client = if facts.get("headers") == Some(&Value::Bool(true))
+            && let Some(key) = headers_key
+        {
+            // Anthropic subscription rate limits, kept here.
+            let accounts = self.accounts.clone();
+            ProviderClient::with_headers(
+                provider,
+                Arc::new(move |headers: &Vec<(String, String)>| {
+                    accounts.record_from_headers(&key, "anthropic", headers);
+                }),
+            )
+        } else if facts.get("headers") == Some(&Value::Bool(true)) {
             let (b, id) = (backend.clone(), shared.turn_id.clone());
             ProviderClient::with_headers(
                 provider,
@@ -690,9 +715,17 @@ impl Turns {
 /// `titleSession`: ask the turn's own provider and model for a short title
 /// once a chat's turn has content, and land it unless the user named the
 /// chat meanwhile. A failure just leaves the prompt-prefix placeholder. The
-/// call's usage goes to the host's usage log (`turn:usage`), and the title's
-/// `session_meta` to the UI and the host's listeners (`turn:notify`).
-async fn generate_title(backend: Arc<Backend>, hub: Hub, store: Arc<SessionStore>, spec: Value, messages: Vec<Value>) {
+/// call's usage goes to the usage log (written here when this daemon keeps it,
+/// else through the host's `turn:usage`), and the title's `session_meta` to
+/// the UI and the host's listeners (`turn:notify`).
+async fn generate_title(
+    backend: Arc<Backend>,
+    hub: Hub,
+    store: Arc<SessionStore>,
+    accounts: Option<Arc<Accounts>>,
+    spec: Value,
+    messages: Vec<Value>,
+) {
     let Some(content) = turn::title_prompt(&messages) else { return };
     let opts = &spec["opts"];
     let facts = &spec["facts"];
@@ -715,9 +748,16 @@ async fn generate_title(backend: Arc<Backend>, hub: Hub, store: Arc<SessionStore
     if let Some(usage) = out.get("usage").filter(|u| u.as_array().is_some_and(|a| !a.is_empty())) {
         let provider = &facts["provider"];
         let who = json!({ "id": provider.get("id"), "kind": provider.get("kind"), "auth": provider.get("auth") });
-        let record =
-            json!({ "provider": who, "modelId": opts.get("modelId"), "sessionId": session_id, "usage": usage });
-        let _ = backend.call("turn:usage", json!([record])).await;
+        match &accounts {
+            Some(a) => {
+                a.side_usage(&who, opts.get("modelId"), &session_id, usage.as_array().map_or(&[], Vec::as_slice))
+            }
+            None => {
+                let record =
+                    json!({ "provider": who, "modelId": opts.get("modelId"), "sessionId": session_id, "usage": usage });
+                let _ = backend.call("turn:usage", json!([record])).await;
+            }
+        }
     }
     if out.get("error").is_some() {
         return;
@@ -830,6 +870,8 @@ async fn persist(store: &Arc<SessionStore>, session: &Arc<Mutex<Value>>, incogni
 }
 
 struct Forward {
+    /// Where this turn's usage and reply lines go, when the daemon keeps them.
+    account: Option<(Arc<Accounts>, TurnAccount, Value)>,
     hub: Hub,
     host: mpsc::UnboundedSender<HostMsg>,
     store: Arc<SessionStore>,
@@ -857,6 +899,9 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
         };
         if str_at(&event, "type") == Some("usage") {
             f.stats.add(&event);
+            if let Some((accounts, account, opts)) = &f.account {
+                accounts.turn_usage(opts, account, &event);
+            }
         }
         let mut extra = None;
         if let Some(snapshot) = snapshot {
@@ -877,6 +922,9 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 if let Some(Value::Array(messages)) = s.get_mut("messages") {
                     turn::attach_turn_stats(messages, f.turn_from, stats);
                 }
+            }
+            if let Some((accounts, account, opts)) = &f.account {
+                accounts.turn_end(opts, account, f.started_at, &event, finished.as_ref());
             }
             extra = Some(json!({ "stats": finished, "startedAt": f.started_at }));
         }

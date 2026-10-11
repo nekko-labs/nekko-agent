@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto';
-import type { AgentEvent, AskAnswer, PendingInput, ProviderConfig, QueuedPrompt, SendOptions, Session, ToolCall, ToolResult, TurnStats } from '@nekko-agent/shared';
-import { isLocalProvider } from '@nekko-agent/shared';
+import type { AgentEvent, AskAnswer, PendingInput, QueuedPrompt, SendOptions, Session, ToolCall, ToolResult, TurnStats } from '@nekko-agent/shared';
+import { sideUsageRecord } from './usage-records.js';
 import { recordUsage } from './usage.js';
 import { daemonCall } from './engine/daemon.js';
 import { daemonOwns, LIVENESS_INTERVAL_MS, LIVENESS_STRIKES } from './daemon-loop.js';
@@ -121,6 +121,18 @@ export function daemonTurnFor(sessionId: string): boolean {
   return false;
 }
 
+/**
+ * What a daemon advertises in `daemon:info` `owned` when it writes a turn's
+ * usage and reply lines and keeps its limits itself (from `facts.account`);
+ * then `account` and `headers` here have nothing to do.
+ */
+export const TURN_ACCOUNT = 'turn:account';
+
+/** Whether the engine daemon accounts for the turns it drives. */
+export async function daemonAccountsTurns(call: Call): Promise<boolean> {
+  return daemonOwns(call, TURN_ACCOUNT);
+}
+
 /** Whether the engine daemon can drive whole chat turns. */
 export async function daemonRunsTurns(call: Call): Promise<boolean> {
   return daemonOwns(call, CHAT_TURN);
@@ -154,12 +166,7 @@ function approved(callId: string, ok: boolean): void {
 /** `turn:usage`: a side call the daemon made after a turn (the title), for the usage log. */
 function sideUsage(payload: { provider?: { id?: string; kind?: string; auth?: string }; modelId?: string; sessionId?: string; usage?: Array<Record<string, number | undefined>> }): void {
   const provider = payload?.provider ?? {};
-  for (const item of payload?.usage ?? []) recordUsage({
-    ts: Date.now(), providerId: provider.id ?? '', modelId: payload.modelId ?? '', sessionId: payload.sessionId ?? '',
-    inputTokens: item.inputTokens ?? 0, outputTokens: item.outputTokens ?? 0,
-    cacheReadTokens: item.cacheReadTokens, cacheWriteTokens: item.cacheWriteTokens,
-    auth: provider.auth as ProviderConfig['auth'], local: isLocalProvider((provider.kind ?? '') as ProviderConfig['kind']),
-  });
+  for (const item of payload?.usage ?? []) recordUsage(sideUsageRecord(provider, payload.modelId, payload.sessionId, item, Date.now()));
 }
 
 /** The daemon calling back about a turn it drives (dispatch.ts `turn:*`). */

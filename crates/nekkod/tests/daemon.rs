@@ -84,7 +84,7 @@ fn fake_backend() {
                                 spec["queued"] = body.0["args"][1]["queued"].clone();
                                 (axum::http::StatusCode::OK, axum::Json(json!({ "spec": spec })))
                             }
-                            "turn:event" | "turn:end" | "turn:approved" | "turn:usage" | "turn:notify" | "loop:log" => {
+                            "turn:event" | "turn:end" | "turn:approved" | "turn:usage" | "turn:notify" | "loop:log" | "limits:notify" => {
                                 recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
                             }
@@ -1041,11 +1041,101 @@ async fn after_a_daemon_turn_the_title_lands_and_the_queue_drains() {
     assert_eq!(prepare[1][0], "turn_t");
     assert_eq!(prepare[1][1]["queued"], json!({ "index": 0, "item": "and then this" }));
     assert_eq!(prepare[1][1]["opts"]["text"], "and then this");
-    let usage = all.iter().find(|e| e[0] == "turn:usage").expect("the title call's usage reached the host");
-    assert_eq!(usage[1][0]["sessionId"], "s_turn_t");
-    assert_eq!(usage[1][0]["provider"]["id"], "p1");
+    // The title call's usage is in the log, written by the daemon, which keeps it.
+    assert!(!all.iter().any(|e| e[0] == "turn:usage"), "no usage callback when the daemon keeps the log");
+    let log = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap_or_default();
+    assert!(log.lines().filter(|l| l.contains(r#""sessionId":"s_turn_t""#)).any(|l| l.contains(r#""providerId":"p1""#)), "{log}");
     assert!(all.iter().any(|e| e[0] == "turn:notify" && e[1][0]["type"] == "session_meta"));
     let titles =
         model.requests.lock().unwrap().iter().filter(|r| r["messages"].to_string().contains("short title")).count();
     assert_eq!(titles, 1, "one title, for the first turn only");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
+    let session = json!({
+        "id": "s_turn_u", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("usage", session);
+    std::fs::write(
+        rig.data.join("settings.json"),
+        json!({ "providers": [{ "id": "p1", "kind": "openai-compat" }, { "id": "c1", "kind": "anthropic", "auth": "subscription", "tokenKey": "claude:t" }] }).to_string(),
+    )
+    .unwrap();
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in ["turn:account", "usage:summary", "limits:get", "limits:headers"] {
+        assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} not owned: {info}");
+    }
+
+    let model = scripted_model(vec![say_text("hello")]).await;
+    let mut spec = turn_spec(&rig, &model, "turn_u", "s_turn_u", json!({}));
+    spec["facts"]["account"] = json!({ "auth": "apikey", "kind": "openai-compat", "incognito": false });
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, end) = turn_record(rig.d.port, "turn_u").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    // The lines the host would have written, written by the daemon.
+    let usage = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap();
+    let lines: Vec<Value> = usage.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(lines.len(), 1, "{usage}");
+    let keys: Vec<&str> = lines[0].as_object().unwrap().keys().map(String::as_str).collect();
+    assert_eq!(keys, ["ts", "providerId", "modelId", "inputTokens", "outputTokens", "sessionId", "auth", "local"]);
+    assert_eq!(lines[0]["inputTokens"], 10);
+    assert_eq!(lines[0]["outputTokens"], 3);
+    assert_eq!(lines[0]["local"], false);
+    let replies = std::fs::read_to_string(rig.data.join("replies.jsonl")).unwrap();
+    let reply: Value = serde_json::from_str(replies.trim()).unwrap();
+    assert_eq!(reply["stop"], "complete");
+    assert_eq!(reply["steps"], 0);
+    assert_eq!(reply["sessionId"], "s_turn_u");
+    assert_eq!(reply["effort"], "normal");
+    assert!(reply["startedAt"].as_u64().unwrap() <= reply["ts"].as_u64().unwrap());
+
+    // And the summary is the daemon's.
+    let (status, summary) = post(rig.d.port, "usage:summary", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{summary}");
+    assert_eq!(summary["totalInput"], 10);
+    assert_eq!(summary["bySession"]["s_turn_u"]["output"], 3);
+    assert_eq!(summary["replies"]["total"], 1);
+
+    // Limits: headers recorded here, read back here, history written, the host told for the relay.
+    let pairs = json!([
+        ["anthropic-ratelimit-unified-5h-utilization", "0.25"],
+        ["anthropic-ratelimit-unified-5h-reset", "1760003600"]
+    ]);
+    let (_, recorded) = post(rig.d.port, "limits:headers", json!(["claude:t", "anthropic", pairs]), Some(TOKEN)).await;
+    assert_eq!(recorded["windows"][0]["usedPercent"], 25);
+    let (_, got) = post(rig.d.port, "limits:get", json!(["claude:t"]), Some(TOKEN)).await;
+    assert_eq!(got, recorded, "a fresh header snapshot is served without a poll");
+    let history = std::fs::read_to_string(rig.data.join("quota-history.jsonl")).unwrap();
+    assert!(history.contains(r#""providerId":"c1","source":"headers""#), "{history}");
+    let notified = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+            if let Some(n) = all.as_array().unwrap().iter().find(|e| e[0] == "limits:notify") {
+                return n.clone();
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("the host hears limits:notify");
+    assert_eq!(notified[1][0]["tokenKey"], "claude:t");
+    // No sign-in stored: a poll says so rather than guessing.
+    let (_, polled) = post(rig.d.port, "limits:get", json!(["claude:none"]), Some(TOKEN)).await;
+    assert_eq!(polled, Value::Null);
+    let (_, problem) = post(rig.d.port, "limits:problem", json!(["claude:none"]), Some(TOKEN)).await;
+    assert_eq!(problem["kind"], "signed_out");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn without_a_data_dir_accounting_stays_with_the_host() {
+    let d = start(true);
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    let owned = info["owned"].as_array().unwrap();
+    assert!(!owned.iter().any(|o| o == "limits:get" || o == "turn:account"), "{info}");
+    let (status, body) = post(d.port, "limits:get", json!(["k"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["echo"], "limits:get", "forwarded to the host: {body}");
 }

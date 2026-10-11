@@ -1,0 +1,669 @@
+//! Usage, reply and limit accounting owned by the daemon (PF14):
+//! `usage:summary`, `limits:get`, `limits:problem`, `limits:headers`,
+//! `limits:poll`, `limits:clear`, and the lines a daemon-driven turn writes.
+//!
+//! The log formats, the summary and the parsers are `nekko-usage`'s (held to
+//! the TS functions by a golden set). This is the stateful half of
+//! `packages/host/src/limits.ts`: the snapshot per token key, the 30-second
+//! poll throttle, one poll at a time per key, why the last read failed and
+//! the backoff before the next. The TS host keeps two things: renewing a
+//! sign-in (`oauth:refresh`, since a refresh rotates the refresh token and so
+//! needs a single writer; the renewed token is read back from `tokens.json`,
+//! so no token crosses the wire) and the phone relay (`limits:notify`).
+//!
+//! Owned only when the daemon knows the data directory; otherwise every one
+//! of these channels goes to the TS host as before.
+
+use crate::backend::Backend;
+use crate::hub::Hub;
+use nekko_usage::{LimitsError, Problem};
+use serde_json::{Map, Value, json};
+use std::collections::HashMap;
+use std::io::Write;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// The channels served here when the data directory is known.
+pub const CHANNELS: &[&str] =
+    &["usage:summary", "limits:get", "limits:problem", "limits:headers", "limits:poll", "limits:clear"];
+
+/// What `daemon:info` adds when they are: the channels, and `turn:account`
+/// (a daemon-driven turn writes its own usage and reply lines and limits).
+pub const OWNED: &[&str] =
+    &["usage:summary", "limits:get", "limits:problem", "limits:headers", "limits:poll", "limits:clear", "turn:account"];
+
+const POLL_INTERVAL_MS: f64 = 30_000.0;
+const ANTHROPIC_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
+const CHATGPT_BASE: &str = "https://chatgpt.com/backend-api";
+const OPENROUTER_BASE: &str = "https://openrouter.ai/api/v1";
+/// A quota read that takes longer than this is a network failure.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn now_ms() -> f64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// `LimitsProblem`.
+#[derive(Clone, Debug)]
+struct Failure {
+    kind: &'static str,
+    status: Option<u16>,
+    at: f64,
+    retry_at: Option<f64>,
+    failures: f64,
+}
+
+impl Failure {
+    fn value(&self) -> Value {
+        let mut o = Map::new();
+        o.insert("kind".into(), json!(self.kind));
+        if let Some(s) = self.status {
+            o.insert("status".into(), json!(s));
+        }
+        o.insert("at".into(), nekko_usage::num(self.at));
+        if let Some(r) = self.retry_at {
+            o.insert("retryAt".into(), nekko_usage::num(r));
+        }
+        o.insert("failures".into(), nekko_usage::num(self.failures));
+        Value::Object(o)
+    }
+}
+
+#[derive(Default)]
+struct State {
+    store: HashMap<String, Value>,
+    last_poll: HashMap<String, f64>,
+    problems: HashMap<String, Failure>,
+    /// Bumped by `limits:clear`, so a poll that was in flight does not write back.
+    generation: HashMap<String, u64>,
+    /// One poll at a time per key; a caller that waited reads what it stored.
+    gates: HashMap<String, Arc<tokio::sync::Mutex<()>>>,
+}
+
+/// A daemon-driven turn's accounting facts (`facts.account` in `chat:turn`).
+#[derive(Clone, Debug)]
+pub struct TurnAccount {
+    pub provider: Value,
+    pub token_key: Option<String>,
+    pub subscription: bool,
+    pub incognito: bool,
+}
+
+impl TurnAccount {
+    pub fn from_facts(facts: &Value) -> Option<TurnAccount> {
+        let a = facts.get("account").filter(|a| a.is_object())?;
+        Some(TurnAccount {
+            provider: json!({ "auth": a.get("auth"), "kind": a.get("kind") }),
+            token_key: a.get("tokenKey").and_then(Value::as_str).filter(|k| !k.is_empty()).map(str::to_string),
+            subscription: a.get("auth").and_then(Value::as_str) == Some("subscription"),
+            incognito: a.get("incognito") == Some(&Value::Bool(true)),
+        })
+    }
+}
+
+pub struct Accounts {
+    dir: Option<PathBuf>,
+    backend: Arc<Backend>,
+    hub: Hub,
+    http: reqwest::Client,
+    anthropic_usage_url: String,
+    state: Mutex<State>,
+    /// Appends from this process, one at a time, so lines never interleave.
+    append: Mutex<()>,
+}
+
+impl Accounts {
+    pub fn new(dir: Option<PathBuf>, backend: Arc<Backend>, hub: Hub) -> Self {
+        Self::with_anthropic_url(dir, backend, hub, ANTHROPIC_USAGE_URL.into())
+    }
+
+    pub fn with_anthropic_url(
+        dir: Option<PathBuf>,
+        backend: Arc<Backend>,
+        hub: Hub,
+        anthropic_usage_url: String,
+    ) -> Self {
+        let http = reqwest::Client::builder().timeout(READ_TIMEOUT).build().unwrap_or_default();
+        Self { dir, backend, hub, http, anthropic_usage_url, state: Mutex::default(), append: Mutex::new(()) }
+    }
+
+    /// Whether this daemon owns accounting (it knows the data directory).
+    pub fn enabled(&self) -> bool {
+        self.dir.is_some()
+    }
+
+    pub async fn route(self: &Arc<Self>, channel: &str, args: &[Value]) -> Result<Value, String> {
+        let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
+        let key = arg(0).as_str().unwrap_or_default().to_string();
+        match channel {
+            "usage:summary" => {
+                let dir = self.dir.clone().ok_or("usage:summary needs the data directory")?;
+                tokio::task::spawn_blocking(move || nekko_usage::usage_summary(&nekko_usage::UsageFiles::read(&dir)))
+                    .await
+                    .map_err(|e| e.to_string())?
+            }
+            "limits:get" => Ok(self.get_limits(&key, arg(1) == &json!(true)).await.unwrap_or(Value::Null)),
+            "limits:problem" => Ok(lock(&self.state).problems.get(&key).map_or(Value::Null, Failure::value)),
+            "limits:headers" => {
+                let pairs = pairs_of(arg(2));
+                Ok(self.record_from_headers(&key, arg(1).as_str().unwrap_or_default(), &pairs).unwrap_or(Value::Null))
+            }
+            "limits:poll" => Ok(self.poll(&key).await.unwrap_or(Value::Null)),
+            "limits:clear" => {
+                self.clear(arg(0).as_str());
+                Ok(Value::Null)
+            }
+            other => Err(format!("{other} is not an accounting channel")),
+        }
+    }
+
+    fn file(&self, name: &str) -> Option<PathBuf> {
+        self.dir.as_ref().map(|d| d.join(name))
+    }
+
+    /// `appendFileSync(path, line + '\n')`; failures are not fatal, as in TS.
+    fn append_line(&self, name: &str, line: &str, private: bool) {
+        let Some(path) = self.file(name) else { return };
+        let _guard = lock(&self.append);
+        let mut opts = std::fs::OpenOptions::new();
+        opts.create(true).append(true);
+        #[cfg(unix)]
+        if private {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        #[cfg(not(unix))]
+        let _ = private;
+        if let Ok(mut f) = opts.open(&path) {
+            let _ = f.write_all(format!("{line}\n").as_bytes());
+        }
+    }
+
+    /// `recordUsage(turnUsageRecord(...))` for one model call of a turn.
+    pub fn turn_usage(&self, opts: &Value, account: &TurnAccount, event: &Value) {
+        let rec = nekko_usage::turn_usage_record(opts, &account.provider, event, now_ms() as u64);
+        self.append_line("usage.jsonl", &nekko_js::stringify(&rec), false);
+    }
+
+    /// The usage of a turn's side call (the title), as `sideUsage` wrote it.
+    pub fn side_usage(&self, provider: &Value, model_id: Option<&Value>, session_id: &str, usage: &[Value]) {
+        for item in usage {
+            let rec =
+                nekko_usage::side_usage_record(provider, model_id, Some(&json!(session_id)), item, now_ms() as u64);
+            self.append_line("usage.jsonl", &nekko_js::stringify(&rec), false);
+        }
+    }
+
+    /// `recordTurnEnd`: the reply line, and a fresh look at the subscription's limits.
+    pub fn turn_end(
+        self: &Arc<Self>,
+        opts: &Value,
+        account: &TurnAccount,
+        started_at: u64,
+        done: &Value,
+        stats: Option<&Value>,
+    ) {
+        let reply = nekko_usage::turn_reply_record(opts, account.incognito, started_at, done, stats, now_ms() as u64);
+        if let Some(r) = reply {
+            self.append_line("replies.jsonl", &nekko_js::stringify(&r), false);
+        }
+        if account.subscription
+            && let Some(key) = account.token_key.clone()
+        {
+            let me = self.clone();
+            tokio::spawn(async move {
+                let _ = me.poll(&key).await;
+            });
+        }
+    }
+
+    fn settings(&self) -> Value {
+        self.file("settings.json")
+            .and_then(|p| std::fs::read(p).ok())
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or(Value::Null)
+    }
+
+    fn providers(&self) -> Vec<Value> {
+        self.settings().get("providers").and_then(Value::as_array).cloned().unwrap_or_default()
+    }
+
+    fn token(&self, key: &str) -> Option<Value> {
+        let tokens: Value = self
+            .file("tokens.json")
+            .and_then(|p| std::fs::read(p).ok())
+            .and_then(|b| serde_json::from_slice(&b).ok())?;
+        tokens.get(key).filter(|t| t.is_object()).cloned()
+    }
+
+    fn quota_history(&self, key: &str, source: &str, limits: &Value) {
+        if let Some(rec) = nekko_usage::quota_history_record(&self.providers(), key, source, limits) {
+            self.append_line("quota-history.jsonl", &nekko_js::stringify(&rec), true);
+        }
+    }
+
+    /// Tell the UI, and the host for the phone relay.
+    fn notify(&self, key: &str, limits: &Value) {
+        let payload = json!({ "tokenKey": key, "limits": limits });
+        self.hub.publish("limits:updated", payload.clone(), false);
+        let backend = self.backend.clone();
+        tokio::spawn(async move {
+            let _ = backend.call("limits:notify", json!([payload])).await;
+        });
+    }
+
+    fn get(&self, key: &str) -> Option<Value> {
+        lock(&self.state).store.get(key).cloned()
+    }
+
+    /// `clearLimits(tokenKey?)`.
+    pub fn clear(&self, key: Option<&str>) {
+        let mut s = lock(&self.state);
+        match key {
+            Some(k) => {
+                s.store.remove(k);
+                s.last_poll.remove(k);
+                s.problems.remove(k);
+                *s.generation.entry(k.to_string()).or_default() += 1;
+            }
+            None => {
+                s.store.clear();
+                s.last_poll.clear();
+                s.problems.clear();
+                // The "" entry is everyone's: every poll compares it too.
+                *s.generation.entry(String::new()).or_default() += 1;
+            }
+        }
+    }
+
+    fn generation(&self, key: &str) -> (u64, u64) {
+        let s = lock(&self.state);
+        (s.generation.get(key).copied().unwrap_or(0), s.generation.get("").copied().unwrap_or(0))
+    }
+
+    /// `recordFromHeaders(tokenKey, provider, headers)`: Anthropic's windows,
+    /// merged over the snapshot (plan and credits kept, per-model windows the
+    /// headers do not mention carried forward).
+    pub fn record_from_headers(&self, key: &str, provider: &str, pairs: &[(String, String)]) -> Option<Value> {
+        if provider != "anthropic" && provider != "claude" {
+            return self.get(key);
+        }
+        let parsed = nekko_usage::parse_anthropic_headers(pairs, now_ms());
+        let fresh = parsed.get("windows").and_then(Value::as_array).cloned().unwrap_or_default();
+        if fresh.is_empty() {
+            return self.get(key);
+        }
+        self.quota_history(key, "headers", &parsed);
+        let limits = {
+            let mut s = lock(&self.state);
+            let previous = s.store.get(key).cloned();
+            let prev_windows =
+                previous.as_ref().and_then(|p| p.get("windows")).and_then(Value::as_array).cloned().unwrap_or_default();
+            let mut limits = parsed.clone();
+            limits["windows"] = Value::Array(nekko_usage::merge_windows(&prev_windows, &fresh));
+            for k in ["planType", "creditsBalance", "creditsState"] {
+                if let Some(v) = previous.as_ref().and_then(|p| p.get(k)) {
+                    limits[k] = v.clone();
+                }
+            }
+            s.store.insert(key.to_string(), limits.clone());
+            limits
+        };
+        self.notify(key, &limits);
+        Some(limits)
+    }
+
+    /// `getLimits(tokenKey, refresh)`: the snapshot while fresh, else a poll,
+    /// and nothing rather than a stale snapshot.
+    pub async fn get_limits(self: &Arc<Self>, key: &str, refresh: bool) -> Option<Value> {
+        let fresh = |v: &Value| {
+            let at = v.get("updatedAt").and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let stale = v.get("staleAfterMs").and_then(Value::as_f64).unwrap_or(f64::NAN);
+            at + stale > now_ms()
+        };
+        if !refresh && let Some(s) = self.get(key).filter(fresh) {
+            return Some(s);
+        }
+        self.poll(key).await.filter(fresh)
+    }
+
+    fn record_problem(&self, key: &str, e: &Problem) {
+        let LimitsError { kind, status, retry_after_ms } = nekko_usage::classify_limits_error(e);
+        let now = now_ms();
+        let mut s = lock(&self.state);
+        let failures = s.problems.get(key).map_or(0.0, |p| p.failures) + 1.0;
+        // A dead sign-in will not fix itself: wait for the user.
+        let waits = kind == "auth_expired" || kind == "signed_out";
+        let retry_at = (!waits).then(|| now + nekko_usage::limits_backoff_ms(failures, retry_after_ms));
+        s.problems.insert(key.to_string(), Failure { kind, status, at: now, retry_at, failures });
+    }
+
+    /// `poll(tokenKey)`: at most one read per key every 30 seconds, none while
+    /// a failure's backoff runs, and none for a dead sign-in until it changes.
+    pub async fn poll(self: &Arc<Self>, key: &str) -> Option<Value> {
+        // A `provider:<id>` key is an API-key provider read with its inference
+        // key; everything else is a sign-in's token key.
+        let api_provider = key.strip_prefix("provider:").and_then(|id| {
+            self.providers()
+                .into_iter()
+                .find(|p| p.get("id").and_then(Value::as_str) == Some(id) && nekko_js::truthy(p.get("enabled")))
+        });
+        let token = if api_provider.is_some() { None } else { self.token(key) };
+        if api_provider.is_none() && token.is_none() {
+            if !lock(&self.state).problems.contains_key(key) {
+                self.record_problem(key, &Problem::Read(LimitsError::new("signed_out", None)));
+            }
+            return self.get(key);
+        }
+        let gate = lock(&self.state).gates.entry(key.to_string()).or_default().clone();
+        let _held = gate.lock().await;
+        let now = now_ms();
+        {
+            let s = lock(&self.state);
+            if now - s.last_poll.get(key).copied().unwrap_or(0.0) < POLL_INTERVAL_MS {
+                return s.store.get(key).cloned();
+            }
+            if let Some(p) = s.problems.get(key) {
+                let obtained = token.as_ref().and_then(|t| t.get("obtainedAt")).and_then(Value::as_f64).unwrap_or(0.0);
+                let blocked = match p.retry_at {
+                    None => !(token.is_some() && obtained > p.at),
+                    Some(r) => now < r,
+                };
+                if blocked {
+                    return s.store.get(key).cloned();
+                }
+            }
+        }
+        let before = self.generation(key);
+        let read = match &api_provider {
+            Some(p) => self.read_api_key_provider(p).await,
+            None => self.read_signed_in(key).await,
+        };
+        if self.generation(key) != before {
+            return self.get(key);
+        }
+        match read {
+            Ok(next) => {
+                if let Some(next) = &next {
+                    self.quota_history(key, "poll", next);
+                    {
+                        let mut s = lock(&self.state);
+                        s.store.insert(key.to_string(), next.clone());
+                        s.problems.remove(key);
+                    }
+                    self.notify(key, next);
+                }
+                lock(&self.state).last_poll.insert(key.to_string(), now_ms());
+                next.or_else(|| self.get(key))
+            }
+            Err(e) => {
+                lock(&self.state).last_poll.insert(key.to_string(), now_ms());
+                self.record_problem(key, &e);
+                self.get(key)
+            }
+        }
+    }
+
+    /// A token usable now: the stored one while it is good for another
+    /// minute (or never expires), else the host renews it and it is read back.
+    async fn fresh_token(&self, key: &str) -> Result<Option<Value>, Problem> {
+        let usable = |t: &Value| {
+            let expires = token_expires_at(t);
+            match expires {
+                Some(e) => e - 60_000.0 > now_ms(),
+                None => !nekko_js::truthy(t.get("refreshToken")),
+            }
+        };
+        if let Some(t) = self.token(key).filter(usable) {
+            return Ok(Some(t));
+        }
+        self.backend.call("oauth:refresh", json!([key])).await.map_err(Problem::Message)?;
+        Ok(self.token(key))
+    }
+
+    async fn read_signed_in(&self, key: &str) -> Result<Option<Value>, Problem> {
+        // Signed out meanwhile: nothing to read, and nothing wrong to report.
+        let Some(fresh) = self.fresh_token(key).await? else { return Ok(None) };
+        let access = fresh.get("accessToken").and_then(Value::as_str).unwrap_or_default().to_string();
+        let base_for = |default: &str| {
+            self.providers()
+                .into_iter()
+                .find(|p| p.get("tokenKey").and_then(Value::as_str) == Some(key))
+                .and_then(|p| p.get("baseUrl").and_then(Value::as_str).map(str::to_string))
+                .unwrap_or_else(|| default.to_string())
+        };
+        match fresh.get("provider").and_then(Value::as_str) {
+            Some("claude") => {
+                let req = self
+                    .http
+                    .get(&self.anthropic_usage_url)
+                    .header("Authorization", format!("Bearer {access}"))
+                    .header("anthropic-beta", "oauth-2025-04-20");
+                let (status, body) = send(req).await?;
+                let json = body.as_ref().and_then(Value::as_object).ok_or(unreadable(status))?;
+                Ok(Some(nekko_usage::parse_anthropic_usage_json(json, now_ms())))
+            }
+            Some("chatgpt") => {
+                let Some(account) = fresh.get("accountId").and_then(Value::as_str).filter(|a| !a.is_empty()) else {
+                    return Err(Problem::Read(LimitsError::new("auth_expired", None)));
+                };
+                let base = base_for(CHATGPT_BASE).trim_end_matches('/').to_string();
+                let req = self
+                    .http
+                    .get(format!("{base}/wham/usage"))
+                    .header("Authorization", format!("Bearer {access}"))
+                    .header("ChatGPT-Account-Id", account);
+                let (status, body) = send(req).await?;
+                let json = body.as_ref().and_then(Value::as_object).ok_or(unreadable(status))?;
+                Ok(Some(nekko_usage::parse_chatgpt_usage(json, now_ms())))
+            }
+            Some("openrouter") => read_openrouter(&self.http, &base_for(OPENROUTER_BASE), &access).await.map(Some),
+            _ => Ok(None),
+        }
+    }
+
+    async fn read_api_key_provider(&self, provider: &Value) -> Result<Option<Value>, Problem> {
+        let Some(key) = provider.get("apiKey").and_then(Value::as_str).filter(|k| !k.is_empty()) else {
+            return Ok(None);
+        };
+        if provider.get("kind").and_then(Value::as_str) != Some("openrouter") {
+            return Ok(None);
+        }
+        let base = provider.get("baseUrl").and_then(Value::as_str).filter(|b| !b.is_empty()).unwrap_or(OPENROUTER_BASE);
+        read_openrouter(&self.http, base, key).await.map(Some)
+    }
+}
+
+/// `tokenExpiresAt`: the stored expiry, or a ChatGPT JWT's `exp` claim.
+fn token_expires_at(t: &Value) -> Option<f64> {
+    if let Some(e) = t.get("expiresAt").and_then(Value::as_f64).filter(|e| *e != 0.0) {
+        return Some(e);
+    }
+    if t.get("provider").and_then(Value::as_str) != Some("chatgpt") {
+        return None;
+    }
+    let jwt = t.get("accessToken").and_then(Value::as_str)?;
+    let payload = jwt.split('.').nth(1)?;
+    let claims: Value = serde_json::from_slice(&base64url(payload)?).ok()?;
+    claims.get("exp").and_then(Value::as_f64).map(|s| s * 1000.0)
+}
+
+fn base64url(s: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    let (mut acc, mut bits) = (0u32, 0u32);
+    for c in s.bytes().filter(|&c| c != b'=') {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'-' | b'+' => 62,
+            b'_' | b'/' => 63,
+            _ => return None,
+        };
+        acc = (acc << 6) | u32::from(v);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+            acc &= (1 << bits) - 1;
+        }
+    }
+    Some(out)
+}
+
+fn unreadable(status: u16) -> Problem {
+    Problem::Read(LimitsError::new("unreadable", Some(status)))
+}
+
+/// One quota read: the status and the body as JSON (`None` when it does not
+/// parse), or the failure a non-2xx answer or the network is.
+async fn send(req: reqwest::RequestBuilder) -> Result<(u16, Option<Value>), Problem> {
+    let res = req.send().await.map_err(|e| Problem::Message(format!("fetch failed: {e}")))?;
+    let status = res.status().as_u16();
+    if !res.status().is_success() {
+        let retry = res.headers().get("retry-after").and_then(|v| v.to_str().ok()).map(str::to_string);
+        return Err(Problem::Read(match status {
+            401 | 403 => LimitsError::new("auth_expired", Some(status)),
+            429 => LimitsError {
+                kind: "rate_limited",
+                status: Some(429),
+                retry_after_ms: nekko_usage::parse_retry_after(retry.as_deref(), now_ms()),
+            },
+            _ => LimitsError::new("http", Some(status)),
+        }));
+    }
+    let bytes = res.bytes().await.map_err(|e| Problem::Message(format!("fetch failed: {e}")))?;
+    Ok((status, serde_json::from_str(&nekko_js::decode_text(&bytes)).ok()))
+}
+
+async fn read_openrouter(http: &reqwest::Client, base: &str, bearer: &str) -> Result<Value, Problem> {
+    let url = format!("{}/key", base.trim_end_matches('/'));
+    let (status, body) = send(http.get(url).header("Authorization", format!("Bearer {bearer}"))).await?;
+    nekko_usage::parse_openrouter_key(body.as_ref(), status, now_ms()).map_err(Problem::Read)
+}
+
+/// The `[name, value]` pairs a host or provider sends.
+fn pairs_of(v: &Value) -> Vec<(String, String)> {
+    v.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|p| Some((p.get(0)?.as_str()?.to_string(), p.get(1)?.as_str()?.to_string())))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("nekkod-accounts-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn accounts(dir: &std::path::Path) -> Arc<Accounts> {
+        Arc::new(Accounts::new(Some(dir.to_path_buf()), Backend::disabled(), Hub::new()))
+    }
+
+    fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
+        list.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[tokio::test]
+    async fn headers_merge_over_a_polled_snapshot_and_keep_plan_and_credits() {
+        let dir = temp_dir("merge");
+        let a = accounts(&dir);
+        lock(&a.state).store.insert(
+            "claude:x".into(),
+            json!({ "windows": [{ "id": "7d_fable", "label": "7-day Fable", "scope": "model", "usedPercent": 3, "resetAt": 0, "status": "allowed" }], "planType": "max", "creditsState": "disabled", "updatedAt": 1, "staleAfterMs": 35000 }),
+        );
+        let got = a
+            .record_from_headers(
+                "claude:x",
+                "anthropic",
+                &pairs(&[("anthropic-ratelimit-unified-5h-utilization", "0.25")]),
+            )
+            .unwrap();
+        let ids: Vec<&str> = got["windows"].as_array().unwrap().iter().map(|w| w["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["5h", "7d_fable"]);
+        assert_eq!(got["planType"], "max");
+        assert_eq!(got["creditsState"], "disabled");
+        // Other providers' headers and headers with no windows change nothing.
+        assert_eq!(a.record_from_headers("claude:x", "chatgpt", &pairs(&[])), Some(got.clone()));
+        assert_eq!(a.record_from_headers("claude:x", "claude", &pairs(&[("x", "y")])), Some(got));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn quota_history_is_written_only_for_a_configured_provider() {
+        let dir = temp_dir("history");
+        std::fs::write(
+            dir.join("settings.json"),
+            r#"{"providers":[{"id":"c","kind":"anthropic","tokenKey":"claude:x"}]}"#,
+        )
+        .unwrap();
+        let a = accounts(&dir);
+        a.record_from_headers(
+            "claude:x",
+            "anthropic",
+            &pairs(&[("anthropic-ratelimit-unified-5h-utilization", "0.5")]),
+        );
+        a.record_from_headers(
+            "claude:y",
+            "anthropic",
+            &pairs(&[("anthropic-ratelimit-unified-5h-utilization", "0.5")]),
+        );
+        let text = std::fs::read_to_string(dir.join("quota-history.jsonl")).unwrap();
+        assert_eq!(text.lines().count(), 1);
+        assert!(
+            text.starts_with(r#"{"timestamp":"#) && text.contains(r#""providerId":"c","source":"headers""#),
+            "{text}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn a_missing_sign_in_is_a_signed_out_problem_and_is_not_retried() {
+        let dir = temp_dir("signed-out");
+        let a = accounts(&dir);
+        assert_eq!(a.poll("claude:none").await, None);
+        let p = a.route("limits:problem", &[json!("claude:none")]).await.unwrap();
+        assert_eq!(p["kind"], "signed_out");
+        assert_eq!(p["failures"], 1);
+        assert!(p.get("retryAt").is_none(), "a dead sign-in waits for the user");
+        a.poll("claude:none").await;
+        let p = a.route("limits:problem", &[json!("claude:none")]).await.unwrap();
+        assert_eq!(p["failures"], 1, "recorded once, not on every poll");
+        a.clear(Some("claude:none"));
+        assert_eq!(a.route("limits:problem", &[json!("claude:none")]).await.unwrap(), Value::Null);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_chatgpt_token_expires_with_its_jwt() {
+        // {"exp":2000000000}
+        let t = json!({ "provider": "chatgpt", "accessToken": "h.eyJleHAiOjIwMDAwMDAwMDB9.s" });
+        assert_eq!(token_expires_at(&t), Some(2_000_000_000_000.0));
+        assert_eq!(token_expires_at(&json!({ "provider": "claude", "accessToken": "x" })), None);
+        assert_eq!(token_expires_at(&json!({ "expiresAt": 5 })), Some(5.0));
+    }
+
+    #[test]
+    fn turn_lines_are_the_hosts() {
+        let dir = temp_dir("lines");
+        let a = Accounts::new(Some(dir.clone()), Backend::disabled(), Hub::new());
+        let account = TurnAccount::from_facts(&json!({ "account": { "auth": "apikey", "kind": "llamacpp" } })).unwrap();
+        let opts = json!({ "sessionId": "s", "providerId": "p", "modelId": "m" });
+        a.turn_usage(&opts, &account, &json!({ "type": "usage", "inputTokens": 1, "outputTokens": 2 }));
+        let line = std::fs::read_to_string(dir.join("usage.jsonl")).unwrap();
+        let tail = r#","providerId":"p","modelId":"m","inputTokens":1,"outputTokens":2,"sessionId":"s","auth":"apikey","local":true}"#;
+        assert!(line.starts_with(r#"{"ts":"#) && line.ends_with(&format!("{tail}\n")), "{line}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

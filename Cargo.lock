@@ -1224,6 +1224,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nekko-usage"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "icu_collator",
+ "nekko-js",
+ "regress",
+ "serde_json",
+]
+
+[[package]]
 name = "nekkod"
 version = "0.1.0"
 dependencies = [
@@ -1244,6 +1255,7 @@ dependencies = [
  "nekko-term",
  "nekko-tools",
  "nekko-turn",
+ "nekko-usage",
  "reqwest",
  "serde",
  "serde_json",

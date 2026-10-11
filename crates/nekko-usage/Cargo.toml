@@ -1,0 +1,16 @@
+[package]
+name = "nekko-usage"
+description = "Usage, reply and quota accounting for the Nekko Agent engine daemon: the log lines, usage summaries, cost estimates and subscription-limit parsers, as the TS host computes them."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+icu_collator.workspace = true
+nekko-js = { path = "../nekko-js" }
+regress.workspace = true
+# Prices like 0.049999999999999996 and costs must parse to the exact double JavaScript has.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
