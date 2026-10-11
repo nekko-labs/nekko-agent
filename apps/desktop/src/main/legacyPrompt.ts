@@ -17,6 +17,13 @@ export interface LegacyPromptDeps {
   ask: (message: string, detail: string) => LegacyChoice;
   /** Report the outcome (or a failure) after the choice was acted on. */
   tell: (title: string, detail: string, error: boolean) => void;
+  /**
+   * The data folder was chosen explicitly (NEKKO_DATA_DIR): a scratch or test
+   * profile. Never offer then, because the old folders belong to the real
+   * profile and "Merge and clean up" would pour them into the scratch one and
+   * delete the originals. Also keeps an isolated launch free of a blocking dialog.
+   */
+  dataDirOverridden?: boolean;
   env?: LegacyEnv;
   detect?: typeof detectLegacy;
   describe?: typeof describeItem;
@@ -39,6 +46,7 @@ export function describeOffer(items: LegacyItem[], target: string, describe: typ
 
 /** Returns true when something was merged (the caller need not do anything else either way). */
 export function offerLegacyCleanup(deps: LegacyPromptDeps): boolean {
+  if (deps.dataDirOverridden) return false;
   const env = deps.env ?? legacyEnv();
   let items: LegacyItem[];
   try { items = (deps.detect ?? detectLegacy)(env); } catch { return false; }

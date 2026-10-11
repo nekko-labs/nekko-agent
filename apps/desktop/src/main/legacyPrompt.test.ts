@@ -20,6 +20,14 @@ describe('offerLegacyCleanup', () => {
     expect(r.merged).toBe(false);
   });
 
+  it('never offers when the data folder was set explicitly (a scratch or test profile)', () => {
+    const r = run('merge-clean', { dataDirOverridden: true });
+    expect(r.ask).not.toHaveBeenCalled();
+    expect(r.merge).not.toHaveBeenCalled();
+    expect(r.clean).not.toHaveBeenCalled();
+    expect(r.merged).toBe(false);
+  });
+
   it('asks again on every launch: "Not now" changes nothing and remembers nothing', () => {
     const first = run('later'); const second = run('later');
     expect(first.merge).not.toHaveBeenCalled();

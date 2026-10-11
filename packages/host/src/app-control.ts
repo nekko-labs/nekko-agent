@@ -85,10 +85,10 @@ export function isAlive(pid: number): boolean {
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
- * Ask the app to close, then insist. On Windows `taskkill /T` without `/F`
- * posts a close to the windows, which runs the app's normal quit (the engine is
- * stopped cleanly and the CLI link is marked not serving); `/F` follows only
- * if the app is still there after `graceMs`.
+ * Ask the app to close, then insist. On Windows `taskkill` without `/F` posts
+ * a close to the app's window, which the app treats as a request to quit (not
+ * to hide in the tray), so the engine stops cleanly and the CLI link is marked
+ * not serving. `/F /T` follows only if the app is still there after `graceMs`.
  */
 export async function stopApp(app: RunningApp, opts: { graceMs?: number; hardMs?: number; alive?: (pid: number) => boolean; signal?: (pid: number, hard: boolean) => void } = {}): Promise<{ graceful: boolean }> {
   const alive = opts.alive ?? isAlive;
@@ -105,9 +105,20 @@ export async function stopApp(app: RunningApp, opts: { graceMs?: number; hardMs?
   return { graceful: false };
 }
 
+/**
+ * The polite close goes to the main process alone. With `/T`, taskkill walks
+ * the tree first, finds the window-less helpers (engine, GPU) that "can only be
+ * terminated forcefully", and then refuses the main process because its
+ * children are still running, so the app never heard the request and every
+ * close waited out the whole grace period before being killed.
+ */
+export function taskkillArgs(pid: number, hard: boolean): string[] {
+  return ['/PID', String(pid), ...(hard ? ['/T', '/F'] : [])];
+}
+
 function defaultSignal(pid: number, hard: boolean): void {
   try {
-    if (process.platform === 'win32') execFileSync('taskkill', ['/PID', String(pid), '/T', ...(hard ? ['/F'] : [])], { stdio: 'ignore', windowsHide: true });
+    if (process.platform === 'win32') execFileSync('taskkill', taskkillArgs(pid, hard), { stdio: 'ignore', windowsHide: true });
     else process.kill(pid, hard ? 'SIGKILL' : 'SIGTERM');
   } catch { /* already gone */ }
 }
