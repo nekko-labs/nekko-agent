@@ -161,8 +161,7 @@ const EFFORT_LABEL: Record<EffortLevel, string> = {
 
 /** Model-specific effort rungs on a compact slider beside the model picker. */
 export function EffortSlider({ modelId, onChanged }: { modelId?: string; onChanged?: () => void }) {
-  const settings = useStore((s) => s.settings);
-  const saved = settings?.effort ?? 'normal';
+  const saved = useStore((s) => s.settings?.effort) ?? 'normal';
   const levels = modelEffortLevels(modelId);
   const native = usesNativeEffort(modelId);
   const fallback = modelDefaultEffort(modelId);

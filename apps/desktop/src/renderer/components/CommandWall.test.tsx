@@ -18,7 +18,7 @@ vi.mock('./PaneFrame.js', () => ({
   PaneFrame: ({ title, children }: { title: string; children: React.ReactNode }) => <section data-title={title}>{children}</section>,
   PaneActions: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-import { CommandWall, commandWallGeometry, companionTree, resizeCompanionSplit, workspaceCompanions } from './CommandWall.js';
+import { CommandWall, commandWallGeometry, companionTree, resizeCompanionSplit, sameDeps, WARM_COMPOSERS, warmFront, workspaceCompanions } from './CommandWall.js';
 import { leafRects } from '../commandWall.js';
 
 const a: WbPane = { id: 'a', kind: 'chat', refId: 'chat-a' };
@@ -218,7 +218,7 @@ describe('workspace companions and stable bodies', () => {
     expect(source).toContain('{allPanes(state.root).map(renderLeaf)}');
     expect(source).toContain('key={pane.id}');
     expect(source).toContain('key={companion.id}');
-    expect(source).toContain("surface={focusedChat ? 'full' : 'transcript'}");
+    expect(source).toContain("surface={fullSurface ? 'full' : 'transcript'}");
     expect(source).toContain('useStore.getState().closePane(companion.id)');
     expect(source).not.toContain('inert={folded');
     expect(css).toContain('transition: left 260ms ease');
@@ -286,6 +286,39 @@ describe('focus full-height chat', () => {
     const html = renderToStaticMarkup(wall(state({ layout: layout('focus'), hero: 'chat-a' })));
     expect(html).toContain('data-surface="full"');
     expect(html).toContain('data-focus-chat="true"');
+  });
+  it('parks the other Focus windows under the hero instead of display: none', () => {
+    const html = renderToStaticMarkup(wall(state({ layout: layout('focus'), hero: 'chat-a' })));
+    const windows = html.match(/<div class="command-wall-window[^>]*>/g) ?? [];
+    const hero = windows.find((w) => w.includes('data-wall-pane="a"'))!;
+    const parked = windows.find((w) => w.includes('data-wall-pane="b"'))!;
+    expect(hero).not.toContain('data-wall-parked');
+    expect(parked).toContain('data-wall-parked="true"');
+    // At the hero's box, so a switch changes no geometry; and without the deck
+    // styling, so it restyles nothing inside the window.
+    expect(parked.match(/style="[^"]*"/)?.[0]).toBe(hero.match(/style="[^"]*"/)?.[0]);
+    expect(parked).not.toContain('display:none');
+    expect(parked).not.toContain('command-wall-deck-window');
+    // Never drawn and never hit, and pointer-events stops at the window: it
+    // inherits, so letting it reach the transcript restyles every element.
+    const css = readFileSync(new URL('./commandWallLayouts.css', import.meta.url), 'utf8');
+    expect(css).toContain('.command-wall-window[data-wall-parked] { content-visibility: hidden; pointer-events: none; transition: none; }');
+    expect(css).toContain(':where(.command-wall-window) > :where(*) { pointer-events: auto; }');
+  });
+  it('keeps the composer of a recent hero while parked, for a bounded few', () => {
+    expect(warmFront([], 'a')).toEqual(['a']);
+    const ids = ['a', 'b'];
+    expect(warmFront(ids, 'a')).toBe(ids);
+    expect(warmFront(ids, 'b')).toEqual(['b', 'a']);
+    expect(warmFront(['a', 'b', 'c', 'd'], 'e')).toEqual(['e', 'a', 'b', 'c']);
+    expect(WARM_COMPOSERS).toBe(4);
+  });
+  it('skips re-rendering a window whose inputs are the same values', () => {
+    const pane = { id: 'p' };
+    expect(sameDeps([pane, 1, 'x', undefined], [pane, 1, 'x', undefined])).toBe(true);
+    expect(sameDeps([pane, 1], [{ id: 'p' }, 1])).toBe(false);
+    expect(sameDeps([1], [1, 2])).toBe(false);
+    expect(sameDeps([NaN], [NaN])).toBe(true);
   });
   it('suppresses approvals on composer-only surfaces', () => {
     const source = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');

@@ -1,5 +1,6 @@
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
+import { chatPaneSettings } from './ChatPane.settings.js';
 import { CopyIcon } from '../icons.js';
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
@@ -548,14 +549,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    */
   readOnly?: boolean;
 }) {
-  const { providers, settings, setMascotMood, refreshSessions } = useStore(
+  const { providers, setMascotMood, refreshSessions } = useStore(
     useShallow((s) => ({
       providers: s.providers,
-      settings: s.settings,
       setMascotMood: s.setMascotMood,
       refreshSessions: s.refreshSessions,
     })),
   );
+  const settings = useStore(useShallow((s) => chatPaneSettings(s.settings)));
 
   // Painted straight from the session cache when this chat was open recently;
   // the host copy is fetched regardless and replaces it (stale-while-revalidate).

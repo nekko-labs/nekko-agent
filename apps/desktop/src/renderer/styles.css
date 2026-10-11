@@ -137,9 +137,18 @@
   child instead, so the ring traces the whole panel.
 
   `--panel-ring-color` is the hook: set it per panel to show focus.
+
+  The two hooks do not inherit: only the ring reads them. Inherited, selecting
+  a wall window restyled every element in its transcript and composer (a few
+  hundred, twice per switch: the window losing the ring and the one gaining
+  it), which was most of a warm switch's style work.
 */
+@property --panel-ring-color { syntax: '*'; inherits: false; }
+@property --panel-ring-width { syntax: '*'; inherits: false; }
 @utility panel-ring {
   &::after {
+    --panel-ring-color: inherit;
+    --panel-ring-width: inherit;
     content: '';
     position: absolute;
     inset: 0;
