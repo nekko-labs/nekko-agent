@@ -26,7 +26,7 @@ interface Fixtures {
   excluded: string[];
   pinned: string[];
   contextWindow: number;
-  prompts: Array<{ workspaces: [] | 'fixture'; contextBlock: string; platform: string; canAsk?: boolean; canPlan?: boolean; orchestrationHint?: string }>;
+  prompts: Array<{ workspaces: [] | 'fixture'; contextBlock: string; platform: string; canAsk?: boolean; canPlan?: boolean; orchestrationHint?: string; systemInstructions?: string; aboutUser?: string; turnWrapper?: string; checkoutNotice?: string }>;
 }
 
 describe('context golden set', () => {
@@ -72,6 +72,10 @@ describe('context golden set', () => {
         canAsk: p.canAsk,
         canPlan: p.canPlan,
         orchestrationHint: p.orchestrationHint,
+        systemInstructions: p.systemInstructions,
+        aboutUser: p.aboutUser,
+        turnWrapper: p.turnWrapper,
+        checkoutNotice: p.checkoutNotice,
       }));
       const out = { guidelines, attached, memory, bundle: inspector, block, prompts };
       // The one machine-specific part: where the tree was made, and the separator.

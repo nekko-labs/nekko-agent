@@ -222,6 +222,13 @@ export function mcpToolSpecs(): ToolSpec[] {
   return out;
 }
 
+/**
+ * What a daemon advertises in `daemon:info` `owned` when a turn it drives can
+ * sync and call that turn's MCP servers itself (from `facts.mcpServers`),
+ * approvals included, so an MCP call never round-trips through this host.
+ */
+export const DAEMON_MCP = 'turn:mcp';
+
 export function isMcpTool(name: string): boolean {
   return name.startsWith('mcp__');
 }

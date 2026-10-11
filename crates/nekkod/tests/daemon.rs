@@ -31,6 +31,9 @@ fn fake_backend() {
         let t1 = token.clone();
         let completions = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
         let recorded = completions.clone();
+        // What `turn:prepare` admits a queued prompt as: a test sets the spec's template.
+        let template = std::sync::Arc::new(std::sync::Mutex::new(None::<Value>));
+        let prepared = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
         // Checkpoint events and loop:end carry the same image-bearing transcript.
         // The fake host must accept it rather than silently rejecting >2 MiB JSON.
         let app = axum::Router::new()
@@ -59,6 +62,52 @@ fn fake_backend() {
                             "sessions:deleteAgentLog" if body.0["args"][0] == "callback_fail" => {
                                 (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "command log unlink failed" })))
                             }
+                            "chat:pending:host" => (axum::http::StatusCode::OK, axum::Json(json!({}))),
+                            "chat:running" => (axum::http::StatusCode::OK, axum::Json(json!([]))),
+                            // A daemon-driven turn's host-run tool (MCP, sub-agents, the browser...).
+                            "turn:tool" => (
+                                {
+                                    recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                    axum::http::StatusCode::OK
+                                },
+                                axum::Json(json!({ "result": { "toolCallId": body.0["args"][1]["id"], "output": "host tool ran" } })),
+                            ),
+                            "test:prepareTemplate" => {
+                                *template.lock().unwrap() = Some(body.0["args"][0].clone());
+                                (axum::http::StatusCode::OK, axum::Json(Value::Null))
+                            }
+                            // A spawn_agent child: made on disk, its first turn from the template.
+                            "spawn:prepare" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                let Some(mut spec) = template.lock().unwrap().clone() else {
+                                    return (axum::http::StatusCode::OK, axum::Json(json!({ "error": "no template" })));
+                                };
+                                let parent = spec["opts"]["sessionId"].clone();
+                                let task = body.0["args"][1]["input"]["task"].clone();
+                                let child = json!({ "id": "s_child", "title": "Sub-agent", "workspaceId": "w1", "parentSessionId": parent, "messages": [], "createdAt": 1, "updatedAt": 1 });
+                                if let Ok(dir) = std::env::var("FAKE_DATA_DIR") {
+                                    std::fs::write(std::path::Path::new(&dir).join("sessions/s_child.json"), child.to_string()).unwrap();
+                                }
+                                spec["turnId"] = json!("turn_child");
+                                spec["opts"] = json!({ "sessionId": "s_child", "providerId": "p1", "modelId": "synthetic", "text": task });
+                                spec["facts"]["spawn"] = json!(false);
+                                (axum::http::StatusCode::OK, axum::Json(json!({ "childId": "s_child", "spec": spec })))
+                            }
+                            "turn:prepare" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                let Some(mut spec) = template.lock().unwrap().clone() else {
+                                    return (axum::http::StatusCode::OK, axum::Json(json!({ "ended": true })));
+                                };
+                                let n = prepared.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                                spec["turnId"] = json!(format!("turn_next_{n}"));
+                                spec["opts"] = body.0["args"][1]["opts"].clone();
+                                spec["queued"] = body.0["args"][1]["queued"].clone();
+                                (axum::http::StatusCode::OK, axum::Json(json!({ "spec": spec })))
+                            }
+                            "turn:event" | "turn:end" | "turn:approved" | "turn:usage" | "turn:notify" | "loop:log" | "limits:notify" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                (axum::http::StatusCode::OK, axum::Json(Value::Null))
+                            }
                             "sessions:deleteAgentLog" | "loop:end" => {
                                 recorded.lock().unwrap().push(body.0["args"].clone());
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
@@ -71,6 +120,11 @@ fn fake_backend() {
                                 axum::http::StatusCode::OK,
                                 axum::Json(json!([{ "id": "agent_s1", "title": "Agent commands" }])),
                             ),
+                            // A saved Hypergate entry: the server list the daemon then runs.
+                            "mcp:hypergate:save" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                (axum::http::StatusCode::OK, axum::Json(json!([])))
+                            }
                             "fail:please" => {
                                 (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "asked to fail" })))
                             }
@@ -259,11 +313,12 @@ async fn authenticated_loop_run_http_body_exceeds_old_limit_without_truncation()
     assert_eq!(status, 401, "{body}");
     assert_eq!(body["error"], "unauthorized");
 
-    // Send exactly one byte beyond the 2 MiB limit, then read the actual HTTP
+    // Send exactly one byte beyond the call limit, then read the actual HTTP
     // response. A larger reqwest upload can race the early 413 and fail with
     // BrokenPipe on Linux before reqwest exposes the response at all.
     use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
-    let limit = 2 * 1024 * 1024;
+    // Other calls are capped at 25 MiB, the web edition's public limit (wire.rs).
+    let limit = 25 * 1024 * 1024;
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", d.port)).await.unwrap();
     stream
         .write_all(
@@ -590,4 +645,765 @@ async fn assert_log_callback_failure_retains_json(with_backend: bool) {
     }
     drop(d);
     std::fs::remove_dir_all(data).unwrap();
+}
+
+/// A scripted OpenAI-compatible model on an ephemeral loopback port: each
+/// request takes the next reply (server-sent events), or hangs when the
+/// script says so. No credentials, user files or paid model are involved.
+struct ScriptedModel {
+    port: u16,
+    requests: std::sync::Arc<std::sync::Mutex<Vec<Value>>>,
+    server: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for ScriptedModel {
+    fn drop(&mut self) {
+        self.server.abort();
+    }
+}
+
+fn sse(chunks: &[Value]) -> String {
+    let mut out: String = chunks.iter().map(|c| format!("data: {c}\n\n")).collect();
+    out.push_str("data: [DONE]\n\n");
+    out
+}
+
+fn say_text(text: &str) -> String {
+    sse(&[json!({
+        "choices": [{ "delta": { "content": text }, "finish_reason": "stop" }],
+        "usage": { "prompt_tokens": 10, "completion_tokens": 3 }
+    })])
+}
+
+fn call_tool(id: &str, name: &str, args: Value) -> String {
+    sse(&[json!({ "choices": [{
+        "delta": { "tool_calls": [{ "index": 0, "id": id, "type": "function", "function": { "name": name, "arguments": args.to_string() } }] },
+        "finish_reason": "tool_calls"
+    }] })])
+}
+
+const HANG: &str = "hang";
+
+async fn scripted_model(script: Vec<String>) -> ScriptedModel {
+    use axum::routing::post as route_post;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let script = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::from(script)));
+    let seen = requests.clone();
+    let app = axum::Router::new().route(
+        "/v1/chat/completions",
+        route_post(move |axum::Json(request): axum::Json<Value>| {
+            let (seen, script) = (seen.clone(), script.clone());
+            async move {
+                // Title calls are answered by content, so their timing never shifts the script.
+                let titling = request["messages"].as_array().is_some_and(|m| {
+                    m.iter()
+                        .any(|m| m["content"].as_str().is_some_and(|c| c.starts_with("Give this task a short title")))
+                });
+                seen.lock().unwrap().push(request);
+                let next = if titling {
+                    say_text("\"Login bug fix.\"")
+                } else {
+                    script.lock().unwrap().pop_front().unwrap_or_else(|| say_text("(script ended)"))
+                };
+                let body = if next == HANG {
+                    let first = futures_util::stream::once(async {
+                        Ok::<_, std::io::Error>(bytes::Bytes::from_static(b": waiting\n\n"))
+                    });
+                    axum::body::Body::from_stream(first.chain(futures_util::stream::pending()))
+                } else {
+                    axum::body::Body::from(next)
+                };
+                axum::response::Response::builder().header("content-type", "text/event-stream").body(body).unwrap()
+            }
+        }),
+    );
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    ScriptedModel { port, requests, server }
+}
+
+struct TurnRig {
+    data: std::path::PathBuf,
+    workspace: std::path::PathBuf,
+    d: Daemon,
+}
+
+impl Drop for TurnRig {
+    fn drop(&mut self) {
+        let _ = self.d.child.kill();
+        let _ = self.d.child.wait();
+        let _ = std::fs::remove_dir_all(&self.data);
+    }
+}
+
+fn turn_rig(name: &str, session: Value) -> TurnRig {
+    let data = std::env::temp_dir().join(format!("nekkod-turn-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let workspace = data.join("project");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    std::fs::write(workspace.join("app.ts"), "export const secret = 'pineapple';\n").unwrap();
+    std::fs::write(workspace.join("AGENTS.md"), "Always run the tests.\n").unwrap();
+    let id = session["id"].as_str().unwrap().to_string();
+    std::fs::write(data.join("sessions").join(format!("{id}.json")), serde_json::to_string_pretty(&session).unwrap())
+        .unwrap();
+    let d = start_with(true, Some(&data));
+    TurnRig { data, workspace, d }
+}
+
+fn turn_spec(rig: &TurnRig, model: &ScriptedModel, turn_id: &str, session_id: &str, extra_opts: Value) -> Value {
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let mut opts =
+        json!({ "sessionId": session_id, "providerId": "p1", "modelId": "synthetic", "text": "Fix the bug" });
+    for (k, v) in extra_opts.as_object().unwrap() {
+        opts[k] = v.clone();
+    }
+    json!({
+        "turnId": turn_id,
+        "opts": opts,
+        "allowBrowserControl": false,
+        "settings": { "providers": [provider], "defaultChatMode": "yolo", "unattendedQuestionMinutes": 0 },
+        "facts": {
+            "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+            "mcpTools": [], "decide": false, "hooks": false,
+            "connectorSnippets": [], "indexSnippets": [],
+            "platform": "win32", "temperature": 0.7, "effort": "normal", "statsEffort": "normal",
+            "promptCaching": true, "provider": provider, "headers": false,
+        },
+    })
+}
+
+/// The backend's record of one turn's callbacks: `turn:event` payloads and the `turn:end` summary.
+async fn turn_record(port: u16, turn_id: &str) -> (Vec<Value>, Value) {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            let (_, all) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
+            let mut events = Vec::new();
+            let mut end = None;
+            for entry in all.as_array().into_iter().flatten() {
+                if entry[1][0] != turn_id {
+                    continue;
+                }
+                match entry[0].as_str() {
+                    Some("turn:event") => events.push(entry[1][1].clone()),
+                    Some("turn:end") => end = Some(entry[1][1].clone()),
+                    _ => {}
+                }
+            }
+            if let Some(end) = end {
+                return (events, end);
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("the daemon never ended the turn")
+}
+
+async fn wait_pending(port: u16, session_id: &str, key: &str, call_id: &str) -> Value {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            let (_, pending) = post(port, "chat:pending", json!([]), Some(TOKEN)).await;
+            if let Some(v) = pending.get(session_id).and_then(|p| p.get(key)) {
+                let id = if key == "approval" { &v["call"]["id"] } else { &v["callId"] };
+                if id == call_id {
+                    return v.clone();
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("no pending {key} {call_id}"))
+}
+
+fn event_types(events: &[Value]) -> Vec<String> {
+    events
+        .iter()
+        .flat_map(|p| p["events"].as_array().cloned().unwrap_or_default())
+        .map(|e| e["type"].as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+fn saved_session(rig: &TurnRig, id: &str) -> Value {
+    let path = rig.data.join("sessions").join(format!("{id}.json"));
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
+    let session = json!({
+        "id": "s_turn_q", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("ask", session);
+    let model = scripted_model(vec![
+        call_tool(
+            "c_ask",
+            "ask_user",
+            json!({ "questions": [{ "question": "Which bug?", "options": ["Login", "Logout"] }] }),
+        ),
+        call_tool("c_read", "read_file", json!({ "path": "app.ts" })),
+        call_tool("c_host", "fetch_url", json!({ "url": "https://example.invalid" })),
+        say_text("all done"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_q", "s_turn_q", json!({}));
+    let (status, started) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{started}");
+    assert_eq!(started["started"], true);
+
+    // The question is the daemon's: the board sees it, and answering it there resumes the turn.
+    let question = wait_pending(rig.d.port, "s_turn_q", "question", "c_ask").await;
+    assert_eq!(question["questions"][0]["question"], "Which bug?");
+    let (_, alive) = post(rig.d.port, "turn:alive", json!(["turn_q"]), Some(TOKEN)).await;
+    assert_eq!(alive, json!(true));
+    let answers = json!([{ "questionId": "q1", "labels": ["Login"] }]);
+    let (status, body) = post(rig.d.port, "chat:answer", json!(["s_turn_q", "c_ask", answers]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, Value::Null), "answered by the daemon, not forwarded to the host");
+
+    let (events, end) = turn_record(rig.d.port, "turn_q").await;
+    assert_eq!(end["aborted"], false, "{end}");
+    assert_eq!(end["stop"], "complete", "{end}");
+    let types = event_types(&events);
+    for t in ["session_meta", "question", "question_resolved", "tool_call", "tool_result", "done"] {
+        assert!(types.iter().any(|x| x == t), "no {t} event in {types:?}");
+    }
+    let done = events.iter().find(|p| p["events"][0]["type"] == "done").unwrap();
+    assert_eq!(done["stats"]["calls"], 1, "only the last reply reported usage: {done}");
+    assert!(done["startedAt"].is_u64());
+    let (_, pending) = post(rig.d.port, "chat:pending", json!([]), Some(TOKEN)).await;
+    assert_eq!(pending, json!({}), "nothing may stay pending after the turn");
+
+    let saved = saved_session(&rig, "s_turn_q");
+    // The placeholder, or the generated title once it has landed after the turn.
+    let titled = (saved["title"].clone(), saved["titleAuto"].clone());
+    assert!(
+        titled == (json!("Fix the bug"), json!(true)) || titled == (json!("Login bug fix"), json!(false)),
+        "{titled:?}"
+    );
+    assert_eq!(saved["providerId"], "p1");
+    assert!(saved.get("activeRun").is_none(), "the run marker is cleared");
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages[0]["role"], "user");
+    assert_eq!(messages[0]["content"], "Fix the bug");
+    let tool_out = |id: &str| -> String {
+        let m = messages.iter().find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id).unwrap();
+        m["toolResult"]["output"].as_str().unwrap().to_string()
+    };
+    assert!(tool_out("c_ask").contains("Q: Which bug?\nA: Login"), "{}", tool_out("c_ask"));
+    assert!(tool_out("c_read").contains("pineapple"));
+    assert_eq!(tool_out("c_host"), "host tool ran");
+    let last = messages.last().unwrap();
+    assert_eq!(last["content"], "all done");
+    assert_eq!(last["turnStats"]["calls"], 1);
+    assert_eq!(last["turnStats"]["providerId"], "p1");
+
+    // What the model was sent: the composed prompt and tools.
+    let first = model.requests.lock().unwrap()[0].clone();
+    let system = first["messages"][0]["content"].as_str().unwrap().to_string();
+    assert!(system.contains("Asking first:"), "ask_user is offered, so the prompt says when to ask");
+    assert!(system.contains(&rig.workspace.to_string_lossy().to_string()));
+    assert!(system.contains("Always run the tests."), "the project's AGENTS.md is in the context block");
+    let tools: Vec<String> = first["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    for t in ["read_file", "ask_user", "update_plan", "set_chat_title", "complete_session"] {
+        assert!(tools.contains(&t.to_string()), "{t} missing from {tools:?}");
+    }
+    assert!(!tools.contains(&"browser".to_string()), "no browser control was allowed");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_parks_approvals_and_answers_them_itself() {
+    let session = json!({
+        "id": "s_turn_a", "title": "Named", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("approve", session);
+    let model = scripted_model(vec![
+        call_tool("c_w", "write_file", json!({ "path": "new.txt", "content": "hi" })),
+        call_tool("c_slow", "ask_user", json!({ "questions": [{ "question": "Go on?", "options": ["Yes", "No"] }] })),
+        say_text("wrote it"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_a", "s_turn_a", json!({}));
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let approval = wait_pending(rig.d.port, "s_turn_a", "approval", "c_w").await;
+    assert_eq!(approval["call"]["name"], "write_file");
+    assert!(!rig.workspace.join("new.txt").exists(), "nothing is written before the approval");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_turn_a", "c_w", true]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, Value::Null), "answered by the daemon, not forwarded to the host");
+
+    // While the turn waits on its question, a host-run tool's approval parks
+    // here too, and the host hears the answer.
+    wait_pending(rig.d.port, "s_turn_a", "question", "c_slow").await;
+    let (status, ok) = post(
+        rig.d.port,
+        "turn:approval",
+        json!(["turn_a", { "id": "c_host_ok", "name": "start_process", "input": {} }, "Start a background process", "medium"]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!((status, ok), (200, json!(true)));
+    let parked = wait_pending(rig.d.port, "s_turn_a", "approval", "c_host_ok").await;
+    assert_eq!(parked["reason"], "Start a background process");
+    let (_, body) = post(rig.d.port, "tool:approve", json!(["s_turn_a", "c_host_ok", false]), Some(TOKEN)).await;
+    assert_eq!(body, Value::Null);
+    let answers = json!([{ "questionId": "q1", "labels": ["Yes"] }]);
+    post(rig.d.port, "chat:answer", json!(["s_turn_a", "c_slow", answers]), Some(TOKEN)).await;
+
+    let (events, end) = turn_record(rig.d.port, "turn_a").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    assert_eq!(std::fs::read_to_string(rig.workspace.join("new.txt")).unwrap(), "hi");
+    let types = event_types(&events);
+    assert_eq!(types.iter().filter(|t| *t == "tool_approval_required").count(), 2, "{types:?}");
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let answered =
+        all.as_array().unwrap().iter().any(|e| e[0] == "turn:approved" && e[1] == json!(["c_host_ok", false]));
+    assert!(answered, "the host heard its approval was refused");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stopping_a_daemon_turn_ends_it_and_clears_the_run_marker() {
+    let session = json!({
+        "id": "s_turn_s", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("stop", session);
+    let model = scripted_model(vec![HANG.to_string()]).await;
+    let spec = turn_spec(&rig, &model, "turn_s", "s_turn_s", json!({}));
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    tokio::time::timeout(Duration::from_secs(20), async {
+        while model.requests.lock().unwrap().is_empty() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the model was never asked");
+    let saved = saved_session(&rig, "s_turn_s");
+    assert!(saved["activeRun"]["startedAt"].is_u64(), "the run marker is on disk while the turn runs");
+    let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert!(running.as_array().unwrap().contains(&json!("s_turn_s")), "{running}");
+
+    let (status, _) = post(rig.d.port, "chat:abort", json!(["s_turn_s"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (events, end) = turn_record(rig.d.port, "turn_s").await;
+    assert_eq!(end["aborted"], true);
+    assert!(event_types(&events).contains(&"error".to_string()));
+    assert!(saved_session(&rig, "s_turn_s").get("activeRun").is_none());
+    let (_, alive) = post(rig.d.port, "turn:alive", json!(["turn_s"]), Some(TOKEN)).await;
+    assert_eq!(alive, json!(false));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_queued_turn_whose_prompt_changed_ends_before_it_starts() {
+    let session = json!({
+        "id": "s_turn_e", "title": "Named", "workspaceId": "w1", "messages": [], "queue": ["other"],
+        "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("early", session);
+    let model = scripted_model(vec![]).await;
+    let mut spec = turn_spec(&rig, &model, "turn_e", "s_turn_e", json!({ "text": "mine" }));
+    spec["queued"] = json!({ "index": 0, "item": "mine" });
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (events, end) = turn_record(rig.d.port, "turn_e").await;
+    assert_eq!(end["early"], true);
+    assert_eq!(events[0]["events"][0]["message"], "Queued prompt changed before it could start.");
+    assert!(model.requests.lock().unwrap().is_empty(), "no model call for a turn that never started");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn after_a_daemon_turn_the_title_lands_and_the_queue_drains() {
+    let session = json!({
+        "id": "s_turn_t", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("after", session);
+    let model = scripted_model(vec![say_text("first answer"), say_text("second answer")]).await;
+    let spec = turn_spec(&rig, &model, "turn_t", "s_turn_t", json!({}));
+    let (status, _) = post(rig.d.port, "test:prepareTemplate", json!([spec.clone()]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    // A follow-up queued while the turn runs: it is the daemon's to run next.
+    let (status, _) = post(rig.d.port, "chat:queue", json!(["s_turn_t", "and then this"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+
+    let (_, first) = turn_record(rig.d.port, "turn_t").await;
+    assert_eq!(first["next"], "turn_next_1", "{first}");
+    let (_, second) = turn_record(rig.d.port, "turn_next_1").await;
+    assert_eq!(second["stop"], "complete", "{second}");
+    assert!(second.get("next").is_none(), "the queue is empty after one follow-up");
+
+    // The title lands on its own, after the first turn.
+    let saved = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            let saved = saved_session(&rig, "s_turn_t");
+            if saved["titleAuto"] == false {
+                return saved;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("the title never landed");
+    assert_eq!(saved["title"], "Login bug fix");
+    let messages = saved["messages"].as_array().unwrap();
+    let contents: Vec<&str> = messages.iter().filter_map(|m| m["content"].as_str()).collect();
+    assert_eq!(contents, ["Fix the bug", "first answer", "and then this", "second answer"]);
+    assert_eq!(saved["queue"], json!([]), "the queued prompt was claimed by its turn");
+
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let all = all.as_array().unwrap();
+    let prepare = all.iter().find(|e| e[0] == "turn:prepare").expect("the host admitted the follow-up");
+    assert_eq!(prepare[1][0], "turn_t");
+    assert_eq!(prepare[1][1]["queued"], json!({ "index": 0, "item": "and then this" }));
+    assert_eq!(prepare[1][1]["opts"]["text"], "and then this");
+    // The title call's usage is in the log, written by the daemon, which keeps it.
+    assert!(!all.iter().any(|e| e[0] == "turn:usage"), "no usage callback when the daemon keeps the log");
+    let log = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap_or_default();
+    assert!(
+        log.lines().filter(|l| l.contains(r#""sessionId":"s_turn_t""#)).any(|l| l.contains(r#""providerId":"p1""#)),
+        "{log}"
+    );
+    assert!(all.iter().any(|e| e[0] == "turn:notify" && e[1][0]["type"] == "session_meta"));
+    let titles =
+        model.requests.lock().unwrap().iter().filter(|r| r["messages"].to_string().contains("short title")).count();
+    assert_eq!(titles, 1, "one title, for the first turn only");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
+    let session = json!({
+        "id": "s_turn_u", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("usage", session);
+    std::fs::write(
+        rig.data.join("settings.json"),
+        json!({ "providers": [{ "id": "p1", "kind": "openai-compat" }, { "id": "c1", "kind": "anthropic", "auth": "subscription", "tokenKey": "claude:t" }] }).to_string(),
+    )
+    .unwrap();
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in ["turn:account", "usage:summary", "limits:get", "limits:headers"] {
+        assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} not owned: {info}");
+    }
+
+    let model = scripted_model(vec![say_text("hello")]).await;
+    let mut spec = turn_spec(&rig, &model, "turn_u", "s_turn_u", json!({}));
+    spec["facts"]["account"] = json!({ "auth": "apikey", "kind": "openai-compat", "incognito": false });
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, end) = turn_record(rig.d.port, "turn_u").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    // The lines the host would have written, written by the daemon.
+    let usage = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap();
+    let lines: Vec<Value> = usage.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(lines.len(), 1, "{usage}");
+    let keys: Vec<&str> = lines[0].as_object().unwrap().keys().map(String::as_str).collect();
+    assert_eq!(keys, ["ts", "providerId", "modelId", "inputTokens", "outputTokens", "sessionId", "auth", "local"]);
+    assert_eq!(lines[0]["inputTokens"], 10);
+    assert_eq!(lines[0]["outputTokens"], 3);
+    assert_eq!(lines[0]["local"], false);
+    let replies = std::fs::read_to_string(rig.data.join("replies.jsonl")).unwrap();
+    let reply: Value = serde_json::from_str(replies.trim()).unwrap();
+    assert_eq!(reply["stop"], "complete");
+    assert_eq!(reply["steps"], 0);
+    assert_eq!(reply["sessionId"], "s_turn_u");
+    assert_eq!(reply["effort"], "normal");
+    assert!(reply["startedAt"].as_u64().unwrap() <= reply["ts"].as_u64().unwrap());
+
+    // And the summary is the daemon's.
+    let (status, summary) = post(rig.d.port, "usage:summary", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{summary}");
+    assert_eq!(summary["totalInput"], 10);
+    assert_eq!(summary["bySession"]["s_turn_u"]["output"], 3);
+    assert_eq!(summary["replies"]["total"], 1);
+
+    // Limits: headers recorded here, read back here, history written, the host told for the relay.
+    let pairs = json!([
+        ["anthropic-ratelimit-unified-5h-utilization", "0.25"],
+        ["anthropic-ratelimit-unified-5h-reset", "1760003600"]
+    ]);
+    let (_, recorded) = post(rig.d.port, "limits:headers", json!(["claude:t", "anthropic", pairs]), Some(TOKEN)).await;
+    assert_eq!(recorded["windows"][0]["usedPercent"], 25);
+    let (_, got) = post(rig.d.port, "limits:get", json!(["claude:t"]), Some(TOKEN)).await;
+    assert_eq!(got, recorded, "a fresh header snapshot is served without a poll");
+    let history = std::fs::read_to_string(rig.data.join("quota-history.jsonl")).unwrap();
+    assert!(history.contains(r#""providerId":"c1","source":"headers""#), "{history}");
+    let notified = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+            if let Some(n) = all.as_array().unwrap().iter().find(|e| e[0] == "limits:notify") {
+                return n.clone();
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("the host hears limits:notify");
+    assert_eq!(notified[1][0]["tokenKey"], "claude:t");
+    // No sign-in stored: a poll says so rather than guessing.
+    let (_, polled) = post(rig.d.port, "limits:get", json!(["claude:none"]), Some(TOKEN)).await;
+    assert_eq!(polled, Value::Null);
+    let (_, problem) = post(rig.d.port, "limits:problem", json!(["claude:none"]), Some(TOKEN)).await;
+    assert_eq!(problem["kind"], "signed_out");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn without_a_data_dir_accounting_stays_with_the_host() {
+    let d = start(true);
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    let owned = info["owned"].as_array().unwrap();
+    assert!(!owned.iter().any(|o| o == "limits:get" || o == "turn:account"), "{info}");
+    let (status, body) = post(d.port, "limits:get", json!(["k"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["echo"], "limits:get", "forwarded to the host: {body}");
+}
+
+/// A streamable-HTTP MCP server with one tool, `echo`, on a loopback port.
+async fn http_mcp() -> (u16, tokio::task::JoinHandle<()>, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
+    use axum::routing::post as route_post;
+    let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen = calls.clone();
+    let app = axum::Router::new().route(
+        "/mcp",
+        route_post(move |axum::Json(msg): axum::Json<Value>| {
+            let seen = seen.clone();
+            async move {
+                let Some(id) = msg.get("id").cloned() else {
+                    return (axum::http::StatusCode::ACCEPTED, axum::Json(Value::Null));
+                };
+                let result = match msg["method"].as_str().unwrap_or_default() {
+                    "initialize" => json!({ "protocolVersion": "2024-11-05" }),
+                    "tools/list" => {
+                        json!({ "tools": [{ "name": "echo", "description": "Echo it", "inputSchema": { "type": "object" } }] })
+                    }
+                    _ => {
+                        seen.lock().unwrap().push(msg.clone());
+                        let text = msg["params"]["arguments"]["text"].as_str().unwrap_or("").to_string();
+                        json!({ "content": [{ "type": "text", "text": format!("echo: {text}") }] })
+                    }
+                };
+                (axum::http::StatusCode::OK, axum::Json(json!({ "jsonrpc": "2.0", "id": id, "result": result })))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    (port, tokio::spawn(async move { axum::serve(listener, app).await.unwrap() }), calls)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_syncs_and_calls_its_mcp_servers_itself() {
+    let session = json!({
+        "id": "s_turn_m", "title": "Named", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("mcp", session);
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().iter().any(|o| o == "turn:mcp"), "{info}");
+    let (mcp_port, mcp_server, mcp_calls) = http_mcp().await;
+    let model =
+        scripted_model(vec![call_tool("c_mcp", "mcp__srv__echo", json!({ "text": "hi" })), say_text("done")]).await;
+    let mut spec = turn_spec(&rig, &model, "turn_m", "s_turn_m", json!({}));
+    spec["settings"]["defaultChatMode"] = json!("ask");
+    let facts = spec["facts"].as_object_mut().unwrap();
+    facts.remove("mcpTools");
+    facts.insert(
+        "mcpServers".into(),
+        json!([{ "id": "srv", "name": "srv", "enabled": true, "command": "", "args": [], "url": format!("http://127.0.0.1:{mcp_port}/mcp") }]),
+    );
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+
+    // Ask mode: the MCP call's approval is parked in the daemon and answered there.
+    let approval = wait_pending(rig.d.port, "s_turn_m", "approval", "c_mcp").await;
+    assert_eq!(approval["reason"], "Call mcp__srv__echo");
+    assert_eq!(approval["severity"], "medium");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_turn_m", "c_mcp", true]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, Value::Null));
+    let (_, end) = turn_record(rig.d.port, "turn_m").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    // The daemon synced the server, offered its tool and ran the call; the host never saw it.
+    let tools: Vec<String> = model.requests.lock().unwrap()[0]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    assert!(tools.contains(&"mcp__srv__echo".to_string()), "{tools:?}");
+    assert_eq!(mcp_calls.lock().unwrap().len(), 1);
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "no host round trip for MCP");
+    let saved = saved_session(&rig, "s_turn_m");
+    let result = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == "c_mcp")
+        .unwrap()
+        .clone();
+    assert_eq!(result["toolResult"]["output"], "echo: hi");
+    mcp_server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn hypergate_is_found_and_connected_by_the_daemon() {
+    use axum::routing::{get, post as route_post};
+    let gate = axum::Router::new()
+        .route(
+            "/health",
+            get(|| async { axum::Json(json!({ "service": "hypergated", "version": "9.9", "servers": 2 })) }),
+        )
+        .route("/api/gateway", get(|| async { axum::Json(json!({ "url": "http://127.0.0.1:1/mcp", "token": "gw" })) }))
+        .route(
+            "/api/clients/resolve",
+            route_post(|| async { axum::Json(json!({ "token": "agent", "name": "Nekko Agent" })) }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move { axum::serve(listener, gate).await.unwrap() });
+    let d = start(true);
+    let (_, found) = post(d.port, "mcp:hypergate", json!([port]), Some(TOKEN)).await;
+    assert_eq!(found["version"], "9.9");
+    assert_eq!(found["port"], port);
+    assert!(found.get("token").is_none(), "detecting mints nothing");
+    let (_, connected) = post(d.port, "mcp:hypergate:connect", json!([port]), Some(TOKEN)).await;
+    assert_eq!(connected["token"], "agent");
+    assert_eq!(connected["agent"], "Nekko Agent");
+    let (_, all) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let save = all.as_array().unwrap().iter().find(|e| e[0] == "mcp:hypergate:save").expect("the host saved the entry");
+    assert_eq!(save[1][0]["token"], "agent");
+    // Nothing listening: null, not an error.
+    server.abort();
+    let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let (status, none) = post(d.port, "mcp:hypergate", json!([free]), Some(TOKEN)).await;
+    assert_eq!((status, none), (200, Value::Null));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
+    let session = json!({
+        "id": "s_turn_p", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("spawn", session);
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().iter().any(|o| o == "turn:spawn"), "{info}");
+    let model = scripted_model(vec![
+        call_tool("c_spawn", "spawn_agent", json!({ "task": "count the files" })),
+        say_text("there are 2 files"),
+        say_text("parent done"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_p", "s_turn_p", json!({}));
+    // The child's turn is admitted by the host from this template.
+    let (status, _) = post(rig.d.port, "test:prepareTemplate", json!([spec.clone()]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let mut spec = spec;
+    spec["facts"]["spawn"] = json!(true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, end) = turn_record(rig.d.port, "turn_p").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let all = all.as_array().unwrap().clone();
+    let prepare = all.iter().find(|e| e[0] == "spawn:prepare").expect("the host was asked to make the child");
+    assert_eq!(prepare[1][0], "turn_p");
+    assert_eq!(prepare[1][2], 0, "first attempt");
+    assert!(!all.iter().any(|e| e[0] == "turn:tool"), "spawn_agent never ran in the host");
+    assert!(all.iter().any(|e| e[0] == "turn:end" && e[1][0] == "turn_child"), "the child ran as its own daemon turn");
+
+    let child = saved_session(&rig, "s_child");
+    assert_eq!(child["messages"][0]["content"], "count the files");
+    assert_eq!(child["messages"].as_array().unwrap().last().unwrap()["content"], "there are 2 files");
+    let parent = saved_session(&rig, "s_turn_p");
+    let result = parent["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == "c_spawn")
+        .unwrap()
+        .clone();
+    assert_eq!(result["toolResult"]["output"], "there are 2 files");
+    assert_eq!(parent["messages"].as_array().unwrap().last().unwrap()["content"], "parent done");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stopping_the_parent_stops_its_sub_agent() {
+    let session = json!({
+        "id": "s_turn_ps", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("spawn-stop", session);
+    let model =
+        scripted_model(vec![call_tool("c_spawn", "spawn_agent", json!({ "task": "wait forever" })), HANG.to_string()])
+            .await;
+    let spec = turn_spec(&rig, &model, "turn_ps", "s_turn_ps", json!({}));
+    post(rig.d.port, "test:prepareTemplate", json!([spec.clone()]), Some(TOKEN)).await;
+    let mut spec = spec;
+    spec["facts"]["spawn"] = json!(true);
+    post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    // Wait for the child to be running, then stop the parent.
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            let (_, alive) = post(rig.d.port, "turn:alive", json!(["turn_child"]), Some(TOKEN)).await;
+            if alive == json!(true) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("the child started");
+    let (_, stopped) = post(rig.d.port, "turn:abort", json!(["turn_ps"]), Some(TOKEN)).await;
+    assert_eq!(stopped, json!(true));
+    let (_, end) = turn_record(rig.d.port, "turn_ps").await;
+    assert_eq!(end["aborted"], true, "{end}");
+    let (_, child_alive) = post(rig.d.port, "turn:alive", json!(["turn_child"]), Some(TOKEN)).await;
+    assert_eq!(child_alive, json!(false), "the child stopped with its parent");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_runs_the_local_decide_tool_itself() {
+    let session = json!({
+        "id": "s_turn_d", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("decide", session);
+    let model = scripted_model(vec![
+        call_tool("c_empty", "decide", json!({ "state": "  ", "questions": [{ "id": "q", "type": "noul", "instructions": "x" }] })),
+        call_tool("c_run", "decide", json!({ "state": "a refund after 40 days", "questions": [{ "id": "refund", "type": "choice", "instructions": "Grant it?", "options": ["yes", "no"] }] })),
+        say_text("decided"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_d", "s_turn_d", json!({}));
+    spec["facts"]["decide"] = json!(true);
+    spec["facts"]["decideWith"] = json!("local");
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, end) = turn_record(rig.d.port, "turn_d").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_turn_d");
+    let out = |id: &str| -> Value {
+        saved["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id)
+            .unwrap()["toolResult"]
+            .clone()
+    };
+    assert_eq!(out("c_empty")["output"], "decide failed: The state is empty.");
+    // No model is loaded in this daemon: the daemon's own answer, not the host's.
+    assert_eq!(out("c_run")["output"], "decide failed: No decision model is loaded. Load one with decide:load.");
+    assert_eq!(out("c_run")["isError"], true);
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "decide never ran in the host");
 }

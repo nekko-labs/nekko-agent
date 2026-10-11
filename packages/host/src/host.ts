@@ -93,6 +93,7 @@ import { AUTO_MODEL_ID, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, isLoca
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
+import { daemonCall } from './engine/daemon.js';
 import { registerManagedCacheEndpoint } from './prompt-caching.js';
 import {
   createProvider,
@@ -170,11 +171,12 @@ import {
   reconcileWorkflowRuns,
 } from './workflows.js';
 import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
-import { isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getRunningSessionIds, resolveApproval, resolveQuestion, previewContext, setContextPrefs } from './chat.js';
+import { isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
 import { loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
+import { setTurnNotifier, turnCallback } from './daemon-turn.js';
 import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
-import { initLimits, getLimits, clearLimits, getLimitsProblem } from './limits.js';
+import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemon as notifyLimits } from './limits.js';
 import { startWorkflowListeners } from './listeners.js';
 import {
   initOAuth,
@@ -185,6 +187,7 @@ import {
   signOut as signOutOAuth,
   importCliAuth,
   resolveSubscriptionProvider,
+  ensureFreshToken,
 } from './oauth.js';
 import { buildSpec, buildSpecDoc, readSpecDocs, setSpecMethodology, toggleSpecTask, specPathForSession } from './spec.js';
 import { createRemoteService } from './remote.js';
@@ -272,7 +275,23 @@ export interface Host {
   loopEnd(runId: string, payload: { history?: import('@nekko-agent/shared').ChatMessage[] }): void;
   loopApprove(runId: string, call: import('@nekko-agent/shared').ToolCall, reason: string, severity: 'low' | 'medium' | 'high'): Promise<boolean>;
   loopLog(sessionId: string, workspaceId: string | undefined, data: string): void;
+  /** A daemon-driven chat turn's callbacks (daemon-turn.ts `turn:*`). */
+  turnCallback(channel: string, args: unknown[]): Promise<unknown>;
   changesNotify(sessionId: string): void;
+  /** The daemon changed a limits snapshot (`limits:notify`): the phone relay hears it. */
+  limitsNotify(payload: { tokenKey: string; limits: SubscriptionLimits }): void;
+  /**
+   * Renew a sign-in when it is due (`oauth:refresh`), for the daemon's quota
+   * polls. The daemon asks rather than refreshing itself, since a refresh
+   * rotates the refresh token and so must have exactly one writer, and it reads
+   * the renewed token from `tokens.json` itself: no token crosses the wire.
+   */
+  oauthRefresh(tokenKey: string): Promise<void>;
+  /**
+   * Save a gateway the daemon resolved as the Hypergate MCP entry
+   * (`mcp:hypergate:save`) and hand back the server list for it to run.
+   */
+  hypergateSave(info: import('@nekko-agent/shared').HypergateInfo): import('@nekko-agent/shared').McpServerConfig[];
   /** For the engine daemon's router: `GET /v1/models`. */
   engineRouterModels(): Promise<unknown>;
   engineRouterModel(modelId: string): Promise<unknown>;
@@ -362,11 +381,13 @@ export interface Host {
    * Sideband, unpersisted; null falls back to the deterministic snippet.
    */
   fillPromptPart(sessionId: string, part: string, draft: string): Promise<string | null>;
-  approveTool(sessionId: string, toolCallId: string, approved: boolean): void;
+  approveTool(sessionId: string, toolCallId: string, approved: boolean): void | Promise<void>;
   /** Answer an `ask_user` call; an empty list means "not answering". */
-  answerQuestion(sessionId: string, callId: string, answers: AskAnswer[]): void;
-  /** Every session waiting on a person right now, keyed by session id. */
-  pendingInput(): Record<string, PendingInput>;
+  answerQuestion(sessionId: string, callId: string, answers: AskAnswer[]): void | Promise<void>;
+  /** Every session waiting on a person right now, keyed by session id (this process's turns and the engine daemon's). */
+  pendingInput(): Promise<Record<string, PendingInput>>;
+  /** Only this process's turns (`chat:pending:host`, for the daemon, which merges its own). */
+  hostPendingInput(): Record<string, PendingInput>;
   runningSessions(): string[];
 
   listTerminals(): Promise<TerminalInfo[]>;
@@ -583,6 +604,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // Automation tasks: fired-task agent events ride the same bus as live chats;
   // task-list changes get their own event. Start the periodic scheduler.
   setTaskSender((e) => events.emit('agentEvent', e));
+  // What the daemon says after a turn it drove has ended (its generated title).
+  setTurnNotifier((e) => events.emit('agentEvent', e));
   setCompactionSender((e) => events.emit('agentEvent', e));
   setDecisionRunner({
     available: async () => {
@@ -624,7 +647,19 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   setWorkflowSender((e) => events.emit('agentEvent', e));
   setWorkflowsNotifier((snapshot) => events.emit('workflowsUpdated', snapshot));
   reconcileWorkflowRuns();
-  reconcileInterruptedChats();
+  {
+    // A daemon-driven turn survives this host restarting: ask which chats it
+    // still drives before writing the rest off.
+    const daemon = daemonCall();
+    const since = Date.now();
+    if (daemon) {
+      void daemon<string[]>('turn:running')
+        .catch(() => [] as string[])
+        .then((ids) => reconcileInterruptedChats(new Set(Array.isArray(ids) ? ids : []), since));
+    } else {
+      reconcileInterruptedChats();
+    }
+  }
   startWorkflowScheduler();
   startWorkflowListeners();
 
@@ -829,7 +864,11 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     loopEnd,
     loopApprove,
     loopLog,
+    turnCallback,
     changesNotify: notifyChanges,
+    limitsNotify: notifyLimits,
+    oauthRefresh: async (tokenKey) => { await ensureFreshToken(tokenKey); },
+    hypergateSave: (info) => saveSettings({ mcpServers: withHypergate(getSettings().mcpServers ?? [], info) }).mcpServers ?? [],
     engineRouterModels: () => engine.routerModels(),
     engineRouterModel: (modelId) => engine.routerModel(modelId),
     engineInstall: (buildId, runtime) => engine.installEngine(buildId, runtime),
@@ -981,8 +1020,9 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     resourceQueue,
     fillPromptPart,
     approveTool: (sessionId, toolCallId, approved) => resolveApproval(sessionId, toolCallId, approved),
-    answerQuestion: (sessionId, callId, answers) => resolveQuestion(sessionId, callId, answers),
+    answerQuestion: (sessionId, callId, answers) => answerQuestion(sessionId, callId, answers),
     pendingInput: getPendingInput,
+    hostPendingInput: getHostPendingInput,
     runningSessions: getRunningSessionIds,
 
     listTerminals,
@@ -1142,8 +1182,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
 
     classifyCommand: (command) => classifyCommand(command, getSettings().guardrails),
     usageSummary,
-    getLimits: (tokenKey, refresh) => getLimits(tokenKey, refresh),
-    getLimitsProblem: async (tokenKey) => getLimitsProblem(tokenKey),
+    getLimits: (tokenKey, refresh) => readLimits(tokenKey, refresh),
+    getLimitsProblem: (tokenKey) => readLimitsProblem(tokenKey),
 
     enableRemote: (relayUrl) => host.remote.enable(relayUrl),
     disableRemote: () => host.remote.disable(),

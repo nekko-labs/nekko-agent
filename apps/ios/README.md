@@ -1,5 +1,7 @@
 # Standalone native iOS foundation
 
+> **Status (2026-10-12):** this is a read-only foundation, not the app you install. The phone app that ships today (pairing, streamed chats, approvals, on-device models) is the Expo app in [`apps/mobile`](../mobile/README.md), built and distributed through EAS. The SwiftUI port continues behind it; see the *Native phone migration* section of [TASKS.md](../../TASKS.md).
+
 SwiftUI iOS first; a separate Kotlin Android foundation is a future step. This directory is independent of Expo `apps/mobile`: no JavaScript runtime, relay implementation, external Swift dependencies, or provider configuration screens.
 
 ## Current scope (implemented, not yet native-verified)

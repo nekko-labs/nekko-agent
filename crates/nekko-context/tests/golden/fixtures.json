@@ -38,6 +38,8 @@
   "prompts": [
     { "workspaces": [], "contextBlock": "", "platform": "win32" },
     { "workspaces": "fixture", "contextBlock": "rendered", "platform": "linux", "canAsk": true, "canPlan": true, "orchestrationHint": "Delegate research to sub-agents.\nKeep the edits yourself." },
-    { "workspaces": "fixture", "contextBlock": "", "platform": "darwin", "canPlan": true }
+    { "workspaces": "fixture", "contextBlock": "", "platform": "darwin", "canPlan": true },
+    { "workspaces": "fixture", "contextBlock": "", "platform": "win32", "canAsk": true, "systemInstructions": "  Answer in British English.\n", "aboutUser": " Philip ", "turnWrapper": "Wrap it up.", "checkoutNotice": "This chat uses the project's current Git branch, including local changes." },
+    { "workspaces": [], "contextBlock": "", "platform": "linux", "systemInstructions": "   ", "aboutUser": "", "turnWrapper": "  ", "checkoutNotice": "" }
   ]
 }

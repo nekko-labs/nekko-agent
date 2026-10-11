@@ -23,6 +23,10 @@ pub struct Ctx {
     pub loops: Arc<crate::loops::Loops>,
     /// MCP servers the TS host syncs and calls (`mcp:sync`, `mcp:call`).
     pub mcp: Arc<crate::mcp::Mcp>,
+    /// Whole chat turns (`chat:turn`) and the input they wait on.
+    pub turns: Arc<crate::turns::Turns>,
+    /// Usage, reply and limit accounting (`usage:summary`, `limits:*`).
+    pub accounts: Arc<crate::accounts::Accounts>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -89,7 +93,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 crate::backend::State::Ready { .. } => "ready",
                 crate::backend::State::Down { .. } => "down",
             },
-            "owned": OWNED,
+            "owned": owned(ctx),
         })),
         "terminals:list" => {
             let mut all = serde_json::to_value(ctx.terminals.list()).unwrap_or(json!([]));
@@ -118,6 +122,86 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "loop:abort" => Ok(json!(ctx.loops.abort(str_arg(&args, 0).unwrap_or_default()))),
         "loop:alive" => Ok(json!(ctx.loops.is_running(str_arg(&args, 0).unwrap_or_default()))),
         "loop:steer" => Ok(json!(ctx.loops.steer(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1).clone()))),
+        "chat:turn" => ctx.turns.start(ctx.backend.clone(), ctx.hub.clone(), arg(&args, 0).clone()),
+        "turn:abort" => Ok(json!(ctx.turns.abort(str_arg(&args, 0).unwrap_or_default()))),
+        "turn:alive" => Ok(json!(ctx.turns.is_running(str_arg(&args, 0).unwrap_or_default()))),
+        // The chats whose turn runs here, for a host that restarted mid-turn.
+        "turn:running" => Ok(json!(ctx.turns.running_sessions())),
+        "turn:steer" => Ok(json!(ctx.turns.steer(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1).clone()))),
+        "turn:approval" => ctx.turns.host_approval(
+            ctx.backend.clone(),
+            str_arg(&args, 0).unwrap_or_default(),
+            args.get(1..).unwrap_or(&[]),
+        ),
+        // Only the daemon's own input: the host merges these with its turns' (daemon-turn.ts).
+        "turn:pending" => Ok(ctx.turns.pending.snapshot()),
+        "turn:approve" => Ok(json!(ctx.turns.pending.approve(
+            str_arg(&args, 0).unwrap_or_default(),
+            str_arg(&args, 1).unwrap_or_default(),
+            arg(&args, 2) == &json!(true)
+        ))),
+        "turn:answer" => Ok(json!(ctx.turns.pending.answer(
+            str_arg(&args, 0).unwrap_or_default(),
+            str_arg(&args, 1).unwrap_or_default(),
+            arg(&args, 2).clone()
+        ))),
+        // The UI's side of pending input: answered here when a daemon turn
+        // waits on it, otherwise by the host (an in-process turn's).
+        "tool:approve" => {
+            let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+            if ctx.turns.pending.approve(sid, cid, arg(&args, 2) == &json!(true)) {
+                return Ok(Value::Null);
+            }
+            ctx.backend.call(channel, Value::Array(args)).await
+        }
+        "chat:answer" => {
+            let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+            if ctx.turns.pending.answer(sid, cid, arg(&args, 2).clone()) {
+                return Ok(Value::Null);
+            }
+            ctx.backend.call(channel, Value::Array(args)).await
+        }
+        "chat:pending" => {
+            let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:pending:host", json!([]))).await;
+            let host = match host {
+                Ok(Ok(v)) if v.is_object() => v,
+                _ => json!({}),
+            };
+            Ok(merge_pending(host, ctx.turns.pending.snapshot()))
+        }
+        "chat:running" => {
+            let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call(channel, json!([]))).await;
+            let mut ids: Vec<Value> = match host {
+                Ok(Ok(Value::Array(a))) => a,
+                _ => Vec::new(),
+            };
+            for id in ctx.turns.running_sessions() {
+                if !ids.iter().any(|v| v.as_str() == Some(&id)) {
+                    ids.push(json!(id));
+                }
+            }
+            Ok(Value::Array(ids))
+        }
+        "chat:steer" => {
+            let sid = str_arg(&args, 0).unwrap_or_default().to_string();
+            let content = nekko_js::trim(str_arg(&args, 1).unwrap_or_default()).to_string();
+            if !content.is_empty()
+                && ctx.turns.steer(&sid, crate::turns::Turns::steering_message(&content))
+                && let Some(store) = &ctx.sessions
+            {
+                let store = store.clone();
+                return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
+                    .await
+                    .map_err(|e| e.to_string());
+            }
+            ctx.backend.call(channel, Value::Array(args)).await
+        }
+        // Stop the daemon's turn at once, then the host's part of stopping
+        // (its own turns, image turns, the chat's dev servers).
+        "chat:abort" => {
+            ctx.turns.abort_session(str_arg(&args, 0).unwrap_or_default());
+            ctx.backend.call(channel, Value::Array(args)).await
+        }
         "changes:list" => {
             let (changes, id) = (ctx.loops.changes.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
             let list =
@@ -145,8 +229,23 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Ok(Value::Null)
         }
         "mcp:sync" => Ok(ctx.mcp.sync(arg(&args, 0)).await),
+        "mcp:hypergate" => {
+            let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+            Ok(crate::hypergate::detect(&base).await.map_or(Value::Null, Value::Object))
+        }
+        // Probe and claim a token here; the host saves the entry (it owns the
+        // settings) and hands back the server list, which this daemon runs.
+        "mcp:hypergate:connect" => {
+            let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+            let Some(info) = crate::hypergate::resolve(&base).await else { return Ok(Value::Null) };
+            let info = Value::Object(info);
+            let servers = ctx.backend.call("mcp:hypergate:save", json!([info])).await?;
+            ctx.mcp.sync(&servers).await;
+            Ok(info)
+        }
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
         "provider:complete" => crate::sideband::complete(arg(&args, 0)).await,
+        c if crate::accounts::CHANNELS.contains(&c) && ctx.accounts.enabled() => ctx.accounts.route(c, &args).await,
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
             session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
         }
@@ -159,9 +258,60 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
     }
 }
 
+/// Merge the host's pending input with the daemon's, the daemon's winning
+/// field by field (`mergePending` in daemon-turn.ts).
+fn merge_pending(host: Value, daemon: Value) -> Value {
+    let mut out = host.as_object().cloned().unwrap_or_default();
+    for (id, p) in daemon.as_object().cloned().unwrap_or_default() {
+        let mut entry = match out.get(&id) {
+            Some(Value::Object(m)) => m.clone(),
+            _ => {
+                let mut m = serde_json::Map::new();
+                m.insert("sessionId".into(), json!(id));
+                m
+            }
+        };
+        for (k, v) in p.as_object().cloned().unwrap_or_default() {
+            if !v.is_null() {
+                entry.insert(k, v);
+            }
+        }
+        out.insert(id, Value::Object(entry));
+    }
+    Value::Object(out)
+}
+
+/// What `daemon:info` reports: the fixed table, and accounting when this
+/// daemon knows the data directory. A host that delegates limits to a daemon
+/// that would forward them straight back would loop, so they are only listed
+/// when they are really served here.
+fn owned(ctx: &Ctx) -> Vec<&'static str> {
+    let mut all = OWNED.to_vec();
+    if ctx.accounts.enabled() {
+        all.extend_from_slice(crate::accounts::OWNED);
+    }
+    all
+}
+
 /// Channels the daemon serves itself (reported by `daemon:info`).
 pub const OWNED: &[&str] = &[
     "daemon:info",
+    // Whole chat turns and the input they wait on (turns.rs).
+    "chat:turn",
+    "turn:abort",
+    "turn:alive",
+    "turn:running",
+    "turn:steer",
+    "turn:approval",
+    "turn:pending",
+    "turn:approve",
+    "turn:answer",
+    "tool:approve",
+    "chat:answer",
+    "chat:pending",
+    "chat:running",
+    "chat:steer",
+    "chat:abort",
     "loop:run",
     // Not a channel: a capability. `loop:run` has no tool-step limit. The host
     // hands runs only to a daemon that says so, because daemons built before
@@ -180,6 +330,14 @@ pub const OWNED: &[&str] = &[
     "changes:record",
     "mcp:sync",
     "mcp:call",
+    "mcp:hypergate",
+    "mcp:hypergate:connect",
+    // Not a channel: a turn whose spec carries `facts.mcpServers` syncs and
+    // calls its MCP servers here (turns.rs), approvals included.
+    "turn:mcp",
+    // Not a channel: a turn whose spec says `facts.spawn` drives its
+    // `spawn_agent` children here, the host making them (`spawn:prepare`).
+    "turn:spawn",
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",
@@ -428,6 +586,16 @@ mod tests {
         assert!(OWNED.contains(&"loop:unbounded"));
         assert!(OWNED.contains(&"loop:prompt-caching"));
         assert!(OWNED.contains(&"provider:prompt-caching"));
+    }
+
+    #[test]
+    fn pending_input_merges_with_the_daemons_winning() {
+        let host = json!({ "s1": { "sessionId": "s1", "question": { "callId": "q" } }, "s2": { "sessionId": "s2", "approval": { "x": 1 } } });
+        let daemon = json!({ "s1": { "sessionId": "s1", "approval": { "y": 2 } }, "s3": { "sessionId": "s3", "question": { "callId": "z" } } });
+        let merged = merge_pending(host, daemon);
+        assert_eq!(merged["s1"], json!({ "sessionId": "s1", "question": { "callId": "q" }, "approval": { "y": 2 } }));
+        assert_eq!(merged["s2"]["approval"], json!({ "x": 1 }));
+        assert_eq!(merged["s3"]["question"]["callId"], "z");
     }
 
     #[test]

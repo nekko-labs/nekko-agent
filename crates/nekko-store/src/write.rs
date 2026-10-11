@@ -38,6 +38,46 @@ const OPTION_KEYS: &[&str] = &[
     "archivedAt",
 ];
 
+/// What a running turn's save takes from disk rather than from memory
+/// (`USER_FIELDS` in sessions.ts): the user may change them mid-turn.
+const USER_FIELDS: &[&str] = &[
+    "pinned",
+    "tags",
+    "order",
+    "mode",
+    "disabledTools",
+    "offline",
+    "incognito",
+    "executionMode",
+    "gitIsolation",
+    "sandbox",
+    "autoModel",
+    "autoQuality",
+    "autoProviderSwitch",
+    "thinking",
+    "chatType",
+    "imageParams",
+    "workspaceId",
+    "supportingWorkspaceIds",
+    "attachedPaths",
+    "specLinked",
+    "queue",
+    "archivedAt",
+];
+
+/// `queueItemPayload`: a queued prompt as `{ text, images?, skill? }`.
+fn queue_payload(item: &Value) -> Value {
+    match item {
+        Value::String(s) => json!({ "text": s }),
+        other => other.clone(),
+    }
+}
+
+/// `queueItemsEqual`: the same payload, as `JSON.stringify` prints it.
+fn queue_items_equal(a: &Value, b: &Value) -> bool {
+    js::stringify(&queue_payload(a)) == js::stringify(&queue_payload(b))
+}
+
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
@@ -153,6 +193,49 @@ impl SessionStore {
             self.save(&mut s)?;
         }
         Ok(Some(Value::Object(s)))
+    }
+
+    /// `saveTurnSession(s, queued)`: save a chat a running turn holds in
+    /// memory, keeping whatever the user changed on disk since: the fields in
+    /// [`USER_FIELDS`] as they are on disk, and the title when the user named
+    /// the chat (`titleAuto === false`). With `queued`, the queue entry the
+    /// turn runs is claimed in the same write, or the save fails if the queue
+    /// changed meanwhile. `s` is updated to what was written.
+    pub fn save_turn(&self, s: &mut Value, queued: Option<(usize, &Value)>) -> Result<(), String> {
+        let Value::Object(target) = s else { return Err("a session that is not an object".into()) };
+        let id = target.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        match self.get(&id) {
+            Some(Value::Object(disk)) => {
+                for key in USER_FIELDS {
+                    match disk.get(*key) {
+                        Some(v) => {
+                            target.insert((*key).into(), v.clone());
+                        }
+                        None => {
+                            target.shift_remove(*key);
+                        }
+                    }
+                }
+                if disk.get("titleAuto") == Some(&Value::Bool(false)) {
+                    target.insert("title".into(), disk.get("title").cloned().unwrap_or(Value::Null));
+                    target.insert("titleAuto".into(), json!(false));
+                }
+                if let Some((index, item)) = queued {
+                    let queue = disk.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
+                    match queue.get(index) {
+                        Some(on_disk) if queue_items_equal(on_disk, item) => {}
+                        _ => return Err("Queued prompt changed before it could start.".into()),
+                    }
+                    let rest: Vec<Value> =
+                        queue.into_iter().enumerate().filter(|(i, _)| *i != index).map(|(_, v)| v).collect();
+                    target.insert("queue".into(), Value::Array(rest));
+                }
+            }
+            _ if queued.is_some() => return Err("Session not found.".into()),
+            _ => {}
+        }
+        self.save(target)
     }
 
     /// `createSession(workspaceId)`.
@@ -387,11 +470,49 @@ impl SessionStore {
             true
         })
     }
+
+    /// `applyAutoTitle(id, title)`: land a generated title, unless the user
+    /// named the chat meanwhile (`titleAuto` no longer `true`). Landing it also
+    /// ends generation. `Ok(true)` when it was written.
+    pub fn set_auto_title(&self, id: &str, title: &str) -> Result<bool, String> {
+        let mut landed = false;
+        self.patch(id, |s| {
+            if s.get("titleAuto") != Some(&Value::Bool(true)) {
+                return false;
+            }
+            s.insert("title".into(), json!(title));
+            s.insert("titleAuto".into(), json!(false));
+            landed = true;
+            true
+        })?;
+        Ok(landed)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_generated_title_lands_only_while_the_app_may_name_the_chat() {
+        let dir = std::env::temp_dir().join(format!("nekko-autotitle-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sessions")).unwrap();
+        let store = SessionStore::new(&dir);
+        let id = store.create(None).unwrap()["id"].as_str().unwrap().to_string();
+        assert!(!store.set_auto_title(&id, "Too soon").unwrap(), "no titleAuto yet: the placeholder is not the app's");
+        let mut s = store.get(&id).unwrap();
+        s["title"] = json!("Fix the bug");
+        s["titleAuto"] = json!(true);
+        store.save_turn(&mut s, None).unwrap();
+        assert!(store.set_auto_title(&id, "Login form fix").unwrap());
+        let saved = store.get(&id).unwrap();
+        assert_eq!((saved["title"].as_str(), saved["titleAuto"].as_bool()), (Some("Login form fix"), Some(false)));
+        let keys: Vec<&String> = saved.as_object().unwrap().keys().collect();
+        assert!(keys.iter().position(|k| *k == "title") < keys.iter().position(|k| *k == "titleAuto"));
+        assert!(!store.set_auto_title(&id, "Again").unwrap(), "landing a title ends generation");
+        assert!(!store.set_auto_title("s_missing", "x").unwrap());
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn ids_look_like_the_ts_ones() {

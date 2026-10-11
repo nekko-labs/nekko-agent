@@ -87,11 +87,14 @@ async fn health() -> impl IntoResponse {
 
 // An inline image expands to base64 in a transcript. The full transcript is
 // needed to save checkpoints, even if the model later uses a smaller window.
-const CALL_BODY_LIMIT: usize = 2 * 1024 * 1024;
+// Other calls match the web edition's public limit (apps/server, 25 MB): it
+// forwards every channel here, image attachments included.
+const CALL_BODY_LIMIT: usize = 25 * 1024 * 1024;
 const LOOP_RUN_BODY_LIMIT: usize = 64 * 1024 * 1024;
 
+/// `chat:turn` carries the user's attached images in its send options.
 fn body_limit(channel: &str) -> usize {
-    if channel == "loop:run" { LOOP_RUN_BODY_LIMIT } else { CALL_BODY_LIMIT }
+    if matches!(channel, "loop:run" | "chat:turn") { LOOP_RUN_BODY_LIMIT } else { CALL_BODY_LIMIT }
 }
 
 #[derive(Deserialize)]
@@ -349,6 +352,7 @@ mod tests {
     #[tokio::test]
     async fn loop_run_accepts_image_bodies_above_axum_default_but_other_calls_do_not() {
         assert_eq!(body_limit("loop:run"), 64 * 1024 * 1024);
+        assert_eq!(body_limit("chat:turn"), 64 * 1024 * 1024);
         assert_eq!(body_limit("loop:tool"), CALL_BODY_LIMIT);
         let image = axum::body::Body::from(vec![b'x'; CALL_BODY_LIMIT + 1]);
         assert!(to_bytes(image, body_limit("loop:run")).await.is_ok());

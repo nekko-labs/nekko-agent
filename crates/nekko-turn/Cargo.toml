@@ -1,0 +1,15 @@
+[package]
+name = "nekko-turn"
+description = "The pure half of a Nekko Agent chat turn for the engine daemon: tool list, system prompt, the user's input in the transcript, titles, questions, plans and turn stats, as the TS host builds them."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+nekko-context = { path = "../nekko-context" }
+nekko-js = { path = "../nekko-js" }
+nekko-loop = { path = "../nekko-loop" }
+nekko-tools = { path = "../nekko-tools" }
+serde_json.workspace = true

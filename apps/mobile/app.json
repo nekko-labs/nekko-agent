@@ -2,7 +2,7 @@
   "expo": {
     "name": "Nekko Agent",
     "slug": "nekko-agent",
-    "owner": "nekkolabs",
+    "owner": "nekkodev",
     "version": "0.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -93,6 +93,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c6004826-8258-4503-88bd-dfef457a1bd3"
+      }
     }
   }
 }

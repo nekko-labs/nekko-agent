@@ -114,10 +114,19 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: npm run build:web
+      # The web edition runs behind the engine daemon, as the desktop does; the
+      # server finds this release build in target/ (so the terminal keypress
+      # budget measures nekkod's pty and its /api/term socket).
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p nekkod --release --locked
       - name: Speed contract
         # Judged against the 2x regression gate in budgets.mjs; a missed budget is
         # measured once more before it fails the job (noisy shared runners). The
         # runner has no GPU, so Chrome runs without its software GPU emulation.
+        # NEKKO_DAEMON=nekkod: fail rather than quietly measure the in-process engine.
+        env:
+          NEKKO_DAEMON: nekkod
         run: node scripts/perf/run.mjs --out perf-results --attempts 3 --no-gpu
       - name: Profile failed latency gate against the unchanged base
         if: failure() && github.event_name == 'pull_request'
@@ -132,6 +141,7 @@ jobs:
           cd ../perf-base
           npm ci
           npm run build:web
+          cargo build -p nekkod --release --locked || echo "Base has no buildable nekkod; its diagnostic runs the in-process engine."
           node scripts/perf/run.mjs --out "$GITHUB_WORKSPACE/perf-results/profile-base" --quick --only latency --profile --timeline --no-gpu || echo "Base diagnostic missed a budget; inspect uploaded report."
       - name: Report
         if: always()

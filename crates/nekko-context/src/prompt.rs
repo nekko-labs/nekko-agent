@@ -16,6 +16,22 @@ pub struct PromptContext<'a> {
     pub can_ask: bool,
     /// `update_plan` is offered this turn.
     pub can_plan: bool,
+    /// The user's custom system instructions (Settings).
+    pub system_instructions: Option<&'a str>,
+    /// The per-turn server instructions (Settings; `DEFAULT_TURN_WRAPPER` when unset).
+    pub turn_wrapper: Option<&'a str>,
+    /// What the user wrote about themselves (Settings).
+    pub about_user: Option<&'a str>,
+    /// Which checkout the chat works in (its worktrees, the current branch, or a container).
+    pub checkout_notice: Option<&'a str>,
+}
+
+/// `${text?.trim() ? `<label>\n${text.trim()}\n` : ''}`.
+fn section(label: &str, text: Option<&str>) -> String {
+    match text.map(nekko_js::trim) {
+        Some(t) if !t.is_empty() => format!("{label}\n{t}\n"),
+        _ => String::new(),
+    }
 }
 
 /// `ASK_GUIDANCE`. The TS source wraps these lines with backslash
@@ -84,5 +100,16 @@ pub fn build_system_prompt(ctx: &PromptContext) -> String {
     } else {
         format!("\nAdditional context provided for this turn:\n\n{}", ctx.context_block)
     };
-    format!("{INTRO}\n\nPlatform: {}\n{ask}{plan}{hint}\nWorkspace folders:\n{folders}\n{block}", ctx.platform)
+    let custom = section("Custom system instructions:", ctx.system_instructions);
+    let about = section("About the user (user-provided background and preferences):", ctx.about_user);
+    let wrapper = section("Server instructions for this user turn:", ctx.turn_wrapper);
+    // Not trimmed: `${ctx.checkoutNotice ? ... : ''}`.
+    let checkout = match ctx.checkout_notice {
+        Some(n) if !n.is_empty() => format!("Checkout baseline:\n{n}\n"),
+        _ => String::new(),
+    };
+    format!(
+        "{INTRO}\n\nPlatform: {}\n{ask}{plan}{hint}{custom}{about}{wrapper}{checkout}\nWorkspace folders:\n{folders}\n{block}",
+        ctx.platform
+    )
 }

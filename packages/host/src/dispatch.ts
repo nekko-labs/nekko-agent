@@ -53,9 +53,28 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'loop:end': ([runId, payload]) => host.loopEnd(String(runId), payload as never),
     'loop:approve': ([runId, call, reason, severity]) => host.loopApprove(String(runId), call as never, String(reason), severity as never),
     'loop:log': ([sessionId, workspaceId, data]) => host.loopLog(String(sessionId), (workspaceId as string | null) ?? undefined, String(data)),
+    // A daemon-driven chat turn calling back (daemon-turn.ts).
+    'turn:event': (args) => host.turnCallback('turn:event', args),
+    'turn:end': (args) => host.turnCallback('turn:end', args),
+    'turn:tool': (args) => host.turnCallback('turn:tool', args),
+    'turn:hook': (args) => host.turnCallback('turn:hook', args),
+    'turn:headers': (args) => host.turnCallback('turn:headers', args),
+    'turn:approved': (args) => host.turnCallback('turn:approved', args),
+    'spawn:prepare': (args) => host.turnCallback('spawn:prepare', args),
+    'turn:prepare': (args) => host.turnCallback('turn:prepare', args),
+    'turn:usage': (args) => host.turnCallback('turn:usage', args),
+    'turn:notify': (args) => host.turnCallback('turn:notify', args),
+    // The daemon merges its own pending input with this process's.
+    'chat:pending:host': () => host.hostPendingInput(),
     // Internal daemon callback, using the host queue and deletion tombstone.
     'sessions:deleteAgentLog': ([id]) => deleteAgentLog(String(id)),
     'changes:notify': ([sessionId]) => host.changesNotify(String(sessionId)),
+    // The daemon keeps limit state (crates/nekkod/src/limits.rs) and asks this
+    // host only for what still lives here: a refreshed sign-in, and the relay.
+    'limits:notify': ([payload]) => host.limitsNotify(payload as never),
+    'oauth:refresh': ([tokenKey]) => host.oauthRefresh(String(tokenKey)),
+    // The daemon resolved a Hypergate gateway (crates/nekkod/src/hypergate.rs); the entry is a setting.
+    'mcp:hypergate:save': ([info]) => host.hypergateSave(info as never),
     'engine:routerModels': () => host.engineRouterModels(),
     'engine:routerModel': ([id]) => host.engineRouterModel(String(id)),
     [C.engineInstall]: ([buildId, runtime]) => host.engineInstall(buildId, runtime),
@@ -269,9 +288,11 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.mcpHypergateConnect]: ([port]) => host.connectHypergate(port),
   };
 
+  // A Map: a channel named constructor or __proto__ is unknown, never Object.prototype's.
+  const handlers = new Map(Object.entries(table));
   return (channel, args) => {
-    const fn = table[channel];
-    if (!fn) throw new Error(`Unknown channel: ${channel}`);
+    const fn = handlers.get(channel);
+    if (typeof fn !== 'function') throw new Error(`Unknown channel: ${channel}`);
     return fn(args ?? []);
   };
 }

@@ -24,6 +24,7 @@ function apply(id: string, [name, ...args]: Op): unknown {
     case 'truncate': return sessions.truncateSession(id, args[0] as string);
     case 'queue': return sessions.queuePrompt(id, args[0] as string);
     case 'dequeue': return sessions.dequeuePrompt(id, args[0] as number);
+    case 'autoTitle': return sessions.applyAutoTitle(id, args[0] as string);
     default: throw new Error(`unknown op ${name}`);
   }
 }

@@ -52,7 +52,7 @@ vi.mock('@nekko-agent/core', async () => {
 const { setDataDir } = await import('./paths.js');
 const { saveSettings } = await import('./store.js');
 const { createSession, getSession, saveSession, setSessionOptions } = await import('./sessions.js');
-const { sendChat, resolveQuestion, resolveApproval, getPendingInput } = await import('./chat.js');
+const { sendChat, resolveQuestion, resolveApproval, getHostPendingInput } = await import('./chat.js');
 
 let dir: string;
 
@@ -127,7 +127,7 @@ describe('ask_user', () => {
       if (e.type === 'question') {
         // Mid-flight, the host can say what this session is waiting on — which
         // is what the board reads when it opens.
-        expect(getPendingInput()[session.id]?.question?.callId).toBe('ask1');
+        expect(getHostPendingInput()[session.id]?.question?.callId).toBe('ask1');
         resolveQuestion(session.id, e.request.callId, [
           { questionId: e.request.questions[0].id, labels: ['Just the parser'], note: 'and nothing else' },
         ]);
@@ -136,7 +136,7 @@ describe('ask_user', () => {
 
     // Nothing is waiting once the turn has finished.
     await turn;
-    expect(getPendingInput()[session.id]).toBeUndefined();
+    expect(getHostPendingInput()[session.id]).toBeUndefined();
 
     expect(events.find((e) => e.type === 'question')).toBeTruthy();
     expect(events.find((e) => e.type === 'question_resolved')).toMatchObject({ callId: 'ask1' });
@@ -212,7 +212,7 @@ describe('ask_user', () => {
       if (e.type === 'question') abortChat(session.id);
     });
 
-    expect(getPendingInput()[session.id]).toBeUndefined();
+    expect(getHostPendingInput()[session.id]).toBeUndefined();
     expect(getSession(session.id)).toBeTruthy();
   });
 });

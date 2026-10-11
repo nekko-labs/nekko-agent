@@ -1,0 +1,223 @@
+[
+ {
+  "name": "current hypergate, agent token",
+  "health": {
+   "status": 200,
+   "body": "{\"service\":\"hypergated\",\"version\":\"1.4.0\",\"servers\":3}"
+  },
+  "gateway": {
+   "status": 200,
+   "body": "{\"url\":\"http://127.0.0.1:9/mcp\",\"uiUrl\":\"http://127.0.0.1:9/ui\",\"token\":\"gw-token\"}"
+  },
+  "resolve": {
+   "status": 200,
+   "body": "{\"token\":\"agent-token\",\"name\":\"Nekko Agent\"}"
+  },
+  "detected": {
+   "url": "http://127.0.0.1:9/mcp",
+   "uiUrl": "http://127.0.0.1:9/ui",
+   "servers": 3,
+   "version": "1.4.0",
+   "port": "PORT"
+  },
+  "resolved": {
+   "url": "http://127.0.0.1:9/mcp",
+   "uiUrl": "http://127.0.0.1:9/ui",
+   "servers": 3,
+   "version": "1.4.0",
+   "port": "PORT",
+   "token": "agent-token",
+   "agent": "Nekko Agent"
+  }
+ },
+ {
+  "name": "older hypergate, gateway token",
+  "health": {
+   "status": 200,
+   "body": "{\"service\":\"hypergated\"}"
+  },
+  "gateway": {
+   "status": 200,
+   "body": "{\"url\":\"http://127.0.0.1:9/mcp\",\"token\":\"gw-token\"}"
+  },
+  "resolve": null,
+  "detected": {
+   "url": "http://127.0.0.1:9/mcp",
+   "uiUrl": "http://localhost:PORT/",
+   "servers": 0,
+   "version": "?",
+   "port": "PORT"
+  },
+  "resolved": {
+   "url": "http://127.0.0.1:9/mcp",
+   "uiUrl": "http://localhost:PORT/",
+   "servers": 0,
+   "version": "?",
+   "port": "PORT",
+   "token": "gw-token"
+  }
+ },
+ {
+  "name": "resolve answers without a token",
+  "health": {
+   "status": 200,
+   "body": "{\"service\":\"hypergated\",\"version\":\"2\",\"servers\":0}"
+  },
+  "gateway": {
+   "status": 200,
+   "body": "{\"url\":\"u\"}"
+  },
+  "resolve": {
+   "status": 200,
+   "body": "{\"name\":\"x\"}"
+  },
+  "detected": {
+   "url": "u",
+   "uiUrl": "http://localhost:PORT/",
+   "servers": 0,
+   "version": "2",
+   "port": "PORT"
+  },
+  "resolved": {
+   "url": "u",
+   "uiUrl": "http://localhost:PORT/",
+   "servers": 0,
+   "version": "2",
+   "port": "PORT"
+  }
+ },
+ {
+  "name": "resolve refused",
+  "health": {
+   "status": 200,
+   "body": "{\"service\":\"hypergated\",\"servers\":1}"
+  },
+  "gateway": {
+   "status": 200,
+   "body": "{\"url\":\"u\",\"token\":\"t\"}"
+  },
+  "resolve": {
+   "status": 403,
+   "body": "{\"token\":\"nope\"}"
+  },
+  "detected": {
+   "url": "u",
+   "uiUrl": "http://localhost:PORT/",
+   "servers": 1,
+   "version": "?",
+   "port": "PORT"
+  },
+  "resolved": {
+   "url": "u",
+   "uiUrl": "http://localhost:PORT/",
+   "servers": 1,
+   "version": "?",
+   "port": "PORT",
+   "token": "t"
+  }
+ },
+ {
+  "name": "something else on the port",
+  "health": {
+   "status": 200,
+   "body": "{\"service\":\"not-hypergate\"}"
+  },
+  "gateway": {
+   "status": 200,
+   "body": "{\"url\":\"u\"}"
+  },
+  "resolve": null,
+  "detected": null,
+  "resolved": null
+ },
+ {
+  "name": "health is not json",
+  "health": {
+   "status": 200,
+   "body": "<html>"
+  },
+  "gateway": {
+   "status": 200,
+   "body": "{\"url\":\"u\"}"
+  },
+  "resolve": null,
+  "detected": null,
+  "resolved": null
+ },
+ {
+  "name": "health null",
+  "health": {
+   "status": 200,
+   "body": "null"
+  },
+  "gateway": {
+   "status": 200,
+   "body": "{\"url\":\"u\"}"
+  },
+  "resolve": null,
+  "detected": null,
+  "resolved": null
+ },
+ {
+  "name": "gateway null",
+  "health": {
+   "status": 200,
+   "body": "{\"service\":\"hypergated\"}"
+  },
+  "gateway": {
+   "status": 200,
+   "body": "null"
+  },
+  "resolve": null,
+  "detected": null,
+  "resolved": null
+ },
+ {
+  "name": "gateway without url, health with nulls",
+  "health": {
+   "status": 200,
+   "body": "{\"service\":\"hypergated\",\"version\":null,\"servers\":null}"
+  },
+  "gateway": {
+   "status": 200,
+   "body": "{\"uiUrl\":null}"
+  },
+  "resolve": null,
+  "detected": {
+   "uiUrl": "http://localhost:PORT/",
+   "servers": 0,
+   "version": "?",
+   "port": "PORT"
+  },
+  "resolved": {
+   "uiUrl": "http://localhost:PORT/",
+   "servers": 0,
+   "version": "?",
+   "port": "PORT"
+  }
+ },
+ {
+  "name": "health as an error page with json",
+  "health": {
+   "status": 500,
+   "body": "{\"service\":\"hypergated\"}"
+  },
+  "gateway": {
+   "status": 404,
+   "body": "{}"
+  },
+  "resolve": null,
+  "detected": {
+   "uiUrl": "http://localhost:PORT/",
+   "servers": 0,
+   "version": "?",
+   "port": "PORT"
+  },
+  "resolved": {
+   "uiUrl": "http://localhost:PORT/",
+   "servers": 0,
+   "version": "?",
+   "port": "PORT"
+  }
+ }
+]

@@ -1214,6 +1214,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "nekko-turn"
+version = "0.1.0"
+dependencies = [
+ "nekko-context",
+ "nekko-js",
+ "nekko-loop",
+ "nekko-tools",
+ "serde_json",
+]
+
+[[package]]
+name = "nekko-usage"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "icu_collator",
+ "nekko-js",
+ "regress",
+ "serde_json",
+]
+
+[[package]]
 name = "nekkod"
 version = "0.1.0"
 dependencies = [
@@ -1225,6 +1247,7 @@ dependencies = [
  "libc",
  "nekko-agent",
  "nekko-chat",
+ "nekko-context",
  "nekko-decide",
  "nekko-infer",
  "nekko-js",
@@ -1232,6 +1255,8 @@ dependencies = [
  "nekko-store",
  "nekko-term",
  "nekko-tools",
+ "nekko-turn",
+ "nekko-usage",
  "reqwest",
  "serde",
  "serde_json",

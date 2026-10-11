@@ -4,16 +4,19 @@
 //! `config.rs`). Prints one line, `NEKKOD_READY {"port":N,"pid":P}`, once it
 //! is listening; everything else goes to stderr. Exits when its stdin closes.
 
+mod accounts;
 mod backend;
 mod config;
 mod decide;
 mod engine;
 mod hub;
+mod hypergate;
 mod loops;
 mod mcp;
 mod procgroup;
 mod routes;
 mod sideband;
+mod turns;
 mod wire;
 
 use backend::Backend;
@@ -78,14 +81,28 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             });
         });
     }
+    let accounts = Arc::new(accounts::Accounts::new(
+        cfg.data_dir.clone().map(std::path::PathBuf::from),
+        backend.clone(),
+        hub.clone(),
+    ));
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
         hub,
         engine: engine.clone(),
-        sessions,
-        loops: Arc::new(loops::Loops::new(changes)),
+        sessions: sessions.clone(),
+        loops: Arc::new(loops::Loops::new(changes.clone())),
+        turns: Arc::new(turns::Turns::new(
+            sessions.clone(),
+            cfg.data_dir.clone().map(std::path::PathBuf::from),
+            changes,
+            accounts.clone(),
+            mcp.clone(),
+            engine.decide.clone(),
+        )),
         mcp: mcp.clone(),
+        accounts,
     };
     routes::forward_terminal_events(&ctx);
 

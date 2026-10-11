@@ -1,10 +1,10 @@
 import { getExecutionMode } from '@nekko-agent/shared';
 import { executeSandboxTool, sandboxWorkspaces, SANDBOX_TOOLS } from './execution-router.js';
-import { canResumeChildFailure, MAX_CHILD_RESUMES } from './delegation-recovery.js';
+import { canResumeChildFailure, childInterruptedMessage, MAX_CHILD_RESUMES, subAgentAnswer, subAgentFailure } from './delegation-recovery.js';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import type { AgentEvent, AskAnswer, ChatMessage, ContextBundle, PendingInput, ProviderConfig, QueuedPrompt, ReplySuggestions, SendOptions, Session, ToolCall, ToolResult } from '@nekko-agent/shared';
-import { ASK_CANCELLED, ASK_UNATTENDED, EFFORT_TEMPERATURE, applyPlanUpdate, effectiveEffort, guessContextWindow, DEFAULT_ORCHESTRATION, clampMaxOutputTokens, formatAskAnswers, getSessionWorkspaceIds, getStrategy, isChatModel, isLocalProvider, sinceCompaction, orchestrationPromptHint, parseAskRequest, parseReplySuggestions, planEcho, queueItemPayload, TurnStatsAccumulator, attachTurnStats } from '@nekko-agent/shared';
+import type { AgentEvent, AskAnswer, ChatMessage, ContextBundle, PendingInput, ProviderConfig, QueuedPrompt, ReplySuggestions, SendOptions, Session, ToolCall, ToolResult, TurnStats } from '@nekko-agent/shared';
+import { ASK_CANCELLED, ASK_UNATTENDED, EFFORT_TEMPERATURE, applyPlanUpdate, effectiveEffort, guessContextWindow, DEFAULT_ORCHESTRATION, clampMaxOutputTokens, formatAskAnswers, getSessionWorkspaceIds, getStrategy, isChatModel, isLocalProvider, sinceCompaction, parseAskRequest, parseReplySuggestions, planEcho, TurnStatsAccumulator, attachTurnStats } from '@nekko-agent/shared';
 import {
   runAgent,
   buildSystemPrompt,
@@ -42,17 +42,21 @@ export function setDecisionRunner(runner: DecisionRunner | null): void {
 }
 import { getSession, listSessions, saveSession, saveTurnSession, createSession, setSessionOptions, queuePrompt } from './sessions.js';
 import { executeTool } from './tools.js';
-import { AGENT_WATCH_TOOL, agentWatchTool } from './agent-watches.js';
+import { agentWatchTool } from './agent-watches.js';
 import { recordUsage } from './usage.js';
 import { recordReply } from './replies.js';
+import { turnReplyRecord, turnUsageRecord } from './usage-records.js';
 import * as LimitsService from './limits.js';
 import { listMemory } from './memory.js';
 import { ensureFreshToken, resolveSubscriptionProvider } from './oauth.js';
 import { searchWorkspace } from './workspace.js';
 import { buildSpec } from './spec.js';
-import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool } from './mcp.js';
+import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool, DAEMON_MCP } from './mcp.js';
 import { daemonCall } from './engine/daemon.js';
 import { daemonOwns, daemonRunsLoops, runAgentViaDaemon } from './daemon-loop.js';
+import { adoptTurn, answerInDaemon, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
+import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
+import { applyTurnInput, cleanTitle, hostToolApproval, sendOptionsForQueuedItem, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
 import { killSessionProcesses } from './processes.js';
 import { hasToolHooks, postToolHooks, preToolHooks, turnEndHooks } from './hooks.js';
 import { completeText } from './sideband.js';
@@ -120,9 +124,17 @@ function setPending(sessionId: string, patch: Partial<Omit<PendingInput, 'sessio
   else pendingBySession.set(sessionId, next);
 }
 
-/** Everything waiting on a person right now, keyed by session. */
-export function getPendingInput(): Record<string, PendingInput> {
+/** What this process's turns are waiting on a person for, keyed by session. */
+export function getHostPendingInput(): Record<string, PendingInput> {
   return Object.fromEntries(pendingBySession);
+}
+
+/**
+ * Everything waiting on a person right now, keyed by session: this process's
+ * turns and the engine daemon's (whose input lives there, daemon-turn.ts).
+ */
+export async function getPendingInput(): Promise<Record<string, PendingInput>> {
+  return mergePending(getHostPendingInput(), await daemonPendingInput());
 }
 
 /** The chats whose turn is running right now. */
@@ -160,36 +172,18 @@ async function titleSession(
 ): Promise<void> {
   const session = getSession(sessionId);
   if (!session || session.titleAuto !== true) return;
-  const userText = session.messages.find((m) => m.role === 'user')?.content ?? '';
-  if (!userText.trim()) return;
-  const assistantText =
-    [...session.messages].reverse().find((m) => m.role === 'assistant' && m.content.trim())?.content ?? '';
+  const content = titlePrompt(session.messages);
+  if (!content) return;
   try {
     const out = await completeText(provider, {
       model: modelId,
-      messages: [
-        {
-          id: 'title',
-          role: 'user',
-          createdAt: Date.now(),
-          content:
-            `Give this task a short title, 3 to 6 words, for a workspace card. ` +
-            `Answer with only the title: no quotes, no trailing punctuation.\n\n` +
-            `Request: ${userText.slice(0, 600)}` +
-            (assistantText ? `\nWhat was done: ${assistantText.slice(0, 240)}` : ''),
-        },
-      ],
+      messages: [{ id: 'title', role: 'user', createdAt: Date.now(), content }],
       temperature: 0.2,
       maxOutputTokens: 24,
       think: false,
       purpose: 'title',
     }, 30_000, sessionId);
-    const title = out
-      .replace(/["'`]/g, '')
-      .replace(/\s+/g, ' ')
-      .replace(/[.!?:;\-–—]+$/, '')
-      .trim()
-      .slice(0, 64);
+    const title = cleanTitle(out);
     if (!title) return;
     const fresh = getSession(sessionId);
     // Re-check the flag: a rename while the call was in flight is the user's.
@@ -339,8 +333,14 @@ export async function fillPromptPart(sessionId: string, part: string, draft: str
 }
 
 /** Resolve a pending tool approval (called from IPC when the user clicks). */
-export function resolveApproval(sessionId: string, toolCallId: string, approved: boolean): void {
-  pendingApprovals.get(toolCallId)?.(approved);
+export async function resolveApproval(sessionId: string, toolCallId: string, approved: boolean): Promise<void> {
+  const local = pendingApprovals.get(toolCallId);
+  // Not one of this process's: a daemon-driven turn's (the phone relay answers here).
+  if (!local) {
+    await approveInDaemon(sessionId, toolCallId, approved);
+    return;
+  }
+  local(approved);
   pendingApprovals.delete(toolCallId);
   const current = pendingBySession.get(sessionId);
   if (current?.approval?.call.id === toolCallId) setPending(sessionId, { approval: undefined });
@@ -351,6 +351,14 @@ export function resolveApproval(sessionId: string, toolCallId: string, approved:
  * answering": the agent is told to choose and carry on rather than left parked
  * on a promise nobody will ever settle.
  */
+export async function answerQuestion(sessionId: string, callId: string, answers: AskAnswer[]): Promise<void> {
+  if (!pendingAnswers.has(callId)) {
+    await answerInDaemon(sessionId, callId, answers);
+    return;
+  }
+  resolveQuestion(sessionId, callId, answers);
+}
+
 export function resolveQuestion(sessionId: string, callId: string, answers: AskAnswer[]): void {
   const resolve = pendingAnswers.get(callId);
   pendingAnswers.delete(callId);
@@ -383,11 +391,16 @@ function releasePending(sessionId: string): void {
  * transcript (an `interrupted` reply, which is what makes the chat offer
  * Continue) and clear the marker. Called once, when the host starts; returns
  * how many chats were marked.
+ *
+ * Under the engine daemon a turn outlives a host restart (daemon-turn.ts), so
+ * the chats the daemon is still driving (`still`) are left alone, as is any
+ * turn started at or after `since` (by this host, while the list was fetched).
  */
-export function reconcileInterruptedChats(): number {
+export function reconcileInterruptedChats(still: ReadonlySet<string> = new Set(), since = Infinity): number {
   let marked = 0;
   for (const session of listSessions()) {
     if (!session.activeRun) continue;
+    if (still.has(session.id) || session.activeRun.startedAt >= since) continue;
     const last = session.messages[session.messages.length - 1];
     const alreadyMarked = last?.role === 'assistant' && last.interrupted;
     if (last && last.role !== 'user' && !alreadyMarked) {
@@ -421,6 +434,10 @@ export async function steerChat(sessionId: string, text: string): Promise<Sessio
   if (!content) return getSession(sessionId);
   if (!isChatRunning(sessionId)) return queuePrompt(sessionId, content);
   const message: ChatMessage = { id: `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`, role: 'user', content, createdAt: Date.now() };
+  if (daemonTurnFor(sessionId)) {
+    if (await steerDaemonTurn(sessionId, message)) return getSession(sessionId);
+    if (!isChatRunning(sessionId)) return queuePrompt(sessionId, content);
+  }
   const runId = daemonRunIds.get(sessionId);
   const daemon = runId ? daemonCall() : undefined;
   if (runId && daemon && (await daemonOwns(daemon, 'loop:steer'))) {
@@ -616,23 +633,6 @@ export function offlineProviderAllowed(provider: ProviderConfig): boolean {
   );
 }
 
-function routingPrompt(providers: ProviderConfig[]): string {
-  const secrets = providers.flatMap((p) => [p.apiKey, p.baseUrl]).filter((s): s is string => !!s);
-  const safe = (value: string) => {
-    for (const secret of secrets) value = value.split(secret).join('[redacted]');
-    return value.replace(/https?:\/\/\S+/gi, '[redacted]');
-  };
-  const enabled = providers.filter((p) => p.enabled).map((p) => ({ id: safe(p.id), label: safe(p.label) }));
-  return [
-    'Sub-agent routing: enabled configured providers (IDs and labels only):',
-    JSON.stringify(enabled),
-    'Omit provider_id and model_id to inherit this chat\'s provider and model. An explicit provider change requires an explicit exact model ID for that provider.',
-    'Use delegation_targets to discover exact chat-model IDs on the intended provider before explicit delegation; never guess. If discovery fails, report the blocker or ask the user, not a different provider. Explicit and user-configured default routes are validated before creating a child.',
-    `User-selected delegation default: ${safe(JSON.stringify(getSettings().orchestration?.delegationRoute ?? null))}. When set, omitted routing arguments use this route, not the parent. Explicit arguments override it.`,
-    'There is no fallback to another provider or model on failure. Keep sensitive work on the intended provider; do not switch to a cloud provider to bypass a local failure. Incognito delegation is unavailable because child sessions are persisted.',
-  ].join('\n');
-}
-
 /**
  * Run a delegated sub-task as a fresh child session and return its final answer.
  * The child streams its own agent events (under its own sessionId) so the
@@ -647,6 +647,47 @@ async function runSubAgent(
   send: Sender,
   signal?: AbortSignal,
 ): Promise<string> {
+  const { child, targetProviderId, targetModelId, task } = await prepareSubAgent(parent, providerId, modelId, input, signal);
+  let failure: string | undefined;
+  // Stopping the parent stops the child: otherwise the parent's turn sat on
+  // this await until the orphaned sub-agent finished on its own.
+  const stopChild = () => abortChat(child.id);
+  signal?.addEventListener('abort', stopChild, { once: true });
+  try {
+    for (let attempt = 0; attempt <= MAX_CHILD_RESUMES; attempt++) {
+      failure = undefined;
+      await sendChat(childSendOptions(child.id, targetProviderId, targetModelId, task, attempt), (event) => {
+        if (event.sessionId === child.id && event.type === 'error') failure = event.message;
+        send(event);
+      });
+      if (signal?.aborted || !failure || !canResumeChildFailure(failure)) break;
+    }
+  } finally {
+    signal?.removeEventListener('abort', stopChild);
+  }
+  if (signal?.aborted) throw new Error('Stopped with the chat.');
+  if (failure) throw new Error(childInterruptedMessage(child.id, failure, getSession(child.id)?.messages));
+  return subAgentAnswer(getSession(child.id)?.messages);
+}
+
+/** A child's turn: the task first, then a resume after a recoverable failure. */
+function childSendOptions(childId: string, providerId: string, modelId: string, task: string, attempt: number): SendOptions {
+  return { sessionId: childId, providerId, modelId, text: attempt ? '' : task, ...(attempt ? { resume: true } : {}) };
+}
+
+/**
+ * Check a `spawn_agent` call against the chat, the settings and the target
+ * provider, and create the child session; throws, with nothing created, when
+ * it cannot be delegated. Shared by the TS route and the daemon's
+ * (`spawn:prepare`).
+ */
+async function prepareSubAgent(
+  parent: Session,
+  providerId: string,
+  modelId: string,
+  input: unknown,
+  signal?: AbortSignal,
+): Promise<{ child: Session; targetProviderId: string; targetModelId: string; task: string }> {
   const parentId = parent.id;
   const settings = getSettings();
   const maxDepth = settings.orchestration?.maxDepth ?? DEFAULT_ORCHESTRATION.maxDepth;
@@ -703,61 +744,200 @@ async function runSubAgent(
   child.offline = parent.offline;
   child.incognito = parent.incognito;
   saveSession(child);
-  let failure: string | undefined;
-  // Stopping the parent stops the child: otherwise the parent's turn sat on
-  // this await until the orphaned sub-agent finished on its own.
-  const stopChild = () => abortChat(child.id);
-  signal?.addEventListener('abort', stopChild, { once: true });
-  try {
-    for (let attempt = 0; attempt <= MAX_CHILD_RESUMES; attempt++) {
-      failure = undefined;
-      await sendChat({ sessionId: child.id, providerId: targetProviderId, modelId: targetModelId, text: attempt ? '' : task, ...(attempt ? { resume: true } : {}) }, (event) => {
-        if (event.sessionId === child.id && event.type === 'error') failure = event.message;
-        send(event);
-      });
-      if (signal?.aborted || !failure || !canResumeChildFailure(failure)) break;
-    }
-  } finally {
-    signal?.removeEventListener('abort', stopChild);
-  }
-  if (signal?.aborted) throw new Error('Stopped with the chat.');
-  if (failure) {
-    const checkpoint = getSession(child.id);
-    const progress = [...(checkpoint?.messages ?? [])].reverse().find(m => m.role === 'assistant' && m.content.trim())?.content.slice(-2000);
-    throw new Error(`Child session ${child.id} interrupted: ${failure}. Saved work remains in the shared project. No provider/model fallback was used. Continue the delegated task directly from its checkpoint, or explain the concrete blocker; do not assume it is complete.${progress ? '\nLast saved progress:\n' + progress : ''}`);
-  }
-  const done = getSession(child.id);
-  const last = [...(done?.messages ?? [])].reverse().find((m) => m.role === 'assistant' && m.content.trim());
-  return last?.content ?? 'Sub-agent finished without producing a written answer.';
+  return { child, targetProviderId, targetModelId, task };
 }
 
-function sendOptionsForQueuedItem(base: SendOptions, item: QueuedPrompt): SendOptions {
-  const payload = queueItemPayload(item);
-  return {
-    ...base,
-    text: payload.text,
-    images: payload.images,
-    skill: payload.skill,
-  };
+type Severity = 'low' | 'medium' | 'high';
+
+/** Everything a turn's host-side tools need, whichever route drives the turn. */
+interface HostToolContext {
+  opts: SendOptions;
+  /** The turn's session (in-process route) or a snapshot of it (daemon route). */
+  session: Session;
+  mode: NonNullable<Session['mode']>;
+  tools: Array<{ name: string }>;
+  settings: ReturnType<typeof getSettings>;
+  toolSettings: ReturnType<typeof getSettings>;
+  defaultCwd?: string;
+  sandbox: boolean;
+  allowBrowserControl: boolean;
+  allowSpawn: boolean;
+  decideWith: import('@nekko-agent/shared').DecisionProvider | null;
+  signal: AbortSignal;
+  send: Sender;
+  persist: () => void;
+  requestApproval: (call: ToolCall, reason: string, severity: Severity) => Promise<boolean>;
+  askUser: (call: ToolCall) => Promise<string>;
+}
+
+/** One tool call of a turn, run in this process. */
+async function runHostTool(ctx: HostToolContext, call: ToolCall): Promise<ToolResult> {
+  const { opts, session, mode, settings, requestApproval, send, persist } = ctx;
+  if (ctx.sandbox) return executeSandboxTool(session.id, call, requestApproval, ctx.signal);
+  if (!ctx.tools.some((tool) => tool.name === call.name)) {
+    return { toolCallId: call.id, output: 'This tool is disabled or unavailable for this chat.', isError: true };
+  }
+  if (call.name === 'set_chat_title') {
+    const disk = getSession(session.id);
+    if (disk?.titleAuto === false) return { toolCallId: call.id, output: 'The chat already has a chosen title; it was not changed.' };
+    const title = typeof call.input.title === 'string' ? call.input.title.trim().replace(/\s+/g, ' ').slice(0, 64) : '';
+    if (!title) return { toolCallId: call.id, output: 'A nonblank title is required.', isError: true };
+    session.title = title;
+    session.titleAuto = false;
+    persist();
+    send({ type: 'session_meta', sessionId: session.id });
+    return { toolCallId: call.id, output: 'Chat title updated.' };
+  }
+  if (call.name === 'complete_session') {
+    if (Object.keys(call.input).length > 0) return { toolCallId: call.id, output: 'complete_session takes no arguments and only completes the current chat.', isError: true };
+    const disk = getSession(session.id);
+    if (!disk) return { toolCallId: call.id, output: 'Session not found; completion was not saved.', isError: true };
+    const saved = setSessionOptions(session.id, { archivedAt: disk.archivedAt ?? Date.now() });
+    if (!saved) return { toolCallId: call.id, output: 'Session not found; completion was not saved.', isError: true };
+    session.archivedAt = saved.archivedAt;
+    send({ type: 'session_meta', sessionId: session.id });
+    return { toolCallId: call.id, output: 'This session is marked completed (archived). Messages are retained under the app’s archive retention policy. You can restore it from completed chats.' };
+  }
+  if (call.name === ASK_USER_TOOL.name) {
+    return { toolCallId: call.id, output: await ctx.askUser(call) };
+  }
+  if (call.name === DECIDE_TOOL.name && decisions && ctx.decideWith) {
+    try {
+      const res = await decisions.run(ctx.decideWith, decideRequestFromTool(call.input));
+      return { toolCallId: call.id, output: JSON.stringify({ model: res.model, provider: res.provider, answers: res.answers }) };
+    } catch (e) {
+      return { toolCallId: call.id, output: `decide failed: ${(e as Error).message}`, isError: true };
+    }
+  }
+  const askFirst = hostToolApproval(call.name, mode, settings.sandboxMode);
+  if (askFirst) {
+    const approved = await requestApproval(call, askFirst, 'medium');
+    if (!approved) return { toolCallId: call.id, output: 'Call not approved by user.', isError: true };
+  }
+  if (call.name === 'report_experiment' && session.trainingRunId) {
+    try {
+      return { toolCallId: call.id, output: reportExperiment(opts.sessionId, call.input as Record<string, unknown>) };
+    } catch (e) {
+      return { toolCallId: call.id, output: `Failed to record: ${(e as Error).message}`, isError: true };
+    }
+  }
+  if (call.name === 'report_artifact' && session.trainingRunId) {
+    try {
+      return { toolCallId: call.id, output: reportArtifact(opts.sessionId, call.input as Record<string, unknown>) };
+    } catch (e) {
+      return { toolCallId: call.id, output: `Failed to record the artifact: ${(e as Error).message}`, isError: true };
+    }
+  }
+  if (call.name === 'update_plan') {
+    try {
+      const input = call.input as Record<string, unknown>;
+      // Run sessions write the run's plan (and mirror it onto the session so
+      // the plan rail can render it too); ordinary chats write
+      // session.agentPlan directly. Either way the rail needs a session_meta
+      // poke to re-read.
+      const output = session.trainingRunId
+        ? updateRunPlan(opts.sessionId, input)
+        : updateSessionPlan(session, input);
+      if (session.trainingRunId) session.agentPlan = runPlanForSession(opts.sessionId);
+      persist();
+      send({ type: 'session_meta', sessionId: opts.sessionId });
+      return { toolCallId: call.id, output };
+    } catch (e) {
+      return { toolCallId: call.id, output: `Failed to update the plan: ${(e as Error).message}`, isError: true };
+    }
+  }
+  if (call.name === 'agent_watch') {
+    try {
+      if (session.incognito || session.trainingRunId || session.offline) throw new Error('Durable watches are unavailable in incognito, goal runs, or offline chats');
+      const input = call.input as Record<string, unknown>;
+      if (input.action === 'create' && (mode === 'ask' || settings.sandboxMode === 'ask-everything') && !await requestApproval(call, 'Schedule an automatic continuation of this chat', 'medium')) {
+        throw new Error('Watch registration not approved');
+      }
+      const output = await agentWatchTool(opts.sessionId, input);
+      return { toolCallId: call.id, output };
+    } catch (e) {
+      return { toolCallId: call.id, output: `Agent watch failed: ${(e as Error).message}`, isError: true };
+    }
+  }
+  if (call.name === 'delegation_targets') {
+    const failure = (code: string, message: string) => ({ toolCallId: call.id, output: JSON.stringify({ ok: false, code, message, fallbackUsed: false }), isError: true });
+    if (session.incognito || session.offline || !ctx.allowSpawn || session.disabledTools?.includes('spawn_agent')) return failure('delegation_unavailable', 'Delegation discovery is unavailable in this chat.');
+    const input = call.input as Record<string, unknown>;
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return failure('invalid_input', 'Expected an object.');
+    const id = input.provider_id ?? opts.providerId;
+    if (typeof id !== 'string' || !id.trim() || id !== id.trim()) return failure('invalid_provider_id', 'Use an exact nonblank provider ID.');
+    const provider = getSettings().providers.find((p) => p.id === id && p.enabled);
+    if (!provider) return failure('provider_unavailable', 'Provider is unknown or disabled. Enable the intended provider in Models.');
+    if (!providerEndpoint(provider)) return failure('invalid_endpoint', 'Configure a valid HTTP(S) endpoint for the intended provider.');
+    if (ctx.signal.aborted) return failure('cancelled', 'Discovery cancelled.');
+    try {
+      const resolved = await resolveSubscriptionProvider(provider);
+      const models = await createProvider(resolved).listModels();
+      if (ctx.signal.aborted) return failure('cancelled', 'Discovery cancelled.');
+      const targets = models.filter((m) => m.providerId === id && isChatModel(m)).map((m) => ({ modelId: m.id }));
+      return { toolCallId: call.id, output: JSON.stringify({ ok: true, providerId: id, models: targets, message: targets.length ? 'Use an exact modelId with spawn_agent.' : 'No chat models available. Load or install a model on this provider, then refresh.', fallbackUsed: false }) };
+    } catch {
+      return failure('model_list_unavailable', 'Could not verify the intended provider model list. Check service availability and credentials in Models, then refresh. No fallback was used.');
+    }
+  }
+  if (call.name === 'spawn_agent') {
+    return runSubAgent({ ...session, mode }, opts.providerId, opts.modelId, call.input, send, ctx.signal)
+      .then((output) => ({ toolCallId: call.id, output }))
+      .catch((e) => subAgentFailure(call.id, (e as Error).message));
+  }
+  return isMcpTool(call.name)
+    ? callMcpTool(call)
+    : executeTool(call, {
+        settings: ctx.toolSettings,
+        defaultCwd: ctx.defaultCwd,
+        requestApproval,
+        mode,
+        allowBrowserControl: ctx.allowBrowserControl,
+        sessionId: opts.sessionId,
+        signal: ctx.signal,
+      });
+}
+
+/** PreToolUse hooks may block a call, PostToolUse hooks may add to its result (hooks.ts). */
+async function withToolHooks(sessionId: string, cwd: string | undefined, call: ToolCall, run: () => Promise<ToolResult>): Promise<ToolResult> {
+  const hookSettings = getSettings();
+  if (!hasToolHooks(hookSettings)) return run();
+  const hookCtx = { sessionId, cwd: cwd ?? process.cwd() };
+  const pre = await preToolHooks(hookSettings, call, hookCtx);
+  if (pre.block) return { toolCallId: call.id, output: [pre.block, ...pre.notes].join('\n'), isError: true };
+  const result = await run();
+  const post = await postToolHooks(hookSettings, call, result, hookCtx);
+  return pre.notes.length ? { ...post, output: `${post.output}\n\n${pre.notes.join('\n')}` } : post;
 }
 
 /** Run a chat turn end to end. */
-export async function sendChat(opts: SendOptions, send: Sender, allowBrowserControl = false, queued?: { index: number; item: QueuedPrompt }): Promise<void> {
+/** A turn the host has admitted, with what it gathered for it. */
+type Admitted = NonNullable<Awaited<ReturnType<typeof admitTurn>>>;
+
+/**
+ * Admit a turn: the provider and chat exist, a sandbox is set up, a worktree
+ * chat has its checkout (and its setup command has run), an offline chat has
+ * a loopback provider, the endpoint is valid; then sync MCP, ask the decision
+ * runner, list the tools and fetch the connector and index snippets. Null,
+ * having said why, when the turn cannot run. `chainAbort` is the Stop of a
+ * daemon-driven chain of queued turns.
+ */
+async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: boolean, chainAbort?: AbortController) {
   const settings = getSettings();
   const provider = settings.providers.find((p) => p.id === opts.providerId);
   if (!provider?.enabled) {
     send({ type: 'error', sessionId: opts.sessionId, message: 'Provider not configured or disabled.' });
-    return;
+    return null;
   }
   const session = getSession(opts.sessionId);
   if (!session) {
     send({ type: 'error', sessionId: opts.sessionId, message: 'Session not found.' });
-    return;
+    return null;
   }
 
   const sandbox = getExecutionMode(session) === 'sandbox';
   if (sandbox && (!session.sandbox || session.chatType === 'image' || opts.skill)) {
-    send({ type: 'error', sessionId: session.id, message: 'Sandbox requires explicit setup and supports text chat without host skills only.' }); return;
+    send({ type: 'error', sessionId: session.id, message: 'Sandbox requires explicit setup and supports text chat without host skills only.' }); return null;
   }
   if (!sandbox && getExecutionMode(session) === 'worktree' && !session.incognito && !session.offline) {
     let created: ReturnType<typeof prepareChatWorktrees>;
@@ -766,7 +946,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
       created = prepareChatWorktrees(session, settings);
     } catch (error) {
       send({ type: 'error', sessionId: opts.sessionId, message: (error as Error).message });
-      return;
+      return null;
     }
     const announce = () => { saveSession(session); send({ type: 'session_meta', sessionId: session.id }); };
     if (JSON.stringify(session.gitWorktrees) !== before) announce();
@@ -798,54 +978,46 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
   const incognito = !!session.incognito;
   if (offline && !offlineProviderAllowed(provider)) {
     send({ type: 'error', sessionId: opts.sessionId, message: 'Offline chat requires a local-compatible provider with a loopback HTTP(S) endpoint.' });
-    return;
+    return null;
   }
   if (!providerEndpoint(provider)) {
     send({ type: 'error', sessionId: opts.sessionId, message: 'Provider requires a valid HTTP(S) endpoint.' });
-    return;
+    return null;
   }
-  const abort = new AbortController();
+  const abort = chainAbort ?? new AbortController();
   abortControllers.set(opts.sessionId, abort);
   // Offline disables tool calls entirely; otherwise combine builtins + connected
   // MCP tools, then drop any the user turned off for this chat.
   // Orchestration: the strategy decides whether sub-agents are even offered.
   const orchestration = settings.orchestration ?? DEFAULT_ORCHESTRATION;
   const allowSpawn = getStrategy(orchestration.strategy).allowsSpawn;
-  const canAsk = !session.parentSessionId && !session.taskId && !session.trainingRunId;
-  let tools: typeof BUILTIN_TOOLS = [];
   let decideWith: import('@nekko-agent/shared').DecisionProvider | null = null;
+  // A daemon that drives the turn and runs its MCP servers syncs them itself (`turn:mcp`).
+  const daemon = process.env.NEKKO_AGENT_LOOP === 'ts' ? undefined : daemonCall();
+  const daemonMcp = !sandbox && !!daemon && (await daemonRunsTurns(daemon)) && (await daemonOwns(daemon, DAEMON_MCP));
   if (!offline) {
-    if (!sandbox && settings.mcpServers?.some((s) => s.enabled)) await syncMcp(settings.mcpServers);
-    const disabled = new Set(session.disabledTools ?? []);
-    if (!allowSpawn || disabled.has('spawn_agent') || session.incognito) disabled.add('delegation_targets');
-    if (!allowSpawn) disabled.add('spawn_agent');
-    if (!allowBrowserControl || !canAsk) { disabled.add('browser'); disabled.add('capture'); }
-    tools = [...BUILTIN_TOOLS, ...(sandbox ? [] : mcpToolSpecs()), ...(!session.incognito && !session.trainingRunId ? [AGENT_WATCH_TOOL] : [])].filter((t) => !disabled.has(t.name));
-    // update_plan goes to every session: goal runs treat it as the execution
-    // contract; ordinary chats publish it to the plan rail so the user sees the
-    // plan the agent derived, not a re-listing of their own prompt.
-    tools.push(UPDATE_PLAN_TOOL);
-    if (session.titleAuto !== false && !session.parentSessionId) tools.push({
-      name: 'set_chat_title',
-      description: 'Name this chat with a concise, specific 3-6 word title. Never overrides a user-chosen title.',
-      parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'], additionalProperties: false },
-    });
-    if (!incognito && !session.parentSessionId && !session.trainingRunId && !disabled.has('complete_session')) tools.push({
-      name: 'complete_session',
-      description: 'Mark this chat completed using the app’s Complete action (archive it). Call only when the user explicitly asks to complete this session. Does not delete messages, clean up worktrees, or stop this final reply. Archived chats follow the app’s archive retention policy. Queued prompts remain saved but will not run automatically.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
-    });
-    // Run-driven sessions can register experiments into their run's idea maze
-    // and report the artifacts they produce.
-    if (session.trainingRunId) tools.push(REPORT_EXPERIMENT_TOOL, REPORT_ARTIFACT_TOOL);
-    // Asking is only offered where somebody is there to answer. A sub-agent, an
-    // automation, or a goal run has no one reading it, so a question would be a
-    // run parked forever rather than a clarification.
-    if (canAsk && !disabled.has(ASK_USER_TOOL.name)) tools.push(ASK_USER_TOOL);
-    decideWith = sandbox || disabled.has(DECIDE_TOOL.name) ? null : await decisions?.available().catch(() => null) ?? null;
-    if (decideWith) tools.push(DECIDE_TOOL);
+    if (!sandbox && !daemonMcp && settings.mcpServers?.some((s) => s.enabled)) await syncMcp(settings.mcpServers);
+    // The daemon syncs for the turn; this only keeps this host's snapshot (the
+    // tool list `listTools` reads) current, and nothing waits on it.
+    else if (daemonMcp && settings.mcpServers?.some((s) => s.enabled)) void syncMcp(settings.mcpServers).catch(() => {});
+    decideWith = sandbox || session.disabledTools?.includes(DECIDE_TOOL.name) ? null : await decisions?.available().catch(() => null) ?? null;
   }
+  let tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl, mcpTools: sandbox || offline ? [] : mcpToolSpecs(), decide: !!decideWith });
   if (sandbox) tools = tools.filter(t => SANDBOX_TOOLS.has(t.name));
+  // Connector fetches and the workspace index stay in this process; the rest
+  // of the context is read from disk by whichever route builds the prompt.
+  // Offline mode skips internet connectors.
+  const connectorSnippets = sandbox || offline ? [] : await collectConnectorSnippets(opts.text);
+  const indexSnippets = sandbox ? [] : session.gitWorktrees && Object.keys(session.gitWorktrees).length ? [] : collectIndexSnippets(getSessionWorkspaceIds(session), opts.text);
+
+  return { settings, provider, session, sandbox, workspaces, toolSettings, mode, offline, incognito, abort, allowSpawn, decideWith, tools, connectorSnippets, indexSnippets, daemonMcp };
+}
+
+export async function sendChat(opts: SendOptions, send: Sender, allowBrowserControl = false, queued?: { index: number; item: QueuedPrompt }): Promise<void> {
+  const admitted = await admitTurn(opts, send, allowBrowserControl);
+  if (!admitted) return;
+  const { settings, provider, session, sandbox, workspaces, toolSettings, mode, offline, incognito, abort, allowSpawn, decideWith, connectorSnippets, indexSnippets } = admitted;
+  let { tools } = admitted;
   // Persist only when not incognito. Preserve any prompts queued mid-run (they
   // land on disk via queuePrompt) so a normal save doesn't clobber them.
   const persist = () => {
@@ -853,7 +1025,20 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
     saveTurnSession(session);
   };
 
-  // Build context with provenance. Offline mode skips internet connectors.
+  // Under the engine daemon the whole turn is the daemon's (daemon-turn.ts).
+  // NEKKO_AGENT_LOOP=ts keeps every turn in this process (a kill switch), and
+  // a sandbox turn always stays here with the container router.
+  const daemon = process.env.NEKKO_AGENT_LOOP === 'ts' ? undefined : daemonCall();
+  if (!sandbox && daemon && (await daemonRunsTurns(daemon))) {
+    const ran = await sendChatViaDaemon(daemon, { ...admitted, opts, send, allowBrowserControl, queued });
+    if (ran) return;
+    // The daemon would not take it: this process runs it, its MCP servers included.
+    if (admitted.daemonMcp && !offline && settings.mcpServers?.some((s) => s.enabled)) {
+      await syncMcp(settings.mcpServers);
+      tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl, mcpTools: mcpToolSpecs(), decide: !!decideWith });
+    }
+  }
+
   const bundle = assembleContext({
     attached: sandbox ? [] : collectAttached([...(session.attachedPaths ?? []), ...(opts.attachedPaths ?? [])]),
     guidelines: sandbox ? [] : collectGuidelines(workspaces),
@@ -861,8 +1046,8 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
       ...listMemory('global'),
       ...getSessionWorkspaceIds(session).flatMap((id) => listMemory('workspace', id)),
     ],
-    connectorSnippets: sandbox || offline ? [] : await collectConnectorSnippets(opts.text),
-    indexSnippets: sandbox ? [] : session.gitWorktrees && Object.keys(session.gitWorktrees).length ? [] : collectIndexSnippets(getSessionWorkspaceIds(session), opts.text),
+    connectorSnippets,
+    indexSnippets,
     excluded: new Set(session.contextPrefs?.excluded ?? []),
     pinned: new Set(session.contextPrefs?.pinned ?? []),
   });
@@ -871,63 +1056,22 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
   // single truncated line while the inspector reported its full token cost.
   const contextBlock = renderContextBlock(bundle, bundle.contents ?? new Map());
 
-  const system = buildSystemPrompt({
+  const system = turnSystemPrompt({
     workspaces,
-    systemInstructions: [sandbox ? 'Sandbox: only folder-N copied paths are accessible. All tool actions require approval. No host controls, networking, MCP, delegation or host fallback.' : settings.systemInstructions, tools.some((t) => t.name === 'agent_watch')
-      ? 'When work must wait for PR checks or another background task, register agent_watch before ending the turn. State its id and wake condition; do not claim to be watching unless registration succeeded. Use a deadline so waiting cannot silently last forever. On wake, verify current status and re-arm if necessary. Do not register automatic continuations when waiting for a user decision, missing permission, credentials, or visual evidence that requires human action.'
-      : ''].filter(Boolean).join('\n\n'),
-    turnWrapper: sandbox ? DEFAULT_TURN_WRAPPER : settings.turnWrapper ?? DEFAULT_TURN_WRAPPER,
-    aboutUser: sandbox ? undefined : settings.aboutUser,
-    checkoutNotice: sandbox ? 'This chat executes in an isolated container on copied folders, not a host checkout.' : getExecutionMode(session) === 'unified' ? 'This chat uses the project’s current Git branch, including local changes.' : Object.values(session.gitWorktrees ?? {}).map((w) => w.notice).join('\n'),
+    tools,
+    settings,
+    sandbox,
+    executionMode: getExecutionMode(session),
+    worktreeNotices: Object.values(session.gitWorktrees ?? {}).map((w) => w.notice),
     contextBlock,
     platform: process.platform,
-    canAsk: tools.some((t) => t.name === ASK_USER_TOOL.name),
-    canPlan: tools.some((t) => t.name === UPDATE_PLAN_TOOL.name),
-    orchestrationHint: tools.some((t) => t.name === 'spawn_agent')
-      ? `${orchestrationPromptHint(orchestration)}\n\n${routingPrompt(settings.providers)}`
-      : '',
   });
 
   if (abort.signal.aborted) {
     if (abortControllers.get(opts.sessionId) === abort) abortControllers.delete(opts.sessionId);
     return;
   }
-  if (opts.resume) {
-    // Carrying on from a run that stopped part-way: keep every step already taken
-    // and only make the transcript valid to send again, by answering any tool call
-    // that never got to run. Nothing is appended and nothing is dropped.
-    repairInterruptedHistory(session.messages);
-  }
-  if (opts.regenerate && !opts.resume) {
-    // Re-answer the last user turn: drop trailing assistant/tool messages, but
-    // never a compaction summary, which stands in for everything before it.
-    while (
-      session.messages.length &&
-      session.messages[session.messages.length - 1].role !== 'user' &&
-      !session.messages[session.messages.length - 1].compaction
-    ) {
-      session.messages.pop();
-    }
-  } else if (!opts.resume || opts.text.trim() || opts.images?.length) {
-    // Empty resume clicks add no synthetic user message, but explicit input is never discarded.
-    const userMsg: ChatMessage = {
-      id: `msg_${Date.now().toString(36)}`,
-      role: 'user',
-      content: opts.text,
-      createdAt: Date.now(),
-      ...(opts.images?.length ? { images: opts.images } : {}),
-      ...(opts.skill ? { skill: opts.skill } : {}),
-    };
-    session.messages.push(userMsg);
-    if (session.title === 'New chat') {
-      // Placeholder until the post-turn summarizer writes the real one; the
-      // flag says the app named it, so a better name may replace it.
-      session.title = opts.text.slice(0, 48) || 'New chat';
-      session.titleAuto = true;
-    }
-  }
-  session.providerId = opts.providerId;
-  session.modelId = opts.modelId;
+  applyTurnInput(session, opts);
   if (queued) {
     try {
       saveTurnSession(session, queued);
@@ -968,7 +1112,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
     abortControllers.set(opts.sessionId, abort);
     eventsSeen = false;
 
-    const requestApproval = (call: ToolCall, reason: string, severity: 'low' | 'medium' | 'high') => {
+    const requestApproval = (call: ToolCall, reason: string, severity: Severity) => {
       // Read live policy: the user can allow the remaining calls while this turn
       // is parked on an approval, including approvals forwarded by the daemon.
       const liveMode = getSession(opts.sessionId)?.mode ?? getSettings().defaultChatMode ?? 'guardrails';
@@ -1016,141 +1160,9 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
 
     try {
       const defaultCwd = workspaces[0]?.path;
-      const executeToolInner = async (call: ToolCall): Promise<ToolResult> => {
-        if (sandbox) return executeSandboxTool(session.id, call, requestApproval, abort.signal);
-        if (!tools.some((tool) => tool.name === call.name)) {
-          return { toolCallId: call.id, output: 'This tool is disabled or unavailable for this chat.', isError: true };
-        }
-        if (call.name === 'set_chat_title') {
-          const disk = getSession(session.id);
-          if (disk?.titleAuto === false) return { toolCallId: call.id, output: 'The chat already has a chosen title; it was not changed.' };
-          const title = typeof call.input.title === 'string' ? call.input.title.trim().replace(/\s+/g, ' ').slice(0, 64) : '';
-          if (!title) return { toolCallId: call.id, output: 'A nonblank title is required.', isError: true };
-          session.title = title;
-          session.titleAuto = false;
-          persist();
-          send({ type: 'session_meta', sessionId: session.id });
-          return { toolCallId: call.id, output: 'Chat title updated.' };
-        }
-        if (call.name === 'complete_session') {
-          if (Object.keys(call.input).length > 0) return { toolCallId: call.id, output: 'complete_session takes no arguments and only completes the current chat.', isError: true };
-          const disk = getSession(session.id);
-          if (!disk) return { toolCallId: call.id, output: 'Session not found; completion was not saved.', isError: true };
-          const saved = setSessionOptions(session.id, { archivedAt: disk.archivedAt ?? Date.now() });
-          if (!saved) return { toolCallId: call.id, output: 'Session not found; completion was not saved.', isError: true };
-          session.archivedAt = saved.archivedAt;
-          send({ type: 'session_meta', sessionId: session.id });
-          return { toolCallId: call.id, output: 'This session is marked completed (archived). Messages are retained under the app’s archive retention policy. You can restore it from completed chats.' };
-        }
-        if (call.name === ASK_USER_TOOL.name) {
-          return { toolCallId: call.id, output: await askUser(call) };
-        }
-        if (call.name === DECIDE_TOOL.name && decisions && decideWith) {
-          try {
-            const res = await decisions.run(decideWith, decideRequestFromTool(call.input));
-            return { toolCallId: call.id, output: JSON.stringify({ model: res.model, provider: res.provider, answers: res.answers }) };
-          } catch (e) {
-            return { toolCallId: call.id, output: `decide failed: ${(e as Error).message}`, isError: true };
-          }
-        }
-        const indirect = call.name === 'spawn_agent' || isMcpTool(call.name);
-        if (indirect && (mode === 'ask' || settings.sandboxMode === 'ask-everything')) {
-          const approved = await requestApproval(call, call.name === 'spawn_agent' ? 'Delegate work to a sub-agent' : `Call ${call.name}`, 'medium');
-          if (!approved) return { toolCallId: call.id, output: 'Call not approved by user.', isError: true };
-        }
-        if (call.name === 'report_experiment' && session.trainingRunId) {
-          try {
-            const output = reportExperiment(opts.sessionId, call.input as Record<string, unknown>);
-            return Promise.resolve({ toolCallId: call.id, output });
-          } catch (e) {
-            return Promise.resolve({ toolCallId: call.id, output: `Failed to record: ${(e as Error).message}`, isError: true });
-          }
-        }
-        if (call.name === 'report_artifact' && session.trainingRunId) {
-          try {
-            const output = reportArtifact(opts.sessionId, call.input as Record<string, unknown>);
-            return Promise.resolve({ toolCallId: call.id, output });
-          } catch (e) {
-            return Promise.resolve({ toolCallId: call.id, output: `Failed to record the artifact: ${(e as Error).message}`, isError: true });
-          }
-        }
-        if (call.name === 'update_plan') {
-          try {
-            const input = call.input as Record<string, unknown>;
-            // Run sessions write the run's plan (and mirror it onto the
-            // session so the plan rail can render it too); ordinary chats
-            // write session.agentPlan directly. Either way the rail needs a
-            // session_meta poke to re-read.
-            const output = session.trainingRunId
-              ? updateRunPlan(opts.sessionId, input)
-              : updateSessionPlan(session, input);
-            if (session.trainingRunId) session.agentPlan = runPlanForSession(opts.sessionId);
-            persist();
-            send({ type: 'session_meta', sessionId: opts.sessionId });
-            return Promise.resolve({ toolCallId: call.id, output });
-          } catch (e) {
-            return Promise.resolve({ toolCallId: call.id, output: `Failed to update the plan: ${(e as Error).message}`, isError: true });
-          }
-        }
-        if (call.name === 'agent_watch') {
-          try {
-            if (session.incognito || session.trainingRunId || session.offline) throw new Error('Durable watches are unavailable in incognito, goal runs, or offline chats');
-            const input = call.input as Record<string, unknown>;
-            if (input.action === 'create' && (mode === 'ask' || settings.sandboxMode === 'ask-everything') && !await requestApproval(call, 'Schedule an automatic continuation of this chat', 'medium')) {
-              throw new Error('Watch registration not approved');
-            }
-            const output = await agentWatchTool(opts.sessionId, input);
-            return { toolCallId: call.id, output };
-          } catch (e) {
-            return { toolCallId: call.id, output: `Agent watch failed: ${(e as Error).message}`, isError: true };
-          }
-        }
-        if (call.name === 'delegation_targets') {
-          const failure = (code: string, message: string) => ({ toolCallId: call.id, output: JSON.stringify({ ok: false, code, message, fallbackUsed: false }), isError: true });
-          if (session.incognito || session.offline || !allowSpawn || session.disabledTools?.includes('spawn_agent')) return failure('delegation_unavailable', 'Delegation discovery is unavailable in this chat.');
-          const input = call.input as Record<string, unknown>;
-          if (!input || typeof input !== 'object' || Array.isArray(input)) return failure('invalid_input', 'Expected an object.');
-          const id = input.provider_id ?? opts.providerId;
-          if (typeof id !== 'string' || !id.trim() || id !== id.trim()) return failure('invalid_provider_id', 'Use an exact nonblank provider ID.');
-          const provider = getSettings().providers.find((p) => p.id === id && p.enabled);
-          if (!provider) return failure('provider_unavailable', 'Provider is unknown or disabled. Enable the intended provider in Models.');
-          if (!providerEndpoint(provider)) return failure('invalid_endpoint', 'Configure a valid HTTP(S) endpoint for the intended provider.');
-          if (abort.signal.aborted) return failure('cancelled', 'Discovery cancelled.');
-          try {
-            const resolved = await resolveSubscriptionProvider(provider);
-            const models = await createProvider(resolved).listModels();
-            if (abort.signal.aborted) return failure('cancelled', 'Discovery cancelled.');
-            const targets = models.filter((m) => m.providerId === id && isChatModel(m)).map((m) => ({ modelId: m.id }));
-            return { toolCallId: call.id, output: JSON.stringify({ ok: true, providerId: id, models: targets, message: targets.length ? 'Use an exact modelId with spawn_agent.' : 'No chat models available. Load or install a model on this provider, then refresh.', fallbackUsed: false }) };
-          } catch {
-            return failure('model_list_unavailable', 'Could not verify the intended provider model list. Check service availability and credentials in Models, then refresh. No fallback was used.');
-          }
-        }
-        if (call.name === 'spawn_agent') {
-          return runSubAgent({ ...session, mode }, opts.providerId, opts.modelId, call.input, send, abort.signal)
-            .then((output) => ({ toolCallId: call.id, output }))
-            .catch((e) => {
-              const message = (e as Error).message;
-              const code = message.includes('exact model ID is not available') ? 'model_unavailable'
-                : message.includes('not a chat model') ? 'not_chat_model'
-                : message.includes('model list') ? 'model_list_unavailable'
-                : message.includes('unknown or disabled') ? 'provider_unavailable'
-                : message.includes('endpoint') ? 'invalid_endpoint'
-                : message.includes('cancelled') ? 'cancelled' : 'delegation_failed';
-              return { toolCallId: call.id, output: JSON.stringify({ ok: false, code, message: `Sub-agent failed: ${message}`, fallbackUsed: false }), isError: true };
-            });
-        }
-        return isMcpTool(call.name)
-          ? callMcpTool(call)
-          : executeTool(call, {
-              settings: toolSettings,
-              defaultCwd,
-              requestApproval,
-              mode,
-              allowBrowserControl,
-              sessionId: opts.sessionId,
-              signal: abort.signal,
-            });
+      const hostTools: HostToolContext = {
+        opts, session, mode, tools, settings, toolSettings, defaultCwd, sandbox, allowBrowserControl, allowSpawn, decideWith,
+        signal: abort.signal, send, persist, requestApproval, askUser,
       };
 
       let cacheUsage: { cacheReadTokens?: number; cacheWriteTokens?: number } = {};
@@ -1165,17 +1177,8 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
         // Hooks wrap every tool call (hooks.ts): PreToolUse may block it,
         // PostToolUse may add to its result. The settings are re-read per
         // call so a hook added mid-run applies to the next tool.
-        executeTool: async (call: ToolCall): Promise<ToolResult> => {
-          if (sandbox) return executeToolInner(call);
-          const hookSettings = getSettings();
-          if (!hasToolHooks(hookSettings)) return executeToolInner(call);
-          const hookCtx = { sessionId: opts.sessionId, cwd: defaultCwd ?? process.cwd() };
-          const pre = await preToolHooks(hookSettings, call, hookCtx);
-          if (pre.block) return { toolCallId: call.id, output: [pre.block, ...pre.notes].join('\n'), isError: true };
-          const result = await executeToolInner(call);
-          const post = await postToolHooks(hookSettings, call, result, hookCtx);
-          return pre.notes.length ? { ...post, output: `${post.output}\n\n${pre.notes.join('\n')}` } : post;
-        },
+        executeTool: (call: ToolCall): Promise<ToolResult> =>
+          sandbox ? runHostTool(hostTools, call) : withToolHooks(opts.sessionId, defaultCwd, call, () => runHostTool(hostTools, call)),
         temperature: EFFORT_TEMPERATURE[effectiveEffort(settings.effort, opts.modelId)],
         effort: settings.effort ?? 'normal',
         // The output cap is a safeguard for local servers, where a looping
@@ -1192,13 +1195,11 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
             ? (headers: Headers) => LimitsService.recordFromHeaders(provider.tokenKey!, provider.kind, headers)
             : undefined,
       };
-      // Under the engine daemon the run itself is the daemon's (daemon-loop.ts):
-      // its tokens reach the UI without passing through this process. A run
-      // that reports rate-limit headers stays here, since only this side
-      // records them. Only a daemon that runs with no tool-step limit gets the
-      // run (daemonRunsLoops): an older one would cap it.
-      // NEKKO_AGENT_LOOP=ts keeps every run in this process (a kill switch).
-      const daemon = process.env.NEKKO_AGENT_LOOP === 'ts' ? undefined : daemonCall();
+      // A daemon too old for `chat:turn` may still drive the reply alone
+      // (daemon-loop.ts): its tokens reach the UI without passing through this
+      // process. A run that reports rate-limit headers stays here, since only
+      // this side records them on that route. Only a daemon that runs with no
+      // tool-step limit gets the run (daemonRunsLoops): an older one would cap it.
       const viaDaemon = !sandbox && !!daemon && !runOptions.onHeaders && (await daemonRunsLoops(daemon)) &&
         (await daemonOwns(daemon, 'loop:prompt-caching'));
       // On disk while the turn runs: a host that starts and finds it knows the
@@ -1234,18 +1235,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
             cacheUsage = {};
           }
           turnStats.add(event);
-          recordUsage({
-            ts: Date.now(),
-            providerId: opts.providerId,
-            modelId: opts.modelId,
-            inputTokens: event.inputTokens,
-            cacheReadTokens: event.cacheReadTokens,
-            cacheWriteTokens: event.cacheWriteTokens,
-            outputTokens: event.outputTokens,
-            sessionId: opts.sessionId,
-            auth: provider.auth,
-            local: isLocalProvider(provider.kind),
-          });
+          recordTurnUsage(opts, provider, event);
         }
         // How the reply ended, for tuning the loop detector (counts only). Older engines omit `stop`; nothing is recorded then.
         if (event.type === 'done' && event.stop) lastStop = event.stop;
@@ -1253,29 +1243,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
         // pane that re-reads the session on `done` already finds them.
         const finished = event.type === 'done' ? turnStats.finish(Date.now(), { steps: event.steps, stop: event.stop }) : undefined;
         if (finished) attachTurnStats(session.messages, turnFrom, finished);
-        if (event.type === 'done' && event.stop && !incognito) {
-          recordReply({
-            ts: Date.now(),
-            startedAt: replyStartedAt,
-            sessionId: opts.sessionId,
-            providerId: opts.providerId,
-            modelId: opts.modelId,
-            steps: event.steps ?? 0,
-            stop: event.stop,
-            ...(finished ? {
-              effort: finished.effort,
-              inputTokens: finished.inputTokens,
-              outputTokens: finished.outputTokens,
-              cacheReadTokens: finished.cacheReadTokens,
-              cacheWriteTokens: finished.cacheWriteTokens,
-              outputMs: finished.outputMs,
-              wallMs: finished.wallMs,
-            } : {}),
-          });
-        }
-        if (event.type === 'done' && provider.auth === 'subscription' && provider.tokenKey) {
-          LimitsService.poll(provider.tokenKey).catch(() => {});
-        }
+        if (event.type === 'done') recordTurnEnd(opts, provider, incognito, replyStartedAt, event, finished);
         // Checkpoint after every completed step, not just at the end. The agent
         // loop appends each assistant message and tool result to `session.messages`
         // as it goes, so writing here means a run that is killed mid-flight (a
@@ -1325,23 +1293,70 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
   if (lastError) {
     send({ type: 'error', sessionId: opts.sessionId, message: lastError.message });
   }
+  await afterTurn({
+    opts, send, allowBrowserControl, sandbox, incognito, offline, workspaces,
+    session, resolvedProvider,
+    stop: abort.signal.aborted ? 'stopped' : lastError ? 'error' : lastStop ?? 'complete',
+    error: lastError?.message,
+    aborted: abort.signal.aborted,
+  });
+}
+
+/** Usage of one model call, for the usage log. */
+function recordTurnUsage(opts: SendOptions, provider: ProviderConfig, event: Extract<AgentEvent, { type: 'usage' }>): void {
+  recordUsage(turnUsageRecord(opts, provider, event, Date.now()));
+}
+
+/** A finished reply: the reply log, and a fresh look at the subscription's limits. */
+function recordTurnEnd(opts: SendOptions, provider: ProviderConfig, incognito: boolean, startedAt: number, event: Extract<AgentEvent, { type: 'done' }>, finished: TurnStats | undefined): void {
+  const reply = turnReplyRecord(opts, incognito, startedAt, event, finished, Date.now());
+  if (reply) recordReply(reply);
+  if (provider.auth === 'subscription' && provider.tokenKey) {
+    LimitsService.poll(provider.tokenKey).catch(() => {});
+  }
+}
+
+interface AfterTurn {
+  opts: SendOptions;
+  send: Sender;
+  allowBrowserControl: boolean;
+  sandbox: boolean;
+  incognito: boolean;
+  offline: boolean;
+  workspaces: Array<{ path: string }>;
+  session: Session;
+  resolvedProvider?: ProviderConfig;
+  stop: 'stopped' | 'error' | 'complete' | 'loop' | 'runaway';
+  error?: string;
+  aborted: boolean;
+}
+
+/** What follows any turn here: TurnEnd hooks and the linked spec. */
+function afterTurnHooks(t: Omit<AfterTurn, 'send' | 'allowBrowserControl' | 'aborted'>): void {
+  const { opts, sandbox, incognito, offline } = t;
   // TurnEnd hooks: how the reply ended, for whoever wants to know. Nothing waits.
   if (!sandbox) turnEndHooks(getSettings(), {
     sessionId: opts.sessionId,
-    cwd: workspaces[0]?.path ?? process.cwd(),
-    stop: abort.signal.aborted ? 'stopped' : lastError ? 'error' : lastStop ?? 'complete',
-    ...(lastError ? { error: lastError.message } : {}),
+    cwd: t.workspaces[0]?.path ?? process.cwd(),
+    stop: t.stop,
+    ...(t.error ? { error: t.error } : {}),
   });
 
   // Keep the linked spec.md in sync with the conversation (best-effort).
-  if (!sandbox && session.specLinked && !incognito && !offline) {
+  if (!sandbox && t.session.specLinked && !incognito && !offline) {
     buildSpec(opts.sessionId).catch(() => {});
   }
+}
+
+/** What follows an in-process turn: hooks, the spec, the title, steering left over, the queue. */
+async function afterTurn(t: AfterTurn): Promise<void> {
+  const { opts, send, sandbox, incognito, offline } = t;
+  afterTurnHooks(t);
 
   // With the first turn done, ask the model for a real title. titleAuto guards
   // a name the user typed; incognito/offline chats skip the extra call.
-  if (!sandbox && !incognito && !offline && session.titleAuto === true) {
-    void titleSession(opts.sessionId, resolvedProvider, opts.modelId, send);
+  if (!sandbox && !incognito && !offline && t.resolvedProvider && (getSession(opts.sessionId) ?? t.session).titleAuto === true) {
+    void titleSession(opts.sessionId, t.resolvedProvider, opts.modelId, send);
   }
 
   // Steering that arrived during the final model call (no tool boundary left
@@ -1351,13 +1366,211 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
   }
   steering.delete(opts.sessionId);
 
-  // Run the next queued prompt, if any (and we weren't aborted). Each turn
-  // dequeues exactly one item, so a chat works through its queue in order.
-  if (!abort.signal.aborted) {
-    const fresh = getSession(opts.sessionId);
-    const next = fresh?.queue?.[0];
-    if (fresh && !fresh.archivedAt && next) {
-      await sendChat(sendOptionsForQueuedItem({ sessionId: opts.sessionId, providerId: opts.providerId, modelId: opts.modelId, text: '' }, next), send, allowBrowserControl, { index: 0, item: next });
-    }
+  if (!t.aborted) await drainQueue(opts, send, t.allowBrowserControl);
+}
+
+/** Run the next queued prompt, if any. Each turn dequeues exactly one item, so a chat works through its queue in order. */
+async function drainQueue(opts: SendOptions, send: Sender, allowBrowserControl: boolean): Promise<void> {
+  const fresh = getSession(opts.sessionId);
+  const next = fresh?.queue?.[0];
+  if (fresh && !fresh.archivedAt && next) {
+    await sendChat(sendOptionsForQueuedItem({ sessionId: opts.sessionId, providerId: opts.providerId, modelId: opts.modelId, text: '' }, next), send, allowBrowserControl, { index: 0, item: next });
   }
 }
+
+interface DaemonTurnInput extends Admitted {
+  opts: SendOptions;
+  send: Sender;
+  allowBrowserControl: boolean;
+  queued?: { index: number; item: QueuedPrompt };
+}
+
+/**
+ * The spec the daemon runs a turn from, and this host's side of that turn
+ * (daemon-turn.ts): the tools still run here, hooks, accounting, and what
+ * follows the turn here once it has ended.
+ */
+async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; hostTurn: HostTurn }> {
+  const { opts, send, provider, settings, abort, session } = t;
+  const incognito = !!session.incognito;
+  const offline = !!session.offline;
+  const turnId = newTurnId();
+  // The provider is resolved before the turn so a refresh failure is reported
+  // after the user's message is saved, as on the in-process route.
+  let resolvedProvider: ProviderConfig | undefined;
+  let providerError: string | undefined;
+  try {
+    resolvedProvider = await resolveSubscriptionProvider(provider);
+  } catch (e) {
+    providerError = (e as Error).message;
+  }
+  const config = (p: ProviderConfig) => createProvider(p).config;
+  const defaultCwd = t.workspaces[0]?.path;
+  const requestApproval = approvalViaDaemon(turnId);
+  // Tools that still run here see a snapshot of the chat; whatever they
+  // change on it travels back to the daemon, which owns the transcript.
+  const snapshot: Session = structuredClone(session);
+  const hostTools: HostToolContext = {
+    opts, session: snapshot, mode: t.mode, tools: t.tools, settings, toolSettings: t.toolSettings, defaultCwd, sandbox: false,
+    allowBrowserControl: t.allowBrowserControl, allowSpawn: t.allowSpawn, decideWith: t.decideWith,
+    signal: abort.signal, send, persist: () => {}, requestApproval,
+    askUser: async () => ASK_CANCELLED,
+  };
+  // A daemon that keeps the usage and reply logs and the limit state writes this
+  // turn's lines and reads its limits itself (crates/nekkod/src/accounts.rs).
+  const daemon = daemonCall();
+  const daemonAccounts = !!daemon && (await daemonAccountsTurns(daemon));
+  const spec: TurnSpec = {
+    turnId,
+    opts,
+    ...(t.queued ? { queued: t.queued } : {}),
+    allowBrowserControl: t.allowBrowserControl,
+    settings: {
+      systemInstructions: settings.systemInstructions,
+      turnWrapper: settings.turnWrapper,
+      aboutUser: settings.aboutUser,
+      orchestration: settings.orchestration,
+      providers: settings.providers.map((p) => ({ id: p.id, label: p.label, enabled: p.enabled, apiKey: p.apiKey, baseUrl: p.baseUrl })),
+      sandboxMode: settings.sandboxMode,
+      guardrails: settings.guardrails,
+      defaultChatMode: settings.defaultChatMode,
+      unattendedQuestionMinutes: settings.unattendedQuestionMinutes,
+    },
+    facts: {
+      workspaces: t.workspaces.map((w) => ({ id: w.id, name: w.name, path: w.path })),
+      // The server list for a daemon that runs them (an offline turn gets none),
+      // else the tool specs this host synced.
+      ...(t.daemonMcp ? { mcpServers: t.offline ? [] : settings.mcpServers ?? [] } : { mcpTools: mcpToolSpecs() }),
+      decide: !!t.decideWith,
+      // Which decision runner `decide` uses; the daemon runs the local one itself.
+      decideWith: t.decideWith,
+      hooks: hasToolHooks(settings),
+      connectorSnippets: t.connectorSnippets,
+      indexSnippets: t.indexSnippets,
+      platform: process.platform,
+      temperature: EFFORT_TEMPERATURE[effectiveEffort(settings.effort, opts.modelId)],
+      effort: settings.effort ?? 'normal',
+      statsEffort: effectiveEffort(settings.effort, opts.modelId),
+      maxOutputTokens: isLocalProvider(provider.kind) ? clampMaxOutputTokens(settings.maxOutputTokens) : undefined,
+      promptCaching: promptCachingForHost(),
+      ...(resolvedProvider ? { provider: config(resolvedProvider) } : {}),
+      ...(providerError !== undefined ? { providerError } : {}),
+      headers: provider.kind === 'anthropic' && provider.auth === 'subscription' && !!provider.tokenKey,
+      // This host can make a `spawn_agent` child for the daemon to drive (`spawn:prepare`).
+      spawn: true,
+      account: {
+        auth: provider.auth,
+        kind: provider.kind,
+        tokenKey: provider.tokenKey,
+        incognito,
+      },
+    },
+  };
+  const hostTurn: HostTurn = {
+    sessionId: opts.sessionId,
+    send,
+    account: (events, extra) => {
+      if (daemonAccounts) return;
+      for (const event of events) {
+        if (event.type === 'usage') recordTurnUsage(opts, provider, event);
+        if (event.type === 'done') recordTurnEnd(opts, provider, incognito, extra.startedAt ?? Date.now(), event, extra.stats);
+      }
+    },
+    executeTool: async (call) => {
+      const before = JSON.stringify(snapshot.agentPlan ?? null);
+      const result = await runHostTool(hostTools, call);
+      const after = JSON.stringify(snapshot.agentPlan ?? null);
+      return after !== before ? { result, patch: { agentPlan: snapshot.agentPlan } } : { result };
+    },
+    hook: async (phase, call, result) => {
+      const hookSettings = getSettings();
+      const hookCtx = { sessionId: opts.sessionId, cwd: defaultCwd ?? process.cwd() };
+      if (!hasToolHooks(hookSettings)) return phase === 'pre' ? { notes: [] } : result;
+      return phase === 'pre' ? preToolHooks(hookSettings, call, hookCtx) : postToolHooks(hookSettings, call, result!, hookCtx);
+    },
+    headers: (pairs) => {
+      if (!daemonAccounts && provider.tokenKey) LimitsService.recordFromHeaders(provider.tokenKey, provider.kind, pairs);
+    },
+    // `spawn_agent` in the daemon (`turn:spawn`): the checks and the child are
+    // made here, the child's turn admitted here, and the daemon drives it.
+    spawn: async (call, attempt, childId) => {
+      let child: { id: string; providerId: string; modelId: string; task: string };
+      if (!childId) {
+        try {
+          const made = await prepareSubAgent({ ...snapshot, mode: t.mode }, opts.providerId, opts.modelId, call.input, abort.signal);
+          child = { id: made.child.id, providerId: made.targetProviderId, modelId: made.targetModelId, task: made.task };
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      } else {
+        const saved = getSession(childId);
+        if (!saved?.parentSessionId || saved.parentSessionId !== opts.sessionId) return { error: 'Unknown child session.' };
+        child = { id: childId, providerId: saved.providerId ?? opts.providerId, modelId: saved.modelId ?? opts.modelId, task: '' };
+      }
+      let failure: string | undefined;
+      const childSend: Sender = (event) => {
+        if (event.sessionId === child.id && event.type === 'error') failure = event.message;
+        send(event);
+      };
+      const childOpts = childSendOptions(child.id, child.providerId, child.modelId, child.task, attempt);
+      const childChain: TurnChain = { send: childSend, allowBrowserControl: false, abort: new AbortController() };
+      const admitted = await admitTurn(childOpts, childSend, false, childChain.abort);
+      if (!admitted) return { childId: child.id, failure: failure ?? 'The sub-agent could not start.' };
+      const built = await buildDaemonTurn({ ...admitted, opts: childOpts, send: childSend, allowBrowserControl: false });
+      adoptTurn(built.spec.turnId, built.hostTurn, childChain, () => {
+        if (abortControllers.get(child.id) === childChain.abort) abortControllers.delete(child.id);
+        releasePending(child.id);
+      });
+      return { childId: child.id, spec: built.spec };
+    },
+    // The title and the queue are the daemon's; the rest of what follows a turn is here.
+    afterEach: (summary) => {
+      finishAgentTerminal(opts.sessionId);
+      // The daemon reports its own failures as events; only a turn lost here
+      // (the daemon gone, or no longer knowing it) still needs one.
+      if (summary.lost) send({ type: 'error', sessionId: opts.sessionId, message: summary.lost });
+      const aborted = abort.signal.aborted || summary.aborted === true;
+      afterTurnHooks({
+        opts, sandbox: false, incognito, offline, workspaces: t.workspaces,
+        session: getSession(opts.sessionId) ?? session, resolvedProvider,
+        stop: aborted ? 'stopped' : summary.lost ? 'error' : summary.stop ?? 'complete',
+        error: summary.lost,
+      });
+    },
+  };
+  return { spec, hostTurn };
+}
+
+/**
+ * The turn on the engine daemon, and the queued prompts it goes on to
+ * (daemon-turn.ts). Resolves false, with nothing done, when the daemon will
+ * not take it; the caller then runs it here.
+ */
+async function sendChatViaDaemon(daemon: NonNullable<ReturnType<typeof daemonCall>>, t: DaemonTurnInput): Promise<boolean> {
+  const { opts, send, abort } = t;
+  const { spec, hostTurn } = await buildDaemonTurn(t);
+  const chain: TurnChain = { send, allowBrowserControl: t.allowBrowserControl, abort };
+  const summary = await runTurnViaDaemon(daemon, spec, hostTurn, chain);
+  if (!summary) return false;
+  if (abortControllers.get(opts.sessionId) === abort) abortControllers.delete(opts.sessionId);
+  releasePending(opts.sessionId);
+  // A queued prompt the daemon could not take (its chat became a sandbox chat, say) runs here.
+  if (summary.drain === 'host' && !abort.signal.aborted && !summary.aborted) await drainQueue(opts, send, t.allowBrowserControl);
+  return true;
+}
+
+/**
+ * `turn:prepare`: the daemon, done with a turn, found a queued prompt. Admit
+ * it as the next turn of the same chain (same listener, same Stop), and hand
+ * the daemon its spec; or say it ended (the admission failed and said why),
+ * or that it must run here.
+ */
+async function prepareQueuedTurn(chain: TurnChain, payload: { opts: SendOptions; queued: { index: number; item: QueuedPrompt } }): Promise<{ spec: TurnSpec } | { ended: true } | { inProcess: true }> {
+  const admitted = await admitTurn(payload.opts, chain.send, chain.allowBrowserControl, chain.abort);
+  if (!admitted) return { ended: true };
+  if (admitted.sandbox || process.env.NEKKO_AGENT_LOOP === 'ts') return { inProcess: true };
+  const { spec, hostTurn } = await buildDaemonTurn({ ...admitted, opts: payload.opts, send: chain.send, allowBrowserControl: chain.allowBrowserControl, queued: payload.queued });
+  registerTurn(spec.turnId, hostTurn, chain);
+  return { spec };
+}
+setTurnPreparer(prepareQueuedTurn);
