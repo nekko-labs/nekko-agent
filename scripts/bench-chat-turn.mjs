@@ -15,12 +15,17 @@
 //   node scripts/bench-chat-turn.mjs --model-url http://127.0.0.1:18431/v1 --model gemma \
 //     --route daemon|ts [--runs 3] [--load 8] [--json out.json]
 //
+// `--usage N` then checks the turns' usage and reply lines landed in the data
+// dir, seeds the usage log to 20,000 records and times N `usage:summary` calls
+// under the same load (the daemon serves it when it owns accounting; pass
+// `--daemon` an older nekkod to time the TS host's).
+//
 // `--route ts` sets NEKKO_AGENT_LOOP=ts on the backend: every turn runs in
 // the TS host, the escape hatch. Nothing touches the user's data directory or
 // a running app; every spawned process is ended on exit.
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { appendFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
@@ -263,6 +268,23 @@ try {
     const r = { firstText: text.firstText, gaps: text.gaps, error: text.error ?? tool.error, approvals: tool.approvals, drain };
     results.runs.push(r);
     console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms, approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
+  }
+  if (args.usage) {
+    const lines = (f) => (existsSync(join(data, f)) ? readFileSync(join(data, f), 'utf8').trim().split('\n').filter(Boolean) : []);
+    const before = { usage: lines('usage.jsonl').length, replies: lines('replies.jsonl').length };
+    const first = await call('usage:summary');
+    console.log(`accounted: ${before.usage} usage lines, ${before.replies} reply lines; summary input ${first.totalInput}, output ${first.totalOutput}, replies ${first.replies?.total ?? 0}; daemon owns usage:summary=${info.owned.includes('usage:summary')}`);
+    const seed = [];
+    for (let i = 0; i < 20_000; i++) seed.push(JSON.stringify({ ts: Date.now() - i * 60_000, providerId: 'local', modelId: i % 3 ? 'gemma' : 'claude-sonnet-4-5', inputTokens: 900 + i % 50, cacheReadTokens: i % 7, outputTokens: 120, sessionId: `s_${i % 300}`, auth: i % 5 ? 'apikey' : 'subscription', local: i % 3 !== 0 }));
+    appendFileSync(join(data, 'usage.jsonl'), `${seed.join('\n')}\n`);
+    const ms = [];
+    for (let i = 0; i < Number(args.usage); i++) {
+      const t0 = performance.now();
+      await call('usage:summary');
+      ms.push(performance.now() - t0);
+    }
+    results.usage = { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms), before };
+    console.log(`usage:summary over 20k records: median ${results.usage.median.toFixed(1)} ms, p95 ${results.usage.p95.toFixed(1)} ms, max ${results.usage.max.toFixed(1)} ms`);
   }
   busy = false;
   await Promise.all(loaders);

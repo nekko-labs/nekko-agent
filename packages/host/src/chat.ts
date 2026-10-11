@@ -45,6 +45,7 @@ import { executeTool } from './tools.js';
 import { agentWatchTool } from './agent-watches.js';
 import { recordUsage } from './usage.js';
 import { recordReply } from './replies.js';
+import { turnReplyRecord, turnUsageRecord } from './usage-records.js';
 import * as LimitsService from './limits.js';
 import { listMemory } from './memory.js';
 import { ensureFreshToken, resolveSubscriptionProvider } from './oauth.js';
@@ -53,7 +54,7 @@ import { buildSpec } from './spec.js';
 import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool } from './mcp.js';
 import { daemonCall } from './engine/daemon.js';
 import { daemonOwns, daemonRunsLoops, runAgentViaDaemon } from './daemon-loop.js';
-import { answerInDaemon, approvalViaDaemon, approveInDaemon, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
+import { answerInDaemon, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
 import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
 import { applyTurnInput, cleanTitle, sendOptionsForQueuedItem, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
 import { killSessionProcesses } from './processes.js';
@@ -1284,42 +1285,13 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
 
 /** Usage of one model call, for the usage log. */
 function recordTurnUsage(opts: SendOptions, provider: ProviderConfig, event: Extract<AgentEvent, { type: 'usage' }>): void {
-  recordUsage({
-    ts: Date.now(),
-    providerId: opts.providerId,
-    modelId: opts.modelId,
-    inputTokens: event.inputTokens,
-    cacheReadTokens: event.cacheReadTokens,
-    cacheWriteTokens: event.cacheWriteTokens,
-    outputTokens: event.outputTokens,
-    sessionId: opts.sessionId,
-    auth: provider.auth,
-    local: isLocalProvider(provider.kind),
-  });
+  recordUsage(turnUsageRecord(opts, provider, event, Date.now()));
 }
 
 /** A finished reply: the reply log, and a fresh look at the subscription's limits. */
 function recordTurnEnd(opts: SendOptions, provider: ProviderConfig, incognito: boolean, startedAt: number, event: Extract<AgentEvent, { type: 'done' }>, finished: TurnStats | undefined): void {
-  if (event.stop && !incognito) {
-    recordReply({
-      ts: Date.now(),
-      startedAt,
-      sessionId: opts.sessionId,
-      providerId: opts.providerId,
-      modelId: opts.modelId,
-      steps: event.steps ?? 0,
-      stop: event.stop,
-      ...(finished ? {
-        effort: finished.effort,
-        inputTokens: finished.inputTokens,
-        outputTokens: finished.outputTokens,
-        cacheReadTokens: finished.cacheReadTokens,
-        cacheWriteTokens: finished.cacheWriteTokens,
-        outputMs: finished.outputMs,
-        wallMs: finished.wallMs,
-      } : {}),
-    });
-  }
+  const reply = turnReplyRecord(opts, incognito, startedAt, event, finished, Date.now());
+  if (reply) recordReply(reply);
   if (provider.auth === 'subscription' && provider.tokenKey) {
     LimitsService.poll(provider.tokenKey).catch(() => {});
   }
@@ -1425,6 +1397,10 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
     signal: abort.signal, send, persist: () => {}, requestApproval,
     askUser: async () => ASK_CANCELLED,
   };
+  // A daemon that keeps the usage and reply logs and the limit state writes this
+  // turn's lines and reads its limits itself (crates/nekkod/src/accounts.rs).
+  const daemon = daemonCall();
+  const daemonAccounts = !!daemon && (await daemonAccountsTurns(daemon));
   const spec: TurnSpec = {
     turnId,
     opts,
@@ -1457,12 +1433,19 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
       ...(resolvedProvider ? { provider: config(resolvedProvider) } : {}),
       ...(providerError !== undefined ? { providerError } : {}),
       headers: provider.kind === 'anthropic' && provider.auth === 'subscription' && !!provider.tokenKey,
+      account: {
+        auth: provider.auth,
+        kind: provider.kind,
+        tokenKey: provider.tokenKey,
+        incognito,
+      },
     },
   };
   const hostTurn: HostTurn = {
     sessionId: opts.sessionId,
     send,
     account: (events, extra) => {
+      if (daemonAccounts) return;
       for (const event of events) {
         if (event.type === 'usage') recordTurnUsage(opts, provider, event);
         if (event.type === 'done') recordTurnEnd(opts, provider, incognito, extra.startedAt ?? Date.now(), event, extra.stats);
@@ -1481,7 +1464,7 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
       return phase === 'pre' ? preToolHooks(hookSettings, call, hookCtx) : postToolHooks(hookSettings, call, result!, hookCtx);
     },
     headers: (pairs) => {
-      if (provider.tokenKey) LimitsService.recordFromHeaders(provider.tokenKey, provider.kind, pairs);
+      if (!daemonAccounts && provider.tokenKey) LimitsService.recordFromHeaders(provider.tokenKey, provider.kind, pairs);
     },
     // The title and the queue are the daemon's; the rest of what follows a turn is here.
     afterEach: (summary) => {

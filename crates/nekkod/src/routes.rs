@@ -25,6 +25,8 @@ pub struct Ctx {
     pub mcp: Arc<crate::mcp::Mcp>,
     /// Whole chat turns (`chat:turn`) and the input they wait on.
     pub turns: Arc<crate::turns::Turns>,
+    /// Usage, reply and limit accounting (`usage:summary`, `limits:*`).
+    pub accounts: Arc<crate::accounts::Accounts>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -91,7 +93,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 crate::backend::State::Ready { .. } => "ready",
                 crate::backend::State::Down { .. } => "down",
             },
-            "owned": OWNED,
+            "owned": owned(ctx),
         })),
         "terminals:list" => {
             let mut all = serde_json::to_value(ctx.terminals.list()).unwrap_or(json!([]));
@@ -229,6 +231,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "mcp:sync" => Ok(ctx.mcp.sync(arg(&args, 0)).await),
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
         "provider:complete" => crate::sideband::complete(arg(&args, 0)).await,
+        c if crate::accounts::CHANNELS.contains(&c) && ctx.accounts.enabled() => ctx.accounts.route(c, &args).await,
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
             session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
         }
@@ -262,6 +265,18 @@ fn merge_pending(host: Value, daemon: Value) -> Value {
         out.insert(id, Value::Object(entry));
     }
     Value::Object(out)
+}
+
+/// What `daemon:info` reports: the fixed table, and accounting when this
+/// daemon knows the data directory. A host that delegates limits to a daemon
+/// that would forward them straight back would loop, so they are only listed
+/// when they are really served here.
+fn owned(ctx: &Ctx) -> Vec<&'static str> {
+    let mut all = OWNED.to_vec();
+    if ctx.accounts.enabled() {
+        all.extend_from_slice(crate::accounts::OWNED);
+    }
+    all
 }
 
 /// Channels the daemon serves itself (reported by `daemon:info`).

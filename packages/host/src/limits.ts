@@ -5,6 +5,8 @@ import type { LimitWindow, LimitsProblem, OAuthProvider, ProviderConfig, Provide
 import { getToken, ensureFreshToken } from './oauth.js';
 import { getSettings } from './store.js';
 import { recordQuotaHistory } from './quota-history.js';
+import { daemonCall } from './engine/daemon.js';
+import { daemonOwns } from './daemon-loop.js';
 
 let events: EventEmitter | null = null;
 
@@ -141,6 +143,46 @@ function splitAnthropicWindow(name: string): { period: string; family?: string }
   return name ? { period: name } : null;
 }
 
+type DaemonCall = NonNullable<ReturnType<typeof daemonCall>>;
+
+/** What a daemon advertises in `daemon:info` `owned` when it keeps the limit state (crates/nekkod/src/limits.rs). */
+export const DAEMON_LIMITS = 'limits:get';
+
+/**
+ * The engine daemon, when it owns limit state. Then this module is a client:
+ * headers and polls go to the daemon, reads come from it, and the daemon tells
+ * the UI itself (and this host, through `limits:notify`, for the phone relay).
+ * Without a daemon (the web, server and cloud editions) everything stays here.
+ */
+async function daemonLimits(): Promise<DaemonCall | undefined> {
+  const call = daemonCall();
+  if (!call) return undefined;
+  return (await daemonOwns(call, DAEMON_LIMITS)) ? call : undefined;
+}
+
+/** `limits:get`, from the daemon when it owns limit state. */
+export async function readLimits(tokenKey: string, refresh = false): Promise<SubscriptionLimits | undefined> {
+  const call = await daemonLimits();
+  if (!call) return getLimits(tokenKey, refresh);
+  return (await call<SubscriptionLimits | null>('limits:get', tokenKey, refresh)) ?? undefined;
+}
+
+/** `limits:problem`, from the daemon when it owns limit state. */
+export async function readLimitsProblem(tokenKey: string): Promise<LimitsProblem | undefined> {
+  const call = await daemonLimits();
+  if (!call) return getLimitsProblem(tokenKey);
+  return (await call<LimitsProblem | null>('limits:problem', tokenKey)) ?? undefined;
+}
+
+/** `limits:notify`: the daemon changed a snapshot; the phone relay hears it from here, the UI already has it. */
+export function notifyFromDaemon(payload: { tokenKey: string; limits: SubscriptionLimits }): void {
+  try {
+    events?.emit('limitsUpdated', { ...payload, relayOnly: true });
+  } catch {
+    // A throwing observer must not fail the daemon's call.
+  }
+}
+
 /** Wire the service to the host's event bus. Called once in createHost. */
 export function initLimits(eventBus: EventEmitter): void {
   events = eventBus;
@@ -152,6 +194,9 @@ export function initLimits(eventBus: EventEmitter): void {
 
 /** Drop all cached state for a token key, or for every key if omitted. */
 export function clearLimits(tokenKey?: string): void {
+  if (daemonCall()) {
+    void daemonLimits().then((call) => call?.('limits:clear', tokenKey ?? null)).catch(() => {});
+  }
   if (tokenKey) {
     store.delete(tokenKey);
     lastPollByToken.delete(tokenKey);
@@ -181,7 +226,7 @@ export async function getLimits(tokenKey: string, refresh = false): Promise<Subs
   if (!refresh && state && state.updatedAt + state.staleAfterMs > Date.now()) {
     return state;
   }
-  const polled = await poll(tokenKey);
+  const polled = await pollHere(tokenKey);
   if (!polled) return undefined;
   if (polled.updatedAt + polled.staleAfterMs <= Date.now()) return undefined;
   return polled;
@@ -201,6 +246,21 @@ export function recordFromHeaders(
   if (provider !== 'anthropic' && provider !== 'claude') {
     return get(tokenKey);
   }
+  if (daemonCall()) {
+    // The daemon may own the state; it hears the same pairs this would parse.
+    const pairs = [...headerMap(headers)];
+    void daemonLimits()
+      .then((call) => (call ? call('limits:headers', tokenKey, provider, pairs) : recordHeaders(tokenKey, pairs)))
+      .catch(() => {});
+    return get(tokenKey);
+  }
+  return recordHeaders(tokenKey, headers);
+}
+
+function recordHeaders(
+  tokenKey: string,
+  headers: Headers | Record<string, string> | Iterable<[string, string]>,
+): SubscriptionLimits | undefined {
   const parsed = parseAnthropicHeaders(headers);
   if (parsed.windows.length === 0) {
     return get(tokenKey);
@@ -244,6 +304,14 @@ export function recordFromHeaders(
  * token key. Fetches the authoritative usage endpoint for Claude or ChatGPT.
  */
 export async function poll(tokenKey: string): Promise<SubscriptionLimits | undefined> {
+  if (daemonCall()) {
+    const call = await daemonLimits();
+    if (call) return (await call<SubscriptionLimits | null>('limits:poll', tokenKey)) ?? undefined;
+  }
+  return pollHere(tokenKey);
+}
+
+async function pollHere(tokenKey: string): Promise<SubscriptionLimits | undefined> {
   // A `provider:<id>` key is an API-key provider read with its inference key;
   // everything else is an OAuth token key.
   const apiKeyProvider = providerFromLimitsKey(tokenKey);
@@ -402,9 +470,14 @@ async function readOpenRouterKey(baseUrl: string, bearer: string): Promise<Subsc
   });
   if (!res.ok) throw failure(res);
 
-  const json = safeJson(await res.text()) as Record<string, unknown> | undefined;
+  return parseOpenRouterKey(safeJson(await res.text()), res.status);
+}
+
+/** Parse OpenRouter's `GET /key` answer; a body without `data` is unreadable. */
+export function parseOpenRouterKey(body: unknown, status: number): SubscriptionLimits {
+  const json = body as Record<string, unknown> | undefined;
   const data = json?.data as Record<string, unknown> | undefined;
-  if (!data) throw new LimitsReadError('unreadable', res.status);
+  if (!data) throw new LimitsReadError('unreadable', status);
 
   const windows: LimitWindow[] = [];
   const free = data.free_model_daily_requests as { limit?: number; remaining?: number; used?: number } | undefined;
@@ -453,7 +526,10 @@ function headerMap(
   headers: Headers | Record<string, string> | Iterable<[string, string]>,
 ): Map<string, string> {
   const map = new Map<string, string>();
-  if (typeof (headers as Headers).forEach === 'function') {
+  // An array of pairs has a forEach too, with the index where a Headers object
+  // passes the name: the pairs a daemon-driven turn relays went through that
+  // branch and threw, so its rate limits were never recorded.
+  if (!Array.isArray(headers) && typeof (headers as Headers).forEach === 'function') {
     (headers as Headers).forEach((v, k) => map.set(k.toLowerCase(), v));
   } else if (typeof (headers as Iterable<[string, string]>)[Symbol.iterator] === 'function') {
     for (const [k, v] of headers as Iterable<[string, string]>) {
@@ -481,7 +557,7 @@ function normalizeStatus(value: string | undefined): LimitWindow['status'] {
   return 'allowed';
 }
 
-function parseAnthropicHeaders(
+export function parseAnthropicHeaders(
   headers: Headers | Record<string, string> | Iterable<[string, string]>,
 ): SubscriptionLimits {
   const map = headerMap(headers);
@@ -535,7 +611,7 @@ export function mergeWindows(previous: LimitWindow[], fresh: LimitWindow[]): Lim
  * serialized them, and a list that reshuffles itself between polls is harder to
  * read than one that is merely incomplete.
  */
-function sortWindows(windows: LimitWindow[]): LimitWindow[] {
+export function sortWindows(windows: LimitWindow[]): LimitWindow[] {
   const rank = (w: LimitWindow) => (w.scope === 'session' ? 0 : w.scope === 'weekly' ? 1 : 2);
   return [...windows].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
 }
@@ -558,7 +634,7 @@ function clampPercent(value: number): number {
  * does is what made a 62%-used week render as "6200%" until the first real
  * request replaced the snapshot with header-derived numbers.
  */
-function parseAnthropicUsageJson(json: Record<string, unknown>): SubscriptionLimits {
+export function parseAnthropicUsageJson(json: Record<string, unknown>): SubscriptionLimits {
   const windows: LimitWindow[] = [];
 
   for (const [key, win] of Object.entries(json)) {
@@ -655,7 +731,7 @@ function describeChatGptWindow(
   };
 }
 
-function parseChatGptUsage(json: Record<string, unknown>): SubscriptionLimits {
+export function parseChatGptUsage(json: Record<string, unknown>): SubscriptionLimits {
   const windows: LimitWindow[] = [];
   const rateLimit = json.rate_limit as Record<string, unknown> | undefined;
   const planType = typeof json.plan_type === 'string' ? json.plan_type : undefined;
