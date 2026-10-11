@@ -446,6 +446,27 @@ export function CommandWall({
   // to one is a visibility flip; the rest park as transcripts.
   const warm = useRef<readonly string[]>([]);
   if (state.layout.mode === 'focus' && state.hero) warm.current = warmFront(warm.current, state.hero);
+  // Leaving Focus, the parked windows jump to their places instead of sliding
+  // there from under the hero: a dozen full-size windows animating down at
+  // once rastered every one of them whole (hundreds of MB of tiles, kept).
+  // Only the hero slides, as it did before windows were parked.
+  const lastFocusHero = useRef<string | null>(null);
+  const prevMode = useRef(state.layout.mode);
+  const leavingFocus = prevMode.current === 'focus' && state.layout.mode !== 'focus';
+  const [unparked, setUnparked] = useState<string | null | undefined>(undefined);
+  const snapping = leavingFocus || unparked !== undefined;
+  const snapHero = leavingFocus ? lastFocusHero.current : unparked;
+  if (state.layout.mode === 'focus') lastFocusHero.current = geometry.hero;
+  useLayoutEffect(() => {
+    const left = prevMode.current === 'focus' && state.layout.mode !== 'focus';
+    prevMode.current = state.layout.mode;
+    if (!left) return;
+    setUnparked(lastFocusHero.current);
+    // Two frames: the jump has been styled by then, so turning transitions
+    // back on starts none.
+    let id = requestAnimationFrame(() => { id = requestAnimationFrame(() => setUnparked(undefined)); });
+    return () => { cancelAnimationFrame(id); setUnparked(undefined); };
+  }, [state.layout.mode]);
 
   const titleOf = (pane: WbPane): string => {
     if (pane.kind === 'chat') return sessionById.get(pane.refId)?.title ?? 'Chat';
@@ -504,10 +525,11 @@ export function CommandWall({
     const density = densityOf(parked && geometry.hero ? geometry.hero : pane.id);
     const logsOpen = logsPane?.id === pane.id && !logsClosing && !logsOverlay;
     const subagents = session ? childrenOf.get(session.id) : undefined;
+    const snap = snapping && pane.id !== snapHero;
     const deps = [
       pane, title, session, terminal, project?.name, projects.length > 1, status?.label, status?.live, needsYou, agentStatus,
       flashing, selected, n, box?.x, box?.y, box?.width, box?.height, parked, hero, focusedChat, folded, showCompanions,
-      inDeck, fullSurface, density, logsOpen, workspaces, dragging, state.layout.mode, state.root, subagents, running, pending,
+      inDeck, fullSurface, density, logsOpen, snap, workspaces, dragging, state.layout.mode, state.root, subagents, running, pending,
     ];
     return <WallLeaf key={pane.id} deps={deps} render={() => {
       const companions = pane.kind === 'chat' ? workspaceCompanions(workspaces, pane.refId) : [];
@@ -516,6 +538,7 @@ export function CommandWall({
         className={`command-wall-window ${deckCard ? 'command-wall-deck-window' : ''} ${flashing ? 'pane-flash' : ''}`}
         style={box ? { left: box.x, top: box.y, width: box.width, height: box.height } : { display: 'none' }}
         data-wall-parked={parked || undefined}
+        data-wall-snap={snap || undefined}
         data-wall-deck={inDeck || undefined}
         data-wall-hero={hero || undefined}
         data-wall-pane={pane.id}

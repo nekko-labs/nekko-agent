@@ -93,10 +93,12 @@ export function ContextGauge({
         tabIndex={0}
         aria-label={`Context window: ${num(used)}${windowTokens ? ` of ${num(windowTokens)}` : ''} tokens in use`}
       >
+        {/* Filled by scaling, not by width: the count moves with every streamed
+            token, and a width transition re-laid-out the page on every frame. */}
         <span
           aria-hidden
-          className="absolute inset-y-0 left-0 transition-[width] duration-300"
-          style={{ width: `${pct}%`, background: `color-mix(in srgb, ${fillColor(pct)} 28%, transparent)` }}
+          className="absolute inset-0 origin-left transition-transform duration-300"
+          style={{ transform: `scaleX(${pct / 100})`, background: `color-mix(in srgb, ${fillColor(pct)} 28%, transparent)` }}
         />
         <span className="relative text-ink-soft">
           {formatContextTokens(used)}{windowTokens ? ` / ${!windowReported ? '~' : ''}${formatContextTokens(windowTokens)}` : ''}

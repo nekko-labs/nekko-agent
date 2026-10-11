@@ -304,6 +304,9 @@ describe('focus full-height chat', () => {
     const css = readFileSync(new URL('./commandWallLayouts.css', import.meta.url), 'utf8');
     expect(css).toContain('.command-wall-window[data-wall-parked] { content-visibility: hidden; pointer-events: none; transition: none; }');
     expect(css).toContain(':where(.command-wall-window) > :where(*) { pointer-events: auto; }');
+    // Leaving Focus they jump to their places: sliding a dozen full-size
+    // windows down at once rastered them all whole.
+    expect(css).toContain('.command-wall-window[data-wall-snap] { transition: none; }');
   });
   it('keeps the composer of a recent hero while parked, for a bounded few', () => {
     expect(warmFront([], 'a')).toEqual(['a']);

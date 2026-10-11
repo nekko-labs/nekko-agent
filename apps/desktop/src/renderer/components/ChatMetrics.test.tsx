@@ -19,6 +19,8 @@ describe('context token formatting', () => {
       const html = renderToStaticMarkup(<ContextGauge bundle={null} draftTokens={Number(tokens)} contextWindow={1000000} />);
       expect(html).toContain(` / ~1m`);
       expect(html).toContain(`color-mix(in srgb, var(--${tone}) 28%, transparent)`);
-      expect(html).toContain('absolute inset-y-0 left-0 transition-[width] duration-300');
+      expect(html).toContain('absolute inset-0 origin-left transition-transform duration-300');
+      expect(html).toContain(`transform:scaleX(${Number(tokens) / 1000000})`);
+      expect(html).not.toContain('transition-[width]');
     });
 });
