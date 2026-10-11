@@ -17,6 +17,7 @@
 
 pub mod ask;
 pub mod catalog;
+pub mod decide;
 pub mod delegate;
 pub mod input;
 pub mod plan;
