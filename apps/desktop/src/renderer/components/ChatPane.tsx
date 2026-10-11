@@ -1117,36 +1117,48 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     transcriptRef.current?.scrollToBottom('smooth');
   };
 
-  // Grow the composer with its content: reset to the two-line minimum, then match
-  // the scroll height (CSS max-height caps it and lets it scroll past that).
-  // A composer the user has sized keeps that size and scrolls instead.
+  // Grow the composer with its content. The editor is as tall as its text by
+  // itself; this only sets its ceiling (half the pane, less the composer's own
+  // controls, past which it scrolls) and, for a composer the user has sized,
+  // its floor. Nothing here runs per keystroke: measuring and rewriting the
+  // height on every key forced three layouts of the whole page per key, the
+  // streaming transcript included. The ceiling follows the pane and the
+  // composer's controls through a ResizeObserver, which reads after layout.
+  const hasDraft = !!draft;
   useLayoutEffect(() => {
     const el = composerRef.current;
     const pane = paneRef.current;
     const section = composerSectionRef.current;
     if (!el || !pane || !section || surface === 'composer') return;
+    el.style.height = '';
     // Empty drafts already have their minimum height in CSS. Warm switching
     // should not force layout merely to rediscover that same empty-editor size.
     if (!draft && composerH === null) {
-      el.style.height = '';
       el.style.maxHeight = '';
+      el.style.minHeight = '';
       return;
     }
     // The shared wall composer uses flex sizing in CSS, including its editor.
     // Measuring and rewriting that height forces layout without affecting it.
-    const resize = () => {
+    let fitted = '';
+    const fit = () => {
       const chrome = section.getBoundingClientRect().height - el.getBoundingClientRect().height;
       const limit = Math.max(0, Math.min(window.innerHeight, pane.getBoundingClientRect().height) * 0.5 - chrome);
-      el.style.maxHeight = limit + 'px';
-      el.style.height = 'auto';
-      el.style.height = Math.min(limit, Math.max(el.scrollHeight, composerH ?? 0)) + 'px';
+      const max = `${limit}px`;
+      const min = composerH === null ? '' : `${Math.min(limit, composerH)}px`;
+      if (fitted === max + min) return;
+      fitted = max + min;
+      el.style.maxHeight = max;
+      el.style.minHeight = min;
       if (document.activeElement === el) revealEditorCaret(el);
     };
-    resize();
-    const observer = new ResizeObserver(resize);
+    fit();
+    const observer = new ResizeObserver(fit);
     observer.observe(pane);
+    observer.observe(section);
     return () => observer.disconnect();
-  }, [draft, composerH, surface]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDraft, composerH, surface]);
 
   /**
    * Drag the line between the conversation and the composer to trade one for
