@@ -20,6 +20,11 @@
 // under the same load (the daemon serves it when it owns accounting; pass
 // `--daemon` an older nekkod to time the TS host's).
 //
+// `--mcp` adds a loopback MCP server (one tool, `mcp__bench__lookup`) and a
+// third turn per run that calls it with an approval, timed like write_file:
+// `tool:approve` to its `tool_result` (in the daemon when it runs the turn's
+// MCP servers, through the TS host otherwise).
+//
 // `--route ts` sets NEKKO_AGENT_LOOP=ts on the backend: every turn runs in
 // the TS host, the escape hatch. Nothing touches the user's data directory or
 // a running app; every spawned process is ended on exit.
@@ -61,7 +66,9 @@ if (args.fake) {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const send = (chunk) => res.write(`data: ${JSON.stringify(chunk)}\n\n`);
       const text = typeof lastUser?.content === 'string' ? lastUser.content : JSON.stringify(lastUser?.content ?? '');
-      if (!afterTool && text.includes('write_file')) {
+      if (!afterTool && text.includes('mcp__bench__lookup')) {
+        send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'mcp__bench__lookup', arguments: JSON.stringify({ key: 'cats' }) } }] }, finish_reason: 'tool_calls' }] });
+      } else if (!afterTool && text.includes('write_file')) {
         const file = text.match(/create (\S+) /)?.[1] ?? 'note.txt';
         send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'write_file', arguments: JSON.stringify({ path: file, content: 'hello' }) } }] }, finish_reason: 'tool_calls' }] });
       } else {
@@ -78,6 +85,27 @@ if (args.fake) {
   await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
   modelUrl = `http://127.0.0.1:${server.address().port}/v1`;
   process.on('exit', () => server.close());
+}
+
+// `--mcp`: a streamable-HTTP MCP server with one tool, on a loopback port.
+let mcpUrl;
+if (args.mcp) {
+  const mcp = createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => { body += d; });
+    req.on('end', () => {
+      const msg = JSON.parse(body || '{}');
+      if (msg.id === undefined) { res.writeHead(202); res.end(); return; }
+      const result = msg.method === 'initialize' ? { protocolVersion: '2024-11-05' }
+        : msg.method === 'tools/list' ? { tools: [{ name: 'lookup', description: 'Look a key up in the bench table', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } }] }
+        : { content: [{ type: 'text', text: `value for ${msg.params?.arguments?.key}: 42` }] };
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }));
+    });
+  });
+  await new Promise((ok) => mcp.listen(0, '127.0.0.1', ok));
+  mcpUrl = `http://127.0.0.1:${mcp.address().port}/mcp`;
+  process.on('exit', () => mcp.close());
 }
 
 const data = mkdtempSync(join(tmpdir(), 'nekko-bench-turn-'));
@@ -153,6 +181,7 @@ await call('settings:update', {
   workspaces: [{ id: 'w1', name: 'project', path: workspace, addedAt: Date.now() }, { id: 'w2', name: 'load', path: loadProject, addedAt: Date.now() }],
   providers: [{ id: 'local', kind: 'llamacpp', label: 'Local', baseUrl: modelUrl, enabled: true }],
   defaultChatMode: 'ask',
+  ...(mcpUrl ? { mcpServers: [{ id: 'bench', name: 'bench', enabled: true, command: '', args: [], url: mcpUrl }] } : {}),
 });
 if (load > 0) {
   await call('workspace:index', 'w2');
@@ -265,9 +294,10 @@ try {
     const tool = await turn(sid, `Use the write_file tool to create note${i}.txt in the project containing exactly: hello ${i}. Then reply "done".`, { approve: true });
     const drain = await queuedFollowUp(sid);
     await new Promise((r) => setTimeout(r, 1000)); // let the follow-up finish
-    const r = { firstText: text.firstText, gaps: text.gaps, error: text.error ?? tool.error, approvals: tool.approvals, drain };
+    const mcpTurn = mcpUrl ? await turn(sid, 'Call the mcp__bench__lookup tool with the key "cats", then say what it returned.', { approve: true }) : null;
+    const r = { firstText: text.firstText, gaps: text.gaps, error: text.error ?? tool.error ?? mcpTurn?.error, approvals: tool.approvals, drain, mcp: mcpTurn?.approvals ?? [] };
     results.runs.push(r);
-    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms, approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
+    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms,${mcpUrl ? ` mcp ${r.mcp.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''} approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
   }
   if (args.usage) {
     const lines = (f) => (existsSync(join(data, f)) ? readFileSync(join(data, f), 'utf8').trim().split('\n').filter(Boolean) : []);
@@ -296,6 +326,7 @@ try {
     gapMax: Math.max(...all((r) => r.gaps)),
     approvalToResultMedian: pct(all((r) => r.approvals.map((a) => a.toResult)), 0.5),
     approvalAnswerMedian: pct(all((r) => r.approvals.map((a) => a.seenToAnswered)), 0.5),
+    mcpToResultMedian: pct(all((r) => (r.mcp ?? []).map((a) => a.toResult)), 0.5),
     queueDrainMedian: pct(all((r) => [r.drain]), 0.5),
     loadCalls,
     loadCallMedian: pct(loadMs, 0.5),

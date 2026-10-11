@@ -287,6 +287,11 @@ export interface Host {
    * the renewed token from `tokens.json` itself: no token crosses the wire.
    */
   oauthRefresh(tokenKey: string): Promise<void>;
+  /**
+   * Save a gateway the daemon resolved as the Hypergate MCP entry
+   * (`mcp:hypergate:save`) and hand back the server list for it to run.
+   */
+  hypergateSave(info: import('@nekko-agent/shared').HypergateInfo): import('@nekko-agent/shared').McpServerConfig[];
   /** For the engine daemon's router: `GET /v1/models`. */
   engineRouterModels(): Promise<unknown>;
   engineRouterModel(modelId: string): Promise<unknown>;
@@ -863,6 +868,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     changesNotify: notifyChanges,
     limitsNotify: notifyLimits,
     oauthRefresh: async (tokenKey) => { await ensureFreshToken(tokenKey); },
+    hypergateSave: (info) => saveSettings({ mcpServers: withHypergate(getSettings().mcpServers ?? [], info) }).mcpServers ?? [],
     engineRouterModels: () => engine.routerModels(),
     engineRouterModel: (modelId) => engine.routerModel(modelId),
     engineInstall: (buildId, runtime) => engine.installEngine(buildId, runtime),

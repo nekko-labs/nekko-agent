@@ -215,6 +215,17 @@ export function cleanTitle(out: string): string {
     .slice(0, 64);
 }
 
+/**
+ * Whether a tool the turn runs indirectly (a sub-agent, an MCP call) asks the
+ * user first, and the reason the prompt shows: in ask mode, or when the
+ * sandbox policy asks for everything. Null when it runs without asking.
+ */
+export function hostToolApproval(name: string, mode: string | undefined, sandboxMode: string | undefined): string | null {
+  const indirect = name === 'spawn_agent' || name.startsWith('mcp__');
+  if (!indirect || (mode !== 'ask' && sandboxMode !== 'ask-everything')) return null;
+  return name === 'spawn_agent' ? 'Delegate work to a sub-agent' : `Call ${name}`;
+}
+
 /** The send options that run a queued prompt next. */
 export function sendOptionsForQueuedItem(base: SendOptions, item: QueuedPrompt): SendOptions {
   const payload = queueItemPayload(item);

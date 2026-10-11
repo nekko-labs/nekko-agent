@@ -66,7 +66,10 @@ fn fake_backend() {
                             "chat:running" => (axum::http::StatusCode::OK, axum::Json(json!([]))),
                             // A daemon-driven turn's host-run tool (MCP, sub-agents, the browser...).
                             "turn:tool" => (
-                                axum::http::StatusCode::OK,
+                                {
+                                    recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                    axum::http::StatusCode::OK
+                                },
                                 axum::Json(json!({ "result": { "toolCallId": body.0["args"][1]["id"], "output": "host tool ran" } })),
                             ),
                             "test:prepareTemplate" => {
@@ -100,6 +103,11 @@ fn fake_backend() {
                                 axum::http::StatusCode::OK,
                                 axum::Json(json!([{ "id": "agent_s1", "title": "Agent commands" }])),
                             ),
+                            // A saved Hypergate entry: the server list the daemon then runs.
+                            "mcp:hypergate:save" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                (axum::http::StatusCode::OK, axum::Json(json!([])))
+                            }
                             "fail:please" => {
                                 (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "asked to fail" })))
                             }
@@ -1141,4 +1149,125 @@ async fn without_a_data_dir_accounting_stays_with_the_host() {
     let (status, body) = post(d.port, "limits:get", json!(["k"]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     assert_eq!(body["echo"], "limits:get", "forwarded to the host: {body}");
+}
+
+/// A streamable-HTTP MCP server with one tool, `echo`, on a loopback port.
+async fn http_mcp() -> (u16, tokio::task::JoinHandle<()>, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
+    use axum::routing::post as route_post;
+    let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen = calls.clone();
+    let app = axum::Router::new().route(
+        "/mcp",
+        route_post(move |axum::Json(msg): axum::Json<Value>| {
+            let seen = seen.clone();
+            async move {
+                let Some(id) = msg.get("id").cloned() else {
+                    return (axum::http::StatusCode::ACCEPTED, axum::Json(Value::Null));
+                };
+                let result = match msg["method"].as_str().unwrap_or_default() {
+                    "initialize" => json!({ "protocolVersion": "2024-11-05" }),
+                    "tools/list" => {
+                        json!({ "tools": [{ "name": "echo", "description": "Echo it", "inputSchema": { "type": "object" } }] })
+                    }
+                    _ => {
+                        seen.lock().unwrap().push(msg.clone());
+                        let text = msg["params"]["arguments"]["text"].as_str().unwrap_or("").to_string();
+                        json!({ "content": [{ "type": "text", "text": format!("echo: {text}") }] })
+                    }
+                };
+                (axum::http::StatusCode::OK, axum::Json(json!({ "jsonrpc": "2.0", "id": id, "result": result })))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    (port, tokio::spawn(async move { axum::serve(listener, app).await.unwrap() }), calls)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_syncs_and_calls_its_mcp_servers_itself() {
+    let session = json!({
+        "id": "s_turn_m", "title": "Named", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("mcp", session);
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().iter().any(|o| o == "turn:mcp"), "{info}");
+    let (mcp_port, mcp_server, mcp_calls) = http_mcp().await;
+    let model =
+        scripted_model(vec![call_tool("c_mcp", "mcp__srv__echo", json!({ "text": "hi" })), say_text("done")]).await;
+    let mut spec = turn_spec(&rig, &model, "turn_m", "s_turn_m", json!({}));
+    spec["settings"]["defaultChatMode"] = json!("ask");
+    let facts = spec["facts"].as_object_mut().unwrap();
+    facts.remove("mcpTools");
+    facts.insert(
+        "mcpServers".into(),
+        json!([{ "id": "srv", "name": "srv", "enabled": true, "command": "", "args": [], "url": format!("http://127.0.0.1:{mcp_port}/mcp") }]),
+    );
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+
+    // Ask mode: the MCP call's approval is parked in the daemon and answered there.
+    let approval = wait_pending(rig.d.port, "s_turn_m", "approval", "c_mcp").await;
+    assert_eq!(approval["reason"], "Call mcp__srv__echo");
+    assert_eq!(approval["severity"], "medium");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_turn_m", "c_mcp", true]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, Value::Null));
+    let (_, end) = turn_record(rig.d.port, "turn_m").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    // The daemon synced the server, offered its tool and ran the call; the host never saw it.
+    let tools: Vec<String> = model.requests.lock().unwrap()[0]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    assert!(tools.contains(&"mcp__srv__echo".to_string()), "{tools:?}");
+    assert_eq!(mcp_calls.lock().unwrap().len(), 1);
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "no host round trip for MCP");
+    let saved = saved_session(&rig, "s_turn_m");
+    let result = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == "c_mcp")
+        .unwrap()
+        .clone();
+    assert_eq!(result["toolResult"]["output"], "echo: hi");
+    mcp_server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn hypergate_is_found_and_connected_by_the_daemon() {
+    use axum::routing::{get, post as route_post};
+    let gate = axum::Router::new()
+        .route(
+            "/health",
+            get(|| async { axum::Json(json!({ "service": "hypergated", "version": "9.9", "servers": 2 })) }),
+        )
+        .route("/api/gateway", get(|| async { axum::Json(json!({ "url": "http://127.0.0.1:1/mcp", "token": "gw" })) }))
+        .route(
+            "/api/clients/resolve",
+            route_post(|| async { axum::Json(json!({ "token": "agent", "name": "Nekko Agent" })) }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move { axum::serve(listener, gate).await.unwrap() });
+    let d = start(true);
+    let (_, found) = post(d.port, "mcp:hypergate", json!([port]), Some(TOKEN)).await;
+    assert_eq!(found["version"], "9.9");
+    assert_eq!(found["port"], port);
+    assert!(found.get("token").is_none(), "detecting mints nothing");
+    let (_, connected) = post(d.port, "mcp:hypergate:connect", json!([port]), Some(TOKEN)).await;
+    assert_eq!(connected["token"], "agent");
+    assert_eq!(connected["agent"], "Nekko Agent");
+    let (_, all) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let save = all.as_array().unwrap().iter().find(|e| e[0] == "mcp:hypergate:save").expect("the host saved the entry");
+    assert_eq!(save[1][0]["token"], "agent");
+    // Nothing listening: null, not an error.
+    server.abort();
+    let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let (status, none) = post(d.port, "mcp:hypergate", json!([free]), Some(TOKEN)).await;
+    assert_eq!((status, none), (200, Value::Null));
 }

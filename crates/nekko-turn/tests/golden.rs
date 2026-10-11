@@ -8,8 +8,8 @@
 
 use nekko_turn::{
     PlanOutcome, TurnStats, apply_plan_update, apply_turn_input, attach_turn_stats, catalog, clean_title,
-    format_ask_answers, parse_ask_request, plan_echo, send_options_for_queued_item, title_prompt, turn_system_prompt,
-    turn_tools,
+    format_ask_answers, host_tool_approval, parse_ask_request, plan_echo, send_options_for_queued_item, title_prompt,
+    turn_system_prompt, turn_tools,
 };
 use serde_json::{Map, Value, json};
 use std::path::Path;
@@ -176,4 +176,14 @@ fn the_catalog_is_the_one_the_ts_wrote() {
     // A smoke check that the embedded catalog parsed; its contents are
     // checked against the TS on every TS test run.
     assert!(catalog::catalog().builtin.iter().any(|t| t["name"] == "bash"));
+}
+
+#[test]
+fn indirect_tool_approvals_match() {
+    let all = expected();
+    for (i, c) in cases(&all, "approvals").iter().enumerate() {
+        let inp = &c["input"];
+        let got = host_tool_approval(inp["name"].as_str().unwrap(), inp["mode"].as_str(), inp["sandboxMode"].as_str());
+        assert_eq!(got.map(Value::String).unwrap_or(Value::Null), c["output"], "approval case {i}: {inp}");
+    }
 }

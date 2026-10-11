@@ -72,6 +72,8 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     // host only for what still lives here: a refreshed sign-in, and the relay.
     'limits:notify': ([payload]) => host.limitsNotify(payload as never),
     'oauth:refresh': ([tokenKey]) => host.oauthRefresh(String(tokenKey)),
+    // The daemon resolved a Hypergate gateway (crates/nekkod/src/hypergate.rs); the entry is a setting.
+    'mcp:hypergate:save': ([info]) => host.hypergateSave(info as never),
     'engine:routerModels': () => host.engineRouterModels(),
     'engine:routerModel': ([id]) => host.engineRouterModel(String(id)),
     [C.engineInstall]: ([buildId, runtime]) => host.engineInstall(buildId, runtime),
