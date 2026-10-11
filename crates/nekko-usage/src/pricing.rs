@@ -96,6 +96,23 @@ pub fn model_price(model_id: &str) -> Option<Price> {
     if model_id.is_empty() {
         return None;
     }
+    // A summary prices every record, mostly the same few ids: remember them.
+    static SEEN: OnceLock<std::sync::Mutex<HashMap<String, Option<Price>>>> = OnceLock::new();
+    let seen = SEEN.get_or_init(Default::default);
+    if let Some(p) = seen.lock().ok().and_then(|m| m.get(model_id).copied()) {
+        return p;
+    }
+    let price = lookup(model_id);
+    if let Ok(mut m) = seen.lock() {
+        if m.len() >= 4096 {
+            m.clear();
+        }
+        m.insert(model_id.to_string(), price);
+    }
+    price
+}
+
+fn lookup(model_id: &str) -> Option<Price> {
     let t = tables();
     let lower = model_id.to_lowercase();
     let id = replace_first(&lower, &t.claude, &["-", ".", ""]);
