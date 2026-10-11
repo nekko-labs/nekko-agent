@@ -43,8 +43,8 @@ interface DecorDocument {
   readonly documentElement: { hasAttribute(name: string): boolean };
   readonly timeline: { readonly currentTime: number | null | CSSNumberish };
   getAnimations(): DecorAnimation[];
-  addEventListener(type: 'animationstart', fn: (e: { animationName: string; target: EventTarget | null }) => void, capture: boolean): void;
-  removeEventListener(type: 'animationstart', fn: (e: { animationName: string; target: EventTarget | null }) => void, capture: boolean): void;
+  addEventListener(type: 'animationstart' | 'animationcancel', fn: (e: { animationName: string; target: EventTarget | null }) => void, capture: boolean): void;
+  removeEventListener(type: 'animationstart' | 'animationcancel', fn: (e: { animationName: string; target: EventTarget | null }) => void, capture: boolean): void;
 }
 
 interface Timers {
@@ -56,15 +56,18 @@ const isDecor = (a: DecorAnimation): boolean => !!a.animationName && DECOR_ANIMA
 
 /** Start the clock; returns a stop function that hands every decoration back to the browser. */
 export function startDecorClock(doc: DecorDocument = document as unknown as DecorDocument, timers: Timers = window as unknown as Timers): () => void {
-  const held = new Map<DecorAnimation, number>();
+  // Each animation's start time and element, read once: a CSS animation's
+  // playState (or effect) brings the page's styles up to date when read, so
+  // the tick touches neither.
+  const held = new Map<DecorAnimation, { start: number; target: Element | null | undefined }>();
   let timer: unknown = null;
   const now = () => Number(doc.timeline.currentTime ?? 0);
 
   const tick = () => {
     if (doc.hidden || doc.documentElement.hasAttribute('data-app-inactive')) return;
     const t = now();
-    for (const [a, start] of held) {
-      if (a.playState === 'idle' || !a.effect?.target?.isConnected) { held.delete(a); continue; }
+    for (const [a, { start, target }] of held) {
+      if (!target?.isConnected) { held.delete(a); continue; }
       a.currentTime = t - start;
     }
     if (!held.size && timer !== null) { timers.clearInterval(timer); timer = null; }
@@ -73,7 +76,7 @@ export function startDecorClock(doc: DecorDocument = document as unknown as Deco
     if (held.has(a) || a.playState === 'idle' || !isDecor(a)) return;
     const start = a.startTime == null ? now() - Number(a.currentTime ?? 0) : Number(a.startTime);
     a.pause();
-    held.set(a, start);
+    held.set(a, { start, target: a.effect?.target });
     if (timer === null) timer = timers.setInterval(tick, 1000 / DECOR_HZ);
   };
   const onStart = (e: { animationName: string; target: EventTarget | null }) => {
@@ -84,10 +87,19 @@ export function startDecorClock(doc: DecorDocument = document as unknown as Deco
     }
   };
 
+  // A decoration the stylesheet takes away (the agent stopped, motion was
+  // reduced) is let go at once: moving a cancelled animation would bring it back.
+  const onCancel = (e: { animationName: string; target: EventTarget | null }) => {
+    if (!DECOR_ANIMATIONS.has(e.animationName)) return;
+    for (const [a, { target }] of held) if (a.animationName === e.animationName && target === e.target) held.delete(a);
+  };
+
   for (const a of doc.getAnimations()) hold(a);
   doc.addEventListener('animationstart', onStart, true);
+  doc.addEventListener('animationcancel', onCancel, true);
   return () => {
     doc.removeEventListener('animationstart', onStart, true);
+    doc.removeEventListener('animationcancel', onCancel, true);
     if (timer !== null) timers.clearInterval(timer);
     timer = null;
     // Back to the browser's own clock, where each one already is.
