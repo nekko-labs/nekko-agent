@@ -34,6 +34,7 @@
 
 use crate::accounts::{Accounts, TurnAccount};
 use crate::backend::Backend;
+use crate::decide::DecideService;
 use crate::hub::Hub;
 use crate::mcp::Mcp;
 use nekko_agent::{ProviderConfig, create_provider};
@@ -239,6 +240,9 @@ pub struct Turns {
     /// The MCP servers (mcp.rs): a turn whose host hands over the server list
     /// syncs and calls them here, without a round trip through the host.
     mcp: Arc<Mcp>,
+    /// The resident decision model (decide.rs): the `decide` tool's local
+    /// provider runs here.
+    decide: Arc<DecideService>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
 }
@@ -252,8 +256,9 @@ impl Turns {
         changes: Arc<ChangeTracker>,
         accounts: Arc<Accounts>,
         mcp: Arc<Mcp>,
+        decide: Arc<DecideService>,
     ) -> Self {
-        Self { store, data_dir, changes, accounts, mcp, running: Mutex::default(), pending: Pending::default() }
+        Self { store, data_dir, changes, accounts, mcp, decide, running: Mutex::default(), pending: Pending::default() }
     }
 
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
@@ -682,6 +687,8 @@ impl Turns {
         let native =
             if hooks { None } else { native_context(self, shared, backend, settings, &workspaces, &mode, &session_id) };
         let runner = TurnTools {
+            // The decision runner the host picked; the local one is this daemon's.
+            decide: (facts.get("decideWith").and_then(Value::as_str) == Some("local")).then(|| self.decide.clone()),
             hub: hub.clone(),
             spawn: facts.get("spawn") == Some(&Value::Bool(true)),
             mcp: own_mcp.is_some().then(|| self.mcp.clone()),
@@ -1053,6 +1060,30 @@ async fn forward_to_host(mut rx: mpsc::UnboundedReceiver<HostMsg>, backend: Arc<
     }
 }
 
+/// The `decide` tool on the local decision model (chat.ts: `decisions.run`
+/// with the `local` provider): the request built and checked as the host
+/// does, the answer as the host writes it.
+async fn decide_tool(service: &DecideService, id: &str, input: &Value) -> Value {
+    let request = turn::decide::decide_request_from_tool(input);
+    if let Some(problem) = turn::decide::check_decision_request(&request) {
+        return error(id, format!("decide failed: {problem}"));
+    }
+    match service.run(request).await {
+        Ok(res) => {
+            let mut out = Map::new();
+            if let Some(model) = res.get("model") {
+                out.insert("model".into(), model.clone());
+            }
+            out.insert("provider".into(), json!("local"));
+            if let Some(answers) = res.get("answers") {
+                out.insert("answers".into(), answers.clone());
+            }
+            result(id, js::stringify(&Value::Object(out)))
+        }
+        Err((_, message)) => error(id, format!("decide failed: {message}")),
+    }
+}
+
 /// The agent terminal lines of one turn, sent to the host in order.
 struct HostLog(mpsc::UnboundedSender<Value>);
 
@@ -1113,6 +1144,8 @@ fn native_context(
 
 /// A turn's tool calls: where each runs, with hooks around them.
 struct TurnTools {
+    /// The `decide` tool runs here when the host picked the local model.
+    decide: Option<Arc<DecideService>>,
     hub: Hub,
     /// `spawn_agent` children are driven here; the host only checks the call,
     /// makes the child and admits its turns (`spawn:prepare`).
@@ -1192,6 +1225,11 @@ impl TurnTools {
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
             _ => {}
+        }
+        if name == "decide"
+            && let Some(service) = &self.decide
+        {
+            return Ok(decide_tool(service, id, &input).await);
         }
         if self.spawn && name == "spawn_agent" {
             return Ok(self.spawn_agent(call).await);

@@ -68,6 +68,22 @@ const MODEL_FILES: Record<DecisionPrecision, string[]> = {
 const MAX_STATE_CHARS = 50_000;
 const MAX_QUESTIONS = 64;
 
+/**
+ * The request shape both providers share; checked here so neither sees
+ * garbage. Pure: the engine daemon's `decide` tool runs the same check
+ * (crates/nekko-turn `decide`, held to this by `decide.golden.test.ts`).
+ */
+export function checkDecisionRequest(request: DecisionRequest): string | null {
+  if (!request || typeof request !== 'object') return 'Send a state and at least one question.';
+  const state = typeof request.state === 'string' ? request.state : JSON.stringify(request.state ?? '');
+  if (!state.trim()) return 'The state is empty.';
+  if (state.length > MAX_STATE_CHARS) return `The state is over ${MAX_STATE_CHARS.toLocaleString('en-US')} characters.`;
+  const questions = request.questions && typeof request.questions === 'object' ? Object.keys(request.questions) : [];
+  if (!questions.length) return 'Ask at least one question.';
+  if (questions.length > MAX_QUESTIONS) return `Ask at most ${MAX_QUESTIONS} questions at once.`;
+  return null;
+}
+
 export interface DecisionsDeps {
   modelsDir: () => string;
   downloads: ReturnType<typeof createDownloads>;
@@ -232,20 +248,8 @@ export function createDecisions(deps: DecisionsDeps) {
     return { ok: true, message: 'Unloaded the decision model.' };
   }
 
-  /** The request shape both providers share; checked here so neither sees garbage. */
-  function check(request: DecisionRequest): string | null {
-    if (!request || typeof request !== 'object') return 'Send a state and at least one question.';
-    const state = typeof request.state === 'string' ? request.state : JSON.stringify(request.state ?? '');
-    if (!state.trim()) return 'The state is empty.';
-    if (state.length > MAX_STATE_CHARS) return `The state is over ${MAX_STATE_CHARS.toLocaleString('en-US')} characters.`;
-    const questions = request.questions && typeof request.questions === 'object' ? Object.keys(request.questions) : [];
-    if (!questions.length) return 'Ask at least one question.';
-    if (questions.length > MAX_QUESTIONS) return `Ask at most ${MAX_QUESTIONS} questions at once.`;
-    return null;
-  }
-
   async function run(provider: DecisionProvider, request: DecisionRequest): Promise<DecisionResponse> {
-    const problem = check(request);
+    const problem = checkDecisionRequest(request);
     if (problem) throw new Error(problem);
     const started = Date.now();
     if (provider === 'local') {

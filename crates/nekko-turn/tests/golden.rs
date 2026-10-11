@@ -216,3 +216,31 @@ fn delegation_results_match() {
         same_text(&sub_agent_failure("call_1", c["input"].as_str().unwrap()), &c["output"], "failure");
     }
 }
+
+#[test]
+fn decide_requests_match() {
+    use nekko_turn::decide::{check_decision_request, decide_request_from_tool};
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden").join("decide.json");
+    let all: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+    assert!(!all.is_empty());
+    for (i, c) in all.iter().enumerate() {
+        // The golden records long states by length; rebuild them.
+        let mut input = c["input"].clone();
+        if let Some(long) = input.get("state").and_then(|s| s.get("long")).and_then(Value::as_u64) {
+            let head = input["state"]["head"].as_str().unwrap().to_string();
+            let unit = head.chars().next().unwrap().to_string();
+            let reps = long as usize / nekko_js::len16(&unit);
+            input["state"] = json!(unit.repeat(reps));
+        }
+        let request = decide_request_from_tool(&input);
+        let problem = check_decision_request(&request);
+        assert_eq!(problem.map(Value::String).unwrap_or(Value::Null), c["problem"], "problem {i}");
+        let mut shown = request.clone();
+        if let Some(s) = request["state"].as_str()
+            && nekko_js::len16(s) > 200
+        {
+            shown["state"] = json!({ "long": nekko_js::len16(s), "head": nekko_js::slice16(s, 20) });
+        }
+        assert_eq!(nekko_js::stringify(&shown), c["request"].as_str().unwrap(), "request {i}");
+    }
+}

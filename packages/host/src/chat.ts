@@ -1442,6 +1442,8 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
       // else the tool specs this host synced.
       ...(t.daemonMcp ? { mcpServers: t.offline ? [] : settings.mcpServers ?? [] } : { mcpTools: mcpToolSpecs() }),
       decide: !!t.decideWith,
+      // Which decision runner `decide` uses; the daemon runs the local one itself.
+      decideWith: t.decideWith,
       hooks: hasToolHooks(settings),
       connectorSnippets: t.connectorSnippets,
       indexSnippets: t.indexSnippets,

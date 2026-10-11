@@ -99,6 +99,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             changes,
             accounts.clone(),
             mcp.clone(),
+            engine.decide.clone(),
         )),
         mcp: mcp.clone(),
         accounts,
