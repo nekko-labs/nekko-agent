@@ -17,7 +17,7 @@ import { githubReviewConfig, registerGitHubReviewRoutes, ReviewReplayLedger } fr
 import { runBackend } from './backend.js';
 import { backendCommand, DaemonProcess, daemonMode, findNekkod, type FoundDaemon } from './nekkod.js';
 import { forwardCall, isSocketRoute, proxyUpgrade, refuse, upgradeAllowed, upstreamPath } from './proxy.js';
-import { subscribeHostEvents, webChannelOverrides, WEBHOOK_DISPATCH, type WebhookDispatchResult } from './web-channels.js';
+import { overrideFor, subscribeHostEvents, webChannelOverrides, WEBHOOK_DISPATCH, type WebhookDispatchResult } from './web-channels.js';
 
 /** Subcommands handled by the embedded CLI (so `npx nekko-agent mcp|chat|…` works). */
 const CLI_SUBCOMMANDS = new Set([
@@ -219,7 +219,7 @@ async function main() {
         const channel = req.params.channel;
         if (channel === CAPABILITIES_CHANNEL) return reply.send(capabilities);
         if (channel === WEBHOOK_DISPATCH) return reply.code(404).send({ error: 'not found' });
-        const own = overrides[channel];
+        const own = overrideFor(overrides, channel);
         const args = req.body?.args ?? [];
         const result = await (own ? own(args) : dispatch(channel, args));
         reply.send(result ?? null);

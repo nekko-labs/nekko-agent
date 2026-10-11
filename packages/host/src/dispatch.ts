@@ -270,7 +270,8 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
   };
 
   return (channel, args) => {
-    const fn = table[channel];
+    // Own keys only: a channel named constructor or __proto__ is unknown, not Object.prototype's.
+    const fn = Object.prototype.hasOwnProperty.call(table, channel) ? table[channel] : undefined;
     if (!fn) throw new Error(`Unknown channel: ${channel}`);
     return fn(args ?? []);
   };

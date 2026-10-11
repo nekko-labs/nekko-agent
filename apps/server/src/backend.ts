@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import { createDispatcher, createHost, flushAgentLogs, useEngineDaemon, useTerminalDaemon } from '@nekko-agent/host';
 import { tokenMatches } from './security.js';
-import { subscribeHostEvents, webChannelOverrides } from './web-channels.js';
+import { overrideFor, subscribeHostEvents, webChannelOverrides } from './web-channels.js';
 
 /**
  * The web edition's TS host backend, run by nekkod (`--nekko-backend`).
@@ -30,7 +30,7 @@ export async function runBackend(dataDir: string): Promise<void> {
   const dispatch = createDispatcher(host);
   const overrides = webChannelOverrides(host);
   const run = (channel: string, args: unknown[]) => {
-    const own = overrides[channel];
+    const own = overrideFor(overrides, channel);
     return own ? own(args) : dispatch(channel, args);
   };
 

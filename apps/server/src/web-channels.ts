@@ -50,6 +50,11 @@ export function webChannelOverrides(host: Host): ChannelOverrides {
   return out;
 }
 
+/** The override for `channel`, never one inherited from Object.prototype (`constructor`, `__proto__`). */
+export function overrideFor(overrides: ChannelOverrides, channel: string): ((args: unknown[]) => unknown) | undefined {
+  return Object.prototype.hasOwnProperty.call(overrides, channel) ? overrides[channel] : undefined;
+}
+
 /** Every host event, keyed by the host's event name, with the channel clients know it by. */
 export const HOST_EVENTS = Object.entries(IpcEvents) as [string, string][];
 
