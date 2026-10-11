@@ -27,7 +27,6 @@ jobs:
           - { key: linux-x64, os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
           - { key: linux-arm64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
           - { key: darwin-arm64, os: macos-latest, target: aarch64-apple-darwin }
-          - { key: darwin-x64, os: macos-latest, target: x86_64-apple-darwin }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -53,7 +52,7 @@ jobs:
           done
           ls -la "$dest"
           # The binary must start (and say its version) on the machine it was built for.
-          if [[ "${{ matrix.key }}" != darwin-x64 ]]; then "$dest"/nekkod* --version; fi
+          "$dest"/nekkod* --version
       - uses: actions/upload-artifact@v7
         with:
           name: nekkod-${{ matrix.key }}

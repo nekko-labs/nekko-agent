@@ -13,13 +13,17 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSy
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** npm platform/arch → the Rust target the release workflow builds for it. */
+/**
+ * npm platform/arch → the Rust target the release workflow builds for it. No
+ * Intel macOS: ONNX Runtime (ort-sys) has no prebuilt library for
+ * x86_64-apple-darwin, and the desktop app ships arm64 only on macOS too. An
+ * Intel Mac runs the web edition on the in-process engine.
+ */
 export const PLATFORMS = {
   'win32-x64': { os: 'win32', cpu: 'x64', target: 'x86_64-pc-windows-msvc', exe: 'nekkod.exe' },
   'linux-x64': { os: 'linux', cpu: 'x64', target: 'x86_64-unknown-linux-gnu', exe: 'nekkod' },
   'linux-arm64': { os: 'linux', cpu: 'arm64', target: 'aarch64-unknown-linux-gnu', exe: 'nekkod' },
   'darwin-arm64': { os: 'darwin', cpu: 'arm64', target: 'aarch64-apple-darwin', exe: 'nekkod' },
-  'darwin-x64': { os: 'darwin', cpu: 'x64', target: 'x86_64-apple-darwin', exe: 'nekkod' },
 };
 
 export const packageName = (key) => `@nekko-agent/nekkod-${key}`;
