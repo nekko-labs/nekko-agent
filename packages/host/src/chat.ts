@@ -990,6 +990,9 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   const daemonMcp = !sandbox && !!daemon && (await daemonRunsTurns(daemon)) && (await daemonOwns(daemon, DAEMON_MCP));
   if (!offline) {
     if (!sandbox && !daemonMcp && settings.mcpServers?.some((s) => s.enabled)) await syncMcp(settings.mcpServers);
+    // The daemon syncs for the turn; this only keeps this host's snapshot (the
+    // tool list `listTools` reads) current, and nothing waits on it.
+    else if (daemonMcp && settings.mcpServers?.some((s) => s.enabled)) void syncMcp(settings.mcpServers).catch(() => {});
     decideWith = sandbox || session.disabledTools?.includes(DECIDE_TOOL.name) ? null : await decisions?.available().catch(() => null) ?? null;
   }
   let tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl, mcpTools: sandbox || offline ? [] : mcpToolSpecs(), decide: !!decideWith });

@@ -123,10 +123,11 @@ describe('limits with a daemon that owns them', () => {
     await sendChat({ sessionId: s.id, providerId: 'p1', modelId: 'm', text: 'hi' }, () => {});
     const spec = calls.find(([c]) => c === 'chat:turn')![1][0] as { facts: Record<string, unknown> };
     expect(spec.facts.account).toEqual({ kind: 'llamacpp', incognito: false });
-    // The daemon runs this turn's MCP servers: it gets the list, and this host syncs nothing.
+    // The daemon runs this turn's MCP servers: it gets the list; this host only
+    // refreshes its own snapshot in the background.
     expect(spec.facts.mcpServers).toEqual([{ id: 'srv', name: 'srv', enabled: true, command: 'x', args: [] }]);
     expect(spec.facts).not.toHaveProperty('mcpTools');
-    expect(syncMcp).not.toHaveBeenCalled();
+    expect(syncMcp).toHaveBeenCalledTimes(1);
     expect(existsSync(join(dir, 'usage.jsonl'))).toBe(false);
     expect(existsSync(join(dir, 'replies.jsonl'))).toBe(false);
   });
