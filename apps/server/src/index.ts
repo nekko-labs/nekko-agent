@@ -221,7 +221,7 @@ async function main() {
         if (channel === WEBHOOK_DISPATCH) return reply.code(404).send({ error: 'not found' });
         const own = overrideFor(overrides, channel);
         const args = req.body?.args ?? [];
-        const result = await (own ? own(args) : dispatch(channel, args));
+        const result = await (typeof own === 'function' ? own(args) : dispatch(channel, args));
         reply.send(result ?? null);
       } catch (e) {
         reply.code(400).send({ error: (e as Error).message });

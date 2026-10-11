@@ -31,7 +31,7 @@ export async function runBackend(dataDir: string): Promise<void> {
   const overrides = webChannelOverrides(host);
   const run = (channel: string, args: unknown[]) => {
     const own = overrideFor(overrides, channel);
-    return own ? own(args) : dispatch(channel, args);
+    return typeof own === 'function' ? own(args) : dispatch(channel, args);
   };
 
   const app = Fastify({ bodyLimit: 64 * 1024 * 1024 });
