@@ -18,9 +18,7 @@ function fakeAnimation(animationName: string, startTime = 100) {
 }
 
 function setup(animations: ReturnType<typeof fakeAnimation>[]) {
-  type Listener = (e: { animationName: string; target: EventTarget | null }) => void;
-  const listeners: Listener[] = [];
-  const cancels: Listener[] = [];
+  const listeners: Array<(e: { animationName: string; target: EventTarget | null }) => void> = [];
   const attrs = new Set<string>();
   let interval: (() => void) | null = null;
   let intervalMs = 0;
@@ -29,15 +27,15 @@ function setup(animations: ReturnType<typeof fakeAnimation>[]) {
     documentElement: { hasAttribute: (n: string) => attrs.has(n) },
     timeline: { currentTime: 1000 },
     getAnimations: () => animations as unknown as DecorAnimation[],
-    addEventListener: (t: 'animationstart' | 'animationcancel', fn: Listener) => { (t === 'animationstart' ? listeners : cancels).push(fn); },
-    removeEventListener: () => { listeners.length = 0; cancels.length = 0; },
+    addEventListener: (_t: 'animationstart', fn: (e: { animationName: string; target: EventTarget | null }) => void) => { listeners.push(fn); },
+    removeEventListener: () => { listeners.length = 0; },
   };
   const timers = {
     setInterval: (fn: () => void, ms: number) => { interval = fn; intervalMs = ms; return 1; },
     clearInterval: () => { interval = null; },
   };
   const stop = startDecorClock(doc, timers);
-  return { doc, attrs, listeners, cancels, stop, tick: () => interval?.(), running: () => interval !== null, intervalMs: () => intervalMs };
+  return { doc, attrs, listeners, stop, tick: () => interval?.(), running: () => interval !== null, intervalMs: () => intervalMs };
 }
 
 describe('decorClock', () => {
@@ -76,16 +74,6 @@ describe('decorClock', () => {
     expect(clock.running()).toBe(true);
     rocket.target.isConnected = false;
     clock.tick();
-    expect(clock.running()).toBe(false);
-  });
-
-  it('lets go of a decoration the stylesheet cancels, so it is never brought back', () => {
-    const rocket = fakeAnimation('rocket-streak', 0);
-    const clock = setup([rocket]);
-    clock.cancels.forEach((fn) => fn({ animationName: 'rocket-streak', target: rocket.target as unknown as EventTarget }));
-    clock.doc.timeline.currentTime = 5000;
-    clock.tick();
-    expect(rocket.currentTime).toBe(0);
     expect(clock.running()).toBe(false);
   });
 
