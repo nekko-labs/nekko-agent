@@ -59,6 +59,17 @@ fn fake_backend() {
                             "sessions:deleteAgentLog" if body.0["args"][0] == "callback_fail" => {
                                 (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "command log unlink failed" })))
                             }
+                            "chat:pending:host" => (axum::http::StatusCode::OK, axum::Json(json!({}))),
+                            "chat:running" => (axum::http::StatusCode::OK, axum::Json(json!([]))),
+                            // A daemon-driven turn's host-run tool (MCP, sub-agents, the browser...).
+                            "turn:tool" => (
+                                axum::http::StatusCode::OK,
+                                axum::Json(json!({ "result": { "toolCallId": body.0["args"][1]["id"], "output": "host tool ran" } })),
+                            ),
+                            "turn:event" | "turn:end" | "turn:approved" | "loop:log" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                (axum::http::StatusCode::OK, axum::Json(Value::Null))
+                            }
                             "sessions:deleteAgentLog" | "loop:end" => {
                                 recorded.lock().unwrap().push(body.0["args"].clone());
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
@@ -590,4 +601,364 @@ async fn assert_log_callback_failure_retains_json(with_backend: bool) {
     }
     drop(d);
     std::fs::remove_dir_all(data).unwrap();
+}
+
+/// A scripted OpenAI-compatible model on an ephemeral loopback port: each
+/// request takes the next reply (server-sent events), or hangs when the
+/// script says so. No credentials, user files or paid model are involved.
+struct ScriptedModel {
+    port: u16,
+    requests: std::sync::Arc<std::sync::Mutex<Vec<Value>>>,
+    server: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for ScriptedModel {
+    fn drop(&mut self) {
+        self.server.abort();
+    }
+}
+
+fn sse(chunks: &[Value]) -> String {
+    let mut out: String = chunks.iter().map(|c| format!("data: {c}\n\n")).collect();
+    out.push_str("data: [DONE]\n\n");
+    out
+}
+
+fn say_text(text: &str) -> String {
+    sse(&[json!({
+        "choices": [{ "delta": { "content": text }, "finish_reason": "stop" }],
+        "usage": { "prompt_tokens": 10, "completion_tokens": 3 }
+    })])
+}
+
+fn call_tool(id: &str, name: &str, args: Value) -> String {
+    sse(&[json!({ "choices": [{
+        "delta": { "tool_calls": [{ "index": 0, "id": id, "type": "function", "function": { "name": name, "arguments": args.to_string() } }] },
+        "finish_reason": "tool_calls"
+    }] })])
+}
+
+const HANG: &str = "hang";
+
+async fn scripted_model(script: Vec<String>) -> ScriptedModel {
+    use axum::routing::post as route_post;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let script = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::from(script)));
+    let seen = requests.clone();
+    let app = axum::Router::new().route(
+        "/v1/chat/completions",
+        route_post(move |axum::Json(request): axum::Json<Value>| {
+            let (seen, script) = (seen.clone(), script.clone());
+            async move {
+                seen.lock().unwrap().push(request);
+                let next = script.lock().unwrap().pop_front().unwrap_or_else(|| say_text("(script ended)"));
+                let body = if next == HANG {
+                    let first = futures_util::stream::once(async {
+                        Ok::<_, std::io::Error>(bytes::Bytes::from_static(b": waiting\n\n"))
+                    });
+                    axum::body::Body::from_stream(first.chain(futures_util::stream::pending()))
+                } else {
+                    axum::body::Body::from(next)
+                };
+                axum::response::Response::builder().header("content-type", "text/event-stream").body(body).unwrap()
+            }
+        }),
+    );
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    ScriptedModel { port, requests, server }
+}
+
+struct TurnRig {
+    data: std::path::PathBuf,
+    workspace: std::path::PathBuf,
+    d: Daemon,
+}
+
+impl Drop for TurnRig {
+    fn drop(&mut self) {
+        let _ = self.d.child.kill();
+        let _ = self.d.child.wait();
+        let _ = std::fs::remove_dir_all(&self.data);
+    }
+}
+
+fn turn_rig(name: &str, session: Value) -> TurnRig {
+    let data = std::env::temp_dir().join(format!("nekkod-turn-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let workspace = data.join("project");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    std::fs::write(workspace.join("app.ts"), "export const secret = 'pineapple';\n").unwrap();
+    std::fs::write(workspace.join("AGENTS.md"), "Always run the tests.\n").unwrap();
+    let id = session["id"].as_str().unwrap().to_string();
+    std::fs::write(data.join("sessions").join(format!("{id}.json")), serde_json::to_string_pretty(&session).unwrap())
+        .unwrap();
+    let d = start_with(true, Some(&data));
+    TurnRig { data, workspace, d }
+}
+
+fn turn_spec(rig: &TurnRig, model: &ScriptedModel, turn_id: &str, session_id: &str, extra_opts: Value) -> Value {
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let mut opts =
+        json!({ "sessionId": session_id, "providerId": "p1", "modelId": "synthetic", "text": "Fix the bug" });
+    for (k, v) in extra_opts.as_object().unwrap() {
+        opts[k] = v.clone();
+    }
+    json!({
+        "turnId": turn_id,
+        "opts": opts,
+        "allowBrowserControl": false,
+        "settings": { "providers": [provider], "defaultChatMode": "yolo", "unattendedQuestionMinutes": 0 },
+        "facts": {
+            "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+            "mcpTools": [], "decide": false, "hooks": false,
+            "connectorSnippets": [], "indexSnippets": [],
+            "platform": "win32", "temperature": 0.7, "effort": "normal", "statsEffort": "normal",
+            "promptCaching": true, "provider": provider, "headers": false,
+        },
+    })
+}
+
+/// The backend's record of one turn's callbacks: `turn:event` payloads and the `turn:end` summary.
+async fn turn_record(port: u16, turn_id: &str) -> (Vec<Value>, Value) {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            let (_, all) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
+            let mut events = Vec::new();
+            let mut end = None;
+            for entry in all.as_array().into_iter().flatten() {
+                if entry[1][0] != turn_id {
+                    continue;
+                }
+                match entry[0].as_str() {
+                    Some("turn:event") => events.push(entry[1][1].clone()),
+                    Some("turn:end") => end = Some(entry[1][1].clone()),
+                    _ => {}
+                }
+            }
+            if let Some(end) = end {
+                return (events, end);
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("the daemon never ended the turn")
+}
+
+async fn wait_pending(port: u16, session_id: &str, key: &str, call_id: &str) -> Value {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            let (_, pending) = post(port, "chat:pending", json!([]), Some(TOKEN)).await;
+            if let Some(v) = pending.get(session_id).and_then(|p| p.get(key)) {
+                let id = if key == "approval" { &v["call"]["id"] } else { &v["callId"] };
+                if id == call_id {
+                    return v.clone();
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("no pending {key} {call_id}"))
+}
+
+fn event_types(events: &[Value]) -> Vec<String> {
+    events
+        .iter()
+        .flat_map(|p| p["events"].as_array().cloned().unwrap_or_default())
+        .map(|e| e["type"].as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+fn saved_session(rig: &TurnRig, id: &str) -> Value {
+    let path = rig.data.join("sessions").join(format!("{id}.json"));
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
+    let session = json!({
+        "id": "s_turn_q", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("ask", session);
+    let model = scripted_model(vec![
+        call_tool(
+            "c_ask",
+            "ask_user",
+            json!({ "questions": [{ "question": "Which bug?", "options": ["Login", "Logout"] }] }),
+        ),
+        call_tool("c_read", "read_file", json!({ "path": "app.ts" })),
+        call_tool("c_host", "fetch_url", json!({ "url": "https://example.invalid" })),
+        say_text("all done"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_q", "s_turn_q", json!({}));
+    let (status, started) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{started}");
+    assert_eq!(started["started"], true);
+
+    // The question is the daemon's: the board sees it, and answering it there resumes the turn.
+    let question = wait_pending(rig.d.port, "s_turn_q", "question", "c_ask").await;
+    assert_eq!(question["questions"][0]["question"], "Which bug?");
+    let (_, alive) = post(rig.d.port, "turn:alive", json!(["turn_q"]), Some(TOKEN)).await;
+    assert_eq!(alive, json!(true));
+    let answers = json!([{ "questionId": "q1", "labels": ["Login"] }]);
+    let (status, body) = post(rig.d.port, "chat:answer", json!(["s_turn_q", "c_ask", answers]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, Value::Null), "answered by the daemon, not forwarded to the host");
+
+    let (events, end) = turn_record(rig.d.port, "turn_q").await;
+    assert_eq!(end["aborted"], false, "{end}");
+    assert_eq!(end["stop"], "complete", "{end}");
+    let types = event_types(&events);
+    for t in ["session_meta", "question", "question_resolved", "tool_call", "tool_result", "done"] {
+        assert!(types.iter().any(|x| x == t), "no {t} event in {types:?}");
+    }
+    let done = events.iter().find(|p| p["events"][0]["type"] == "done").unwrap();
+    assert_eq!(done["stats"]["calls"], 1, "only the last reply reported usage: {done}");
+    assert!(done["startedAt"].is_u64());
+    let (_, pending) = post(rig.d.port, "chat:pending", json!([]), Some(TOKEN)).await;
+    assert_eq!(pending, json!({}), "nothing may stay pending after the turn");
+
+    let saved = saved_session(&rig, "s_turn_q");
+    assert_eq!(saved["title"], "Fix the bug");
+    assert_eq!(saved["titleAuto"], true);
+    assert_eq!(saved["providerId"], "p1");
+    assert!(saved.get("activeRun").is_none(), "the run marker is cleared");
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages[0]["role"], "user");
+    assert_eq!(messages[0]["content"], "Fix the bug");
+    let tool_out = |id: &str| -> String {
+        let m = messages.iter().find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id).unwrap();
+        m["toolResult"]["output"].as_str().unwrap().to_string()
+    };
+    assert!(tool_out("c_ask").contains("Q: Which bug?\nA: Login"), "{}", tool_out("c_ask"));
+    assert!(tool_out("c_read").contains("pineapple"));
+    assert_eq!(tool_out("c_host"), "host tool ran");
+    let last = messages.last().unwrap();
+    assert_eq!(last["content"], "all done");
+    assert_eq!(last["turnStats"]["calls"], 1);
+    assert_eq!(last["turnStats"]["providerId"], "p1");
+
+    // What the model was sent: the composed prompt and tools.
+    let first = model.requests.lock().unwrap()[0].clone();
+    let system = first["messages"][0]["content"].as_str().unwrap().to_string();
+    assert!(system.contains("Asking first:"), "ask_user is offered, so the prompt says when to ask");
+    assert!(system.contains(&rig.workspace.to_string_lossy().to_string()));
+    assert!(system.contains("Always run the tests."), "the project's AGENTS.md is in the context block");
+    let tools: Vec<String> = first["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    for t in ["read_file", "ask_user", "update_plan", "set_chat_title", "complete_session"] {
+        assert!(tools.contains(&t.to_string()), "{t} missing from {tools:?}");
+    }
+    assert!(!tools.contains(&"browser".to_string()), "no browser control was allowed");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_parks_approvals_and_answers_them_itself() {
+    let session = json!({
+        "id": "s_turn_a", "title": "Named", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("approve", session);
+    let model = scripted_model(vec![
+        call_tool("c_w", "write_file", json!({ "path": "new.txt", "content": "hi" })),
+        call_tool("c_slow", "ask_user", json!({ "questions": [{ "question": "Go on?", "options": ["Yes", "No"] }] })),
+        say_text("wrote it"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_a", "s_turn_a", json!({}));
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let approval = wait_pending(rig.d.port, "s_turn_a", "approval", "c_w").await;
+    assert_eq!(approval["call"]["name"], "write_file");
+    assert!(!rig.workspace.join("new.txt").exists(), "nothing is written before the approval");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_turn_a", "c_w", true]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, Value::Null), "answered by the daemon, not forwarded to the host");
+
+    // While the turn waits on its question, a host-run tool's approval parks
+    // here too, and the host hears the answer.
+    wait_pending(rig.d.port, "s_turn_a", "question", "c_slow").await;
+    let (status, ok) = post(
+        rig.d.port,
+        "turn:approval",
+        json!(["turn_a", { "id": "c_host_ok", "name": "start_process", "input": {} }, "Start a background process", "medium"]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!((status, ok), (200, json!(true)));
+    let parked = wait_pending(rig.d.port, "s_turn_a", "approval", "c_host_ok").await;
+    assert_eq!(parked["reason"], "Start a background process");
+    let (_, body) = post(rig.d.port, "tool:approve", json!(["s_turn_a", "c_host_ok", false]), Some(TOKEN)).await;
+    assert_eq!(body, Value::Null);
+    let answers = json!([{ "questionId": "q1", "labels": ["Yes"] }]);
+    post(rig.d.port, "chat:answer", json!(["s_turn_a", "c_slow", answers]), Some(TOKEN)).await;
+
+    let (events, end) = turn_record(rig.d.port, "turn_a").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    assert_eq!(std::fs::read_to_string(rig.workspace.join("new.txt")).unwrap(), "hi");
+    let types = event_types(&events);
+    assert_eq!(types.iter().filter(|t| *t == "tool_approval_required").count(), 2, "{types:?}");
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let answered =
+        all.as_array().unwrap().iter().any(|e| e[0] == "turn:approved" && e[1] == json!(["c_host_ok", false]));
+    assert!(answered, "the host heard its approval was refused");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stopping_a_daemon_turn_ends_it_and_clears_the_run_marker() {
+    let session = json!({
+        "id": "s_turn_s", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("stop", session);
+    let model = scripted_model(vec![HANG.to_string()]).await;
+    let spec = turn_spec(&rig, &model, "turn_s", "s_turn_s", json!({}));
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    tokio::time::timeout(Duration::from_secs(20), async {
+        while model.requests.lock().unwrap().is_empty() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the model was never asked");
+    let saved = saved_session(&rig, "s_turn_s");
+    assert!(saved["activeRun"]["startedAt"].is_u64(), "the run marker is on disk while the turn runs");
+    let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert!(running.as_array().unwrap().contains(&json!("s_turn_s")), "{running}");
+
+    let (status, _) = post(rig.d.port, "chat:abort", json!(["s_turn_s"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (events, end) = turn_record(rig.d.port, "turn_s").await;
+    assert_eq!(end["aborted"], true);
+    assert!(event_types(&events).contains(&"error".to_string()));
+    assert!(saved_session(&rig, "s_turn_s").get("activeRun").is_none());
+    let (_, alive) = post(rig.d.port, "turn:alive", json!(["turn_s"]), Some(TOKEN)).await;
+    assert_eq!(alive, json!(false));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_queued_turn_whose_prompt_changed_ends_before_it_starts() {
+    let session = json!({
+        "id": "s_turn_e", "title": "Named", "workspaceId": "w1", "messages": [], "queue": ["other"],
+        "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("early", session);
+    let model = scripted_model(vec![]).await;
+    let mut spec = turn_spec(&rig, &model, "turn_e", "s_turn_e", json!({ "text": "mine" }));
+    spec["queued"] = json!({ "index": 0, "item": "mine" });
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (events, end) = turn_record(rig.d.port, "turn_e").await;
+    assert_eq!(end["early"], true);
+    assert_eq!(events[0]["events"][0]["message"], "Queued prompt changed before it could start.");
+    assert!(model.requests.lock().unwrap().is_empty(), "no model call for a turn that never started");
 }

@@ -93,6 +93,7 @@ import { AUTO_MODEL_ID, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, isLoca
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
+import { daemonCall } from './engine/daemon.js';
 import { registerManagedCacheEndpoint } from './prompt-caching.js';
 import {
   createProvider,
@@ -170,9 +171,10 @@ import {
   reconcileWorkflowRuns,
 } from './workflows.js';
 import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
-import { isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getRunningSessionIds, resolveApproval, resolveQuestion, previewContext, setContextPrefs } from './chat.js';
+import { isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
 import { loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
+import { turnCallback } from './daemon-turn.js';
 import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
 import { initLimits, getLimits, clearLimits, getLimitsProblem } from './limits.js';
 import { startWorkflowListeners } from './listeners.js';
@@ -272,6 +274,8 @@ export interface Host {
   loopEnd(runId: string, payload: { history?: import('@nekko-agent/shared').ChatMessage[] }): void;
   loopApprove(runId: string, call: import('@nekko-agent/shared').ToolCall, reason: string, severity: 'low' | 'medium' | 'high'): Promise<boolean>;
   loopLog(sessionId: string, workspaceId: string | undefined, data: string): void;
+  /** A daemon-driven chat turn's callbacks (daemon-turn.ts `turn:*`). */
+  turnCallback(channel: string, args: unknown[]): Promise<unknown>;
   changesNotify(sessionId: string): void;
   /** For the engine daemon's router: `GET /v1/models`. */
   engineRouterModels(): Promise<unknown>;
@@ -362,11 +366,13 @@ export interface Host {
    * Sideband, unpersisted; null falls back to the deterministic snippet.
    */
   fillPromptPart(sessionId: string, part: string, draft: string): Promise<string | null>;
-  approveTool(sessionId: string, toolCallId: string, approved: boolean): void;
+  approveTool(sessionId: string, toolCallId: string, approved: boolean): void | Promise<void>;
   /** Answer an `ask_user` call; an empty list means "not answering". */
-  answerQuestion(sessionId: string, callId: string, answers: AskAnswer[]): void;
-  /** Every session waiting on a person right now, keyed by session id. */
-  pendingInput(): Record<string, PendingInput>;
+  answerQuestion(sessionId: string, callId: string, answers: AskAnswer[]): void | Promise<void>;
+  /** Every session waiting on a person right now, keyed by session id (this process's turns and the engine daemon's). */
+  pendingInput(): Promise<Record<string, PendingInput>>;
+  /** Only this process's turns (`chat:pending:host`, for the daemon, which merges its own). */
+  hostPendingInput(): Record<string, PendingInput>;
   runningSessions(): string[];
 
   listTerminals(): Promise<TerminalInfo[]>;
@@ -624,7 +630,19 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   setWorkflowSender((e) => events.emit('agentEvent', e));
   setWorkflowsNotifier((snapshot) => events.emit('workflowsUpdated', snapshot));
   reconcileWorkflowRuns();
-  reconcileInterruptedChats();
+  {
+    // A daemon-driven turn survives this host restarting: ask which chats it
+    // still drives before writing the rest off.
+    const daemon = daemonCall();
+    const since = Date.now();
+    if (daemon) {
+      void daemon<string[]>('turn:running')
+        .catch(() => [] as string[])
+        .then((ids) => reconcileInterruptedChats(new Set(Array.isArray(ids) ? ids : []), since));
+    } else {
+      reconcileInterruptedChats();
+    }
+  }
   startWorkflowScheduler();
   startWorkflowListeners();
 
@@ -829,6 +847,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     loopEnd,
     loopApprove,
     loopLog,
+    turnCallback,
     changesNotify: notifyChanges,
     engineRouterModels: () => engine.routerModels(),
     engineRouterModel: (modelId) => engine.routerModel(modelId),
@@ -981,8 +1000,9 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     resourceQueue,
     fillPromptPart,
     approveTool: (sessionId, toolCallId, approved) => resolveApproval(sessionId, toolCallId, approved),
-    answerQuestion: (sessionId, callId, answers) => resolveQuestion(sessionId, callId, answers),
+    answerQuestion: (sessionId, callId, answers) => answerQuestion(sessionId, callId, answers),
     pendingInput: getPendingInput,
+    hostPendingInput: getHostPendingInput,
     runningSessions: getRunningSessionIds,
 
     listTerminals,

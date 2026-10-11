@@ -155,3 +155,57 @@ fn clear_matches_the_ts_host() {
         std::fs::remove_dir_all(data).unwrap();
     }
 }
+
+/// `JSON.stringify(v, null, 2)`, as both sides write a chat file.
+fn pretty(v: &Value) -> String {
+    serde_json::to_string_pretty(v).unwrap()
+}
+
+#[test]
+fn a_running_turn_saves_exactly_as_save_turn_session_does() {
+    let file: Value =
+        serde_json::from_str(&std::fs::read_to_string(golden().join("turn-saves.json")).unwrap()).unwrap();
+    let cases = file["cases"].as_array().unwrap();
+    assert!(cases.len() >= 8);
+    for c in cases {
+        let name = c["name"].as_str().unwrap();
+        let fixture = c["fixture"].as_str().unwrap();
+        let want = &file["expected"][name];
+        let data =
+            std::env::temp_dir().join(format!("nekko-turn-save-{}-{}", std::process::id(), name.replace(' ', "_")));
+        std::fs::create_dir_all(data.join("sessions")).unwrap();
+        let path = data.join("sessions").join(format!("{fixture}.json"));
+        std::fs::copy(golden().join("sessions").join(format!("{fixture}.json")), &path).unwrap();
+        let original: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let store = SessionStore::new(&data);
+        for op in c["disk"].as_array().unwrap() {
+            let op = op.as_array().unwrap();
+            let arg = op.get(1).cloned().unwrap_or(Value::Null);
+            match op[0].as_str().unwrap() {
+                "setOptions" => store.set_options(fixture, &arg).unwrap(),
+                "setSpecLinked" => store.set_spec_linked(fixture, &arg).unwrap(),
+                "queue" => store.queue(fixture, &arg).unwrap(),
+                other => panic!("unknown op {other}"),
+            };
+        }
+        if c["deleted"] == true {
+            std::fs::remove_file(&path).unwrap();
+        }
+        let mut copy = original.clone();
+        for (k, v) in c["turn"].as_object().unwrap() {
+            if k == "messagesAppend" {
+                copy["messages"].as_array_mut().unwrap().extend(v.as_array().unwrap().iter().cloned());
+            } else {
+                copy[k] = v.clone();
+            }
+        }
+        let queued = c.get("queued").map(|q| (q["index"].as_u64().unwrap() as usize, &q["item"]));
+        let error = store.save_turn(&mut copy, queued).err();
+        assert_eq!(error.map(Value::String).unwrap_or(Value::Null), want["error"], "{name}: error");
+        // A save that failed leaves the fixture as checked out, which may have CRLF line ends.
+        let written = std::fs::read_to_string(&path).ok().map(|t| normalize(&t.replace("\r\n", "\n")));
+        assert_eq!(written.map(Value::String).unwrap_or(Value::Null), want["written"], "{name}: file");
+        assert_eq!(Value::String(normalize(&pretty(&copy))), want["memory"], "{name}: memory");
+        std::fs::remove_dir_all(data).ok();
+    }
+}

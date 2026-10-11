@@ -53,6 +53,15 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'loop:end': ([runId, payload]) => host.loopEnd(String(runId), payload as never),
     'loop:approve': ([runId, call, reason, severity]) => host.loopApprove(String(runId), call as never, String(reason), severity as never),
     'loop:log': ([sessionId, workspaceId, data]) => host.loopLog(String(sessionId), (workspaceId as string | null) ?? undefined, String(data)),
+    // A daemon-driven chat turn calling back (daemon-turn.ts).
+    'turn:event': (args) => host.turnCallback('turn:event', args),
+    'turn:end': (args) => host.turnCallback('turn:end', args),
+    'turn:tool': (args) => host.turnCallback('turn:tool', args),
+    'turn:hook': (args) => host.turnCallback('turn:hook', args),
+    'turn:headers': (args) => host.turnCallback('turn:headers', args),
+    'turn:approved': (args) => host.turnCallback('turn:approved', args),
+    // The daemon merges its own pending input with this process's.
+    'chat:pending:host': () => host.hostPendingInput(),
     // Internal daemon callback, using the host queue and deletion tombstone.
     'sessions:deleteAgentLog': ([id]) => deleteAgentLog(String(id)),
     'changes:notify': ([sessionId]) => host.changesNotify(String(sessionId)),
