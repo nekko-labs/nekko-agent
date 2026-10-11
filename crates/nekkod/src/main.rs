@@ -10,6 +10,7 @@ mod config;
 mod decide;
 mod engine;
 mod hub;
+mod hypergate;
 mod loops;
 mod mcp;
 mod procgroup;
@@ -97,6 +98,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             cfg.data_dir.clone().map(std::path::PathBuf::from),
             changes,
             accounts.clone(),
+            mcp.clone(),
         )),
         mcp: mcp.clone(),
         accounts,

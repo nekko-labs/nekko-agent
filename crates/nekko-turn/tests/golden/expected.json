@@ -5890,5 +5890,583 @@
     "attachedNone": false
    }
   }
+ ],
+ "approvals": [
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": "ask",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": "Delegate work to a sub-agent"
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": "ask",
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Delegate work to a sub-agent"
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": "ask",
+    "sandboxMode": null
+   },
+   "output": "Delegate work to a sub-agent"
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": "guardrails",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": "guardrails",
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Delegate work to a sub-agent"
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": "guardrails",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": "yolo",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": "yolo",
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Delegate work to a sub-agent"
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": "yolo",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": null,
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": null,
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Delegate work to a sub-agent"
+  },
+  {
+   "input": {
+    "name": "spawn_agent",
+    "mode": null,
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": "ask",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": "Call mcp__files__read"
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": "ask",
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Call mcp__files__read"
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": "ask",
+    "sandboxMode": null
+   },
+   "output": "Call mcp__files__read"
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": "guardrails",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": "guardrails",
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Call mcp__files__read"
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": "guardrails",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": "yolo",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": "yolo",
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Call mcp__files__read"
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": "yolo",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": null,
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": null,
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Call mcp__files__read"
+  },
+  {
+   "input": {
+    "name": "mcp__files__read",
+    "mode": null,
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": "ask",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": "Call mcp__"
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": "ask",
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Call mcp__"
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": "ask",
+    "sandboxMode": null
+   },
+   "output": "Call mcp__"
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": "guardrails",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": "guardrails",
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Call mcp__"
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": "guardrails",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": "yolo",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": "yolo",
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Call mcp__"
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": "yolo",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": null,
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": null,
+    "sandboxMode": "ask-everything"
+   },
+   "output": "Call mcp__"
+  },
+  {
+   "input": {
+    "name": "mcp__",
+    "mode": null,
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": "ask",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": "ask",
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": "ask",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": "guardrails",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": "guardrails",
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": "guardrails",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": "yolo",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": "yolo",
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": "yolo",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": null,
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": null,
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "mcp_files",
+    "mode": null,
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": "ask",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": "ask",
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": "ask",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": "guardrails",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": "guardrails",
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": "guardrails",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": "yolo",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": "yolo",
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": "yolo",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": null,
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": null,
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "read_file",
+    "mode": null,
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": "ask",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": "ask",
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": "ask",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": "guardrails",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": "guardrails",
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": "guardrails",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": "yolo",
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": "yolo",
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": "yolo",
+    "sandboxMode": null
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": null,
+    "sandboxMode": "workspace-jail"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": null,
+    "sandboxMode": "ask-everything"
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "name": "browser",
+    "mode": null,
+    "sandboxMode": null
+   },
+   "output": null
+  }
  ]
 }

@@ -18,7 +18,7 @@ const daemonCall = vi.hoisted(() => vi.fn<() => unknown>(() => undefined));
 vi.mock('./engine/daemon.js', async () => ({ ...(await vi.importActual<typeof import('./engine/daemon.js')>('./engine/daemon.js')), daemonCall }));
 const mcpToolSpecs = vi.hoisted(() => vi.fn(() => [{ name: 'mcp__srv__echo', description: 'Echo', parameters: { type: 'object', properties: {} } }]));
 const callMcpTool = vi.hoisted(() => vi.fn(async (call: { id: string }) => ({ toolCallId: call.id, output: 'mcp says hi' })));
-vi.mock('./mcp.js', () => ({ syncMcp: vi.fn(async () => {}), mcpToolSpecs, isMcpTool: (n: string) => n.startsWith('mcp__'), callMcpTool }));
+vi.mock('./mcp.js', () => ({ syncMcp: vi.fn(async () => {}), mcpToolSpecs, isMcpTool: (n: string) => n.startsWith('mcp__'), callMcpTool, DAEMON_MCP: 'turn:mcp' }));
 
 let rounds: ProviderChunk[][] = [];
 vi.mock('@nekko-agent/core', async () => {

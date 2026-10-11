@@ -35,6 +35,7 @@
 use crate::accounts::{Accounts, TurnAccount};
 use crate::backend::Backend;
 use crate::hub::Hub;
+use crate::mcp::Mcp;
 use nekko_agent::{ProviderConfig, create_provider};
 use nekko_chat::ProviderClient;
 use nekko_js as js;
@@ -222,6 +223,9 @@ pub struct Turns {
     changes: Arc<ChangeTracker>,
     /// The usage and reply logs and the limit state (accounts.rs).
     accounts: Arc<Accounts>,
+    /// The MCP servers (mcp.rs): a turn whose host hands over the server list
+    /// syncs and calls them here, without a round trip through the host.
+    mcp: Arc<Mcp>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
 }
@@ -234,8 +238,9 @@ impl Turns {
         data_dir: Option<PathBuf>,
         changes: Arc<ChangeTracker>,
         accounts: Arc<Accounts>,
+        mcp: Arc<Mcp>,
     ) -> Self {
-        Self { store, data_dir, changes, accounts, running: Mutex::default(), pending: Pending::default() }
+        Self { store, data_dir, changes, accounts, mcp, running: Mutex::default(), pending: Pending::default() }
     }
 
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
@@ -492,13 +497,24 @@ impl Turns {
         }
         let incognito = js::truthy(loaded.get("incognito"));
 
+        // MCP: a host that hands over the server list (`turn:mcp`) leaves the
+        // sync and the calls to this daemon; an older one sends the tool specs.
+        let own_mcp = facts.get("mcpServers").filter(|s| s.is_array()).cloned();
+        let mcp_tools = match &own_mcp {
+            Some(configs) if !js::truthy(loaded.get("offline")) => {
+                let any = configs.as_array().is_some_and(|a| a.iter().any(|c| c.get("enabled") == Some(&json!(true))));
+                if any { self.mcp.sync(configs).await["specs"].clone() } else { self.mcp.snapshot()["specs"].clone() }
+            }
+            Some(_) => json!([]),
+            None => facts.get("mcpTools").cloned().unwrap_or(json!([])),
+        };
         // The turn's composition: tools, context from disk, the system prompt.
         let tool_input = json!({
             "session": loaded,
             "offline": js::truthy(loaded.get("offline")),
             "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
             "allowBrowserControl": spec.get("allowBrowserControl").cloned().unwrap_or(json!(false)),
-            "mcpTools": facts.get("mcpTools").cloned().unwrap_or(json!([])),
+            "mcpTools": mcp_tools,
             "decide": facts.get("decide").cloned().unwrap_or(json!(false)),
         });
         let tools = turn::turn_tools(&tool_input);
@@ -640,6 +656,9 @@ impl Turns {
         let native =
             if hooks { None } else { native_context(self, shared, backend, settings, &workspaces, &mode, &session_id) };
         let runner = TurnTools {
+            mcp: own_mcp.is_some().then(|| self.mcp.clone()),
+            mode: mode.clone(),
+            sandbox_mode: settings.get("sandboxMode").and_then(Value::as_str).map(str::to_string),
             turns: self.clone(),
             shared: shared.clone(),
             backend: backend.clone(),
@@ -1063,6 +1082,12 @@ fn native_context(
 
 /// A turn's tool calls: where each runs, with hooks around them.
 struct TurnTools {
+    /// MCP calls run here when the host handed over the servers.
+    mcp: Option<Arc<Mcp>>,
+    /// The chat's mode at the turn's start and `settings.sandboxMode`, for the
+    /// approval an indirect tool asks (`hostToolApproval`).
+    mode: String,
+    sandbox_mode: Option<String>,
     turns: Arc<Turns>,
     shared: Arc<Shared>,
     backend: Arc<Backend>,
@@ -1133,6 +1158,11 @@ impl TurnTools {
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
             _ => {}
         }
+        if let Some(mcp) = &self.mcp
+            && name.starts_with("mcp__")
+        {
+            return Ok(self.call_mcp(mcp, call, name).await);
+        }
         if let Some(ctx) = &self.native
             && NATIVE.contains(&name)
             && is_ported(name)
@@ -1154,6 +1184,17 @@ impl TurnTools {
             self.shared.emit(json!({ "type": "session_meta", "sessionId": self.shared.session_id }));
         }
         Ok(reply.get("result").cloned().unwrap_or_else(|| error(id, "The host returned no result.")))
+    }
+
+    /// An MCP call in the daemon: ask first when the policy says so, then run it.
+    async fn call_mcp(&self, mcp: &Mcp, call: &Value, name: &str) -> Value {
+        let id = str_at(call, "id").unwrap_or_default();
+        if let Some(reason) = turn::host_tool_approval(name, Some(&self.mode), self.sandbox_mode.as_deref())
+            && !self.turns.request_approval(&self.shared, call, &reason, &json!("medium")).await
+        {
+            return error(id, "Call not approved by user.");
+        }
+        mcp.call(call).await
     }
 
     async fn disk(&self) -> Option<Value> {

@@ -20,6 +20,7 @@ import {
   SANDBOX_INSTRUCTIONS,
   applyTurnInput,
   cleanTitle,
+  hostToolApproval,
   sendOptionsForQueuedItem,
   titlePrompt,
   turnSystemPrompt,
@@ -240,6 +241,15 @@ function statsCases() {
   });
 }
 
+function approvalCases() {
+  const out = [];
+  for (const name of ['spawn_agent', 'mcp__files__read', 'mcp__', 'mcp_files', 'read_file', 'browser'])
+    for (const mode of ['ask', 'guardrails', 'yolo', undefined])
+      for (const sandboxMode of ['workspace-jail', 'ask-everything', undefined])
+        out.push({ input: { name, mode: mode ?? null, sandboxMode: sandboxMode ?? null }, output: hostToolApproval(name, mode, sandboxMode) });
+  return out;
+}
+
 describe('turn plan golden set', () => {
   afterEach(() => vi.useRealTimers());
 
@@ -267,6 +277,7 @@ describe('turn plan golden set', () => {
       ask: askCases(),
       plans: planCases(),
       stats: statsCases(),
+      approvals: approvalCases(),
     });
   });
 });

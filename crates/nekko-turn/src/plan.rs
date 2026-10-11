@@ -242,6 +242,17 @@ pub fn turn_system_prompt(input: &Value) -> String {
     })
 }
 
+/// `hostToolApproval(name, mode, sandboxMode)`: whether a tool the turn runs
+/// indirectly (a sub-agent, an MCP call) asks the user first, and the reason
+/// the prompt shows. `None` when it runs without asking.
+pub fn host_tool_approval(name: &str, mode: Option<&str>, sandbox_mode: Option<&str>) -> Option<String> {
+    let indirect = name == "spawn_agent" || name.starts_with("mcp__");
+    if !indirect || (mode != Some("ask") && sandbox_mode != Some("ask-everything")) {
+        return None;
+    }
+    Some(if name == "spawn_agent" { "Delegate work to a sub-agent".into() } else { format!("Call {name}") })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

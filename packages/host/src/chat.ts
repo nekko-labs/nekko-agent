@@ -51,12 +51,12 @@ import { listMemory } from './memory.js';
 import { ensureFreshToken, resolveSubscriptionProvider } from './oauth.js';
 import { searchWorkspace } from './workspace.js';
 import { buildSpec } from './spec.js';
-import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool } from './mcp.js';
+import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool, DAEMON_MCP } from './mcp.js';
 import { daemonCall } from './engine/daemon.js';
 import { daemonOwns, daemonRunsLoops, runAgentViaDaemon } from './daemon-loop.js';
 import { answerInDaemon, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
 import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
-import { applyTurnInput, cleanTitle, sendOptionsForQueuedItem, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
+import { applyTurnInput, cleanTitle, hostToolApproval, sendOptionsForQueuedItem, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
 import { killSessionProcesses } from './processes.js';
 import { hasToolHooks, postToolHooks, preToolHooks, turnEndHooks } from './hooks.js';
 import { completeText } from './sideband.js';
@@ -793,9 +793,9 @@ async function runHostTool(ctx: HostToolContext, call: ToolCall): Promise<ToolRe
       return { toolCallId: call.id, output: `decide failed: ${(e as Error).message}`, isError: true };
     }
   }
-  const indirect = call.name === 'spawn_agent' || isMcpTool(call.name);
-  if (indirect && (mode === 'ask' || settings.sandboxMode === 'ask-everything')) {
-    const approved = await requestApproval(call, call.name === 'spawn_agent' ? 'Delegate work to a sub-agent' : `Call ${call.name}`, 'medium');
+  const askFirst = hostToolApproval(call.name, mode, settings.sandboxMode);
+  if (askFirst) {
+    const approved = await requestApproval(call, askFirst, 'medium');
     if (!approved) return { toolCallId: call.id, output: 'Call not approved by user.', isError: true };
   }
   if (call.name === 'report_experiment' && session.trainingRunId) {
@@ -985,8 +985,11 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   const orchestration = settings.orchestration ?? DEFAULT_ORCHESTRATION;
   const allowSpawn = getStrategy(orchestration.strategy).allowsSpawn;
   let decideWith: import('@nekko-agent/shared').DecisionProvider | null = null;
+  // A daemon that drives the turn and runs its MCP servers syncs them itself (`turn:mcp`).
+  const daemon = process.env.NEKKO_AGENT_LOOP === 'ts' ? undefined : daemonCall();
+  const daemonMcp = !sandbox && !!daemon && (await daemonRunsTurns(daemon)) && (await daemonOwns(daemon, DAEMON_MCP));
   if (!offline) {
-    if (!sandbox && settings.mcpServers?.some((s) => s.enabled)) await syncMcp(settings.mcpServers);
+    if (!sandbox && !daemonMcp && settings.mcpServers?.some((s) => s.enabled)) await syncMcp(settings.mcpServers);
     decideWith = sandbox || session.disabledTools?.includes(DECIDE_TOOL.name) ? null : await decisions?.available().catch(() => null) ?? null;
   }
   let tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl, mcpTools: sandbox || offline ? [] : mcpToolSpecs(), decide: !!decideWith });
@@ -997,13 +1000,14 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   const connectorSnippets = sandbox || offline ? [] : await collectConnectorSnippets(opts.text);
   const indexSnippets = sandbox ? [] : session.gitWorktrees && Object.keys(session.gitWorktrees).length ? [] : collectIndexSnippets(getSessionWorkspaceIds(session), opts.text);
 
-  return { settings, provider, session, sandbox, workspaces, toolSettings, mode, offline, incognito, abort, allowSpawn, decideWith, tools, connectorSnippets, indexSnippets };
+  return { settings, provider, session, sandbox, workspaces, toolSettings, mode, offline, incognito, abort, allowSpawn, decideWith, tools, connectorSnippets, indexSnippets, daemonMcp };
 }
 
 export async function sendChat(opts: SendOptions, send: Sender, allowBrowserControl = false, queued?: { index: number; item: QueuedPrompt }): Promise<void> {
   const admitted = await admitTurn(opts, send, allowBrowserControl);
   if (!admitted) return;
-  const { settings, provider, session, sandbox, workspaces, toolSettings, mode, offline, incognito, abort, allowSpawn, decideWith, tools, connectorSnippets, indexSnippets } = admitted;
+  const { settings, provider, session, sandbox, workspaces, toolSettings, mode, offline, incognito, abort, allowSpawn, decideWith, connectorSnippets, indexSnippets } = admitted;
+  let { tools } = admitted;
   // Persist only when not incognito. Preserve any prompts queued mid-run (they
   // land on disk via queuePrompt) so a normal save doesn't clobber them.
   const persist = () => {
@@ -1018,6 +1022,11 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
   if (!sandbox && daemon && (await daemonRunsTurns(daemon))) {
     const ran = await sendChatViaDaemon(daemon, { ...admitted, opts, send, allowBrowserControl, queued });
     if (ran) return;
+    // The daemon would not take it: this process runs it, its MCP servers included.
+    if (admitted.daemonMcp && !offline && settings.mcpServers?.some((s) => s.enabled)) {
+      await syncMcp(settings.mcpServers);
+      tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl, mcpTools: mcpToolSpecs(), decide: !!decideWith });
+    }
   }
 
   const bundle = assembleContext({
@@ -1419,7 +1428,9 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
     },
     facts: {
       workspaces: t.workspaces.map((w) => ({ id: w.id, name: w.name, path: w.path })),
-      mcpTools: mcpToolSpecs(),
+      // The server list for a daemon that runs them (an offline turn gets none),
+      // else the tool specs this host synced.
+      ...(t.daemonMcp ? { mcpServers: t.offline ? [] : settings.mcpServers ?? [] } : { mcpTools: mcpToolSpecs() }),
       decide: !!t.decideWith,
       hooks: hasToolHooks(settings),
       connectorSnippets: t.connectorSnippets,

@@ -229,6 +229,20 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Ok(Value::Null)
         }
         "mcp:sync" => Ok(ctx.mcp.sync(arg(&args, 0)).await),
+        "mcp:hypergate" => {
+            let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+            Ok(crate::hypergate::detect(&base).await.map_or(Value::Null, Value::Object))
+        }
+        // Probe and claim a token here; the host saves the entry (it owns the
+        // settings) and hands back the server list, which this daemon runs.
+        "mcp:hypergate:connect" => {
+            let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+            let Some(info) = crate::hypergate::resolve(&base).await else { return Ok(Value::Null) };
+            let info = Value::Object(info);
+            let servers = ctx.backend.call("mcp:hypergate:save", json!([info])).await?;
+            ctx.mcp.sync(&servers).await;
+            Ok(info)
+        }
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
         "provider:complete" => crate::sideband::complete(arg(&args, 0)).await,
         c if crate::accounts::CHANNELS.contains(&c) && ctx.accounts.enabled() => ctx.accounts.route(c, &args).await,
@@ -316,6 +330,11 @@ pub const OWNED: &[&str] = &[
     "changes:record",
     "mcp:sync",
     "mcp:call",
+    "mcp:hypergate",
+    "mcp:hypergate:connect",
+    // Not a channel: a turn whose spec carries `facts.mcpServers` syncs and
+    // calls its MCP servers here (turns.rs), approvals included.
+    "turn:mcp",
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",

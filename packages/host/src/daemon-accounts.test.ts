@@ -16,7 +16,8 @@ import type { Provider } from '@nekko-agent/core';
 
 const daemonCall = vi.hoisted(() => vi.fn<() => unknown>(() => undefined));
 vi.mock('./engine/daemon.js', async () => ({ ...(await vi.importActual<typeof import('./engine/daemon.js')>('./engine/daemon.js')), daemonCall }));
-vi.mock('./mcp.js', () => ({ syncMcp: vi.fn(async () => {}), mcpToolSpecs: () => [], isMcpTool: () => false, callMcpTool: vi.fn() }));
+const syncMcp = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('./mcp.js', () => ({ syncMcp, mcpToolSpecs: () => [], isMcpTool: () => false, callMcpTool: vi.fn(), DAEMON_MCP: 'turn:mcp' }));
 vi.mock('@nekko-agent/core', async () => {
   const actual = await vi.importActual<typeof import('@nekko-agent/core')>('@nekko-agent/core');
   return {
@@ -43,7 +44,7 @@ const answers: Record<string, unknown> = {};
 function useFakeDaemon(): void {
   daemonCall.mockReturnValue(async (channel: string, ...args: unknown[]) => {
     calls.push([channel, args]);
-    if (channel === 'daemon:info') return { owned: ['chat:turn', 'turn:alive', 'turn:account', 'limits:get', 'limits:poll'] };
+    if (channel === 'daemon:info') return { owned: ['chat:turn', 'turn:alive', 'turn:account', 'turn:mcp', 'limits:get', 'limits:poll'] };
     if (channel === 'chat:turn') {
       const spec = args[0] as { turnId: string; opts: { sessionId: string } };
       setTimeout(() => void (async () => {
@@ -112,6 +113,7 @@ describe('limits with a daemon that owns them', () => {
       workspaces: [{ id: 'w1', name: 'ws', path: ws, addedAt: 0 }],
       providers: [{ id: 'p1', kind: 'llamacpp', label: 'Local', baseUrl: 'http://127.0.0.1:9/v1', enabled: true }],
       defaultChatMode: 'yolo',
+      mcpServers: [{ id: 'srv', name: 'srv', enabled: true, command: 'x', args: [] }],
     });
     const s = createSession('w1');
     s.title = 'Named';
@@ -119,8 +121,12 @@ describe('limits with a daemon that owns them', () => {
     s.gitIsolation = false;
     saveSession(s);
     await sendChat({ sessionId: s.id, providerId: 'p1', modelId: 'm', text: 'hi' }, () => {});
-    const spec = calls.find(([c]) => c === 'chat:turn')![1][0] as { facts: { account: unknown } };
+    const spec = calls.find(([c]) => c === 'chat:turn')![1][0] as { facts: Record<string, unknown> };
     expect(spec.facts.account).toEqual({ kind: 'llamacpp', incognito: false });
+    // The daemon runs this turn's MCP servers: it gets the list, and this host syncs nothing.
+    expect(spec.facts.mcpServers).toEqual([{ id: 'srv', name: 'srv', enabled: true, command: 'x', args: [] }]);
+    expect(spec.facts).not.toHaveProperty('mcpTools');
+    expect(syncMcp).not.toHaveBeenCalled();
     expect(existsSync(join(dir, 'usage.jsonl'))).toBe(false);
     expect(existsSync(join(dir, 'replies.jsonl'))).toBe(false);
   });
