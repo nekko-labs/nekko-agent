@@ -13,6 +13,7 @@ coverage/
 *.tsbuildinfo
 release/
 cli-dist/
+npm-nekkod/
 # The CommonJS CLI bundled into the desktop app (apps/cli/scripts/bundle-app.mjs)
 app-dist/
 # runtime artifacts written by training/goal/design runs when this repo is

@@ -134,7 +134,17 @@ async function main() {
   if (env('VERSION') === undefined) {
     try {
       const { createRequire } = await import('node:module');
-      process.env.NEKKO_VERSION = createRequire(import.meta.url)('../package.json').version ?? '0.0.0';
+      const require = createRequire(import.meta.url);
+      // dist/index.js in the repo (../package.json), index.mjs in the npm bundle (./package.json).
+      const ours = (p: string) => {
+        try {
+          const pkg = require(p) as { name?: string; version?: string };
+          return pkg.name === '@nekko-agent/server' || pkg.name === 'nekko-agent-web' ? pkg.version : undefined;
+        } catch {
+          return undefined;
+        }
+      };
+      process.env.NEKKO_VERSION = ours('../package.json') ?? ours('./package.json') ?? '0.0.0';
     } catch {
       /* leave unset → host reports 0.0.0 */
     }
