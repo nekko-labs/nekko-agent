@@ -129,9 +129,35 @@ import { layoutWithLogsDrawer, overlayLogsDrawer, useWallLogs } from '../wallLog
 import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, TerminalIcon } from '../icons.js';
 import { readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
+import { PaneVisibleContext } from '../paneVisibility.js';
 
 /** The kinds the wall's compass offers, in order. */
 const WALL_ADDABLE: PaneKind[] = [...WALL_KINDS];
+
+/** How many Focus heroes keep their composer mounted while parked. */
+export const WARM_COMPOSERS = 4;
+
+/** `ids` with `id` moved to the front, at most `max` long; `ids` itself when nothing moves. */
+export function warmFront(ids: readonly string[], id: string, max = WARM_COMPOSERS): readonly string[] {
+  if (ids[0] === id) return ids;
+  return [id, ...ids.filter((x) => x !== id)].slice(0, max);
+}
+
+export const sameDeps = (a: readonly unknown[], b: readonly unknown[]): boolean =>
+  a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
+
+/**
+ * One wall window, rendered again only when something it shows changes. A
+ * switch changes two windows (the one leaving and the one arriving); without
+ * this every window on the wall, a dozen frames with their toolbars and
+ * icons, re-rendered on every switch. `render` reads the latest values, and
+ * every handler inside goes through the wall's `live` ref, so a window that
+ * skipped a render never calls a stale callback.
+ */
+const WallLeaf = React.memo(
+  function WallLeaf({ render }: { render: () => React.ReactNode; deps: readonly unknown[] }) { return <>{render()}</>; },
+  (a, b) => sameDeps(a.deps, b.deps),
+);
 
 export interface WallGeometry {
   panes: Map<string, { x: number; y: number; width: number; height: number }>;
@@ -412,6 +438,36 @@ export function CommandWall({
     });
   };
 
+  // What the windows' handlers need, read when they run: a window that skipped
+  // a render (WallLeaf) still acts on the current wall.
+  const live = useRef({ state, dragging, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow });
+  live.current = { state, dragging, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow };
+  // The Focus heroes seen last keep their composer while parked, so going back
+  // to one is a visibility flip; the rest park as transcripts.
+  const warm = useRef<readonly string[]>([]);
+  if (state.layout.mode === 'focus' && state.hero) warm.current = warmFront(warm.current, state.hero);
+  // Leaving Focus, the parked windows jump to their places instead of sliding
+  // there from under the hero: a dozen full-size windows animating down at
+  // once rastered every one of them whole (hundreds of MB of tiles, kept).
+  // Only the hero slides, as it did before windows were parked.
+  const lastFocusHero = useRef<string | null>(null);
+  const prevMode = useRef(state.layout.mode);
+  const leavingFocus = prevMode.current === 'focus' && state.layout.mode !== 'focus';
+  const [unparked, setUnparked] = useState<string | null | undefined>(undefined);
+  const snapping = leavingFocus || unparked !== undefined;
+  const snapHero = leavingFocus ? lastFocusHero.current : unparked;
+  if (state.layout.mode === 'focus') lastFocusHero.current = geometry.hero;
+  useLayoutEffect(() => {
+    const left = prevMode.current === 'focus' && state.layout.mode !== 'focus';
+    prevMode.current = state.layout.mode;
+    if (!left) return;
+    setUnparked(lastFocusHero.current);
+    // Two frames: the jump has been styled by then, so turning transitions
+    // back on starts none.
+    let id = requestAnimationFrame(() => { id = requestAnimationFrame(() => setUnparked(undefined)); });
+    return () => { cancelAnimationFrame(id); setUnparked(undefined); };
+  }, [state.layout.mode]);
+
   const titleOf = (pane: WbPane): string => {
     if (pane.kind === 'chat') return sessionById.get(pane.refId)?.title ?? 'Chat';
     if (pane.kind === 'terminal') return terminalById.get(pane.refId)?.title || 'Terminal';
@@ -447,24 +503,50 @@ export function CommandWall({
     const n = pane.kind === 'chat' ? numberOf.get(pane.refId) : undefined;
 
     const rect = shownPanes.get(pane.id);
-    const focusedChat = pane.kind === 'chat' && state.layout.mode === 'focus' && geometry.hero === pane.id;
+    const hero = geometry.hero === pane.id;
+    const focusedChat = pane.kind === 'chat' && state.layout.mode === 'focus' && hero;
     const folded = state.folded[pane.refId] ?? (!focusedChat && (numberOf.size > 4 || (state.layout.mode === 'grid' && (rect?.width ?? 0) < 700)));
-    const companions = pane.kind === 'chat' ? workspaceCompanions(workspaces, pane.refId) : [];
     const showCompanions = focusedChat ? !(state.folded[pane.refId] ?? false) : !folded && state.layout.mode === 'grid';
     const inDeck = geometry.deck.has(pane.id);
-    return (
+    // Focus shows one window. The others are parked under it at its size but
+    // not rendered (content-visibility: hidden), so returning to one reuses
+    // its styles and layout instead of rebuilding them from display: none.
+    const heroRect = !rect && inDeck && state.layout.mode === 'focus' && geometry.hero ? shownPanes.get(geometry.hero) : undefined;
+    const parked = !!heroRect;
+    const box = rect ?? heroRect;
+    // A parked window keeps what the hero has (no deck styling, not inert, the
+    // Focus attribute): flipping any of them on a switch restyles its whole
+    // transcript, and content-visibility: hidden already keeps it out of
+    // sight, focus and the accessibility tree.
+    const deckCard = inDeck && !parked;
+    // A recent hero keeps its composer while parked; the others park as transcripts.
+    const fullSurface = focusedChat || (parked && warm.current.includes(pane.refId));
+    // Parked at the hero's size, so at its density too: nothing in the window changes when it comes back.
+    const density = densityOf(parked && geometry.hero ? geometry.hero : pane.id);
+    const logsOpen = logsPane?.id === pane.id && !logsClosing && !logsOverlay;
+    const subagents = session ? childrenOf.get(session.id) : undefined;
+    const snap = snapping && pane.id !== snapHero;
+    const deps = [
+      pane, title, session, terminal, project?.name, projects.length > 1, status?.label, status?.live, needsYou, agentStatus,
+      flashing, selected, n, box?.x, box?.y, box?.width, box?.height, parked, hero, focusedChat, folded, showCompanions,
+      inDeck, fullSurface, density, logsOpen, snap, workspaces, dragging, state.layout.mode, state.root, subagents, running, pending,
+    ];
+    return <WallLeaf key={pane.id} deps={deps} render={() => {
+      const companions = pane.kind === 'chat' ? workspaceCompanions(workspaces, pane.refId) : [];
+      return (
       <div
-        key={pane.id}
-        className={`command-wall-window ${inDeck ? 'command-wall-deck-window' : ''} ${flashing ? 'pane-flash' : ''}`}
-        style={rect ? { left: rect.x, top: rect.y, width: rect.width, height: rect.height } : { display: 'none' }}
+        className={`command-wall-window ${deckCard ? 'command-wall-deck-window' : ''} ${flashing ? 'pane-flash' : ''}`}
+        style={box ? { left: box.x, top: box.y, width: box.width, height: box.height } : { display: 'none' }}
+        data-wall-parked={parked || undefined}
+        data-wall-snap={snap || undefined}
         data-wall-deck={inDeck || undefined}
-        data-wall-hero={geometry.hero === pane.id || undefined}
+        data-wall-hero={hero || undefined}
         data-wall-pane={pane.id}
         data-grid-cell={`${pane.kind}:${pane.refId}`}
         data-wall-selected={selected || undefined}
         data-wall-working={agentStatus === 'working' || undefined}
         data-wall-needs-you={needsYou || undefined}
-        data-wall-logs-open={(logsPane?.id === pane.id && !logsClosing && !logsOverlay) || undefined}
+        data-wall-logs-open={logsOpen || undefined}
       >
         {/* The composer's beam, quieter: a working agent window says so at a glance. */}
         {agentStatus === 'working' && <span className="composer-beam-ring wall-window-beam" aria-hidden><span className="composer-beam-spin" /></span>}
@@ -479,7 +561,7 @@ export function CommandWall({
             <>
               {/* The project only when there is more than one to tell apart:
                   on a one-project wall it is the same word on every strip. */}
-              {project && projects.length > 1 && !densityOf(pane.id) && <span className="chip hidden shrink-0 text-[10px] sm:inline">{project.name}</span>}
+              {project && projects.length > 1 && !density && <span className="chip hidden shrink-0 text-[10px] sm:inline">{project.name}</span>}
             </>
           }
           isActive={false}
@@ -489,14 +571,15 @@ export function CommandWall({
           closeTitle={openable ? 'Remove from the wall (the chat stays)' : 'Remove from the wall'}
           dragging={dragging}
           canSplit={(dir) => state.layout.mode === 'grid' && !inDeck && canSplit(state.root, pane.id, dir)}
-          onAddWindow={() => setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
-          onSplit={(dir, kind) => { void addWindow(kind, { paneId: pane.id, dir }); }}
-          onClose={() => update((root) => removePane(root, pane.id))}
-          onMinimize={pane.kind === 'chat' ? () => update((root) => removePane(root, pane.id)) : undefined}
-          onFocus={() => { if (pane.kind === 'chat') onSelect(pane.refId); }}
+          onAddWindow={() => live.current.setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
+          onSplit={(dir, kind) => { void live.current.addWindow(kind, { paneId: pane.id, dir }); }}
+          onClose={() => live.current.update((root) => removePane(root, pane.id))}
+          onMinimize={pane.kind === 'chat' ? () => live.current.update((root) => removePane(root, pane.id)) : undefined}
+          onFocus={() => { if (pane.kind === 'chat') live.current.onSelect(pane.refId); }}
           onDragStart={() => setDragging(pane.id)}
           onDragEnd={() => setDragging(null)}
           onDrop={(target) => {
+            const { dragging, state, update } = live.current;
             if (dragging) update((root) => (target === 'swap' || state.layout.mode !== 'grid' ? swapPanes(root, dragging, pane.id) : movePane(root, dragging, pane.id, target)));
             setDragging(null);
           }}
@@ -506,23 +589,23 @@ export function CommandWall({
               absolutely positioned content and could not be seen. */}
           {openable && (
             <PaneActions>
-               {state.layout.mode !== 'focus' && <button className="command-wall-action" title="Switch to Focus mode (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => focusWindow(pane)}><LayoutIcon className="h-3.5 w-3.5" /></button>}
-               {companions.length > 0 && <button className="command-wall-action" title={`${folded ? 'Expand' : 'Fold'} companions (${companions.length})`} aria-label={`${folded ? 'Expand' : 'Fold'} companions for ${title} (${companions.length})`} aria-expanded={showCompanions} onClick={() => setState((s) => ({ ...s, folded: { ...s.folded, [pane.refId]: !folded } }))}>⧉ {companions.length}</button>}
+               {state.layout.mode !== 'focus' && <button className="command-wall-action" title="Switch to Focus mode (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><LayoutIcon className="h-3.5 w-3.5" /></button>}
+               {companions.length > 0 && <button className="command-wall-action" title={`${folded ? 'Expand' : 'Fold'} companions (${companions.length})`} aria-label={`${folded ? 'Expand' : 'Fold'} companions for ${title} (${companions.length})`} aria-expanded={showCompanions} onClick={() => live.current.setState((s) => ({ ...s, folded: { ...s.folded, [pane.refId]: !folded } }))}>⧉ {companions.length}</button>}
               <button
                 className="rounded-sm p-1 text-ink-faint hover:text-ink"
                 title={`Open ${title}`}
                 aria-label={`Open ${title} in the Agent tab`}
-                onClick={() => (pane.kind === 'chat' ? onOpenChat(pane.refId) : onOpenTerminal(pane.refId))}
+                onClick={() => (pane.kind === 'chat' ? live.current.onOpenChat(pane.refId) : live.current.onOpenTerminal(pane.refId))}
               >
                 <ExternalIcon className="h-3 w-3" />
               </button>
             </PaneActions>
           )}
-          {inDeck && <button className="command-wall-card" onClick={() => focusWindow(pane)} aria-label={`Focus ${title}`}>{terminal ? <TerminalExcerpt terminalId={terminal.id} /> : <span>{session?.lastReplyText || 'No reply yet'}</span>}<small>{session ? `${session.modelId || 'Default model'} · ${session.transcriptTokens.toLocaleString()} context tokens` : status?.label}</small></button>}
-          <div className="command-wall-content" inert={!rect || inDeck} aria-hidden={!rect || inDeck || undefined} data-companions-visible={showCompanions && companions.length > 0 || undefined} data-focus-chat={focusedChat || undefined}>
+          {deckCard && <button className="command-wall-card" onClick={() => live.current.focusWindow(pane)} aria-label={`Focus ${title}`}>{terminal ? <TerminalExcerpt terminalId={terminal.id} /> : <span>{session?.lastReplyText || 'No reply yet'}</span>}<small>{session ? `${session.modelId || 'Default model'} · ${session.transcriptTokens.toLocaleString()} context tokens` : status?.label}</small></button>}
+          <div className="command-wall-content" inert={!box || deckCard} aria-hidden={!box || deckCard || undefined} data-companions-visible={showCompanions && companions.length > 0 || undefined} data-focus-chat={(focusedChat || parked) || undefined}>
 
             <div className="command-wall-primary">
-           {pane.kind === 'chat' ? <PaneDensityHint.Provider value={densityOf(pane.id)}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={focusedChat ? 'full' : 'transcript'} status={agentStatus ?? 'idle'} selected={selected} /></PaneDensityHint.Provider>
+           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} status={agentStatus ?? 'idle'} selected={fullSurface ? undefined : selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : null}
            </div>
@@ -538,10 +621,11 @@ export function CommandWall({
               })}
             </div>
           </div>
-          {session && <WorkingSubagents children={childrenOf.get(session.id) ?? []} running={running} pending={pending} onOpen={(id) => { update((root) => allPanes(root).some(p => p.kind === 'chat' && p.refId === id) ? root : addPane(root, wallPane('chat', id), aspect)); onSelect(id); }} />}
+          {session && <WorkingSubagents children={subagents ?? []} running={running} pending={pending} onOpen={(id) => { const { update, aspect, onSelect } = live.current; update((root) => allPanes(root).some(p => p.kind === 'chat' && p.refId === id) ? root : addPane(root, wallPane('chat', id), aspect)); onSelect(id); }} />}
         </PaneFrame>
       </div>
-    );
+      );
+    }} />;
   };
 
   // Each divider retains its original split box as its parent so pointer and

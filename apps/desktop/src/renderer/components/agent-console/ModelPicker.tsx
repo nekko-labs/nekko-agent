@@ -7,6 +7,7 @@ import {
   AUTO_MODEL_ID, AUTO_QUALITIES, AUTO_QUALITY_META, blockLabel, formatModelPriceLabel,
   isLocalProvider, modelPricing, resolveModelAvailability,
 } from '@nekko-agent/shared';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
 import { useAllProviderLimits } from '../../useLimits.js';
 import { ContextMenu, ContextAction } from '../ContextMenu.js';
@@ -62,7 +63,8 @@ export function ModelPicker({
   readOnly?: boolean;
 }) {
   const [menu, setMenu] = useState<{x: number; y: number; pid: string; mid: string} | null>(null);
-  const settings = useStore((s) => s.settings);
+  // Only what the picker shows: the whole settings object is replaced on every save.
+  const settings = useStore(useShallow((s) => s.settings && { favoriteModels: s.settings.favoriteModels, defaultProviderId: s.settings.defaultProviderId, defaultModelId: s.settings.defaultModelId }));
   const refreshSettings = useStore((s) => s.refreshSettings);
   const setOpen = (next: boolean) => onOpenChange(next);
   const [query, setQuery] = useState('');

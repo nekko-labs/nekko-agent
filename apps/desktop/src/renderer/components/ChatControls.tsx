@@ -48,8 +48,7 @@ function useFloatingMenu(open: boolean, anchor: React.RefObject<HTMLElement | nu
 }
 
 export function McpMenu() {
-  const settings = useStore((s) => s.settings);
-  const servers = settings?.mcpServers ?? [];
+  const servers = useStore((s) => s.settings?.mcpServers) ?? [];
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<McpServerStatus[] | null>(null);
   const [checking, setChecking] = useState(false);
@@ -331,7 +330,7 @@ export function ChatControls({
   /** Render just one control, for a host that lays them out itself (the wall composer's bottom bar). */
   only?: 'mode' | 'privacy';
 }) {
-  const settings = useStore((s) => s.settings);
+  const defaultChatMode = useStore((s) => s.settings?.defaultChatMode);
   const [tools, setTools] = useState<Array<{ name: string; description: string }>>([]);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
@@ -386,11 +385,11 @@ export function ChatControls({
     if (executionMode === 'sandbox') { setSetupOpen(true); return; }
     try {
       onChange(await window.nekko.setSessionOptions(session.id, { executionMode, gitIsolation: executionMode === 'worktree' }));
-      await window.nekko.updateSettings({ defaultExecutionMode: executionMode, gitManagement: { ...settings?.gitManagement, mode: executionMode === 'worktree' ? 'worktree' : 'shared' } });
+      await window.nekko.updateSettings({ defaultExecutionMode: executionMode, gitManagement: { ...useStore.getState().settings?.gitManagement, mode: executionMode === 'worktree' ? 'worktree' : 'shared' } });
       await useStore.getState().refreshSettings();
     } catch (e) { setExecutionError(String((e as Error).message ?? e)); }
   };
-  const mode: ChatMode = session.mode ?? settings?.defaultChatMode ?? 'guardrails';
+  const mode: ChatMode = session.mode ?? defaultChatMode ?? 'guardrails';
   const disabled = new Set(session.disabledTools ?? []);
   const availableTools = sandbox ? tools.filter((t) => ['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash'].includes(t.name)) : tools;
   const enabledCount = availableTools.filter((t) => !disabled.has(t.name)).length;

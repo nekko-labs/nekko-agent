@@ -19,6 +19,12 @@
   transition: left 260ms ease, top 260ms ease, width 260ms ease, height 260ms ease;
 }
 .command-wall-window > .panel { min-width: 0; min-height: 0; overflow: hidden; }
+/* A Focus window that is not the hero: kept laid out under it, never drawn. */
+.command-wall-window[data-wall-parked] { content-visibility: hidden; pointer-events: none; transition: none; }
+/* pointer-events inherits: without this, parking a window restyles its whole subtree. */
+:where(.command-wall-window) > :where(*) { pointer-events: auto; }
+/* Leaving Focus, a parked window jumps to its place (CommandWall says why). */
+.command-wall-window[data-wall-snap] { transition: none; }
 .command-wall-content { position: absolute; inset: 0; display: flex; }
 .command-wall-primary { position: relative; flex: 1; min-width: 0; min-height: 0; }
 /* Only companions fold; primary chat/terminal bodies never hide with folded. */
