@@ -1044,7 +1044,10 @@ async fn after_a_daemon_turn_the_title_lands_and_the_queue_drains() {
     // The title call's usage is in the log, written by the daemon, which keeps it.
     assert!(!all.iter().any(|e| e[0] == "turn:usage"), "no usage callback when the daemon keeps the log");
     let log = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap_or_default();
-    assert!(log.lines().filter(|l| l.contains(r#""sessionId":"s_turn_t""#)).any(|l| l.contains(r#""providerId":"p1""#)), "{log}");
+    assert!(
+        log.lines().filter(|l| l.contains(r#""sessionId":"s_turn_t""#)).any(|l| l.contains(r#""providerId":"p1""#)),
+        "{log}"
+    );
     assert!(all.iter().any(|e| e[0] == "turn:notify" && e[1][0]["type"] == "session_meta"));
     let titles =
         model.requests.lock().unwrap().iter().filter(|r| r["messages"].to_string().contains("short title")).count();
