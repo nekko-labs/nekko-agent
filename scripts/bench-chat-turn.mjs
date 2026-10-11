@@ -222,6 +222,33 @@ function turn(sessionId, text, { approve } = {}) {
   });
 }
 
+/**
+ * A follow-up queued while a reply streams: from that reply's `done` to the
+ * follow-up's first text, i.e. how long the queue drain takes.
+ */
+function queuedFollowUp(sessionId) {
+  return new Promise((ok, fail) => {
+    let doneAt;
+    let queued = false;
+    const timer = setTimeout(() => { listeners.delete(on); fail(new Error('queued turn timed out')); }, Number(args.timeout ?? 180_000));
+    const on = (e, at) => {
+      if (e.sessionId !== sessionId || e.relayOnly) return;
+      if (e.type === 'text' && !queued) {
+        queued = true;
+        call('chat:queue', sessionId, 'Write two short sentences about dogs. Do not use any tools.').catch(fail);
+      }
+      if (e.type === 'done' && doneAt === undefined) doneAt = at;
+      else if (e.type === 'text' && doneAt !== undefined) {
+        clearTimeout(timer);
+        listeners.delete(on);
+        ok(at - doneAt);
+      }
+    };
+    listeners.add(on);
+    call('chat:send', { sessionId, providerId: 'local', modelId: model, text: 'Write four short sentences about birds. Do not use any tools.' }).catch(fail);
+  });
+}
+
 const results = { route, load, runs: [] };
 try {
   const warm = await newSession();
@@ -231,9 +258,11 @@ try {
     const sid = await newSession();
     const text = await turn(sid, 'Write four short sentences about cats. Do not use any tools.');
     const tool = await turn(sid, `Use the write_file tool to create note${i}.txt in the project containing exactly: hello ${i}. Then reply "done".`, { approve: true });
-    const r = { firstText: text.firstText, gaps: text.gaps, error: text.error ?? tool.error, approvals: tool.approvals };
+    const drain = await queuedFollowUp(sid);
+    await new Promise((r) => setTimeout(r, 1000)); // let the follow-up finish
+    const r = { firstText: text.firstText, gaps: text.gaps, error: text.error ?? tool.error, approvals: tool.approvals, drain };
     results.runs.push(r);
-    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms, approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}${r.error ? `, error: ${r.error}` : ''}`);
+    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms, approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
   }
   busy = false;
   await Promise.all(loaders);
@@ -245,6 +274,7 @@ try {
     gapMax: Math.max(...all((r) => r.gaps)),
     approvalToResultMedian: pct(all((r) => r.approvals.map((a) => a.toResult)), 0.5),
     approvalAnswerMedian: pct(all((r) => r.approvals.map((a) => a.seenToAnswered)), 0.5),
+    queueDrainMedian: pct(all((r) => [r.drain]), 0.5),
     loadCalls,
     loadCallMedian: pct(loadMs, 0.5),
   };

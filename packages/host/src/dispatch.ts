@@ -60,6 +60,9 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'turn:hook': (args) => host.turnCallback('turn:hook', args),
     'turn:headers': (args) => host.turnCallback('turn:headers', args),
     'turn:approved': (args) => host.turnCallback('turn:approved', args),
+    'turn:prepare': (args) => host.turnCallback('turn:prepare', args),
+    'turn:usage': (args) => host.turnCallback('turn:usage', args),
+    'turn:notify': (args) => host.turnCallback('turn:notify', args),
     // The daemon merges its own pending input with this process's.
     'chat:pending:host': () => host.hostPendingInput(),
     // Internal daemon callback, using the host queue and deletion tombstone.

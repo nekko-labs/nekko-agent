@@ -470,11 +470,49 @@ impl SessionStore {
             true
         })
     }
+
+    /// `applyAutoTitle(id, title)`: land a generated title, unless the user
+    /// named the chat meanwhile (`titleAuto` no longer `true`). Landing it also
+    /// ends generation. `Ok(true)` when it was written.
+    pub fn set_auto_title(&self, id: &str, title: &str) -> Result<bool, String> {
+        let mut landed = false;
+        self.patch(id, |s| {
+            if s.get("titleAuto") != Some(&Value::Bool(true)) {
+                return false;
+            }
+            s.insert("title".into(), json!(title));
+            s.insert("titleAuto".into(), json!(false));
+            landed = true;
+            true
+        })?;
+        Ok(landed)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_generated_title_lands_only_while_the_app_may_name_the_chat() {
+        let dir = std::env::temp_dir().join(format!("nekko-autotitle-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sessions")).unwrap();
+        let store = SessionStore::new(&dir);
+        let id = store.create(None).unwrap()["id"].as_str().unwrap().to_string();
+        assert!(!store.set_auto_title(&id, "Too soon").unwrap(), "no titleAuto yet: the placeholder is not the app's");
+        let mut s = store.get(&id).unwrap();
+        s["title"] = json!("Fix the bug");
+        s["titleAuto"] = json!(true);
+        store.save_turn(&mut s, None).unwrap();
+        assert!(store.set_auto_title(&id, "Login form fix").unwrap());
+        let saved = store.get(&id).unwrap();
+        assert_eq!((saved["title"].as_str(), saved["titleAuto"].as_bool()), (Some("Login form fix"), Some(false)));
+        let keys: Vec<&String> = saved.as_object().unwrap().keys().collect();
+        assert!(keys.iter().position(|k| *k == "title") < keys.iter().position(|k| *k == "titleAuto"));
+        assert!(!store.set_auto_title(&id, "Again").unwrap(), "landing a title ends generation");
+        assert!(!store.set_auto_title("s_missing", "x").unwrap());
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn ids_look_like_the_ts_ones() {

@@ -31,6 +31,9 @@ fn fake_backend() {
         let t1 = token.clone();
         let completions = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
         let recorded = completions.clone();
+        // What `turn:prepare` admits a queued prompt as: a test sets the spec's template.
+        let template = std::sync::Arc::new(std::sync::Mutex::new(None::<Value>));
+        let prepared = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
         // Checkpoint events and loop:end carry the same image-bearing transcript.
         // The fake host must accept it rather than silently rejecting >2 MiB JSON.
         let app = axum::Router::new()
@@ -66,7 +69,22 @@ fn fake_backend() {
                                 axum::http::StatusCode::OK,
                                 axum::Json(json!({ "result": { "toolCallId": body.0["args"][1]["id"], "output": "host tool ran" } })),
                             ),
-                            "turn:event" | "turn:end" | "turn:approved" | "loop:log" => {
+                            "test:prepareTemplate" => {
+                                *template.lock().unwrap() = Some(body.0["args"][0].clone());
+                                (axum::http::StatusCode::OK, axum::Json(Value::Null))
+                            }
+                            "turn:prepare" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                let Some(mut spec) = template.lock().unwrap().clone() else {
+                                    return (axum::http::StatusCode::OK, axum::Json(json!({ "ended": true })));
+                                };
+                                let n = prepared.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                                spec["turnId"] = json!(format!("turn_next_{n}"));
+                                spec["opts"] = body.0["args"][1]["opts"].clone();
+                                spec["queued"] = body.0["args"][1]["queued"].clone();
+                                (axum::http::StatusCode::OK, axum::Json(json!({ "spec": spec })))
+                            }
+                            "turn:event" | "turn:end" | "turn:approved" | "turn:usage" | "turn:notify" | "loop:log" => {
                                 recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
                             }
@@ -652,8 +670,17 @@ async fn scripted_model(script: Vec<String>) -> ScriptedModel {
         route_post(move |axum::Json(request): axum::Json<Value>| {
             let (seen, script) = (seen.clone(), script.clone());
             async move {
+                // Title calls are answered by content, so their timing never shifts the script.
+                let titling = request["messages"].as_array().is_some_and(|m| {
+                    m.iter()
+                        .any(|m| m["content"].as_str().is_some_and(|c| c.starts_with("Give this task a short title")))
+                });
                 seen.lock().unwrap().push(request);
-                let next = script.lock().unwrap().pop_front().unwrap_or_else(|| say_text("(script ended)"));
+                let next = if titling {
+                    say_text("\"Login bug fix.\"")
+                } else {
+                    script.lock().unwrap().pop_front().unwrap_or_else(|| say_text("(script ended)"))
+                };
                 let body = if next == HANG {
                     let first = futures_util::stream::once(async {
                         Ok::<_, std::io::Error>(bytes::Bytes::from_static(b": waiting\n\n"))
@@ -826,8 +853,12 @@ async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
     assert_eq!(pending, json!({}), "nothing may stay pending after the turn");
 
     let saved = saved_session(&rig, "s_turn_q");
-    assert_eq!(saved["title"], "Fix the bug");
-    assert_eq!(saved["titleAuto"], true);
+    // The placeholder, or the generated title once it has landed after the turn.
+    let titled = (saved["title"].clone(), saved["titleAuto"].clone());
+    assert!(
+        titled == (json!("Fix the bug"), json!(true)) || titled == (json!("Login bug fix"), json!(false)),
+        "{titled:?}"
+    );
     assert_eq!(saved["providerId"], "p1");
     assert!(saved.get("activeRun").is_none(), "the run marker is cleared");
     let messages = saved["messages"].as_array().unwrap();
@@ -961,4 +992,59 @@ async fn a_queued_turn_whose_prompt_changed_ends_before_it_starts() {
     assert_eq!(end["early"], true);
     assert_eq!(events[0]["events"][0]["message"], "Queued prompt changed before it could start.");
     assert!(model.requests.lock().unwrap().is_empty(), "no model call for a turn that never started");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn after_a_daemon_turn_the_title_lands_and_the_queue_drains() {
+    let session = json!({
+        "id": "s_turn_t", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("after", session);
+    let model = scripted_model(vec![say_text("first answer"), say_text("second answer")]).await;
+    let spec = turn_spec(&rig, &model, "turn_t", "s_turn_t", json!({}));
+    let (status, _) = post(rig.d.port, "test:prepareTemplate", json!([spec.clone()]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    // A follow-up queued while the turn runs: it is the daemon's to run next.
+    let (status, _) = post(rig.d.port, "chat:queue", json!(["s_turn_t", "and then this"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+
+    let (_, first) = turn_record(rig.d.port, "turn_t").await;
+    assert_eq!(first["next"], "turn_next_1", "{first}");
+    let (_, second) = turn_record(rig.d.port, "turn_next_1").await;
+    assert_eq!(second["stop"], "complete", "{second}");
+    assert!(second.get("next").is_none(), "the queue is empty after one follow-up");
+
+    // The title lands on its own, after the first turn.
+    let saved = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            let saved = saved_session(&rig, "s_turn_t");
+            if saved["titleAuto"] == false {
+                return saved;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("the title never landed");
+    assert_eq!(saved["title"], "Login bug fix");
+    let messages = saved["messages"].as_array().unwrap();
+    let contents: Vec<&str> = messages.iter().filter_map(|m| m["content"].as_str()).collect();
+    assert_eq!(contents, ["Fix the bug", "first answer", "and then this", "second answer"]);
+    assert_eq!(saved["queue"], json!([]), "the queued prompt was claimed by its turn");
+
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let all = all.as_array().unwrap();
+    let prepare = all.iter().find(|e| e[0] == "turn:prepare").expect("the host admitted the follow-up");
+    assert_eq!(prepare[1][0], "turn_t");
+    assert_eq!(prepare[1][1]["queued"], json!({ "index": 0, "item": "and then this" }));
+    assert_eq!(prepare[1][1]["opts"]["text"], "and then this");
+    let usage = all.iter().find(|e| e[0] == "turn:usage").expect("the title call's usage reached the host");
+    assert_eq!(usage[1][0]["sessionId"], "s_turn_t");
+    assert_eq!(usage[1][0]["provider"]["id"], "p1");
+    assert!(all.iter().any(|e| e[0] == "turn:notify" && e[1][0]["type"] == "session_meta"));
+    let titles =
+        model.requests.lock().unwrap().iter().filter(|r| r["messages"].to_string().contains("short title")).count();
+    assert_eq!(titles, 1, "one title, for the first turn only");
 }

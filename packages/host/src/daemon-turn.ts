@@ -1,5 +1,7 @@
 import { randomBytes } from 'crypto';
-import type { AgentEvent, AskAnswer, PendingInput, QueuedPrompt, SendOptions, Session, ToolCall, ToolResult, TurnStats } from '@nekko-agent/shared';
+import type { AgentEvent, AskAnswer, PendingInput, ProviderConfig, QueuedPrompt, SendOptions, Session, ToolCall, ToolResult, TurnStats } from '@nekko-agent/shared';
+import { isLocalProvider } from '@nekko-agent/shared';
+import { recordUsage } from './usage.js';
 import { daemonCall } from './engine/daemon.js';
 import { daemonOwns, LIVENESS_INTERVAL_MS, LIVENESS_STRIKES } from './daemon-loop.js';
 
@@ -27,7 +29,12 @@ import { daemonOwns, LIVENESS_INTERVAL_MS, LIVENESS_STRIKES } from './daemon-loo
  * - every event reaches this side too (`turn:event`, deltas batched), marked
  *   `relayOnly` (the UI already has it from the daemon), for the phone relay,
  *   the caller's own listeners, and usage and reply accounting;
- * - `turn:end` hands back how the reply ended, and chat.ts runs what follows.
+ * - `turn:end` hands back how the reply ended; chat.ts runs the hooks and the
+ *   linked spec. The daemon generates the chat's title itself (its usage
+ *   comes back through `turn:usage`, its `session_meta` through
+ *   `turn:notify`) and runs the next queued prompt: this host admits it
+ *   (`turn:prepare`) and the daemon drives it as the next turn of the chain
+ *   (`next` in the summary).
  */
 
 type Call = <T>(channel: string, ...args: unknown[]) => Promise<T>;
@@ -43,6 +50,10 @@ export interface TurnSummary {
   early?: boolean;
   /** The user stopped it. */
   aborted?: boolean;
+  /** The daemon started the chat's next queued prompt as this turn (from `turn:prepare`). */
+  next?: string;
+  /** The next queued prompt has to run in this process: its turn is this host's to start. */
+  drain?: 'host';
   /** Set here, never by the daemon: the turn was lost (the daemon gone or no longer knowing it). */
   lost?: string;
 }
@@ -57,10 +68,21 @@ export interface HostTurn {
   executeTool: (call: ToolCall) => Promise<{ result: ToolResult; patch?: Partial<Session> }>;
   hook: (phase: 'pre' | 'post', call: ToolCall, result?: ToolResult) => Promise<unknown>;
   headers: (pairs: Array<[string, string]>) => void;
+  /** What still follows a turn here once it has ended: the agent terminal, TurnEnd hooks, the linked spec. */
+  afterEach: (summary: TurnSummary) => void;
+}
+
+/** What the turns of one `sendChat` share: its listener, its Stop, its browser permission. */
+export interface TurnChain {
+  send: (event: AgentEvent) => void;
+  allowBrowserControl: boolean;
+  abort: AbortController;
 }
 
 interface Registered extends HostTurn {
+  chain: TurnChain;
   end: (summary: TurnSummary) => void;
+  ended: Promise<TurnSummary>;
   /** Anything arrived since the last liveness check. */
   heard: boolean;
 }
@@ -68,6 +90,30 @@ interface Registered extends HostTurn {
 const turns = new Map<string, Registered>();
 /** Approvals for tools run here, parked in the daemon, by tool call id. */
 const approvals = new Map<string, (approved: boolean) => void>();
+
+/** Register a turn the daemon is about to drive, so its callbacks find it. */
+export function registerTurn(turnId: string, turn: HostTurn, chain: TurnChain): void {
+  let end!: (summary: TurnSummary) => void;
+  const ended = new Promise<TurnSummary>((resolve) => { end = resolve; });
+  turns.set(turnId, { ...turn, chain, end, ended, heard: false });
+}
+
+/**
+ * Admits the chat's next queued prompt as a daemon turn (`turn:prepare`):
+ * the spec for the daemon, or `ended` (the admission failed and said so), or
+ * `inProcess` (this host must run it). Set by chat.ts.
+ */
+type Preparer = (chain: TurnChain, payload: { opts: SendOptions; queued: { index: number; item: QueuedPrompt } }) => Promise<{ spec: TurnSpec } | { ended: true } | { inProcess: true }>;
+let preparer: Preparer | undefined;
+export function setTurnPreparer(fn: Preparer): void {
+  preparer = fn;
+}
+
+/** Where an event about a finished turn goes (the generated title's `session_meta`): this host's bus. Set by host.ts. */
+let notify: ((event: AgentEvent) => void) | undefined;
+export function setTurnNotifier(fn: (event: AgentEvent) => void): void {
+  notify = fn;
+}
 
 /** Whether the daemon drives this session's running turn. */
 export function daemonTurnFor(sessionId: string): boolean {
@@ -105,10 +151,23 @@ function approved(callId: string, ok: boolean): void {
   resolve?.(ok === true);
 }
 
+/** `turn:usage`: a side call the daemon made after a turn (the title), for the usage log. */
+function sideUsage(payload: { provider?: { id?: string; kind?: string; auth?: string }; modelId?: string; sessionId?: string; usage?: Array<Record<string, number | undefined>> }): void {
+  const provider = payload?.provider ?? {};
+  for (const item of payload?.usage ?? []) recordUsage({
+    ts: Date.now(), providerId: provider.id ?? '', modelId: payload.modelId ?? '', sessionId: payload.sessionId ?? '',
+    inputTokens: item.inputTokens ?? 0, outputTokens: item.outputTokens ?? 0,
+    cacheReadTokens: item.cacheReadTokens, cacheWriteTokens: item.cacheWriteTokens,
+    auth: provider.auth as ProviderConfig['auth'], local: isLocalProvider((provider.kind ?? '') as ProviderConfig['kind']),
+  });
+}
+
 /** The daemon calling back about a turn it drives (dispatch.ts `turn:*`). */
 export async function turnCallback(channel: string, args: unknown[]): Promise<unknown> {
   const [turnId] = args as [string];
   if (channel === 'turn:approved') return approved(String(args[0]), args[1] === true);
+  if (channel === 'turn:usage') return sideUsage(args[0] as never);
+  if (channel === 'turn:notify') return notify?.({ ...(args[0] as AgentEvent), relayOnly: true } as unknown as AgentEvent);
   const turn = turns.get(String(turnId));
   switch (channel) {
     case 'turn:event': {
@@ -135,6 +194,11 @@ export async function turnCallback(channel: string, args: unknown[]): Promise<un
     case 'turn:headers':
       turn?.headers((args[1] ?? []) as Array<[string, string]>);
       return;
+    case 'turn:prepare': {
+      // The previous turn of the chain is still registered: its turn:end comes after this.
+      if (!turn || !preparer || turn.chain.abort.signal.aborted) return { ended: true };
+      return preparer(turn.chain, args[1] as never);
+    }
     default:
       throw new Error(`unknown turn callback ${channel}`);
   }
@@ -149,24 +213,25 @@ export interface TurnSpec {
 }
 
 /**
- * Run one turn on the daemon and resolve with how it ended, or with null when
- * the daemon would not take it (then the caller runs it in process). Stop
- * asks the daemon to stop; a daemon that goes quiet and no longer knows the
- * turn (or cannot be reached) ends it here as interrupted.
+ * Run a turn on the daemon, and the queued prompts it goes on to, and
+ * resolve with how the last one ended, or with null when the daemon would not
+ * take the first (then the caller runs it in process). Each turn's own
+ * after-work runs as it ends. Stop asks the daemon to stop whichever turn is
+ * running; a daemon that goes quiet and no longer knows the turn (or cannot
+ * be reached) ends it here as interrupted.
  */
 export async function runTurnViaDaemon(
   call: Call,
   spec: TurnSpec,
   turn: HostTurn,
-  signal: AbortSignal,
+  chain: TurnChain,
   livenessIntervalMs = LIVENESS_INTERVAL_MS,
 ): Promise<TurnSummary | null> {
-  const turnId = spec.turnId;
-  let finish!: (summary: TurnSummary) => void;
-  const ended = new Promise<TurnSummary>((resolve) => { finish = resolve; });
-  const registered: Registered = { ...turn, heard: false, end: (summary) => finish(summary) };
-  turns.set(turnId, registered);
-  const onAbort = () => void call('turn:abort', turnId).catch(() => finish({ aborted: true, lost: 'Stopped' }));
+  let current = spec.turnId;
+  registerTurn(current, turn, chain);
+  const signal = chain.abort.signal;
+  const stopped = (summary: TurnSummary) => turns.get(current)?.end(summary);
+  const onAbort = () => void call('turn:abort', current).catch(() => stopped({ aborted: true, lost: 'Stopped' }));
   try {
     try {
       await call(CHAT_TURN, spec);
@@ -175,28 +240,43 @@ export async function runTurnViaDaemon(
     }
     signal.addEventListener('abort', onAbort, { once: true });
     if (signal.aborted) onAbort();
-    let strikes = 0;
-    let canProbe: boolean | undefined;
     for (;;) {
-      const summary = await Promise.race([ended, new Promise<null>((resolve) => setTimeout(() => resolve(null), livenessIntervalMs))]);
-      if (summary) return summary;
-      if (registered.heard) { registered.heard = false; continue; }
-      canProbe ??= await daemonOwns(call, 'turn:alive');
-      if (!canProbe) continue;
-      try {
-        const alive = await call<boolean>('turn:alive', turnId);
-        strikes = 0;
-        if (alive === false) {
-          // turn:end may have just landed; it wins.
-          return await Promise.race([ended, new Promise<TurnSummary>((resolve) => setTimeout(() => resolve({ lost: 'The engine stopped driving this reply. The steps it finished are saved.' }), 50))]);
-        }
-      } catch {
-        if (++strikes >= LIVENESS_STRIKES) return { lost: 'The engine could not be reached. The steps it finished are saved.' };
+      const registered = turns.get(current)!;
+      const summary = await waitFor(call, current, registered, livenessIntervalMs);
+      turns.delete(current);
+      if (!summary.early) registered.afterEach(summary);
+      if (summary.next && turns.has(summary.next) && !summary.lost) {
+        current = summary.next;
+        continue;
       }
+      return summary;
     }
   } finally {
     signal.removeEventListener('abort', onAbort);
-    turns.delete(turnId);
+    turns.delete(current);
+  }
+}
+
+/** One turn's end, or its loss when the daemon goes quiet and no longer knows it. */
+async function waitFor(call: Call, turnId: string, registered: Registered, livenessIntervalMs: number): Promise<TurnSummary> {
+  let strikes = 0;
+  let canProbe: boolean | undefined;
+  for (;;) {
+    const summary = await Promise.race([registered.ended, new Promise<null>((resolve) => setTimeout(() => resolve(null), livenessIntervalMs))]);
+    if (summary) return summary;
+    if (registered.heard) { registered.heard = false; continue; }
+    canProbe ??= await daemonOwns(call, 'turn:alive');
+    if (!canProbe) continue;
+    try {
+      const alive = await call<boolean>('turn:alive', turnId);
+      strikes = 0;
+      if (alive === false) {
+        // turn:end may have just landed; it wins.
+        return await Promise.race([registered.ended, new Promise<TurnSummary>((resolve) => setTimeout(() => resolve({ lost: 'The engine stopped driving this reply. The steps it finished are saved.' }), 50))]);
+      }
+    } catch {
+      if (++strikes >= LIVENESS_STRIKES) return { lost: 'The engine could not be reached. The steps it finished are saved.' };
+    }
   }
 }
 

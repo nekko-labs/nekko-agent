@@ -53,7 +53,8 @@ import { buildSpec } from './spec.js';
 import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool } from './mcp.js';
 import { daemonCall } from './engine/daemon.js';
 import { daemonOwns, daemonRunsLoops, runAgentViaDaemon } from './daemon-loop.js';
-import { answerInDaemon, approvalViaDaemon, approveInDaemon, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, runTurnViaDaemon, steerDaemonTurn } from './daemon-turn.js';
+import { answerInDaemon, approvalViaDaemon, approveInDaemon, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
+import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
 import { applyTurnInput, cleanTitle, sendOptionsForQueuedItem, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
 import { killSessionProcesses } from './processes.js';
 import { hasToolHooks, postToolHooks, preToolHooks, turnEndHooks } from './hooks.js';
@@ -902,22 +903,33 @@ async function withToolHooks(sessionId: string, cwd: string | undefined, call: T
 }
 
 /** Run a chat turn end to end. */
-export async function sendChat(opts: SendOptions, send: Sender, allowBrowserControl = false, queued?: { index: number; item: QueuedPrompt }): Promise<void> {
+/** A turn the host has admitted, with what it gathered for it. */
+type Admitted = NonNullable<Awaited<ReturnType<typeof admitTurn>>>;
+
+/**
+ * Admit a turn: the provider and chat exist, a sandbox is set up, a worktree
+ * chat has its checkout (and its setup command has run), an offline chat has
+ * a loopback provider, the endpoint is valid; then sync MCP, ask the decision
+ * runner, list the tools and fetch the connector and index snippets. Null,
+ * having said why, when the turn cannot run. `chainAbort` is the Stop of a
+ * daemon-driven chain of queued turns.
+ */
+async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: boolean, chainAbort?: AbortController) {
   const settings = getSettings();
   const provider = settings.providers.find((p) => p.id === opts.providerId);
   if (!provider?.enabled) {
     send({ type: 'error', sessionId: opts.sessionId, message: 'Provider not configured or disabled.' });
-    return;
+    return null;
   }
   const session = getSession(opts.sessionId);
   if (!session) {
     send({ type: 'error', sessionId: opts.sessionId, message: 'Session not found.' });
-    return;
+    return null;
   }
 
   const sandbox = getExecutionMode(session) === 'sandbox';
   if (sandbox && (!session.sandbox || session.chatType === 'image' || opts.skill)) {
-    send({ type: 'error', sessionId: session.id, message: 'Sandbox requires explicit setup and supports text chat without host skills only.' }); return;
+    send({ type: 'error', sessionId: session.id, message: 'Sandbox requires explicit setup and supports text chat without host skills only.' }); return null;
   }
   if (!sandbox && getExecutionMode(session) === 'worktree' && !session.incognito && !session.offline) {
     let created: ReturnType<typeof prepareChatWorktrees>;
@@ -926,7 +938,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
       created = prepareChatWorktrees(session, settings);
     } catch (error) {
       send({ type: 'error', sessionId: opts.sessionId, message: (error as Error).message });
-      return;
+      return null;
     }
     const announce = () => { saveSession(session); send({ type: 'session_meta', sessionId: session.id }); };
     if (JSON.stringify(session.gitWorktrees) !== before) announce();
@@ -958,13 +970,13 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
   const incognito = !!session.incognito;
   if (offline && !offlineProviderAllowed(provider)) {
     send({ type: 'error', sessionId: opts.sessionId, message: 'Offline chat requires a local-compatible provider with a loopback HTTP(S) endpoint.' });
-    return;
+    return null;
   }
   if (!providerEndpoint(provider)) {
     send({ type: 'error', sessionId: opts.sessionId, message: 'Provider requires a valid HTTP(S) endpoint.' });
-    return;
+    return null;
   }
-  const abort = new AbortController();
+  const abort = chainAbort ?? new AbortController();
   abortControllers.set(opts.sessionId, abort);
   // Offline disables tool calls entirely; otherwise combine builtins + connected
   // MCP tools, then drop any the user turned off for this chat.
@@ -978,6 +990,19 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
   }
   let tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl, mcpTools: sandbox || offline ? [] : mcpToolSpecs(), decide: !!decideWith });
   if (sandbox) tools = tools.filter(t => SANDBOX_TOOLS.has(t.name));
+  // Connector fetches and the workspace index stay in this process; the rest
+  // of the context is read from disk by whichever route builds the prompt.
+  // Offline mode skips internet connectors.
+  const connectorSnippets = sandbox || offline ? [] : await collectConnectorSnippets(opts.text);
+  const indexSnippets = sandbox ? [] : session.gitWorktrees && Object.keys(session.gitWorktrees).length ? [] : collectIndexSnippets(getSessionWorkspaceIds(session), opts.text);
+
+  return { settings, provider, session, sandbox, workspaces, toolSettings, mode, offline, incognito, abort, allowSpawn, decideWith, tools, connectorSnippets, indexSnippets };
+}
+
+export async function sendChat(opts: SendOptions, send: Sender, allowBrowserControl = false, queued?: { index: number; item: QueuedPrompt }): Promise<void> {
+  const admitted = await admitTurn(opts, send, allowBrowserControl);
+  if (!admitted) return;
+  const { settings, provider, session, sandbox, workspaces, toolSettings, mode, offline, incognito, abort, allowSpawn, decideWith, tools, connectorSnippets, indexSnippets } = admitted;
   // Persist only when not incognito. Preserve any prompts queued mid-run (they
   // land on disk via queuePrompt) so a normal save doesn't clobber them.
   const persist = () => {
@@ -985,21 +1010,12 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
     saveTurnSession(session);
   };
 
-  // Connector fetches and the workspace index stay in this process; the rest
-  // of the context is read from disk by whichever route builds the prompt.
-  // Offline mode skips internet connectors.
-  const connectorSnippets = sandbox || offline ? [] : await collectConnectorSnippets(opts.text);
-  const indexSnippets = sandbox ? [] : session.gitWorktrees && Object.keys(session.gitWorktrees).length ? [] : collectIndexSnippets(getSessionWorkspaceIds(session), opts.text);
-
   // Under the engine daemon the whole turn is the daemon's (daemon-turn.ts).
   // NEKKO_AGENT_LOOP=ts keeps every turn in this process (a kill switch), and
   // a sandbox turn always stays here with the container router.
   const daemon = process.env.NEKKO_AGENT_LOOP === 'ts' ? undefined : daemonCall();
   if (!sandbox && daemon && (await daemonRunsTurns(daemon))) {
-    const ran = await sendChatViaDaemon(daemon, {
-      opts, send, allowBrowserControl, queued, session, settings, provider, workspaces, toolSettings,
-      mode, abort, tools, decideWith, allowSpawn, connectorSnippets, indexSnippets,
-    });
+    const ran = await sendChatViaDaemon(daemon, { ...admitted, opts, send, allowBrowserControl, queued });
     if (ran) return;
   }
 
@@ -1324,9 +1340,9 @@ interface AfterTurn {
   aborted: boolean;
 }
 
-/** What follows a turn on either route: hooks, the spec, the title, steering left over, the queue. */
-async function afterTurn(t: AfterTurn): Promise<void> {
-  const { opts, send, sandbox, incognito, offline } = t;
+/** What follows any turn here: TurnEnd hooks and the linked spec. */
+function afterTurnHooks(t: Omit<AfterTurn, 'send' | 'allowBrowserControl' | 'aborted'>): void {
+  const { opts, sandbox, incognito, offline } = t;
   // TurnEnd hooks: how the reply ended, for whoever wants to know. Nothing waits.
   if (!sandbox) turnEndHooks(getSettings(), {
     sessionId: opts.sessionId,
@@ -1339,6 +1355,12 @@ async function afterTurn(t: AfterTurn): Promise<void> {
   if (!sandbox && t.session.specLinked && !incognito && !offline) {
     buildSpec(opts.sessionId).catch(() => {});
   }
+}
+
+/** What follows an in-process turn: hooks, the spec, the title, steering left over, the queue. */
+async function afterTurn(t: AfterTurn): Promise<void> {
+  const { opts, send, sandbox, incognito, offline } = t;
+  afterTurnHooks(t);
 
   // With the first turn done, ask the model for a real title. titleAuto guards
   // a name the user typed; incognito/offline chats skip the extra call.
@@ -1353,41 +1375,31 @@ async function afterTurn(t: AfterTurn): Promise<void> {
   }
   steering.delete(opts.sessionId);
 
-  // Run the next queued prompt, if any (and we weren't aborted). Each turn
-  // dequeues exactly one item, so a chat works through its queue in order.
-  if (!t.aborted) {
-    const fresh = getSession(opts.sessionId);
-    const next = fresh?.queue?.[0];
-    if (fresh && !fresh.archivedAt && next) {
-      await sendChat(sendOptionsForQueuedItem({ sessionId: opts.sessionId, providerId: opts.providerId, modelId: opts.modelId, text: '' }, next), send, t.allowBrowserControl, { index: 0, item: next });
-    }
+  if (!t.aborted) await drainQueue(opts, send, t.allowBrowserControl);
+}
+
+/** Run the next queued prompt, if any. Each turn dequeues exactly one item, so a chat works through its queue in order. */
+async function drainQueue(opts: SendOptions, send: Sender, allowBrowserControl: boolean): Promise<void> {
+  const fresh = getSession(opts.sessionId);
+  const next = fresh?.queue?.[0];
+  if (fresh && !fresh.archivedAt && next) {
+    await sendChat(sendOptionsForQueuedItem({ sessionId: opts.sessionId, providerId: opts.providerId, modelId: opts.modelId, text: '' }, next), send, allowBrowserControl, { index: 0, item: next });
   }
 }
 
-interface DaemonTurnInput {
+interface DaemonTurnInput extends Admitted {
   opts: SendOptions;
   send: Sender;
   allowBrowserControl: boolean;
   queued?: { index: number; item: QueuedPrompt };
-  session: Session;
-  settings: ReturnType<typeof getSettings>;
-  provider: ProviderConfig;
-  workspaces: Array<{ id: string; name: string; path: string }>;
-  toolSettings: ReturnType<typeof getSettings>;
-  mode: NonNullable<Session['mode']>;
-  abort: AbortController;
-  tools: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
-  decideWith: import('@nekko-agent/shared').DecisionProvider | null;
-  allowSpawn: boolean;
-  connectorSnippets: Array<{ label: string; origin: string; body: string }>;
-  indexSnippets: Array<{ relPath: string; path: string; body: string }>;
 }
 
 /**
- * The turn on the engine daemon (daemon-turn.ts). Resolves false, with
- * nothing done, when the daemon will not take it; the caller then runs it here.
+ * The spec the daemon runs a turn from, and this host's side of that turn
+ * (daemon-turn.ts): the tools still run here, hooks, accounting, and what
+ * follows the turn here once it has ended.
  */
-async function sendChatViaDaemon(daemon: NonNullable<ReturnType<typeof daemonCall>>, t: DaemonTurnInput): Promise<boolean> {
+async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; hostTurn: HostTurn }> {
   const { opts, send, provider, settings, abort, session } = t;
   const incognito = !!session.incognito;
   const offline = !!session.offline;
@@ -1413,8 +1425,7 @@ async function sendChatViaDaemon(daemon: NonNullable<ReturnType<typeof daemonCal
     signal: abort.signal, send, persist: () => {}, requestApproval,
     askUser: async () => ASK_CANCELLED,
   };
-  const hooks = hasToolHooks(settings);
-  const spec = {
+  const spec: TurnSpec = {
     turnId,
     opts,
     ...(t.queued ? { queued: t.queued } : {}),
@@ -1434,7 +1445,7 @@ async function sendChatViaDaemon(daemon: NonNullable<ReturnType<typeof daemonCal
       workspaces: t.workspaces.map((w) => ({ id: w.id, name: w.name, path: w.path })),
       mcpTools: mcpToolSpecs(),
       decide: !!t.decideWith,
-      hooks,
+      hooks: hasToolHooks(settings),
       connectorSnippets: t.connectorSnippets,
       indexSnippets: t.indexSnippets,
       platform: process.platform,
@@ -1448,7 +1459,7 @@ async function sendChatViaDaemon(daemon: NonNullable<ReturnType<typeof daemonCal
       headers: provider.kind === 'anthropic' && provider.auth === 'subscription' && !!provider.tokenKey,
     },
   };
-  const summary = await runTurnViaDaemon(daemon, spec, {
+  const hostTurn: HostTurn = {
     sessionId: opts.sessionId,
     send,
     account: (events, extra) => {
@@ -1472,24 +1483,54 @@ async function sendChatViaDaemon(daemon: NonNullable<ReturnType<typeof daemonCal
     headers: (pairs) => {
       if (provider.tokenKey) LimitsService.recordFromHeaders(provider.tokenKey, provider.kind, pairs);
     },
-  }, abort.signal);
+    // The title and the queue are the daemon's; the rest of what follows a turn is here.
+    afterEach: (summary) => {
+      finishAgentTerminal(opts.sessionId);
+      // The daemon reports its own failures as events; only a turn lost here
+      // (the daemon gone, or no longer knowing it) still needs one.
+      if (summary.lost) send({ type: 'error', sessionId: opts.sessionId, message: summary.lost });
+      const aborted = abort.signal.aborted || summary.aborted === true;
+      afterTurnHooks({
+        opts, sandbox: false, incognito, offline, workspaces: t.workspaces,
+        session: getSession(opts.sessionId) ?? session, resolvedProvider,
+        stop: aborted ? 'stopped' : summary.lost ? 'error' : summary.stop ?? 'complete',
+        error: summary.lost,
+      });
+    },
+  };
+  return { spec, hostTurn };
+}
+
+/**
+ * The turn on the engine daemon, and the queued prompts it goes on to
+ * (daemon-turn.ts). Resolves false, with nothing done, when the daemon will
+ * not take it; the caller then runs it here.
+ */
+async function sendChatViaDaemon(daemon: NonNullable<ReturnType<typeof daemonCall>>, t: DaemonTurnInput): Promise<boolean> {
+  const { opts, send, abort } = t;
+  const { spec, hostTurn } = await buildDaemonTurn(t);
+  const chain: TurnChain = { send, allowBrowserControl: t.allowBrowserControl, abort };
+  const summary = await runTurnViaDaemon(daemon, spec, hostTurn, chain);
   if (!summary) return false;
   if (abortControllers.get(opts.sessionId) === abort) abortControllers.delete(opts.sessionId);
   releasePending(opts.sessionId);
-  // A turn that ended before its reply started (stopped first, a queued prompt
-  // that changed, no provider) has nothing after it, as on the in-process route.
-  if (summary.early) return true;
-  finishAgentTerminal(opts.sessionId);
-  // The daemon reports its own failures as events; only a turn lost here (the
-  // daemon gone, or no longer knowing it) still needs one.
-  if (summary.lost) send({ type: 'error', sessionId: opts.sessionId, message: summary.lost });
-  const aborted = abort.signal.aborted || summary.aborted === true;
-  await afterTurn({
-    opts, send, allowBrowserControl: t.allowBrowserControl, sandbox: false, incognito, offline, workspaces: t.workspaces,
-    session: getSession(opts.sessionId) ?? session, resolvedProvider,
-    stop: aborted ? 'stopped' : summary.lost ? 'error' : summary.stop ?? 'complete',
-    error: summary.lost,
-    aborted,
-  });
+  // A queued prompt the daemon could not take (its chat became a sandbox chat, say) runs here.
+  if (summary.drain === 'host' && !abort.signal.aborted && !summary.aborted) await drainQueue(opts, send, t.allowBrowserControl);
   return true;
 }
+
+/**
+ * `turn:prepare`: the daemon, done with a turn, found a queued prompt. Admit
+ * it as the next turn of the same chain (same listener, same Stop), and hand
+ * the daemon its spec; or say it ended (the admission failed and said why),
+ * or that it must run here.
+ */
+async function prepareQueuedTurn(chain: TurnChain, payload: { opts: SendOptions; queued: { index: number; item: QueuedPrompt } }): Promise<{ spec: TurnSpec } | { ended: true } | { inProcess: true }> {
+  const admitted = await admitTurn(payload.opts, chain.send, chain.allowBrowserControl, chain.abort);
+  if (!admitted) return { ended: true };
+  if (admitted.sandbox || process.env.NEKKO_AGENT_LOOP === 'ts') return { inProcess: true };
+  const { spec, hostTurn } = await buildDaemonTurn({ ...admitted, opts: payload.opts, send: chain.send, allowBrowserControl: chain.allowBrowserControl, queued: payload.queued });
+  registerTurn(spec.turnId, hostTurn, chain);
+  return { spec };
+}
+setTurnPreparer(prepareQueuedTurn);
