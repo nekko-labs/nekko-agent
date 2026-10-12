@@ -23,6 +23,8 @@ tokenizers = { version = "0.22.2", default-features = false, features = ["fancy-
 # (see ort-sys's dist table). A provider that fails to start at run time falls back to CPU.
 [target.'cfg(windows)'.dependencies]
 ort = { workspace = true, features = ["directml"] }
+# Picking and loading the DirectML.dll nekkod delay-loads (src/directml.rs).
+windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_LibraryLoader", "Win32_System_SystemInformation"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 ort = { workspace = true, features = ["coreml"] }

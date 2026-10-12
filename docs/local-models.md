@@ -7,16 +7,26 @@ before you wait through the load. This is what the Models page shows you and why
 
 ## The Nekko engine
 
-The engine is llama.cpp, managed by Nekko Agent. You press one button, a few hundred
-megabytes come down from llama.cpp's own releases, and the app can serve models. Nothing
+The engine is llama.cpp, managed by Nekko Agent. You press one button, a build comes down
+from llama.cpp's own releases (about 30 MB for the default Vulkan or CPU build), and the
+app can serve models. Nothing
 is downloaded before that press.
 
 **Which build.** Picked from what the GPU probe actually found, not from the platform:
-CUDA only where `nvidia-smi` answers, Vulkan for a GPU we cannot identify, Metal on Apple
-Silicon, CPU where there is no evidence of anything else. A slow engine that runs beats a
-fast one that fails to start. Every other build for your machine stays in the list if you
-disagree. If you already have a `llama-server`, point at it instead: Nekko Agent will run
-it and never update or remove it.
+Vulkan for any GPU, NVIDIA included, Metal on Apple Silicon, CPU where there is no
+evidence of anything else. A slow engine that runs beats a fast one that fails to start.
+CUDA is offered, not defaulted: on Windows it is about 550 MB (the build plus NVIDIA's
+CUDA runtime) against Vulkan's 30 MB, so an NVIDIA machine starts on Vulkan and the
+Model server card offers **Switch to CUDA** once `nvidia-smi` answers. Every other build
+for your machine stays in the list if you disagree. If you already have a `llama-server`,
+point at it instead: Nekko Agent will run it and never update or remove it.
+
+**No Visual Studio, ever.** The Windows builds of llama.cpp and stable-diffusion.cpp, and
+Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`,
+`VCRUNTIME140.dll`), not Visual Studio. The installer carries those DLLs beside the daemon
+(about 1 MB), and on a PC without the Visual C++ Redistributable they are copied in beside
+the engine before it starts. If an engine still dies for a missing DLL, the error says so
+and links Microsoft's 25 MB redistributable.
 
 **Where models come from.** A short curated list answers "what should I run"; search
 covers everything else, straight against Hugging Face with no account. Each model expands

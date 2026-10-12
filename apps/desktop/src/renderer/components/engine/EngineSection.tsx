@@ -99,14 +99,16 @@ export function EngineSection({
 
   // One click puts a broken engine right: the same build, downloaded again into
   // a clean folder. The server is stopped by the host just before the swap.
-  const repair = async () => {
-    if (!install.problem) return;
+  // The CUDA upgrade takes the same path: a different build, downloaded into
+  // its own folder, swapped in when it lands.
+  const reinstall = async (buildId: string | undefined, started: string) => {
+    if (!buildId) return;
     setRepairing(true);
     const res = await window.nekko
-      .engineInstall(install.problem.repairBuildId)
+      .engineInstall(buildId)
       .catch((e: Error) => ({ ok: false, message: e.message }));
     setRepairing(false);
-    pushToast(res.ok ? 'info' : 'error', res.ok ? 'Repairing the engine. Models will use your graphics card once it finishes.' : res.message);
+    pushToast(res.ok ? 'info' : 'error', res.ok ? started : res.message);
     if (res.ok) setTab('downloads');
     await refresh();
   };
@@ -208,10 +210,23 @@ export function EngineSection({
                 <p className="min-w-0 flex-1 text-[12.5px]">{install.problem.message}</p>
                 <button
                   className="btn btn-primary py-1.5 text-[12px]"
-                  onClick={() => void repair()}
+                  onClick={() => void reinstall(install.problem?.repairBuildId, 'Repairing the engine. Models will use your graphics card once it finishes.')}
                   disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
                 >
                   {repairing ? 'Starting…' : 'Repair engine'}
+                </button>
+              </div>
+            )}
+
+            {install.upgrade && !install.problem && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
+                <p className="min-w-0 flex-1 text-[12.5px] text-ink-soft">{install.upgrade.message}</p>
+                <button
+                  className="btn py-1.5 text-[12px]"
+                  onClick={() => void reinstall(install.upgrade?.buildId, 'Downloading the CUDA engine. Nekko switches to it once it finishes.')}
+                  disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
+                >
+                  {repairing ? 'Starting…' : 'Switch to CUDA'}
                 </button>
               </div>
             )}

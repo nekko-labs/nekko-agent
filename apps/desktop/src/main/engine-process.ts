@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
 /**
@@ -12,12 +12,24 @@ import { createInterface } from 'node:readline';
  * supervises the TS backend. If the daemon binary is missing (a development
  * checkout that never ran `cargo build`, or an antivirus that quarantined
  * it), the TS backend is started directly instead, so the app still works
- * with the TS terminals; `mode` says which one is running.
+ * with the TS terminals; `mode` says which one is running. The same fallback
+ * covers a daemon Windows cannot load (STATUS_DLL_NOT_FOUND, see
+ * `isMissingDllExit`), so a broken install degrades rather than spinning.
  *
  * The Electron main process never runs the engine itself any more: a busy
  * agent loop, a pty flood or a synchronous file write there used to stall
  * window management and every IPC reply the UI waited on.
  */
+
+/**
+ * STATUS_DLL_NOT_FOUND as Node reports a Windows exit code: the loader could
+ * not find a DLL the executable imports, before any of its code ran. For
+ * nekkod that has meant the Visual C++ runtime, which the installer now ships
+ * beside it; restarting cannot fix it, so the daemon is set aside instead.
+ */
+export function isMissingDllExit(code: number | null): boolean {
+  return code === 0xc0000135 || code === -1073741515;
+}
 
 export interface EngineEndpoint {
   /** `http://127.0.0.1:<port>` */
@@ -81,6 +93,8 @@ export class EngineProcess {
 
   get running(): boolean { return this.requested && !this.stopping; }
   private backoff = 500;
+  /** Why the daemon cannot run on this machine, once it has failed in a way a restart will not fix. */
+  private daemonBroken: string | null = null;
   private readonly token = randomBytes(24).toString('base64url');
 
   constructor(private readonly opts: EngineOptions) {}
@@ -103,9 +117,13 @@ export class EngineProcess {
     this.requested = true;
     this.stopping = false;
     clearTimeout(this.restartTimer);
-    const daemon = findDaemon(this.opts);
+    const found = findDaemon(this.opts);
+    const daemon = this.daemonBroken ? null : found;
     const backendEnv: Record<string, string> = {
       ELECTRON_RUN_AS_NODE: '1',
+      // Where the app-local Visual C++ runtime is, for llama.cpp builds (the
+      // daemon sets this itself for the backend it supervises).
+      ...(found ? { NEKKOD_RUNTIME_DIR: dirname(found) } : {}),
       NEKKO_BACKEND_DATA_DIR: this.opts.dataDir,
       NEKKO_BACKEND_APP: JSON.stringify(this.opts.app),
       NEKKO_BACKEND_ORIGINS: JSON.stringify(this.opts.origins),
@@ -133,7 +151,9 @@ export class EngineProcess {
     } else {
       mode = 'backend';
       marker = BACKEND_READY;
-      console.warn('nekkod not found; running the TS backend directly (TS terminals, no daemon)');
+      console.warn(this.daemonBroken
+        ? `nekkod cannot run here (${this.daemonBroken}); running the TS backend directly`
+        : 'nekkod not found; running the TS backend directly (TS terminals, no daemon)');
       child = spawn(backend.exe, backend.args, {
         env: { ...process.env, ...backendEnv, NEKKO_BACKEND_TOKEN: this.token },
         stdio: ['pipe', 'pipe', 'inherit'],
@@ -168,9 +188,13 @@ export class EngineProcess {
       this.child = null;
       if (this.stopping) return;
       if (Date.now() - startedAt > 30_000) this.backoff = 500;
+      if (mode === 'daemon' && isMissingDllExit(code)) {
+        this.daemonBroken = 'Windows could not load a DLL it needs, usually the Microsoft Visual C++ Runtime';
+        this.backoff = 0;
+      }
       console.error(`engine: ${mode} exited (${signal ?? code}); restarting in ${this.backoff}ms`);
       this.restartTimer = setTimeout(() => { if (this.requested && !this.stopping) this.start(); }, this.backoff);
-      this.backoff = Math.min(this.backoff * 2, MAX_BACKOFF_MS);
+      this.backoff = Math.min(Math.max(this.backoff * 2, 500), MAX_BACKOFF_MS);
     });
   }
 

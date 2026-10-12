@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GpuStats } from '@nekko-agent/shared';
-import { buildsFor, hasBinaries, matchAsset, matchCompanion, recommendedBuild } from './builds.js';
+import { buildsFor, cudaUpgrade, hasBinaries, matchAsset, matchCompanion, recommendedBuild } from './builds.js';
 
 /**
  * Picking the wrong build is the most expensive mistake this feature can make:
@@ -29,8 +29,11 @@ const apple: GpuStats = {
 const noGpu: GpuStats = { source: 'none', devices: [], totalMB: 0, usedMB: 0, freeMB: 0 };
 
 describe('build selection', () => {
-  it('picks CUDA on Windows with an NVIDIA reading', () => {
-    expect(recommendedBuild('win32', 'x64', nvidia)?.backend).toBe('cuda');
+  it('picks Vulkan, not CUDA, on Windows with an NVIDIA reading', () => {
+    // CUDA's build and runtime are about 550 MB against Vulkan's 30 MB; CUDA is
+    // the opt-in upgrade once Vulkan runs (cudaUpgrade).
+    expect(recommendedBuild('win32', 'x64', nvidia)?.backend).toBe('vulkan');
+    expect(recommendedBuild('linux', 'x64', nvidia)?.backend).toBe('vulkan');
   });
 
   it('does not pick CUDA on Windows without one', () => {
@@ -57,7 +60,22 @@ describe('build selection', () => {
     const backends = buildsFor('win32', 'x64', nvidia).map((b) => b.backend);
     expect(backends).toContain('vulkan');
     expect(backends).toContain('cpu');
-    expect(backends[0]).toBe('cuda');
+    expect(backends.slice(0, 2)).toEqual(['vulkan', 'cuda']);
+  });
+});
+
+describe('the CUDA upgrade', () => {
+  it('is offered to an NVIDIA machine running a managed non-CUDA build', () => {
+    expect(cudaUpgrade('win32', 'x64', nvidia, 'vulkan')?.id).toBe('win-x64-cuda');
+    expect(cudaUpgrade('linux', 'x64', nvidia, 'cpu')?.id).toBe('linux-x64-cuda');
+  });
+
+  it('is not offered without an NVIDIA reading, on CUDA already, or with nothing installed', () => {
+    expect(cudaUpgrade('win32', 'x64', noGpu, 'vulkan')).toBeUndefined();
+    expect(cudaUpgrade('win32', 'x64', { ...apple, source: 'none', unified: false }, 'vulkan')).toBeUndefined();
+    expect(cudaUpgrade('win32', 'x64', nvidia, 'cuda')).toBeUndefined();
+    expect(cudaUpgrade('win32', 'x64', nvidia, undefined)).toBeUndefined();
+    expect(cudaUpgrade('darwin', 'arm64', nvidia, 'cpu')).toBeUndefined();
   });
 });
 

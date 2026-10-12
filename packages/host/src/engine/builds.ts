@@ -30,7 +30,7 @@ const BUILDS: EngineBuild[] = [
     arch: 'x64',
     backend: 'cuda',
     assetPattern: 'bin-win-cuda',
-    requires: 'An NVIDIA GPU with a current driver.',
+    requires: 'An NVIDIA GPU with a current driver. The fastest on NVIDIA, but a much bigger download: it brings the CUDA libraries along.',
     // The CUDA archive ships without the runtime libraries; they are a separate
     // asset on the same release, and the build will not start without them.
     companionPattern: 'cudart-llama',
@@ -100,7 +100,7 @@ const BUILDS: EngineBuild[] = [
     arch: 'x64',
     backend: 'cuda',
     assetPattern: 'bin-ubuntu-cuda',
-    requires: 'An NVIDIA GPU with a current driver.',
+    requires: 'An NVIDIA GPU with a current driver. The fastest on NVIDIA, but a much bigger download: it brings the CUDA libraries along.',
     companionPattern: 'cudart-llama',
   },
   {
@@ -159,11 +159,14 @@ const ARCHIVE_RE = /\.(zip|tar\.gz|tgz)$/i;
 /**
  * The builds that could run here, best first.
  *
- * "Best" is the accelerator we have evidence for. An NVIDIA reading from
- * `nvidia-smi` is evidence for CUDA; Apple Silicon is evidence for Metal; a GPU
- * we cannot identify is evidence for Vulkan but not for CUDA. With no evidence at
- * all we lead with CPU, because a slow engine that runs beats a fast one that
- * fails to start.
+ * "Best" is the accelerator we have evidence for, weighed against what it
+ * costs to get. Apple Silicon is evidence for Metal; any GPU, NVIDIA included,
+ * is evidence for Vulkan. An NVIDIA reading from `nvidia-smi` is evidence for
+ * CUDA too, but CUDA's build plus the CUDA runtime it needs is about 550 MB on
+ * Windows against Vulkan's 30 MB, for a model server that runs on either, so
+ * Vulkan leads and CUDA is offered afterwards as an upgrade (`cudaUpgrade`).
+ * With no evidence at all we lead with CPU, because a slow engine that runs
+ * beats a fast one that fails to start.
  */
 export function buildsFor(
   platform: EnginePlatform,
@@ -178,7 +181,7 @@ export function buildsFor(
 
 function preferenceOrder(platform: EnginePlatform, gpu: GpuStats | null, adapters: GpuAdapter[]): EngineBackend[] {
   if (platform === 'darwin') return ['metal', 'cpu', 'vulkan', 'cuda', 'hip'];
-  if (gpu?.source === 'nvidia-smi' && gpu.devices.length > 0) return ['cuda', 'vulkan', 'cpu', 'hip', 'metal'];
+  if (gpu?.source === 'nvidia-smi' && gpu.devices.length > 0) return ['vulkan', 'cuda', 'cpu', 'hip', 'metal'];
   // A GPU we know nothing about: Vulkan is the portable accelerated path, and
   // claiming CUDA without an NVIDIA reading would be a guess.
   if (gpu && gpu.devices.length > 0) return ['vulkan', 'cpu', 'cuda', 'hip', 'metal'];
@@ -186,6 +189,22 @@ function preferenceOrder(platform: EnginePlatform, gpu: GpuStats | null, adapter
   // is the evidence; without it these machines were offered the CPU build.
   if (adapters.some((a) => a.vendor !== 'other')) return ['vulkan', 'cpu', 'cuda', 'hip', 'metal'];
   return ['cpu', 'vulkan', 'cuda', 'hip', 'metal'];
+}
+
+/**
+ * The CUDA build, when this machine has an NVIDIA GPU (by `nvidia-smi`) and is
+ * running a managed build of something else that a GPU could beat: the opt-in
+ * step up from the Vulkan default.
+ */
+export function cudaUpgrade(
+  platform: EnginePlatform,
+  arch: string,
+  gpu: GpuStats | null,
+  installed: EngineBackend | undefined,
+): EngineBuild | undefined {
+  if (!installed || installed === 'cuda' || installed === 'metal') return undefined;
+  if (gpu?.source !== 'nvidia-smi' || gpu.devices.length === 0) return undefined;
+  return BUILDS.find((b) => b.platform === platform && b.arch === arch && b.backend === 'cuda');
 }
 
 /** The build we would install if the user just says yes. */

@@ -5,9 +5,10 @@ import { createReadStream } from 'fs';
 import { chmod, mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises';
 import { dirname, join, relative, isAbsolute } from 'path';
 import type { EngineBuild, EngineInstall, EnginePlatform, GpuStats } from '@nekko-agent/shared';
-import { buildsFor, hasBinaries, matchAsset, matchCompanion, recommendedBuild } from './builds.js';
+import { buildsFor, cudaUpgrade, hasBinaries, matchAsset, matchCompanion, recommendedBuild } from './builds.js';
 import { diffusionBuilds, matchDiffusionAsset, matchDiffusionCompanion } from './diffusion.js';
 import { RUNTIME_RELEASES } from './runtime-releases.js';
+import { ensureVcRuntime } from './vc-runtime.js';
 import type { EngineInstallPreview } from '@nekko-agent/shared';
 import type { Downloads } from './download.js';
 
@@ -103,6 +104,7 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
     const record = await readRecord();
     if (record && (await isExecutable(record.binPath))) {
       const problem = await missingGpuRuntime(record);
+      const cuda = runtime === 'llama' && !problem ? cudaUpgrade(platform, arch, gpu, record.backend) : undefined;
       return {
         binPath: record.binPath,
         source: 'managed',
@@ -110,6 +112,14 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
         version: record.version,
         installedAt: record.installedAt,
         ...(problem ? { problem } : {}),
+        ...(cuda
+          ? {
+              upgrade: {
+                buildId: cuda.id,
+                message: 'Your NVIDIA graphics card can run models faster on the CUDA engine. It is a download of several hundred MB, so it is not installed by default.',
+              },
+            }
+          : {}),
         available,
         recommended,
       };
@@ -204,6 +214,9 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
           const bin = await findServerBinary(dir, 0, serverNames);
           if (!bin) return `The archive did not contain ${serverNames[0]}.`;
           if (platform !== 'win32') await chmod(bin, 0o755).catch(() => {});
+          // The Windows builds import the Visual C++ runtime; a PC without it
+          // gets the app's own copy beside the binary (vc-runtime.ts).
+          await ensureVcRuntime(dirname(bin), { platform }).catch(() => []);
           signal.throwIfAborted();
           await writeRecord({
             binPath: bin,

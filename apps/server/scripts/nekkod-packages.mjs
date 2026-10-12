@@ -6,7 +6,7 @@
 //   node apps/server/scripts/nekkod-packages.mjs --bins <dir> --out <dir> [--version x.y.z]
 //
 // <bins> holds one folder per platform, named as in PLATFORMS below
-// (e.g. `linux-x64/nekkod`, `win32-x64/nekkod.exe` plus `DirectML.dll`), which is
+// (e.g. `linux-x64/nekkod`, `win32-x64/nekkod.exe` plus `msvcp140.dll`), which is
 // how the release workflow lays out the build matrix's artifacts. A platform with
 // no folder is skipped with a warning unless --require-all is passed.
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -28,8 +28,12 @@ export const PLATFORMS = {
 
 export const packageName = (key) => `@nekko-agent/nekkod-${key}`;
 
-/** Shared libraries ONNX Runtime loads from beside the executable (see apps/desktop/scripts/stage-daemon.mjs). */
-const SIDECAR = /^(DirectML\.dll|(lib)?onnxruntime[^/\\]*\.(dll|so(\.\d+)*|dylib))$/;
+/**
+ * Shared libraries loaded from beside the executable: ONNX Runtime's, and on Windows the
+ * Visual C++ runtime deployed app-local (apps/desktop/scripts/stage-daemon.mjs,
+ * scripts/vc-runtime.mjs). Not DirectML.dll: nekkod delay-loads that one on demand.
+ */
+const SIDECAR = /^((lib)?onnxruntime[^/\\]*\.(dll|so(\.\d+)*|dylib)|(msvcp140|vcruntime140)(_\w+)?\.dll)$/i;
 
 export function writePackages({ bins, out, version, requireAll = false, log = console.log }) {
   mkdirSync(out, { recursive: true });

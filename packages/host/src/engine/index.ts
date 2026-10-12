@@ -136,6 +136,7 @@ export function createEngine(deps: EngineDeps) {
     typesafeKey: () => deps.typesafeKey?.(),
     folders: () => deps.decisionFolders?.() ?? [],
     saveFolders: (dirs) => deps.saveDecisionFolders?.(dirs),
+    directmlDir: () => join(engineDir(), 'directml'),
   });
 
   // A backend restarted under a daemon that kept serving picks its models up.

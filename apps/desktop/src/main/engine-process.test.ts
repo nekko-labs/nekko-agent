@@ -2,7 +2,16 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { findDaemon } from './engine-process.js';
+import { findDaemon, isMissingDllExit } from './engine-process.js';
+
+describe('a daemon Windows cannot load', () => {
+  it('is recognised by STATUS_DLL_NOT_FOUND, however Node signs it', () => {
+    expect(isMissingDllExit(3221225781)).toBe(true);
+    expect(isMissingDllExit(-1073741515)).toBe(true);
+    expect(isMissingDllExit(1)).toBe(false);
+    expect(isMissingDllExit(null)).toBe(false);
+  });
+});
 
 const app = (over: Partial<{ isPackaged: boolean; appPath: string; resourcesPath: string }> = {}) => ({
   app: { isPackaged: false, appPath: '/nowhere/apps/desktop', userData: '/u', version: '0', ...over },

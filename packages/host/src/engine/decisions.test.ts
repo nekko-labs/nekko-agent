@@ -96,4 +96,34 @@ describe('decision models', () => {
     const keyless = createDecisions({ modelsDir: () => models, downloads: fakeDownloads().downloads, daemon: () => undefined, typesafeKey: () => undefined, fetch });
     await expect(keyless.run('typesafe', request)).rejects.toThrow(/TypeSafe API key/);
   });
+it('fetches DirectML only on a Windows whose own copy is too old, and still loads on the CPU when that fails', async () => {
+    const models = await scratch();
+    const dir = join(models, 'decision', 'laya-en');
+    await mkdir(dir, { recursive: true });
+    for (const f of ['model_fp16.onnx', 'tokenizer.json', 'rl_agent_config.json']) await writeFile(join(dir, f), '{}');
+    let available = true;
+    const decideLoad = vi.fn(async (req: Record<string, unknown>) => ({ precision: req.precision, ep: 'cpu' }));
+    const daemon = { decideStatus: vi.fn(async () => ({ loaded: false, directml: { available } })), decideLoad } as unknown as EngineDaemon;
+    const fetch = vi.fn(async () => { throw new Error('offline'); }) as unknown as typeof globalThis.fetch;
+    const make = (platform: NodeJS.Platform) =>
+      createDecisions({ modelsDir: () => models, downloads: fakeDownloads().downloads, daemon: () => daemon, typesafeKey: () => undefined, fetch, platform, directmlDir: () => join(models, 'dml') });
+
+    // Windows 11: its own DirectML will do, so nothing is fetched or passed.
+    expect((await make('win32').load('laya-en')).ok).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(decideLoad.mock.calls[0][0]).not.toHaveProperty('directml');
+
+    // Windows 10: too old, and the fetch fails; the model loads anyway, and the message says why it is on the CPU.
+    available = false;
+    const res = await make('win32').load('laya-en');
+    expect(res.ok).toBe(true);
+    expect(fetch).toHaveBeenCalled();
+    expect(res.message).toMatch(/runs on the CPU until DirectML can be fetched/);
+    expect(decideLoad.mock.calls[1][0]).not.toHaveProperty('directml');
+
+    // Not Windows: never asked.
+    fetch.mockClear();
+    await make('linux').load('laya-en');
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });
