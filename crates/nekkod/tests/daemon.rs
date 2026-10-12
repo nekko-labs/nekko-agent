@@ -1463,7 +1463,11 @@ async fn a_daemon_turn_fetches_pages_and_runs_background_processes_itself() {
     assert!(!calls.iter().any(|e| e[0] == "turn:tool"), "neither tool went through the host: {all}");
     // The output reached the agent terminal through the host's log.
     let logged = || {
-        calls.iter().filter(|e| e[0] == "loop:log").map(|e| e[1][2].as_str().unwrap_or("").to_string()).collect::<String>()
+        calls
+            .iter()
+            .filter(|e| e[0] == "loop:log")
+            .map(|e| e[1][2].as_str().unwrap_or("").to_string())
+            .collect::<String>()
     };
     assert!(logged().contains("[echoer, background]"), "{}", logged());
     server.abort();
