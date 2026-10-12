@@ -300,6 +300,14 @@ pub async fn index_snippets(ctx: &Ctx, workspace_ids: &[String], text: &str) -> 
     blocking(move || index.snippets(&found, &query)).await.unwrap_or_default()
 }
 
+/// `fetchPrInfo(url)`: one PR's live state, read now (gh, else the REST API
+/// with the GitHub token), `null` when it cannot be read. For agent watches.
+#[allow(dead_code, reason = "agent watches moving into the daemon call it")]
+pub async fn pr_info(ctx: &Ctx, url: &str) -> Value {
+    let token = github_token(&settings(&ctx.backend).await);
+    ctx.workspace.prs.fetch_info(url, token.as_deref()).await
+}
+
 /// `generateDesign(workspaceId, input)`: the checks and the prompt here, the
 /// default provider (signed in) from the host, the model call on the Rust
 /// providers, then the prototype file and the concept card.

@@ -40,7 +40,7 @@
 //
 // `--workspace N` times N rounds of the file explorer and workspace index
 // calls (`workspace:index`, `workspace:search`, `workspace:files`, `dir:list`,
-// `file:read`) on the 400-file project and the 2,500-file load project, under
+// `file:read`, `workspace:gitStatus` forced, `design:get`) on the 400-file project and the 2,500-file load project, under
 // the same load. The daemon serves them when it owns them; the load then runs
 // the same search in the host through `bench:hostLoad`, so it still keeps the
 // host's event loop busy.
@@ -381,6 +381,8 @@ try {
       await time('dir:list 400', () => call('dir:list', workspace));
       await time('file:read', () => call('file:read', join(workspace, 'file0.ts')));
       await time('indexStatus', () => call('workspace:indexStatus', 'w1'));
+      await time('gitStatus (forced)', () => call('workspace:gitStatus', 'w1', true));
+      await time('design:get', () => call('design:get', 'w1'));
     }
     results.workspace = Object.fromEntries(Object.entries(timings).map(([k, ms]) => [k, { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms) }]));
     console.log(`workspace calls (daemon owns workspace:search=${info.owned.includes('workspace:search')}):`);
