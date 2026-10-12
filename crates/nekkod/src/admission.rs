@@ -194,7 +194,7 @@ fn effort_temperature(e: nekko_agent::EffortLevel) -> f64 {
     }
 }
 
-fn platform() -> &'static str {
+pub fn platform() -> &'static str {
     if cfg!(windows) {
         "win32"
     } else if cfg!(target_os = "macos") {

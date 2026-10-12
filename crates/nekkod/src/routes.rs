@@ -250,6 +250,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf)).unwrap_or_default();
             crate::decisions::route(ctx, &data_dir, c, &args).await
         }
+        c if crate::context::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
+            crate::context::route(ctx, c, args).await
+        }
         "chat:send" if ctx.admission.is_some() => {
             crate::admission::send(ctx, ctx.admission.as_ref().expect("checked"), args).await
         }
@@ -346,6 +349,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.admission.is_some() {
         all.extend_from_slice(crate::admission::CHANNELS);
+    }
+    if ctx.settings.is_some() && ctx.sessions.is_some() {
+        all.extend_from_slice(crate::context::CHANNELS);
     }
     all
 }

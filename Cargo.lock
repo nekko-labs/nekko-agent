@@ -1448,6 +1448,7 @@ dependencies = [
  "nekko-turn",
  "nekko-usage",
  "nekko-web",
+ "regress",
  "reqwest",
  "serde",
  "serde_json",

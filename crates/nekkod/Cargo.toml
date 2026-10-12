@@ -33,6 +33,7 @@ nekko-tools = { path = "../nekko-tools" }
 nekko-turn = { path = "../nekko-turn" }
 nekko-usage = { path = "../nekko-usage" }
 nekko-web = { path = "../nekko-web" }
+regress.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -8,6 +8,7 @@ mod accounts;
 mod admission;
 mod backend;
 mod config;
+mod context;
 mod decide;
 mod decisions;
 mod engine;

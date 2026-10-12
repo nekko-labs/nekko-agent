@@ -354,6 +354,14 @@ impl SessionStore {
         })
     }
 
+    /// `setContextPrefs`: the chat's include and pin choices, as given.
+    pub fn set_context_prefs(&self, id: &str, prefs: &Value) -> Result<Option<Value>, String> {
+        self.patch(id, |s| {
+            s.insert("contextPrefs".into(), prefs.clone());
+            true
+        })
+    }
+
     /// `setSessionWorkspace`.
     pub fn set_workspace(&self, id: &str, workspace_id: Option<&str>) -> Result<Option<Value>, String> {
         self.patch(id, |s| {
