@@ -15,6 +15,9 @@
 //   node scripts/bench-chat-turn.mjs --model-url http://127.0.0.1:18431/v1 --model gemma \
 //     --route daemon|ts [--runs 3] [--load 8] [--json out.json]
 //
+// `--stats N` times N calls each of `gpu:stats`, `system:stats` and
+// `machine:readiness` under the same load, 1.1 s apart (past the GPU cache).
+//
 // `--usage N` then checks the turns' usage and reply lines landed in the data
 // dir, seeds the usage log to 20,000 records and times N `usage:summary` calls
 // under the same load (the daemon serves it when it owns accounting; pass
@@ -28,6 +31,15 @@
 // `--spawn` adds a turn per run that delegates to a sub-agent (`spawn_agent`,
 // approved), timed from `tool:approve` to the parent's `tool_result`, which
 // spans the whole child turn.
+//
+// `--tools` adds two turns per run on tools that used to call back into the
+// TS host: `fetch_url` of a loopback page and `start_process` (both asked
+// for, since the chat is in ask mode), timed from `tool:approve` to their
+// `tool_result`.
+//
+// `--hooks` adds a PreToolUse and a PostToolUse hook on write_file (each
+// `echo`), so the write_file approval's timing includes running them (in the
+// daemon when it runs hooks, through the TS host otherwise).
 //
 // `--route ts` sets NEKKO_AGENT_LOOP=ts on the backend: every turn runs in
 // the TS host, the escape hatch. Nothing touches the user's data directory or
@@ -52,6 +64,18 @@ const load = Number(args.load ?? 0);
 let modelUrl = args['model-url'] ?? 'http://127.0.0.1:18431/v1';
 const model = args.model ?? 'gemma';
 
+// `--tools`: a loopback page for `fetch_url`.
+let pageUrl;
+if (args.tools) {
+  const page = createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(`<html><head><title>Bench page</title></head><body>${'<p>Cats sleep a lot. <a href="/more">More</a></p>'.repeat(200)}</body></html>`);
+  });
+  await new Promise((ok) => page.listen(0, '127.0.0.1', ok));
+  pageUrl = `http://127.0.0.1:${page.address().port}/cats`;
+  process.on('exit', () => page.close());
+}
+
 // `--fake`: a deterministic model on a loopback port instead of a real one,
 // so the numbers are the engine's and not the model's: 40 text tokens 15 ms
 // apart, and a write_file call when asked for one.
@@ -70,7 +94,11 @@ if (args.fake) {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const send = (chunk) => res.write(`data: ${JSON.stringify(chunk)}\n\n`);
       const text = typeof lastUser?.content === 'string' ? lastUser.content : JSON.stringify(lastUser?.content ?? '');
-      if (!afterTool && text.includes('spawn_agent')) {
+      if (!afterTool && text.includes('fetch_url')) {
+        send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'fetch_url', arguments: JSON.stringify({ url: pageUrl }) } }] }, finish_reason: 'tool_calls' }] });
+      } else if (!afterTool && text.includes('start_process')) {
+        send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'start_process', arguments: JSON.stringify({ command: 'echo bench', name: 'bench' }) } }] }, finish_reason: 'tool_calls' }] });
+      } else if (!afterTool && text.includes('spawn_agent')) {
         send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'spawn_agent', arguments: JSON.stringify({ task: 'Write four short sentences about dogs.', title: 'Dogs' }) } }] }, finish_reason: 'tool_calls' }] });
       } else if (!afterTool && text.includes('mcp__bench__lookup')) {
         send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'mcp__bench__lookup', arguments: JSON.stringify({ key: 'cats' }) } }] }, finish_reason: 'tool_calls' }] });
@@ -187,6 +215,10 @@ await call('settings:update', {
   workspaces: [{ id: 'w1', name: 'project', path: workspace, addedAt: Date.now() }, { id: 'w2', name: 'load', path: loadProject, addedAt: Date.now() }],
   providers: [{ id: 'local', kind: 'llamacpp', label: 'Local', baseUrl: modelUrl, enabled: true }],
   defaultChatMode: 'ask',
+  ...(args.hooks ? { hooks: [
+    { id: 'bench-pre', event: 'PreToolUse', name: 'pre', matcher: 'write_file', command: 'echo ok' },
+    { id: 'bench-post', event: 'PostToolUse', name: 'post', matcher: 'write_file', command: 'echo checked' },
+  ] } : {}),
   ...(mcpUrl ? { mcpServers: [{ id: 'bench', name: 'bench', enabled: true, command: '', args: [], url: mcpUrl }] } : {}),
 });
 if (load > 0) {
@@ -301,11 +333,14 @@ try {
     const drain = await queuedFollowUp(sid);
     await new Promise((r) => setTimeout(r, 1000)); // let the follow-up finish
     const spawnTurn = args.spawn ? await turn(sid, 'Use the spawn_agent tool to delegate: write four short sentences about dogs. Then reply with what it said.', { approve: true }) : null;
+    const fetchTurn = args.tools ? await turn(sid, 'Use the fetch_url tool on the bench page, then summarize it.', { approve: true }) : null;
+    const processTurn = args.tools ? await turn(sid, 'Use the start_process tool to start the bench process, then reply "started".', { approve: true }) : null;
     const mcpTurn = mcpUrl ? await turn(sid, 'Call the mcp__bench__lookup tool with the key "cats", then say what it returned.', { approve: true }) : null;
-    const r = { firstText: text.firstText, gaps: text.gaps, error: text.error ?? tool.error ?? mcpTurn?.error, approvals: tool.approvals, drain, mcp: mcpTurn?.approvals ?? [], spawn: spawnTurn?.approvals ?? [] };
+    const r = { firstText: text.firstText, gaps: text.gaps, error: text.error ?? tool.error ?? mcpTurn?.error, approvals: tool.approvals, drain, mcp: mcpTurn?.approvals ?? [], spawn: spawnTurn?.approvals ?? [], fetch: fetchTurn?.approvals ?? [], process: processTurn?.approvals ?? [] };
+    r.error = r.error ?? fetchTurn?.error ?? processTurn?.error;
     if (spawnTurn?.error) r.error = r.error ?? spawnTurn.error;
     results.runs.push(r);
-    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms,${args.spawn ? ` spawn ${r.spawn.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''}${mcpUrl ? ` mcp ${r.mcp.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''} approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
+    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms,${args.spawn ? ` spawn ${r.spawn.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''}${args.tools ? ` fetch_url ${r.fetch.map((a) => `${a.toResult?.toFixed(1)} ms`).join(', ') || 'none'}, start_process ${r.process.map((a) => `${a.toResult?.toFixed(1)} ms`).join(', ') || 'none'},` : ''}${mcpUrl ? ` mcp ${r.mcp.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''} approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
   }
   if (args.usage) {
     const lines = (f) => (existsSync(join(data, f)) ? readFileSync(join(data, f), 'utf8').trim().split('\n').filter(Boolean) : []);
@@ -324,6 +359,21 @@ try {
     results.usage = { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms), before };
     console.log(`usage:summary over 20k records: median ${results.usage.median.toFixed(1)} ms, p95 ${results.usage.p95.toFixed(1)} ms, max ${results.usage.max.toFixed(1)} ms`);
   }
+  if (args.stats) {
+    // The monitor meters' polls and the readiness advisor, under the same load.
+    results.stats = {};
+    for (const channel of ['gpu:stats', 'system:stats', 'machine:readiness']) {
+      const ms = [];
+      for (let i = 0; i < Number(args.stats); i++) {
+        const t0 = performance.now();
+        await call(channel);
+        ms.push(performance.now() - t0);
+        await new Promise((r) => setTimeout(r, 1100)); // past the GPU cache, as a polling meter is
+      }
+      results.stats[channel] = { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms), daemon: info.owned.includes(channel) };
+      console.log(`${channel}: median ${results.stats[channel].median.toFixed(1)} ms, p95 ${results.stats[channel].p95.toFixed(1)} ms, max ${results.stats[channel].max.toFixed(1)} ms (daemon owns it: ${results.stats[channel].daemon})`);
+    }
+  }
   busy = false;
   await Promise.all(loaders);
   const all = (f) => results.runs.flatMap(f).filter((x) => typeof x === 'number');
@@ -335,6 +385,8 @@ try {
     approvalToResultMedian: pct(all((r) => r.approvals.map((a) => a.toResult)), 0.5),
     approvalAnswerMedian: pct(all((r) => r.approvals.map((a) => a.seenToAnswered)), 0.5),
     mcpToResultMedian: pct(all((r) => (r.mcp ?? []).map((a) => a.toResult)), 0.5),
+    fetchToResultMedian: pct(all((r) => (r.fetch ?? []).map((a) => a.toResult)), 0.5),
+    processToResultMedian: pct(all((r) => (r.process ?? []).map((a) => a.toResult)), 0.5),
     spawnToResultMedian: pct(all((r) => (r.spawn ?? []).map((a) => a.toResult)), 0.5),
     queueDrainMedian: pct(all((r) => [r.drain]), 0.5),
     loadCalls,

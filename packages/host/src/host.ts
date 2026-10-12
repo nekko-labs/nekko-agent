@@ -93,7 +93,7 @@ import { AUTO_MODEL_ID, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, isLoca
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
-import { daemonCall } from './engine/daemon.js';
+import { daemonCall, daemonOwns } from './engine/daemon.js';
 import { registerManagedCacheEndpoint } from './prompt-caching.js';
 import {
   createProvider,
@@ -108,7 +108,7 @@ import {
 import { setDataDir, dataDir } from './paths.js';
 import { createVoiceService } from './engine/voice.js';
 import { join } from 'node:path';
-import { getSettings, saveSettings, resetSettings } from './store.js';
+import { getSettings, saveSettings, resetSettings, settingsChanged, useSettingsDaemon } from './store.js';
 import * as sessions from './sessions.js';
 import * as memory from './memory.js';
 import { usageSummary, clearUsage } from './usage.js';
@@ -278,6 +278,8 @@ export interface Host {
   /** A daemon-driven chat turn's callbacks (daemon-turn.ts `turn:*`). */
   turnCallback(channel: string, args: unknown[]): Promise<unknown>;
   changesNotify(sessionId: string): void;
+  /** The daemon saved a settings change made elsewhere (the UI's update or reset): follow it. */
+  settingsChanged(next: AppSettings, patch: Partial<AppSettings> | null): void;
   /** The daemon changed a limits snapshot (`limits:notify`): the phone relay hears it. */
   limitsNotify(payload: { tokenKey: string; limits: SubscriptionLimits }): void;
   /**
@@ -590,7 +592,16 @@ function chatOwner(worktreeRoot: string): { id: string; title: string; running: 
 
 export function createHost(opts: { dataDir: string; allowBrowserControl?: boolean }): Host {
   setDataDir(opts.dataDir);
+  // Under nekkod, settings.json is the daemon's to write (crates/nekkod/src/settings.rs).
+  const call = daemonOwns('settings') ? daemonCall() : undefined;
+  useSettingsDaemon(call ? (channel, args) => call<AppSettings>(channel, ...args) : null);
   const voice = createVoiceService(join(opts.dataDir, 'voice'), getSettings);
+  /** Stop the speech server, wherever it runs: the daemon serves `voice:*` when it knows the data dir. */
+  const stopVoice = () => {
+    voice.stop();
+    const call = daemonCall();
+    if (call && daemonOwns('voice')) void call('voice:stop').catch(() => undefined);
+  };
   const events = new EventEmitter();
   const activeChats = new Map<string, Promise<void>>();
   const interrupting = new Set<string>();
@@ -751,7 +762,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     getSettings,
     updateSettings: (patch) => {
       const next = saveSettings(patch);
-      if (patch.voice !== undefined) voice.stop();
+      if (patch.voice !== undefined) stopVoice();
       if (patch.messaging !== undefined) messaging.update(next.messaging);
       return next;
     },
@@ -845,7 +856,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     },
     runtimeStatus: (providerId) => runtimes.status(providerId),
     runtimeStart: (providerId) => runtimes.start(providerId),
-    runtimeStop: (providerId, force) => { if (providerId === 'nekko-engine') voice.stop(); return runtimes.stop(providerId, force); },
+    runtimeStop: (providerId, force) => { if (providerId === 'nekko-engine') stopVoice(); return runtimes.stop(providerId, force); },
     runtimeLoad: (providerId, modelId, params) => runtimes.load(providerId, modelId, params),
     runtimeFacts: (providerId) => runtimes.facts(providerId),
     runtimePlan: (providerId, modelId, req) => runtimes.plan(providerId, modelId, req),
@@ -866,6 +877,14 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     loopLog,
     turnCallback,
     changesNotify: notifyChanges,
+    settingsChanged: (next, patch) => {
+      settingsChanged(next, patch);
+      // What updateSettings does after a save, for a save the daemon made.
+      if (patch && typeof patch === 'object') {
+        if (patch.voice !== undefined) stopVoice();
+        if (patch.messaging !== undefined) messaging.update(getSettings().messaging);
+      }
+    },
     limitsNotify: notifyLimits,
     oauthRefresh: async (tokenKey) => { await ensureFreshToken(tokenKey); },
     hypergateSave: (info) => saveSettings({ mcpServers: withHypergate(getSettings().mcpServers ?? [], info) }).mcpServers ?? [],

@@ -69,6 +69,8 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     // Internal daemon callback, using the host queue and deletion tombstone.
     'sessions:deleteAgentLog': ([id]) => deleteAgentLog(String(id)),
     'changes:notify': ([sessionId]) => host.changesNotify(String(sessionId)),
+    // The daemon writes settings.json (crates/nekkod/src/settings.rs) and tells this host what changed.
+    'settings:changed': ([next, patch]) => host.settingsChanged(next as never, (patch ?? null) as never),
     // The daemon keeps limit state (crates/nekkod/src/limits.rs) and asks this
     // host only for what still lives here: a refreshed sign-in, and the relay.
     'limits:notify': ([payload]) => host.limitsNotify(payload as never),

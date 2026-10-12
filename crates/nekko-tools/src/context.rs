@@ -168,6 +168,9 @@ pub struct ToolContext {
     pub runner: Arc<dyn CommandRunner>,
     pub limits: BashLimits,
     pub cancel: Cancel,
+    /// Background processes (`start_process`, `read_process`, `kill_process`);
+    /// those tools are unknown without it.
+    pub processes: Option<Arc<crate::process::Processes>>,
 }
 
 impl ToolContext {
@@ -187,6 +190,7 @@ impl ToolContext {
             runner: Arc::new(ShellRunner),
             limits: BashLimits::default(),
             cancel: Cancel::new(),
+            processes: None,
         }
     }
 }

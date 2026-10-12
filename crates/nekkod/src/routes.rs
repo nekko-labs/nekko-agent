@@ -27,6 +27,16 @@ pub struct Ctx {
     pub turns: Arc<crate::turns::Turns>,
     /// Usage, reply and limit accounting (`usage:summary`, `limits:*`).
     pub accounts: Arc<crate::accounts::Accounts>,
+    /// settings.json, when the data directory is known (`settings:*`).
+    pub settings: Option<Arc<crate::settings::Settings>>,
+    /// Nekko Voice (`voice:*`), when the data directory is known.
+    pub voice: Option<Arc<crate::voice::Voice>>,
+    /// The model catalog, when the daemon has the settings store (for the Hugging Face token).
+    pub catalog: Option<Arc<nekko_engine::catalog::Catalog>>,
+    /// GPU and system stats and the readiness advisor (`gpu:stats`, `system:stats`, `machine:readiness`).
+    pub machine: Arc<nekko_machine::Machine>,
+    /// The experimental resource-queue client, when the data directory is known.
+    pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -35,7 +45,7 @@ const AGENT_PREFIX: &str = "agent_";
 
 /// How long a daemon-served call waits on the backend for supporting data
 /// (settings, the agent logs) before carrying on without it.
-const AUX_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+pub const AUX_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 fn arg(args: &[Value], i: usize) -> &Value {
     args.get(i).unwrap_or(&Value::Null)
@@ -200,6 +210,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         // (its own turns, image turns, the chat's dev servers).
         "chat:abort" => {
             ctx.turns.abort_session(str_arg(&args, 0).unwrap_or_default());
+            // A dev server the agent started belongs to the work it was doing.
+            ctx.turns.processes.kill_session(str_arg(&args, 0).unwrap_or_default());
             ctx.backend.call(channel, Value::Array(args)).await
         }
         "changes:list" => {
@@ -246,6 +258,30 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
         "provider:complete" => crate::sideband::complete(arg(&args, 0)).await,
         c if crate::accounts::CHANNELS.contains(&c) && ctx.accounts.enabled() => ctx.accounts.route(c, &args).await,
+        // The daemon's settings store says where the data directory is.
+        c if crate::decisions::CHANNELS.contains(&c) && ctx.settings.is_some() => {
+            let data_dir =
+                ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf)).unwrap_or_default();
+            crate::decisions::route(ctx, &data_dir, c, &args).await
+        }
+        c if crate::catalog::CHANNELS.contains(&c) && ctx.catalog.is_some() => match &ctx.catalog {
+            Some(catalog) => crate::catalog::route(catalog, c, &args).await,
+            None => ctx.backend.call(c, Value::Array(args)).await,
+        },
+        c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
+        c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
+            crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
+        }
+        c if crate::voice::CHANNELS.contains(&c) && ctx.voice.is_some() => match &ctx.voice {
+            Some(voice) => voice.route(c, &args).await,
+            None => Err("voice needs the data directory".into()),
+        },
+        c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
+        // Without a data directory the host keeps the coordinator file.
+        "resource:queue" => match &ctx.resource_queue {
+            Some(queue) => queue.route(&args).await,
+            None => ctx.backend.call(channel, Value::Array(args)).await,
+        },
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
             session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
         }
@@ -287,8 +323,25 @@ fn merge_pending(host: Value, daemon: Value) -> Value {
 /// when they are really served here.
 fn owned(ctx: &Ctx) -> Vec<&'static str> {
     let mut all = OWNED.to_vec();
+    all.extend_from_slice(crate::tooling::CHANNELS);
     if ctx.accounts.enabled() {
         all.extend_from_slice(crate::accounts::OWNED);
+    }
+    if ctx.catalog.is_some() {
+        all.extend_from_slice(crate::catalog::CHANNELS);
+    }
+    if ctx.settings.is_some() {
+        all.extend_from_slice(crate::decisions::CHANNELS);
+    }
+    if ctx.settings.is_some() {
+        all.extend_from_slice(crate::settings::CHANNELS);
+    }
+    if ctx.voice.is_some() {
+        all.extend_from_slice(crate::voice::CHANNELS);
+    }
+    all.extend_from_slice(crate::machine::CHANNELS);
+    if ctx.resource_queue.is_some() {
+        all.extend_from_slice(crate::resource_queue::CHANNELS);
     }
     all
 }
@@ -338,6 +391,9 @@ pub const OWNED: &[&str] = &[
     // Not a channel: a turn whose spec says `facts.spawn` drives its
     // `spawn_agent` children here, the host making them (`spawn:prepare`).
     "turn:spawn",
+    // Not a channel: a turn whose spec carries `facts.hookRules` runs its
+    // PreToolUse and PostToolUse hooks here (nekko-tools `hooks`).
+    "turn:hooks",
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",
@@ -460,10 +516,7 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 async fn create_terminal(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
-    let settings = match tokio::time::timeout(AUX_WAIT, ctx.backend.call("settings:get", json!([]))).await {
-        Ok(Ok(v)) => v,
-        _ => Value::Null,
-    };
+    let settings = crate::settings::current(ctx).await;
     let s = |k: &str| opts.get(k).and_then(Value::as_str);
     let dim = |k: &str, d: u16| opts.get(k).and_then(Value::as_u64).map(|n| n.clamp(1, 1000) as u16).unwrap_or(d);
     let shell = resolve_shell(s("shell"), settings.get("defaultShellPath").and_then(Value::as_str));

@@ -6,17 +6,24 @@
 
 mod accounts;
 mod backend;
+mod catalog;
 mod config;
 mod decide;
+mod decisions;
 mod engine;
 mod hub;
 mod hypergate;
 mod loops;
+mod machine;
 mod mcp;
 mod procgroup;
+mod resource_queue;
 mod routes;
+mod settings;
 mod sideband;
+mod tooling;
 mod turns;
+mod voice;
 mod wire;
 
 use backend::Backend;
@@ -64,7 +71,13 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let hub = Hub::new();
     let terminals = Arc::new(Registry::new());
     let backend = match cfg.backend.clone() {
-        Some(cmd) => Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone()),
+        Some(mut cmd) => {
+            // What the backend must reach through the daemon rather than write itself.
+            if cfg.data_dir.is_some() {
+                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS].join(","));
+            }
+            Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
+        }
         None => Backend::disabled(),
     };
     let engine = Arc::new(engine::Engine::new(backend.clone()));
@@ -86,6 +99,23 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         backend.clone(),
         hub.clone(),
     ));
+    let settings = cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), backend.clone()));
+    // Voice reads its settings from the daemon's store.
+    let voice = cfg.data_dir.clone().zip(settings.clone()).map(|(d, s)| {
+        let store = s.store.clone();
+        let read: Arc<dyn Fn() -> serde_json::Value + Send + Sync> = Arc::new(move || store.get());
+        voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
+    });
+    let catalog = settings.as_deref().map(catalog::new);
+    // The machine probes and the resource queue read the daemon's settings store.
+    let read_settings = |s: &Option<Arc<settings::Settings>>| {
+        let store = s.as_ref().map(|s| s.store.clone());
+        move || store.as_ref().map_or(serde_json::Value::Null, |s| s.get())
+    };
+    let engine_bin = {
+        let read = read_settings(&settings);
+        move || nekko_js::truthy_str(read().get("engineBinPath")).map(str::to_string)
+    };
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -93,18 +123,36 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         engine: engine.clone(),
         sessions: sessions.clone(),
         loops: Arc::new(loops::Loops::new(changes.clone())),
-        turns: Arc::new(turns::Turns::new(
-            sessions.clone(),
-            cfg.data_dir.clone().map(std::path::PathBuf::from),
-            changes,
-            accounts.clone(),
-            mcp.clone(),
-            engine.decide.clone(),
-        )),
+        turns: Arc::new(
+            turns::Turns::new(
+                sessions.clone(),
+                cfg.data_dir.clone().map(std::path::PathBuf::from),
+                changes,
+                accounts.clone(),
+                mcp.clone(),
+                engine.decide.clone(),
+            )
+            .with_settings(settings.as_ref().map(|s| s.store.clone()))
+            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
+        ),
         mcp: mcp.clone(),
         accounts,
+        machine: Arc::new(nekko_machine::Machine::new(
+            cfg.data_dir.clone().map(std::path::PathBuf::from),
+            Box::new(engine_bin),
+        )),
+        resource_queue: cfg.data_dir.clone().map(|d| {
+            Arc::new(resource_queue::ResourceQueue::new(
+                std::path::PathBuf::from(d),
+                Box::new(read_settings(&settings)),
+            ))
+        }),
+        settings,
+        voice: voice.clone(),
+        catalog,
     };
     routes::forward_terminal_events(&ctx);
+    let processes = ctx.turns.processes.clone();
 
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
     let router = wire::router(app);
@@ -118,9 +166,13 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     axum::serve(listener, router).with_graceful_shutdown(shutdown_signal(cfg.exit_on_stdin_close)).await?;
 
     engine.shutdown();
+    if let Some(voice) = &voice {
+        voice.stop().await;
+    }
     backend.shutdown().await;
     terminals.close_all();
     mcp.stop_all();
+    processes.kill_all();
     Ok(())
 }
 

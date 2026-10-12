@@ -20,9 +20,13 @@
 //!   trip never passes through the TS event loop. Tools that still run in the
 //!   host park their approvals here too (`turn:approval`).
 //!
-//! It calls back for what has not moved: `turn:tool` (MCP, sub-agents, the
-//! browser, processes, fetch, watches, training reports, `decide`),
-//! `turn:hook` (tool hooks), `turn:headers` (Anthropic subscription rate
+//! It runs `fetch_url`, the browser and window capture (`nekko-web`, the
+//! in-app browser through the desktop app's bridge) and the background-process
+//! tools (`nekko-tools`) itself, and calls back for what has not moved:
+//! `turn:tool` (watches, delegation targets, training reports, and MCP,
+//! sub-agents or `decide` for a host that keeps them), `turn:hook` (tool
+//! hooks, for a host that keeps them; given `facts.hookRules` they run here),
+//! `turn:headers` (Anthropic subscription rate
 //! limits), `loop:log` (the agent terminal); and it sends the host every
 //! event (`turn:event`, deltas batched) for the phone relay and usage and
 //! reply accounting, then `turn:end`.
@@ -42,7 +46,7 @@ use nekko_chat::ProviderClient;
 use nekko_js as js;
 use nekko_loop::{Cancel, RunOptions, Steering, ToolRunner, run_agent};
 use nekko_store::SessionStore;
-use nekko_tools::{ChangeTracker, CommandLog, ToolCall, ToolContext, approver_fn, is_ported};
+use nekko_tools::{ChangeTracker, CommandLog, Processes, ToolCall, ToolContext, approver_fn, is_ported};
 use nekko_turn as turn;
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
@@ -57,7 +61,21 @@ use tokio::sync::{mpsc, oneshot};
 const DELTA_BATCH: Duration = Duration::from_millis(100);
 
 /// The built-in tools the daemon runs itself (`nekko-tools`).
-const NATIVE: &[&str] = &["read_file", "write_file", "edit_file", "glob", "grep", "list_dir", "bash"];
+const NATIVE: &[&str] = &[
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+];
+
+/// Of [`NATIVE`], the background-process tools (`nekko_tools::process`).
+const PROCESS_TOOLS: &[&str] = &["start_process", "read_process", "kill_process"];
 
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
@@ -243,6 +261,16 @@ pub struct Turns {
     /// The resident decision model (decide.rs): the `decide` tool's local
     /// provider runs here.
     decide: Arc<DecideService>,
+    /// Background processes the agent started (`start_process`); they
+    /// outlive the turn and die with the chat's Stop or the daemon.
+    pub processes: Arc<Processes>,
+    /// settings.json, when the daemon writes it: tool hooks are re-read
+    /// from it per call, as the TS host did.
+    settings: Option<Arc<nekko_settings::SettingsStore>>,
+    /// The desktop app's bridge to its in-app browser and window capturer
+    /// (absent outside the desktop app), and the chats' browser sessions.
+    bridge: Option<Arc<nekko_web::browser::HttpBridge>>,
+    pub browsers: Arc<nekko_web::browser::Browsers>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
 }
@@ -258,7 +286,32 @@ impl Turns {
         mcp: Arc<Mcp>,
         decide: Arc<DecideService>,
     ) -> Self {
-        Self { store, data_dir, changes, accounts, mcp, decide, running: Mutex::default(), pending: Pending::default() }
+        Self {
+            store,
+            data_dir,
+            changes,
+            accounts,
+            mcp,
+            decide,
+            processes: Processes::new(),
+            settings: None,
+            bridge: None,
+            browsers: nekko_web::browser::Browsers::new(),
+            running: Mutex::default(),
+            pending: Pending::default(),
+        }
+    }
+
+    /// The daemon's settings store (settings.rs).
+    pub fn with_settings(mut self, settings: Option<Arc<nekko_settings::SettingsStore>>) -> Self {
+        self.settings = settings;
+        self
+    }
+
+    /// The desktop bridge (`config.browserBridge`).
+    pub fn with_bridge(mut self, bridge: Option<(String, String)>) -> Self {
+        self.bridge = bridge.map(|(url, token)| Arc::new(nekko_web::browser::HttpBridge::new(url, token)));
+        self
     }
 
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
@@ -702,7 +755,12 @@ impl Turns {
             names,
             native,
             hooks,
+            hook_rules: facts.get("hookRules").filter(|r| r.is_array()).map(nekko_tools::hooks::rules),
+            hook_cwd: workspaces.first().and_then(|w| str_at(w, "path")).map(str::to_string).unwrap_or_else(|| {
+                std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
+            }),
             incognito,
+            allow_browser: spec.get("allowBrowserControl") == Some(&Value::Bool(true)),
             training: js::truthy(lock(&session).get("trainingRunId")),
             unattended_ms: (settings.get("unattendedQuestionMinutes").and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
                 * 60_000.0) as u64,
@@ -1128,6 +1186,7 @@ fn native_context(
     ctx.default_cwd = workspaces.first().and_then(|w| str_at(w, "path")).map(str::to_string);
     ctx.session_id = Some(session_id.to_string());
     ctx.changes = Some(turns.changes.clone());
+    ctx.processes = Some(turns.processes.clone());
     let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
     let b = backend.clone();
     tokio::spawn(async move {
@@ -1163,7 +1222,13 @@ struct TurnTools {
     session: Arc<Mutex<Value>>,
     names: HashSet<String>,
     native: Option<ToolContext>,
+    /// The host runs this turn's tool hooks (`turn:hook`): an older host.
     hooks: bool,
+    /// This turn's hook rules, run here (`facts.hookRules`), and the folder they run in.
+    hook_rules: Option<Vec<nekko_tools::hooks::HookRule>>,
+    hook_cwd: String,
+    /// `spec.allowBrowserControl`: a local desktop chat may use the browser and capture tools.
+    allow_browser: bool,
     incognito: bool,
     training: bool,
     unattended_ms: u64,
@@ -1179,6 +1244,22 @@ fn error(id: &str, output: impl Into<String>) -> Value {
 
 impl ToolRunner for TurnTools {
     async fn run(&self, call: &Value) -> Result<Value, String> {
+        if let Some(spec_rules) = &self.hook_rules {
+            // Re-read per call, so a hook added mid-turn applies to the next tool.
+            let rules = match &self.turns.settings {
+                Some(store) => {
+                    let store = store.clone();
+                    let hooks =
+                        tokio::task::spawn_blocking(move || store.get()["hooks"].clone()).await.unwrap_or(Value::Null);
+                    nekko_tools::hooks::rules(&hooks)
+                }
+                None => spec_rules.clone(),
+            };
+            if nekko_tools::hooks::has_tool_hooks(&rules) {
+                return self.run_with_hooks(&rules, call).await;
+            }
+            return self.inner(call).await;
+        }
         if !self.hooks {
             return self.inner(call).await;
         }
@@ -1212,6 +1293,41 @@ impl ToolRunner for TurnTools {
 }
 
 impl TurnTools {
+    /// The hooks around a call, run here (hooks.ts `withToolHooks`).
+    async fn run_with_hooks(&self, rules: &[nekko_tools::hooks::HookRule], call: &Value) -> Result<Value, String> {
+        use nekko_tools::hooks::{post_tool_hooks, pre_tool_hooks};
+        let id = str_at(call, "id").unwrap_or_default();
+        let sid = &self.shared.session_id;
+        let (block, notes) = pre_tool_hooks(rules, call, sid, &self.hook_cwd).await;
+        if let Some(block) = block {
+            let mut lines = vec![block];
+            lines.extend(notes);
+            return Ok(error(
+                id,
+                lines.join(
+                    "
+",
+                ),
+            ));
+        }
+        let out = self.inner(call).await?;
+        let mut post = post_tool_hooks(rules, call, out, sid, &self.hook_cwd).await;
+        if !notes.is_empty() {
+            let output = format!(
+                "{}
+
+{}",
+                post.get("output").map(js::display).unwrap_or_default(),
+                notes.join(
+                    "
+"
+                )
+            );
+            post["output"] = json!(output);
+        }
+        Ok(post)
+    }
+
     async fn inner(&self, call: &Value) -> Result<Value, String> {
         let id = str_at(call, "id").unwrap_or_default();
         let name = str_at(call, "name").unwrap_or_default();
@@ -1239,9 +1355,23 @@ impl TurnTools {
         {
             return Ok(self.call_mcp(mcp, call, name).await);
         }
+        if name == "fetch_url" {
+            return Ok(self.fetch_url(call).await);
+        }
+        if let Some(ctx) = &self.native
+            && (name == "browser" || name == "capture")
+        {
+            let call: ToolCall = serde_json::from_value(call.clone()).map_err(|e| e.to_string())?;
+            let bridge = self.turns.bridge.as_deref().map(|b| b as &dyn nekko_web::browser::Bridge);
+            return Ok(if name == "browser" {
+                nekko_web::browser::browser_tool(&call, ctx, self.allow_browser, bridge, &self.turns.browsers).await
+            } else {
+                nekko_web::browser::capture_tool(&call, ctx, self.allow_browser, bridge).await
+            });
+        }
         if let Some(ctx) = &self.native
             && NATIVE.contains(&name)
-            && is_ported(name)
+            && (is_ported(name) || PROCESS_TOOLS.contains(&name))
         {
             let call: ToolCall = serde_json::from_value(call.clone()).map_err(|e| e.to_string())?;
             return serde_json::to_value(nekko_tools::execute(&call, ctx).await).map_err(|e| e.to_string());
@@ -1260,6 +1390,29 @@ impl TurnTools {
             self.shared.emit(json!({ "type": "session_meta", "sessionId": self.shared.session_id }));
         }
         Ok(reply.get("result").cloned().unwrap_or_else(|| error(id, "The host returned no result.")))
+    }
+
+    /// `fetch_url` (tools.ts): reading a page is as safe as reading a file,
+    /// so only ask mode or the ask-everything sandbox asks.
+    async fn fetch_url(&self, call: &Value) -> Value {
+        let id = str_at(call, "id").unwrap_or_default();
+        let input = call.get("input").cloned().unwrap_or(Value::Null);
+        let url = match input.get("url") {
+            Some(Value::String(u)) if !js::trim(u).is_empty() => u.clone(),
+            _ => return error(id, "A URL is required."),
+        };
+        let asks = self.mode == "ask" || self.sandbox_mode.as_deref() == Some("ask-everything");
+        if asks && !self.turns.request_approval(&self.shared, call, &format!("Fetch {url}"), &json!("low")).await {
+            return error(id, "Fetch not approved by user.");
+        }
+        let cancel = nekko_tools::Cancel::new();
+        let c2 = cancel.clone();
+        self.shared.cancel.on_cancel(move || c2.cancel());
+        let max = input.get("max_chars").and_then(Value::as_f64);
+        match nekko_web::fetch_url(&url, max, &cancel).await {
+            Ok(page) => result(id, nekko_web::describe_fetched(&page)),
+            Err(e) => error(id, e),
+        }
     }
 
     /// `spawn_agent` (chat.ts `runSubAgent`): ask first when the policy says

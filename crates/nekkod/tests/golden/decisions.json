@@ -1,0 +1,1154 @@
+{
+ "catalog": [
+  {
+   "id": "laya-en",
+   "name": "Laya (English)",
+   "publisher": "Convai Innovations",
+   "license": "Apache-2.0",
+   "unavailable": "No correct ONNX export of Laya is hosted yet, so it cannot be downloaded here. Export it with the recipe in docs/decision-models.md and add the folder below.",
+   "description": "A 395M ModernBERT decision model. Routes, scores and answers yes/no questions about a text or JSON state, with calibrated probabilities, in one pass. 512-token context.",
+   "variants": [
+    {
+     "precision": "fp16",
+     "file": "model_fp16.onnx",
+     "bytes": 843685645,
+     "recommended": true
+    },
+    {
+     "precision": "int8",
+     "file": "model_int8.onnx",
+     "bytes": 424348081
+    },
+    {
+     "precision": "fp32",
+     "file": "model.onnx",
+     "bytes": 1685917998
+    }
+   ],
+   "shared": [
+    {
+     "file": "tokenizer.json",
+     "bytes": 3583228
+    },
+    {
+     "file": "tokenizer_config.json",
+     "bytes": 308
+    },
+    {
+     "file": "rl_agent_config.json",
+     "bytes": 745
+    },
+    {
+     "file": "config.json",
+     "bytes": 2083
+    }
+   ]
+  }
+ ],
+ "tree": {
+  "models/decision/laya-en/model_fp16.onnx": "fp16 graph",
+  "models/decision/laya-en/model_int8.onnx": "int8",
+  "models/decision/laya-en/tokenizer.json": "{}",
+  "models/decision/laya-en/rl_agent_config.json": "{\"a\":1}",
+  "models/decision/custom/laya.onnx": "fp32 weights here",
+  "models/decision/custom/tokenizer.json": "{}",
+  "models/decision/custom/rl_agent_config.json": "{}",
+  "models/decision/noweights/tokenizer.json": "{}",
+  "models/decision/noweights/rl_agent_config.json": "{}",
+  "models/decision/partial/model_fp16.onnx": "x",
+  "models/decision/partial/rl_agent_config.json": "{}",
+  "models/decision/stray.txt": "not a dir",
+  "ext1/model.fp16.onnx": "graph16",
+  "ext1/model_int8.onnx": "g8",
+  "ext1/tokenizer/tokenizer.json": "{\"nested\":true}",
+  "ext1/rl_agent_config.json": "{}",
+  "ext2/model.onnx": "graph",
+  "ext2/tokenizer.json": "{}",
+  "ext3/model.onnx": "graph",
+  "ext3/model.onnx.data": "external weights",
+  "ext3/tokenizer.json": "{}",
+  "ext3/rl_agent_config.json": "{}",
+  "bad/model.onnx": "graph",
+  "bad/tokenizer.json": "{}",
+  "bad/rl_agent_config.json": "{}"
+ },
+ "scripts": [
+  {
+   "name": "local",
+   "typesafeKey": null,
+   "typesafe": [],
+   "steps": [
+    {
+     "op": "catalog",
+     "args": [],
+     "out": {
+      "ok": [
+       {
+        "id": "laya-en",
+        "name": "Laya (English)",
+        "publisher": "Convai Innovations",
+        "license": "Apache-2.0",
+        "unavailable": "No correct ONNX export of Laya is hosted yet, so it cannot be downloaded here. Export it with the recipe in docs/decision-models.md and add the folder below.",
+        "description": "A 395M ModernBERT decision model. Routes, scores and answers yes/no questions about a text or JSON state, with calibrated probabilities, in one pass. 512-token context.",
+        "variants": [
+         {
+          "precision": "fp16",
+          "file": "model_fp16.onnx",
+          "bytes": 843685645,
+          "recommended": true
+         },
+         {
+          "precision": "int8",
+          "file": "model_int8.onnx",
+          "bytes": 424348081
+         },
+         {
+          "precision": "fp32",
+          "file": "model.onnx",
+          "bytes": 1685917998
+         }
+        ],
+        "shared": [
+         {
+          "file": "tokenizer.json",
+          "bytes": 3583228
+         },
+         {
+          "file": "tokenizer_config.json",
+          "bytes": 308
+         },
+         {
+          "file": "rl_agent_config.json",
+          "bytes": 745
+         },
+         {
+          "file": "config.json",
+          "bytes": 2083
+         }
+        ]
+       }
+      ]
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "models",
+     "args": [],
+     "out": {
+      "ok": [
+       {
+        "id": "custom",
+        "name": "custom",
+        "dir": "<root>/models/decision/custom",
+        "precisions": [
+         "fp32"
+        ],
+        "sizeBytes": 17
+       },
+       {
+        "id": "laya-en",
+        "name": "Laya (English)",
+        "dir": "<root>/models/decision/laya-en",
+        "precisions": [
+         "fp16",
+         "int8"
+        ],
+        "sizeBytes": 14,
+        "catalogId": "laya-en"
+       }
+      ]
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "download",
+     "args": [
+      "laya-en",
+      "fp16"
+     ],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "No correct ONNX export of Laya is hosted yet, so it cannot be downloaded here. Export it with the recipe in docs/decision-models.md and add the folder below."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "download",
+     "args": [
+      "laya-en",
+      "int8"
+     ],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "No correct ONNX export of Laya is hosted yet, so it cannot be downloaded here. Export it with the recipe in docs/decision-models.md and add the folder below."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "download",
+     "args": [
+      "laya-en",
+      "fp8"
+     ],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "That decision model is not in the catalog."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "download",
+     "args": [
+      "nope"
+     ],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "That decision model is not in the catalog."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "addFolder",
+     "args": [
+      ""
+     ],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "Enter the folder that holds the export."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "addFolder",
+     "args": [
+      "   "
+     ],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "Enter the folder that holds the export."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "addFolder",
+     "args": [
+      "<root>/ext2"
+     ],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "<root>/ext2 has no complete export: it needs an ONNX model file, tokenizer.json and rl_agent_config.json."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "addFolder",
+     "args": [
+      "<root>/ext1"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Added <root>/ext1 (fp16, int8)."
+      }
+     },
+     "calls": [
+      [
+       "saveFolders",
+       [
+        "<root>/ext1"
+       ]
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "addFolder",
+     "args": [
+      "<root>/ext1/"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Added <root>/ext1 (fp16, int8)."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "addFolder",
+     "args": [
+      "<root>/ext2/../ext3"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Added <root>/ext3 (fp32)."
+      }
+     },
+     "calls": [
+      [
+       "saveFolders",
+       [
+        "<root>/ext1",
+        "<root>/ext3"
+       ]
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "addFolder",
+     "args": [
+      "<root>/bad"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Added <root>/bad (fp32)."
+      }
+     },
+     "calls": [
+      [
+       "saveFolders",
+       [
+        "<root>/ext1",
+        "<root>/ext3",
+        "<root>/bad"
+       ]
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "models",
+     "args": [],
+     "out": {
+      "ok": [
+       {
+        "id": "folder:<root>/ext1",
+        "name": "Laya · ext1",
+        "dir": "<root>/ext1",
+        "precisions": [
+         "fp16",
+         "int8"
+        ],
+        "sizeBytes": 9,
+        "external": true
+       },
+       {
+        "id": "folder:<root>/ext3",
+        "name": "Laya · ext3",
+        "dir": "<root>/ext3",
+        "precisions": [
+         "fp32"
+        ],
+        "sizeBytes": 21,
+        "external": true
+       },
+       {
+        "id": "folder:<root>/bad",
+        "name": "Laya · bad",
+        "dir": "<root>/bad",
+        "precisions": [
+         "fp32"
+        ],
+        "sizeBytes": 5,
+        "external": true
+       },
+       {
+        "id": "custom",
+        "name": "custom",
+        "dir": "<root>/models/decision/custom",
+        "precisions": [
+         "fp32"
+        ],
+        "sizeBytes": 17
+       },
+       {
+        "id": "laya-en",
+        "name": "Laya (English)",
+        "dir": "<root>/models/decision/laya-en",
+        "precisions": [
+         "fp16",
+         "int8"
+        ],
+        "sizeBytes": 14,
+        "catalogId": "laya-en"
+       }
+      ]
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "status",
+     "args": [],
+     "out": {
+      "ok": {
+       "local": {
+        "available": true,
+        "loaded": false
+       },
+       "typesafe": {
+        "configured": false
+       }
+      }
+     },
+     "calls": [
+      [
+       "decide:status"
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "load",
+     "args": [
+      "nope"
+     ],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "That decision model is not downloaded."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "load",
+     "args": [
+      "laya-en"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Loaded Laya (English) (fp16) on directml in 1.2 s."
+      }
+     },
+     "calls": [
+      [
+       "decide:load",
+       {
+        "dir": "<root>/models/decision/laya-en",
+        "precision": "fp16",
+        "name": "laya-en"
+       }
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "status",
+     "args": [],
+     "out": {
+      "ok": {
+       "local": {
+        "available": true,
+        "loaded": true,
+        "model": "laya-en",
+        "dir": "<root>/models/decision/laya-en",
+        "ep": "directml",
+        "precision": "fp16",
+        "loadMs": 1234
+       },
+       "typesafe": {
+        "configured": false
+       }
+      }
+     },
+     "calls": [
+      [
+       "decide:status"
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "load",
+     "args": [
+      "folder:<root>/ext1",
+      "int8"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Loaded Laya · ext1 (int8) on cpu."
+      }
+     },
+     "calls": [
+      [
+       "decide:load",
+       {
+        "dir": "<root>/ext1",
+        "precision": "int8",
+        "name": "laya"
+       }
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "load",
+     "args": [
+      "folder:<root>/bad"
+     ],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "ONNX Runtime could not load the model"
+      }
+     },
+     "calls": [
+      [
+       "decide:load",
+       {
+        "dir": "<root>/bad",
+        "precision": "fp32",
+        "name": "laya"
+       }
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "status",
+     "args": [],
+     "out": {
+      "ok": {
+       "local": {
+        "available": true,
+        "loaded": true,
+        "model": "laya",
+        "dir": "<root>/ext1",
+        "ep": "cpu",
+        "precision": "int8",
+        "loadMs": 0
+       },
+       "typesafe": {
+        "configured": false
+       }
+      }
+     },
+     "calls": [
+      [
+       "decide:status"
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "run",
+     "args": [
+      "local",
+      {
+       "state": "I was charged twice.",
+       "questions": {
+        "dept": {
+         "type": "choice",
+         "instructions": "Which team?",
+         "criteria": [
+          "billing",
+          "technical"
+         ]
+        }
+       }
+      }
+     ],
+     "out": {
+      "ok": {
+       "model": "laya",
+       "answers": {
+        "dept": {
+         "type": "choice",
+         "choice": "billing",
+         "probabilities": {
+          "billing": 0.9,
+          "technical": 0.1
+         }
+        }
+       },
+       "provider": "local",
+       "latencyMs": 0
+      }
+     },
+     "calls": [
+      [
+       "decide:run",
+       {
+        "state": "I was charged twice.",
+        "questions": {
+         "dept": {
+          "type": "choice",
+          "instructions": "Which team?",
+          "criteria": [
+           "billing",
+           "technical"
+          ]
+         }
+        }
+       }
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "run",
+     "args": [
+      "local",
+      {
+       "state": "  ",
+       "questions": {
+        "q": {}
+       }
+      }
+     ],
+     "out": {
+      "error": "The state is empty."
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "run",
+     "args": [
+      "local",
+      {
+       "state": "x",
+       "questions": {}
+      }
+     ],
+     "out": {
+      "error": "Ask at least one question."
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "remove",
+     "args": [
+      "folder:<root>/bad"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Removed the folder from the list. Its files were not touched."
+      }
+     },
+     "calls": [
+      [
+       "decide:status"
+      ],
+      [
+       "saveFolders",
+       [
+        "<root>/ext1",
+        "<root>/ext3"
+       ]
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "remove",
+     "args": [
+      "folder:<root>/ext1"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Removed the folder from the list. Its files were not touched."
+      }
+     },
+     "calls": [
+      [
+       "decide:status"
+      ],
+      [
+       "decide:unload"
+      ],
+      [
+       "saveFolders",
+       [
+        "<root>/ext3"
+       ]
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "status",
+     "args": [],
+     "out": {
+      "ok": {
+       "local": {
+        "available": true,
+        "loaded": false
+       },
+       "typesafe": {
+        "configured": false
+       }
+      }
+     },
+     "calls": [
+      [
+       "decide:status"
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "load",
+     "args": [
+      "laya-en",
+      "int8"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Loaded Laya (English) (int8) on cpu."
+      }
+     },
+     "calls": [
+      [
+       "decide:load",
+       {
+        "dir": "<root>/models/decision/laya-en",
+        "precision": "int8",
+        "name": "laya-en"
+       }
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "remove",
+     "args": [
+      "laya-en"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Deleted the decision model."
+      }
+     },
+     "calls": [
+      [
+       "decide:status"
+      ],
+      [
+       "decide:unload"
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "remove",
+     "args": [
+      "../../etc"
+     ],
+     "out": {
+      "error": "That is not a decision model id."
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "remove",
+     "args": [
+      "decision"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Deleted the decision model."
+      }
+     },
+     "calls": [
+      [
+       "decide:status"
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "unload",
+     "args": [],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Unloaded the decision model."
+      }
+     },
+     "calls": [
+      [
+       "decide:unload"
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "models",
+     "args": [],
+     "out": {
+      "ok": [
+       {
+        "id": "folder:<root>/ext3",
+        "name": "Laya · ext3",
+        "dir": "<root>/ext3",
+        "precisions": [
+         "fp32"
+        ],
+        "sizeBytes": 21,
+        "external": true
+       },
+       {
+        "id": "custom",
+        "name": "custom",
+        "dir": "<root>/models/decision/custom",
+        "precisions": [
+         "fp32"
+        ],
+        "sizeBytes": 17
+       }
+      ]
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "checkTypesafe",
+     "args": [],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "No TypeSafe API key is set."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "run",
+     "args": [
+      "typesafe",
+      {
+       "state": "I was charged twice.",
+       "questions": {
+        "dept": {
+         "type": "choice",
+         "instructions": "Which team?",
+         "criteria": [
+          "billing",
+          "technical"
+         ]
+        }
+       }
+      }
+     ],
+     "out": {
+      "error": "Add a TypeSafe API key to use Jev."
+     },
+     "calls": [],
+     "requests": []
+    }
+   ]
+  },
+  {
+   "name": "typesafe",
+   "typesafeKey": "ts-key-123",
+   "typesafe": [
+    {
+     "status": 200,
+     "body": "{\"data\":[{\"id\":\"jev-latest\"},{\"id\":\"jev-mini\"}]}"
+    },
+    {
+     "status": 200,
+     "body": "{\"object\":\"list\",\"data\":[]}"
+    },
+    {
+     "status": 401,
+     "body": ""
+    },
+    {
+     "status": 500,
+     "body": "oops"
+    },
+    {
+     "status": 200,
+     "body": "{\"model\":\"jev-latest\",\"answers\":{\"dept\":{\"type\":\"choice\",\"choice\":\"billing\"}}}"
+    },
+    {
+     "status": 400,
+     "body": "{\"error\":{\"message\":\"bad questions\"}}"
+    },
+    {
+     "status": 429,
+     "body": "{\"error\":\"slow down\"}"
+    },
+    {
+     "status": 502,
+     "body": "<html>bad gateway</html>"
+    }
+   ],
+   "steps": [
+    {
+     "op": "status",
+     "args": [],
+     "out": {
+      "ok": {
+       "local": {
+        "available": true,
+        "loaded": false
+       },
+       "typesafe": {
+        "configured": true
+       }
+      }
+     },
+     "calls": [
+      [
+       "decide:status"
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "checkTypesafe",
+     "args": [],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Key works. Models: jev-latest, jev-mini."
+      }
+     },
+     "calls": [],
+     "requests": [
+      {
+       "url": "https://api.typesafe.ai/v1/models",
+       "method": "GET",
+       "auth": "Bearer ts-key-123",
+       "body": null
+      }
+     ]
+    },
+    {
+     "op": "checkTypesafe",
+     "args": [],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Key works."
+      }
+     },
+     "calls": [],
+     "requests": [
+      {
+       "url": "https://api.typesafe.ai/v1/models",
+       "method": "GET",
+       "auth": "Bearer ts-key-123",
+       "body": null
+      }
+     ]
+    },
+    {
+     "op": "checkTypesafe",
+     "args": [],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "TypeSafe rejected the key."
+      }
+     },
+     "calls": [],
+     "requests": [
+      {
+       "url": "https://api.typesafe.ai/v1/models",
+       "method": "GET",
+       "auth": "Bearer ts-key-123",
+       "body": null
+      }
+     ]
+    },
+    {
+     "op": "checkTypesafe",
+     "args": [],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "TypeSafe answered 500."
+      }
+     },
+     "calls": [],
+     "requests": [
+      {
+       "url": "https://api.typesafe.ai/v1/models",
+       "method": "GET",
+       "auth": "Bearer ts-key-123",
+       "body": null
+      }
+     ]
+    },
+    {
+     "op": "run",
+     "args": [
+      "typesafe",
+      {
+       "state": "I was charged twice.",
+       "questions": {
+        "dept": {
+         "type": "choice",
+         "instructions": "Which team?",
+         "criteria": [
+          "billing",
+          "technical"
+         ]
+        }
+       }
+      }
+     ],
+     "out": {
+      "ok": {
+       "model": "jev-latest",
+       "answers": {
+        "dept": {
+         "type": "choice",
+         "choice": "billing"
+        }
+       },
+       "provider": "typesafe",
+       "latencyMs": 0
+      }
+     },
+     "calls": [],
+     "requests": [
+      {
+       "url": "https://api.typesafe.ai/v1/systemone",
+       "method": "POST",
+       "auth": "Bearer ts-key-123",
+       "body": "{\"state\":\"I was charged twice.\",\"questions\":{\"dept\":{\"type\":\"choice\",\"instructions\":\"Which team?\",\"criteria\":[\"billing\",\"technical\"]}},\"model\":\"jev-latest\"}"
+      }
+     ]
+    },
+    {
+     "op": "run",
+     "args": [
+      "typesafe",
+      {
+       "state": "I was charged twice.",
+       "questions": {
+        "dept": {
+         "type": "choice",
+         "instructions": "Which team?",
+         "criteria": [
+          "billing",
+          "technical"
+         ]
+        }
+       },
+       "model": "jev-mini"
+      }
+     ],
+     "out": {
+      "error": "TypeSafe answered 400: bad questions"
+     },
+     "calls": [],
+     "requests": [
+      {
+       "url": "https://api.typesafe.ai/v1/systemone",
+       "method": "POST",
+       "auth": "Bearer ts-key-123",
+       "body": "{\"state\":\"I was charged twice.\",\"questions\":{\"dept\":{\"type\":\"choice\",\"instructions\":\"Which team?\",\"criteria\":[\"billing\",\"technical\"]}},\"model\":\"jev-mini\"}"
+      }
+     ]
+    },
+    {
+     "op": "run",
+     "args": [
+      "typesafe",
+      {
+       "state": "I was charged twice.",
+       "questions": {
+        "dept": {
+         "type": "choice",
+         "instructions": "Which team?",
+         "criteria": [
+          "billing",
+          "technical"
+         ]
+        }
+       }
+      }
+     ],
+     "out": {
+      "error": "TypeSafe answered 429: slow down"
+     },
+     "calls": [],
+     "requests": [
+      {
+       "url": "https://api.typesafe.ai/v1/systemone",
+       "method": "POST",
+       "auth": "Bearer ts-key-123",
+       "body": "{\"state\":\"I was charged twice.\",\"questions\":{\"dept\":{\"type\":\"choice\",\"instructions\":\"Which team?\",\"criteria\":[\"billing\",\"technical\"]}},\"model\":\"jev-latest\"}"
+      }
+     ]
+    },
+    {
+     "op": "run",
+     "args": [
+      "typesafe",
+      {
+       "state": "I was charged twice.",
+       "questions": {
+        "dept": {
+         "type": "choice",
+         "instructions": "Which team?",
+         "criteria": [
+          "billing",
+          "technical"
+         ]
+        }
+       }
+      }
+     ],
+     "out": {
+      "error": "TypeSafe answered 502: <html>bad gateway</html>"
+     },
+     "calls": [],
+     "requests": [
+      {
+       "url": "https://api.typesafe.ai/v1/systemone",
+       "method": "POST",
+       "auth": "Bearer ts-key-123",
+       "body": "{\"state\":\"I was charged twice.\",\"questions\":{\"dept\":{\"type\":\"choice\",\"instructions\":\"Which team?\",\"criteria\":[\"billing\",\"technical\"]}},\"model\":\"jev-latest\"}"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
