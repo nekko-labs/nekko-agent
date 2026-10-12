@@ -461,13 +461,14 @@ function Budget({ usage, now, sessions, providers }: Pick<WallDockProps, 'usage'
 function Hardware({ providers }: { providers: ProviderConfig[] }) {
   const monitors = useMonitors();
   const { system, gpu } = useResourceSample();
-  const util = gpu?.devices.map((d) => d.utilizationPct).filter((n): n is number => n != null && Number.isFinite(n)) ?? [];
-  const gpuUtil = util.length ? Math.max(...util) : null;
   const memory = (used: number, total: number) => total > 0 ? `${(used / 1024).toFixed(1)} / ${(total / 1024).toFixed(1)} GiB (${Math.round(used / total * 100)}%)` : 'Unavailable';
   const rows = [
     { label: 'CPU', value: !monitors.cpu ? null : system?.cpuPct ?? null, text: !monitors.cpu ? 'Monitor off' : system ? `${system.cpuPct}%` : 'Unavailable', color: 'var(--accent)' },
     { label: 'Memory', value: monitors.memory && system && system.memTotalMB > 0 ? system.memUsedMB / system.memTotalMB * 100 : null, text: !monitors.memory ? 'Monitor off' : system ? memory(system.memUsedMB, system.memTotalMB) : 'Unavailable', color: 'var(--accent-2)' },
-    { label: 'GPU (peak device)', value: monitors.gpu ? gpuUtil : null, text: !monitors.gpu ? 'Monitor off' : gpuUtil == null ? 'Unavailable' : `${gpuUtil}%`, color: 'var(--success)' },
+    ...(gpu?.devices.length ? gpu.devices : [{ name: '', utilizationPct: undefined }]).map((device, index) => {
+      const value = monitors.gpu && Number.isFinite(device.utilizationPct) ? device.utilizationPct! : null;
+      return { label: device.name ? `GPU ${index + 1}: ${device.name}` : 'GPU', value, text: !monitors.gpu ? 'Monitor off' : value == null ? 'Unavailable' : `${value}%`, color: 'var(--success)' };
+    }),
     { label: gpu ? gpuMemoryLabel(gpu) : 'VRAM', value: monitors.vram && gpu && gpu.totalMB > 0 ? gpu.usedMB / gpu.totalMB * 100 : null, text: !monitors.vram ? 'Monitor off' : gpu ? memory(gpu.usedMB, gpu.totalMB) : 'Unavailable', color: 'var(--warning)' },
   ];
   return <div className="wall-dock__metrics wall-dock__hardware">

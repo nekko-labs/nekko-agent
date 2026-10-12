@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pickerPlacement } from './pickerPlacement.js';
 import { filteredModelGroups, isModelPickerEscape, nextFavoriteModels, shouldDismissModelPickerPointer } from './modelPickerInteractions.js';
@@ -29,7 +29,7 @@ export function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
  * models, grouped by provider, starred on top, Auto first.
  */
 export function ModelPicker({
-  providers,
+  providers: allProviders,
   providerId,
   models,
   modelId,
@@ -62,6 +62,8 @@ export function ModelPicker({
   /** Allow model selection without changing favorites or default settings. */
   readOnly?: boolean;
 }) {
+  // A provider switched off on the Models page is neither listed nor contacted.
+  const providers = useMemo(() => allProviders.filter((p) => p.enabled !== false), [allProviders]);
   const [menu, setMenu] = useState<{x: number; y: number; pid: string; mid: string} | null>(null);
   // Only what the picker shows: the whole settings object is replaced on every save.
   const settings = useStore(useShallow((s) => s.settings && { favoriteModels: s.settings.favoriteModels, defaultProviderId: s.settings.defaultProviderId, defaultModelId: s.settings.defaultModelId }));

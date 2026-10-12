@@ -13,5 +13,13 @@ test('default build builds and stages nekkod before building the app', () => {
 });
 
 test('dev builds before starting the desktop development server', () => {
-  assert.equal(pkg.scripts.dev, 'npm run build && npm run dev -w @nekko-agent/desktop');
+  assert.equal(pkg.scripts.dev, 'npm run build:dev && npm run dev -w @nekko-agent/desktop');
+  // The daemon and every workspace the app imports are rebuilt, so dev never
+  // runs stale output; the daemon uses the fast dev-daemon profile.
+  assert.match(pkg.scripts['build:dev'], /^node apps\/desktop\/scripts\/stage-daemon\.mjs --dev && /);
+  assert.match(pkg.scripts['build:dev'], /build:core/);
+  assert.match(pkg.scripts['build:dev'], /@nekko-agent\/host/);
+  assert.match(pkg.scripts['build:dev'], /build:app --workspace=apps\/cli/);
+  // electron-vite dev bundles the desktop app itself; a production build first is wasted.
+  assert.doesNotMatch(pkg.scripts['build:dev'], /@nekko-agent\/desktop/);
 });

@@ -93,7 +93,7 @@ app.whenReady().then(async () => {
       }
     }
     if (!process.env.NEKKO_TEST_REVISION) {
-      await run("[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='New image session').click()");
+      await run("[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Media gen').click()");
       await check('workspace image entry uses real store creation and options', "integration.calls.some(c=>c.method==='options'&&c.options.chatType==='image') && integration.state().activeSessionId==='new-1' && integration.state().workspaces.some(w=>w.anchor.refId==='new-1')");
     }
     win.setContentSize(1200,900); await reset(); await run('integration.dashboard()'); await sleep(900);

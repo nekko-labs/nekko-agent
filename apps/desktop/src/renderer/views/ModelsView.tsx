@@ -5,7 +5,7 @@ import type { LimitWindow, ModelInfo, OAuthProvider, OAuthStatus, ProviderConfig
 import { formatUSD, isLocalProvider, isRuntimeKind, formatModelPriceLabel, modelPricing } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
-import { Badge } from '../components/primitives/index.js';
+import { Badge, Toggle } from '../components/primitives/index.js';
 import { SubscriptionSignIn } from '../components/SubscriptionSignIn.js';
 import { AddProvider, SUBSCRIPTION_KINDS, reconnectProviderConfig } from '../components/providers/AddProvider.js';
 import { PlusIcon, TrashIcon, CheckIcon, StarIcon } from '../icons.js';
@@ -222,6 +222,8 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   const settings = useStore((s) => s.settings);
   const refreshSettings = useStore((s) => s.refreshSettings);
   const pushToast = useStore((s) => s.pushToast);
+  // Only an explicit off switch disables; older entries without the field stay on.
+  const enabled = provider.enabled !== false;
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [conn, setConn] = useState<{ state: 'unknown' | 'testing' | 'ok' | 'fail'; message?: string }>({ state: 'unknown' });
   const defaultSettings = useStore(s => s.settings);
@@ -281,8 +283,10 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
     setConn({ state: r.ok ? 'ok' : 'fail', message: r.message });
   };
 
-  // Auto-check connectivity (and load models) when the card mounts.
+  // Auto-check connectivity (and load models) when the card mounts, but only
+  // for an enabled provider: a disabled one is never contacted.
   useEffect(() => {
+    if (!enabled) { setModels([]); setConn({ state: 'unknown' }); return; }
     load();
     test();
     if (provider.kind === 'lmstudio') {
@@ -292,7 +296,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
       window.nekko.oauthStatus(provider.id).then(setSub).catch(() => setSub(null));
     }
     /* eslint-disable-next-line */
-  }, [provider.id, provider.tokenKey]);
+  }, [provider.id, provider.tokenKey, enabled]);
 
   // A background catalog refresh (Settings → Updates) can land new models on
   // this card while the page is open.
@@ -427,22 +431,27 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
     load();
   };
 
-  return (
-    <div className="card p-5">
+  const setEnabled = async (next: boolean) => {
+    await window.nekko.saveProvider({ ...provider, enabled: next });
+    onChanged();
+  };
+
+  const header = (
       <div className="flex items-start justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">{provider.label}</h3>
-            {conn.state === 'ok' && (
+            <h3 className={`font-semibold ${enabled ? '' : 'text-ink-faint'}`}>{provider.label}</h3>
+            {!enabled && <span className="chip">disabled</span>}
+            {enabled && conn.state === 'ok' && (
               <Badge tone="success" variant="solid" className="px-2 py-0.5">
                 <CheckIcon className="h-3 w-3" /> Connected
               </Badge>
             )}
-            {conn.state === 'fail' && (
+            {enabled && conn.state === 'fail' && (
               <Badge tone="danger" variant="solid" title={conn.message}>Offline</Badge>
             )}
-            {conn.state === 'testing' && <span className="chip">checking…</span>}
-            {subscription && (
+            {enabled && conn.state === 'testing' && <span className="chip">checking…</span>}
+            {enabled && subscription && (
               <Badge
                 tone={sub?.connected ? 'success' : 'warning'}
                 variant="soft"
@@ -457,8 +466,15 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
             )}
             {provider.discovered && <span className="chip">discovered</span>}
           </div>
-          {!local && <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{provider.baseUrl}</p>}
+          {(!local || !enabled) && <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{provider.baseUrl}</p>}
         </div>
+        <div className="flex shrink-0 items-center gap-1">
+        <Toggle
+          value={enabled}
+          onChange={(v) => void setEnabled(v)}
+          label={`${enabled ? 'Disable' : 'Enable'} ${provider.label}`}
+          title={enabled ? 'Enabled: checked, listed in model pickers, and usable in chats. Click to disable.' : 'Disabled: never contacted or launched. Click to enable.'}
+        />
         <button
           className="btn btn-ghost px-2"
           onClick={async () => {
@@ -472,7 +488,27 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
         >
           <TrashIcon className="h-4 w-4" />
         </button>
+        </div>
       </div>
+  );
+
+  // A disabled provider is never contacted: no connection test, no model
+  // list, no `lms` probe and no runtime polling, so a stopped LM Studio is
+  // not woken just because this page opened.
+  if (!enabled) {
+    return (
+      <div className="card p-5">
+        {header}
+        <p className="mt-3 text-[12px] text-ink-faint">
+          Disabled. Nekko Agent won't check, list, or start this provider, and it is hidden from model pickers. Turn it on to use it again.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card p-5">
+      {header}
 
       {/* A local server gets the full control surface: power, address, residency,
           and the fit planner. Start/stop, the address, and the model list all live

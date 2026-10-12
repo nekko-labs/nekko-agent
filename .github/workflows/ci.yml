@@ -82,6 +82,8 @@ jobs:
         run: npm run test:grid-bugs -w @nekko-agent/desktop
       - name: Grouped Agents sidebar regressions
         run: node apps/desktop/scripts/agent-sidebar-integration.cjs
+      - name: Fresh settings, server and page recovery regressions
+        run: node apps/desktop/scripts/fresh-pages-integration.cjs
       - name: Hidden owned-window screenshots
         if: runner.os != 'Windows'
         run: node apps/desktop/scripts/capture-smoke.mjs capture-results

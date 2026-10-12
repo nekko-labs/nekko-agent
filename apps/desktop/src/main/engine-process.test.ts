@@ -66,6 +66,15 @@ describe('finding the engine daemon', () => {
     utimesSync(debug, older, older);
     expect(findDaemon(app({ appPath }))).toBe(release);
 
+    // `npm run dev` builds the dev-daemon profile; a fresh one beats both.
+    const devDaemon = join(root, 'target', 'dev-daemon', exe);
+    mkdirSync(join(root, 'target', 'dev-daemon'), { recursive: true });
+    writeFileSync(devDaemon, '');
+    const newest = new Date('2026-10-04T00:00:00Z');
+    utimesSync(devDaemon, newest, newest);
+    expect(findDaemon(app({ appPath }))).toBe(devDaemon);
+    rmSync(devDaemon);
+
     // Only one build present: that one.
     rmSync(release);
     expect(findDaemon(app({ appPath }))).toBe(debug);

@@ -126,6 +126,17 @@ export interface Workspace {
 }
 
 const PLAN_RAIL_KEY = 'nekko.planRail';
+const PLAN_RAIL_SESSIONS_KEY = 'nekko.planRail.sessions';
+
+function readPlanRailSessions(): Record<string, boolean> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(PLAN_RAIL_SESSIONS_KEY) ?? '{}');
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      return Object.fromEntries(Object.entries(saved).filter(([, value]) => typeof value === 'boolean'));
+    }
+  } catch { /* private mode or malformed preferences */ }
+  return {};
+}
 
 /**
  * The rail's remembered state. On by default; the chat pane hides it anyway when
@@ -171,16 +182,15 @@ interface UiState {
   activeProviderId: string | null;
   activeModelId: string | null;
   contextPanelOpen: boolean;
-  /**
-   * Whether the chat pane shows its plan / sub-agent rail. App-wide rather than
-   * per-chat, like the context panel: it's a way of working, not a property of
-   * one conversation.
-   */
+  /** Legacy saved default for chats without an individual plan-panel choice. */
   planRailOpen: boolean;
+  /** Individual visibility choices, preserved across wall/focus layout changes. */
+  planRailOpenBySession: Record<string, boolean>;
   /** Whether the first-run setup wizard is showing over the app. */
   onboardingOpen: boolean;
   /** True after the first settings load has finished. */
   settingsLoaded: boolean;
+  settingsError: string | null;
   mascotMood: MascotMood;
   toasts: Toast[];
   paletteOpen: boolean;
@@ -264,7 +274,7 @@ interface UiState {
   setMascotMood: (m: MascotMood) => void;
   setView: (v: View) => void;
   setOnboardingOpen: (open: boolean) => void;
-  refreshSettings: () => Promise<void>;
+  refreshSettings: (autoOpenOnboarding?: boolean) => Promise<void>;
   refreshSessions: () => Promise<void>;
   setActiveSession: (id: string | null) => void;
   refreshProviders: () => Promise<void>;
@@ -273,7 +283,7 @@ interface UiState {
   reloadModels: (providerId: string) => Promise<void>;
   selectModel: (id: string) => void;
   toggleContextPanel: () => void;
-  togglePlanRail: () => void;
+  togglePlanRail: (sessionId: string) => void;
   applyTheme: () => void;
 
   refreshTerminals: () => Promise<void>;
@@ -535,8 +545,10 @@ export const useStore = create<UiState>((set, get) => ({
   // Default the context panel closed on small screens (phones).
   contextPanelOpen: typeof window !== 'undefined' ? window.innerWidth >= 1024 : true,
   planRailOpen: readPlanRailOpen(),
+  planRailOpenBySession: readPlanRailSessions(),
   onboardingOpen: false,
   settingsLoaded: false,
+  settingsError: null,
   mascotMood: 'waving',
   toasts: [],
   paletteOpen: false,
@@ -606,20 +618,25 @@ export const useStore = create<UiState>((set, get) => ({
   setView: (v) => set((s) => ({ view: viewEnabled(v, s.settings) ? v : 'command' })),
   setOnboardingOpen: (open) => set({ onboardingOpen: open }),
 
-  refreshSettings: async () => {
+  refreshSettings: async (autoOpenOnboarding = true) => {
+    set({ settingsError: null });
     try {
       const settings = await window.nekko.getSettings();
-      const onboardingOpen = shouldAutoOpenOnboarding(settings);
-      set({ settings, onboardingOpen, settingsLoaded: true });
+      if (!settings) throw new Error('Nekko service returned no settings.');
+      const onboardingOpen = autoOpenOnboarding ? shouldAutoOpenOnboarding(settings) : get().onboardingOpen;
+      set({ settings, onboardingOpen, settingsLoaded: true, settingsError: null });
       get().applyTheme();
       if (!get().activeProviderId && settings.defaultProviderId) {
         set({ activeProviderId: settings.defaultProviderId, activeModelId: settings.defaultModelId ?? null });
       }
       // Refreshing the folder list never chooses a folder for the user.
-    } catch {
+    } catch (e) {
       // Never leave the app on the loading gate: if settings can't be read,
       // unblock the UI and let surfaces fall back to their empty states.
-      set({ settingsLoaded: true });
+      const settingsError = e instanceof Error ? e.message : 'Nekko service is unavailable.';
+      set({ settingsLoaded: true, settingsError });
+      get().pushToast('error', `Could not load settings: ${settingsError}`);
+      get().applyTheme();
     }
   },
 
@@ -727,11 +744,11 @@ export const useStore = create<UiState>((set, get) => ({
 
   toggleContextPanel: () => set((s) => ({ contextPanelOpen: !s.contextPanelOpen })),
 
-  togglePlanRail: () =>
+  togglePlanRail: (sessionId) =>
     set((s) => {
-      const planRailOpen = !s.planRailOpen;
-      try { localStorage.setItem(PLAN_RAIL_KEY, planRailOpen ? '1' : '0'); } catch { /* private mode */ }
-      return { planRailOpen };
+      const planRailOpenBySession = { ...s.planRailOpenBySession, [sessionId]: !(s.planRailOpenBySession[sessionId] ?? s.planRailOpen) };
+      try { localStorage.setItem(PLAN_RAIL_SESSIONS_KEY, JSON.stringify(planRailOpenBySession)); } catch { /* private mode */ }
+      return { planRailOpenBySession };
     }),
 
   applyTheme: () => {

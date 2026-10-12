@@ -42,7 +42,7 @@ Nekko Agent is one engine and one React UI that run in several places: the deskt
 
 ## Build order
 
-`npm run build` builds the Rust daemon, then the TypeScript workspaces in dependency order: `shared`, `core`, `host`, `cli`, `desktop`. `npm run dev` runs that build and launches the desktop app.
+`npm run build` builds the Rust daemon, then the TypeScript workspaces in dependency order: `shared`, `core`, `host`, `cli`, `desktop`. `npm run dev` runs a faster variant (the daemon in the incremental `dev-daemon` profile, no production desktop bundle, since electron-vite dev builds its own) and launches the desktop app.
 
 ## Where to put new code
 

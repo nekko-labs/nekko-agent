@@ -20,7 +20,7 @@
     "build:core": "npm run build -w @nekko-agent/shared && npm run build -w @nekko-agent/core",
     "build:web": "npm run build:core && npm run build -w @nekko-agent/host && npm run build --workspace=apps/cli && npm run build -w @nekko-agent/desktop && npm run build -w @nekko-agent/server && npm run build -w @nekko-agent/cloud",
     "cloud": "npm run build:core && npm run build -w @nekko-agent/host && npm run build -w @nekko-agent/desktop && npm run build -w @nekko-agent/cloud && npm run start -w @nekko-agent/cloud",
-    "dev": "npm run build && npm run dev -w @nekko-agent/desktop",
+    "dev": "npm run build:dev && npm run dev -w @nekko-agent/desktop",
     "local": "npm run build:core && npm run build -w @nekko-agent/host && npm run build -w @nekko-agent/desktop && node apps/desktop/scripts/stage-daemon.mjs --optional && npm run start -w @nekko-agent/desktop",
     "web": "npm run build:web && npm run start -w @nekko-agent/server",
     "docs": "node scripts/build-docs.mjs",
@@ -35,6 +35,7 @@
     "dist": "npm run build && npm run dist -w @nekko-agent/desktop",
     "test:daemon": "cargo test --workspace --locked",
     "build:nekkod": "node apps/desktop/scripts/stage-daemon.mjs",
+    "build:dev": "node apps/desktop/scripts/stage-daemon.mjs --dev && npm run build:core && npm run build -w @nekko-agent/host && npm run build --workspace=apps/cli && npm run build:app --workspace=apps/cli",
     "build:app": "npm run build:core && npm run build -w @nekko-agent/host && npm run build --workspace=apps/cli && npm run build:app --workspace=apps/cli && npm run build -w @nekko-agent/desktop"
   },
   "engines": {

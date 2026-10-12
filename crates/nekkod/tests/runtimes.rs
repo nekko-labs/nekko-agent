@@ -90,7 +90,9 @@ async fn the_control_plane_runs_in_the_daemon() {
     let ollama = fake_ollama(seen.clone()).await;
     let settings = json!({ "providers": [
         { "id": "ollama", "kind": "ollama", "name": "Ollama", "baseUrl": format!("http://127.0.0.1:{ollama}") },
-        { "id": "cloud", "kind": "openai", "name": "OpenAI", "baseUrl": "https://api.openai.com/v1" }
+        { "id": "cloud", "kind": "openai", "name": "OpenAI", "baseUrl": "https://api.openai.com/v1" },
+        { "id": "off", "kind": "ollama", "name": "Off", "baseUrl": format!("http://127.0.0.1:{ollama}"), "enabled": false },
+        { "id": "lms-off", "kind": "lmstudio", "name": "LM Studio", "baseUrl": "http://127.0.0.1:1/v1", "enabled": false }
     ] });
     std::fs::write(dir.join("settings.json"), settings.to_string()).unwrap();
     let d = start(&dir);
@@ -134,6 +136,15 @@ async fn the_control_plane_runs_in_the_daemon() {
     assert_eq!(cloud["ok"], json!(false));
     let (_, none) = post(d.port, "runtime:status", json!(["cloud"])).await;
     assert_eq!(none, Value::Null);
+
+    // A provider switched off is never probed, even when its server is up.
+    let (_, off) = post(d.port, "runtime:status", json!(["off"])).await;
+    assert_eq!(off, Value::Null);
+    let (_, off_facts) = post(d.port, "runtime:facts", json!(["off"])).await;
+    assert_eq!(off_facts, json!([]));
+    let (_, lms_off) = post(d.port, "lms:probe", json!(["lms-off"])).await;
+    assert_eq!(lms_off["available"], json!(false));
+    assert!(lms_off["reason"].as_str().unwrap_or_default().contains("disabled"), "{lms_off}");
 
     drop(d);
     let _ = std::fs::remove_dir_all(&dir);

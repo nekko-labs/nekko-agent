@@ -7,13 +7,29 @@ const quota = vi.hoisted(() => ({ byToken: {} as Record<string, any>, answered: 
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => quota }));
 vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
-vi.mock('./ResourceMonitor.js', () => ({ useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: null }) }));
+const resources = vi.hoisted(() => ({ gpu: null as import('@nekko-agent/shared').GpuStats | null }));
+vi.mock('./ResourceMonitor.js', () => ({ useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: resources.gpu }) }));
 import { WallDock } from './WallDock.js';
 function render(minimized = false) {
   const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, panels: { vitals: false, automations: false, utilization: false, budget: false, insights: false, hardware: true }, minimized: { ...DEFAULT_WALL_STATE.dock.minimized, hardware: minimized } } };
   return renderToStaticMarkup(<WallDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
 }
 describe('wall dock presentation', () => {
+  it('pairs each GPU name with its own utilization, including unavailable readings', () => {
+    resources.gpu = { source: 'nvidia-smi', totalMB: 0, usedMB: 0, freeMB: 0, devices: [
+      { name: 'NVIDIA RTX 4090', memoryTotalMB: 0, memoryUsedMB: 0, memoryFreeMB: 0, utilizationPct: 12 },
+      { name: 'NVIDIA RTX 3090', memoryTotalMB: 0, memoryUsedMB: 0, memoryFreeMB: 0, utilizationPct: 87 },
+      { name: 'Intel Arc', memoryTotalMB: 0, memoryUsedMB: 0, memoryFreeMB: 0 },
+    ] };
+    try {
+      const html = render();
+      expect(html).toContain('aria-label="GPU 1: NVIDIA RTX 4090" aria-valuemin="0" aria-valuemax="100" aria-valuenow="12"');
+      expect(html).toContain('aria-label="GPU 2: NVIDIA RTX 3090" aria-valuemin="0" aria-valuemax="100" aria-valuenow="87"');
+      expect(html).toContain('GPU 3: Intel Arc');
+      expect(html).not.toContain('peak device');
+      expect(html).toContain('Unavailable');
+    } finally { resources.gpu = null; }
+  });
   it('clarifies stale quota without claiming an active refresh', () => {
     quota.byToken.plan = { updatedAt: 1000, staleAfterMs: 1000, windows: [] };
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, panels: { vitals: false, automations: false, utilization: true, budget: false, insights: false, hardware: false } } };

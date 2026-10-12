@@ -326,6 +326,10 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
+### Page recovery and startup appearance (2026-10-12)
+
+- [ ] FR1: Land shared-settings recovery, model-server loading/error/retry states, page/section/overlay render isolation, system appearance before first mount, and pixel Nekko in every desktop title bar. Implemented in PR #489; 900 desktop tests, typecheck, full production build and hidden fresh-default/failure/retry checks pass in both themes and widths. See SPEC.md, Page recovery and startup appearance. Hosted gates and landing pending. Friend-specific service failure and packaged-install reproduction remain unverified; these are diagnostic limitations, not a claimed engine repair.
+
 ### Docs hub (added 2026-10-12)
 
 - [ ] T189: Documentation hub at nekkoagent.com/docs, modelled on svelte.dev/docs, generated from repo Markdown by `scripts/build-docs.mjs` (`npm run docs`), with per-page Markdown, `llms-full.txt`, search, and the Docs site workflow that regenerates and commits the pages on any PR (or a regenerate PR on main) only when the output changed. Added: 2026-10-12. See SPEC.md, Documentation hub. Hub merged in #485; production verified 2026-10-12 (`/docs`, `/docs/cli.md`, `/llms-full.txt`, search index and images all 200). Remaining: confirm the first real run of the Docs site workflow pushes with the App token (its installation needs contents and pull-requests write, which runtime-updates.yml already uses).
@@ -874,6 +878,8 @@ Observation: the fixed per-reply step budget (`DEFAULT_MAX_STEPS`, was 80) was h
 - [ ] Stripe billing keys to enable live charges (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`, `CLOUD_PUBLIC_URL`); integration is built + tested, just unconfigured.
 
 ## Shipped
+
+- [x] **Star default folders + provider on/off switch** (2026-10-13, [SPEC.md](SPEC.md#default-folders-for-new-agents-and-the-logs-drawer-2026-10-11), [provider switch](SPEC.md#models--providers)): `defaultFolders.ts` (`nextDefaultFolders`, `toggleDefaultFolder`) writes the existing `defaultWorkspaceIds`; a star sits in the composer `FolderPickerMenu` (optional `defaults`/`onToggleDefault` props) and the Context Inspector's `FolderAccordion`. Provider cards get the shared `Toggle` writing `ProviderConfig.enabled`; a disabled card renders only its header and runs no effects. Guards so nothing probes a disabled provider: host `testProvider`/`listModels`/`lmsAvailable`/`runtimeStatus`/`runtimeFacts`/`runtimePlan`/`runtimeAutoFit`, and in nekkod `providers:test`/`models:list`/`lms:probe` (providers.rs, checked before an OAuth refresh) plus `runtime:status|facts|plan|autoFit` and `lms:probe` (runtimes.rs). `ModelPicker` drops disabled providers itself. Only `enabled === false` disables, so older entries stay on. Tests: `provider-disabled.test.ts`, `FolderPicker.test.tsx`, nekkod `tests/runtimes.rs`. Visual desktop check pending.
 
 ### GitHub dependent chat worktrees (2026-10-12, PR #482)
 
