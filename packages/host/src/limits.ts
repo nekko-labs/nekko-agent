@@ -415,7 +415,7 @@ async function pollChatGpt(
   if (!accountId) throw new LimitsReadError('auth_expired');
 
   const configuredBase = getSettings().providers.find((p) => p.tokenKey === tokenKey)?.baseUrl;
-  const baseUrl = (configuredBase ?? 'https://chatgpt.com/backend-api').replace(/\/+$/, '');
+  const baseUrl = withoutTrailingSlashes(configuredBase ?? 'https://chatgpt.com/backend-api');
   const res = await fetch(`${baseUrl}/wham/usage`, {
     method: 'GET',
     headers: {
@@ -463,8 +463,15 @@ async function pollOpenRouter(tokenKey: string, accessToken: string): Promise<Su
   return readOpenRouterKey(baseUrl, accessToken);
 }
 
+/** `s.replace(/\/+$/, '')` in linear time (the base URLs come from settings). */
+function withoutTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end -= 1;
+  return s.slice(0, end);
+}
+
 async function readOpenRouterKey(baseUrl: string, bearer: string): Promise<SubscriptionLimits | undefined> {
-  const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/key`, {
+  const res = await fetch(`${withoutTrailingSlashes(baseUrl)}/key`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${bearer}` },
   });

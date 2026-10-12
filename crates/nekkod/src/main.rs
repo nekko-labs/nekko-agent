@@ -15,6 +15,7 @@ mod loops;
 mod mcp;
 mod procgroup;
 mod routes;
+mod settings;
 mod sideband;
 mod turns;
 mod wire;
@@ -64,7 +65,13 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let hub = Hub::new();
     let terminals = Arc::new(Registry::new());
     let backend = match cfg.backend.clone() {
-        Some(cmd) => Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone()),
+        Some(mut cmd) => {
+            // What the backend must reach through the daemon rather than write itself.
+            if cfg.data_dir.is_some() {
+                cmd.env.insert("NEKKOD_OWNS".into(), settings::OWNS.into());
+            }
+            Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
+        }
         None => Backend::disabled(),
     };
     let engine = Arc::new(engine::Engine::new(backend.clone()));
@@ -103,6 +110,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         )),
         mcp: mcp.clone(),
         accounts,
+        settings: cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), backend.clone())),
     };
     routes::forward_terminal_events(&ctx);
     let processes = ctx.turns.processes.clone();

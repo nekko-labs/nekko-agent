@@ -1,0 +1,83 @@
+[
+  { "name": "no file", "file": null, "ops": [{ "op": "get" }] },
+  { "name": "no file then update", "file": null, "ops": [{ "op": "update", "patch": { "theme": "dark" } }, { "op": "get" }] },
+  {
+    "name": "user file merged over defaults",
+    "file": "{\"theme\":\"light\",\"extra\":1,\"providers\":[{\"id\":\"p\",\"kind\":\"ollama\",\"baseUrl\":\"http://x\"}],\"zeta\":{\"a\":[1,2.5,1e21,0.000001]}}",
+    "ops": [{ "op": "get" }, { "op": "update", "patch": { "accent": "#123456", "newKey": null } }]
+  },
+  {
+    "name": "normalizes array fields",
+    "file": "{\"providers\":{},\"guardrails\":[],\"workspaces\":\"x\",\"connectors\":null,\"prompts\":5,\"favoriteModels\":true,\"mcpServers\":{\"a\":1}}",
+    "ops": [{ "op": "get" }]
+  },
+  { "name": "drops maxSteps", "file": "{\"maxSteps\":20,\"theme\":\"dark\"}", "ops": [{ "op": "get" }, { "op": "update", "patch": {} }] },
+  { "name": "legacy accent migrated", "file": "{\"accent\":\"#FF7A59\"}", "ops": [{ "op": "get" }] },
+  { "name": "own accent kept", "file": "{\"accent\":\"#abcdef\"}", "ops": [{ "op": "get" }] },
+  { "name": "empty accent kept", "file": "{\"accent\":\"\"}", "ops": [{ "op": "get" }] },
+  { "name": "non-string accent falls back to defaults", "file": "{\"accent\":5,\"theme\":\"dark\"}", "ops": [{ "op": "get" }] },
+  { "name": "invalid json", "file": "{\"theme\":", "ops": [{ "op": "get" }] },
+  { "name": "byte order mark", "file": "\ufeff{\"theme\":\"dark\"}", "ops": [{ "op": "get" }] },
+  { "name": "null file", "file": "null", "ops": [{ "op": "get" }] },
+  { "name": "number file", "file": "42", "ops": [{ "op": "get" }] },
+  { "name": "array file", "file": "[\"a\",{\"b\":1}]", "ops": [{ "op": "get" }] },
+  { "name": "string file", "file": "\"hi\"", "ops": [{ "op": "get" }] },
+  { "name": "duplicate keys", "file": "{\"theme\":\"a\",\"x\":1,\"theme\":\"b\"}", "ops": [{ "op": "get" }] },
+  { "name": "unicode and escapes", "file": "{\"name\":\"caf\\u00e9 \\ud83d\\ude00 \\u0001\\u001f\\t\\n\\\"\\\\ \\u2028 /\"}", "ops": [{ "op": "update", "patch": { "e": "\u0000\b\f\r\u007f" } }] },
+  {
+    "name": "workspaces deduplicated on save",
+    "file": "{\"workspaces\":[{\"id\":\"a\",\"name\":\"A\",\"path\":\"C:\\\\code\",\"addedAt\":1}]}",
+    "ops": [
+      {
+        "op": "update",
+        "patch": {
+          "workspaces": [
+            { "id": "a", "name": "A", "path": "C:\\code", "addedAt": 1 },
+            { "id": "b", "name": "B", "path": "c:/code/", "addedAt": 2 },
+            { "id": "c", "name": "C", "path": "/home/a", "addedAt": 3 },
+            { "id": "d", "name": "D", "path": "/home/A", "addedAt": 4 },
+            { "id": "e", "name": "E", "path": "/home/a///", "addedAt": 5 },
+            { "id": "f", "name": "F", "path": "  \\\\server\\Share\\  ", "addedAt": 6 },
+            { "id": "g", "name": "G", "path": "\\\\SERVER\\share", "addedAt": 7 },
+            { "id": "h", "name": "H", "path": "D:", "addedAt": 8 },
+            { "id": "i", "name": "I", "path": "d:\\\\", "addedAt": 9 },
+            { "id": "j", "name": "J", "path": "///", "addedAt": 10 },
+            { "id": "k", "name": "K", "path": "/", "addedAt": 11 },
+            { "id": "l", "name": "L", "path": "", "addedAt": 12 },
+            { "id": "m", "name": "M", "path": "x\n//", "addedAt": 13 },
+            { "id": "n", "name": "N", "path": "x\n/", "addedAt": 14 }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "empty ids are not remembered",
+    "file": null,
+    "ops": [
+      {
+        "op": "update",
+        "patch": {
+          "workspaces": [
+            { "id": "", "path": "/a" },
+            { "id": "x", "path": "/a" },
+            { "id": "y", "path": "/a" },
+            { "id": 0, "path": "/b" },
+            { "id": 7, "path": "/b" }
+          ]
+        }
+      }
+    ]
+  },
+  { "name": "empty workspaces array", "file": "{\"workspaces\":[{\"id\":\"a\",\"path\":\"/a\"}]}", "ops": [{ "op": "update", "patch": { "workspaces": [] } }] },
+  { "name": "falsy workspaces skip dedupe", "file": null, "ops": [{ "op": "update", "patch": { "workspaces": null } }, { "op": "update", "patch": { "workspaces": 0 } }] },
+  { "name": "workspace path not a string throws", "file": "{\"theme\":\"dark\"}", "ops": [{ "op": "update", "patch": { "workspaces": [{ "id": "a", "path": 5 }] } }, { "op": "get" }] },
+  { "name": "workspace entry null throws", "file": null, "ops": [{ "op": "update", "patch": { "workspaces": [null] } }] },
+  { "name": "workspaces not iterable throws", "file": null, "ops": [{ "op": "update", "patch": { "workspaces": { "a": 1 } } }, { "op": "update", "patch": { "workspaces": 3 } }] },
+  { "name": "workspaces string iterates characters", "file": null, "ops": [{ "op": "update", "patch": { "workspaces": "ab" } }] },
+  { "name": "missing patch throws", "file": null, "ops": [{ "op": "update" }, { "op": "update", "patch": null }] },
+  { "name": "array and string patches spread", "file": null, "ops": [{ "op": "update", "patch": ["x", "y"] }, { "op": "update", "patch": "ab" }, { "op": "update", "patch": 5 }, { "op": "update", "patch": true }] },
+  { "name": "update replaces nested values whole", "file": "{\"engine\":{\"port\":1,\"autoStart\":true}}", "ops": [{ "op": "update", "patch": { "engine": { "port": 2 } } }, { "op": "get" }] },
+  { "name": "reset", "file": "{\"theme\":\"dark\",\"providers\":[{\"id\":\"p\"}]}", "ops": [{ "op": "reset" }, { "op": "get" }] },
+  { "name": "large and odd numbers", "file": "{\"a\":12345678901234567890,\"b\":-0,\"c\":1.0,\"d\":1E2,\"e\":0.1,\"f\":123e-20,\"g\":[]}", "ops": [{ "op": "update", "patch": { "h": {} } }] }
+]

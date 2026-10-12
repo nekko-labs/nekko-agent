@@ -24,6 +24,7 @@ nekko-decide = { path = "../nekko-decide" }
 nekko-infer = { path = "../nekko-infer" }
 nekko-js = { path = "../nekko-js" }
 nekko-loop = { path = "../nekko-loop" }
+nekko-settings = { path = "../nekko-settings" }
 nekko-store = { path = "../nekko-store" }
 nekko-term = { path = "../nekko-term" }
 nekko-tools = { path = "../nekko-tools" }

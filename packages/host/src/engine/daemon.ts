@@ -82,6 +82,15 @@ export function daemonCall(): (<T>(channel: string, ...args: unknown[]) => Promi
   };
 }
 
+/**
+ * Whether the daemon this host runs under owns `what` (a file it is the
+ * single writer of, such as `settings`), from `NEKKOD_OWNS`, which nekkod sets
+ * when it knows the data directory.
+ */
+export function daemonOwns(what: string): boolean {
+  return Boolean(currentLink) && (process.env.NEKKOD_OWNS ?? '').split(',').includes(what);
+}
+
 export function engineDaemon(): EngineDaemon | undefined {
   return current;
 }
