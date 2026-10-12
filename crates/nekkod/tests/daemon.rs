@@ -34,6 +34,8 @@ fn fake_backend() {
         // What `turn:prepare` admits a queued prompt as: a test sets the spec's template.
         let template = std::sync::Arc::new(std::sync::Mutex::new(None::<Value>));
         let prepared = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        // What `design:provider` answers: a test points it at its scripted model.
+        let design_provider = std::sync::Arc::new(std::sync::Mutex::new(None::<Value>));
         // Checkpoint events and loop:end carry the same image-bearing transcript.
         // The fake host must accept it rather than silently rejecting >2 MiB JSON.
         let app = axum::Router::new()
@@ -72,6 +74,17 @@ fn fake_backend() {
                                 },
                                 axum::Json(json!({ "result": { "toolCallId": body.0["args"][1]["id"], "output": "host tool ran" } })),
                             ),
+                            "test:designProvider" => {
+                                *design_provider.lock().unwrap() = Some(body.0["args"][0].clone());
+                                (axum::http::StatusCode::OK, axum::Json(Value::Null))
+                            }
+                            "design:provider" => match design_provider.lock().unwrap().clone() {
+                                Some(v) => (axum::http::StatusCode::OK, axum::Json(v)),
+                                None => (
+                                    axum::http::StatusCode::BAD_REQUEST,
+                                    axum::Json(json!({ "error": "Set a default provider and model in Models first." })),
+                                ),
+                            },
                             "test:prepareTemplate" => {
                                 *template.lock().unwrap() = Some(body.0["args"][0].clone());
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
@@ -1646,6 +1659,46 @@ async fn serves_files_memory_and_comments_itself() {
     assert_eq!(snippets[0]["body"], json!("1: export function a() {}"));
     let (_, status) = post(d.port, "workspace:indexStatus", json!(["w1"]), Some(TOKEN)).await;
     assert_eq!(status["state"], json!("ready"));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn generates_a_design_on_the_default_provider() {
+    let data = std::env::temp_dir().join(format!("nekkod-design-{}", std::process::id()));
+    std::fs::create_dir_all(&data).unwrap();
+    let model = scripted_model(vec![say_text("```html\n<!DOCTYPE html><p>Pricing</p>\n```")]).await;
+    let d = start_with(true, Some(&data));
+    // No default provider yet: the host's answer is the error.
+    let (status, refused) =
+        post(d.port, "design:generate", json!(["w1", { "prompt": "A pricing page" }]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
+    assert!(refused.to_string().contains("default provider"), "{refused}");
+    let (status, _) = post(d.port, "design:generate", json!(["w1", { "prompt": "  " }]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
+    let provider = json!({ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) });
+    post(
+        d.port,
+        "test:designProvider",
+        json!([{ "provider": provider, "model": "synthetic", "promptCaching": true }]),
+        Some(TOKEN),
+    )
+    .await;
+    let (status, board) =
+        post(d.port, "design:generate", json!(["w1", { "prompt": "  A pricing page  " }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{board}");
+    let page = &board["pages"][0];
+    assert_eq!(
+        (page["kind"].clone(), page["label"].clone(), page["html"].clone()),
+        (json!("concept"), json!("A pricing page"), json!("<!DOCTYPE html><p>Pricing</p>"))
+    );
+    let sent = model.requests.lock().unwrap().clone();
+    let user = sent[0]["messages"].as_array().unwrap().iter().find(|m| m["role"] == "user").unwrap().clone();
+    assert_eq!(user["content"], json!("Design this: A pricing page"));
+    let (_, again) = post(d.port, "design:get", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(again, board);
+    let (_, noted) = post(d.port, "design:addNote", json!(["w1", page["id"], " tighter "]), Some(TOKEN)).await;
+    assert_eq!(noted["pages"][0]["notes"][0]["text"], json!("tighter"));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }

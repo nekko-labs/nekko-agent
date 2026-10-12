@@ -2,6 +2,7 @@ import { IpcChannels } from '@nekko-agent/shared';
 import type { Host } from './host.js';
 import { deleteAgentLog } from './agent-log.js';
 import { benchHostLoad } from './workspace.js';
+import { designProvider } from './design.js';
 import { daemonOwns } from './daemon-loop.js';
 import { daemonCall } from './engine/daemon.js';
 
@@ -25,6 +26,13 @@ export const DAEMON_SERVED = new Set<string>([
   IpcChannels.prSessionList,
   IpcChannels.prDiff,
   IpcChannels.prAction,
+  IpcChannels.designGet,
+  IpcChannels.designAddPage,
+  IpcChannels.designUpdatePage,
+  IpcChannels.designRemovePage,
+  IpcChannels.designAddNote,
+  IpcChannels.designResolveNote,
+  IpcChannels.designGenerate,
   IpcChannels.memoryList,
   IpcChannels.memorySave,
   IpcChannels.memoryDelete,
@@ -104,6 +112,8 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'settings:changed': ([next, patch]) => host.settingsChanged(next as never, (patch ?? null) as never),
     // The daemon indexed a workspace (crates/nekkod/src/workspace.rs); it told the UI itself.
     'index:progress': ([status]) => host.indexProgressRelay(status as never),
+    // The daemon generates a design (crates/nekkod/src/workspace.rs) with the default provider, signed in here.
+    'design:provider': () => designProvider(),
     // The daemon keeps limit state (crates/nekkod/src/limits.rs) and asks this
     // host only for what still lives here: a refreshed sign-in, and the relay.
     'limits:notify': ([payload]) => host.limitsNotify(payload as never),

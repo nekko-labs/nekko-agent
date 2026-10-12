@@ -12,6 +12,7 @@
 //! writes (`tests/golden`).
 
 pub mod comments;
+pub mod design;
 pub mod files;
 pub mod git;
 pub mod index;

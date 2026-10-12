@@ -11,7 +11,7 @@
 use crate::backend::Backend;
 use crate::hub::Hub;
 use crate::routes::Ctx;
-use nekko_workspace::{comments, files, git::Git, index::Index, memory, pr::Prs};
+use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -35,8 +35,25 @@ pub const CHANNELS: &[&str] = &[
 
 /// Channels that keep their files in the data directory, served only when
 /// this daemon knows it.
-pub const DATA_CHANNELS: &[&str] =
-    &["memory:list", "memory:save", "memory:delete", "comments:list", "comment:add", "comment:resolve"];
+pub const DATA_CHANNELS: &[&str] = &[
+    "memory:list",
+    "memory:save",
+    "memory:delete",
+    "comments:list",
+    "comment:add",
+    "comment:resolve",
+    "design:get",
+    "design:addPage",
+    "design:updatePage",
+    "design:removePage",
+    "design:addNote",
+    "design:resolveNote",
+    "design:generate",
+];
+
+/// A design generation has no limit in the host; this keeps a stuck model
+/// from holding the call forever.
+const DESIGN_TIMEOUT_MS: u64 = 10 * 60 * 1000;
 
 pub struct Workspace {
     data_dir: Option<PathBuf>,
@@ -233,6 +250,17 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 None => Ok(out),
             }
         }
+        "design:addPage" => {
+            let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
+            let folder =
+                folder_path(&folders(backend).await, &arg(&args, 0).map(nekko_js::display).unwrap_or_default());
+            blocking(move || design::add_page(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2), folder.as_deref()))
+                .await?
+        }
+        "design:generate" => {
+            let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
+            generate_design(ctx, dir, args).await
+        }
         _ => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
             data_route(dir, channel, args).await
@@ -249,6 +277,13 @@ async fn data_route(dir: PathBuf, channel: &str, args: Vec<Value>) -> Result<Val
         "comments:list" => Ok(comments::list(&dir, arg(&args, 0))),
         "comment:add" => comments::add(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2), arg(&args, 3)),
         "comment:resolve" => comments::resolve(&dir, arg(&args, 0), arg(&args, 1)),
+        "design:get" => Ok(design::get(&dir, arg(&args, 0))),
+        "design:updatePage" => {
+            design::update_page(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2).unwrap_or(&Value::Null))
+        }
+        "design:removePage" => design::remove_page(&dir, arg(&args, 0), arg(&args, 1)),
+        "design:addNote" => design::add_note(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2)),
+        "design:resolveNote" => design::resolve_note(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2)),
         other => Err(format!("{other} is not a workspace channel")),
     })
     .await?
@@ -263,6 +298,44 @@ pub async fn index_snippets(ctx: &Ctx, workspace_ids: &[String], text: &str) -> 
         workspace_ids.iter().map(|id| (id.clone(), folder_path(&saved, id).is_some())).collect();
     let (index, query) = (ctx.workspace.index.clone(), text.to_string());
     blocking(move || index.snippets(&found, &query)).await.unwrap_or_default()
+}
+
+/// `generateDesign(workspaceId, input)`: the checks and the prompt here, the
+/// default provider (signed in) from the host, the model call on the Rust
+/// providers, then the prototype file and the concept card.
+async fn generate_design(ctx: &Ctx, dir: PathBuf, args: Vec<Value>) -> Result<Value, String> {
+    let workspace = arg(&args, 0).cloned();
+    let input = arg(&args, 1).cloned().unwrap_or(Value::Null);
+    let plan = {
+        let (dir, workspace, input) = (dir.clone(), workspace.clone(), input.clone());
+        blocking(move || design::plan(&dir, workspace.as_ref(), &input)).await??
+    };
+    let chosen = ctx.backend.call("design:provider", json!([])).await?;
+    let mut message =
+        json!({ "id": "design", "role": "user", "content": plan.ask, "createdAt": nekko_workspace_now() });
+    if let Some(images) = &plan.images {
+        message["images"] = json!(images);
+    }
+    let spec = json!({
+        "provider": chosen.get("provider").cloned().unwrap_or(Value::Null),
+        "request": {
+            "model": chosen.get("model").cloned().unwrap_or(Value::Null),
+            "system": design::DESIGN_SYSTEM,
+            "messages": [message],
+            "temperature": 0.6,
+            "promptCaching": chosen.get("promptCaching").cloned().unwrap_or(json!(true)),
+        },
+        "timeoutMs": DESIGN_TIMEOUT_MS,
+    });
+    let reply = crate::sideband::complete(&spec).await.map_err(|e| format!("Design generation failed: {e}"))?;
+    let raw = reply.get("text").and_then(Value::as_str).unwrap_or_default().to_string();
+    let folder =
+        folder_path(&folders(&ctx.backend).await, &workspace.as_ref().map(nekko_js::display).unwrap_or_default());
+    blocking(move || design::land(&dir, workspace.as_ref(), &input, &plan, &raw, folder.as_deref())).await?
+}
+
+fn nekko_workspace_now() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 /// Index a folder off the async threads, telling the UI and the host's

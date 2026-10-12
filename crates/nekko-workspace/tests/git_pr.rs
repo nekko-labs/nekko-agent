@@ -77,7 +77,7 @@ fn the_pure_halves_match_the_ts_host() {
         "cooldown".into(),
         list("cooldown").iter().map(|s| json!(pr::read_cooldown_ms(s.as_str().unwrap()))).collect(),
     );
-    let text = format!("{}\n", nekko_js::stringify_pretty(&Value::Object(out)));
+    let text = format!("{}\n", nekko_js::stringify_pretty(&Value::Object(out), "  "));
     let want = golden("git-pr.json").replace("\r\n", "\n");
     if text != want {
         for (i, (w, g)) in want.lines().zip(text.lines()).enumerate() {
