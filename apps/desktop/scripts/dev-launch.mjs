@@ -48,8 +48,48 @@ export function prepareMacBundle() {
   writeFileSync(launcher, `#!/usr/bin/env node\nrequire(${JSON.stringify(wrapper)}).launch(${JSON.stringify(bundle)},${JSON.stringify(cache)});\n`, { mode: 0o755 });
   return { launcher, bundle, cache };
 }
+/**
+ * Windows names a process after its executable's version info and draws its
+ * taskbar button from the executable's icon, so a dev run of the stock
+ * electron.exe shows up as "Electron" with Electron's logo. Copy the runtime
+ * once per Electron version as "Nekko Agent.exe" carrying the app's icon and
+ * name (the download itself stays untouched for other worktrees).
+ */
+export async function prepareWindowsRuntime() {
+  const version = require('electron/package.json').version;
+  const cache = resolve('.dev-runtime', `${version}-win`);
+  const exe = join(cache, 'Nekko Agent.exe');
+  const ready = join(cache, 'ready-v1');
+  if (existsSync(ready) && existsSync(exe)) return exe;
+  rmSync(cache, { recursive: true, force: true });
+  mkdirSync(cache, { recursive: true });
+  const dist = dirname(electron);
+  cpSync(dist, cache, { recursive: true, filter: (src) => resolve(src) !== resolve(dist, 'electron.exe') });
+  const ResEdit = await import('resedit');
+  const pe = ResEdit.NtExecutable.from(readFileSync(electron), { ignoreCert: true });
+  const res = ResEdit.NtExecutableResource.from(pe);
+  const group = ResEdit.Resource.IconGroupEntry.fromEntries(res.entries)[0];
+  const icon = ResEdit.Data.IconFile.from(readFileSync(resolve('build/icon.ico')));
+  ResEdit.Resource.IconGroupEntry.replaceIconsForResource(res.entries, group?.id ?? 1, group?.lang ?? 1033, icon.icons.map((i) => i.data));
+  for (const info of ResEdit.Resource.VersionInfo.fromEntries(res.entries)) {
+    for (const lang of info.getAllLanguagesForStringValues()) {
+      info.setStringValues(lang, { FileDescription: 'Nekko Agent', ProductName: 'Nekko Agent', InternalName: 'Nekko Agent', OriginalFilename: 'Nekko Agent.exe', CompanyName: 'Nekko Labs' });
+    }
+    info.outputToResourceEntries(res.entries);
+  }
+  res.outputResource(pe);
+  writeFileSync(exe, Buffer.from(pe.generate()));
+  writeFileSync(ready, 'patched');
+  return exe;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 if (process.platform === 'darwin') { const prepared = prepareMacBundle(); env.ELECTRON_EXEC_PATH = prepared.launcher; ownedCache = prepared.cache; }
+if (process.platform === 'win32') {
+  // A branded copy is cosmetic: if it cannot be made, run the stock runtime.
+  try { env.ELECTRON_EXEC_PATH = await prepareWindowsRuntime(); }
+  catch (e) { console.warn(`[nekko] Running as electron.exe (could not brand the dev runtime: ${e instanceof Error ? e.message : e})`); }
+}
 const cli = resolve(dirname(require.resolve('electron-vite')), '../bin/electron-vite.js');
 // In a terminal the launcher keeps the keyboard for its stop keys; electron-vite
 // and the app don't read stdin. Elsewhere (CI, an IDE task) nothing changes.

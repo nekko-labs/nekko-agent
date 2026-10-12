@@ -57,6 +57,7 @@
     "postcss": "^8.5.29",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "resedit": "^1.7.2",
     "tailwindcss": "^4.3.3",
     "vite": "^7.3.7",
     "zustand": "^5.0.15"
