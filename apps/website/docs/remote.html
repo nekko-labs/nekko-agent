@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phone remote control · Nekko Agent docs</title>
+    <meta name="description" content="Drive the agent on your computer from your phone, end-to-end encrypted." />
+    <link rel="canonical" href="https://nekkoagent.com/docs/remote" />
+    <link rel="alternate" type="text/markdown" href="/docs/remote.md" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="theme-color" content="#101714" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/docs/remote" />
+    <meta property="og:title" content="Phone remote control · Nekko Agent docs" />
+    <meta property="og:description" content="Drive the agent on your computer from your phone, end-to-end encrypted." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/docs.css?v=docs-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Phone remote control","description":"Drive the agent on your computer from your phone, end-to-end encrypted.","url":"https://nekkoagent.com/docs/remote","inLanguage":"en","isPartOf":{"@id":"https://nekkoagent.com/#website"},"publisher":{"@id":"https://nekkolabs.com/#organization"},"about":{"@id":"https://nekkoagent.com/#app"}}</script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="docs-home" href="/docs">Docs</a>
+      <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Site">
+        <a href="https://github.com/nekko-labs/nekko-agent" rel="noopener">GitHub</a>
+        <a class="download" href="/#download">Download</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote" aria-current="page">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <main id="content">
+        <article class="prose" id="top">
+          <p class="kicker">Using Nekko Agent</p>
+          <h1>Phone remote control</h1>
+          <p class="page-tools">
+            <a href="/docs/remote.md">View as Markdown</a>
+            <a href="/llms.txt">llms.txt</a>
+          </p>
+<p>Drive the Nekko Agent running on your computer from your phone: start and manage chats, watch and steer
+training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
+and tools always execute on <strong>your</strong> machine, under its guardrails; the phone is a thin client.</p>
+<h2 id="how-it-works"><a class="anchor" href="#how-it-works" aria-hidden="true" tabindex="-1">#</a>How it works</h2>
+<div class="code"><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code>[ Phone ]  --TLS--&gt;  [ relay ]  &lt;--outbound WSS--  [ your computer (agent) ]</code></pre></div>
+<ul>
+<li>Your computer <strong>dials out</strong> to a relay and claims a room. No inbound ports, no port-forwarding.</li>
+<li>Your phone connects to the same relay with the pairing credentials.</li>
+<li>Every payload is <strong>end-to-end encrypted</strong> (AES-GCM, key derived from the pairing secret). The
+relay routes ciphertext; it cannot read prompts, replies, files, or model output.</li>
+<li>On top of the encrypted transport, every device must pass a <strong>handshake against your computer&#39;s
+device registry</strong>: new devices enroll only through a <strong>single-use pairing code that expires in
+10 minutes</strong>, and your computer answers each device individually (never broadcast).</li>
+</ul>
+<h2 id="pairing-a-phone"><a class="anchor" href="#pairing-a-phone" aria-hidden="true" tabindex="-1">#</a>Pairing a phone</h2>
+<ol>
+<li>On your computer: <strong>Settings → Remote access → Enable</strong> (the managed relay is prefilled; or
+paste your self-hosted relay URL), then <strong>Pair a device</strong>.</li>
+<li>On your phone: scan the QR in the Nekko Agent app (<strong>Computers → Pair a computer</strong>), or with the
+phone&#39;s camera app, which hands the <code>nekko-agent-pair:</code> link to the Nekko Agent app. Without the
+app, open the pairing link in a browser to get the full app over the relay.</li>
+<li>The phone shows up under <strong>Paired devices</strong>, with a live connection dot.</li>
+</ol>
+<h2 id="the-phone-app"><a class="anchor" href="#the-phone-app" aria-hidden="true" tabindex="-1">#</a>The phone app</h2>
+<p>The iOS and Android app (<code>apps/mobile</code>) is built for the phone rather than being the desktop on a
+small screen: your computer&#39;s chats with <strong>Working</strong> / <strong>Needs you</strong> badges, new chats on any of the
+computer&#39;s models and folders, live replies, <strong>Allow this?</strong> cards for risky commands, the agent&#39;s
+questions as tap-to-answer choices, follow-ups that queue while a run is going, and Stop. It can
+pair several computers and talks to one at a time.</p>
+<p>It also runs <strong>models on the phone itself</strong> (llama.cpp, curated small GGUF models from Hugging Face
+sized to the phone&#39;s memory), so you can keep chatting when the computer is off. Those chats never
+leave the phone and don&#39;t use the relay.</p>
+<p>On the phone, the pairing key and the derived encryption key live in the iOS Keychain / Android
+Keystore. The app drops any provider API keys your computer sends with its settings and never
+stores them.</p>
+<p>Manage devices from the same card: <strong>rename</strong> them, <strong>revoke</strong> one instantly (it&#39;s kicked live and
+denied from then on), or <strong>Rotate secret</strong> to cryptographically reset the room, which unpairs
+everything at once.</p>
+<p>Remote access survives restarts: if it was enabled, the agent reconnects when Nekko Agent starts.</p>
+<h2 id="security-model-honestly-stated"><a class="anchor" href="#security-model-honestly-stated" aria-hidden="true" tabindex="-1">#</a>Security model, honestly stated</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Defense</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Relay operator reads your traffic</td>
+<td>Impossible by construction: E2E encryption, relay sees ciphertext only</td>
+</tr>
+<tr>
+<td>Stranger connects to your room</td>
+<td>Needs the pairing secret (128-bit) for transport auth, then a registered device or a live pairing code</td>
+</tr>
+<tr>
+<td>Leaked/stale pairing link</td>
+<td>The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone&#39;s URL/history after pairing</td>
+</tr>
+<tr>
+<td>Lost/stolen phone</td>
+<td>Revoke it in Settings: kicked immediately, denied afterward, push token dropped</td>
+</tr>
+<tr>
+<td>Revoked device replays old creds</td>
+<td>The agent refuses its handshake and unicasts nothing to it; rotate the secret for a full cryptographic reset</td>
+</tr>
+<tr>
+<td>Malicious relay withholding/reordering</td>
+<td>Availability only; it still can&#39;t read or forge frames (AES-GCM auth)</td>
+</tr>
+<tr>
+<td>Phone asks for something dangerous</td>
+<td>Tool calls run on your machine under your guardrails/sandbox and chat mode (Ask/Guardrails/YOLO)</td>
+</tr>
+</tbody></table></div>
+<p>What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
+enable push, device push tokens plus the content-free fact &quot;a run finished&quot;. That&#39;s the whole list,
+and it&#39;s why relayed local-model use is inherently zero-data-retention for content.</p>
+<h2 id="choosing-a-relay"><a class="anchor" href="#choosing-a-relay" aria-hidden="true" tabindex="-1">#</a>Choosing a relay</h2>
+<h3 id="managed-relay-default-wssnekko-agent-relayflydev"><a class="anchor" href="#managed-relay-default-wssnekko-agent-relayflydev" aria-hidden="true" tabindex="-1">#</a>Managed relay (default): <code>wss://nekko-agent-relay.fly.dev</code></h3>
+<p>Zero setup; free during beta with per-connection rate limits. When Nekko Agent Cloud launches, the
+managed relay becomes part of the paid plans (it already supports gating via
+<code>NEKKO_RELAY_AUTHZ_URL</code>), while self-hosting stays free forever.</p>
+<h3 id="private-relay-over-tailscale-free-no-account-nothing-hosted"><a class="anchor" href="#private-relay-over-tailscale-free-no-account-nothing-hosted" aria-hidden="true" tabindex="-1">#</a>Private relay over Tailscale (free, no account, nothing hosted)</h3>
+<p>If your phone and computer are both on a <a href="https://tailscale.com" rel="noopener">Tailscale</a> network, you do not
+need a hosted relay at all: run the relay <strong>on the computer</strong> and bind it to the computer&#39;s
+Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts the hop
+(WireGuard), and the app&#39;s end-to-end layer still sits on top. This is how free remote-desktop
+tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
+network you already own.</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run relay:tailscale        # Windows (PowerShell); or scripts/private-relay.sh on macOS/Linux</code></pre></div>
+<p>The script prints the URL to paste into <strong>Settings → Remote access</strong> (for example
+<code>ws://gomi.tailfd6474.ts.net:4400</code>; the MagicDNS name resolves on any device in the tailnet, the
+<code>100.x.y.z</code> address works too). Enable, <strong>Pair a device</strong>, scan the QR from the phone with
+Tailscale switched on. The relay only listens on the Tailscale interface, so
+<code>NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1</code> is safe here; never use that flag on a public bind.</p>
+<p>Plain <code>ws://</code> is fine on a tailnet: the transport is already encrypted end to end by WireGuard and
+the iOS app ships with Expo&#39;s default App Transport Security (arbitrary loads allowed). If you
+prefer <code>wss://</code>, enable <strong>HTTPS certificates</strong> in the tailnet&#39;s DNS settings and either put
+<code>tailscale serve --bg 4400</code> in front (needs Serve enabled once per tailnet) or terminate TLS with
+<code>tailscale cert</code> on your own proxy.</p>
+<p>Trade-offs: the computer must be awake and Tailscale running; push notifications need APNs/FCM
+keys on this relay like any other; Tailscale&#39;s free plan covers up to 100 devices and 3 users.</p>
+<h3 id="self-host-free-forever-one-command"><a class="anchor" href="#self-host-free-forever-one-command" aria-hidden="true" tabindex="-1">#</a>Self-host (free forever, one command)</h3>
+<p>The relay is a tiny stateless Node service; anything that runs a container can host it.</p>
+<p><strong>Docker</strong></p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">docker run -d --name nekko-agent-relay -p 4400:4400 --restart unless-stopped \
+  -e NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 \
+  ghcr.io/nekko-labs/nekko-agent-relay:latest</code></pre></div>
+<p><strong>Docker Compose</strong></p>
+<div class="code"><span class="code-lang">yaml</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-yaml">services:
+  nekko-agent-relay:
+    image: ghcr.io/nekko-labs/nekko-agent-relay:latest
+    ports: [&quot;4400:4400&quot;]
+    environment:
+      NEKKO_RELAY_ALLOW_UNAUTHENTICATED: &quot;1&quot;
+    restart: unless-stopped</code></pre></div>
+<p><strong>Coolify</strong> (recommended if you already run one): add a new service → Docker image
+<code>ghcr.io/nekko-labs/nekko-agent-relay:latest</code>, expose port 4400, attach a domain, and let Coolify&#39;s
+proxy terminate TLS. Point Nekko Agent at <code>wss://relay.your-domain.com</code>.</p>
+<p><strong>Fly.io</strong>: <code>fly deploy -c apps/relay/fly.toml</code> from a repo checkout. Keep it at <strong>one machine</strong>
+(<code>fly scale count 1</code>): rooms live in a machine&#39;s memory, so agent and phone must land on the same
+instance.</p>
+<p>Put any self-hosted relay behind TLS (<code>wss://</code>) for internet use; the E2E layer protects content
+regardless, but TLS also protects the transport-auth query string. Then paste the URL into
+<strong>Settings → Remote access</strong> before enabling.</p>
+<p>Environment knobs:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Env</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>NEKKO_RELAY_PORT</code> / <code>NEKKO_RELAY_HOST</code></td>
+<td>Bind (default <code>0.0.0.0:4400</code>)</td>
+</tr>
+<tr>
+<td><code>APNS_KEY_P8</code> / <code>APNS_KEY_ID</code> / <code>APNS_TEAM_ID</code></td>
+<td>Enable iOS push</td>
+</tr>
+<tr>
+<td><code>FCM_SERVICE_ACCOUNT</code></td>
+<td>Enable Android push (service-account JSON)</td>
+</tr>
+<tr>
+<td><code>NEKKO_RELAY_AUTHZ_URL</code></td>
+<td>Gate agent enrollment on a Nekko Agent Cloud account (managed hosting)</td>
+</tr>
+<tr>
+<td><code>NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1</code></td>
+<td>Explicitly allow unauthenticated agent enrollment for trusted/private deployments; otherwise agent enrollment is disabled when no authz URL is configured</td>
+</tr>
+</tbody></table></div>
+<p>The relay validates device IDs as UUIDs and push tokens as non-empty platform
+tokens. A connected device cannot replace another connection&#39;s push token for
+the same device ID. Keep the relay behind TLS (<code>wss://</code>) and do not enable the
+unauthenticated mode on a public endpoint.</p>
+<h2 id="headless-agents"><a class="anchor" href="#headless-agents" aria-hidden="true" tabindex="-1">#</a>Headless agents</h2>
+<p>A machine without a screen (server, homelab box) can expose itself with the relay-agent mode:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">NEKKO_RELAY_URL=wss://your-relay NEKKO_ROOM=myroom NEKKO_PAIR_KEY=&lt;secret&gt; npx nekko-agent</code></pre></div>
+<p>It prints a one-time pairing code (10 minutes) at boot and keeps the same persistent device
+registry as the desktop app.</p>
+
+          <footer class="page-foot">
+            <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/docs/REMOTE.md" rel="noopener">Edit this page on GitHub</a>
+            <div class="pager"><a class="prev" href="/docs/usage-limits"><span>Previous</span>Usage limits and prices</a><a class="next" href="/docs/cli"><span>Next</span>CLI and MCP</a></div>
+          </footer>
+        </article>
+      </main>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Phone remote control</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d2"><a href="#pairing-a-phone">Pairing a phone</a></li><li class="d2"><a href="#the-phone-app">The phone app</a></li><li class="d2"><a href="#security-model-honestly-stated">Security model, honestly stated</a></li><li class="d2"><a href="#choosing-a-relay">Choosing a relay</a></li><li class="d3"><a href="#managed-relay-default-wssnekko-agent-relayflydev">Managed relay (default): wss://nekko-agent-relay.fly.dev</a></li><li class="d3"><a href="#private-relay-over-tailscale-free-no-account-nothing-hosted">Private relay over Tailscale (free, no account, nothing hosted)</a></li><li class="d3"><a href="#self-host-free-forever-one-command">Self-host (free forever, one command)</a></li><li class="d2"><a href="#headless-agents">Headless agents</a></li></ul></nav></aside>
+    </div>
+    <dialog class="search-dialog" aria-label="Search the docs">
+      <form method="dialog" class="search-box">
+        <input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="esc" aria-label="Close search">Esc</button>
+      </form>
+      <ul class="results" role="listbox" aria-label="Results"></ul>
+    </dialog>
+    <script src="/docs.js?v=docs-1" defer></script>
+  </body>
+</html>

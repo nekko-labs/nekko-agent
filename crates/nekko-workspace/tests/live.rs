@@ -63,7 +63,10 @@ async fn reads_a_repository_and_a_plain_folder() {
 }
 
 /// A one-connection-at-a-time HTTP server answering from `answer(method, path)`.
-async fn fake_api(answer: fn(&str, &str) -> (u16, Value)) -> (String, Arc<Mutex<Vec<String>>>) {
+async fn fake_api<F>(answer: F) -> (String, Arc<Mutex<Vec<String>>>)
+where
+    F: Fn(&str, &str) -> (u16, Value) + Send + Sync + 'static,
+{
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -131,6 +134,60 @@ async fn falls_back_to_the_rest_api_without_gh() {
     assert!(log.contains(&"PATCH /repos/o/r/pulls/5 (token)".to_string()), "{log:?}");
     assert_eq!(prs.cached_info("https://github.com/o/r/pull/404", None, false).await, Value::Null);
     assert_eq!(prs.action("not a url", "merge", None).await, json!({ "ok": false, "message": "Not a valid PR URL." }));
+}
+
+#[tokio::test]
+async fn native_stack_reads_prevent_an_ordinary_daemon_merge() {
+    fn stacked(method: &str, path: &str) -> (u16, Value) {
+        if method == "GET" && path == "/repos/o/r/pulls/5" {
+            (200, json!({"title": "Stacked", "state": "open", "stack": {"number": 3, "size": 2}}))
+        } else {
+            (404, json!({}))
+        }
+    }
+    let (base, seen) = fake_api(stacked).await;
+    let prs = Prs::new("nekko-no-such-gh", &base);
+    let url = "https://github.com/o/r/pull/5";
+    assert_eq!(prs.cached_info(url, Some("tok"), false).await["stack"], json!({"number": 3, "size": 2}));
+    let result = prs.action(url, "merge", Some("tok")).await;
+    assert_eq!(result["ok"], json!(false));
+    assert!(result["message"].as_str().unwrap().contains("all included layers"));
+    assert!(seen.lock().unwrap().iter().all(|request| request.starts_with("GET ")));
+    assert_eq!(prs.action("https://github.com/o/r/pull/404", "merge", Some("tok")).await["ok"], json!(false));
+}
+
+#[tokio::test]
+async fn successful_stack_link_refreshes_session_membership_before_cache_expiry() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let linked = Arc::new(AtomicBool::new(false));
+    let server_linked = linked.clone();
+    let (base, seen) = fake_api(move |method, path| {
+        if method == "GET" && path == "/repos/o/r/pulls/5" {
+            let stack =
+                if server_linked.load(Ordering::SeqCst) { json!({"number": 3, "size": 2}) } else { Value::Null };
+            (200, json!({"title": "Five", "state": "open", "stack": stack}))
+        } else {
+            (404, json!({}))
+        }
+    })
+    .await;
+    let prs = Prs::new("nekko-no-such-gh", &base);
+    let messages = vec![
+        json!({"role": "assistant", "toolCalls": [{"id": "create", "name": "bash", "input": {"command": "gh pr create --title feature --body feature"}}]}),
+        json!({"role": "tool", "toolResult": {"toolCallId": "create", "output": "https://github.com/o/r/pull/5", "isError": false}}),
+    ];
+    let initial = prs.session_prs(&messages, Some("tok"), false).await;
+    assert_eq!(initial.len(), 1);
+    assert!(initial[0].get("stack").is_none());
+    linked.store(true, Ordering::SeqCst);
+    assert!(prs.session_prs(&messages, Some("tok"), false).await[0].get("stack").is_none());
+    assert_eq!(seen.lock().unwrap().len(), 1, "ordinary polling keeps its cached read");
+    let fresh = prs.session_prs(&messages, Some("tok"), true).await;
+    assert_eq!(fresh[0]["stack"], json!({"number": 3, "size": 2}));
+    assert_eq!(seen.lock().unwrap().len(), 2, "Link stack explicitly re-reads membership");
+    assert_eq!(prs.session_prs(&messages, Some("tok"), false).await[0]["stack"], fresh[0]["stack"]);
+    assert_eq!(seen.lock().unwrap().len(), 2, "the refreshed membership survives the next poll");
+    assert!(prs.session_prs(&[], Some("tok"), true).await.is_empty());
 }
 
 fn vaizer_api(method: &str, path: &str) -> (u16, Value) {

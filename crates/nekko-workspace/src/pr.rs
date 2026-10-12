@@ -360,6 +360,15 @@ fn key_lock(map: &Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>, key: &str
     map.lock().unwrap_or_else(|e| e.into_inner()).entry(key.to_string()).or_default().clone()
 }
 
+fn add_stack(info: &mut Value, native: &Value) {
+    if let Some(stack) = native.get("stack")
+        && stack.get("number").is_some_and(Value::is_u64)
+        && stack.get("size").is_some_and(Value::is_u64)
+    {
+        info["stack"] = json!({"number": stack["number"], "size": stack["size"]});
+    }
+}
+
 impl Prs {
     pub fn new(gh: &str, api: &str) -> Self {
         Self {
@@ -405,7 +414,7 @@ impl Prs {
         use reqwest::header::{HeaderMap, HeaderValue};
         let mut h = HeaderMap::new();
         h.insert("Accept", HeaderValue::from_static("application/vnd.github+json"));
-        h.insert("X-GitHub-Api-Version", HeaderValue::from_static("2022-11-28"));
+        h.insert("X-GitHub-Api-Version", HeaderValue::from_static("2026-03-10"));
         h.insert("User-Agent", HeaderValue::from_static("nekko-agent"));
         if let Some(v) = token.and_then(|t| HeaderValue::from_str(&format!("Bearer {t}")).ok()) {
             h.insert("Authorization", v);
@@ -419,6 +428,39 @@ impl Prs {
             return None;
         }
         res.json::<Value>().await.ok()
+    }
+
+    async fn native_pr(&self, slug: &str, number: u64, token: Option<&str>) -> Option<Value> {
+        let path = format!("repos/{slug}/pulls/{number}");
+        if !self.gh_missing.load(Ordering::SeqCst) {
+            let result = self
+                .gh_read(
+                    &["api", &path, "--method", "GET", "-H", "X-GitHub-Api-Version: 2026-03-10"],
+                    Duration::from_secs(15),
+                    None,
+                )
+                .await;
+            if result.ok {
+                return serde_json::from_str(&result.stdout).ok();
+            }
+            if result.missing {
+                self.gh_missing.store(true, Ordering::SeqCst);
+            } else if token.is_none() {
+                return None;
+            }
+        }
+        let response = self
+            .http
+            .get(format!("{}/{path}", self.api))
+            .headers(self.headers(token))
+            .header("X-GitHub-Api-Version", "2026-03-10")
+            .send()
+            .await
+            .ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        response.json().await.ok()
     }
 
     /// `fetchPrInfo(url)`: gh first, the REST API when gh is missing, not
@@ -437,7 +479,11 @@ impl Prs {
             } else if res.ok
                 && let Ok(j) = serde_json::from_str::<Value>(&res.stdout)
             {
-                return pr_info_from_gh(url, &owner, &repo, number, &j, true);
+                let mut info = pr_info_from_gh(url, &owner, &repo, number, &j, true);
+                if let Some(native) = self.native_pr(&slug, number, token).await {
+                    add_stack(&mut info, &native);
+                }
+                return info;
             }
         }
         let base = format!("{}/repos/{owner}/{repo}", self.api);
@@ -448,7 +494,9 @@ impl Prs {
         {
             checks = checks_from_status(&cj);
         }
-        pr_info_from_api(url, &owner, &repo, number, &j, checks)
+        let mut info = pr_info_from_api(url, &owner, &repo, number, &j, checks);
+        add_stack(&mut info, &j);
+        info
     }
 
     /// The by-URL read, cached for a minute and shared by concurrent callers.
@@ -512,9 +560,9 @@ impl Prs {
     }
 
     /// `listSessionPrs`: live state for every PR the chat created.
-    pub async fn session_prs(&self, messages: &[Value], token: Option<&str>) -> Vec<Value> {
+    pub async fn session_prs(&self, messages: &[Value], token: Option<&str>, force: bool) -> Vec<Value> {
         let urls = collect_session_pr_urls(messages);
-        let reads = urls.iter().map(|u| self.cached_info(u, token, false));
+        let reads = urls.iter().map(|u| self.cached_info(u, token, force));
         futures_util::future::join_all(reads).await.into_iter().filter(|v| !v.is_null()).collect()
     }
 
@@ -615,6 +663,17 @@ impl Prs {
         };
         let slug = format!("{owner}/{repo}");
         let n = number.to_string();
+        if action == "merge" {
+            match self.native_pr(&slug, number, token).await {
+                Some(native) if js::truthy(native.get("stack")) => {
+                    return json!({"ok": false, "message": "Merge this stack on GitHub to review all included layers. Open the PR on GitHub."});
+                }
+                None => {
+                    return json!({"ok": false, "message": "Could not verify stack membership. Refresh GitHub access before merging."});
+                }
+                _ => {}
+            }
+        }
         let (ok, message) = if !self.gh_missing.load(Ordering::SeqCst) {
             let args: Vec<&str> = match action {
                 "approve" => vec!["pr", "review", &n, "--repo", &slug, "--approve"],

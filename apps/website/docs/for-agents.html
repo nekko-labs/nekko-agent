@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Docs for AI agents · Nekko Agent docs</title>
+    <meta name="description" content="Machine-readable docs (llms.txt, Markdown pages) and the files an agent should read before changing the code." />
+    <link rel="canonical" href="https://nekkoagent.com/docs/for-agents" />
+    <link rel="alternate" type="text/markdown" href="/docs/for-agents.md" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="theme-color" content="#101714" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/docs/for-agents" />
+    <meta property="og:title" content="Docs for AI agents · Nekko Agent docs" />
+    <meta property="og:description" content="Machine-readable docs (llms.txt, Markdown pages) and the files an agent should read before changing the code." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/docs.css?v=docs-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Docs for AI agents","description":"Machine-readable docs (llms.txt, Markdown pages) and the files an agent should read before changing the code.","url":"https://nekkoagent.com/docs/for-agents","inLanguage":"en","isPartOf":{"@id":"https://nekkoagent.com/#website"},"publisher":{"@id":"https://nekkolabs.com/#organization"},"about":{"@id":"https://nekkoagent.com/#app"}}</script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="docs-home" href="/docs">Docs</a>
+      <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Site">
+        <a href="https://github.com/nekko-labs/nekko-agent" rel="noopener">GitHub</a>
+        <a class="download" href="/#download">Download</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents" aria-current="page">Docs for AI agents</a></li></ul></section></aside>
+      <main id="content">
+        <article class="prose" id="top">
+          <p class="kicker">For AI agents</p>
+          <h1>Docs for AI agents</h1>
+          <p class="page-tools">
+            <a href="/docs/for-agents.md">View as Markdown</a>
+            <a href="/llms.txt">llms.txt</a>
+          </p>
+<p>These docs are written for people and for AI agents. Every page is also published as plain Markdown, and the whole set is available as one file, so an agent can read it without parsing HTML.</p>
+<h2 id="machine-readable-docs"><a class="anchor" href="#machine-readable-docs" aria-hidden="true" tabindex="-1">#</a>Machine-readable docs</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>URL</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="/llms.txt"><code>/llms.txt</code></a></td>
+<td>An index of the site and every docs page, in the <a href="https://llmstxt.org" rel="noopener">llms.txt</a> format</td>
+</tr>
+<tr>
+<td><a href="/llms-full.txt"><code>/llms-full.txt</code></a></td>
+<td>Every docs page in one Markdown file</td>
+</tr>
+<tr>
+<td><code>/docs/&lt;page&gt;.md</code></td>
+<td>Any single page as Markdown, for example <a href="/docs/cli.md"><code>/docs/cli.md</code></a></td>
+</tr>
+</tbody></table></div>
+<p>Each page also links its Markdown version at the top, next to the title.</p>
+<h2 id="use-nekko-agent-from-your-agent"><a class="anchor" href="#use-nekko-agent-from-your-agent" aria-hidden="true" tabindex="-1">#</a>Use Nekko Agent from your agent</h2>
+<p>Nekko Agent can be a subagent for Claude Code, Codex, Cursor and other tools: they hand it work, and it runs that work on your local models. Register its MCP server once, for example in Claude Code:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">claude mcp add nekko-agent -- node /abs/path/nekko-agent/apps/cli/dist/index.js mcp</code></pre></div>
+<p>The tools, the other harnesses and the CLI commands are in <a href="/docs/cli">CLI and MCP</a>.</p>
+<h2 id="working-on-the-code"><a class="anchor" href="#working-on-the-code" aria-hidden="true" tabindex="-1">#</a>Working on the code</h2>
+<p>An agent changing Nekko Agent should read these files in the repo first:</p>
+<ol>
+<li><a href="https://github.com/nekko-labs/nekko-agent/blob/main/AGENTS.md" rel="noopener"><code>AGENTS.md</code></a>: how work lands (a worktree per task, a PR for every change, visual evidence for UI changes).</li>
+<li><a href="https://github.com/nekko-labs/nekko-agent/blob/main/SPEC.md" rel="noopener"><code>SPEC.md</code></a>: what the product does and why. Update it whenever a feature changes.</li>
+<li><a href="https://github.com/nekko-labs/nekko-agent/blob/main/TASKS.md" rel="noopener"><code>TASKS.md</code></a>: the technical plan and the task list, with stable task IDs.</li>
+<li><a href="/docs/contributing">Contributing</a> and <a href="/docs/architecture">Architecture</a> on this site.</li>
+</ol>
+<h2 id="editing-these-docs"><a class="anchor" href="#editing-these-docs" aria-hidden="true" tabindex="-1">#</a>Editing these docs</h2>
+<p>Each page is rendered from one Markdown file in the repo, listed in <code>docs/hub/nav.json</code>. Edit the Markdown, then regenerate the site:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run docs</code></pre></div>
+<p>If you skip that step, the <strong>Docs site</strong> workflow rebuilds the pages on the pull request and commits them to its branch, but only when the output actually changed. A pull request that changes user-facing behaviour should also update the page that describes it.</p>
+
+          <footer class="page-foot">
+            <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/docs/hub/for-agents.md" rel="noopener">Edit this page on GitHub</a>
+            <div class="pager"><a class="prev" href="/docs/release-signing"><span>Previous</span>Release signing</a><span></span></div>
+          </footer>
+        </article>
+      </main>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Docs for AI agents</a></li><li class="d2"><a href="#machine-readable-docs">Machine-readable docs</a></li><li class="d2"><a href="#use-nekko-agent-from-your-agent">Use Nekko Agent from your agent</a></li><li class="d2"><a href="#working-on-the-code">Working on the code</a></li><li class="d2"><a href="#editing-these-docs">Editing these docs</a></li></ul></nav></aside>
+    </div>
+    <dialog class="search-dialog" aria-label="Search the docs">
+      <form method="dialog" class="search-box">
+        <input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="esc" aria-label="Close search">Esc</button>
+      </form>
+      <ul class="results" role="listbox" aria-label="Results"></ul>
+    </dialog>
+    <script src="/docs.js?v=docs-1" defer></script>
+  </body>
+</html>

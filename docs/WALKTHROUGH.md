@@ -1,4 +1,4 @@
-# Nekko Agent, Walkthrough
+# Nekko Agent walkthrough
 
 A guided tour of Nekko Agent, from install to your first agentic edit. Screenshots
 are from the running app.

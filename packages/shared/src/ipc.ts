@@ -190,6 +190,8 @@ export const IpcChannels = {
   prSessionList: 'pr:sessionList',
   prDiff: 'pr:diff',
   prAction: 'pr:action',
+  prContinueStack: 'pr:continueStack',
+  prLinkStack: 'pr:linkStack',
 
   commentsList: 'comments:list',
   commentAdd: 'comment:add',
@@ -673,11 +675,13 @@ export interface NekkoApi {
   acceptAllChanges(sessionId: string): Promise<void>;
 
   /** Live PR state for every GitHub PR URL referenced in a chat's transcript. */
-  listSessionPrs(sessionId: string): Promise<import('./pr.js').PrInfo[]>;
+  listSessionPrs(sessionId: string, force?: boolean): Promise<import('./pr.js').PrInfo[]>;
   /** A PR's changed files + patches (for the diff pane). */
   getPrDiff(url: string): Promise<import('./pr.js').PrDiff>;
   /** Approve / decline / merge / reopen a PR. Always user-initiated. */
   prAction(url: string, action: import('./pr.js').PrAction): Promise<import('./pr.js').PrActionResult>;
+  continuePrStack(sessionId: string, url: string): Promise<Session>;
+  linkPrStack(sessionId: string, url: string): Promise<import('./pr.js').PrActionResult>;
 
   /** Inline editor comments on a file (gutter "+" annotations the agent picks up). */
   listComments(path: string): Promise<LineComment[]>;

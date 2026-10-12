@@ -337,7 +337,21 @@ export function CommandCenterView() {
     return [{ session, n: i + 1, status, glyph: agentStatusOfLane(lane, blocked) }];
   }), [agentsOnWall, sessions, pending, isRunningSession]);
   const selectedAgent = agentList.find((a) => a.session.id === selected) ?? null;
-  const [composerHeight, setComposerHeight] = useState<number | null>(null);
+  // The dragged height is saved with the wall (like the dock and width), so
+  // it is still there after visiting another page or restarting the app.
+  const composerHeight = wall.composer.height ?? null;
+  const setComposerHeight = useCallback((height: number | null) => setWall((w) => {
+    const next = height === null ? undefined : Math.round(height);
+    if (w.composer.height === next) return w;
+    const { height: _old, ...rest } = w.composer;
+    return { ...w, composer: next === undefined ? rest : { ...rest, height: next } };
+  }), [setWall]);
+  const setComposerWidth = useCallback((width: number | null) => setWall((w) => {
+    const next = width === null ? undefined : Math.round(width);
+    if (w.composer.width === next) return w;
+    const { width: _old, ...rest } = w.composer;
+    return { ...w, composer: next === undefined ? rest : { ...rest, width: next } };
+  }), [setWall]);
   const composerDrag = useRef<{ y: number; height: number } | null>(null);
   const composerSplit = <div className="wall-composer-split" role="separator" tabIndex={0} aria-label="Resize composer versus wall" aria-orientation="horizontal" title="Drag to resize composer versus wall; double-click to reset"
     onPointerDown={(e) => { composerDrag.current = { y: e.clientY, height: composerRef.current?.offsetHeight ?? 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
@@ -352,7 +366,8 @@ export function CommandCenterView() {
       agent={selectedAgent}
       agents={agentList}
       dock={wall.composer}
-      onDock={(composer) => setWall((w) => ({ ...w, composer }))}
+      onDock={(dock) => setWall((w) => ({ ...w, composer: { ...w.composer, side: dock.side, align: dock.align } }))}
+      onWidth={setComposerWidth}
       onSelect={selectAgent}
       onOpen={openChat}
       onFocus={(id) => {

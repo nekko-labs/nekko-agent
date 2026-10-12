@@ -129,8 +129,8 @@ export interface CommandWallSetting {
   filter: 'all' | 'chat' | 'terminal';
   insights: { panels: Record<string, boolean> };
   watermark: number;
-  /** Where the wall's one composer sits. */
-  composer?: { side: 'top' | 'bottom'; align: 'left' | 'center' | 'right' };
+  /** Where the wall's one composer sits, and the size it was dragged to (CSS pixels; absent means default). */
+  composer?: { side: 'top' | 'bottom'; align: 'left' | 'center' | 'right'; width?: number; height?: number };
 }
 
 /**

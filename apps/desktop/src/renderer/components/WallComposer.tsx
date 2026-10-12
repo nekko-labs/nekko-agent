@@ -4,7 +4,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SessionSummary } from '@nekko-agent/shared';
 import { ChatPane } from './ChatPane.js';
 import { ChatIcon, FocusLayoutIcon, LayoutIcon } from '../icons.js';
-import { type ComposerDock, type ComposerAlign, type ComposerSide } from '../commandWall.js';
+import { composerMaxWidth, type ComposerDock, type ComposerAlign, type ComposerSide } from '../commandWall.js';
 
 /** One agent window the composer can be pointed at: its number on the wall and what it is doing. */
 export interface WallAgent {
@@ -35,6 +35,7 @@ export function WallComposer({
   agents,
   dock,
   onDock,
+  onWidth,
   onSelect,
   onOpen,
   onFocus,
@@ -47,6 +48,8 @@ export function WallComposer({
   agents: WallAgent[];
   dock: ComposerDock;
   onDock: (dock: ComposerDock) => void;
+  /** The dragged width (null to reset), saved with the wall so it survives leaving the page. */
+  onWidth: (width: number | null) => void;
   onSelect: (sessionId: string) => void;
   onOpen: (sessionId: string) => void;
   onFocus: (sessionId: string) => void;
@@ -54,11 +57,15 @@ export function WallComposer({
   /** The composer panel, used to focus the selected chat input. */
   panelRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const [width, setWidth] = useState<number | null>(null);
+  // The dragged width lives in the wall's saved state, not here: this
+  // component unmounts whenever another page is shown, and a width kept in it
+  // was forgotten every time.
+  const width = dock.width ?? null;
+  const setWidth = onWidth;
   const widthDrag = useRef<{ x: number; width: number; edge: 'left' | 'right' } | null>(null);
   const resizeWidth = (next: number) => {
-    const available = panelRef.current?.parentElement?.clientWidth ?? 1000;
-    setWidth(Math.max(Math.min(320, available), Math.min(available, next)));
+    const available = composerMaxWidth(panelRef.current);
+    setWidth(Math.round(Math.max(Math.min(320, available), Math.min(available, next))));
   };
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -105,6 +112,21 @@ export function WallComposer({
     measure();
     return () => { mo.disconnect(); ro.disconnect(); };
   }, [panelRef, agent?.session.id]);
+
+  // A saved width wider than the wall now (a smaller window, the panels
+  // opened) is drawn at the wall's width and keeps its saved value for when
+  // there is room again. The cap follows the windows' stage as it resizes.
+  const [maxWidth, setMaxWidth] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    const stage = panel?.closest('.wall-column')?.querySelector<HTMLElement>('.command-wall-stage');
+    const update = () => { const next = composerMaxWidth(panelRef.current); setMaxWidth((prev) => (prev === next ? prev : next)); };
+    update();
+    if (!stage || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(update);
+    ro.observe(stage);
+    return () => ro.disconnect();
+  }, [panelRef]);
 
   const alignClass = dock.align === 'left' ? 'self-start' : dock.align === 'right' ? 'self-end' : 'self-center';
 
@@ -181,7 +203,7 @@ export function WallComposer({
   return (
     <div
       ref={panelRef}
-      style={{ height: (height ?? 320) + extra, width: width ?? undefined }}
+      style={{ height: (height ?? 320) + extra, width: width ?? undefined, maxWidth: maxWidth ?? undefined }}
       className={`panel wall-composer flex shrink-0 flex-col ${alignClass}`}
       data-has-agent={agent ? true : undefined}
       data-wall-composer
