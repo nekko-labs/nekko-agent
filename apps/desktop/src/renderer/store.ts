@@ -521,6 +521,20 @@ async function openUsableChat(get: () => UiState, set: (p: Partial<UiState>) => 
   return sid;
 }
 
+/**
+ * Chats this window created, by the session-list request count at the time.
+ * A list request issued before (or as) the chat was created can answer
+ * without it; `refreshSessions` keeps such a chat until a list includes it.
+ */
+let sessionListSeq = 0;
+const createdAtSeq = new Map<string, number>();
+
+/** Put a chat the host just created at the top of the list, safe from a stale in-flight refresh. */
+export function addCreatedSession(s: Session): void {
+  createdAtSeq.set(s.id, sessionListSeq);
+  useStore.setState((state) => ({ sessions: [summarizeSession(s), ...state.sessions.filter((x) => x.id !== s.id)] }));
+}
+
 export const useStore = create<UiState>((set, get) => ({
   settings: null,
   view: 'command',
@@ -592,13 +606,15 @@ export const useStore = create<UiState>((set, get) => ({
     // The host already returned the full record: seed before opening the pane
     // so its first frame has the session and brain, without a round-trip.
     putCachedSession(s);
-    set((state) => ({ sessions: [summarizeSession(s), ...state.sessions], activeSessionId: s.id, view: 'chat' }));
+    addCreatedSession(s);
+    set({ activeSessionId: s.id, view: 'chat' });
     get().openChatPane(s.id);
   },
   continuePrStack: async (sessionId, url) => {
     const s = await window.nekko.continuePrStack(sessionId, url);
     putCachedSession(s);
-    set((state) => ({ sessions: [summarizeSession(s), ...state.sessions], activeSessionId: s.id, view: 'chat' }));
+    addCreatedSession(s);
+    set({ activeSessionId: s.id, view: 'chat' });
     get().openChatPane(s.id);
     get().pushToast('success', 'New chat starts from this PR in its own worktree.');
   },
@@ -609,7 +625,8 @@ export const useStore = create<UiState>((set, get) => ({
       imageParams: { ...DEFAULT_IMAGE_CHAT_PARAMS, modelId, ...(defaults ?? {}) },
     })) ?? created;
     putCachedSession(s);
-    set((state) => ({ sessions: [summarizeSession(s), ...state.sessions], activeSessionId: s.id, view: 'chat' }));
+    addCreatedSession(s);
+    set({ activeSessionId: s.id, view: 'chat' });
     get().openChatPane(s.id);
   },
   setMascotMood: (m) => set({ mascotMood: m }),
@@ -641,7 +658,15 @@ export const useStore = create<UiState>((set, get) => ({
   },
 
   refreshSessions: async () => {
-    const sessions = await window.nekko.listSessionSummaries();
+    const asked = ++sessionListSeq;
+    const listed = await window.nekko.listSessionSummaries();
+    // A chat created while this list was in flight may be missing from it (it
+    // was read before the chat was written). Keep those, or the new window
+    // vanishes until the next refresh brings it back.
+    const ids = new Set(listed.map((x) => x.id));
+    const kept = get().sessions.filter((x) => !ids.has(x.id) && (createdAtSeq.get(x.id) ?? -1) >= asked);
+    for (const [id, seq] of createdAtSeq) if (ids.has(id) || seq < asked) createdAtSeq.delete(id);
+    const sessions = kept.length ? [...kept, ...listed] : listed;
     set({ sessions });
     // A restored layout can point at chats that were archived or deleted since
     // (another client, the retention purge). Drop those windows now that the

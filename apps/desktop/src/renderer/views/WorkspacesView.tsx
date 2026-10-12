@@ -621,7 +621,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                   get a hue apiece rather than four identical grey lines. */}
               <button
                 className="create-row create-row-hero flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left"
-                onClick={() => { closeNewMenu(); newChat(); }}
+                onClick={() => { closeNewMenu(); void Promise.resolve(newChat()).catch((e: Error) => useStore.getState().pushToast('error', `Could not start an agent: ${e.message}`)); }}
               >
                 <span className="create-tile create-tile-brand">
                   <ChatIcon className="h-4 w-4" />
