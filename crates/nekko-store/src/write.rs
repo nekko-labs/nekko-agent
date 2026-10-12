@@ -260,6 +260,18 @@ impl SessionStore {
         Ok(Value::Object(s))
     }
 
+    /// `Object.assign(session, fields); saveSession(session)`, for a service
+    /// that makes a chat of its own (a task's title, `taskId`, model). `None`
+    /// when there is no such chat.
+    pub fn assign(&self, id: &str, fields: &[(&str, Value)]) -> Result<Option<Value>, String> {
+        self.patch(id, |s| {
+            for (k, v) in fields {
+                s.insert((*k).to_string(), v.clone());
+            }
+            true
+        })
+    }
+
     /// `deleteSession`.
     pub fn delete(&self, id: &str) -> Result<(), String> {
         if !valid_id(id) {

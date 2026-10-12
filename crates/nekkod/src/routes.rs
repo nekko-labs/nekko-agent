@@ -39,6 +39,8 @@ pub struct Ctx {
     pub catalog: Option<Arc<nekko_engine::catalog::Catalog>>,
     /// Files, memory, comments and the workspace index (`workspace:*`, `file:*`).
     pub workspace: Arc<crate::workspace::Workspace>,
+    /// Automation tasks and their scheduler (`tasks:*`, `task:*`).
+    pub automation: Arc<crate::automation::Automation>,
     /// GPU and system stats and the readiness advisor (`gpu:stats`, `system:stats`, `machine:readiness`).
     pub machine: Arc<nekko_machine::Machine>,
     /// The experimental resource-queue client, when the data directory is known.
@@ -286,6 +288,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             None => Err("voice needs the data directory".into()),
         },
         c if ctx.workspace.serves(c) => crate::workspace::route(ctx, c, &args).await,
+        c if crate::automation::TASK_CHANNELS.contains(&c) && ctx.automation.owns_tasks() => {
+            ctx.automation.route(c, &args).await
+        }
         c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
         // Without a data directory the host keeps the coordinator file.
         "resource:queue" => match &ctx.resource_queue {
@@ -378,6 +383,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
         all.extend_from_slice(crate::context::CHANNELS);
     }
     all.extend(ctx.workspace.owned());
+    if ctx.automation.owns_tasks() {
+        all.extend_from_slice(crate::automation::TASK_CHANNELS);
+    }
     all.extend_from_slice(crate::machine::CHANNELS);
     if ctx.resource_queue.is_some() {
         all.extend_from_slice(crate::resource_queue::CHANNELS);

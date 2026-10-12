@@ -94,6 +94,7 @@ import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
 import { daemonCall, daemonOwns } from './engine/daemon.js';
+import { unlessDaemonOwns, viaDaemon } from './daemon-services.js';
 import { registerManagedCacheEndpoint } from './prompt-caching.js';
 import {
   createProvider,
@@ -499,11 +500,11 @@ export interface Host {
   vaizerSkillMd(slug: string): Promise<string | null>;
 
   /** Automation tasks: scheduled, recurring, and long-running background agents. */
-  listTasks(): AutomationTask[];
-  createTask(task: NewTask): AutomationTask[];
-  updateTask(id: string, patch: Partial<AutomationTask>): AutomationTask[];
-  deleteTask(id: string): AutomationTask[];
-  runTaskNow(id: string): void;
+  listTasks(): Promise<AutomationTask[]>;
+  createTask(task: NewTask): Promise<AutomationTask[]>;
+  updateTask(id: string, patch: Partial<AutomationTask>): Promise<AutomationTask[]>;
+  deleteTask(id: string): Promise<AutomationTask[]>;
+  runTaskNow(id: string): Promise<void>;
 
   /** Training/goal runs: the data-scientist agent + experiment-tree engine. */
   listTrainingRuns(): TrainingRun[];
@@ -646,7 +647,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     run: (provider, request) => engine.decisions.run(provider, request),
   });
   setTasksNotifier((tasks) => events.emit('tasksUpdated', tasks));
-  startTaskScheduler();
+  unlessDaemonOwns('tasks', startTaskScheduler);
   configureAgentWatches({
     busy: isChatRunning,
     exists: (id) => { const s = sessions.getSession(id); return !!s && !s.archivedAt; },
@@ -1171,11 +1172,12 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     vaizerCatalog: (refresh?: boolean) => getVaizerCatalog(refresh),
     vaizerSkillMd: (slug: string) => getVaizerSkillMd(slug),
 
-    listTasks,
-    createTask,
-    updateTask,
-    deleteTask,
-    runTaskNow,
+    // The daemon runs tasks when it owns them (crates/nekko-automation).
+    listTasks: () => viaDaemon('tasks', 'tasks:list', [], listTasks),
+    createTask: (task) => viaDaemon('tasks', 'task:create', [task], () => createTask(task)),
+    updateTask: (id, patch) => viaDaemon('tasks', 'task:update', [id, patch], () => updateTask(id, patch)),
+    deleteTask: (id) => viaDaemon('tasks', 'task:delete', [id], () => deleteTask(id)),
+    runTaskNow: (id) => viaDaemon('tasks', 'task:runNow', [id], () => runTaskNow(id)),
 
     listTrainingRuns,
     createTrainingRun,

@@ -6,6 +6,7 @@
 
 mod accounts;
 mod admission;
+mod automation;
 mod backend;
 mod catalog;
 mod config;
@@ -80,7 +81,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS, oauth::OWNS].join(","));
+                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS, oauth::OWNS, automation::OWNS].join(","));
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -118,6 +119,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
         .then(|| admission::Admission::new(&hub, cfg.allow_browser_control, ts_loop));
     let catalog = settings.as_deref().map(catalog::new);
+    let automation =
+        Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), backend.clone(), hub.clone()));
     // The machine probes and the resource queue read the daemon's settings store.
     let read_settings = |s: &Option<Arc<settings::Settings>>| {
         let store = s.as_ref().map(|s| s.store.clone());
@@ -178,6 +181,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         voice: voice.clone(),
         catalog,
         workspace: Arc::new(workspace::Workspace::new(cfg.data_dir.clone().map(std::path::PathBuf::from))),
+        automation: automation.clone(),
     };
     routes::forward_terminal_events(&ctx);
     if let Some(adm) = ctx.admission.clone() {
@@ -187,6 +191,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Box::pin(async move { admission::admit_queued(&c, &adm, &payload).await })
         }));
     }
+    automation.start();
     let processes = ctx.turns.processes.clone();
 
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
