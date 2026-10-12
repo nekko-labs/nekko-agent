@@ -1197,6 +1197,49 @@ async fn a_queued_turn_whose_prompt_changed_ends_before_it_starts() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_chain_the_daemon_admitted_admits_its_queued_prompts_too() {
+    let session = json!({
+        "id": "s_chain", "title": "New chat", "workspaceId": "w1", "messages": [], "queue": ["and then this"],
+        "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("chain", session);
+    let model = scripted_model(vec![say_text("first answer"), say_text("second answer")]).await;
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let settings = json!({
+        "providers": [provider],
+        "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+    });
+    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+
+    let opts = json!({ "sessionId": "s_chain", "providerId": "p1", "modelId": "synthetic", "text": "first" });
+    let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, Value::Null));
+    let saved = saved_session(&rig, "s_chain");
+    let contents: Vec<&str> =
+        saved["messages"].as_array().unwrap().iter().filter_map(|m| m["content"].as_str()).collect();
+    assert_eq!(contents, ["first", "first answer", "and then this", "second answer"]);
+    assert_eq!(saved["queue"], json!([]));
+
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(!calls.iter().any(|c| c[0] == "turn:prepare"), "the daemon admitted the follow-up itself");
+    let adopts: Vec<&Value> = calls.iter().filter(|c| c[0] == "turn:adopt").collect();
+    assert_eq!(adopts.len(), 2, "{adopts:?}");
+    assert_eq!(adopts[0][1][0]["chained"], false);
+    assert_eq!(adopts[1][1][0]["chained"], true);
+    assert_eq!(adopts[1][1][0]["opts"]["text"], "and then this");
+    let (first, second) = (adopts[0][1][0]["turnId"].as_str().unwrap(), adopts[1][1][0]["turnId"].as_str().unwrap());
+    assert!(second.starts_with("turn_d"), "{second}");
+    let ends: Vec<&Value> = calls.iter().filter(|c| c[0] == "turn:end").collect();
+    let first_end = ends.iter().find(|c| c[1][0] == first).expect("the first turn ended");
+    assert_eq!(first_end[1][1]["next"], second);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn after_a_daemon_turn_the_title_lands_and_the_queue_drains() {
     let session = json!({
         "id": "s_turn_t", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1

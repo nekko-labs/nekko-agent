@@ -49,9 +49,11 @@ use nekko_tools::{ChangeTracker, CommandLog, Processes, ToolCall, ToolContext, a
 use nekko_turn as turn;
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
+use std::future::Future;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, oneshot};
 
@@ -273,7 +275,14 @@ pub struct Turns {
     chained: Mutex<HashMap<String, Ended>>,
     /// The chats whose chain a `chat:send` here is waiting on.
     watched: Mutex<HashMap<String, usize>>,
+    /// Set once at startup when the daemon admits `chat:send`.
+    preparer: OnceLock<Preparer>,
 }
+
+/// Admits the next queued prompt of a chain the daemon admitted itself
+/// (admission.rs `admit_queued`): the `turn:prepare` reply, or `None` when the
+/// host must answer it.
+pub type Preparer = Arc<dyn Fn(Value) -> Pin<Box<dyn Future<Output = Option<Value>> + Send>> + Send + Sync>;
 
 static STEER_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -299,7 +308,13 @@ impl Turns {
             pending: Pending::default(),
             chained: Mutex::default(),
             watched: Mutex::default(),
+            preparer: OnceLock::new(),
         }
+    }
+
+    /// Who admits the queued prompts of chains the daemon admitted.
+    pub fn set_preparer(&self, preparer: Preparer) {
+        let _ = self.preparer.set(preparer);
     }
 
     /// The daemon's settings store (settings.rs).
@@ -528,7 +543,16 @@ impl Turns {
         });
         let payload =
             json!({ "opts": turn::send_options_for_queued_item(&base, &next), "queued": { "index": 0, "item": next } });
-        match backend.call("turn:prepare", json!([turn_id, payload])).await {
+        // A chain the daemon admitted (`turn_d...`) is admitted here; the host only as a fallback.
+        let mine = match self.preparer.get() {
+            Some(p) if turn_id.starts_with("turn_d") => p(payload.clone()).await,
+            _ => None,
+        };
+        let reply = match mine {
+            Some(r) => Ok(r),
+            None => backend.call("turn:prepare", json!([turn_id, payload])).await,
+        };
+        match reply {
             Ok(reply) if reply.get("spec").is_some_and(Value::is_object) => {
                 let next_spec = reply["spec"].clone();
                 let next_id = next_spec.get("turnId").cloned().unwrap_or(Value::Null);

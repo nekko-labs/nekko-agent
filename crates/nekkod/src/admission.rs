@@ -245,9 +245,55 @@ fn has_index_words(text: &str) -> bool {
     false
 }
 
+/// What admitting a turn came to.
+enum Admit {
+    /// The host runs it (a sandbox chat, or the kill switch).
+    Host,
+    /// It cannot run; the chat was told why.
+    Ended,
+    /// The `chat:turn` spec to drive; the host has been handed the turn.
+    Spec(Value),
+}
+
+async fn ended(ctx: &Ctx, session_id: &str, message: &str) -> Result<Admit, String> {
+    fail(ctx, session_id, message).await?;
+    Ok(Admit::Ended)
+}
+
 /// `chat:send`.
 pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<Value, String> {
     let opts = args.first().cloned().unwrap_or(Value::Null);
+    let session_id = s(&opts, "sessionId").to_string();
+    let spec = match admit(ctx, adm, opts, None).await? {
+        Admit::Host => return ctx.backend.call("chat:send", Value::Array(args)).await,
+        Admit::Ended => return Ok(Value::Null),
+        Admit::Spec(spec) => spec,
+    };
+    ctx.turns.watch(&session_id);
+    let result = drive_chain(ctx, spec).await;
+    ctx.turns.unwatch(&session_id);
+    if let Err(e) = result {
+        return fail(ctx, &session_id, &e).await;
+    }
+    Ok(Value::Null)
+}
+
+/// The next queued prompt of a chain the daemon admitted (`turn:prepare`,
+/// answered here): `{ spec }`, `{ ended: true }` (it could not start and the
+/// chat was told why), or `{ inProcess: true }` (the host must run it).
+/// `None` (a sandbox chat, or the kill switch) leaves it to the host's `turn:prepare`.
+pub async fn admit_queued(ctx: &Ctx, adm: &Arc<Admission>, payload: &Value) -> Option<Value> {
+    let opts = payload.get("opts").cloned().unwrap_or(Value::Null);
+    match admit(ctx, adm, opts, payload.get("queued").cloned()).await {
+        Ok(Admit::Spec(spec)) => Some(json!({ "spec": spec })),
+        Ok(Admit::Host) => None,
+        Ok(Admit::Ended) | Err(_) => Some(json!({ "ended": true })),
+    }
+}
+
+/// `admitTurn` and `buildDaemonTurn`: check, provision and describe a turn,
+/// and hand it to the host for its callbacks.
+async fn admit(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Value>) -> Result<Admit, String> {
     let session_id = s(&opts, "sessionId").to_string();
     let store = ctx.sessions.clone().ok_or("chat:send needs the data directory")?;
     let session = {
@@ -256,10 +302,11 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
     };
     // A sandbox chat runs in the host's container router; the kill switch keeps everything there.
     if adm.ts_loop || session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox") {
-        return ctx.backend.call("chat:send", Value::Array(args)).await;
+        return Ok(Admit::Host);
     }
-    if adm.is_compacting(&session_id) {
-        return fail(ctx, &session_id, "This chat is being compacted. Wait or move to a new chat.").await;
+    // A queued prompt was admitted by the host without this check; so it stays.
+    if queued.is_none() && adm.is_compacting(&session_id) {
+        return ended(ctx, &session_id, "This chat is being compacted. Wait or move to a new chat.").await;
     }
     let settings = crate::settings::current(ctx).await;
     let provider = settings
@@ -267,9 +314,9 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
         .and_then(Value::as_array)
         .and_then(|ps| ps.iter().find(|p| p.get("id") == opts.get("providerId")).cloned());
     let Some(provider) = provider.filter(|p| nekko_js::truthy(p.get("enabled"))) else {
-        return fail(ctx, &session_id, "Provider not configured or disabled.").await;
+        return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
-    let Some(mut session) = session else { return fail(ctx, &session_id, "Session not found.").await };
+    let Some(mut session) = session else { return ended(ctx, &session_id, "Session not found.").await };
 
     let mode_name = crate::worktrees::execution_mode(&session);
     let offline = nekko_js::truthy(session.get("offline"));
@@ -279,7 +326,7 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
         && !offline
         && let Err(message) = provision(ctx, &store, &mut session, &settings).await
     {
-        return fail(ctx, &session_id, &message).await;
+        return ended(ctx, &session_id, &message).await;
     }
     let mut chat = session.clone();
     chat["gitIsolation"] = json!(mode_name == "worktree");
@@ -290,7 +337,7 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
         None => settings.get("defaultChatMode").filter(|m| !m.is_null()).cloned().unwrap_or(json!("guardrails")),
     };
     if offline && !offline_provider_allowed(&provider) {
-        return fail(
+        return ended(
             ctx,
             &session_id,
             "Offline chat requires a local-compatible provider with a loopback HTTP(S) endpoint.",
@@ -298,7 +345,7 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
         .await;
     }
     if provider_endpoint(&provider).is_none() {
-        return fail(ctx, &session_id, "Provider requires a valid HTTP(S) endpoint.").await;
+        return ended(ctx, &session_id, "Provider requires a valid HTTP(S) endpoint.").await;
     }
 
     let disabled_decide = session
@@ -412,15 +459,20 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
         ],
     );
     spec_settings["providers"] = Value::Array(providers);
-    let spec = json!({
+    let mut spec = json!({
         "turnId": turn_id,
         "opts": opts,
         "allowBrowserControl": adm.allow_browser_control,
         "settings": spec_settings,
         "facts": Value::Object(facts),
     });
+    if let Some(q) = &queued {
+        spec["queued"] = q.clone();
+    }
 
-    // The host registers the turn for its callbacks; nothing here waits on it.
+    // The host registers the turn for its callbacks. A first turn does not
+    // wait on it; a queued one does, so the host follows the chain onto it
+    // before it hears the previous turn end.
     {
         let backend = ctx.backend.clone();
         let payload = json!([{
@@ -431,21 +483,22 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
             "decideWith": decide_with,
             "allowBrowserControl": adm.allow_browser_control,
             "provider": resolved,
+            // A queued turn joins the chain the host already follows.
+            "chained": queued.is_some(),
         }]);
-        tokio::spawn(async move {
+        let adopt = async move {
             if let Err(e) = backend.call("turn:adopt", payload).await {
                 eprintln!("nekkod: the host could not adopt a turn: {e}");
             }
-        });
+        };
+        if queued.is_some() {
+            adopt.await;
+        } else {
+            tokio::spawn(adopt);
+        }
     }
 
-    ctx.turns.watch(&session_id);
-    let result = drive_chain(ctx, spec).await;
-    ctx.turns.unwatch(&session_id);
-    if let Err(e) = result {
-        return fail(ctx, &session_id, &e).await;
-    }
-    Ok(Value::Null)
+    Ok(Admit::Spec(spec))
 }
 
 /// Start the turn and wait for it and every queued turn the daemon chains after it.

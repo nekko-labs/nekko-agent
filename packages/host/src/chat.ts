@@ -54,7 +54,7 @@ import { buildSpec } from './spec.js';
 import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool, DAEMON_MCP } from './mcp.js';
 import { daemonCall } from './engine/daemon.js';
 import { daemonOwns, daemonRunsLoops, runAgentViaDaemon } from './daemon-loop.js';
-import { adoptTurn, answerInDaemon, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
+import { adoptTurn, answerInDaemon, chainOf, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
 import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
 import { applyTurnInput, cleanTitle, hostToolApproval, sendOptionsForQueuedItem, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
 import { killSessionProcesses } from './processes.js';
@@ -1590,6 +1590,8 @@ export async function adoptAdmittedTurn(
     decideWith: import('@nekko-agent/shared').DecisionProvider | null;
     allowBrowserControl: boolean;
     provider?: ProviderConfig;
+    /** The daemon admitted the chat's next queued prompt: it joins the chain already adopted here. */
+    chained?: boolean;
   },
   send: Sender,
 ): Promise<void> {
@@ -1599,8 +1601,10 @@ export async function adoptAdmittedTurn(
   if (!session || !provider) return;
   const offline = !!session.offline;
   const orchestration = settings.orchestration ?? DEFAULT_ORCHESTRATION;
-  const abort = new AbortController();
-  abortControllers.set(session.id, abort);
+  const joined = payload.chained ? chainOf(session.id) : undefined;
+  if (payload.chained && !joined) return;
+  const abort = joined?.abort ?? new AbortController();
+  if (!joined) abortControllers.set(session.id, abort);
   const tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl: payload.allowBrowserControl, mcpTools: offline ? [] : mcpToolSpecs(), decide: !!payload.decideWith });
   const t: DaemonTurnInput = {
     settings, provider, session, sandbox: false, workspaces: payload.workspaces,
@@ -1612,6 +1616,8 @@ export async function adoptAdmittedTurn(
   const daemon = daemonCall();
   const daemonAccounts = !!daemon && (await daemonAccountsTurns(daemon));
   const hostTurn = hostTurnFor(t, payload.turnId, payload.provider, daemonAccounts);
+  // The chain's adoptTurn loop follows `summary.next` onto it.
+  if (joined) return registerTurn(payload.turnId, hostTurn, joined);
   const chain: TurnChain = { send, allowBrowserControl: payload.allowBrowserControl, abort };
   adoptTurn(payload.turnId, hostTurn, chain, () => {
     if (abortControllers.get(session.id) === abort) abortControllers.delete(session.id);

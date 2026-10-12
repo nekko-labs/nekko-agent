@@ -181,6 +181,12 @@ export function setTurnNotifier(fn: (event: AgentEvent) => void): void {
   notify = fn;
 }
 
+/** The chain of the turn the daemon drives for this session, if any. */
+export function chainOf(sessionId: string): TurnChain | undefined {
+  for (const t of turns.values()) if (t.sessionId === sessionId) return t.chain;
+  return undefined;
+}
+
 /** Whether the daemon drives this session's running turn. */
 export function daemonTurnFor(sessionId: string): boolean {
   for (const t of turns.values()) if (t.sessionId === sessionId) return true;

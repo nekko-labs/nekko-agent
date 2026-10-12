@@ -152,6 +152,13 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         voice: voice.clone(),
     };
     routes::forward_terminal_events(&ctx);
+    if let Some(adm) = ctx.admission.clone() {
+        let c = ctx.clone();
+        ctx.turns.set_preparer(Arc::new(move |payload| {
+            let (c, adm) = (c.clone(), adm.clone());
+            Box::pin(async move { admission::admit_queued(&c, &adm, &payload).await })
+        }));
+    }
     let processes = ctx.turns.processes.clone();
 
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
