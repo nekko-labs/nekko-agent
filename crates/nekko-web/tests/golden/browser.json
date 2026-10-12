@@ -1,0 +1,1266 @@
+[
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b1",
+   "input": {
+    "mode": "dedicated",
+    "action": "navigate",
+    "url": "https://example.com"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "Example page"
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: navigate https://example.com."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "navigate",
+    "url": "https://example.com",
+    "sessionId": "b1"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-0",
+   "output": "Example page"
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b1",
+   "input": {
+    "mode": "existing",
+    "action": "inspect"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-1",
+   "output": "Close the current browser session before switching modes or ports.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b1",
+   "input": {
+    "mode": "dedicated",
+    "action": "close"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "Closed."
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: close."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "close",
+    "sessionId": "b1"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-2",
+   "output": "Closed."
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b2",
+   "input": {
+    "mode": "dedicated",
+    "action": "evaluate",
+    "expression": "document.links.length + 1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "3"
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: evaluate document.links.length + 111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111. The expression runs as script inside the page."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "evaluate",
+    "expression": "document.links.length + 1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "sessionId": "b2"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-3",
+   "output": "3"
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b3",
+   "input": {
+    "mode": "dedicated",
+    "action": "screenshot"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "Screenshot of tab 0",
+     "image": {
+      "data": "iVBORw0KGgo=",
+      "mime": "image/png"
+     }
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: screenshot. Page pixels will be sent to the selected chat model for inspection."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "screenshot",
+    "sessionId": "b3"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-4",
+   "output": "Screenshot of tab 0\nPixels attached to the selected model; vision support is required.",
+   "images": [
+    "data:image/png;base64,iVBORw0KGgo="
+   ]
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b3",
+   "input": {
+    "mode": "dedicated",
+    "action": "screenshot"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "image": {
+      "data": "iVBORw0KGgo=",
+      "mime": "image/png"
+     }
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: screenshot. Page pixels will be sent to the selected chat model for inspection."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "screenshot",
+    "sessionId": "b3"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-5",
+   "output": "Screenshot taken.\nPixels attached to the selected model; vision support is required.",
+   "images": [
+    "data:image/png;base64,iVBORw0KGgo="
+   ]
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b3",
+   "input": {
+    "mode": "dedicated",
+    "action": "screenshot"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "image": {
+      "data": "x",
+      "mime": "image/jpeg"
+     }
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: screenshot. Page pixels will be sent to the selected chat model for inspection."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "screenshot",
+    "sessionId": "b3"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-6",
+   "output": "In-app browser returned an invalid screenshot.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b4",
+   "input": {
+    "mode": "dedicated",
+    "action": "type",
+    "text": "say \"hi\"\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "Typed."
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: type \"say /\"hi/\"/nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "type",
+    "text": "say \"hi\"\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "sessionId": "b4"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-7",
+   "output": "Typed."
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b4",
+   "input": {
+    "mode": "dedicated",
+    "action": "press",
+    "key": "Control+A"
+   },
+   "reply": {
+    "ok": false,
+    "body": {
+     "error": "No page."
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: press Control+A."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "press",
+    "key": "Control+A",
+    "sessionId": "b4"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-8",
+   "output": "No page.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b4",
+   "input": {
+    "mode": "dedicated",
+    "action": "wait",
+    "text": "Done"
+   },
+   "reply": {
+    "ok": false,
+    "body": {}
+   }
+  },
+  "reasons": [
+   "Browser dedicated: wait text \"Done\"."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "wait",
+    "text": "Done",
+    "sessionId": "b4"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-9",
+   "output": "In-app browser action failed.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b4",
+   "input": {
+    "mode": "dedicated",
+    "action": "wait",
+    "selector": "#done",
+    "state": "visible"
+   },
+   "reply": {
+    "ok": true,
+    "body": {}
+   }
+  },
+  "reasons": [
+   "Browser dedicated: wait #done."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "wait",
+    "selector": "#done",
+    "state": "visible",
+    "sessionId": "b4"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-10",
+   "output": ""
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b4",
+   "input": {
+    "mode": "dedicated",
+    "action": "tab_switch",
+    "tab": 2
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "Tab 2."
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: tab_switch 2."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "tab_switch",
+    "tab": 2,
+    "sessionId": "b4"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-11",
+   "output": "Tab 2."
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b4",
+   "input": {
+    "mode": "dedicated",
+    "action": "tab_close"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "Closed tab."
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: tab_close current."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "tab_close",
+    "sessionId": "b4"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-12",
+   "output": "Closed tab."
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b4",
+   "input": {
+    "mode": "dedicated",
+    "action": "click",
+    "selector": "a.more",
+    "sessionId": "spoofed",
+    "visible": true
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "Clicked."
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: click a.more."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "click",
+    "selector": "a.more",
+    "sessionId": "b4",
+    "visible": true
+   }
+  ],
+  "result": {
+   "toolCallId": "call-13",
+   "output": "Clicked."
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b5",
+   "input": {
+    "mode": "dedicated",
+    "action": "navigate",
+    "url": "https://example.com"
+   },
+   "approve": false
+  },
+  "reasons": [
+   "Browser dedicated: navigate https://example.com."
+  ],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-14",
+   "output": "Browser action not approved.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b5",
+   "input": {
+    "mode": "dedicated",
+    "action": "navigate",
+    "url": "https://example.com"
+   },
+   "bridge": false
+  },
+  "reasons": [
+   "Browser dedicated: navigate https://example.com."
+  ],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-15",
+   "output": "In-app browser is unavailable. Restart the desktop app to enable it.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b5",
+   "input": {
+    "mode": "dedicated",
+    "action": "navigate",
+    "url": "https://example.com"
+   },
+   "allow": false
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-16",
+   "output": "Browser control is available only in a local desktop chat.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b5",
+   "input": {
+    "mode": "dedicated",
+    "action": "navigate",
+    "url": "https://example.com"
+   },
+   "reply": {
+    "throws": "fetch failed"
+   }
+  },
+  "reasons": [
+   "Browser dedicated: navigate https://example.com."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "navigate",
+    "url": "https://example.com",
+    "sessionId": "b5"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-17",
+   "output": "fetch failed",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b6",
+   "input": {
+    "mode": "nope",
+    "action": "navigate"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-18",
+   "output": "Choose dedicated or existing browser mode.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b6",
+   "input": {
+    "mode": "existing",
+    "action": "inspect",
+    "visible": false
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-19",
+   "output": "visible is a boolean for dedicated mode only.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b6",
+   "input": {
+    "mode": "existing",
+    "action": "inspect",
+    "port": "9333x"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-20",
+   "output": "CDP port must be a local TCP port.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b6",
+   "input": {
+    "mode": "existing",
+    "action": "logs"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-21",
+   "output": "The logs action needs dedicated mode (the in-app browser). Existing mode supports navigate, inspect, click, fill and close.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b6",
+   "input": {
+    "mode": "dedicated",
+    "action": "fill",
+    "selector": "#q",
+    "value": 5
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-22",
+   "output": "value must be a string of at most 10000 characters.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b6",
+   "input": {
+    "mode": "dedicated",
+    "action": "scroll",
+    "amount": 0
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-23",
+   "output": "amount must be between 1 and 20000 pixels.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b6",
+   "input": {
+    "mode": "dedicated",
+    "action": "extract",
+    "what": "html"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-24",
+   "output": "what must be one of text, links.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b6",
+   "input": {
+    "mode": "dedicated",
+    "action": "navigate",
+    "url": "HTTPS://EXAMPLE.COM",
+    "selector": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-25",
+   "output": "selector must be a string of at most 500 characters.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b6",
+   "input": {
+    "mode": "dedicated",
+    "action": "tab_new",
+    "url": "ftp://x"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-26",
+   "output": "Only HTTP(S) pages can be opened.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b6",
+   "input": {
+    "mode": "dedicated",
+    "action": "press",
+    "key": "Enteré"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-27",
+   "output": "press needs a key such as Enter, Tab, ArrowDown or Control+A.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "list"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "windows": [
+      {
+       "window_id": "window:1",
+       "title": "Editor",
+       "size": [
+        1200,
+        800
+       ]
+      }
+     ],
+     "empty": [],
+     "none": {}
+    }
+   }
+  },
+  "reasons": [
+   "Window capture: list. Window content may contain private information."
+  ],
+  "requests": [
+   {
+    "tool": "capture",
+    "sessionId": "c1",
+    "action": "list"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-28",
+   "output": "{\n  \"windows\": [\n    {\n      \"window_id\": \"window:1\",\n      \"title\": \"Editor\",\n      \"size\": [\n        1200,\n        800\n      ]\n    }\n  ],\n  \"empty\": [],\n  \"none\": {}\n}"
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "list",
+    "window_id": "window:1"
+   },
+   "approve": false
+  },
+  "reasons": [
+   "Window capture: list window:1. Window content may contain private information."
+  ],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-29",
+   "output": "Window capture not approved.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "list"
+   },
+   "allow": false
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-30",
+   "output": "Window capture is available only in a local desktop chat.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "list"
+   },
+   "bridge": false
+  },
+  "reasons": [
+   "Window capture: list. Window content may contain private information."
+  ],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-31",
+   "output": "Desktop capture bridge is unavailable. Restart the desktop app; no browser fallback was used.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "zoom"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-32",
+   "output": "Choose list, screenshot, or record.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "inspect": "yes"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-33",
+   "output": "inspect must be a boolean.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "path": "a.png"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-34",
+   "output": "List windows and choose a window_id first.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-35",
+   "output": "An output path is required.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1",
+    "path": "../outside.png"
+   },
+   "sandboxMode": "off"
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-36",
+   "output": "Capture output must be inside the chat project, without escaping through links.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1",
+    "path": "../outside.png"
+   },
+   "sandboxMode": "workspace-jail"
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-37",
+   "output": "Sandbox: <OUT>/outside.png is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1",
+    "path": "shot.jpg"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-38",
+   "output": "Use .png for screenshots or .webm for recordings.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1",
+    "path": "taken.png"
+   },
+   "existing": "taken.png"
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-39",
+   "output": "Capture output already exists; choose a new path.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "record",
+    "window_id": "window:1",
+    "path": "clip.webm",
+    "seconds": 20
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-40",
+   "output": "Recording duration must be 1–15 seconds.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "record",
+    "window_id": "window:1",
+    "path": "clip.webm",
+    "seconds": "3"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "window_id": "window:1",
+     "mime": "video/webm",
+     "data": "d2VibS1ieXRlcw==",
+     "seconds": 3
+    }
+   }
+  },
+  "reasons": [
+   "Window capture: record window:1 → <ROOT>/clip.webm. Window content may contain private information."
+  ],
+  "requests": [
+   {
+    "tool": "capture",
+    "sessionId": "c1",
+    "action": "record",
+    "window_id": "window:1",
+    "seconds": "3"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-41",
+   "output": "{\n  \"window_id\": \"window:1\",\n  \"mime\": \"video/webm\",\n  \"seconds\": 3,\n  \"path\": \"<ROOT>/clip.webm\",\n  \"bytes\": 10,\n  \"inspection\": \"Saved without model inspection.\"\n}"
+  },
+  "written": "d2VibS1ieXRlcw=="
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1",
+    "path": ".shots/after.png"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "title": "Other",
+     "window_id": "window:1",
+     "mime": "image/png",
+     "data": "cG5nLWJ5dGVz",
+     "width": 1200,
+     "height": 800,
+     "path": "theirs",
+     "bytes": 1
+    }
+   }
+  },
+  "reasons": [
+   "Window capture: screenshot window:1 → <ROOT>/.shots/after.png. Window content may contain private information. Screenshot pixels will also be sent to the selected chat model for inspection."
+  ],
+  "requests": [
+   {
+    "tool": "capture",
+    "sessionId": "c1",
+    "action": "screenshot",
+    "window_id": "window:1"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-42",
+   "output": "{\n  \"title\": \"Other\",\n  \"window_id\": \"window:1\",\n  \"mime\": \"image/png\",\n  \"width\": 1200,\n  \"height\": 800,\n  \"path\": \"<ROOT>/.shots/after.png\",\n  \"bytes\": 9,\n  \"inspection\": \"Pixels attached to the selected model; vision support is required. Capture alone does not prove verification.\"\n}",
+   "images": [
+    "data:image/png;base64,cG5nLWJ5dGVz"
+   ]
+  },
+  "written": "cG5nLWJ5dGVz"
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1",
+    "path": "deep/er/quiet.PNG",
+    "inspect": false
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "mime": "image/png",
+     "data": "cG5nLWJ5dGVz\n"
+    }
+   }
+  },
+  "reasons": [
+   "Window capture: screenshot window:1 → <ROOT>/deep/er/quiet.PNG. Window content may contain private information."
+  ],
+  "requests": [
+   {
+    "tool": "capture",
+    "sessionId": "c1",
+    "action": "screenshot",
+    "window_id": "window:1"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-43",
+   "output": "{\n  \"mime\": \"image/png\",\n  \"path\": \"<ROOT>/deep/er/quiet.PNG\",\n  \"bytes\": 9,\n  \"inspection\": \"Saved without model inspection.\"\n}"
+  },
+  "written": "cG5nLWJ5dGVz"
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1",
+    "path": "bad.png"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "mime": "image/jpeg",
+     "data": "cG5nLWJ5dGVz"
+    }
+   }
+  },
+  "reasons": [
+   "Window capture: screenshot window:1 → <ROOT>/bad.png. Window content may contain private information. Screenshot pixels will also be sent to the selected chat model for inspection."
+  ],
+  "requests": [
+   {
+    "tool": "capture",
+    "sessionId": "c1",
+    "action": "screenshot",
+    "window_id": "window:1"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-44",
+   "output": "Desktop bridge returned invalid capture media.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1",
+    "path": "empty.png"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "mime": "image/png",
+     "data": "===="
+    }
+   }
+  },
+  "reasons": [
+   "Window capture: screenshot window:1 → <ROOT>/empty.png. Window content may contain private information. Screenshot pixels will also be sent to the selected chat model for inspection."
+  ],
+  "requests": [
+   {
+    "tool": "capture",
+    "sessionId": "c1",
+    "action": "screenshot",
+    "window_id": "window:1"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-45",
+   "output": "Desktop bridge returned empty capture media.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1",
+    "path": "fail.png"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "error": "Window is gone."
+    }
+   }
+  },
+  "reasons": [
+   "Window capture: screenshot window:1 → <ROOT>/fail.png. Window content may contain private information. Screenshot pixels will also be sent to the selected chat model for inspection."
+  ],
+  "requests": [
+   {
+    "tool": "capture",
+    "sessionId": "c1",
+    "action": "screenshot",
+    "window_id": "window:1"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-46",
+   "output": "Window is gone.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "capture",
+   "session": "c1",
+   "input": {
+    "action": "screenshot",
+    "window_id": "window:1",
+    "path": "fail2.png"
+   },
+   "reply": {
+    "ok": false,
+    "body": {}
+   }
+  },
+  "reasons": [
+   "Window capture: screenshot window:1 → <ROOT>/fail2.png. Window content may contain private information. Screenshot pixels will also be sent to the selected chat model for inspection."
+  ],
+  "requests": [
+   {
+    "tool": "capture",
+    "sessionId": "c1",
+    "action": "screenshot",
+    "window_id": "window:1"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-47",
+   "output": "Window capture failed.",
+   "isError": true
+  },
+  "written": null
+ }
+]
