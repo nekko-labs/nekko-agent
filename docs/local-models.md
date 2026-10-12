@@ -8,16 +8,20 @@ before you wait through the load. This is what the Models page shows you and why
 ## The Nekko engine
 
 The engine is llama.cpp, managed by Nekko Agent. You press one button, a build comes down
-from llama.cpp's own releases (about 30 MB for the default Vulkan or CPU build), and the
-app can serve models. Nothing
+from llama.cpp's own releases (about 30 MB for Vulkan or CPU, several hundred MB for
+CUDA), and the app can serve models. Nothing
 is downloaded before that press.
 
 **Which build.** Picked from what the GPU probe actually found, not from the platform:
-Vulkan for any GPU, NVIDIA included, Metal on Apple Silicon, CPU where there is no
-evidence of anything else. A slow engine that runs beats a fast one that fails to start.
-CUDA is offered, not defaulted: on Windows it is about 550 MB (the build plus NVIDIA's
-CUDA runtime) against Vulkan's 30 MB, so an NVIDIA machine starts on Vulkan and the
-Model server card offers **Switch to CUDA** once `nvidia-smi` answers. Every other build
+CUDA where `nvidia-smi` answers and the card can run it, Vulkan for any other GPU, Metal
+on Apple Silicon, CPU where there is no evidence of anything else. A slow engine that runs
+beats a fast one that fails to start. llama.cpp's CUDA build is CUDA 13, which needs a
+GTX 16 / RTX 20 series card or newer (compute capability 7.5) and driver 580 or newer, so
+an older card or driver is recommended Vulkan and told why. The picker says CUDA is
+roughly 15-20% faster than Vulkan on NVIDIA (a rough public figure, not yet measured on
+our hardware); it is also the bigger download, about 550 MB on Windows with NVIDIA's CUDA
+runtime against Vulkan's 30 MB. A supported NVIDIA machine on a Vulkan or CPU build is
+offered **Switch to CUDA** on the Model server card. Every other build
 for your machine stays in the list if you disagree. If you already have a `llama-server`,
 point at it instead: Nekko Agent will run it and never update or remove it.
 

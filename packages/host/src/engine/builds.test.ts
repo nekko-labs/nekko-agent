@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GpuStats } from '@nekko-agent/shared';
-import { buildsFor, cudaUpgrade, hasBinaries, matchAsset, matchCompanion, recommendedBuild } from './builds.js';
+import { buildsFor, cudaSupportFrom, cudaUpgrade, hasBinaries, matchAsset, matchCompanion, recommendedBuild } from './builds.js';
 
 /**
  * Picking the wrong build is the most expensive mistake this feature can make:
@@ -29,11 +29,26 @@ const apple: GpuStats = {
 const noGpu: GpuStats = { source: 'none', devices: [], totalMB: 0, usedMB: 0, freeMB: 0 };
 
 describe('build selection', () => {
-  it('picks Vulkan, not CUDA, on Windows with an NVIDIA reading', () => {
-    // CUDA's build and runtime are about 550 MB against Vulkan's 30 MB; CUDA is
-    // the opt-in upgrade once Vulkan runs (cudaUpgrade).
-    expect(recommendedBuild('win32', 'x64', nvidia)?.backend).toBe('vulkan');
-    expect(recommendedBuild('linux', 'x64', nvidia)?.backend).toBe('vulkan');
+  it('picks CUDA on Windows and Linux with an NVIDIA card that can run it', () => {
+    const ok = cudaSupportFrom('12.0, 617.14');
+    expect(recommendedBuild('win32', 'x64', nvidia, [], ok)?.backend).toBe('cuda');
+    expect(recommendedBuild('linux', 'x64', nvidia, [], ok)?.backend).toBe('cuda');
+    // No reading (the query failed): trust nvidia-smi, as before the check.
+    expect(recommendedBuild('win32', 'x64', nvidia)?.backend).toBe('cuda');
+  });
+
+  it('picks Vulkan for an NVIDIA card or driver the CUDA 13 build cannot run, and says why', () => {
+    const pascal = cudaSupportFrom('6.1, 581.15');
+    const builds = buildsFor('win32', 'x64', nvidia, [], pascal);
+    expect(builds[0].backend).toBe('vulkan');
+    expect(builds.find((b) => b.backend === 'cuda')?.requires).toMatch(/older than the GTX 16/);
+    expect(recommendedBuild('win32', 'x64', nvidia, [], cudaSupportFrom('8.9, 566.36'))?.backend).toBe('vulkan');
+  });
+
+  it('tells people roughly how much faster CUDA is when they choose', () => {
+    const builds = buildsFor('win32', 'x64', nvidia);
+    expect(builds.find((b) => b.backend === 'cuda')?.requires).toMatch(/Roughly 15-20% faster than Vulkan/);
+    expect(builds.find((b) => b.backend === 'vulkan')?.requires).toMatch(/CUDA is roughly 15-20% faster/);
   });
 
   it('does not pick CUDA on Windows without one', () => {
@@ -60,7 +75,22 @@ describe('build selection', () => {
     const backends = buildsFor('win32', 'x64', nvidia).map((b) => b.backend);
     expect(backends).toContain('vulkan');
     expect(backends).toContain('cpu');
-    expect(backends.slice(0, 2)).toEqual(['vulkan', 'cuda']);
+    expect(backends.slice(0, 2)).toEqual(['cuda', 'vulkan']);
+  });
+});
+
+describe('reading CUDA support from nvidia-smi', () => {
+  it('needs compute capability 7.5 and driver 580 on every card', () => {
+    expect(cudaSupportFrom('12.0, 617.14')).toEqual({ supported: true });
+    expect(cudaSupportFrom('7.5, 580.65.06')).toEqual({ supported: true });
+    expect(cudaSupportFrom('8.6, 581.0\r\n6.1, 581.0')?.supported).toBe(false);
+    expect(cudaSupportFrom('8.6, 560.94')).toMatchObject({ supported: false, reason: expect.stringMatching(/driver/) });
+  });
+
+  it('is unknown, not unsupported, when there is nothing to read', () => {
+    expect(cudaSupportFrom(null)).toBeUndefined();
+    expect(cudaSupportFrom('')).toBeUndefined();
+    expect(cudaSupportFrom('[N/A], [N/A]')).toBeUndefined();
   });
 });
 
@@ -76,6 +106,7 @@ describe('the CUDA upgrade', () => {
     expect(cudaUpgrade('win32', 'x64', nvidia, 'cuda')).toBeUndefined();
     expect(cudaUpgrade('win32', 'x64', nvidia, undefined)).toBeUndefined();
     expect(cudaUpgrade('darwin', 'arm64', nvidia, 'cpu')).toBeUndefined();
+    expect(cudaUpgrade('win32', 'x64', nvidia, 'vulkan', cudaSupportFrom('6.1, 581.15'))).toBeUndefined();
   });
 });
 
