@@ -9,6 +9,8 @@ import { useT } from './i18n.js';
 import { SHORTCUTS } from './shortcuts.js';
 import { hasAppChrome } from './chrome.js';
 import { TitleBar } from './components/TitleBar.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
+import { ServiceLoadState } from './components/ServiceLoadState.js';
 import { BrandMark } from './components/BrandMark.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { syncAppActivity } from './appActivity.js';
@@ -67,13 +69,14 @@ const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string 
 const MOBILE_NAV: View[] = ['command', 'chat', 'training', 'workflows', 'settings'];
 
 export function App() {
-  const { view, setView, mascotMood, settings, settingsLoaded, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
+  const { view, setView, mascotMood, settings, settingsLoaded, settingsError, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
     useShallow((s) => ({
       view: s.view,
       setView: s.setView,
       mascotMood: s.mascotMood,
       settings: s.settings,
       settingsLoaded: s.settingsLoaded,
+      settingsError: s.settingsError,
       providers: s.providers,
       onboardingOpen: s.onboardingOpen,
       refreshSettings: s.refreshSettings,
@@ -227,7 +230,7 @@ export function App() {
   return (
     <div className="flex h-full w-full flex-col" style={{ background: 'var(--paper)' }}>
       {/* The window's own title bar, in the desktop shell only. */}
-      <TitleBar />
+      <ErrorBoundary label="Title bar"><TitleBar /></ErrorBoundary>
 
       {!settingsLoaded ? (
         <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
@@ -287,6 +290,8 @@ export function App() {
               <span className="font-medium">Get started:</span> connect your first model in Model Providers →
             </button>
           )}
+          <ErrorBoundary key={view} label={t(`nav.${view}`)}>
+          {!settings && settingsError ? <ServiceLoadState label="settings" error={settingsError} retry={refreshSettings} /> : <>
           {view === 'command' && <CommandCenterView />}
           {view === 'chat' && <WorkspacesView />}
           {view === 'skills' && <SkillsView />}
@@ -298,11 +303,13 @@ export function App() {
           {view === 'connectors' && <ConnectorsView />}
           {view === 'memory' && <MemoryView />}
           {view === 'settings' && <SettingsView />}
+          </>}
+          </ErrorBoundary>
         </main>
 
         {/* First-run setup wizard: covers nav + main but leaves the window's
             title bar (and its OS buttons) reachable above it. */}
-        {onboardingOpen && <OnboardingView />}
+        {onboardingOpen && <ErrorBoundary label="Setup"><OnboardingView /></ErrorBoundary>}
       </div>
 
       {/* Phone bottom tab bar: the remote-control surface. The long tail of
@@ -334,13 +341,13 @@ export function App() {
       {/* Global overlays stay mounted even while settings load, so deep links,
           toasts, and update banners keep working on any settings failure. */}
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
-      <UpdateBanner />
-      <RelayPairing />
-      {view !== 'command' && <ResourceHud />}
-      <Mascot mood={mascotMood} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} />
-      <CommandPalette />
-      <DeepLinkListener />
-      <Toasts />
+      <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
+      <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>
+      {view !== 'command' && <ErrorBoundary label="Resource monitor"><ResourceHud /></ErrorBoundary>}
+      <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>
+      <ErrorBoundary label="Command palette"><CommandPalette /></ErrorBoundary>
+      <ErrorBoundary label="Links"><DeepLinkListener /></ErrorBoundary>
+      <ErrorBoundary label="Notifications"><Toasts /></ErrorBoundary>
     </div>
   );
 }

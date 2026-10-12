@@ -15,6 +15,8 @@ import { MlxInstallCard } from './MlxInstallCard.js';
 import { DecisionModels } from './DecisionModels.js';
 import { LocalServerSection } from '../server/LocalServerSection.js';
 import { ServerPowerPill } from '../server/ServerPowerPill.js';
+import { ServiceLoadState } from '../ServiceLoadState.js';
+import { ErrorBoundary } from '../ErrorBoundary.js';
 
 /**
  * The engine Nekko Agent runs itself, and the models it serves.
@@ -46,6 +48,7 @@ export function EngineSection({
 }) {
   const pushToast = useStore((s) => s.pushToast);
   const [status, setStatus] = useState<EngineStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<Array<LocalModel & { loaded: boolean }>>([]);
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const [tab, setTab] = useState<Tab>('models');
@@ -54,14 +57,25 @@ export function EngineSection({
   const [repairing, setRepairing] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [s, m, d] = await Promise.all([
-      window.nekko.engineStatus().catch(() => null),
-      window.nekko.engineModels().catch(() => []),
-      window.nekko.engineDownloads().catch(() => []),
+    const [s, m, d] = await Promise.allSettled([
+      window.nekko.engineStatus().then((s) => {
+        if (!s) throw new Error('Nekko service returned no model server status.');
+        return s;
+      }),
+      window.nekko.engineModels().then((models) => {
+        if (!Array.isArray(models)) throw new Error('Nekko service returned no model list.');
+        return models;
+      }),
+      window.nekko.engineDownloads().then((jobs) => {
+        if (!Array.isArray(jobs)) throw new Error('Nekko service returned no download list.');
+        return jobs;
+      }),
     ]);
-    setStatus(s);
-    setModels(m);
-    setJobs(d);
+    if (s.status === 'fulfilled') setStatus(s.value);
+    if (m.status === 'fulfilled') setModels(m.value);
+    if (d.status === 'fulfilled') setJobs(d.value);
+    const failure = [s, m, d].find((result) => result.status === 'rejected');
+    setError(failure?.status === 'rejected' ? (failure.reason instanceof Error ? failure.reason.message : 'Nekko service is unavailable.') : null);
   }, []);
 
   useEffect(() => {
@@ -88,7 +102,7 @@ export function EngineSection({
     return () => clearInterval(t);
   }, [loadingCount, refresh]);
 
-  if (!status) return null;
+  if (!status) return <ServiceLoadState label="model server" error={error} retry={refresh} />;
 
   const { install, running } = status;
   const installed = Boolean(install.binPath || status.diffusionInstall?.binPath);
@@ -145,6 +159,7 @@ export function EngineSection({
 
   return (
     <section className="min-w-0 space-y-8">
+      {error && <ServiceLoadState label="model server" error={error} retry={refresh} />}
       <div className="grid min-w-0 grid-cols-1 items-start gap-6 xl:grid-cols-2">
       <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -229,8 +244,8 @@ export function EngineSection({
           <summary className="cursor-pointer text-[12px] font-medium">Model server settings</summary>
           <div className="mt-3"><EngineServerSettings settings={status.settings} install={install} running={running} onChanged={() => { void refresh(); onProvidersChanged(); }} /></div>
         </details>
-        <DiffusionInstallCard install={status.diffusionInstall} onChanged={refresh} />
-        <MlxInstallCard install={status.mlxInstall} onChanged={refresh} />
+        <ErrorBoundary label="Image runtime"><DiffusionInstallCard install={status.diffusionInstall} onChanged={refresh} /></ErrorBoundary>
+        <ErrorBoundary label="MLX runtime"><MlxInstallCard install={status.mlxInstall} onChanged={refresh} /></ErrorBoundary>
 
         {/* The engine's own output, under the server it came from rather than
             the model library: when a start fails this is where you look, and
@@ -245,7 +260,7 @@ export function EngineSection({
         )}
       </div>
       </div>
-      <LocalServerSection />
+      <ErrorBoundary label="Local API"><LocalServerSection /></ErrorBoundary>
       </div>
       <div className="min-w-0">
         <h2 className="text-[15px] font-semibold">Models</h2>
@@ -267,6 +282,7 @@ export function EngineSection({
         </div>
 
         <div className="mt-3">
+          <ErrorBoundary key={tab} label="Model library">
           {tab === 'models' && (
             <ModelsHome
               providerId={PROVIDER_ID}
@@ -285,6 +301,7 @@ export function EngineSection({
           {tab === 'downloads' && <DownloadsPanel jobs={jobs} onChanged={refresh} />}
           {tab === 'folders' && <ModelFolders onChanged={refresh} />}
           {tab === 'decisions' && <DecisionModels />}
+          </ErrorBoundary>
         </div>
       </div>
       </div>

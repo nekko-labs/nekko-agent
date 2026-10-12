@@ -25,7 +25,8 @@ describe('Agents header placement', () => {
     const title = renderToStaticMarkup(<TitleBar />);
     // The brand mark stands alone (no wordmark), still named for assistive tech.
     expect(title).not.toContain('Nekko Agent</span>');
-    expect(title).toContain('<title>Nekko Agent</title>');
+    expect(title).toContain('aria-label="Nekko Agent"');
+    expect(title).toContain('data-part="pixel-head"');
     expect(title).toContain('width="28"');
     expect(title).toContain('class="titlebar-heading');
     expect(title.indexOf('>Agents</h1>')).toBeLessThan(title.indexOf('data-version'));
