@@ -2007,8 +2007,12 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-suggestions-chip:hover, .composer-suggestions-chip.is-open { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); color: var(--ink); }
 .composer-suggestions-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* The composer row: the composer at its docked alignment. */
-.wall-composer-row { position: relative; display: flex; align-items: stretch; gap: 20px; flex-shrink: 0; min-width: 0; padding-inline: 16px; }
+/* The composer row: the composer at its docked alignment. Its inset matches
+   the wall's own (14px padding, plus the scrollbar gutter the wall always
+   reserves on the right: --wall-gutter, the 10px of ::-webkit-scrollbar), so a
+   composer stretched to the limit lines up with the windows edge to edge, and
+   a centred one is centred under them. */
+.wall-composer-row { --wall-gutter: 10px; position: relative; display: flex; align-items: stretch; gap: 20px; flex-shrink: 0; min-width: 0; padding-inline: 14px calc(14px + var(--wall-gutter)); }
 .wall-composer-row[data-dock$='-left'] { justify-content: flex-start; }
 .wall-composer-row[data-dock$='-center'] { justify-content: center; }
 .wall-composer-row[data-dock$='-right'] { justify-content: flex-end; }
