@@ -35,6 +35,10 @@ pub struct Ctx {
     pub catalog: Option<Arc<nekko_engine::catalog::Catalog>>,
     /// Phone remote access (`remote:*`) and the relay agent.
     pub remote: Arc<crate::remote::Remote>,
+    /// GPU and system stats and the readiness advisor (`gpu:stats`, `system:stats`, `machine:readiness`).
+    pub machine: Arc<nekko_machine::Machine>,
+    /// The experimental resource-queue client, when the data directory is known.
+    pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -275,6 +279,12 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             None => Err("voice needs the data directory".into()),
         },
         c if crate::remote::CHANNELS.contains(&c) && ctx.remote.enabled() => ctx.remote.route(c, &args).await,
+        c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
+        // Without a data directory the host keeps the coordinator file.
+        "resource:queue" => match &ctx.resource_queue {
+            Some(queue) => queue.route(&args).await,
+            None => ctx.backend.call(channel, Value::Array(args)).await,
+        },
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
             session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
         }
@@ -334,6 +344,10 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.remote.enabled() {
         all.extend_from_slice(crate::remote::CHANNELS);
+    }
+    all.extend_from_slice(crate::machine::CHANNELS);
+    if ctx.resource_queue.is_some() {
+        all.extend_from_slice(crate::resource_queue::CHANNELS);
     }
     all
 }

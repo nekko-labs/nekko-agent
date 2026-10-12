@@ -112,7 +112,7 @@ pub(crate) fn normalize_string(path: &[u16], allow_above_root: bool, sep: u16, i
 }
 
 /// The process working directory as Node reports it.
-pub(crate) fn process_cwd() -> String {
+pub fn process_cwd() -> String {
     std::env::current_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| ".".into())
 }
 
