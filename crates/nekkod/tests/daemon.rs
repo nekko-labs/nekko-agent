@@ -1558,3 +1558,23 @@ async fn a_daemon_turn_runs_its_tool_hooks_itself() {
     let calls = all.as_array().unwrap();
     assert!(!calls.iter().any(|e| e[0] == "turn:hook" || e[0] == "turn:tool"), "the host ran nothing: {all}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn classifies_commands_and_lists_tools_without_the_host() {
+    let data = std::env::temp_dir().join(format!("nekkod-tooling-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    let d = start_with(false, Some(&data));
+    let (status, decision) = post(d.port, "guardrails:classify", json!(["rm -rf /"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{decision}");
+    assert_eq!(decision["action"], "ask", "{decision}");
+    assert_eq!(decision["matches"][0]["ruleId"], "rm-rf", "{decision}");
+    let (_, safe) = post(d.port, "guardrails:classify", json!(["ls"]), Some(TOKEN)).await;
+    assert_eq!(safe["action"], "allow", "{safe}");
+    let (_, tools) = post(d.port, "tools:list", json!([]), Some(TOKEN)).await;
+    let names: Vec<&str> = tools.as_array().unwrap().iter().filter_map(|t| t["name"].as_str()).collect();
+    assert!(names.contains(&"read_file") && names.contains(&"bash"), "{names:?}");
+    assert!(tools[0]["description"].as_str().is_some_and(|d| !d.is_empty()));
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}

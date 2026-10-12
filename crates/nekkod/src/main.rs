@@ -19,6 +19,7 @@ mod procgroup;
 mod routes;
 mod settings;
 mod sideband;
+mod tooling;
 mod turns;
 mod voice;
 mod wire;

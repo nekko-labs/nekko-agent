@@ -264,6 +264,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Some(catalog) => crate::catalog::route(catalog, c, &args).await,
             None => ctx.backend.call(c, Value::Array(args)).await,
         },
+        c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
         c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
             crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
         }
@@ -312,6 +313,7 @@ fn merge_pending(host: Value, daemon: Value) -> Value {
 /// when they are really served here.
 fn owned(ctx: &Ctx) -> Vec<&'static str> {
     let mut all = OWNED.to_vec();
+    all.extend_from_slice(crate::tooling::CHANNELS);
     if ctx.accounts.enabled() {
         all.extend_from_slice(crate::accounts::OWNED);
     }
