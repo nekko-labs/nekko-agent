@@ -1627,6 +1627,25 @@ async fn serves_files_memory_and_comments_itself() {
     // A folder the settings do not list is not searched.
     let (_, hits) = post(d.port, "workspace:search", json!(["w_missing", "a"]), Some(TOKEN)).await;
     assert_eq!(hits, json!([]));
+    // The folder list is the daemon's own settings.
+    let folder =
+        json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": project.to_string_lossy(), "addedAt": 1 }] }]);
+    post(d.port, "settings:update", folder, Some(TOKEN)).await;
+    let (_, done) = post(d.port, "workspace:index", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(
+        (done["state"].clone(), done["fileCount"].clone(), done["symbolCount"].clone()),
+        (json!("ready"), json!(2), json!(1))
+    );
+    let (_, hits) = post(d.port, "workspace:search", json!(["w1", "FUNCTION A"]), Some(TOKEN)).await;
+    assert_eq!(hits[0]["relPath"], json!("src/a.ts"));
+    assert_eq!(hits[0]["line"], json!(1));
+    let (_, listed) = post(d.port, "workspace:files", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(listed.as_array().unwrap().len(), 2);
+    let (_, snippets) =
+        post(d.port, "workspace:snippets", json!([["w1"], "where is function defined"]), Some(TOKEN)).await;
+    assert_eq!(snippets[0]["body"], json!("1: export function a() {}"));
+    let (_, status) = post(d.port, "workspace:indexStatus", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(status["state"], json!("ready"));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }

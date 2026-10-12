@@ -173,7 +173,7 @@ import {
 import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
 import { isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
-import { daemonOwns, loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
+import { daemonOwns as daemonServes, loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
 import { setTurnNotifier, turnCallback } from './daemon-turn.js';
 import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
 import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemon as notifyLimits } from './limits.js';
@@ -613,7 +613,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // The engine daemon holds the index when it serves `workspace:index`.
   const indexNewFolder = async (folder: WorkspaceFolder) => {
     const daemon = daemonCall();
-    if (daemon && (await daemonOwns(daemon, IpcChannels.workspaceIndex))) {
+    if (daemon && (await daemonServes(daemon, IpcChannels.workspaceIndex))) {
       await daemon(IpcChannels.workspaceIndex, folder.id).catch(() => {});
     } else {
       indexWorkspace(folder, onIndexProgress);

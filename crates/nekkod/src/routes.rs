@@ -274,7 +274,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Some(voice) => voice.route(c, &args).await,
             None => Err("voice needs the data directory".into()),
         },
-        c if ctx.workspace.serves(c) => crate::workspace::route(&ctx.workspace, &ctx.backend, &ctx.hub, c, &args).await,
+        c if ctx.workspace.serves(c) => crate::workspace::route(ctx, c, &args).await,
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
             session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
         }

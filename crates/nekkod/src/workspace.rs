@@ -1,22 +1,19 @@
 //! The user's projects, served here (PF14): the file explorer, memory notes,
 //! line comments and the workspace index (`crates/nekko-workspace`).
 //!
-//! The folder list is still a setting the TS host keeps, so finding a
-//! workspace's folder asks it (`settings:get`); everything else runs here,
-//! off the async threads. Index progress goes to the UI from here and to the
+//! A workspace's folder comes from the settings (`crate::settings::current`,
+//! the daemon's own store when it knows the data directory); everything runs
+//! here, off the async threads. Index progress goes to the UI from here and to the
 //! host's own listeners (the phone relay) through `index:progress`, marked
 //! `relayOnly` there so the backend's copy is not sent twice.
 
 use crate::backend::Backend;
 use crate::hub::Hub;
+use crate::routes::Ctx;
 use nekko_workspace::{comments, files, index::Index, memory};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
-
-/// How long a call waits on the host for the folder list.
-const SETTINGS_WAIT: Duration = Duration::from_secs(5);
 
 /// Channels served here whatever the edition.
 pub const CHANNELS: &[&str] = &[
@@ -73,12 +70,9 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
     tokio::task::spawn_blocking(f).await.map_err(|e| format!("workspace call failed: {e}"))
 }
 
-/// The saved folders, `settings.workspaces`, from the host.
-async fn folders(backend: &Backend) -> Vec<Value> {
-    match tokio::time::timeout(SETTINGS_WAIT, backend.call("settings:get", json!([]))).await {
-        Ok(Ok(s)) => s.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default(),
-        _ => Vec::new(),
-    }
+/// The saved folders, `settings.workspaces`.
+async fn folders(ctx: &Ctx) -> Vec<Value> {
+    crate::settings::current(ctx).await.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default()
 }
 
 fn folder_path(folders: &[Value], id: &str) -> Option<String> {
@@ -89,13 +83,8 @@ fn folder_path(folders: &[Value], id: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-pub async fn route(
-    ws: &Workspace,
-    backend: &Arc<Backend>,
-    hub: &Hub,
-    channel: &str,
-    args: &[Value],
-) -> Result<Value, String> {
+pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
+    let ws = &ctx.workspace;
     let args = args.to_vec();
     match channel {
         "file:read" => blocking(move || files::read_file(&text(&args, 0))).await?,
@@ -111,14 +100,14 @@ pub async fn route(
         }
         "workspace:index" => {
             let id = text(&args, 0);
-            let Some(root) = folder_path(&folders(backend).await, &id) else {
+            let Some(root) = folder_path(&folders(ctx).await, &id) else {
                 return Err("Workspace not found".into());
             };
-            index_now(ws.index.clone(), backend.clone(), hub.clone(), id, root).await
+            index_now(ws.index.clone(), ctx.backend.clone(), ctx.hub.clone(), id, root).await
         }
         "workspace:search" => {
             let id = text(&args, 0);
-            if folder_path(&folders(backend).await, &id).is_none() {
+            if folder_path(&folders(ctx).await, &id).is_none() {
                 return Ok(json!([]));
             }
             // `query.toLowerCase()` on anything else throws in the host.
@@ -133,7 +122,7 @@ pub async fn route(
                 .and_then(Value::as_array)
                 .map(|a| a.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect())
                 .unwrap_or_default();
-            Ok(Value::Array(snippets_for(ws, backend, &ids, &text(&args, 1)).await))
+            Ok(Value::Array(index_snippets(ctx, &ids, &text(&args, 1)).await))
         }
         _ => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
@@ -156,18 +145,14 @@ async fn data_route(dir: PathBuf, channel: &str, args: Vec<Value>) -> Result<Val
     .await?
 }
 
-/// The chat's index snippets (`collectIndexSnippets` in chat.ts): for the
-/// daemon's own turn admission, the same as `workspace:snippets`. Each is
-/// `{ relPath, path, body }`, the TS `ContextSnippet` shape.
-#[allow(dead_code, reason = "chat admission moving into the daemon calls it")]
-pub async fn index_snippets(ctx: &crate::routes::Ctx, workspace_ids: &[String], text: &str) -> Vec<Value> {
-    snippets_for(&ctx.workspace, &ctx.backend, workspace_ids, text).await
-}
-
-async fn snippets_for(ws: &Workspace, backend: &Backend, ids: &[String], query: &str) -> Vec<Value> {
-    let saved = if ids.is_empty() { Vec::new() } else { folders(backend).await };
-    let found: Vec<(String, bool)> = ids.iter().map(|id| (id.clone(), folder_path(&saved, id).is_some())).collect();
-    let (index, query) = (ws.index.clone(), query.to_string());
+/// The chat's index snippets (`collectIndexSnippets` in chat.ts): what
+/// `workspace:snippets` answers, and what a daemon-side admission calls.
+/// Each is `{ relPath, path, body }`, the TS `ContextSnippet` shape.
+pub async fn index_snippets(ctx: &Ctx, workspace_ids: &[String], text: &str) -> Vec<Value> {
+    let saved = if workspace_ids.is_empty() { Vec::new() } else { folders(ctx).await };
+    let found: Vec<(String, bool)> =
+        workspace_ids.iter().map(|id| (id.clone(), folder_path(&saved, id).is_some())).collect();
+    let (index, query) = (ctx.workspace.index.clone(), text.to_string());
     blocking(move || index.snippets(&found, &query)).await.unwrap_or_default()
 }
 
