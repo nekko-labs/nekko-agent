@@ -7,7 +7,7 @@ const wall = readFileSync(new URL('../components/CommandWall.tsx', import.meta.u
 const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 const drawer = readFileSync(new URL('../components/AgentLogsDrawer.tsx', import.meta.url), 'utf8');
 
-beforeEach(() => useWallLogs.setState({ sessionId: null, closing: false }));
+beforeEach(() => useWallLogs.setState({ sessionId: null, kind: 'logs', closing: false }));
 
 it('keeps owning-session logs available without the compact-pane visibility gate', () => {
   const start = source.indexOf('aria-label="Open agent logs"');
@@ -54,10 +54,10 @@ const two = (): Map<string, Rect> => new Map([
   ['right', { x: 1004, y: 0, width: 996, height: 1000 }],
 ]);
 
-it('hangs the drawer off the right edge at 90% height and pushes the window beside it', () => {
+it('hangs the drawer off the right edge at 96% height and pushes the window beside it', () => {
   const { panes, drawer } = layoutWithLogsDrawer(two(), 'left', 2000);
   const w = logsDrawerWidth(2000);
-  expect(drawer).toEqual({ x: 996, y: 50, width: w, height: 900 });
+  expect(drawer).toEqual({ x: 996, y: 20, width: w, height: 960 });
   expect(panes.get('left')).toEqual(two().get('left'));
   const right = panes.get('right')!;
   // The 8px gap between them stays, scaled with the squeeze.
@@ -87,7 +87,7 @@ it('keeps three windows in a row on the wall, narrowing the drawer before pushin
   expect(c.x + c.width).toBeLessThanOrEqual(1570 + 1e-6);
   expect(panes.get('b')!.width).toBeGreaterThanOrEqual(240 - 1e-6);
   expect(drawer!.width).toBeGreaterThanOrEqual(280);
-  expect(drawer!.height).toBe(630);
+  expect(drawer!.height).toBe(672);
 });
 
 it('still opens on a one-column wall, over the window instead of beside it', () => {
@@ -95,7 +95,7 @@ it('still opens on a one-column wall, over the window instead of beside it', () 
   const { panes, drawer, overlay } = overlayLogsDrawer(col, 'a');
   expect(overlay).toBe(true);
   expect(panes.get('a')).toEqual(col.get('a'));
-  expect(drawer).toEqual({ x: 28, y: 20, width: 560, height: 360 });
+  expect(drawer).toEqual({ x: 28, y: 8, width: 560, height: 384 });
   // The wall picks the overlay below NARROW_WIDTH rather than closing the drawer.
   expect(wall).toContain('overlayLogsDrawer(geometry.panes, logsPane.id)');
 });
@@ -109,4 +109,25 @@ it('leaves windows in other rows where they are', () => {
   const { panes } = layoutWithLogsDrawer(grid, 'a', 2000);
   expect(panes.get('c')).toEqual(grid.get('c'));
   expect(panes.get('b')!.x).toBeGreaterThan(1004);
+});
+
+it('opens Changes, Files and Browser in the same drawer, switching kind without closing', () => {
+  const s = useWallLogs.getState;
+  s().toggle('a', 'diff');
+  expect(s()).toMatchObject({ sessionId: 'a', kind: 'diff', closing: false });
+  s().toggle('a', 'browser');
+  expect(s()).toMatchObject({ sessionId: 'a', kind: 'browser', closing: false });
+  s().toggle('a', 'browser');
+  expect(s()).toMatchObject({ sessionId: 'a', kind: 'browser', closing: true });
+  s().closed();
+  s().toggle('a');
+  expect(s()).toMatchObject({ sessionId: 'a', kind: 'logs', closing: false });
+});
+
+it('renders each companion kind in the drawer, and the wall buttons toggle it', () => {
+  expect(drawer).toContain('<DiffPane sessionId={sessionId} />');
+  expect(drawer).toContain('<BrowserPane url="about:blank" />');
+  expect(drawer).toContain('<ExplorerPane');
+  const buttons = readFileSync(new URL('../components/AgentCompanionButtons.tsx', import.meta.url), 'utf8');
+  expect(buttons).toContain('useWallLogs.getState().toggle(sessionId, kind)');
 });
