@@ -252,8 +252,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         }
         "design:addPage" => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
-            let folder =
-                folder_path(&folders(backend).await, &arg(&args, 0).map(nekko_js::display).unwrap_or_default());
+            let folder = folder_path(&folders(ctx).await, &arg(&args, 0).map(nekko_js::display).unwrap_or_default());
             blocking(move || design::add_page(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2), folder.as_deref()))
                 .await?
         }
@@ -304,7 +303,7 @@ pub async fn index_snippets(ctx: &Ctx, workspace_ids: &[String], text: &str) -> 
 /// with the GitHub token), `null` when it cannot be read. For agent watches.
 #[allow(dead_code, reason = "agent watches moving into the daemon call it")]
 pub async fn pr_info(ctx: &Ctx, url: &str) -> Value {
-    let token = github_token(&settings(&ctx.backend).await);
+    let token = github_token(&settings(ctx).await);
     ctx.workspace.prs.fetch_info(url, token.as_deref()).await
 }
 
@@ -337,8 +336,7 @@ async fn generate_design(ctx: &Ctx, dir: PathBuf, args: Vec<Value>) -> Result<Va
     });
     let reply = crate::sideband::complete(&spec).await.map_err(|e| format!("Design generation failed: {e}"))?;
     let raw = reply.get("text").and_then(Value::as_str).unwrap_or_default().to_string();
-    let folder =
-        folder_path(&folders(&ctx.backend).await, &workspace.as_ref().map(nekko_js::display).unwrap_or_default());
+    let folder = folder_path(&folders(ctx).await, &workspace.as_ref().map(nekko_js::display).unwrap_or_default());
     blocking(move || design::land(&dir, workspace.as_ref(), &input, &plan, &raw, folder.as_deref())).await?
 }
 
