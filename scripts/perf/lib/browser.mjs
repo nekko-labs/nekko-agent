@@ -27,7 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function onPath(cmd) {
   try {
-    const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [cmd], { stdio: ['ignore', 'pipe', 'ignore'] })
+    const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [cmd], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true })
       .toString()
       .split(/\r?\n/)
       .find(Boolean);
@@ -85,7 +85,7 @@ function playwrightChromium() {
 export function killTree(proc) {
   if (!proc?.pid || proc.exitCode !== null) return;
   if (process.platform === 'win32') {
-    try { execFileSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* already gone */ }
+    try { execFileSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch { /* already gone */ }
   } else {
     // Spawned detached, so the pid leads its own process group.
     try { process.kill(-proc.pid, 'SIGKILL'); } catch { try { proc.kill('SIGKILL'); } catch { /* already gone */ } }

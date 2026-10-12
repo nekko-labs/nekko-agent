@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
@@ -140,4 +140,25 @@ it('names checkouts after a chosen title, else with three words, never colliding
   prepareChatWorktrees(b, settings);
   expect(a.gitWorktrees!.repo.root).not.toBe(b.gitWorktrees!.repo.root);
   expect(a.gitWorktrees!.repo.branch).not.toBe(b.gitWorktrees!.repo.branch);
+});
+
+it('keeps aliased folders inside their isolated checkout', () => {
+  const holder = mkdtempSync(join(tmpdir(), 'nekko-worktree-alias-'));
+  const alias = join(holder, 'project');
+  symlinkSync(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  try {
+    writeFileSync(join(root, 'file.txt'), 'source only\n');
+    settings.workspaces[0].path = alias;
+    const a = session('s_alias');
+    prepareChatWorktrees(a, settings);
+    expect(a.gitWorktrees!.repo.path).toBe(a.gitWorktrees!.repo.root);
+    expect(readFileSync(join(a.gitWorktrees!.repo.path, 'file.txt'), 'utf8')).toBe('committed\n');
+    expect(readFileSync(join(root, 'file.txt'), 'utf8')).toBe('source only\n');
+    expect(chatWorkspaces(a, settings)[0].path).toBe(a.gitWorktrees!.repo.path);
+    a.gitWorktrees!.repo.path = alias; // Repair a mapping saved with the old alias bug.
+    prepareChatWorktrees(a, settings);
+    expect(a.gitWorktrees!.repo.path).toBe(a.gitWorktrees!.repo.root);
+    settings.workspaces[0].path = holder;
+    expect(() => prepareChatWorktrees(a, settings)).toThrow('no longer belongs');
+  } finally { if (process.platform === 'win32') rmdirSync(alias); else unlinkSync(alias); rmdirSync(holder); }
 });

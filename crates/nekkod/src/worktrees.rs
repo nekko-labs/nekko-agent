@@ -43,17 +43,28 @@ fn p_join(parts: &[&str]) -> String {
     if cfg!(windows) { nekko_tools::path::win32::join(parts) } else { nekko_tools::path::posix::join(parts) }
 }
 
+fn disk_path(p: &str) -> String {
+    let resolved = p_resolve(&[p]);
+    let canonical = std::fs::canonicalize(&resolved).map(|p| p.to_string_lossy().into_owned()).unwrap_or(resolved);
+    // Windows canonical paths use a verbatim prefix that Git does not report.
+    if let Some(unc) = canonical.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{unc}");
+    }
+    canonical.strip_prefix(r"\\?\").unwrap_or(&canonical).to_string()
+}
+
 fn p_relative(from: &str, to: &str) -> String {
+    let (from, to) = (disk_path(from), disk_path(to));
     if cfg!(windows) {
-        nekko_tools::path::win32::relative(from, to)
+        nekko_tools::path::win32::relative(&from, &to)
     } else {
-        nekko_tools::path::posix::relative(from, to)
+        nekko_tools::path::posix::relative(&from, &to)
     }
 }
 
 /// Windows paths compare case-insensitively; Git reports them with forward slashes.
 fn norm(p: &str) -> String {
-    let r = p_resolve(&[p]);
+    let r = disk_path(p);
     if cfg!(windows) { r.to_lowercase() } else { r }
 }
 
@@ -327,10 +338,18 @@ pub fn prepare(session: &mut Value, settings: &Value) -> Result<Vec<(String, Val
     let mut created = restore_removed(session)?;
     let workspaces = workspaces_of(settings);
     for id in session_workspace_ids(session) {
-        if session["gitWorktrees"].get(&id).is_some_and(|w| nekko_js::truthy(Some(w))) {
+        let Some(folder) = workspaces.iter().find(|w| s(w, "id") == id) else { continue };
+        if let Some(saved) = session["gitWorktrees"].get(&id).filter(|w| nekko_js::truthy(Some(w))).cloned() {
+            let sub = p_relative(s(&saved, "sourceRoot"), s(folder, "path"));
+            if sub == ".."
+                || sub.starts_with(&format!("..{}", std::path::MAIN_SEPARATOR))
+                || Path::new(&sub).is_absolute()
+            {
+                return Err("The configured folder no longer belongs to this chat worktree.".into());
+            }
+            session["gitWorktrees"][&id]["path"] = json!(p_join(&[s(&saved, "root"), &sub]));
             continue;
         }
-        let Some(folder) = workspaces.iter().find(|w| s(w, "id") == id) else { continue };
         let (folder_path, folder_name) = (s(folder, "path").to_string(), s(folder, "name").to_string());
         // Ordinary folders are skipped; a broken Git checkout must not silently run shared.
         let root = match git(&folder_path, &["rev-parse", "--show-toplevel"]) {
@@ -345,7 +364,7 @@ pub fn prepare(session: &mut Value, settings: &Value) -> Result<Vec<(String, Val
         };
         let existing = session["gitWorktrees"]
             .as_object()
-            .and_then(|m| m.values().find(|w| p_resolve(&[s(w, "sourceRoot")]) == p_resolve(&[&root])).cloned());
+            .and_then(|m| m.values().find(|w| norm(s(w, "sourceRoot")) == norm(&root)).cloned());
         if let Some(mut existing) = existing {
             let path = p_join(&[s(&existing, "root"), &p_relative(&root, &folder_path)]);
             existing["path"] = json!(path);
@@ -865,6 +884,53 @@ mod tests {
 
     fn read(p: &str, rel: &str) -> String {
         std::fs::read_to_string(Path::new(p).join(rel)).unwrap()
+    }
+
+    #[test]
+    fn aliased_paths_stay_inside_the_isolated_checkout() {
+        let repo = Repo::new("alias");
+        #[cfg(windows)]
+        let alias = {
+            use std::os::windows::ffi::OsStrExt;
+            let wide: Vec<u16> = std::ffi::OsStr::new(&repo.root).encode_wide().chain(Some(0)).collect();
+            let mut buf = vec![0u16; 32768];
+            // Only asks Windows for another spelling of this fixture's path.
+            let n = unsafe {
+                windows_sys::Win32::Storage::FileSystem::GetShortPathNameW(
+                    wide.as_ptr(),
+                    buf.as_mut_ptr(),
+                    buf.len() as u32,
+                )
+            };
+            if n == 0 || n as usize >= buf.len() {
+                return;
+            }
+            String::from_utf16_lossy(&buf[..n as usize])
+        };
+        #[cfg(unix)]
+        let alias = {
+            let p = std::env::temp_dir().join(format!("nekkod-wt-alias-link-{}", std::process::id()));
+            let _ = std::fs::remove_file(&p);
+            std::os::unix::fs::symlink(&repo.root, &p).unwrap();
+            p.to_string_lossy().into_owned()
+        };
+        let mut settings = repo.settings();
+        settings["workspaces"][0]["path"] = json!(alias);
+        repo.write("file.txt", "source only\n");
+        let mut chat = session("s_alias");
+        prepare(&mut chat, &settings).unwrap();
+        let checkout = &chat["gitWorktrees"]["repo"];
+        assert_eq!(norm(s(checkout, "path")), norm(s(checkout, "root")));
+        assert_eq!(read(s(checkout, "path"), "file.txt"), "committed\n");
+        assert_eq!(read(&repo.root, "file.txt"), "source only\n");
+        assert_eq!(chat_workspaces(Some(&chat), &settings)[0]["path"], checkout["path"]);
+        chat["gitWorktrees"]["repo"]["path"] = json!(alias);
+        prepare(&mut chat, &settings).unwrap();
+        assert_eq!(chat["gitWorktrees"]["repo"]["path"], chat["gitWorktrees"]["repo"]["root"]);
+        settings["workspaces"][0]["path"] = json!(std::env::temp_dir().to_string_lossy());
+        assert!(prepare(&mut chat, &settings).unwrap_err().contains("no longer belongs"));
+        #[cfg(unix)]
+        let _ = std::fs::remove_file(alias);
     }
 
     #[test]
