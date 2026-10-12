@@ -252,6 +252,12 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
         "provider:complete" => crate::sideband::complete(arg(&args, 0)).await,
         c if crate::accounts::CHANNELS.contains(&c) && ctx.accounts.enabled() => ctx.accounts.route(c, &args).await,
+        // The daemon's settings store says where the data directory is.
+        c if crate::decisions::CHANNELS.contains(&c) && ctx.settings.is_some() => {
+            let data_dir =
+                ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf)).unwrap_or_default();
+            crate::decisions::route(ctx, &data_dir, c, &args).await
+        }
         c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
             crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
         }
@@ -302,6 +308,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     let mut all = OWNED.to_vec();
     if ctx.accounts.enabled() {
         all.extend_from_slice(crate::accounts::OWNED);
+    }
+    if ctx.settings.is_some() {
+        all.extend_from_slice(crate::decisions::CHANNELS);
     }
     if ctx.settings.is_some() {
         all.extend_from_slice(crate::settings::CHANNELS);
