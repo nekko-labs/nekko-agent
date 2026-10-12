@@ -301,6 +301,16 @@ fn s<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(Value::as_str).unwrap_or_default()
 }
 
+fn stack_notice(parent: &Value) -> String {
+    format!(
+        "This chat builds on {}, branch {}, committed snapshot {}. Create the dependent PR against {}; gh pr create uses this configured base. After publishing, use Link stack in the PR panel to register it with GitHub. Recheck the parent before publishing; if it changes or merges, explicitly rebase this branch when safe. Never automatically reset other worktrees or force push.",
+        s(parent, "url"),
+        s(parent, "branch"),
+        s(parent, "sha"),
+        s(parent, "branch")
+    )
+}
+
 /// `chatWorkspaces`: a chat's folders, each Git project pointed at its own checkout.
 pub fn chat_workspaces(session: Option<&Value>, settings: &Value) -> Vec<Value> {
     let workspaces = workspaces_of(settings);
@@ -371,7 +381,7 @@ pub fn prepare(session: &mut Value, settings: &Value) -> Result<Vec<(String, Val
             session["gitWorktrees"][&id] = existing;
             continue;
         }
-        let checkout = make_checkout(session, settings, &root, &folder_path, &folder_name).map_err(|e| {
+        let checkout = make_checkout(session, settings, &root, &folder_path, &id).map_err(|e| {
             format!("Could not prepare isolated checkout for {folder_name}. No shared-checkout fallback was used: {e}")
         });
         let checkout = checkout?;
@@ -386,9 +396,17 @@ fn make_checkout(
     settings: &Value,
     root: &str,
     folder_path: &str,
-    _name: &str,
+    workspace_id: &str,
 ) -> Result<Value, String> {
     let gm = |e: GitError| e.message;
+    let parent = session.get("gitStackParent").filter(|p| s(p, "workspaceId") == workspace_id);
+    if let Some(parent) = parent {
+        let sha = s(parent, "sha");
+        if ![40, 64].contains(&sha.len()) || !sha.bytes().all(|c| c.is_ascii_hexdigit()) {
+            return Err("Invalid parent PR commit. Start the stacked chat again.".into());
+        }
+        git(root, &["check-ref-format", &format!("refs/heads/{}", s(parent, "branch"))]).map_err(gm)?;
+    }
     let dirty = !git(root, &["status", "--porcelain"]).map_err(gm)?.is_empty();
     let common = p_resolve(&[root, &git(root, &["rev-parse", "--git-common-dir"]).map_err(gm)?]);
     let home = p_join(&[&common, "nekko-worktrees"]);
@@ -400,9 +418,13 @@ fn make_checkout(
     let target = p_join(&[&home, &name]);
     let branch = format!("nekko/{name}");
     std::fs::create_dir_all(&home).map_err(|e| format!("Error: {e}"))?;
-    git(root, &["worktree", "add", "-b", &branch, &target, "HEAD"]).map_err(gm)?;
+    git(root, &["worktree", "add", "-b", &branch, &target, parent.map(|p| s(p, "sha")).unwrap_or("HEAD")])
+        .map_err(gm)?;
+    if let Some(parent) = parent {
+        git(&target, &["config", &format!("branch.{branch}.gh-merge-base"), s(parent, "branch")]).map_err(gm)?;
+    }
     let local_changes = settings.pointer("/gitManagement/baseline").and_then(Value::as_str) == Some("local-changes");
-    if dirty && local_changes {
+    if parent.is_none() && dirty && local_changes {
         let (code, patch, err) = run("git", &["diff", "--binary", "HEAD"], root, None, GIT_TIMEOUT)?;
         if code != 0 {
             return Err(format!("Error: Command failed: git diff --binary HEAD\n{}", String::from_utf8_lossy(&err)));
@@ -417,7 +439,10 @@ fn make_checkout(
         // Untracked files are not copied: they may include secrets or large build artifacts.
     }
     let copied = copy_worktree_includes(root, &target).map_err(|e| e.to_string())?;
-    let base = if dirty {
+    let parent_notice = parent.map(stack_notice);
+    let base = if let Some(notice) = &parent_notice {
+        notice.as_str()
+    } else if dirty {
         if local_changes {
             "This chat uses an isolated worktree with tracked local edits copied in. Untracked files were not copied."
         } else {
@@ -462,6 +487,17 @@ fn restore_removed(session: &mut Value) -> Result<Vec<(String, Value)>, String> 
         }
         let Some((first_id, first)) = entries.iter().find(|(_, w)| s(w, "root") == root).cloned() else { continue };
         let (source, branch) = (s(&first, "sourceRoot").to_string(), s(&first, "branch").to_string());
+        let parent = session
+            .get("gitStackParent")
+            .filter(|p| session["gitWorktrees"].get(s(p, "workspaceId")).is_some_and(|w| s(w, "root") == root))
+            .cloned();
+        if parent.is_some() && !git_ok(&source, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")])
+        {
+            return Err(
+                "This stacked chat's branch was deleted. Start a new stacked chat; it cannot safely resume from HEAD."
+                    .into(),
+            );
+        }
         let attempt = (|| -> Result<String, GitError> {
             git_ok(&source, &["worktree", "prune"]);
             if git_ok(&source, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")]) {
@@ -480,6 +516,9 @@ fn restore_removed(session: &mut Value) -> Result<Vec<(String, Value)>, String> 
                 e.message
             )
         })?;
+        if let Some(parent) = parent {
+            notice = format!("{} {notice}", stack_notice(&parent));
+        }
         let copied = copy_worktree_includes(&source, &root).map_err(|e| e.to_string())?;
         if !copied.is_empty() {
             notice.push_str(&format!(" Copied from .worktreeinclude: {}.", copied.join(", ")));
@@ -886,6 +925,45 @@ mod tests {
 
     fn read(p: &str, rel: &str) -> String {
         std::fs::read_to_string(Path::new(p).join(rel)).unwrap()
+    }
+
+    #[test]
+    fn stacked_checkout_uses_the_pinned_parent_and_preserves_source_edits() {
+        let r = Repo::new("stack-parent");
+        r.git(&["checkout", "-b", "parent-feature"]);
+        r.write("file.txt", "parent PR code\n");
+        r.git(&["add", "."]);
+        r.git(&["commit", "-m", "Parent feature"]);
+        let sha = r.git(&["rev-parse", "HEAD"]);
+        r.git(&["checkout", "-"]);
+        r.write("file.txt", "user edits\n");
+        let mut settings = r.settings();
+        settings["gitManagement"] = json!({"baseline": "local-changes"});
+        let mut chat = session("stack");
+        chat["gitStackParent"] = json!({"workspaceId": "repo", "url": "https://github.com/owner/repo/pull/12", "branch": "parent-feature", "sha": sha.trim()});
+        prepare(&mut chat, &settings).unwrap();
+        let wt = &chat["gitWorktrees"]["repo"];
+        assert_eq!(read(s(wt, "path"), "file.txt"), "parent PR code\n");
+        assert_eq!(read(&r.root, "file.txt"), "user edits\n");
+        assert_eq!(
+            git(s(wt, "path"), &["config", &format!("branch.{}.gh-merge-base", s(wt, "branch"))]).unwrap().trim(),
+            "parent-feature"
+        );
+        assert!(s(wt, "notice").contains("Link stack"));
+        let checkout_root = s(wt, "root").to_string();
+        let branch = s(wt, "branch").to_string();
+        assert!(prepare(&mut chat, &settings).unwrap().is_empty());
+        r.git(&["worktree", "remove", "--force", &checkout_root]);
+        assert_eq!(prepare(&mut chat, &settings).unwrap().len(), 1);
+        let restored = &chat["gitWorktrees"]["repo"];
+        assert_eq!(read(s(restored, "path"), "file.txt"), "parent PR code\n");
+        assert!(s(restored, "notice").contains("https://github.com/owner/repo/pull/12"));
+        assert!(s(restored, "notice").contains("Link stack"));
+        r.git(&["worktree", "remove", "--force", &checkout_root]);
+        r.git(&["branch", "-D", &branch]);
+        assert!(prepare(&mut chat, &settings).unwrap_err().contains("branch was deleted"));
+        assert!(!exists(&checkout_root));
+        assert_eq!(read(&r.root, "file.txt"), "user edits\n");
     }
 
     #[test]

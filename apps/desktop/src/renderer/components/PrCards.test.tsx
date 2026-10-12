@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 const theme = vi.hoisted(() => ({ preset: 'autumn' as string | undefined }));
-vi.mock('../store.js', () => ({ useStore: Object.assign(vi.fn((selector) => selector({ settings: { themePreset: theme.preset }, openPrPane: vi.fn() })), { getState: vi.fn() }) }));
+vi.mock('../store.js', () => ({ useStore: Object.assign(vi.fn((selector) => selector({ settings: { themePreset: theme.preset }, sessions: [], openPrPane: vi.fn() })), { getState: vi.fn() }) }));
 import type { PrInfo } from '@nekko-agent/shared';
 import { PrCard, PrActionDock, PrBadge } from './PrCard.js';
 const url = 'https://github.com/o/r/pull/1';
