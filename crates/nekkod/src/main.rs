@@ -18,6 +18,7 @@ mod routes;
 mod settings;
 mod sideband;
 mod turns;
+mod voice;
 mod wire;
 
 use backend::Backend;
@@ -68,7 +69,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert("NEKKOD_OWNS".into(), settings::OWNS.into());
+                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS].join(","));
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -93,6 +94,13 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         backend.clone(),
         hub.clone(),
     ));
+    let settings = cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), backend.clone()));
+    // Voice reads its settings from the daemon's store.
+    let voice = cfg.data_dir.clone().zip(settings.clone()).map(|(d, s)| {
+        let store = s.store.clone();
+        let read: Arc<dyn Fn() -> serde_json::Value + Send + Sync> = Arc::new(move || store.get());
+        voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
+    });
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -110,7 +118,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         )),
         mcp: mcp.clone(),
         accounts,
-        settings: cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), backend.clone())),
+        settings,
+        voice: voice.clone(),
     };
     routes::forward_terminal_events(&ctx);
     let processes = ctx.turns.processes.clone();
@@ -127,6 +136,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     axum::serve(listener, router).with_graceful_shutdown(shutdown_signal(cfg.exit_on_stdin_close)).await?;
 
     engine.shutdown();
+    if let Some(voice) = &voice {
+        voice.stop().await;
+    }
     backend.shutdown().await;
     terminals.close_all();
     mcp.stop_all();

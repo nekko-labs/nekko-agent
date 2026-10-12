@@ -596,6 +596,12 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   const call = daemonOwns('settings') ? daemonCall() : undefined;
   useSettingsDaemon(call ? (channel, args) => call<AppSettings>(channel, ...args) : null);
   const voice = createVoiceService(join(opts.dataDir, 'voice'), getSettings);
+  /** Stop the speech server, wherever it runs: the daemon serves `voice:*` when it knows the data dir. */
+  const stopVoice = () => {
+    voice.stop();
+    const call = daemonCall();
+    if (call && daemonOwns('voice')) void call('voice:stop').catch(() => undefined);
+  };
   const events = new EventEmitter();
   const activeChats = new Map<string, Promise<void>>();
   const interrupting = new Set<string>();
@@ -756,7 +762,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     getSettings,
     updateSettings: (patch) => {
       const next = saveSettings(patch);
-      if (patch.voice !== undefined) voice.stop();
+      if (patch.voice !== undefined) stopVoice();
       if (patch.messaging !== undefined) messaging.update(next.messaging);
       return next;
     },
@@ -850,7 +856,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     },
     runtimeStatus: (providerId) => runtimes.status(providerId),
     runtimeStart: (providerId) => runtimes.start(providerId),
-    runtimeStop: (providerId, force) => { if (providerId === 'nekko-engine') voice.stop(); return runtimes.stop(providerId, force); },
+    runtimeStop: (providerId, force) => { if (providerId === 'nekko-engine') stopVoice(); return runtimes.stop(providerId, force); },
     runtimeLoad: (providerId, modelId, params) => runtimes.load(providerId, modelId, params),
     runtimeFacts: (providerId) => runtimes.facts(providerId),
     runtimePlan: (providerId, modelId, req) => runtimes.plan(providerId, modelId, req),
@@ -875,7 +881,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       settingsChanged(next, patch);
       // What updateSettings does after a save, for a save the daemon made.
       if (patch && typeof patch === 'object') {
-        if (patch.voice !== undefined) voice.stop();
+        if (patch.voice !== undefined) stopVoice();
         if (patch.messaging !== undefined) messaging.update(getSettings().messaging);
       }
     },
