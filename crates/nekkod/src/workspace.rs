@@ -11,7 +11,7 @@
 use crate::backend::Backend;
 use crate::hub::Hub;
 use crate::routes::Ctx;
-use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs};
+use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs, skills};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -53,6 +53,13 @@ pub const DATA_CHANNELS: &[&str] = &[
     "design:addNote",
     "design:resolveNote",
     "design:generate",
+    "skills:installed",
+    "skills:external",
+    "skills:targets",
+    "skill:install",
+    "skill:uninstall",
+    "vaizer:catalog",
+    "vaizer:skillMd",
 ];
 
 /// A design generation has no limit in the host; this keeps a stuck model
@@ -64,12 +71,19 @@ pub struct Workspace {
     index: Arc<Index>,
     prs: Arc<Prs>,
     git: Git,
+    vaizer: skills::Vaizer,
 }
 
 impl Workspace {
     pub fn new(data_dir: Option<PathBuf>) -> Self {
         let prs = Arc::new(Prs::default());
-        Self { data_dir, index: Arc::new(Index::new()), git: Git::new(prs.clone()), prs }
+        Self {
+            data_dir,
+            index: Arc::new(Index::new()),
+            git: Git::new(prs.clone()),
+            prs,
+            vaizer: skills::Vaizer::default(),
+        }
     }
 
     /// Is this channel answered here (never handed back to the host)?
@@ -257,6 +271,21 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "workspace:list" => Ok(settings(ctx).await.get("workspaces").cloned().unwrap_or(json!([]))),
         "workspace:addByPath" => add_folder(ctx, arg(&args, 0)).await,
         "workspace:remove" => remove_folder(ctx, &text(&args, 0)).await,
+        "skills:installed" | "skills:targets" | "skill:install" | "skill:uninstall" | "skills:external" => {
+            let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
+            let roots: Vec<String> = if channel == "skills:external" {
+                folders(ctx).await.iter().filter_map(|w| w.get("path").map(nekko_js::display)).collect()
+            } else {
+                Vec::new()
+            };
+            let channel = channel.to_string();
+            blocking(move || skills_route(&dir, &channel, &args, &roots)).await?
+        }
+        "vaizer:catalog" => {
+            let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
+            Ok(ws.vaizer.catalog(&dir, nekko_js::truthy(arg(&args, 0))).await)
+        }
+        "vaizer:skillMd" => Ok(ws.vaizer.skill_md(&text(&args, 0)).await),
         "design:addPage" => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
             let folder = folder_path(&folders(ctx).await, &arg(&args, 0).map(nekko_js::display).unwrap_or_default());
@@ -408,6 +437,34 @@ async fn remove_folder(ctx: &Ctx, id: &str) -> Result<Value, String> {
     let saved = crate::settings::update(ctx, json!({ "workspaces": kept })).await?;
     ctx.workspace.index.forget(id);
     Ok(saved.get("workspaces").cloned().unwrap_or(json!([])))
+}
+
+/// `os.homedir()`.
+fn home_dir() -> String {
+    std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default()
+}
+
+/// The skills channels, on the data directory and the user's home.
+fn skills_route(dir: &std::path::Path, channel: &str, args: &[Value], roots: &[String]) -> Result<Value, String> {
+    let home = home_dir();
+    match channel {
+        "skills:installed" => Ok(Value::Array(skills::list_installed(dir))),
+        "skills:targets" => Ok(skills::targets(&home)),
+        "skill:install" => {
+            skills::install(dir, &home, arg(args, 0).unwrap_or(&Value::Null), arg(args, 1), arg(args, 2))
+        }
+        "skill:uninstall" => {
+            skills::uninstall(dir, arg(args, 0).unwrap_or(&Value::Null), arg(args, 1)).map(Value::Array)
+        }
+        "skills:external" => {
+            let exclude: Vec<String> = skills::list_installed(dir)
+                .iter()
+                .filter_map(|r| r.get("path").filter(|p| nekko_js::truthy(Some(p))).map(nekko_js::display))
+                .collect();
+            Ok(Value::Array(skills::discover_external(&home, roots, &exclude, &skills::reserved_names(dir))))
+        }
+        other => Err(format!("{other} is not a skills channel")),
+    }
 }
 
 /// `fetchPrInfo(url)`: one PR's live state, read now (gh, else the REST API

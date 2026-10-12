@@ -20,6 +20,7 @@ pub mod memory;
 pub mod outline;
 pub mod pr;
 pub mod proc;
+pub mod skills;
 
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};

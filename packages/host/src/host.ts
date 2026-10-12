@@ -128,7 +128,7 @@ import {
   resolveDesignNote,
   generateDesign,
 } from './design.js';
-import { listInstalledSkills, skillTargets, installSkill, uninstallSkill, listInstalledSkillDefs } from './skills.js';
+import { listInstalledSkills, readInstalledSkills, skillTargets, installSkill, uninstallSkill, listInstalledSkillDefs } from './skills.js';
 import { discoverExternalSkills } from './external-skills.js';
 import { getVaizerCatalog, getVaizerSkillMd } from './vaizer.js';
 import {
@@ -1152,7 +1152,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     listExternalSkills: () =>
       discoverExternalSkills({
         projectRoots: getSettings().workspaces.map((w) => w.path),
-        exclude: listInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
+        exclude: readInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
         reserved: [...SKILLS, ...listInstalledSkillDefs()].map((s) => s.name),
       }),
     skillTargets,

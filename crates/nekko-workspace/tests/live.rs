@@ -132,3 +132,37 @@ async fn falls_back_to_the_rest_api_without_gh() {
     assert_eq!(prs.cached_info("https://github.com/o/r/pull/404", None, false).await, Value::Null);
     assert_eq!(prs.action("not a url", "merge", None).await, json!({ "ok": false, "message": "Not a valid PR URL." }));
 }
+
+fn vaizer_api(method: &str, path: &str) -> (u16, Value) {
+    match (method, path) {
+        ("GET", "/catalog.json") => (
+            200,
+            json!({ "marketplace": "vaizer", "skills": [
+            { "id": "a", "slug": "good-one", "description": "d", "tier": "community" },
+            { "id": "b", "slug": "Bad Slug", "description": "d", "tier": "community" },
+            { "id": "c", "slug": "c", "description": "d", "tier": "unknown" },
+        ] }),
+        ),
+        ("GET", "/main/plugins/good-one/skills/good-one/SKILL.md") => (200, json!("legacy body")),
+        _ => (404, json!({})),
+    }
+}
+
+#[tokio::test]
+async fn the_vaizer_catalog_is_offline_first_and_caches_a_refresh() {
+    use nekko_workspace::skills::Vaizer;
+    let (base, seen) = fake_api(vaizer_api).await;
+    let data = temp("vaizer");
+    let v = Vaizer::new(&format!("{base}/catalog.json"), &format!("{base}/main"));
+    let bundled = v.catalog(&data, false).await;
+    assert_eq!(bundled["source"], json!("bundled"));
+    assert!(seen.lock().unwrap().is_empty(), "no network without a refresh");
+    let live = v.catalog(&data, true).await;
+    assert_eq!((live["source"].clone(), live["skills"].as_array().unwrap().len()), (json!("live"), 1));
+    let cached = v.catalog(&data, false).await;
+    assert_eq!((cached["source"].clone(), cached["skills"][0]["slug"].clone()), (json!("cached"), json!("good-one")));
+    // The current plugin path 404s, the legacy one answers.
+    assert_eq!(v.skill_md("good-one").await, json!("\"legacy body\""));
+    assert_eq!(v.skill_md("../etc").await, Value::Null);
+    let _ = std::fs::remove_dir_all(data);
+}

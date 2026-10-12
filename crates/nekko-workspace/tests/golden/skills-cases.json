@@ -1,0 +1,54 @@
+{
+  "home": {
+    ".claude/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: The alpha skill\n---\n\nDo alpha things.\n",
+    ".claude/skills/beta/SKILL.md": "---\nname: beta\n---\n\n# Beta\n\nFirst real line of beta.\nMore.\n",
+    ".claude/skills/beta/scripts/run.sh": "echo hi\n",
+    ".claude/skills/review-council/SKILL.md": "---\nname: review-council\ndescription: shadowed by the built-in\n---\nbody\n",
+    ".codex/skills/Gamma/SKILL.md": "---\r\nname: \"gamma-two\"\r\ndescription: >\r\n  folded  over\r\n  two lines\r\n---\r\nGamma body\r\n",
+    ".codex/skills/empty/SKILL.md": "---\nname: empty\n---\n",
+    ".codex/skills/bad name/SKILL.md": "---\nname: bad name\n---\nbody\n",
+    ".gemini/skills/nometa/SKILL.md": "﻿Just a body, no frontmatter.\n",
+    ".gemini/skills/dupe/SKILL.md": "---\nname: alpha\n---\nsecond alpha\n",
+    ".agents/skills/.hidden/SKILL.md": "---\nname: hidden\n---\nstill read\n",
+    ".agents/skills/noskill/README.md": "no SKILL.md here\n",
+    ".agents/skills/literal/SKILL.md": "---\nname: literal\ndescription: |\n  line one\n  line two\nother: x\n---\nLiteral body\n"
+  },
+  "project": {
+    ".claude/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: project alpha wins\n---\nProject alpha.\n",
+    ".agents/skills/proj/SKILL.md": "---\nname: proj\ndescription: 'single quoted'\n---\nProject skill.\n"
+  },
+  "ops": [
+    ["targets"],
+    ["list"],
+    ["install", "nekko-agent-review-council", "nekko-agent"],
+    ["install", "nekko-agent-review-council", "nekko-agent"],
+    ["install", "nekko-agent-review-council", "claude"],
+    ["install", "nekko-agent-review-council", "kotrain"],
+    ["install", "no-such-skill", "codex"],
+    ["install", "vaizer-x", "codex", { "id": "vaizer-x", "name": "vx", "description": "From Vaizer", "author": "A", "source": "vaizer", "category": "Automation", "template": "t", "instructions": "i", "markdown": "---\nname: vx\n---\nverbatim" }],
+    ["install", "vaizer-y", "claude", { "id": "vaizer-y", "name": "bad name", "description": "d", "author": "A", "source": "vaizer", "category": "Automation", "template": "t", "instructions": "i" }],
+    ["install", "vaizer-z", "claude", { "id": "other", "name": "z" }],
+    ["install", "vaizer-alpha", "claude", { "id": "vaizer-alpha", "name": "alpha", "description": "d", "author": "A", "source": "vaizer", "category": "Automation", "template": "t", "instructions": "i" }],
+    ["external"],
+    ["skillFile", ".claude/skills/review-council"],
+    ["skillFile", ".codex/skills/vx"],
+    ["uninstall", "nekko-agent-review-council", "claude"],
+    ["exists", ".claude/skills/review-council"],
+    ["removeHome", ".codex/skills/vx"],
+    ["list"],
+    ["uninstall", "nekko-agent-review-council", "nekko-agent"],
+    ["uninstall", "missing", "codex"],
+    ["list"],
+    ["external"]
+  ],
+  "parse": [
+    "",
+    "no frontmatter\n\n",
+    "---\nname: x\n---",
+    "---\nname: x\n---   \nbody",
+    "---\nname:\ndescription: \"\"\n---\nb",
+    "---\nNAME: Upper\nname: lower\n---\nb",
+    "---\ndescription: >-\n  a\n\n  b\n---\nb",
+    "---\nname: 'mis\"\n---\nb"
+  ]
+}

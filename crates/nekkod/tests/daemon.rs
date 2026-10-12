@@ -1660,6 +1660,18 @@ async fn serves_files_memory_and_comments_itself() {
     assert_eq!(snippets[0]["body"], json!("1: export function a() {}"));
     let (_, status) = post(d.port, "workspace:indexStatus", json!(["w1"]), Some(TOKEN)).await;
     assert_eq!(status["state"], json!("ready"));
+    // Skills (the nekko-agent target only: nothing is written outside the data dir).
+    let (_, installed) =
+        post(d.port, "skill:install", json!(["nekko-agent-review-council", "nekko-agent"]), Some(TOKEN)).await;
+    assert_eq!(installed["ok"], json!(true));
+    assert!(data.join("skills.json").exists());
+    let (_, listed) = post(d.port, "skills:installed", json!([]), Some(TOKEN)).await;
+    assert_eq!(listed[0]["skillId"], json!("nekko-agent-review-council"));
+    let (_, left) =
+        post(d.port, "skill:uninstall", json!(["nekko-agent-review-council", "nekko-agent"]), Some(TOKEN)).await;
+    assert_eq!(left, json!([]));
+    let (_, catalog) = post(d.port, "vaizer:catalog", json!([]), Some(TOKEN)).await;
+    assert_eq!(catalog["source"], json!("bundled"));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
