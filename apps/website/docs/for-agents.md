@@ -39,4 +39,4 @@ Each page is rendered from one Markdown file in the repo, listed in `docs/hub/na
 npm run docs
 ```
 
-`npm test` fails if the generated pages are out of date with their Markdown.
+If you skip that step, the **Docs site** workflow rebuilds the pages on the pull request and commits them to its branch, but only when the output actually changed. A pull request that changes user-facing behaviour should also update the page that describes it.

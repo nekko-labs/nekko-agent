@@ -56,13 +56,13 @@ npm run typecheck   # every TypeScript workspace
 
 ## Documentation
 
-The docs at [nekkoagent.com/docs](https://nekkoagent.com/docs) are rendered from Markdown in this repo. `docs/hub/nav.json` lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change:
+The docs at [nekkoagent.com/docs](https://nekkoagent.com/docs) are rendered from Markdown in this repo. `docs/hub/nav.json` lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change. When a pull request changes what users see or do, update the page that describes it in the same PR.
 
 ```bash
 npm run docs
 ```
 
-`npm test` fails when the generated pages are out of date.
+If you forget, the **Docs site** workflow regenerates the pages on your pull request and pushes them to its branch. It only commits when something actually changed.
 
 ## Commit messages
 

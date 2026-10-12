@@ -112,9 +112,9 @@ npm run typecheck   # every TypeScript workspace</code></pre></div>
 <code>node scripts/itest-local.mjs http://your-host:port your-model-id</code></li>
 </ul>
 <h2 id="documentation"><a class="anchor" href="#documentation" aria-hidden="true" tabindex="-1">#</a>Documentation</h2>
-<p>The docs at <a href="https://nekkoagent.com/docs">nekkoagent.com/docs</a> are rendered from Markdown in this repo. <code>docs/hub/nav.json</code> lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change:</p>
+<p>The docs at <a href="https://nekkoagent.com/docs">nekkoagent.com/docs</a> are rendered from Markdown in this repo. <code>docs/hub/nav.json</code> lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change. When a pull request changes what users see or do, update the page that describes it in the same PR.</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run docs</code></pre></div>
-<p><code>npm test</code> fails when the generated pages are out of date.</p>
+<p>If you forget, the <strong>Docs site</strong> workflow regenerates the pages on your pull request and pushes them to its branch. It only commits when something actually changed.</p>
 <h2 id="commit-messages"><a class="anchor" href="#commit-messages" aria-hidden="true" tabindex="-1">#</a>Commit messages</h2>
 <p>Conventional commits (<code>feat:</code>, <code>fix:</code>, <code>docs:</code>, <code>refactor:</code>, <code>test:</code>, <code>chore:</code>).</p>
 <h2 id="reporting-bugs--requesting-features"><a class="anchor" href="#reporting-bugs--requesting-features" aria-hidden="true" tabindex="-1">#</a>Reporting bugs / requesting features</h2>
