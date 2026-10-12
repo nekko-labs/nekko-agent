@@ -1,6 +1,33 @@
 import { IpcChannels } from '@nekko-agent/shared';
 import type { Host } from './host.js';
 import { deleteAgentLog } from './agent-log.js';
+import { benchHostLoad } from './workspace.js';
+import { daemonOwns } from './daemon-loop.js';
+import { daemonCall } from './engine/daemon.js';
+
+/**
+ * Channels the engine daemon answers itself once it lists them in
+ * `daemon:info` `owned`, and never hands back to this host. A call that
+ * reaches this dispatcher anyway (the local API server, the phone relay)
+ * goes to the daemon, which holds their state (the workspace index lives in
+ * its memory). Only channels the daemon never forwards here may be listed,
+ * or a call would loop.
+ */
+export const DAEMON_SERVED = new Set<string>([
+  IpcChannels.fileRead,
+  IpcChannels.fileWrite,
+  IpcChannels.dirList,
+  IpcChannels.workspaceIndex,
+  IpcChannels.workspaceIndexStatus,
+  IpcChannels.workspaceSearch,
+  IpcChannels.workspaceFiles,
+  IpcChannels.memoryList,
+  IpcChannels.memorySave,
+  IpcChannels.memoryDelete,
+  IpcChannels.commentsList,
+  IpcChannels.commentAdd,
+  IpcChannels.commentResolve,
+]);
 
 /**
  * Maps an IPC channel + positional args to the matching Host method. Shared by
@@ -71,6 +98,8 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'changes:notify': ([sessionId]) => host.changesNotify(String(sessionId)),
     // The daemon writes settings.json (crates/nekkod/src/settings.rs) and tells this host what changed.
     'settings:changed': ([next, patch]) => host.settingsChanged(next as never, (patch ?? null) as never),
+    // The daemon indexed a workspace (crates/nekkod/src/workspace.rs); it told the UI itself.
+    'index:progress': ([status]) => host.indexProgressRelay(status as never),
     // The daemon keeps limit state (crates/nekkod/src/limits.rs) and asks this
     // host only for what still lives here: a refreshed sign-in, and the relay.
     'limits:notify': ([payload]) => host.limitsNotify(payload as never),
@@ -290,11 +319,25 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.mcpHypergateConnect]: ([port]) => host.connectHypergate(port),
   };
 
+  // Benchmarks only (scripts/bench-chat-turn.mjs sets the variable on the
+  // backend it starts): the host-side work the old in-host index search did,
+  // to keep this process's event loop busy now that the daemon searches.
+  if (process.env.NEKKO_BENCH_LOAD === '1') {
+    table['bench:hostLoad'] = ([id, q]) => {
+      const folder = host.listWorkspaces().find((w) => w.id === id);
+      return folder ? benchHostLoad(folder, String(q)) : [];
+    };
+  }
+
   // A Map: a channel named constructor or __proto__ is unknown, never Object.prototype's.
   const handlers = new Map(Object.entries(table));
   return (channel, args) => {
     const fn = handlers.get(channel);
     if (typeof fn !== 'function') throw new Error(`Unknown channel: ${channel}`);
+    const daemon = DAEMON_SERVED.has(channel) ? daemonCall() : undefined;
+    if (daemon) {
+      return daemonOwns(daemon, channel).then((owned) => (owned ? daemon(channel, ...(args ?? [])) : fn(args ?? [])));
+    }
     return fn(args ?? []);
   };
 }

@@ -431,10 +431,106 @@ pub fn decode_text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// `JSON.stringify(value, null, 2)`: two-space indent, `"key": value`, and
+/// empty arrays and objects printed as `[]` and `{}`.
+pub fn stringify_pretty(v: &Value) -> String {
+    let mut out = String::new();
+    write_pretty(v, &mut out, 0);
+    out
+}
+
+fn write_pretty(v: &Value, out: &mut String, depth: usize) {
+    let pad = |out: &mut String, d: usize| out.extend(std::iter::repeat_n("  ", d));
+    match v {
+        Value::Array(a) if !a.is_empty() => {
+            out.push_str("[\n");
+            for (i, x) in a.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(",\n");
+                }
+                pad(out, depth + 1);
+                write_pretty(x, out, depth + 1);
+            }
+            out.push('\n');
+            pad(out, depth);
+            out.push(']');
+        }
+        Value::Object(o) if !o.is_empty() => {
+            out.push_str("{\n");
+            for (i, (k, x)) in o.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(",\n");
+                }
+                pad(out, depth + 1);
+                out.push_str(&serde_json::to_string(k).unwrap_or_default());
+                out.push_str(": ");
+                write_pretty(x, out, depth + 1);
+            }
+            out.push('\n');
+            pad(out, depth);
+            out.push('}');
+        }
+        other => write(other, out),
+    }
+}
+
+/// A canonical array index (`"0"`, `"7"`, not `"07"`): JavaScript lists those
+/// keys first, in numeric order, whatever order they were added in.
+fn array_index(k: &str) -> Option<u32> {
+    if k.is_empty() || (k.len() > 1 && k.starts_with('0')) || !k.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    k.parse::<u32>().ok().filter(|&n| n != u32::MAX)
+}
+
+/// An object's keys in JavaScript's property order, all the way down: what
+/// `JSON.stringify` of the TS object would print.
+pub fn js_order(v: Value) -> Value {
+    match v {
+        Value::Object(m) => {
+            let mut indexed: Vec<(u32, String, Value)> = Vec::new();
+            let mut rest: Vec<(String, Value)> = Vec::new();
+            for (k, v) in m {
+                match array_index(&k) {
+                    Some(n) => indexed.push((n, k, js_order(v))),
+                    None => rest.push((k, js_order(v))),
+                }
+            }
+            indexed.sort_by_key(|(n, _, _)| *n);
+            Value::Object(indexed.into_iter().map(|(_, k, v)| (k, v)).chain(rest).collect())
+        }
+        Value::Array(a) => Value::Array(a.into_iter().map(js_order).collect()),
+        other => other,
+    }
+}
+
+/// `a.localeCompare(b)`: V8 hands it to ICU's root collation.
+pub fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
+    use icu_collator::options::CollatorOptions;
+    use icu_collator::{Collator, CollatorBorrowed};
+    use std::sync::OnceLock;
+    static C: OnceLock<Option<CollatorBorrowed<'static>>> = OnceLock::new();
+    match C.get_or_init(|| Collator::try_new(Default::default(), CollatorOptions::default()).ok()).as_ref() {
+        Some(c) => c.compare(a, b),
+        None => a.cmp(b),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn pretty_prints_like_json_stringify_with_two_spaces() {
+        let v = json!({ "a": [], "b": {}, "c": [1, { "d": 1.5e21 }], "e": "x\"" });
+        assert_eq!(
+            stringify_pretty(&v),
+            "{\n  \"a\": [],\n  \"b\": {},\n  \"c\": [\n    1,\n    {\n      \"d\": 1.5e+21\n    }\n  ],\n  \"e\": \"x\\\"\"\n}"
+        );
+        let ordered = js_order(json!({ "b": 1, "10": 2, "2": 3, "07": 4 }));
+        assert_eq!(ordered.as_object().unwrap().keys().collect::<Vec<_>>(), ["2", "10", "b", "07"]);
+    }
 
     #[test]
     fn measures_caps_and_folds_like_javascript() {

@@ -23,6 +23,7 @@ mod tooling;
 mod turns;
 mod voice;
 mod wire;
+mod workspace;
 
 use backend::Backend;
 use hub::Hub;
@@ -128,6 +129,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         settings,
         voice: voice.clone(),
         catalog,
+        workspace: Arc::new(workspace::Workspace::new(cfg.data_dir.clone().map(std::path::PathBuf::from))),
     };
     routes::forward_terminal_events(&ctx);
     let processes = ctx.turns.processes.clone();

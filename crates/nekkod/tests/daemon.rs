@@ -1578,3 +1578,55 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn serves_files_memory_and_comments_itself() {
+    let data = std::env::temp_dir().join(format!("nekkod-workspace-{}", std::process::id()));
+    let project = data.join("project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(project.join("src").join("a.ts"), "export function a() {}\n").unwrap();
+    let d = start_with(true, Some(&data));
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in ["file:read", "dir:list", "workspace:search", "memory:save", "comment:add"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
+    }
+    let file = project.join("src").join("a.ts").to_string_lossy().into_owned();
+    let (status, read) = post(d.port, "file:read", json!([file]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(read, json!({ "content": "export function a() {}\n", "truncated": false, "binary": false }));
+    let written = project.join("new").join("b.txt").to_string_lossy().into_owned();
+    post(d.port, "file:write", json!([written, "hi"]), Some(TOKEN)).await;
+    assert_eq!(std::fs::read_to_string(&written).unwrap(), "hi");
+    let (_, listed) = post(d.port, "dir:list", json!([project.to_string_lossy()]), Some(TOKEN)).await;
+    assert_eq!(
+        listed.as_array().unwrap().iter().map(|e| e["name"].clone()).collect::<Vec<_>>(),
+        [json!("new"), json!("src")]
+    );
+
+    let (_, saved) = post(
+        d.port,
+        "memory:save",
+        json!([{ "id": "m_1", "scope": "global", "title": "T", "body": "B", "tags": [], "createdAt": 1, "updatedAt": 1 }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(saved[0]["id"], "m_1");
+    assert!(data.join("memory").join("m_1.md").exists());
+    let (status, refused) = post(d.port, "memory:delete", json!(["../x"]), Some(TOKEN)).await;
+    assert_ne!(status, 200, "{refused}");
+    post(d.port, "memory:delete", json!(["m_1"]), Some(TOKEN)).await;
+    assert!(!data.join("memory").join("m_1.md").exists());
+
+    let (_, added) = post(d.port, "comment:add", json!(["/p.ts", 3, "x", "look"]), Some(TOKEN)).await;
+    let id = added[0]["id"].clone();
+    let (_, listed) = post(d.port, "comments:list", json!(["/p.ts"]), Some(TOKEN)).await;
+    assert_eq!(listed, added);
+    let (_, resolved) = post(d.port, "comment:resolve", json!(["/p.ts", id]), Some(TOKEN)).await;
+    assert_eq!(resolved, json!([]));
+    // A folder the settings do not list is not searched.
+    let (_, hits) = post(d.port, "workspace:search", json!(["w_missing", "a"]), Some(TOKEN)).await;
+    assert_eq!(hits, json!([]));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}

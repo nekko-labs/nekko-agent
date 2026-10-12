@@ -33,6 +33,8 @@ pub struct Ctx {
     pub voice: Option<Arc<crate::voice::Voice>>,
     /// The model catalog, when the daemon has the settings store (for the Hugging Face token).
     pub catalog: Option<Arc<nekko_engine::catalog::Catalog>>,
+    /// Files, memory, comments and the workspace index (`workspace:*`, `file:*`).
+    pub workspace: Arc<crate::workspace::Workspace>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -272,6 +274,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Some(voice) => voice.route(c, &args).await,
             None => Err("voice needs the data directory".into()),
         },
+        c if ctx.workspace.serves(c) => crate::workspace::route(&ctx.workspace, &ctx.backend, &ctx.hub, c, &args).await,
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
             session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
         }
@@ -329,6 +332,7 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     if ctx.voice.is_some() {
         all.extend_from_slice(crate::voice::CHANNELS);
     }
+    all.extend(ctx.workspace.owned());
     all
 }
 
