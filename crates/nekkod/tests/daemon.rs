@@ -688,6 +688,52 @@ async fn tokens_are_the_daemons_to_read_renew_and_forget() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn providers_are_listed_saved_tested_and_asked_for_models_by_the_daemon() {
+    let data = std::env::temp_dir().join(format!("nekkod-providers-{}", std::process::id()));
+    std::fs::create_dir_all(&data).unwrap();
+    // An OpenAI-compatible server that wants a key.
+    let app = axum::Router::new().route(
+        "/v1/models",
+        axum::routing::get(|headers: axum::http::HeaderMap| async move {
+            if headers.get("authorization").and_then(|v| v.to_str().ok()) == Some("Bearer k1") {
+                (axum::http::StatusCode::OK, axum::Json(json!({ "data": [{ "id": "m1" }, { "id": "m2" }] })))
+            } else {
+                (axum::http::StatusCode::UNAUTHORIZED, axum::Json(json!({ "error": { "message": "bad key" } })))
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}/v1", l.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    let d = start_with(true, Some(&data));
+
+    let p = json!({ "id": "p1", "kind": "openai-compat", "label": "Local", "baseUrl": base, "apiKey": "k1", "enabled": true });
+    let (_, saved) = post(d.port, "providers:save", json!([p]), Some(TOKEN)).await;
+    assert_eq!(saved, json!([p]));
+    let (_, listed) = post(d.port, "providers:list", json!([]), Some(TOKEN)).await;
+    assert_eq!(listed, json!([p]));
+    let (_, ok) = post(d.port, "providers:test", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(ok, json!({ "ok": true, "message": "Connected" }));
+    let mut bad = p.clone();
+    bad["apiKey"] = json!("nope");
+    let (_, refused) = post(d.port, "providers:testConfig", json!([bad]), Some(TOKEN)).await;
+    assert_eq!(refused, json!({ "ok": false, "message": "HTTP 401, check your API key: bad key" }));
+    let (_, missing) = post(d.port, "providers:test", json!(["nope"]), Some(TOKEN)).await;
+    assert_eq!(missing, json!({ "ok": false, "message": "Not found" }));
+    let (_, models) = post(d.port, "models:list", json!(["p1"]), Some(TOKEN)).await;
+    let ids: Vec<&str> = models.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["m1", "m2"]);
+    let (_, none) = post(d.port, "lms:probe", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(none, json!({ "available": false }));
+    let (_, removed) = post(d.port, "providers:remove", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(removed, json!([]));
+    let on_disk: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert_eq!(on_disk["providers"], json!([]));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn failed_log_callback_retains_json_for_delete_and_clear() {
     assert_log_callback_failure_retains_json(true).await;
 }

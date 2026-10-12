@@ -108,6 +108,18 @@ impl Provider for AnyProvider {
     }
 }
 
+impl AnyProvider {
+    /// `test()`: the connection check the Providers settings run.
+    pub async fn test(&self) -> TestResult {
+        match self {
+            Self::OpenAiCompat(p) => p.test().await,
+            Self::Anthropic(p) => p.test().await,
+            Self::Ollama(p) => p.test().await,
+            Self::ChatGpt(p) => p.test().await,
+        }
+    }
+}
+
 /// Build a provider from its stored config, on the real wire.
 pub fn create_provider(config: ProviderConfig) -> AnyProvider {
     create_provider_with(config, Io::default())

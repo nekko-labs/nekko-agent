@@ -448,6 +448,11 @@ impl OAuth {
         self.save_new(sid, &provider, token).await
     }
 
+    /// The stored token set for a key (`getToken`), as saved.
+    pub fn stored(&self, key: &str) -> Option<Value> {
+        self.tokens.get(key)
+    }
+
     /// `ensureFreshToken`: the stored token while it is good for another
     /// minute (or never expires), else renewed, saved and announced. One
     /// renewal at a time per token; a caller that waited sees the renewed one.

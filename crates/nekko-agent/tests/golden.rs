@@ -334,6 +334,29 @@ async fn every_model_list_maps_exactly_as_the_ts_provider_maps_it() {
     }
 }
 
+#[tokio::test]
+async fn every_connection_test_answers_exactly_as_the_ts_provider_does() {
+    let providers = read("providers.json");
+    let expected = read("tests.json");
+    let cases = read("test-cases.json");
+    let cases = cases.as_array().unwrap();
+    assert_eq!(cases.len(), expected.as_object().unwrap().len(), "tests.json is stale");
+    for c in cases {
+        let name = c["name"].as_str().unwrap();
+        let want = &expected[name];
+        let mut config = providers[c["provider"].as_str().unwrap()].clone();
+        for (k, v) in c.get("patch").and_then(Value::as_object).cloned().unwrap_or_default() {
+            config[k] = v;
+        }
+        let transport = FakeTransport::by_url(c["responses"].as_object().unwrap().clone());
+        let result = provider(&config, transport.clone()).test().await;
+        let sent: Vec<String> = transport.sent().iter().map(recorded).collect();
+        let want_sent: Vec<String> = want["requests"].as_array().unwrap().iter().map(expected_request).collect();
+        assert_eq!(sent, want_sent, "requests of {name}");
+        assert_eq!(serde_json::to_value(&result).unwrap(), want["result"], "result of {name}");
+    }
+}
+
 /// Everything in the golden set is exercised, so a case added on the TS side
 /// cannot be silently skipped here.
 #[test]

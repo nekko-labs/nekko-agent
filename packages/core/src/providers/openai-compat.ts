@@ -127,12 +127,12 @@ export class OpenAICompatProvider implements Provider {
   async test(): Promise<{ ok: boolean; message: string }> {
     try {
       // OpenRouter's /key endpoint answers with the key's label and remaining
-      // credits — a real auth check, unlike /models which is public there.
+      // credits: a real auth check, unlike /models which is public there.
       if (this.config.kind === 'openrouter') {
         if (!this.config.apiKey) return { ok: false, message: 'Paste an API key or sign in with OpenRouter first.' };
         const res = await fetch(`${this.base()}/key`, { headers: this.headers() });
         if (res.status === 401 || res.status === 403) {
-          return { ok: false, message: 'OpenRouter rejected this key — check it or regenerate it.' };
+          return { ok: false, message: 'OpenRouter rejected this key. Check it or regenerate it.' };
         }
         if (!res.ok) return { ok: false, message: `OpenRouter answered HTTP ${res.status}.` };
         const json = (await res.json().catch(() => null)) as {
@@ -142,7 +142,7 @@ export class OpenAICompatProvider implements Provider {
         const remaining = d?.limit_remaining ?? (d?.limit != null && d?.usage != null ? d.limit - d.usage : null);
         return {
           ok: true,
-          message: `Connected${remaining != null ? ` — $${Math.max(0, remaining).toFixed(2)} left` : ' — unlimited'}`,
+          message: `Connected${remaining != null ? `, $${Math.max(0, remaining).toFixed(2)} left` : ', unlimited'}`,
         };
       }
       const res = await fetch(`${this.base()}/models`, { headers: this.headers() });

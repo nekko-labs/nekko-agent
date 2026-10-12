@@ -16,6 +16,7 @@ mod loops;
 mod mcp;
 mod oauth;
 mod procgroup;
+mod providers;
 mod routes;
 mod settings;
 mod sideband;

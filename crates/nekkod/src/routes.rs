@@ -260,6 +260,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf)).unwrap_or_default();
             crate::decisions::route(ctx, &data_dir, c, &args).await
         }
+        c if crate::providers::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
+            crate::providers::route(ctx, c, &args).await
+        }
         c if crate::oauth::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
             ctx.oauth.as_ref().expect("checked").route(c, &args).await
         }
@@ -325,6 +328,7 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.oauth.is_some() {
         all.extend_from_slice(crate::oauth::CHANNELS);
+        all.extend_from_slice(crate::providers::CHANNELS);
     }
     all
 }
