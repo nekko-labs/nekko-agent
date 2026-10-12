@@ -1,0 +1,681 @@
+{
+ "hf": {
+  "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF/tree/main?recursive=true": {
+   "status": 200,
+   "body": "[{\"type\":\"file\",\"oid\":\"x\",\"size\":1500,\"path\":\".gitattributes\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":9000,\"path\":\"README.md\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":2497280000,\"path\":\"Qwen3-4B-Q4_K_M.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":4280000000,\"path\":\"Qwen3-4B-Q8_0.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":2080000000,\"path\":\"Qwen3-4B-Q3_K_M.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":8050000000,\"path\":\"Qwen3-4B-BF16.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":2270000000,\"path\":\"Qwen3-4B-IQ4_XS.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":2550000000,\"path\":\"Qwen3-4B-UD-Q4_K_XL.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":840000000,\"path\":\"mmproj-F16.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":12,\"path\":\"params\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":9700,\"path\":\"tokenizer_config.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":727,\"path\":\"config.json\"},{\"type\":\"directory\",\"oid\":\"x\",\"size\":0,\"path\":\"nested\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":11000000,\"path\":\"nested/tokenizer.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":70000000,\"path\":\"nested/huge/config.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":10,\"path\":\"Template.JINJA\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":4000,\"path\":\"chat_template.jinja\"}]"
+  },
+  "https://huggingface.co/api/models/bartowski/Qwen2.5-7B-Instruct-GGUF/tree/main?recursive=true": {
+   "status": 200,
+   "body": "[{\"type\":\"file\",\"oid\":\"x\",\"size\":4680000000,\"path\":\"Qwen2.5-7B-Instruct-Q4_K_M.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":6250000000,\"path\":\"Qwen2.5-7B-Instruct-Q6_K.gguf\"}]"
+  },
+  "https://huggingface.co/api/models/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/tree/main?recursive=true": "throw",
+  "https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF/tree/main?recursive=true": {
+   "status": 200,
+   "body": "[{\"type\":\"file\",\"oid\":\"x\",\"size\":12100000000,\"path\":\"gpt-oss-20b-MXFP4.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":9000000000,\"path\":\"Q8_0/big-Q8_0-00002-of-00003.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":9000000000,\"path\":\"Q8_0/big-Q8_0-00001-of-00003.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":3000000000,\"path\":\"Q8_0/big-Q8_0-00003-of-00003.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":100,\"path\":\"weird-name.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":200,\"path\":\"UPPER.GGUF\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":50,\"path\":\"f32/model-f32.gguf\"}]"
+  },
+  "https://huggingface.co/api/models/bartowski/google_gemma-3-12b-it-GGUF/tree/main?recursive=true": {
+   "status": 200,
+   "body": "[]"
+  },
+  "https://huggingface.co/api/models/CompendiumLabs/bge-small-en-v1.5-gguf/tree/main?recursive=true": {
+   "status": 200,
+   "body": "[{\"type\":\"file\",\"oid\":\"x\",\"size\":67000000,\"path\":\"bge-small-en-v1.5-f16.gguf\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":36000000,\"path\":\"bge-small-en-v1.5-q8_0.gguf\"}]"
+  },
+  "https://huggingface.co/api/models?filter=gguf&search=qwen%20coder%2F%26&sort=downloads&direction=-1&limit=20&full=true": {
+   "status": 200,
+   "body": "[{\"id\":\"unsloth/Qwen3-4B-GGUF\",\"downloads\":120000,\"likes\":300,\"lastModified\":\"2025-05-01T10:00:00.000Z\",\"createdAt\":\"2025-04-29T00:00:00Z\",\"pipeline_tag\":\"text-generation\",\"gated\":false,\"tags\":[\"gguf\",\"base_model:Qwen/Qwen3-4B\",\"license:apache-2.0\",\"vision\"]},{\"modelId\":\"ggml-org/gpt-oss-20b-GGUF\",\"downloads\":5,\"tags\":[\"gguf\"],\"gated\":\"auto\",\"lastModified\":\"not a date\"},{\"id\":\"someone/empty-GGUF\",\"downloads\":1},{\"downloads\":3},{\"id\":\"noslash\",\"tags\":[\"embedding\"]}]"
+  },
+  "https://huggingface.co/api/models/noslash/tree/main?recursive=true": {
+   "status": 200,
+   "body": "[{\"type\":\"file\",\"oid\":\"x\",\"size\":10,\"path\":\"x-Q4_0.gguf\"}]"
+  },
+  "https://huggingface.co/api/models/someone/empty-GGUF/tree/main?recursive=true": {
+   "status": 200,
+   "body": "[{\"type\":\"file\",\"oid\":\"x\",\"size\":1,\"path\":\"README.md\"}]"
+  },
+  "https://huggingface.co/api/models?filter=mlx&pipeline_tag=text-generation&search=llama&sort=downloads&direction=-1&limit=20&full=true": {
+   "status": 200,
+   "body": "[{\"id\":\"mlx-community/Llama-3.2-3B-Instruct-4bit\",\"downloads\":900,\"tags\":[\"mlx\",\"safetensors\"]},{\"id\":\"someone/both-GGUF\",\"tags\":[\"mlx\"]},{\"id\":\"other/plain\",\"tags\":[]}]"
+  },
+  "https://huggingface.co/api/models/mlx-community/Llama-3.2-3B-Instruct-4bit/tree/main?recursive=true": {
+   "status": 200,
+   "body": "[{\"type\":\"file\",\"oid\":\"x\",\"size\":1000,\"path\":\"config.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":3000000000,\"path\":\"model-00001-of-00002.safetensors\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":1000000000,\"path\":\"model-00002-of-00002.safetensors\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":60000,\"path\":\"model.safetensors.index.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":11000000,\"path\":\"tokenizer.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":5000,\"path\":\"tokenizer_config.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":600,\"path\":\"special_tokens_map.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":4000,\"path\":\"README.md\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":80000,\"path\":\"figure.png\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":10,\"path\":\"sub/config.json\"}]"
+  },
+  "https://huggingface.co/api/models/someone/both-GGUF/tree/main?recursive=true": {
+   "status": 200,
+   "body": "[{\"type\":\"file\",\"oid\":\"x\",\"size\":900,\"path\":\"config.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":2000000000,\"path\":\"model.safetensors\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":1000000,\"path\":\"Model-Q4_K_M.gguf\"}]"
+  },
+  "https://huggingface.co/api/models/other/plain/tree/main?recursive=true": {
+   "status": 200,
+   "body": "[{\"type\":\"file\",\"oid\":\"x\",\"size\":1000,\"path\":\"config.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":3000000000,\"path\":\"model-00001-of-00002.safetensors\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":1000000000,\"path\":\"model-00002-of-00002.safetensors\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":60000,\"path\":\"model.safetensors.index.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":11000000,\"path\":\"tokenizer.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":5000,\"path\":\"tokenizer_config.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":600,\"path\":\"special_tokens_map.json\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":4000,\"path\":\"README.md\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":80000,\"path\":\"figure.png\"},{\"type\":\"file\",\"oid\":\"x\",\"size\":10,\"path\":\"sub/config.json\"}]"
+  },
+  "https://huggingface.co/api/models?filter=gguf&search=broken&sort=downloads&direction=-1&limit=20&full=true": {
+   "status": 500,
+   "body": "down"
+  },
+  "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF": {
+   "status": 200,
+   "body": "{\"id\":\"unsloth/Qwen3-4B-GGUF\",\"downloads\":120000,\"likes\":300,\"lastModified\":\"2025-05-01T10:00:00.000Z\",\"pipeline_tag\":\"text-generation\",\"tags\":[\"gguf\",\"base_model:quantized:Qwen/Qwen3-4B\",\"license:apache-2.0\",\"reasoning\"],\"cardData\":{\"summary\":\"Small model.\",\"license\":\"apache-2.0\"},\"gated\":false}"
+  },
+  "https://huggingface.co/api/models/someone/both-GGUF": {
+   "status": 200,
+   "body": "{\"tags\":[\"mlx\"],\"cardData\":{\"base_model\":\"org/base\"}}"
+  },
+  "https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF": "throw",
+  "https://huggingface.co/unsloth/Qwen3-4B-GGUF/raw/main/README.md": {
+   "status": 200,
+   "body": "---\nlicense: apache-2.0\ntags:\n- gguf\n---\n\n# Qwen3 4B\n\nA model card.\n"
+  },
+  "https://huggingface.co/ggml-org/gpt-oss-20b-GGUF/raw/main/README.md": {
+   "status": 503,
+   "body": ""
+  },
+  "https://huggingface.co/someone/both-GGUF/raw/main/README.md": "throw"
+ },
+ "steps": [
+  {
+   "op": "curated",
+   "args": [],
+   "mlx": false,
+   "token": null,
+   "out": "[{\"id\":\"bartowski/Qwen2.5-7B-Instruct-GGUF\",\"name\":\"Qwen2.5 7B Instruct\",\"owner\":\"Qwen\",\"parameterSize\":\"7B\",\"summary\":\"A strong all-rounder for chat and tools that fits comfortably on most machines.\",\"tags\":[\"chat\",\"tools\"],\"curated\":true,\"quants\":[{\"label\":\"Q4_K_M\",\"file\":\"Qwen2.5-7B-Instruct-Q4_K_M.gguf\",\"sizeBytes\":4680000000,\"extraFiles\":[],\"note\":\"The usual choice: best balance of size and quality.\"},{\"label\":\"Q6_K\",\"file\":\"Qwen2.5-7B-Instruct-Q6_K.gguf\",\"sizeBytes\":6250000000,\"extraFiles\":[],\"note\":\"Close to full quality, much bigger.\"}]},{\"id\":\"unsloth/Qwen3-4B-GGUF\",\"name\":\"Qwen3 4B\",\"owner\":\"Qwen\",\"parameterSize\":\"4B\",\"summary\":\"Small and fast, with optional step-by-step reasoning. The easiest one to start with.\",\"tags\":[\"chat\",\"reasoning\"],\"curated\":true,\"recommended\":true,\"quants\":[{\"label\":\"Q3_K_M\",\"file\":\"Qwen3-4B-Q3_K_M.gguf\",\"sizeBytes\":2080000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"Smallest useful size. Noticeably rougher.\"},{\"label\":\"IQ4_XS\",\"file\":\"Qwen3-4B-IQ4_XS.gguf\",\"sizeBytes\":2270000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]},{\"label\":\"Q4_K_M\",\"file\":\"Qwen3-4B-Q4_K_M.gguf\",\"sizeBytes\":2497280000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"The usual choice: best balance of size and quality.\"},{\"label\":\"Q8_0\",\"file\":\"Qwen3-4B-Q8_0.gguf\",\"sizeBytes\":4280000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"BF16\",\"file\":\"Qwen3-4B-BF16.gguf\",\"sizeBytes\":8050000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]},{\"label\":\"Q4_K_XL\",\"file\":\"Qwen3-4B-UD-Q4_K_XL.gguf\",\"sizeBytes\":2550000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]}]},{\"id\":\"ggml-org/gpt-oss-20b-GGUF\",\"name\":\"gpt-oss 20B\",\"owner\":\"OpenAI\",\"parameterSize\":\"20B\",\"summary\":\"An open-weight reasoning model. Needs a roomy GPU.\",\"tags\":[\"chat\",\"reasoning\",\"tools\"],\"curated\":true,\"quants\":[{\"label\":\"Q8_0\",\"file\":\"Q8_0/big-Q8_0-00001-of-00003.gguf\",\"sizeBytes\":21000000000,\"extraFiles\":[\"Q8_0/big-Q8_0-00002-of-00003.gguf\",\"Q8_0/big-Q8_0-00003-of-00003.gguf\"],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"MXFP4\",\"file\":\"gpt-oss-20b-MXFP4.gguf\",\"sizeBytes\":12100000000,\"extraFiles\":[]},{\"label\":\"F32\",\"file\":\"f32/model-f32.gguf\",\"sizeBytes\":50,\"extraFiles\":[]},{\"label\":\"weird-name\",\"file\":\"weird-name.gguf\",\"sizeBytes\":100,\"extraFiles\":[]},{\"label\":\"UPPER\",\"file\":\"UPPER.GGUF\",\"sizeBytes\":200,\"extraFiles\":[]}]},{\"id\":\"CompendiumLabs/bge-small-en-v1.5-gguf\",\"name\":\"BGE Small (embeddings)\",\"owner\":\"BAAI\",\"parameterSize\":\"33M\",\"summary\":\"Turns text into vectors for search. Tiny.\",\"tags\":[\"embedding\"],\"curated\":true,\"quants\":[{\"label\":\"Q8_0\",\"file\":\"bge-small-en-v1.5-q8_0.gguf\",\"sizeBytes\":36000000,\"extraFiles\":[],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"F16\",\"file\":\"bge-small-en-v1.5-f16.gguf\",\"sizeBytes\":67000000,\"extraFiles\":[],\"note\":\"Unquantized. Very large.\"}]}]",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/bartowski/google_gemma-3-12b-it-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/bartowski/Qwen2.5-7B-Instruct-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/CompendiumLabs/bge-small-en-v1.5-gguf/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "search",
+   "args": [
+    "qwen coder/&"
+   ],
+   "mlx": false,
+   "token": "hf_token",
+   "out": "[{\"id\":\"unsloth/Qwen3-4B-GGUF\",\"name\":\"Qwen3 4B\",\"owner\":\"unsloth\",\"parameterSize\":\"4B\",\"tags\":[\"chat\",\"vision\"],\"quants\":[{\"label\":\"Q3_K_M\",\"file\":\"Qwen3-4B-Q3_K_M.gguf\",\"sizeBytes\":2080000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"Smallest useful size. Noticeably rougher.\"},{\"label\":\"IQ4_XS\",\"file\":\"Qwen3-4B-IQ4_XS.gguf\",\"sizeBytes\":2270000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]},{\"label\":\"Q4_K_M\",\"file\":\"Qwen3-4B-Q4_K_M.gguf\",\"sizeBytes\":2497280000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"The usual choice: best balance of size and quality.\"},{\"label\":\"Q8_0\",\"file\":\"Qwen3-4B-Q8_0.gguf\",\"sizeBytes\":4280000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"BF16\",\"file\":\"Qwen3-4B-BF16.gguf\",\"sizeBytes\":8050000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]},{\"label\":\"Q4_K_XL\",\"file\":\"Qwen3-4B-UD-Q4_K_XL.gguf\",\"sizeBytes\":2550000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]}],\"downloads\":120000,\"likes\":300,\"updatedAt\":1746093600000,\"createdAt\":1745884800000,\"pipelineTag\":\"text-generation\",\"baseModel\":\"Qwen/Qwen3-4B\",\"hfTags\":[\"gguf\",\"base_model:Qwen/Qwen3-4B\",\"license:apache-2.0\",\"vision\"],\"gated\":false},{\"id\":\"ggml-org/gpt-oss-20b-GGUF\",\"name\":\"gpt oss 20b\",\"owner\":\"ggml-org\",\"parameterSize\":\"20B\",\"tags\":[\"chat\",\"reasoning\"],\"quants\":[{\"label\":\"Q8_0\",\"file\":\"Q8_0/big-Q8_0-00001-of-00003.gguf\",\"sizeBytes\":21000000000,\"extraFiles\":[\"Q8_0/big-Q8_0-00002-of-00003.gguf\",\"Q8_0/big-Q8_0-00003-of-00003.gguf\"],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"MXFP4\",\"file\":\"gpt-oss-20b-MXFP4.gguf\",\"sizeBytes\":12100000000,\"extraFiles\":[]},{\"label\":\"F32\",\"file\":\"f32/model-f32.gguf\",\"sizeBytes\":50,\"extraFiles\":[]},{\"label\":\"weird-name\",\"file\":\"weird-name.gguf\",\"sizeBytes\":100,\"extraFiles\":[]},{\"label\":\"UPPER\",\"file\":\"UPPER.GGUF\",\"sizeBytes\":200,\"extraFiles\":[]}],\"downloads\":5,\"hfTags\":[\"gguf\"],\"gated\":true},{\"id\":\"noslash\",\"name\":\"noslash\",\"owner\":\"noslash\",\"tags\":[\"embedding\"],\"quants\":[{\"label\":\"Q4_0\",\"file\":\"x-Q4_0.gguf\",\"sizeBytes\":10,\"extraFiles\":[]}],\"hfTags\":[\"embedding\"],\"gated\":false}]",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models?filter=gguf&search=qwen%20coder%2F%26&sort=downloads&direction=-1&limit=20&full=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent",
+      "authorization": "Bearer hf_token"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent",
+      "authorization": "Bearer hf_token"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/noslash/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent",
+      "authorization": "Bearer hf_token"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/someone/empty-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent",
+      "authorization": "Bearer hf_token"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent",
+      "authorization": "Bearer hf_token"
+     }
+    }
+   ]
+  },
+  {
+   "op": "search",
+   "args": [
+    "  "
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "[{\"id\":\"bartowski/Qwen2.5-7B-Instruct-GGUF\",\"name\":\"Qwen2.5 7B Instruct\",\"owner\":\"Qwen\",\"parameterSize\":\"7B\",\"summary\":\"A strong all-rounder for chat and tools that fits comfortably on most machines.\",\"tags\":[\"chat\",\"tools\"],\"curated\":true,\"quants\":[{\"label\":\"Q4_K_M\",\"file\":\"Qwen2.5-7B-Instruct-Q4_K_M.gguf\",\"sizeBytes\":4680000000,\"extraFiles\":[],\"note\":\"The usual choice: best balance of size and quality.\"},{\"label\":\"Q6_K\",\"file\":\"Qwen2.5-7B-Instruct-Q6_K.gguf\",\"sizeBytes\":6250000000,\"extraFiles\":[],\"note\":\"Close to full quality, much bigger.\"}]},{\"id\":\"unsloth/Qwen3-4B-GGUF\",\"name\":\"Qwen3 4B\",\"owner\":\"Qwen\",\"parameterSize\":\"4B\",\"summary\":\"Small and fast, with optional step-by-step reasoning. The easiest one to start with.\",\"tags\":[\"chat\",\"reasoning\"],\"curated\":true,\"recommended\":true,\"quants\":[{\"label\":\"Q3_K_M\",\"file\":\"Qwen3-4B-Q3_K_M.gguf\",\"sizeBytes\":2080000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"Smallest useful size. Noticeably rougher.\"},{\"label\":\"IQ4_XS\",\"file\":\"Qwen3-4B-IQ4_XS.gguf\",\"sizeBytes\":2270000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]},{\"label\":\"Q4_K_M\",\"file\":\"Qwen3-4B-Q4_K_M.gguf\",\"sizeBytes\":2497280000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"The usual choice: best balance of size and quality.\"},{\"label\":\"Q8_0\",\"file\":\"Qwen3-4B-Q8_0.gguf\",\"sizeBytes\":4280000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"BF16\",\"file\":\"Qwen3-4B-BF16.gguf\",\"sizeBytes\":8050000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]},{\"label\":\"Q4_K_XL\",\"file\":\"Qwen3-4B-UD-Q4_K_XL.gguf\",\"sizeBytes\":2550000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]}]},{\"id\":\"ggml-org/gpt-oss-20b-GGUF\",\"name\":\"gpt-oss 20B\",\"owner\":\"OpenAI\",\"parameterSize\":\"20B\",\"summary\":\"An open-weight reasoning model. Needs a roomy GPU.\",\"tags\":[\"chat\",\"reasoning\",\"tools\"],\"curated\":true,\"quants\":[{\"label\":\"Q8_0\",\"file\":\"Q8_0/big-Q8_0-00001-of-00003.gguf\",\"sizeBytes\":21000000000,\"extraFiles\":[\"Q8_0/big-Q8_0-00002-of-00003.gguf\",\"Q8_0/big-Q8_0-00003-of-00003.gguf\"],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"MXFP4\",\"file\":\"gpt-oss-20b-MXFP4.gguf\",\"sizeBytes\":12100000000,\"extraFiles\":[]},{\"label\":\"F32\",\"file\":\"f32/model-f32.gguf\",\"sizeBytes\":50,\"extraFiles\":[]},{\"label\":\"weird-name\",\"file\":\"weird-name.gguf\",\"sizeBytes\":100,\"extraFiles\":[]},{\"label\":\"UPPER\",\"file\":\"UPPER.GGUF\",\"sizeBytes\":200,\"extraFiles\":[]}]},{\"id\":\"CompendiumLabs/bge-small-en-v1.5-gguf\",\"name\":\"BGE Small (embeddings)\",\"owner\":\"BAAI\",\"parameterSize\":\"33M\",\"summary\":\"Turns text into vectors for search. Tiny.\",\"tags\":[\"embedding\"],\"curated\":true,\"quants\":[{\"label\":\"Q8_0\",\"file\":\"bge-small-en-v1.5-q8_0.gguf\",\"sizeBytes\":36000000,\"extraFiles\":[],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"F16\",\"file\":\"bge-small-en-v1.5-f16.gguf\",\"sizeBytes\":67000000,\"extraFiles\":[],\"note\":\"Unquantized. Very large.\"}]}]",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/bartowski/google_gemma-3-12b-it-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/bartowski/Qwen2.5-7B-Instruct-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/CompendiumLabs/bge-small-en-v1.5-gguf/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "search",
+   "args": [
+    "llama",
+    20,
+    "mlx"
+   ],
+   "mlx": true,
+   "token": null,
+   "out": "[{\"id\":\"mlx-community/Llama-3.2-3B-Instruct-4bit\",\"name\":\"Llama 3.2 3B Instruct 4bit\",\"owner\":\"mlx-community\",\"parameterSize\":\"3B\",\"tags\":[\"chat\"],\"quants\":[{\"label\":\"4bit\",\"file\":\"model-00001-of-00002.safetensors\",\"sizeBytes\":4011066600,\"extraFiles\":[\"config.json\",\"model-00002-of-00002.safetensors\",\"model.safetensors.index.json\",\"special_tokens_map.json\",\"tokenizer.json\",\"tokenizer_config.json\"],\"note\":\"MLX, for Apple Silicon\",\"format\":\"mlx\"}],\"downloads\":900,\"hfTags\":[\"mlx\",\"safetensors\"],\"gated\":false},{\"id\":\"someone/both-GGUF\",\"name\":\"both\",\"owner\":\"someone\",\"tags\":[\"chat\"],\"quants\":[{\"label\":\"MLX\",\"file\":\"model.safetensors\",\"sizeBytes\":2000000900,\"extraFiles\":[\"config.json\"],\"note\":\"MLX, for Apple Silicon\",\"format\":\"mlx\"}],\"hfTags\":[\"mlx\"],\"gated\":false}]",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models?filter=mlx&pipeline_tag=text-generation&search=llama&sort=downloads&direction=-1&limit=20&full=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/mlx-community/Llama-3.2-3B-Instruct-4bit/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/other/plain/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/someone/both-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "search",
+   "args": [
+    "llama",
+    20,
+    "mlx"
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "[]",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models?filter=mlx&pipeline_tag=text-generation&search=llama&sort=downloads&direction=-1&limit=20&full=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/mlx-community/Llama-3.2-3B-Instruct-4bit/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/other/plain/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/someone/both-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "search",
+   "args": [
+    "broken"
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "[]",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models?filter=gguf&search=broken&sort=downloads&direction=-1&limit=20&full=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "model",
+   "args": [
+    "unsloth/Qwen3-4B-GGUF"
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "{\"id\":\"unsloth/Qwen3-4B-GGUF\",\"name\":\"Qwen3 4B\",\"owner\":\"unsloth\",\"parameterSize\":\"4B\",\"summary\":\"Small model.\",\"tags\":[\"chat\",\"reasoning\"],\"quants\":[{\"label\":\"Q3_K_M\",\"file\":\"Qwen3-4B-Q3_K_M.gguf\",\"sizeBytes\":2080000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"Smallest useful size. Noticeably rougher.\"},{\"label\":\"IQ4_XS\",\"file\":\"Qwen3-4B-IQ4_XS.gguf\",\"sizeBytes\":2270000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]},{\"label\":\"Q4_K_M\",\"file\":\"Qwen3-4B-Q4_K_M.gguf\",\"sizeBytes\":2497280000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"The usual choice: best balance of size and quality.\"},{\"label\":\"Q8_0\",\"file\":\"Qwen3-4B-Q8_0.gguf\",\"sizeBytes\":4280000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"BF16\",\"file\":\"Qwen3-4B-BF16.gguf\",\"sizeBytes\":8050000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]},{\"label\":\"Q4_K_XL\",\"file\":\"Qwen3-4B-UD-Q4_K_XL.gguf\",\"sizeBytes\":2550000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]}],\"downloads\":120000,\"likes\":300,\"updatedAt\":1746093600000,\"pipelineTag\":\"text-generation\",\"baseModel\":\"quantized:Qwen/Qwen3-4B\",\"hfTags\":[\"gguf\",\"base_model:quantized:Qwen/Qwen3-4B\",\"license:apache-2.0\",\"reasoning\"],\"license\":\"apache-2.0\",\"gated\":false}",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "model",
+   "args": [
+    "someone/both-GGUF"
+   ],
+   "mlx": true,
+   "token": null,
+   "out": "{\"id\":\"someone/both-GGUF\",\"name\":\"both\",\"owner\":\"someone\",\"tags\":[\"chat\"],\"quants\":[{\"label\":\"Q4_K_M\",\"file\":\"Model-Q4_K_M.gguf\",\"sizeBytes\":1000000,\"extraFiles\":[\"config.json\"],\"note\":\"The usual choice: best balance of size and quality.\"},{\"label\":\"MLX\",\"file\":\"model.safetensors\",\"sizeBytes\":2000000900,\"extraFiles\":[\"config.json\"],\"note\":\"MLX, for Apple Silicon\",\"format\":\"mlx\"}],\"baseModel\":\"org/base\",\"hfTags\":[\"mlx\"],\"gated\":false}",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/someone/both-GGUF",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/someone/both-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "model",
+   "args": [
+    "someone/both-GGUF"
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "{\"id\":\"someone/both-GGUF\",\"name\":\"both\",\"owner\":\"someone\",\"tags\":[\"chat\"],\"quants\":[{\"label\":\"Q4_K_M\",\"file\":\"Model-Q4_K_M.gguf\",\"sizeBytes\":1000000,\"extraFiles\":[\"config.json\"],\"note\":\"The usual choice: best balance of size and quality.\"}],\"baseModel\":\"org/base\",\"hfTags\":[\"mlx\"],\"gated\":false}",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/someone/both-GGUF",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/someone/both-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "model",
+   "args": [
+    "ggml-org/gpt-oss-20b-GGUF"
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "{\"id\":\"ggml-org/gpt-oss-20b-GGUF\",\"name\":\"gpt oss 20b\",\"owner\":\"ggml-org\",\"parameterSize\":\"20B\",\"tags\":[\"chat\",\"reasoning\"],\"quants\":[{\"label\":\"Q8_0\",\"file\":\"Q8_0/big-Q8_0-00001-of-00003.gguf\",\"sizeBytes\":21000000000,\"extraFiles\":[\"Q8_0/big-Q8_0-00002-of-00003.gguf\",\"Q8_0/big-Q8_0-00003-of-00003.gguf\"],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"MXFP4\",\"file\":\"gpt-oss-20b-MXFP4.gguf\",\"sizeBytes\":12100000000,\"extraFiles\":[]},{\"label\":\"F32\",\"file\":\"f32/model-f32.gguf\",\"sizeBytes\":50,\"extraFiles\":[]},{\"label\":\"weird-name\",\"file\":\"weird-name.gguf\",\"sizeBytes\":100,\"extraFiles\":[]},{\"label\":\"UPPER\",\"file\":\"UPPER.GGUF\",\"sizeBytes\":200,\"extraFiles\":[]}],\"gated\":false}",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "model",
+   "args": [
+    "someone/empty-GGUF"
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "null",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/someone/empty-GGUF",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/someone/empty-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "detail",
+   "args": [
+    "unsloth/Qwen3-4B-GGUF"
+   ],
+   "mlx": false,
+   "token": "hf_token",
+   "out": "{\"id\":\"unsloth/Qwen3-4B-GGUF\",\"name\":\"Qwen3 4B\",\"owner\":\"unsloth\",\"parameterSize\":\"4B\",\"summary\":\"Small model.\",\"tags\":[\"chat\",\"reasoning\"],\"quants\":[{\"label\":\"Q3_K_M\",\"file\":\"Qwen3-4B-Q3_K_M.gguf\",\"sizeBytes\":2080000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"Smallest useful size. Noticeably rougher.\"},{\"label\":\"IQ4_XS\",\"file\":\"Qwen3-4B-IQ4_XS.gguf\",\"sizeBytes\":2270000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]},{\"label\":\"Q4_K_M\",\"file\":\"Qwen3-4B-Q4_K_M.gguf\",\"sizeBytes\":2497280000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"The usual choice: best balance of size and quality.\"},{\"label\":\"Q8_0\",\"file\":\"Qwen3-4B-Q8_0.gguf\",\"sizeBytes\":4280000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"BF16\",\"file\":\"Qwen3-4B-BF16.gguf\",\"sizeBytes\":8050000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]},{\"label\":\"Q4_K_XL\",\"file\":\"Qwen3-4B-UD-Q4_K_XL.gguf\",\"sizeBytes\":2550000000,\"extraFiles\":[\"mmproj-F16.gguf\",\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]}],\"downloads\":120000,\"likes\":300,\"updatedAt\":1746093600000,\"pipelineTag\":\"text-generation\",\"baseModel\":\"quantized:Qwen/Qwen3-4B\",\"hfTags\":[\"gguf\",\"base_model:quantized:Qwen/Qwen3-4B\",\"license:apache-2.0\",\"reasoning\"],\"license\":\"apache-2.0\",\"gated\":false,\"readme\":\"# Qwen3 4B\\n\\nA model card.\"}",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent",
+      "authorization": "Bearer hf_token"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent",
+      "authorization": "Bearer hf_token"
+     }
+    },
+    {
+     "url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/raw/main/README.md",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent",
+      "authorization": "Bearer hf_token"
+     }
+    }
+   ]
+  },
+  {
+   "op": "detail",
+   "args": [
+    "ggml-org/gpt-oss-20b-GGUF"
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "{\"id\":\"ggml-org/gpt-oss-20b-GGUF\",\"name\":\"gpt oss 20b\",\"owner\":\"ggml-org\",\"parameterSize\":\"20B\",\"tags\":[\"chat\",\"reasoning\"],\"quants\":[{\"label\":\"Q8_0\",\"file\":\"Q8_0/big-Q8_0-00001-of-00003.gguf\",\"sizeBytes\":21000000000,\"extraFiles\":[\"Q8_0/big-Q8_0-00002-of-00003.gguf\",\"Q8_0/big-Q8_0-00003-of-00003.gguf\"],\"note\":\"Effectively full quality. Large.\"},{\"label\":\"MXFP4\",\"file\":\"gpt-oss-20b-MXFP4.gguf\",\"sizeBytes\":12100000000,\"extraFiles\":[]},{\"label\":\"F32\",\"file\":\"f32/model-f32.gguf\",\"sizeBytes\":50,\"extraFiles\":[]},{\"label\":\"weird-name\",\"file\":\"weird-name.gguf\",\"sizeBytes\":100,\"extraFiles\":[]},{\"label\":\"UPPER\",\"file\":\"UPPER.GGUF\",\"sizeBytes\":200,\"extraFiles\":[]}],\"gated\":false,\"readmeError\":\"Hugging Face answered 503.\"}",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/ggml-org/gpt-oss-20b-GGUF/raw/main/README.md",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "detail",
+   "args": [
+    "someone/both-GGUF"
+   ],
+   "mlx": true,
+   "token": null,
+   "out": "{\"id\":\"someone/both-GGUF\",\"name\":\"both\",\"owner\":\"someone\",\"tags\":[\"chat\"],\"quants\":[{\"label\":\"Q4_K_M\",\"file\":\"Model-Q4_K_M.gguf\",\"sizeBytes\":1000000,\"extraFiles\":[\"config.json\"],\"note\":\"The usual choice: best balance of size and quality.\"},{\"label\":\"MLX\",\"file\":\"model.safetensors\",\"sizeBytes\":2000000900,\"extraFiles\":[\"config.json\"],\"note\":\"MLX, for Apple Silicon\",\"format\":\"mlx\"}],\"baseModel\":\"org/base\",\"hfTags\":[\"mlx\"],\"gated\":false,\"readmeError\":\"Couldn't reach Hugging Face for the model card.\"}",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/someone/both-GGUF",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/someone/both-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/someone/both-GGUF/raw/main/README.md",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "detail",
+   "args": [
+    "someone/empty-GGUF"
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "null",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/someone/empty-GGUF",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/api/models/someone/empty-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    },
+    {
+     "url": "https://huggingface.co/someone/empty-GGUF/raw/main/README.md",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "companions",
+   "args": [
+    "unsloth/Qwen3-4B-GGUF"
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "{\"projector\":\"mmproj-F16.gguf\",\"sidecars\":[\"tokenizer_config.json\",\"config.json\",\"nested/tokenizer.json\",\"chat_template.jinja\"]}",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/unsloth/Qwen3-4B-GGUF/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  },
+  {
+   "op": "companions",
+   "args": [
+    "nobody/missing"
+   ],
+   "mlx": false,
+   "token": null,
+   "out": "null",
+   "requests": [
+    {
+     "url": "https://huggingface.co/api/models/nobody/missing/tree/main?recursive=true",
+     "headers": {
+      "accept": "application/json",
+      "user-agent": "nekko-agent"
+     }
+    }
+   ]
+  }
+ ],
+ "frontMatter": [
+  {
+   "input": "---\na: 1\n---\nbody\n",
+   "out": "body"
+  },
+  {
+   "input": "---\nunclosed",
+   "out": "---\nunclosed"
+  },
+  {
+   "input": "  plain text  ",
+   "out": "plain text"
+  },
+  {
+   "input": "---\na: 1\n---",
+   "out": ""
+  },
+  {
+   "input": "---x\n---\n\ntext",
+   "out": "text"
+  },
+  {
+   "input": "",
+   "out": ""
+  }
+ ],
+ "fileUrls": [
+  {
+   "repo": "a/b",
+   "file": "dir/my file#1?.gguf",
+   "url": "https://huggingface.co/a/b/resolve/main/dir/my%20file%231%3F.gguf?download=true"
+  },
+  {
+   "repo": "org/repo",
+   "file": "plain.gguf",
+   "url": "https://huggingface.co/org/repo/resolve/main/plain.gguf?download=true"
+  },
+  {
+   "repo": "o/r",
+   "file": "ünï/çødé.gguf",
+   "url": "https://huggingface.co/o/r/resolve/main/%C3%BCn%C3%AF/%C3%A7%C3%B8d%C3%A9.gguf?download=true"
+  }
+ ]
+}

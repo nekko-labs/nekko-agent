@@ -20,12 +20,13 @@
 //!   trip never passes through the TS event loop. Tools that still run in the
 //!   host park their approvals here too (`turn:approval`).
 //!
-//! It runs `fetch_url` (`nekko-web`) and the background-process tools
-//! (`nekko-tools`) itself, and calls back for what has not moved: `turn:tool`
-//! (the browser and window capture, watches, delegation targets, training
-//! reports, and MCP, sub-agents or `decide` for a host that keeps them),
-//! `turn:hook` (tool hooks, for a host that keeps them; given `facts.hookRules`
-//! they run here), `turn:headers` (Anthropic subscription rate
+//! It runs `fetch_url`, the browser and window capture (`nekko-web`, the
+//! in-app browser through the desktop app's bridge) and the background-process
+//! tools (`nekko-tools`) itself, and calls back for what has not moved:
+//! `turn:tool` (watches, delegation targets, training reports, and MCP,
+//! sub-agents or `decide` for a host that keeps them), `turn:hook` (tool
+//! hooks, for a host that keeps them; given `facts.hookRules` they run here),
+//! `turn:headers` (Anthropic subscription rate
 //! limits), `loop:log` (the agent terminal); and it sends the host every
 //! event (`turn:event`, deltas batched) for the phone relay and usage and
 //! reply accounting, then `turn:end`.
@@ -266,6 +267,10 @@ pub struct Turns {
     /// settings.json, when the daemon writes it: tool hooks are re-read
     /// from it per call, as the TS host did.
     settings: Option<Arc<nekko_settings::SettingsStore>>,
+    /// The desktop app's bridge to its in-app browser and window capturer
+    /// (absent outside the desktop app), and the chats' browser sessions.
+    bridge: Option<Arc<nekko_web::browser::HttpBridge>>,
+    pub browsers: Arc<nekko_web::browser::Browsers>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
     /// How each queued turn the daemon started as the next of a chain ends,
@@ -295,6 +300,8 @@ impl Turns {
             decide,
             processes: Processes::new(),
             settings: None,
+            bridge: None,
+            browsers: nekko_web::browser::Browsers::new(),
             running: Mutex::default(),
             pending: Pending::default(),
             chained: Mutex::default(),
@@ -305,6 +312,12 @@ impl Turns {
     /// The daemon's settings store (settings.rs).
     pub fn with_settings(mut self, settings: Option<Arc<nekko_settings::SettingsStore>>) -> Self {
         self.settings = settings;
+        self
+    }
+
+    /// The desktop bridge (`config.browserBridge`).
+    pub fn with_bridge(mut self, bridge: Option<(String, String)>) -> Self {
+        self.bridge = bridge.map(|(url, token)| Arc::new(nekko_web::browser::HttpBridge::new(url, token)));
         self
     }
 
@@ -784,6 +797,7 @@ impl Turns {
                 std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
             }),
             incognito,
+            allow_browser: spec.get("allowBrowserControl") == Some(&Value::Bool(true)),
             training: js::truthy(lock(&session).get("trainingRunId")),
             unattended_ms: (settings.get("unattendedQuestionMinutes").and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
                 * 60_000.0) as u64,
@@ -1250,6 +1264,8 @@ struct TurnTools {
     /// This turn's hook rules, run here (`facts.hookRules`), and the folder they run in.
     hook_rules: Option<Vec<nekko_tools::hooks::HookRule>>,
     hook_cwd: String,
+    /// `spec.allowBrowserControl`: a local desktop chat may use the browser and capture tools.
+    allow_browser: bool,
     incognito: bool,
     training: bool,
     unattended_ms: u64,
@@ -1378,6 +1394,17 @@ impl TurnTools {
         }
         if name == "fetch_url" {
             return Ok(self.fetch_url(call).await);
+        }
+        if let Some(ctx) = &self.native
+            && (name == "browser" || name == "capture")
+        {
+            let call: ToolCall = serde_json::from_value(call.clone()).map_err(|e| e.to_string())?;
+            let bridge = self.turns.bridge.as_deref().map(|b| b as &dyn nekko_web::browser::Bridge);
+            return Ok(if name == "browser" {
+                nekko_web::browser::browser_tool(&call, ctx, self.allow_browser, bridge, &self.turns.browsers).await
+            } else {
+                nekko_web::browser::capture_tool(&call, ctx, self.allow_browser, bridge).await
+            });
         }
         if let Some(ctx) = &self.native
             && NATIVE.contains(&name)

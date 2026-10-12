@@ -122,8 +122,9 @@ export class EngineProcess {
     if (daemon) {
       mode = 'daemon';
       marker = DAEMON_READY;
-      // The desktop host lets the agent drive a browser, so a turn the daemon admits offers it too.
-      const config = { token: this.token, allowedOrigins: this.opts.origins, backend, dataDir: this.opts.dataDir, allowBrowserControl: true };
+      // The daemon runs the browser and capture tools itself and reaches the
+      // in-app browser through the same bridge (in its config, not its env).
+      const config = { token: this.token, allowedOrigins: this.opts.origins, backend, dataDir: this.opts.dataDir, allowBrowserControl: true, ...(this.opts.browserBridge ? { browserBridge: this.opts.browserBridge } : {}) };
       child = spawn(daemon, [], {
         env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) },
         stdio: ['pipe', 'pipe', 'inherit'],
