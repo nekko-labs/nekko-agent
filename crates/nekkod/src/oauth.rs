@@ -400,6 +400,12 @@ impl OAuth {
         } else {
             &self.endpoints.openrouter_key
         };
+        // A token or code only ever goes out over HTTPS (or to this machine, in tests).
+        let url = reqwest::Url::parse(url).map_err(|e| e.to_string())?;
+        let loopback = matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "[::1]"));
+        if url.scheme() != "https" && !(url.scheme() == "http" && loopback) {
+            return Err(format!("refusing to send a sign-in request over {}", url.scheme()));
+        }
         let mut r = self.http.post(url).body(req.body.clone());
         for (k, v) in &req.headers {
             r = r.header(*k, *v);
