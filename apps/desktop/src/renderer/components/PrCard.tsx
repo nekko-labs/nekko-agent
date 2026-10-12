@@ -98,7 +98,7 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
       else {
         const result = await window.nekko.linkPrStack(sessionId, url);
         useStore.getState().pushToast(result.ok ? 'success' : 'error', result.message);
-        await useStore.getState().refreshSessionPrs(sessionId);
+        await useStore.getState().refreshSessionPrs(sessionId, result.ok);
       }
     } catch (error) { useStore.getState().pushToast('error', (error as Error).message); }
     finally { setBusy(null); }

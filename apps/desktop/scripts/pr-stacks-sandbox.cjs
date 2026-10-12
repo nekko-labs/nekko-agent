@@ -39,6 +39,7 @@ app.whenReady().then(async()=>{
         win.setContentSize(width,850);await run(`document.documentElement.dataset.theme='${theme}'`);await shot(`${theme}-${width}-dependent`);
       }
       await click('Link stack');
+      check('successful link forces the cached PR read',await run("window.integration.calls.some(c=>c.method==='listPrs'&&c.force===true)"));
       check('native linking updates live controls',await run("window.integration.calls.some(c=>c.method==='linkStack') && [...document.querySelectorAll('button')].some(b=>b.textContent==='Merge on GitHub') && ![...document.querySelectorAll('button')].some(b=>b.textContent==='Link stack')"));
       await click('Merge on GitHub');
       check('stack merge opens GitHub without ordinary merge',await run("window.integration.calls.some(c=>c.method==='openPath') && !window.integration.calls.some(c=>c.method==='prAction'&&c.action==='merge')"));

@@ -277,7 +277,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.changeAccept]: ([sid, p]) => host.acceptChange(sid, p),
     [C.changeAcceptAll]: ([sid]) => host.acceptAllChanges(sid),
 
-    [C.prSessionList]: ([sid]) => host.listSessionPrs(sid),
+    [C.prSessionList]: ([sid, force]) => host.listSessionPrs(sid, force === true),
     [C.prDiff]: ([url]) => host.getPrDiff(url),
     [C.prAction]: ([url, action]) => host.prAction(url, action),
     [C.prContinueStack]: ([sid, url]) => host.continuePrStack(sid, url),

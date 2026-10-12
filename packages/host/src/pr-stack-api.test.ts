@@ -1,10 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-const mock = vi.hoisted(() => ({ exec: vi.fn(), token: '' }));
+const mock = vi.hoisted(() => ({ exec: vi.fn(), token: '', session: null as any }));
 vi.mock('child_process', () => ({ execFile: mock.exec }));
 vi.mock('./store.js', () => ({ getSettings: () => ({ connectors: mock.token ? [{ kind: 'github', connected: true, token: mock.token }] : [] }) }));
-vi.mock('./sessions.js', () => ({ getSession: () => null }));
+vi.mock('./sessions.js', () => ({ getSession: () => mock.session }));
 beforeEach(() => {
   vi.resetModules(); vi.clearAllMocks(); mock.token = '';
+  mock.session = null;
   vi.stubGlobal('fetch', vi.fn());
 });
 it('blocks ordinary merge when the authoritative PR belongs to a stack', async () => {
@@ -41,4 +42,23 @@ it('does not repeat a possibly completed mutation after a gh error', async () =>
   const { githubStackRequest } = await import('./pr.js');
   await expect(githubStackRequest('repos/owner/repo/stacks', [12, 13])).rejects.toThrow('timeout');
   expect(fetch).not.toHaveBeenCalled();
+});
+it('refreshes host fallback membership after linking and preserves it for subsequent polling', async () => {
+  let linked = false;
+  mock.session = { messages: [
+    { role: 'assistant', toolCalls: [{ id: 'create', name: 'bash', input: { command: 'gh pr create --title feature --body feature' } }] },
+    { role: 'tool', toolResult: { toolCallId: 'create', output: 'https://github.com/owner/repo/pull/12', isError: false } },
+  ] };
+  mock.exec.mockImplementation((_bin, args, _opts, cb) => cb(null, JSON.stringify(args[0] === 'pr' ? { state: 'OPEN', title: 'Feature' } : { stack: linked ? { number: 3, size: 2 } : null }), ''));
+  const { listSessionPrs } = await import('./pr.js');
+  expect((await listSessionPrs('test'))[0].stack).toBeUndefined();
+  const initialReads = mock.exec.mock.calls.length;
+  linked = true;
+  expect((await listSessionPrs('test'))[0].stack).toBeUndefined();
+  expect(mock.exec).toHaveBeenCalledTimes(initialReads);
+  expect((await listSessionPrs('test', true))[0].stack).toEqual({ number: 3, size: 2 });
+  const refreshedReads = mock.exec.mock.calls.length;
+  expect(refreshedReads).toBeGreaterThan(initialReads);
+  expect((await listSessionPrs('test'))[0].stack).toEqual({ number: 3, size: 2 });
+  expect(mock.exec).toHaveBeenCalledTimes(refreshedReads);
 });

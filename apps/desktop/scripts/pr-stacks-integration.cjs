@@ -5,7 +5,13 @@ const cp = require('node:child_process');
 const repo = path.resolve(__dirname, '../../..');
 const modules = path.join(repo, 'node_modules');
 const injection = `
+let staleMembership = null;
 Object.assign(bridge, {
+  listSessionPrs: async (sessionId, force) => {
+    calls.push({method:'listPrs',sessionId,force});
+    if(force)staleMembership=null;
+    return staleMembership ?? fixturePrs;
+  },
   continuePrStack: async (sessionId, url) => {
     calls.push({method:'continueStack',sessionId,url});
     await new Promise(r=>setTimeout(r,120));
@@ -13,7 +19,7 @@ Object.assign(bridge, {
     const s={...makeSession('followup-'+(++serial)),workspaceId:'synthetic-project',executionMode:'worktree',gitIsolation:true,gitStackParent:{workspaceId:'synthetic-project',url,branch:'feature/auth',sha:'a'.repeat(40)}};
     records.push(s);return s;
   },
-  linkPrStack: async (sessionId,url) => {calls.push({method:'linkStack',sessionId,url});fixturePrs=fixturePrs.map(p=>({...p,stack:{number:3,size:2}}));return {ok:true,message:'Linked as a GitHub PR stack.'};},
+  linkPrStack: async (sessionId,url) => {calls.push({method:'linkStack',sessionId,url});staleMembership=structuredClone(fixturePrs);fixturePrs=fixturePrs.map(p=>({...p,stack:{number:3,size:2}}));return {ok:true,message:'Linked as a GitHub PR stack.'};},
   openPath: async url => {calls.push({method:'openPath',url});},
   prAction: async (url,action) => {calls.push({method:'prAction',url,action});return {ok:true,message:'Synthetic action.'};},
 });

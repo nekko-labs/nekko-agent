@@ -560,9 +560,9 @@ impl Prs {
     }
 
     /// `listSessionPrs`: live state for every PR the chat created.
-    pub async fn session_prs(&self, messages: &[Value], token: Option<&str>) -> Vec<Value> {
+    pub async fn session_prs(&self, messages: &[Value], token: Option<&str>, force: bool) -> Vec<Value> {
         let urls = collect_session_pr_urls(messages);
-        let reads = urls.iter().map(|u| self.cached_info(u, token, false));
+        let reads = urls.iter().map(|u| self.cached_info(u, token, force));
         futures_util::future::join_all(reads).await.into_iter().filter(|v| !v.is_null()).collect()
     }
 

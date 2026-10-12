@@ -465,7 +465,7 @@ export interface Host {
   acceptAllChanges(sessionId: string): Promise<void>;
 
   /** Live PR state for every PR URL referenced in a chat's transcript. */
-  listSessionPrs(sessionId: string): Promise<PrInfo[]>;
+  listSessionPrs(sessionId: string, force?: boolean): Promise<PrInfo[]>;
   /** A PR's changed files + patches (diff pane). */
   getPrDiff(url: string): Promise<PrDiff>;
   /** Approve / decline / merge / reopen a PR (user-initiated). */

@@ -675,7 +675,7 @@ export interface NekkoApi {
   acceptAllChanges(sessionId: string): Promise<void>;
 
   /** Live PR state for every GitHub PR URL referenced in a chat's transcript. */
-  listSessionPrs(sessionId: string): Promise<import('./pr.js').PrInfo[]>;
+  listSessionPrs(sessionId: string, force?: boolean): Promise<import('./pr.js').PrInfo[]>;
   /** A PR's changed files + patches (for the diff pane). */
   getPrDiff(url: string): Promise<import('./pr.js').PrDiff>;
   /** Approve / decline / merge / reopen a PR. Always user-initiated. */

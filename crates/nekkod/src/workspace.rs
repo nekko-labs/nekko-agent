@@ -260,7 +260,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             let s = session(ctx, &text(&args, 0)).await;
             let Some(messages) = s.get("messages").and_then(Value::as_array) else { return Ok(json!([])) };
             let token = github_token(&settings(ctx).await);
-            Ok(Value::Array(ws.prs.session_prs(messages, token.as_deref()).await))
+            Ok(Value::Array(
+                ws.prs.session_prs(messages, token.as_deref(), arg(&args, 1) == Some(&Value::Bool(true))).await,
+            ))
         }
         "pr:diff" => {
             let token = github_token(&settings(ctx).await);

@@ -296,12 +296,12 @@ export async function branchPr(cwd: string, branch: string): Promise<PrInfo | nu
 }
 
 /** Live PR state for every PR URL referenced in a session's transcript. */
-export async function listSessionPrs(sessionId: string): Promise<PrInfo[]> {
+export async function listSessionPrs(sessionId: string, force = false): Promise<PrInfo[]> {
   const session = getSession(sessionId);
   if (!session) return [];
   const urls = collectSessionPrUrls(session.messages);
   if (urls.length === 0) return [];
-  const infos = await Promise.all(urls.map((u) => cachedInfo(u)));
+  const infos = await Promise.all(urls.map((u) => cachedInfo(u, force)));
   return infos.filter((i): i is PrInfo => !!i);
 }
 
