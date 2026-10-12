@@ -1,28 +1,42 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { uniqueFolders, type Session, type SessionMeta, type WorkspaceFolder } from '@nekko-agent/shared';
-import { CloseIcon, FolderIcon, PlusIcon } from '../icons.js';
+import { CloseIcon, FolderIcon, PlusIcon, StarIcon } from '../icons.js';
 import { useStore } from '../store.js';
+import { toggleDefaultFolder } from '../defaultFolders.js';
 import { addFolderToChat, applyFolderSelection, withoutPrimary, withPrimary } from '../sessionFolders.js';
 
 type ChatFolders = Pick<SessionMeta, 'workspaceId' | 'supportingWorkspaceIds'>;
+const NO_DEFAULTS: string[] = [];
 
 /** The menu body: one row per folder, "No folder", then "Add folder…". */
-export function FolderPickerMenu({ folders, chat, onPick, onClear, onAdd, onRemove }: {
+export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear, onAdd, onRemove, onToggleDefault }: {
   folders: WorkspaceFolder[];
   chat: ChatFolders | null;
+  /** Starred folders new chats start with. */
+  defaults?: string[];
   onPick: (id: string) => void;
   onClear: () => void;
   onAdd: () => void;
   onRemove: (id: string) => void;
+  onToggleDefault?: (id: string) => void;
 }) {
   const primary = chat?.workspaceId;
   const supporting = new Set(chat?.supportingWorkspaceIds ?? []);
   const row = 'flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2';
 
   return <>
-    {folders.map((f) => (
+    {folders.map((f) => {
+      const starred = defaults.includes(f.id);
+      return (
       <div key={f.id} className="flex items-center">
+        {onToggleDefault && (
+          <button type="button" aria-pressed={starred} aria-label={starred ? `Stop starting new chats in ${f.name}` : `Start new chats in ${f.name}`}
+            title={starred ? 'Default for new chats (click to unset)' : 'Set as default for new chats'}
+            className={`shrink-0 rounded p-1.5 hover:bg-surface-2 ${starred ? 'text-accent' : 'text-ink-faint hover:text-ink'}`} onClick={() => onToggleDefault(f.id)}>
+            <StarIcon className="h-3.5 w-3.5" filled={starred} />
+          </button>
+        )}
         <button role="menuitemradio" aria-checked={primary === f.id} title={f.path}
           className={`${row} ${primary === f.id ? 'text-accent' : ''}`} onClick={() => onPick(f.id)}>
           <span className="flex items-center gap-1.5 text-[12px] font-medium">
@@ -35,7 +49,8 @@ export function FolderPickerMenu({ folders, chat, onPick, onClear, onAdd, onRemo
           <CloseIcon className="h-3.5 w-3.5" />
         </button>
       </div>
-    ))}
+      );
+    })}
 
     <button role="menuitemradio" aria-checked={!primary} className={`${row} ${!primary ? 'text-accent' : ''}`} onClick={onClear}>
       <span className="text-[12px] font-medium">No folder</span>
@@ -64,6 +79,7 @@ export function FolderPicker({ sessionId, session, disabled, onChange }: {
   // Older profiles can still hold one folder under two ids; show it once.
   const saved = useStore((s) => s.settings?.workspaces);
   const folders = useMemo(() => uniqueFolders(saved ?? []).folders, [saved]);
+  const defaults = useStore((s) => s.settings?.defaultWorkspaceIds) ?? NO_DEFAULTS;
   // The store's summary sees Context Inspector edits the pane's own copy misses.
   const summary = useStore((s) => s.sessions.find((x) => x.id === sessionId));
   const chat: ChatFolders | null = summary ?? session;
@@ -151,7 +167,7 @@ export function FolderPicker({ sessionId, session, disabled, onChange }: {
       </button>
       {open && createPortal(
         <div ref={menu} style={position} className="card fixed z-[100] overflow-y-auto p-1.5 shadow-lg" role="menu" aria-label="Primary folder">
-          <FolderPickerMenu folders={folders} chat={chat} onPick={pick} onClear={clear} onAdd={add} onRemove={remove} />
+          <FolderPickerMenu folders={folders} chat={chat} defaults={defaults} onPick={pick} onClear={clear} onAdd={add} onRemove={remove} onToggleDefault={toggleDefaultFolder} />
         </div>, document.body,
       )}
     </div>

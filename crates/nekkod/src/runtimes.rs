@@ -67,10 +67,32 @@ pub fn new(
     ))
 }
 
+/// Whether a saved provider is switched off (an unknown id is not "disabled").
+async fn disabled(ctx: &crate::routes::Ctx, id: &str) -> bool {
+    crate::settings::current(ctx)
+        .await
+        .get("providers")
+        .and_then(Value::as_array)
+        .and_then(|list| list.iter().find(|p| p.get("id").and_then(Value::as_str) == Some(id)))
+        .is_some_and(|p| !crate::providers::is_enabled(p))
+}
+
 pub async fn route(ctx: &crate::routes::Ctx, rt: &Runtimes, channel: &str, args: &[Value]) -> Result<Value, String> {
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
     let s = |i: usize| nekko_js::display(arg(i));
     let params = |i: usize| if arg(i).is_object() { arg(i).clone() } else { json!({}) };
+    // The Models page polls status, facts and the `lms` probe. A provider
+    // switched off there answers as absent, so polling never spawns `lms` or
+    // touches its server (and so cannot wake a stopped LM Studio).
+    if matches!(channel, "runtime:status" | "runtime:facts" | "runtime:plan" | "runtime:autoFit" | "lms:probe")
+        && disabled(ctx, &s(0)).await
+    {
+        return Ok(match channel {
+            "runtime:facts" => json!([]),
+            "lms:probe" => json!({ "available": false, "reason": crate::providers::DISABLED }),
+            _ => Value::Null,
+        });
+    }
     Ok(match channel {
         "runtime:status" => rt.status(&s(0)).await,
         "runtime:start" => rt.start(&s(0)).await,

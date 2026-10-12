@@ -702,6 +702,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   });
 
   const findProvider = (id: string) => getSettings().providers.find((p) => p.id === id);
+  /** A provider switched off on the Models page is never contacted or launched. */
+  const DISABLED_PROVIDER = 'This provider is disabled. Turn it on in Model Providers to use it.';
 
   /**
    * Keep one provider entry pointing at the engine.
@@ -816,6 +818,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     testProvider: async (id) => {
       const p = findProvider(id);
       if (!p) return { ok: false, message: 'Not found' };
+      if (p.enabled === false) return { ok: false, message: DISABLED_PROVIDER };
       try {
         const resolved = await resolveSubscriptionProvider(p);
         return await createProvider(resolved).test();
@@ -834,7 +837,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
 
     listModels: async (providerId) => {
       const p = findProvider(providerId);
-      if (!p) return [];
+      if (!p || p.enabled === false) return [];
       try {
         const resolved = await resolveSubscriptionProvider(p);
         return await createProvider(resolved).listModels();
@@ -873,6 +876,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     lmsAvailable: async (providerId) => {
       const p = findProvider(providerId);
       if (p?.kind !== 'lmstudio') return { available: false };
+      if (p.enabled === false) return { available: false, reason: DISABLED_PROVIDER };
       return lmsProbe(p.baseUrl);
     },
     stopServer: async (providerId) => {
@@ -881,14 +885,16 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       if (!isLocalProvider(p.kind)) return { ok: false, message: 'Only local model servers can be stopped from here.' };
       return stopLocalServer(p.baseUrl);
     },
-    runtimeStatus: (providerId) => runtimes.status(providerId),
+    // Status and facts are what the Models page polls; a disabled provider
+    // answers null/[] so polling never spawns `lms` or hits its server.
+    runtimeStatus: async (providerId) => (findProvider(providerId)?.enabled === false ? null : runtimes.status(providerId)),
     runtimeStart: (providerId) => runtimes.start(providerId),
     runtimeStop: (providerId, force) => { if (providerId === 'nekko-engine') stopVoice(); return runtimes.stop(providerId, force); },
     runtimeLoad: (providerId, modelId, params) => runtimes.load(providerId, modelId, params),
-    runtimeFacts: (providerId) => runtimes.facts(providerId),
-    runtimePlan: (providerId, modelId, req) => runtimes.plan(providerId, modelId, req),
-    runtimeAutoFit: (providerId, modelId, budgetFraction, parallelSlots) =>
-      runtimes.autoPlan(providerId, modelId, budgetFraction, parallelSlots),
+    runtimeFacts: async (providerId) => (findProvider(providerId)?.enabled === false ? [] : runtimes.facts(providerId)),
+    runtimePlan: async (providerId, modelId, req) => (findProvider(providerId)?.enabled === false ? null : runtimes.plan(providerId, modelId, req)),
+    runtimeAutoFit: async (providerId, modelId, budgetFraction, parallelSlots) =>
+      (findProvider(providerId)?.enabled === false ? null : runtimes.autoPlan(providerId, modelId, budgetFraction, parallelSlots)),
 
     voiceStatus: () => voice.status(),
     voiceInstall: () => voice.install(),
