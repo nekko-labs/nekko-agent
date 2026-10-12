@@ -1578,3 +1578,31 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_keeps_and_reads_connectors() {
+    let data = std::env::temp_dir().join(format!("nekkod-connectors-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    let d = start_with(true, Some(&data));
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("connector:fetch")), "{info}");
+    let (_, missing) = post(d.port, "connector:fetch", json!(["teams"]), Some(TOKEN)).await;
+    assert_eq!(missing["error"], "Connector not connected", "{missing}");
+    let hook = json!({ "webhookUrl": "https://acme.webhook.office.com/x" });
+    let (_, list) = post(d.port, "connector:connect", json!(["teams", null, hook]), Some(TOKEN)).await;
+    assert_eq!(list[0]["kind"], "teams", "{list}");
+    assert_eq!(list[0]["connected"], true);
+    assert!(list[0]["connectedAt"].is_number());
+    // The daemon wrote settings.json itself.
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert_eq!(saved["connectors"][0]["settings"], hook);
+    let (_, found) = post(d.port, "connector:fetch", json!(["teams"]), Some(TOKEN)).await;
+    assert_eq!(found[0]["subtitle"], "acme.webhook.office.com", "{found}");
+    let (_, list) = post(d.port, "connector:disconnect", json!(["teams"]), Some(TOKEN)).await;
+    assert_eq!(list, json!([]));
+    let (_, list) = post(d.port, "connectors:list", json!([]), Some(TOKEN)).await;
+    assert_eq!(list, json!([]));
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}

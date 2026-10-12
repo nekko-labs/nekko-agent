@@ -19,6 +19,7 @@ futures-util.workspace = true
 getrandom.workspace = true
 nekko-agent = { path = "../nekko-agent" }
 nekko-chat = { path = "../nekko-chat" }
+nekko-connectors = { path = "../nekko-connectors" }
 nekko-context = { path = "../nekko-context" }
 nekko-decide = { path = "../nekko-decide" }
 nekko-engine = { path = "../nekko-engine" }
