@@ -263,6 +263,9 @@ pub struct Turns {
     /// Background processes the agent started (`start_process`); they
     /// outlive the turn and die with the chat's Stop or the daemon.
     pub processes: Arc<Processes>,
+    /// settings.json, when the daemon writes it: tool hooks are re-read
+    /// from it per call, as the TS host did.
+    settings: Option<Arc<nekko_settings::SettingsStore>>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
 }
@@ -286,9 +289,16 @@ impl Turns {
             mcp,
             decide,
             processes: Processes::new(),
+            settings: None,
             running: Mutex::default(),
             pending: Pending::default(),
         }
+    }
+
+    /// The daemon's settings store (settings.rs).
+    pub fn with_settings(mut self, settings: Option<Arc<nekko_settings::SettingsStore>>) -> Self {
+        self.settings = settings;
+        self
     }
 
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
@@ -1218,8 +1228,21 @@ fn error(id: &str, output: impl Into<String>) -> Value {
 
 impl ToolRunner for TurnTools {
     async fn run(&self, call: &Value) -> Result<Value, String> {
-        if let Some(rules) = self.hook_rules.as_deref().filter(|r| nekko_tools::hooks::has_tool_hooks(r)) {
-            return self.run_with_hooks(rules, call).await;
+        if let Some(spec_rules) = &self.hook_rules {
+            // Re-read per call, so a hook added mid-turn applies to the next tool.
+            let rules = match &self.turns.settings {
+                Some(store) => {
+                    let store = store.clone();
+                    let hooks =
+                        tokio::task::spawn_blocking(move || store.get()["hooks"].clone()).await.unwrap_or(Value::Null);
+                    nekko_tools::hooks::rules(&hooks)
+                }
+                None => spec_rules.clone(),
+            };
+            if nekko_tools::hooks::has_tool_hooks(&rules) {
+                return self.run_with_hooks(&rules, call).await;
+            }
+            return self.inner(call).await;
         }
         if !self.hooks {
             return self.inner(call).await;

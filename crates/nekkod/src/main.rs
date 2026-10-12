@@ -108,14 +108,17 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         engine: engine.clone(),
         sessions: sessions.clone(),
         loops: Arc::new(loops::Loops::new(changes.clone())),
-        turns: Arc::new(turns::Turns::new(
-            sessions.clone(),
-            cfg.data_dir.clone().map(std::path::PathBuf::from),
-            changes,
-            accounts.clone(),
-            mcp.clone(),
-            engine.decide.clone(),
-        )),
+        turns: Arc::new(
+            turns::Turns::new(
+                sessions.clone(),
+                cfg.data_dir.clone().map(std::path::PathBuf::from),
+                changes,
+                accounts.clone(),
+                mcp.clone(),
+                engine.decide.clone(),
+            )
+            .with_settings(settings.as_ref().map(|s| s.store.clone())),
+        ),
         mcp: mcp.clone(),
         accounts,
         settings,

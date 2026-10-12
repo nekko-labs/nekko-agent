@@ -1528,11 +1528,16 @@ async fn a_daemon_turn_runs_its_tool_hooks_itself() {
     } else {
         ("echo no shell today 1>&2; exit 2", "echo saw $NEKKO_TOOL_NAME in $(pwd)")
     };
-    let mut spec = turn_spec(&rig, &model, "turn_h", "s_turn_h", json!({}));
-    spec["facts"]["hookRules"] = json!([
+    let rules = json!([
         { "id": "h1", "event": "PreToolUse", "name": "guard", "matcher": "bash", "command": pre_cmd },
         { "id": "h2", "event": "PostToolUse", "name": "note", "matcher": "read_file", "command": post_cmd },
     ]);
+    // The daemon writes settings.json and re-reads the hooks from it per call;
+    // the spec's copy is only for a daemon without a data directory.
+    let (status, _) = post(rig.d.port, "settings:update", json!([{ "hooks": rules }]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let mut spec = turn_spec(&rig, &model, "turn_h", "s_turn_h", json!({}));
+    spec["facts"]["hookRules"] = json!([]);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     let (_, end) = turn_record(rig.d.port, "turn_h").await;
