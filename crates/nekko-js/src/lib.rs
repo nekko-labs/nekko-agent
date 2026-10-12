@@ -210,6 +210,112 @@ fn write(v: &Value, out: &mut String) {
     }
 }
 
+/// `JSON.stringify(value, null, indent)`: the same values as [`stringify`],
+/// one member per line, nested `indent` deeper per level; empty arrays and
+/// objects stay `[]` and `{}`.
+pub fn stringify_pretty(v: &Value, indent: &str) -> String {
+    let mut out = String::new();
+    write_pretty(v, indent, 0, &mut out);
+    out
+}
+
+fn write_pretty(v: &Value, indent: &str, depth: usize, out: &mut String) {
+    let pad = |out: &mut String, d: usize| {
+        out.push('\n');
+        for _ in 0..d {
+            out.push_str(indent);
+        }
+    };
+    match v {
+        Value::Array(a) if !a.is_empty() => {
+            out.push('[');
+            for (i, x) in a.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                pad(out, depth + 1);
+                write_pretty(x, indent, depth + 1, out);
+            }
+            pad(out, depth);
+            out.push(']');
+        }
+        Value::Object(o) if !o.is_empty() => {
+            out.push('{');
+            for (i, (k, x)) in o.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                pad(out, depth + 1);
+                out.push_str(&serde_json::to_string(k).unwrap_or_default());
+                out.push_str(": ");
+                write_pretty(x, indent, depth + 1, out);
+            }
+            pad(out, depth);
+            out.push('}');
+        }
+        other => write(other, out),
+    }
+}
+
+/// A canonical array index (`"0"`, `"7"`, not `"07"`): JavaScript lists those
+/// keys first, in numeric order, whatever order they were added in.
+pub fn array_index(k: &str) -> Option<u32> {
+    if k.is_empty() || (k.len() > 1 && k.starts_with('0')) || !k.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    k.parse::<u32>().ok().filter(|&n| n != u32::MAX)
+}
+
+/// An object's keys in JavaScript's property order, all the way down: what
+/// `JSON.stringify` of the same object built in JavaScript would print.
+pub fn js_order(v: Value) -> Value {
+    match v {
+        Value::Object(m) => {
+            let mut indexed: Vec<(u32, String, Value)> = Vec::new();
+            let mut rest: Vec<(String, Value)> = Vec::new();
+            for (k, v) in m {
+                match array_index(&k) {
+                    Some(n) => indexed.push((n, k, js_order(v))),
+                    None => rest.push((k, js_order(v))),
+                }
+            }
+            indexed.sort_by_key(|(n, _, _)| *n);
+            Value::Object(indexed.into_iter().map(|(_, k, v)| (k, v)).chain(rest).collect())
+        }
+        Value::Array(a) => Value::Array(a.into_iter().map(js_order).collect()),
+        other => other,
+    }
+}
+
+/// `{ ...target, ...source }` onto `target`, for any `source` JSON can hold:
+/// an object's own keys, an array's or a string's indices (a string by UTF-16
+/// unit), and nothing for `null`, numbers and booleans. Keys already present
+/// keep their place and take the new value; the result is in JavaScript's
+/// property order.
+pub fn spread_into(target: &mut serde_json::Map<String, Value>, source: &Value) {
+    match source {
+        Value::Object(m) => {
+            for (k, v) in m {
+                target.insert(k.clone(), v.clone());
+            }
+        }
+        Value::Array(a) => {
+            for (i, v) in a.iter().enumerate() {
+                target.insert(i.to_string(), v.clone());
+            }
+        }
+        Value::String(s) => {
+            for (i, u) in s.encode_utf16().enumerate() {
+                target.insert(i.to_string(), Value::String(String::from_utf16_lossy(&[u])));
+            }
+        }
+        _ => {}
+    }
+    if let Value::Object(m) = js_order(Value::Object(std::mem::take(target))) {
+        *target = m;
+    }
+}
+
 /// A value as a template literal prints it (`${v}`).
 pub fn display(v: &Value) -> String {
     match v {

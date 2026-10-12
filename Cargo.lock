@@ -1324,6 +1324,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nekko-settings"
+version = "0.1.0"
+dependencies = [
+ "getrandom",
+ "nekko-js",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "nekko-store"
 version = "0.1.0"
 dependencies = [
@@ -1416,6 +1426,7 @@ dependencies = [
  "nekko-infer",
  "nekko-js",
  "nekko-loop",
+ "nekko-settings",
  "nekko-store",
  "nekko-term",
  "nekko-tools",

@@ -104,7 +104,8 @@ fn fake_backend() {
                                 spec["queued"] = body.0["args"][1]["queued"].clone();
                                 (axum::http::StatusCode::OK, axum::Json(json!({ "spec": spec })))
                             }
-                            "turn:event" | "turn:end" | "turn:approved" | "turn:usage" | "turn:notify" | "loop:log" | "limits:notify" => {
+                            "turn:event" | "turn:end" | "turn:approved" | "turn:usage" | "turn:notify" | "loop:log" | "limits:notify"
+                            | "settings:changed" => {
                                 recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
                             }
@@ -608,6 +609,43 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     assert!(!sessions.join("s_one.json").exists());
     let (_, callbacks) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
     assert_eq!(callbacks, json!([[new_id], [fresh["id"]], ["s_one"]]));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn settings_are_the_daemons_to_write_when_it_knows_the_data_dir() {
+    let data = std::env::temp_dir().join(format!("nekkod-settings-{}", std::process::id()));
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), r#"{"theme":"dark","maxSteps":3}"#).unwrap();
+    let d = start_with(true, Some(&data));
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("settings:update")));
+    let (status, got) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(got["theme"], "dark");
+    assert!(got.get("maxSteps").is_none());
+    assert!(got["guardrails"].as_array().is_some_and(|g| !g.is_empty()), "merged over the defaults");
+    // The UI's update: written by the daemon and told to the host.
+    let patch = json!({ "voice": { "enabled": true }, "workspaces": [{ "id": "a", "path": "/x" }, { "id": "b", "path": "/x/" }] });
+    let (_, next) = post(d.port, "settings:update", json!([patch]), Some(TOKEN)).await;
+    assert_eq!(next["workspaces"], json!([{ "id": "a", "path": "/x" }]));
+    let on_disk: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert_eq!(on_disk, next);
+    // The host's own write: saved, not echoed back to it.
+    let (_, saved) = post(d.port, "settings:save", json!([{ "theme": "light" }]), Some(TOKEN)).await;
+    assert_eq!((saved["theme"].clone(), saved["voice"].clone()), (json!("light"), json!({ "enabled": true })));
+    let (status, err) = post(d.port, "settings:update", json!([null]), Some(TOKEN)).await;
+    assert_ne!(status, 200, "a missing patch is refused as saveSettings refuses it: {err}");
+    let (_, reset) = post(d.port, "settings:reset", json!([]), Some(TOKEN)).await;
+    assert_eq!(reset["theme"], "system");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let changed: Vec<&Value> = calls.as_array().unwrap().iter().filter(|c| c[0] == "settings:changed").collect();
+    assert_eq!(changed.len(), 2, "the UI's update and reset reach the host, the host's own save does not: {calls}");
+    assert_eq!(changed[0][1], json!([next, patch]));
+    assert_eq!(changed[1][1], json!([reset, null]));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
