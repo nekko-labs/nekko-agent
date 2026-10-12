@@ -124,7 +124,16 @@ function render(page, resolveHref) {
       },
       link({ href, title: t, tokens }) {
         const inner = this.parser.parseInline(tokens);
-        const external = /^https?:\/\//.test(href) && !href.startsWith(ORIGIN);
+        let external = false;
+        if (/^https?:\/\//.test(href)) {
+          try {
+            const originUrl = new URL(ORIGIN);
+            const hrefUrl = new URL(href);
+            external = hrefUrl.protocol !== originUrl.protocol || hrefUrl.host !== originUrl.host;
+          } catch {
+            external = true;
+          }
+        }
         return `<a href="${escapeHtml(href)}"${t ? ` title="${escapeHtml(t)}"` : ''}${external ? ' rel="noopener"' : ''}>${inner}</a>`;
       },
       image({ href, text }) {
