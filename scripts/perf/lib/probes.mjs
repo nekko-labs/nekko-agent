@@ -129,13 +129,16 @@ export const INSTALL = String.raw`(() => {
     let start = null;
     let sawFrame = false;
     let sawHistory = false;
-    const res = {};
+    // Where a slow sample's time went: how long the click waited to be
+    // dispatched, and when each frame after it began (relative to the click).
+    const res = { frames: [] };
     const finish = () => {
       const end = start + Math.max(res.frame ?? 0, res.history ?? 0);
       res.loaf = P.loaf.filter((e) => e.start + e.duration >= start && e.start <= end);
       P.switchResult = res;
     };
-    const loop = () => requestAnimationFrame(() => {
+    const loop = () => requestAnimationFrame((t) => {
+      if (res.frames.length < 12) res.frames.push(Math.round((t - start) * 10) / 10);
       const panel = visiblePanel(title);
       const frameNow = !sawFrame && !!panel;
       const historyNow = !sawHistory && !!panel && newestVisible(panel, marker);
@@ -155,7 +158,7 @@ export const INSTALL = String.raw`(() => {
       if (performance.now() - start > timeoutMs) { res.timeout = true; finish(); return; }
       loop();
     });
-    document.addEventListener('click', (e) => { start = e.timeStamp; loop(); }, { capture: true, once: true });
+    document.addEventListener('click', (e) => { start = e.timeStamp; res.dispatch = Math.round((performance.now() - start) * 10) / 10; loop(); }, { capture: true, once: true });
   };
   /** The window whose title strip reads "title", visible or not. */
   P.panel = (title) => [...document.querySelectorAll('.panel')]
@@ -184,6 +187,13 @@ export const INSTALL = String.raw`(() => {
  * back to back and the next main frame starts as soon as it is asked for, as
  * it does on a fast real display. It only removes the hold; any work the app
  * does still delays the frame that shows the change.
+ *
+ * Frames back to back are not free: on a 4-vCPU runner they keep about 2.4
+ * cores of Chromium's compositor and display busy (as the looping CSS
+ * decorations did before they moved to a clock of their own). So the pump
+ * runs only while a measurement is in flight: `window.__perfPump(true)` a
+ * moment before the input (long enough for any hold to lapse) and
+ * `window.__perfPump(false)` once the sample is in. It is installed paused.
  */
 export const FRAME_PUMP = String.raw`(() => {
   if (document.getElementById('__perf-frame-pump')) return true;
@@ -192,7 +202,9 @@ export const FRAME_PUMP = String.raw`(() => {
   el.setAttribute('aria-hidden', 'true');
   el.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;pointer-events:none;z-index:2147483647;will-change:transform;background:rgba(0,0,0,0.01);contain:strict';
   document.documentElement.appendChild(el);
-  el.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(1px)' }], { duration: 1000, iterations: Infinity, direction: 'alternate' });
+  const a = el.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(1px)' }], { duration: 1000, iterations: Infinity, direction: 'alternate' });
+  a.pause();
+  window.__perfPump = (on) => { if (on) a.play(); else a.pause(); return true; };
   return true;
 })()`;
 

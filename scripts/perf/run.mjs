@@ -31,11 +31,11 @@
  *
  * Latency budgets (keypress, switching) run in a browser with the frame-rate
  * limiter off, so a sample is the app's work rather than the wait for a
- * virtual 60 Hz vsync. That browser also runs a 1 px compositor animation
- * (FRAME_PUMP in lib/probes.mjs): without it, a frame that draws nothing holds
- * the next one to a 60 Hz tick, and the figures depended on whether some
- * decoration happened to be animating. The report prints the resulting frame
- * wake; --no-frame-pump turns the pump off. Frame work while streaming runs in a second, ordinary
+ * virtual 60 Hz vsync. While a sample is in flight that browser also runs a
+ * 1 px compositor animation (FRAME_PUMP in lib/probes.mjs): without it, a
+ * frame that draws nothing holds the next one to a 60 Hz tick, and the figures
+ * depended on whether some decoration happened to be animating. The report
+ * prints the resulting frame wake; --no-frame-pump turns the pump off. Frame work while streaming runs in a second, ordinary
  * vsync-paced browser: with the limiter off, CSS animations alone would fill
  * every idle moment with frames and the per-frame figure would stop meaning
  * anything.
@@ -189,7 +189,18 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
   await cdp.evaluate(INSTALL);
   // Latency browsers keep their frames flowing (see FRAME_PUMP), unless
   // --no-frame-pump asks for the old behaviour (to show what it changes).
-  if (pump && !flag('no-frame-pump')) await cdp.evaluate(FRAME_PUMP);
+  const pumping = pump && !flag('no-frame-pump');
+  if (pumping) await cdp.evaluate(FRAME_PUMP);
+  /**
+   * Frames flowing for the measurement about to start (on), or not (off).
+   * Turned on 25 ms ahead of the input: a hold still running then (at most
+   * one 16.7 ms interval) has lapsed by the time the input arrives.
+   */
+  const framePump = async (on) => {
+    if (!pumping) return;
+    await cdp.evaluate(`window.__perfPump(${on})`);
+    if (on) await sleep(25);
+  };
   // --extra-css: measure the app with a stylesheet on top, e.g. a candidate
   // change or a known regression the gates should catch.
   if (opt('extra-css')) await cdp.call((css) => document.head.appendChild(Object.assign(document.createElement('style'), { textContent: css })) && true, readFileSync(opt('extra-css'), 'utf8'));
@@ -261,12 +272,14 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
     await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     at = await cdp.call(locate, 'div[role="button"]', title);
     if (!at) throw new Error('sidebar card disappeared before measured switch: ' + title);
+    await framePump(true);
     await clickAt(at);
     let res = null;
     for (let k = 0; k < 800 && !res; k++) {
       res = await cdp.evaluate('window.__perf.switchResult');
       if (!res) await sleep(25);
     }
+    await framePump(false);
     if (!res || res.timeout) {
       const seen = await cdp.call((marker) => [...document.querySelectorAll('.panel')].map((p) => ({
         title: p.firstElementChild?.querySelector('span.truncate')?.textContent,
@@ -334,7 +347,7 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
     if (!(b > a)) throw new Error(`the reply is not streaming onto the screen (${a} -> ${b} chars)`);
   };
 
-  return { cdp, browser, close, waitFor, clickEl, openChat, switchTo, startStream };
+  return { cdp, browser, close, waitFor, clickEl, openChat, switchTo, startStream, framePump };
 }
 
 /**
@@ -352,7 +365,9 @@ async function measureLatency({ appUrl, mock, api, bigChat }) {
   // How long a frame asked for right after an empty one takes to start: a few
   // tenths of a ms when the latency figures measure the app, ~15 when they
   // would measure a 60 Hz idle wake instead (see FRAME_PUMP).
+  await app.framePump(true);
   const wake = summarize(await app.cdp.call(frameWake, 30));
+  await app.framePump(false);
   log(`frame wake p50 ${wake.p50} ms, p95 ${wake.p95} ms${flag('no-frame-pump') ? ' (--no-frame-pump)' : ''}`);
 
   // Warm: back and forth between two chats seen a moment ago.
@@ -365,7 +380,7 @@ async function measureLatency({ appUrl, mock, api, bigChat }) {
   // Switches slower than this keep the long animation frames that overlapped
   // them, so the report says where an outlier's time went.
   const slow = [];
-  const noteSlow = (kind, r, ms) => { if (ms >= 50) slow.push({ kind, ms: Math.round(ms), loaf: r.loaf }); };
+  const noteSlow = (kind, r, ms) => { if (ms >= 50) slow.push({ kind, ms: Math.round(ms), loaf: r.loaf, dispatch: r.dispatch, frames: r.frames }); };
   for (let k = 0; k < CFG.warmSwitches; k++) {
     const r = await app.switchTo(k % 2 === 0 ? 1 : 0);
     warm.push(r.history);
@@ -402,6 +417,8 @@ async function measureLatency({ appUrl, mock, api, bigChat }) {
   await app.cdp.evaluate('window.__perf.keys.length = 0; window.__perf.recordEvents = true;');
   const typingTimeline = flag('profile') || flag('timeline') ? await startTimeline(app.cdp) : null;
   if (flag('profile')) await startProfile(app.cdp);
+  // Keys arrive every 45 ms, so the pump stays on for the whole run of them.
+  await app.framePump(true);
   const text = 'the quick brown fox jumps over the lazy dog ';
   for (let k = 0; k < CFG.keySamples; k++) {
     const ch = text[k % text.length];
@@ -411,6 +428,7 @@ async function measureLatency({ appUrl, mock, api, bigChat }) {
     await app.cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch, code, windowsVirtualKeyCode: vk });
     await sleep(CFG.keyGapMs);
   }
+  await app.framePump(false);
   if (flag('profile')) await stopProfile(app.cdp, OUT, 'typing');
   if (typingTimeline) await typingTimeline(OUT, 'typing');
   await sleep(300);
@@ -445,6 +463,7 @@ async function measureTerminal(app) {
   await sleep(2500);
   await app.cdp.evaluate(`document.querySelector('.xterm-helper-textarea').focus(); window.__perf.term.length = 0; window.__perf.termEcho.length = 0; 1`);
   const letters = 'abcdefghijklmnopqrstuvwxyz';
+  await app.framePump(true);
   for (let k = 0; k < CFG.termSamples; k++) {
     const ch = letters[k % letters.length];
     await app.cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: ch, code: `Key${ch.toUpperCase()}`, text: ch, unmodifiedText: ch, windowsVirtualKeyCode: ch.toUpperCase().charCodeAt(0) });
@@ -459,6 +478,7 @@ async function measureTerminal(app) {
     }
   }
   await sleep(400);
+  await app.framePump(false);
   return { samples: await app.cdp.evaluate('window.__perf.term.slice()'), echo: await app.cdp.evaluate('window.__perf.termEcho.slice()') };
 }
 
@@ -815,7 +835,7 @@ function markdown(report) {
       ? [`- Measured ${report.attempts} times; each row shows its best attempt. p95 per attempt: ${report.budgets.filter((b) => b.attempts).map((b) => `${b.id} ${b.attempts.map((v) => (v == null ? '-' : v.toFixed(1))).join(' / ')}`).join('; ')}`]
       : []),
     `- Event Timing entries of 16 ms or more while typing: ${report.eventTiming.count} (max ${report.eventTiming.max.toFixed(0)} ms)`,
-    ...report.slowSwitches.map((x) => `- Slow ${x.kind} switch, ${x.ms} ms: ${x.loaf?.length ? x.loaf.map((f) => `long frame ${Math.round(f.duration)} ms (style+layout ${Math.round(f.styleLayout)} ms) ${f.scripts.map((sc) => `${sc.invoker} ${sc.source} ${sc.duration} ms`).join(', ') || 'no script attribution'}`).join('; ') : 'no long animation frame overlapped it (time spent off the main thread or between frames)'}`),
+    ...report.slowSwitches.map((x) => `- Slow ${x.kind} switch, ${x.ms} ms (click dispatched after ${x.dispatch ?? '-'} ms; frames began at ${(x.frames ?? []).join(', ')} ms): ${x.loaf?.length ? x.loaf.map((f) => `long frame ${Math.round(f.duration)} ms (style+layout ${Math.round(f.styleLayout)} ms) ${f.scripts.map((sc) => `${sc.invoker} ${sc.source} ${sc.duration} ms`).join(', ') || 'no script attribution'}`).join('; ') : 'no long animation frame overlapped it (time spent off the main thread or between frames)'}`),
     ...(report.frameWake
       ? [`- Latency browser frame wake (a frame asked for 2 ms after an empty one): p50 ${report.frameWake.p50} ms, p95 ${report.frameWake.p95} ms${report.frameWake.pump ? '' : ' (--no-frame-pump: latency figures include the 60 Hz idle wake)'}`]
       : []),

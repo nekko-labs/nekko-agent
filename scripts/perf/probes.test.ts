@@ -29,14 +29,18 @@ it('installs one frame pump, outside the app, animating on the compositor only',
     getElementById: (id: string) => made.find((e) => e.id === id) ?? null,
     createElement: () => {
       const el: any = { style: {}, attrs: {} as Record<string, string>, setAttribute(k: string, v: string) { this.attrs[k] = v; } };
-      el.animate = (frames: Record<string, string>[], opts: { iterations: number }) => { el.frames = frames; el.opts = opts; };
+      el.animate = (frames: Record<string, string>[], opts: { iterations: number }) => {
+        el.frames = frames; el.opts = opts;
+        return el.anim = { playing: true, play() { this.playing = true; }, pause() { this.playing = false; } };
+      };
       return el;
     },
     documentElement: { appendChild: (el: any) => made.push(el) },
   };
-  const install = new Function('document', `return ${FRAME_PUMP}`);
-  expect(install(document)).toBe(true);
-  expect(install(document)).toBe(true);
+  const window: any = {};
+  const install = new Function('document', 'window', `return ${FRAME_PUMP}`);
+  expect(install(document, window)).toBe(true);
+  expect(install(document, window)).toBe(true);
   expect(made).toHaveLength(1);
   const [pump] = made;
   expect(pump.style.cssText).toContain('pointer-events:none');
@@ -44,4 +48,10 @@ it('installs one frame pump, outside the app, animating on the compositor only',
   // Transform only: the compositor runs it, the main thread does no work per frame.
   expect(pump.frames.every((f: Record<string, string>) => Object.keys(f).join() === 'transform')).toBe(true);
   expect(pump.opts.iterations).toBe(Infinity);
+  // Installed paused; the harness runs it only while a sample is in flight.
+  expect(pump.anim.playing).toBe(false);
+  window.__perfPump(true);
+  expect(pump.anim.playing).toBe(true);
+  window.__perfPump(false);
+  expect(pump.anim.playing).toBe(false);
 });
