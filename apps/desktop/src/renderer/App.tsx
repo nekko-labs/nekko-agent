@@ -10,7 +10,6 @@ import { SHORTCUTS } from './shortcuts.js';
 import { hasAppChrome } from './chrome.js';
 import { TitleBar } from './components/TitleBar.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
-import { ServiceLoadState } from './components/ServiceLoadState.js';
 import { BrandMark } from './components/BrandMark.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { syncAppActivity } from './appActivity.js';
@@ -69,14 +68,13 @@ const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string 
 const MOBILE_NAV: View[] = ['command', 'chat', 'training', 'workflows', 'settings'];
 
 export function App() {
-  const { view, setView, mascotMood, settings, settingsLoaded, settingsError, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
+  const { view, setView, mascotMood, settings, settingsLoaded, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
     useShallow((s) => ({
       view: s.view,
       setView: s.setView,
       mascotMood: s.mascotMood,
       settings: s.settings,
       settingsLoaded: s.settingsLoaded,
-      settingsError: s.settingsError,
       providers: s.providers,
       onboardingOpen: s.onboardingOpen,
       refreshSettings: s.refreshSettings,
@@ -291,7 +289,6 @@ export function App() {
             </button>
           )}
           <ErrorBoundary key={view} label={t(`nav.${view}`)}>
-          {!settings && settingsError ? <ServiceLoadState label="settings" error={settingsError} retry={refreshSettings} /> : <>
           {view === 'command' && <CommandCenterView />}
           {view === 'chat' && <WorkspacesView />}
           {view === 'skills' && <SkillsView />}
@@ -303,7 +300,6 @@ export function App() {
           {view === 'connectors' && <ConnectorsView />}
           {view === 'memory' && <MemoryView />}
           {view === 'settings' && <SettingsView />}
-          </>}
           </ErrorBoundary>
         </main>
 

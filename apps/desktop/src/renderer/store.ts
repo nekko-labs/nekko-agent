@@ -623,7 +623,9 @@ export const useStore = create<UiState>((set, get) => ({
     } catch (e) {
       // Never leave the app on the loading gate: if settings can't be read,
       // unblock the UI and let surfaces fall back to their empty states.
-      set({ settingsLoaded: true, settingsError: e instanceof Error ? e.message : 'Nekko service is unavailable.' });
+      const settingsError = e instanceof Error ? e.message : 'Nekko service is unavailable.';
+      set({ settingsLoaded: true, settingsError });
+      get().pushToast('error', `Could not load settings: ${settingsError}`);
       get().applyTheme();
     }
   },
