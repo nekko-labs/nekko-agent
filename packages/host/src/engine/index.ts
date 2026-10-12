@@ -99,6 +99,9 @@ export function createEngine(deps: EngineDeps) {
     getGpuStats: deps.getGpuStats,
     getGpuAdapters: deps.getGpuAdapters,
     externalPath: deps.externalBinPath,
+    // A (re)install swaps the files under a running llama-server, which Windows
+    // refuses; stop it just before, once the new build is already downloaded.
+    beforeReplace: async () => { if (server.isRunning()) await server.stop(); },
   });
 
   // Lets the GPU probe fall back to this engine's own device list. Only the

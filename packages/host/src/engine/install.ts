@@ -3,7 +3,7 @@ import { execFile } from 'child_process';
 import { createHash } from 'crypto';
 import { createReadStream } from 'fs';
 import { chmod, mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises';
-import { join, relative, isAbsolute } from 'path';
+import { dirname, join, relative, isAbsolute } from 'path';
 import type { EngineBuild, EngineInstall, EnginePlatform, GpuStats } from '@nekko-agent/shared';
 import { buildsFor, hasBinaries, matchAsset, matchCompanion, recommendedBuild } from './builds.js';
 import { diffusionBuilds, matchDiffusionAsset, matchDiffusionCompanion } from './diffusion.js';
@@ -56,6 +56,13 @@ export interface EngineInstallerDeps {
   run?: (cmd: string, args: string[], timeoutMs?: number) => Promise<string | null>;
   /** A path the user chose by hand, checked before anything is downloaded. */
   externalPath?: () => string | undefined;
+  /**
+   * Called once a new build has downloaded, just before the old one's files are
+   * replaced. Windows will not delete a running `llama-server.exe` or the DLLs
+   * it has loaded, so the host stops its server here, and not earlier: the old
+   * engine keeps serving for the whole download.
+   */
+  beforeReplace?: () => Promise<void>;
 }
 
 export function createEngineInstaller(deps: EngineInstallerDeps) {
@@ -95,12 +102,14 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
 
     const record = await readRecord();
     if (record && (await isExecutable(record.binPath))) {
+      const problem = await missingGpuRuntime(record);
       return {
         binPath: record.binPath,
         source: 'managed',
         backend: record.backend,
         version: record.version,
         installedAt: record.installedAt,
+        ...(problem ? { problem } : {}),
         available,
         recommended,
       };
@@ -174,6 +183,14 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
         // file consumed before the transfer has renamed it fails the rename.
         try {
           signal.throwIfAborted();
+          // A reinstall unpacks into a clean folder, cleared only now that the
+          // new archive is safely here, so a failed download still leaves the
+          // old engine usable. Unpacking over the old files kept whatever the
+          // last install left, such as the Linux runtime a broken CUDA install
+          // got by mistake. A file Windows still has locked is left to be
+          // overwritten rather than failing the install.
+          await deps.beforeReplace?.();
+          await clearExcept(dir, path);
           await extract(path, dir, run);
           if (companion) {
             // CUDA's runtime libraries ship separately and the server will not
@@ -215,6 +232,27 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
     await rm(join(deps.engineDir(), record.buildId), { recursive: true, force: true });
     await rm(join(deps.engineDir(), RECORD_FILE), { force: true });
     return { ok: true, message: 'Removed the engine.' };
+  }
+
+  /**
+   * A managed Windows CUDA build without the CUDA runtime beside it.
+   *
+   * `ggml-cuda.dll` needs `cublas64_NN.dll`, and without it llama.cpp quietly
+   * drops the CUDA backend: the server starts, `/health` is fine, and every
+   * model runs on the CPU at a small fraction of the speed. Older installs got
+   * the Linux runtime instead of the Windows one, so this is checked on the
+   * files rather than trusted from the record. A file check, not a process
+   * launch, because `detect` runs on every status poll.
+   */
+  async function missingGpuRuntime(record: EngineRecord): Promise<EngineInstall['problem']> {
+    if (runtime !== 'llama' || platform !== 'win32' || record.backend !== 'cuda') return undefined;
+    const names = await readdir(dirname(record.binPath)).catch(() => null);
+    if (!names || names.some((n) => /^cublas64_\d+\.dll$/i.test(n))) return undefined;
+    return {
+      message:
+        'The NVIDIA engine is missing its GPU libraries, so models are running on the processor and replies will be very slow or never arrive. Repair it to use your graphics card.',
+      repairBuildId: record.buildId,
+    };
   }
 
   async function readRecord(): Promise<EngineRecord | null> {
@@ -358,6 +396,17 @@ async function extract(
     }
   }
   throw new Error('no archive tool available (tried tar, unzip, PowerShell)');
+}
+
+/** Empty a build folder of everything but the archive about to be unpacked into it. */
+async function clearExcept(dir: string, keep: string): Promise<void> {
+  const entries = await readdir(dir).catch(() => [] as string[]);
+  await Promise.all(
+    entries
+      .map((name) => join(dir, name))
+      .filter((path) => path !== keep)
+      .map((path) => rm(path, { recursive: true, force: true }).catch(() => {})),
+  );
 }
 
 /** A plain fetch-to-file, for the companion archive that has no job of its own. */

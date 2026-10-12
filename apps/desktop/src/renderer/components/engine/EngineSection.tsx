@@ -51,6 +51,7 @@ export function EngineSection({
   const [tab, setTab] = useState<Tab>('models');
   const [busy, setBusy] = useState<'starting' | 'stopping' | null>(null);
   const [showLog, setShowLog] = useState(false);
+  const [repairing, setRepairing] = useState(false);
 
   const refresh = useCallback(async () => {
     const [s, m, d] = await Promise.all([
@@ -95,6 +96,20 @@ export function EngineSection({
   const active = groupDownloads(jobs).filter((g) => isActive(g.state));
   const residentBytes = status.resident.reduce((n, r) => n + (r.vramBytes ?? 0), 0);
   const borrowed = models.filter((m) => m.managed === false).length;
+
+  // One click puts a broken engine right: the same build, downloaded again into
+  // a clean folder. The server is stopped by the host just before the swap.
+  const repair = async () => {
+    if (!install.problem) return;
+    setRepairing(true);
+    const res = await window.nekko
+      .engineInstall(install.problem.repairBuildId)
+      .catch((e: Error) => ({ ok: false, message: e.message }));
+    setRepairing(false);
+    pushToast(res.ok ? 'info' : 'error', res.ok ? 'Repairing the engine. Models will use your graphics card once it finishes.' : res.message);
+    if (res.ok) setTab('downloads');
+    await refresh();
+  };
 
   const toggle = async () => {
     setBusy(running ? 'stopping' : 'starting');
@@ -183,6 +198,23 @@ export function EngineSection({
                 {running && <AddressPill address={address} />}
               </div>
             </div>
+
+            {install.problem && (
+              <div
+                role="alert"
+                className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3"
+                style={{ borderColor: 'var(--warning, #d1a054)' }}
+              >
+                <p className="min-w-0 flex-1 text-[12.5px]">{install.problem.message}</p>
+                <button
+                  className="btn btn-primary py-1.5 text-[12px]"
+                  onClick={() => void repair()}
+                  disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
+                >
+                  {repairing ? 'Starting…' : 'Repair engine'}
+                </button>
+              </div>
+            )}
 
             {status.settings.bind === 'lan' && running && (
               <p className="mt-2 text-[11.5px]" style={{ color: 'var(--warning, #d1a054)' }}>
