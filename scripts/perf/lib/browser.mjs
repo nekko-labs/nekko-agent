@@ -139,7 +139,7 @@ async function launchOnce(bin, { port, width, height, vsync, gpu }) {
   // CI containers run as root without the user namespaces the sandbox needs.
   // /dev/shm on a container runner is small enough to crash Chrome's renderer.
   if (process.platform === 'linux') args.unshift('--no-sandbox', '--disable-dev-shm-usage');
-  const proc = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'], detached: process.platform !== 'win32' });
+  const proc = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
   const close = async () => {
     killTree(proc);
     // The profile stays locked until every child has exited.
