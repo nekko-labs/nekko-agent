@@ -1,0 +1,790 @@
+{
+ "start": 1760000000000,
+ "ops": [
+  {
+   "op": "status",
+   "args": [],
+   "now": 1760000000000,
+   "result": {
+    "enabled": false,
+    "devices": []
+   },
+   "file": null,
+   "kicked": []
+  },
+  {
+   "op": "devices",
+   "args": [],
+   "now": 1760000000000,
+   "result": [],
+   "file": null,
+   "kicked": []
+  },
+  {
+   "op": "pairing",
+   "args": [],
+   "now": 1760000000000,
+   "result": null,
+   "file": null,
+   "kicked": []
+  },
+  {
+   "op": "enable",
+   "args": [
+    "wss://relay.example/"
+   ],
+   "now": 1760000000000,
+   "result": {
+    "enabled": true,
+    "relayUrl": "wss://relay.example/",
+    "room": "030a11181f262d34",
+    "hasKey": true,
+    "devices": [],
+    "connected": [],
+    "online": false
+   },
+   "file": "{\n  \"enabled\": true,\n  \"devices\": [],\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\"\n}",
+   "kicked": []
+  },
+  {
+   "op": "pairing",
+   "args": [],
+   "now": 1760000000000,
+   "result": {
+    "relayUrl": "wss://relay.example/",
+    "room": "030a11181f262d34",
+    "key": "222930373e454c535a61686f767d848b"
+   },
+   "file": "{\n  \"enabled\": true,\n  \"devices\": [],\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\"\n}",
+   "kicked": []
+  },
+  {
+   "op": "hello",
+   "args": [
+    {
+     "type": "hello",
+     "deviceId": "phone-1",
+     "name": "Pixel 9",
+     "platform": "android"
+    }
+   ],
+   "now": 1760000000000,
+   "result": {
+    "type": "denied",
+    "reason": "unknown-device"
+   },
+   "file": "{\n  \"enabled\": true,\n  \"devices\": [],\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\"\n}",
+   "kicked": []
+  },
+  {
+   "op": "pair",
+   "args": [],
+   "now": 1760000000000,
+   "result": {
+    "code": "DMU3AHRY",
+    "expiresAt": 1760000600000
+   },
+   "file": "{\n  \"enabled\": true,\n  \"devices\": [],\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\"\n}",
+   "kicked": []
+  },
+  {
+   "op": "hello",
+   "args": [
+    {
+     "type": "hello",
+     "deviceId": "phone-1",
+     "name": "Pixel 9",
+     "platform": "android",
+     "pair": "WRONG"
+    }
+   ],
+   "now": 1760000000000,
+   "result": {
+    "type": "denied",
+    "reason": "bad-code"
+   },
+   "file": "{\n  \"enabled\": true,\n  \"devices\": [],\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\"\n}",
+   "kicked": []
+  },
+  {
+   "op": "hello",
+   "args": [
+    {
+     "type": "hello",
+     "deviceId": "phone-1",
+     "name": "  Pixel 9  ",
+     "platform": "android",
+     "pair": "DMU3AHRY"
+    }
+   ],
+   "now": 1760000000000,
+   "result": {
+    "type": "welcome",
+    "device": {
+     "id": "phone-1",
+     "name": "Pixel 9",
+     "platform": "android",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000000000
+    }
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Pixel 9\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000000000\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "hello",
+   "args": [
+    {
+     "type": "hello",
+     "deviceId": "phone-2",
+     "pair": "DMU3AHRY"
+    }
+   ],
+   "now": 1760000000000,
+   "result": {
+    "type": "denied",
+    "reason": "bad-code"
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Pixel 9\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000000000\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "pair",
+   "args": [],
+   "now": 1760000000000,
+   "result": {
+    "code": "DMU3AHRY",
+    "expiresAt": 1760000600000
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Pixel 9\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000000000\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "hello",
+   "args": [
+    {
+     "type": "hello",
+     "deviceId": "phone-2",
+     "platform": "ios",
+     "pair": "DMU3AHRY"
+    }
+   ],
+   "now": 1760000060000,
+   "result": {
+    "type": "welcome",
+    "device": {
+     "id": "phone-2",
+     "name": "iPhone",
+     "platform": "ios",
+     "createdAt": 1760000060000,
+     "lastSeenAt": 1760000060000
+    }
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Pixel 9\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000000000\n    },\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"iPhone\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "hello",
+   "args": [
+    {
+     "type": "hello",
+     "deviceId": "phone-1"
+    }
+   ],
+   "now": 1760000120000,
+   "result": {
+    "type": "welcome",
+    "device": {
+     "id": "phone-1",
+     "name": "Pixel 9",
+     "platform": "android",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000120000
+    }
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"iPhone\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Pixel 9\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "rename",
+   "args": [
+    "phone-1",
+    "  Work phone  "
+   ],
+   "now": 1760000120000,
+   "result": [
+    {
+     "id": "phone-2",
+     "name": "iPhone",
+     "platform": "ios",
+     "createdAt": 1760000060000,
+     "lastSeenAt": 1760000060000
+    },
+    {
+     "id": "phone-1",
+     "name": "Work phone",
+     "platform": "android",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000120000
+    }
+   ],
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"iPhone\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "rename",
+   "args": [
+    "phone-1",
+    "   "
+   ],
+   "now": 1760000120000,
+   "result": [
+    {
+     "id": "phone-2",
+     "name": "iPhone",
+     "platform": "ios",
+     "createdAt": 1760000060000,
+     "lastSeenAt": 1760000060000
+    },
+    {
+     "id": "phone-1",
+     "name": "Work phone",
+     "platform": "android",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000120000
+    }
+   ],
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"iPhone\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "rename",
+   "args": [
+    "phone-2",
+    "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+   ],
+   "now": 1760000120000,
+   "result": [
+    {
+     "id": "phone-2",
+     "name": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+     "platform": "ios",
+     "createdAt": 1760000060000,
+     "lastSeenAt": 1760000060000
+    },
+    {
+     "id": "phone-1",
+     "name": "Work phone",
+     "platform": "android",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000120000
+    }
+   ],
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "rename",
+   "args": [
+    "nobody",
+    "Ghost"
+   ],
+   "now": 1760000120000,
+   "result": [
+    {
+     "id": "phone-2",
+     "name": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+     "platform": "ios",
+     "createdAt": 1760000060000,
+     "lastSeenAt": 1760000060000
+    },
+    {
+     "id": "phone-1",
+     "name": "Work phone",
+     "platform": "android",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000120000
+    }
+   ],
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "pair",
+   "args": [],
+   "now": 1760000120000,
+   "result": {
+    "code": "DMU3AHRY",
+    "expiresAt": 1760000720000
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "hello",
+   "args": [
+    {
+     "type": "hello",
+     "deviceId": "phone-3",
+     "pair": "DMU3AHRY"
+    }
+   ],
+   "now": 1760000600001,
+   "result": {
+    "type": "welcome",
+    "device": {
+     "id": "phone-3",
+     "name": "Device",
+     "platform": "unknown",
+     "createdAt": 1760000600001,
+     "lastSeenAt": 1760000600001
+    }
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    },\n    {\n      \"id\": \"phone-3\",\n      \"name\": \"Device\",\n      \"platform\": \"unknown\",\n      \"createdAt\": 1760000600001,\n      \"lastSeenAt\": 1760000600001\n    }\n  ]\n}",
+   "kicked": []
+  },
+  {
+   "op": "revoke",
+   "args": [
+    "phone-2"
+   ],
+   "now": 1760000600001,
+   "result": [
+    {
+     "id": "phone-2",
+     "name": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+     "platform": "ios",
+     "createdAt": 1760000060000,
+     "lastSeenAt": 1760000060000,
+     "revoked": true
+    },
+    {
+     "id": "phone-1",
+     "name": "Work phone",
+     "platform": "android",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000120000
+    },
+    {
+     "id": "phone-3",
+     "name": "Device",
+     "platform": "unknown",
+     "createdAt": 1760000600001,
+     "lastSeenAt": 1760000600001
+    }
+   ],
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000,\n      \"revoked\": true\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    },\n    {\n      \"id\": \"phone-3\",\n      \"name\": \"Device\",\n      \"platform\": \"unknown\",\n      \"createdAt\": 1760000600001,\n      \"lastSeenAt\": 1760000600001\n    }\n  ]\n}",
+   "kicked": [
+    "phone-2"
+   ]
+  },
+  {
+   "op": "hello",
+   "args": [
+    {
+     "type": "hello",
+     "deviceId": "phone-2"
+    }
+   ],
+   "now": 1760000600001,
+   "result": {
+    "type": "denied",
+    "reason": "revoked"
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000,\n      \"revoked\": true\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    },\n    {\n      \"id\": \"phone-3\",\n      \"name\": \"Device\",\n      \"platform\": \"unknown\",\n      \"createdAt\": 1760000600001,\n      \"lastSeenAt\": 1760000600001\n    }\n  ]\n}",
+   "kicked": [
+    "phone-2"
+   ]
+  },
+  {
+   "op": "revoke",
+   "args": [
+    "nobody"
+   ],
+   "now": 1760000600001,
+   "result": [
+    {
+     "id": "phone-2",
+     "name": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+     "platform": "ios",
+     "createdAt": 1760000060000,
+     "lastSeenAt": 1760000060000,
+     "revoked": true
+    },
+    {
+     "id": "phone-1",
+     "name": "Work phone",
+     "platform": "android",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000120000
+    },
+    {
+     "id": "phone-3",
+     "name": "Device",
+     "platform": "unknown",
+     "createdAt": 1760000600001,
+     "lastSeenAt": 1760000600001
+    }
+   ],
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000,\n      \"revoked\": true\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    },\n    {\n      \"id\": \"phone-3\",\n      \"name\": \"Device\",\n      \"platform\": \"unknown\",\n      \"createdAt\": 1760000600001,\n      \"lastSeenAt\": 1760000600001\n    }\n  ]\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "status",
+   "args": [],
+   "now": 1760000600001,
+   "result": {
+    "enabled": true,
+    "relayUrl": "wss://relay.example/",
+    "room": "030a11181f262d34",
+    "hasKey": true,
+    "devices": [
+     {
+      "id": "phone-2",
+      "name": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+      "platform": "ios",
+      "createdAt": 1760000060000,
+      "lastSeenAt": 1760000060000,
+      "revoked": true
+     },
+     {
+      "id": "phone-1",
+      "name": "Work phone",
+      "platform": "android",
+      "createdAt": 1760000000000,
+      "lastSeenAt": 1760000120000
+     },
+     {
+      "id": "phone-3",
+      "name": "Device",
+      "platform": "unknown",
+      "createdAt": 1760000600001,
+      "lastSeenAt": 1760000600001
+     }
+    ],
+    "connected": [],
+    "online": false
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000,\n      \"revoked\": true\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    },\n    {\n      \"id\": \"phone-3\",\n      \"name\": \"Device\",\n      \"platform\": \"unknown\",\n      \"createdAt\": 1760000600001,\n      \"lastSeenAt\": 1760000600001\n    }\n  ]\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "disable",
+   "args": [],
+   "now": 1760000600001,
+   "result": {
+    "enabled": false,
+    "devices": [
+     {
+      "id": "phone-2",
+      "name": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+      "platform": "ios",
+      "createdAt": 1760000060000,
+      "lastSeenAt": 1760000060000,
+      "revoked": true
+     },
+     {
+      "id": "phone-1",
+      "name": "Work phone",
+      "platform": "android",
+      "createdAt": 1760000000000,
+      "lastSeenAt": 1760000120000
+     },
+     {
+      "id": "phone-3",
+      "name": "Device",
+      "platform": "unknown",
+      "createdAt": 1760000600001,
+      "lastSeenAt": 1760000600001
+     }
+    ]
+   },
+   "file": "{\n  \"enabled\": false,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000,\n      \"revoked\": true\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    },\n    {\n      \"id\": \"phone-3\",\n      \"name\": \"Device\",\n      \"platform\": \"unknown\",\n      \"createdAt\": 1760000600001,\n      \"lastSeenAt\": 1760000600001\n    }\n  ]\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "pairing",
+   "args": [],
+   "now": 1760000600001,
+   "result": null,
+   "file": "{\n  \"enabled\": false,\n  \"relayUrl\": \"wss://relay.example/\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000,\n      \"revoked\": true\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    },\n    {\n      \"id\": \"phone-3\",\n      \"name\": \"Device\",\n      \"platform\": \"unknown\",\n      \"createdAt\": 1760000600001,\n      \"lastSeenAt\": 1760000600001\n    }\n  ]\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "enable",
+   "args": [
+    "ws://127.0.0.1:4400"
+   ],
+   "now": 1760000600001,
+   "result": {
+    "enabled": true,
+    "relayUrl": "ws://127.0.0.1:4400",
+    "room": "030a11181f262d34",
+    "hasKey": true,
+    "devices": [
+     {
+      "id": "phone-2",
+      "name": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+      "platform": "ios",
+      "createdAt": 1760000060000,
+      "lastSeenAt": 1760000060000,
+      "revoked": true
+     },
+     {
+      "id": "phone-1",
+      "name": "Work phone",
+      "platform": "android",
+      "createdAt": 1760000000000,
+      "lastSeenAt": 1760000120000
+     },
+     {
+      "id": "phone-3",
+      "name": "Device",
+      "platform": "unknown",
+      "createdAt": 1760000600001,
+      "lastSeenAt": 1760000600001
+     }
+    ],
+    "connected": [],
+    "online": false
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"ws://127.0.0.1:4400\",\n  \"room\": \"030a11181f262d34\",\n  \"secret\": \"222930373e454c535a61686f767d848b\",\n  \"devices\": [\n    {\n      \"id\": \"phone-2\",\n      \"name\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1760000060000,\n      \"lastSeenAt\": 1760000060000,\n      \"revoked\": true\n    },\n    {\n      \"id\": \"phone-1\",\n      \"name\": \"Work phone\",\n      \"platform\": \"android\",\n      \"createdAt\": 1760000000000,\n      \"lastSeenAt\": 1760000120000\n    },\n    {\n      \"id\": \"phone-3\",\n      \"name\": \"Device\",\n      \"platform\": \"unknown\",\n      \"createdAt\": 1760000600001,\n      \"lastSeenAt\": 1760000600001\n    }\n  ]\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "rotate",
+   "args": [],
+   "now": 1760000600001,
+   "result": {
+    "enabled": true,
+    "relayUrl": "ws://127.0.0.1:4400",
+    "room": "9ea5acb3bac1c8cf",
+    "hasKey": true,
+    "devices": [],
+    "connected": [],
+    "online": false
+   },
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"ws://127.0.0.1:4400\",\n  \"room\": \"9ea5acb3bac1c8cf\",\n  \"secret\": \"bdc4cbd2d9e0e7eef5fc030a11181f26\",\n  \"devices\": []\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "devices",
+   "args": [],
+   "now": 1760000600001,
+   "result": [],
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"ws://127.0.0.1:4400\",\n  \"room\": \"9ea5acb3bac1c8cf\",\n  \"secret\": \"bdc4cbd2d9e0e7eef5fc030a11181f26\",\n  \"devices\": []\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "disable",
+   "args": [],
+   "now": 1760000600001,
+   "result": {
+    "enabled": false,
+    "devices": []
+   },
+   "file": "{\n  \"enabled\": false,\n  \"relayUrl\": \"ws://127.0.0.1:4400\",\n  \"room\": \"9ea5acb3bac1c8cf\",\n  \"secret\": \"bdc4cbd2d9e0e7eef5fc030a11181f26\",\n  \"devices\": []\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "rotate",
+   "args": [],
+   "now": 1760000600001,
+   "result": {
+    "enabled": false,
+    "devices": []
+   },
+   "file": "{\n  \"enabled\": false,\n  \"relayUrl\": \"ws://127.0.0.1:4400\",\n  \"room\": \"dce3eaf1f8ff060d\",\n  \"secret\": \"fb020910171e252c333a41484f565d64\",\n  \"devices\": []\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "file",
+   "args": [],
+   "now": 1760000600001,
+   "result": null,
+   "file": "{\"enabled\":true,\"devices\":[{\"id\":\"d\",\"name\":\"n\",\"platform\":\"ios\",\"createdAt\":1,\"lastSeenAt\":2,\"extra\":[1]}],\"relayUrl\":\"ws://x\",\"unknown\":5,\"room\":\"r\",\"secret\":\"s\"}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "status",
+   "args": [],
+   "now": 1760000600001,
+   "result": {
+    "enabled": true,
+    "relayUrl": "ws://x",
+    "room": "r",
+    "hasKey": true,
+    "devices": [
+     {
+      "id": "d",
+      "name": "n",
+      "platform": "ios",
+      "createdAt": 1,
+      "lastSeenAt": 2,
+      "extra": [
+       1
+      ]
+     }
+    ],
+    "connected": [],
+    "online": false
+   },
+   "file": "{\"enabled\":true,\"devices\":[{\"id\":\"d\",\"name\":\"n\",\"platform\":\"ios\",\"createdAt\":1,\"lastSeenAt\":2,\"extra\":[1]}],\"relayUrl\":\"ws://x\",\"unknown\":5,\"room\":\"r\",\"secret\":\"s\"}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "rename",
+   "args": [
+    "d",
+    "New"
+   ],
+   "now": 1760000600001,
+   "result": [
+    {
+     "id": "d",
+     "name": "New",
+     "platform": "ios",
+     "createdAt": 1,
+     "lastSeenAt": 2,
+     "extra": [
+      1
+     ]
+    }
+   ],
+   "file": "{\n  \"enabled\": true,\n  \"relayUrl\": \"ws://x\",\n  \"room\": \"r\",\n  \"secret\": \"s\",\n  \"devices\": [\n    {\n      \"id\": \"d\",\n      \"name\": \"New\",\n      \"platform\": \"ios\",\n      \"createdAt\": 1,\n      \"lastSeenAt\": 2,\n      \"extra\": [\n        1\n      ]\n    }\n  ]\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "file",
+   "args": [],
+   "now": 1760000600001,
+   "result": null,
+   "file": "not json",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "status",
+   "args": [],
+   "now": 1760000600001,
+   "result": {
+    "enabled": false,
+    "devices": []
+   },
+   "file": "not json",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "enable",
+   "args": [
+    "ws://y"
+   ],
+   "now": 1760000600001,
+   "result": {
+    "enabled": true,
+    "relayUrl": "ws://y",
+    "room": "1a21282f363d444b",
+    "hasKey": true,
+    "devices": [],
+    "connected": [],
+    "online": false
+   },
+   "file": "{\n  \"enabled\": true,\n  \"devices\": [],\n  \"relayUrl\": \"ws://y\",\n  \"room\": \"1a21282f363d444b\",\n  \"secret\": \"3940474e555c636a71787f868d949ba2\"\n}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "file",
+   "args": [],
+   "now": 1760000600001,
+   "result": null,
+   "file": "{\"enabled\":true}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "status",
+   "args": [],
+   "now": 1760000600001,
+   "result": {
+    "enabled": true,
+    "hasKey": false,
+    "devices": [],
+    "connected": [],
+    "online": false
+   },
+   "file": "{\"enabled\":true}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "devices",
+   "args": [],
+   "now": 1760000600001,
+   "result": [],
+   "file": "{\"enabled\":true}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "pairing",
+   "args": [],
+   "now": 1760000600001,
+   "result": null,
+   "file": "{\"enabled\":true}",
+   "kicked": [
+    "phone-2",
+    "nobody"
+   ]
+  }
+ ]
+}

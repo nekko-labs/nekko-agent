@@ -16,6 +16,7 @@ mod hypergate;
 mod loops;
 mod mcp;
 mod procgroup;
+mod remote;
 mod routes;
 mod settings;
 mod sideband;
@@ -72,7 +73,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS].join(","));
+                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS, remote::OWNS].join(","));
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -105,6 +106,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
     });
     let catalog = settings.as_deref().map(catalog::new);
+    let remote = Arc::new(remote::Remote::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -128,9 +130,25 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         settings,
         voice: voice.clone(),
         catalog,
+        remote: remote.clone(),
     };
     routes::forward_terminal_events(&ctx);
     let processes = ctx.turns.processes.clone();
+    {
+        // A paired phone reaches what the UI reaches: the router.
+        let ctx = ctx.clone();
+        remote.set_dispatcher(Arc::new(move |channel: String, args: serde_json::Value| {
+            let ctx = ctx.clone();
+            Box::pin(async move {
+                // The TS dispatcher destructures the list and threw on anything else.
+                let serde_json::Value::Array(args) = args else {
+                    return Err(format!("{channel}: args is not a list"));
+                };
+                routes::route(&ctx, &channel, args).await
+            })
+        }));
+    }
+    remote.start();
 
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
     let router = wire::router(app);
@@ -143,6 +161,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
 
     axum::serve(listener, router).with_graceful_shutdown(shutdown_signal(cfg.exit_on_stdin_close)).await?;
 
+    remote.stop();
     engine.shutdown();
     if let Some(voice) = &voice {
         voice.stop().await;
