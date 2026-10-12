@@ -120,6 +120,52 @@ describe('asset matching', () => {
     );
   });
 
+  it('never pairs a Windows build with the Linux runtime of the same toolkit', () => {
+    // The real b11224 release, in the order GitHub lists it. The Ubuntu runtime
+    // shares the `cuda-13.4-x64` tail with the Windows one and comes first, and
+    // picking it left Windows with `.so` files: llama-server started, found no
+    // CUDA device, and ran every model on the CPU without saying so.
+    const release = [
+      'cudart-llama-b11224-bin-ubuntu-cuda-12.8-x64.tar.gz',
+      'cudart-llama-b11224-bin-ubuntu-cuda-13.4-arm64.tar.gz',
+      'cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz',
+      'cudart-llama-bin-win-cuda-12.4-x64.zip',
+      'cudart-llama-bin-win-cuda-13.4-arm64.zip',
+      'cudart-llama-bin-win-cuda-13.4-x64.zip',
+      'llama-b11224-bin-ubuntu-cuda-12.8-x64.tar.gz',
+      'llama-b11224-bin-ubuntu-cuda-13.4-arm64.tar.gz',
+      'llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz',
+      'llama-b11224-bin-win-cuda-12.4-x64.zip',
+      'llama-b11224-bin-win-cuda-13.4-arm64.zip',
+      'llama-b11224-bin-win-cuda-13.4-x64.zip',
+    ];
+    const win = buildFor('win32', 'x64', 'cuda');
+    const winAsset = matchAsset(win, release)!;
+    expect(winAsset).toBe('llama-b11224-bin-win-cuda-13.4-x64.zip');
+    expect(matchCompanion(win, winAsset, release)).toBe('cudart-llama-bin-win-cuda-13.4-x64.zip');
+    expect(matchCompanion(win, 'llama-b11224-bin-win-cuda-12.4-x64.zip', release)).toBe(
+      'cudart-llama-bin-win-cuda-12.4-x64.zip',
+    );
+    const winArm = buildFor('win32', 'arm64', 'cuda');
+    expect(matchCompanion(winArm, 'llama-b11224-bin-win-cuda-13.4-arm64.zip', release)).toBe(
+      'cudart-llama-bin-win-cuda-13.4-arm64.zip',
+    );
+
+    // And the other way round: Linux keeps its own runtime.
+    const linux = buildFor('linux', 'x64', 'cuda');
+    const linuxAsset = matchAsset(linux, release)!;
+    expect(linuxAsset).toBe('llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz');
+    expect(matchCompanion(linux, linuxAsset, release)).toBe('cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz');
+  });
+
+  it('finds no companion rather than one for another platform', () => {
+    // Missing is recoverable (install refuses with a clear message); wrong is a
+    // working-looking engine that never touches the GPU.
+    const win = buildFor('win32', 'x64', 'cuda');
+    const linuxOnly = ['cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz'];
+    expect(matchCompanion(win, 'llama-b11224-bin-win-cuda-13.4-x64.zip', linuxOnly)).toBeUndefined();
+  });
+
   it('asks for no companion where the build needs none', () => {
     const vulkan = buildFor('win32', 'x64', 'vulkan');
     expect(matchCompanion(vulkan, 'llama-b10996-bin-win-vulkan-x64.zip', assets)).toBeUndefined();
