@@ -90,11 +90,11 @@ async fn health() -> impl IntoResponse {
 // Other calls match the web edition's public limit (apps/server, 25 MB): it
 // forwards every channel here, image attachments included.
 const CALL_BODY_LIMIT: usize = 25 * 1024 * 1024;
-const LOOP_RUN_BODY_LIMIT: usize = 64 * 1024 * 1024;
+const TURN_BODY_LIMIT: usize = 64 * 1024 * 1024;
 
 /// `chat:turn` carries the user's attached images in its send options.
 fn body_limit(channel: &str) -> usize {
-    if matches!(channel, "loop:run" | "chat:turn") { LOOP_RUN_BODY_LIMIT } else { CALL_BODY_LIMIT }
+    if channel == "chat:turn" { TURN_BODY_LIMIT } else { CALL_BODY_LIMIT }
 }
 
 #[derive(Deserialize)]
@@ -350,19 +350,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn loop_run_accepts_image_bodies_above_axum_default_but_other_calls_do_not() {
-        assert_eq!(body_limit("loop:run"), 64 * 1024 * 1024);
+    async fn chat_turn_accepts_image_bodies_above_axum_default_but_other_calls_do_not() {
         assert_eq!(body_limit("chat:turn"), 64 * 1024 * 1024);
-        assert_eq!(body_limit("loop:tool"), CALL_BODY_LIMIT);
+        assert_eq!(body_limit("turn:tool"), CALL_BODY_LIMIT);
         let image = axum::body::Body::from(vec![b'x'; CALL_BODY_LIMIT + 1]);
-        assert!(to_bytes(image, body_limit("loop:run")).await.is_ok());
+        assert!(to_bytes(image, body_limit("chat:turn")).await.is_ok());
         let image = axum::body::Body::from(vec![b'x'; CALL_BODY_LIMIT + 1]);
-        assert!(to_bytes(image, body_limit("loop:tool")).await.is_err());
+        assert!(to_bytes(image, body_limit("turn:tool")).await.is_err());
     }
 
     #[tokio::test]
-    async fn loop_run_still_rejects_oversized_bodies() {
-        let body = axum::body::Body::from(vec![b'x'; LOOP_RUN_BODY_LIMIT + 1]);
-        assert!(to_bytes(body, body_limit("loop:run")).await.is_err());
+    async fn chat_turn_still_rejects_oversized_bodies() {
+        let body = axum::body::Body::from(vec![b'x'; TURN_BODY_LIMIT + 1]);
+        assert!(to_bytes(body, body_limit("chat:turn")).await.is_err());
     }
 }

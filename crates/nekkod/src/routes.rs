@@ -19,8 +19,8 @@ pub struct Ctx {
     pub engine: Arc<crate::engine::Engine>,
     /// Session reads (`nekko-store`), when the data directory is known.
     pub sessions: Option<Arc<nekko_store::SessionStore>>,
-    /// Agent runs the TS host hands the daemon (`loop:run`).
-    pub loops: Arc<crate::loops::Loops>,
+    /// Pending changes the agent's file tools recorded (`changes:*`).
+    pub changes: Arc<nekko_tools::ChangeTracker>,
     /// MCP servers the TS host syncs and calls (`mcp:sync`, `mcp:call`).
     pub mcp: Arc<crate::mcp::Mcp>,
     /// Whole chat turns (`chat:turn`) and the input they wait on.
@@ -81,7 +81,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
     {
         return ctx.backend.call(channel, Value::Array(args)).await;
     }
-    if matches!(channel, "loop:run" | "terminal:create" | "mcp:call") {
+    if matches!(channel, "terminal:create" | "mcp:call") {
         if arg(&args, 0).get("executionMode").and_then(Value::as_str) == Some("sandbox") {
             return Err(format!("{channel} cannot execute sandbox work natively; use the host container router"));
         }
@@ -142,10 +142,6 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             }
             terminal_op(ctx, channel, &id, &args)
         }
-        "loop:run" => ctx.loops.start(ctx.backend.clone(), ctx.hub.clone(), arg(&args, 0).clone()),
-        "loop:abort" => Ok(json!(ctx.loops.abort(str_arg(&args, 0).unwrap_or_default()))),
-        "loop:alive" => Ok(json!(ctx.loops.is_running(str_arg(&args, 0).unwrap_or_default()))),
-        "loop:steer" => Ok(json!(ctx.loops.steer(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1).clone()))),
         "chat:turn" => ctx.turns.start(ctx.backend.clone(), ctx.hub.clone(), arg(&args, 0).clone()),
         "turn:abort" => Ok(json!(ctx.turns.abort(str_arg(&args, 0).unwrap_or_default()))),
         "turn:alive" => Ok(json!(ctx.turns.is_running(str_arg(&args, 0).unwrap_or_default()))),
@@ -217,24 +213,22 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             ctx.backend.call(channel, Value::Array(args)).await
         }
         "changes:list" => {
-            let (changes, id) = (ctx.loops.changes.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
+            let (changes, id) = (ctx.changes.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
             let list =
                 tokio::task::spawn_blocking(move || changes.list_changes(&id)).await.map_err(|e| e.to_string())?;
             Ok(serde_json::to_value(list).unwrap_or(json!([])))
         }
         "changes:accept" => {
-            ctx.loops
-                .changes
-                .accept_change(str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+            ctx.changes.accept_change(str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
             Ok(Value::Null)
         }
         "changes:acceptAll" => {
-            ctx.loops.changes.accept_all(str_arg(&args, 0).unwrap_or_default());
+            ctx.changes.accept_all(str_arg(&args, 0).unwrap_or_default());
             Ok(Value::Null)
         }
         // The host snapshots a file here before its own tool executor writes it.
         "changes:record" => {
-            let changes = ctx.loops.changes.clone();
+            let changes = ctx.changes.clone();
             let (id, path) =
                 (str_arg(&args, 0).unwrap_or_default().to_string(), str_arg(&args, 1).unwrap_or_default().to_string());
             tokio::task::spawn_blocking(move || changes.record_original(&id, &path))
@@ -461,16 +455,6 @@ pub const OWNED: &[&str] = &[
     "chat:running",
     "chat:steer",
     "chat:abort",
-    "loop:run",
-    // Not a channel: a capability. `loop:run` has no tool-step limit. The host
-    // hands runs only to a daemon that says so, because daemons built before
-    // the limit was removed read the host's budget as a real cap.
-    "loop:unbounded",
-    // Caching policy and usage counters survive every loop/provider boundary.
-    "loop:prompt-caching",
-    "loop:abort",
-    "loop:alive",
-    "loop:steer",
     "provider:complete",
     "provider:prompt-caching",
     "changes:list",
@@ -728,12 +712,8 @@ mod tests {
     }
 
     #[test]
-    fn info_says_the_loop_has_no_step_limit() {
-        // packages/host/src/daemon-loop.ts daemonRunsLoops needs both, or the
-        // host keeps every run in process.
-        assert!(OWNED.contains(&"loop:run"));
-        assert!(OWNED.contains(&"loop:unbounded"));
-        assert!(OWNED.contains(&"loop:prompt-caching"));
+    fn info_lists_prompt_caching() {
+        // sideband.ts hands side calls to the daemon only when it says so.
         assert!(OWNED.contains(&"provider:prompt-caching"));
     }
 

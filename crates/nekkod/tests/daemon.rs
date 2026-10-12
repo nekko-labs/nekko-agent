@@ -326,20 +326,19 @@ async fn forwards_unported_channels_and_serves_owned_ones() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn authenticated_loop_run_http_body_exceeds_old_limit_without_truncation() {
+async fn authenticated_chat_turn_http_body_exceeds_old_limit_without_truncation() {
     let d = start(false);
-    // Invalid provider deliberately stops before a provider call. A 400 provider
-    // error proves the complete >2 MiB JSON body reached the loop route.
-    let args = json!([{ "runId": "large-http", "provider": null, "history": [{
-        "role": "user", "content": "image", "images": [format!("data:image/png;base64,{}", "A".repeat(2 * 1024 * 1024))]
-    }] }]);
-    let (status, body) = post(d.port, "loop:run", args.clone(), Some(TOKEN)).await;
+    // Without a data directory the turn stops before anything runs. That 400
+    // proves the complete >2 MiB JSON body reached the turn route.
+    let image = format!("data:image/png;base64,{}", "A".repeat(2 * 1024 * 1024));
+    let args = json!([{ "turnId": "large-http", "opts": { "sessionId": "s", "text": "image", "images": [image] } }]);
+    let (status, body) = post(d.port, "chat:turn", args.clone(), Some(TOKEN)).await;
     assert_eq!(status, 400, "{body}");
-    assert!(body["error"].as_str().unwrap().starts_with("provider:"), "{body}");
+    assert_eq!(body["error"], "chat:turn needs the daemon to know the data directory", "{body}");
 
     // Authentication rejects before reading the body; keep this request small so
     // the server cannot close the socket while reqwest is still uploading it.
-    let (status, body) = post(d.port, "loop:run", json!([]), None).await;
+    let (status, body) = post(d.port, "chat:turn", json!([]), None).await;
     assert_eq!(status, 401, "{body}");
     assert_eq!(body["error"], "unauthorized");
 
@@ -353,7 +352,7 @@ async fn authenticated_loop_run_http_body_exceeds_old_limit_without_truncation()
     stream
         .write_all(
             format!(
-                "POST /api/loop:tool HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {TOKEN}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                "POST /api/turn:tool HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {TOKEN}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                 d.port,
                 limit + 1
             )
@@ -428,60 +427,40 @@ async fn large_image_reply_completes_and_followup_starts_with_local_provider() {
         )
         .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024));
     let server = tokio::spawn(async move { axum::serve(listener, provider).await.unwrap() });
-    let d = start(true);
-    let (backend_status, backend_body) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert_eq!(backend_status, 200, "backend not ready: {backend_body}");
-    let config = json!({
-        "id": "synthetic-local", "kind": "openai-compat", "baseUrl": format!("http://127.0.0.1:{provider_port}/v1"),
-        "enabled": true
+    let session = json!({
+        "id": "s_large", "title": "Named", "mode": "yolo", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
     });
+    let rig = turn_rig("large-image", session);
+    let unused = scripted_model(vec![]).await;
     let image = format!("data:image/png;base64,{}", "A".repeat(2 * 1024 * 1024));
-    let first = json!({
-        "runId": "synthetic-large", "sessionId": "synthetic-session", "provider": config,
-        "model": "synthetic", "history": [{ "role": "user", "content": "image", "images": [image.clone()] }]
-    });
-    let (status, started) = post(d.port, "loop:run", json!([first]), Some(TOKEN)).await;
+    let spec_for = |turn: &str, text: &str, images: Value| {
+        let mut spec = turn_spec(&rig, &unused, turn, "s_large", json!({ "text": text, "images": images }));
+        let base = format!("http://127.0.0.1:{provider_port}/v1");
+        spec["facts"]["provider"]["baseUrl"] = json!(base);
+        spec["settings"]["providers"][0]["baseUrl"] = json!(base);
+        spec
+    };
+    let (status, started) =
+        post(rig.d.port, "chat:turn", json!([spec_for("t_large", "image", json!([image.clone()]))]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
     assert_eq!(started["started"], true);
+    let (_, end) = turn_record(rig.d.port, "t_large").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_large");
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages[0]["images"][0], image);
+    assert_eq!(messages.last().unwrap()["content"], format!("synthetic-image-{}", image.len()));
+    assert_ne!(messages.last().unwrap()["interrupted"], true);
 
-    async fn completion(port: u16, run_id: &str) -> Value {
-        tokio::time::timeout(Duration::from_secs(30), async {
-            loop {
-                let (status, results) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
-                assert_eq!(status, 200, "{results}");
-                if let Some(entry) = results.as_array().unwrap().iter().find(|entry| entry[0] == run_id) {
-                    return entry[1].clone();
-                }
-                tokio::time::sleep(Duration::from_millis(50)).await;
-            }
-        })
-        .await
-        .expect("daemon did not deliver loop:end to backend")
-    }
-
-    let ended = completion(d.port, "synthetic-large").await;
-    let history = ended["history"].as_array().unwrap();
-    assert_eq!(ended["sessionId"], "synthetic-session");
-    assert_eq!(history[0]["images"][0], image);
-    assert_eq!(history.last().unwrap()["content"], format!("synthetic-image-{}", image.len()));
-    assert_eq!(history.last().unwrap()["role"], "assistant");
-    assert_ne!(history.last().unwrap()["interrupted"], true);
-
-    let next = json!({
-        "runId": "synthetic-next", "sessionId": "synthetic-session", "provider": config,
-        "model": "synthetic", "history": [
-            { "role": "user", "content": "image", "images": [image] },
-            { "role": "assistant", "content": format!("synthetic-image-{}", 2 * 1024 * 1024 + "data:image/png;base64,".len()) },
-            { "role": "user", "content": "followup" }
-        ]
-    });
-    let (status, started) = post(d.port, "loop:run", json!([next]), Some(TOKEN)).await;
+    let (status, started) =
+        post(rig.d.port, "chat:turn", json!([spec_for("t_next", "followup", json!([]))]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
-    assert_eq!(started["started"], true);
-    let ended = completion(d.port, "synthetic-next").await;
-    assert_eq!(ended["history"][3]["content"], "synthetic-followup");
-    assert_eq!(ended["history"][3]["role"], "assistant");
-    assert_ne!(ended["history"][3]["interrupted"], true);
+    let (_, end) = turn_record(rig.d.port, "t_next").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_large");
+    let last = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!(last["content"], "synthetic-followup");
+    assert_eq!(last["role"], "assistant");
     server.abort();
 }
 

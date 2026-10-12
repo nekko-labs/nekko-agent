@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import type { FileChange } from '@nekko-agent/shared';
 import { daemonCall } from './engine/daemon.js';
-import { daemonOwns } from './daemon-loop.js';
+import { daemonOwns } from './daemon-caps.js';
 
 /**
  * Tracks files the agent changes during a session so the user can review and

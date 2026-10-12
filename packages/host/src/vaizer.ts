@@ -9,7 +9,7 @@ import {
 } from '@nekko-agent/shared';
 import { dataDir } from './store.js';
 import { daemonCall } from './engine/daemon.js';
-import { daemonOwns } from './daemon-loop.js';
+import { daemonOwns } from './daemon-caps.js';
 
 /**
  * Vaizer skills marketplace (github.com/nekko-labs/vaizer), an optional

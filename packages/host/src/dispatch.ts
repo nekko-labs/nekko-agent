@@ -4,7 +4,7 @@ import { deleteAgentLog } from './agent-log.js';
 import { benchHostLoad } from './workspace.js';
 import { designProvider } from './design.js';
 import { resolvedProvider } from './spec.js';
-import { daemonOwns } from './daemon-loop.js';
+import { daemonOwns } from './daemon-caps.js';
 import { daemonCall } from './engine/daemon.js';
 
 /**
@@ -107,11 +107,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'engine:routerLoad': ([id, image]) => host.engineRouterLoad(String(id), Boolean(image)),
     // Internal: the daemon's runtime control plane asking the engine (its `llamacpp` adapter).
     'engine:runtime': ([method, ...args]) => host.engineRuntime(String(method), args),
-    // A daemon-driven agent run calling back (daemon-loop.ts).
-    'loop:tool': ([runId, call]) => host.loopTool(String(runId), call as never),
-    'loop:event': ([runId, payload]) => host.loopEvent(String(runId), payload as never),
-    'loop:end': ([runId, payload]) => host.loopEnd(String(runId), payload as never),
-    'loop:approve': ([runId, call, reason, severity]) => host.loopApprove(String(runId), call as never, String(reason), severity as never),
+    // A daemon-driven turn's command output, for the agent terminal (daemon-caps.ts).
     'loop:log': ([sessionId, workspaceId, data]) => host.loopLog(String(sessionId), (workspaceId as string | null) ?? undefined, String(data)),
     // A daemon-driven chat turn calling back (daemon-turn.ts).
     'turn:event': (args) => host.turnCallback('turn:event', args),

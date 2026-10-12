@@ -4,7 +4,7 @@ const daemon = vi.fn();
 let linked = true;
 vi.mock('./engine/daemon.js', () => ({ daemonCall: () => (linked ? daemon : undefined) }));
 // Probe per fixture: the real daemonOwns caches capabilities for the process lifetime.
-vi.mock('./daemon-loop.js', () => ({
+vi.mock('./daemon-caps.js', () => ({
   daemonOwns: async (call: typeof daemon, channel: string) => (await call('daemon:info')).owned.includes(channel),
 }));
 let promptCaching: boolean | undefined = true;

@@ -175,7 +175,7 @@ import {
 import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
 import { adoptAdmittedTurn, connectorSnippetsFor, indexSnippetsForAdmission, isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
-import { daemonOwns as daemonServes, loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
+import { daemonOwns as daemonServes, loopLog } from './daemon-caps.js';
 import { setTurnNotifier, turnCallback } from './daemon-turn.js';
 import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
 import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemon as notifyLimits } from './limits.js';
@@ -274,11 +274,7 @@ export interface Host {
   engineRouterLoad(modelId: string, image: boolean): Promise<{ ok: boolean; status?: number; message?: string }>;
   /** The daemon's runtime control plane calling the engine it does not run yet (its `llamacpp` adapter). */
   engineRuntime(method: string, args: unknown[]): Promise<unknown>;
-  /** A daemon-driven run's callbacks (daemon-loop.ts): a tool call, its events, its end. */
-  loopTool(runId: string, call: import('@nekko-agent/shared').ToolCall): Promise<import('@nekko-agent/shared').ToolResult>;
-  loopEvent(runId: string, payload: { events?: import('@nekko-agent/shared').AgentEvent[]; history?: import('@nekko-agent/shared').ChatMessage[] }): Promise<void>;
-  loopEnd(runId: string, payload: { history?: import('@nekko-agent/shared').ChatMessage[] }): void;
-  loopApprove(runId: string, call: import('@nekko-agent/shared').ToolCall, reason: string, severity: 'low' | 'medium' | 'high'): Promise<boolean>;
+  /** A daemon-driven turn's command output (`loop:log`, daemon-caps.ts). */
   loopLog(sessionId: string, workspaceId: string | undefined, data: string): void;
   /** Register a turn the daemon admitted itself and drives (`turn:adopt`). */
   adoptTurn(payload: Parameters<typeof adoptAdmittedTurn>[0]): Promise<void>;
@@ -912,10 +908,6 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
         default: throw new Error(`Unknown engine call: ${method}`);
       }
     },
-    loopTool,
-    loopEvent,
-    loopEnd,
-    loopApprove,
     loopLog,
     turnCallback,
     changesNotify: notifyChanges,

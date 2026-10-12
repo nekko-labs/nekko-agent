@@ -17,7 +17,6 @@ mod decisions;
 mod engine;
 mod hub;
 mod hypergate;
-mod loops;
 mod machine;
 mod mcp;
 mod oauth;
@@ -162,7 +161,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         hub: hub.clone(),
         engine: engine.clone(),
         sessions: sessions.clone(),
-        loops: Arc::new(loops::Loops::new(changes.clone())),
+        changes: changes.clone(),
         turns: Arc::new(
             turns::Turns::new(
                 sessions.clone(),
