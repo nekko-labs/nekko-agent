@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, extname } from 'path';
 import { randomUUID } from 'crypto';
-import { createHostProvider as createProvider } from './prompt-caching.js';
+import { createHostProvider as createProvider, hostProviderConfig, promptCachingForHost } from './prompt-caching.js';
 import type { DesignBoard, DesignPage, GenerateDesignInput } from '@nekko-agent/shared';
 import { dataDir, getSettings } from './store.js';
 import { resolveSubscriptionProvider } from './oauth.js';
@@ -109,7 +109,7 @@ export function addDesignNote(workspaceId: string, pageId: string, text: string)
 }
 
 /** System prompt for one-shot prototype generation. */
-const DESIGN_SYSTEM = [
+export const DESIGN_SYSTEM = [
   'You are a world-class product designer and front-end engineer producing a single, self-contained HTML prototype.',
   'Rules: output ONE complete HTML document. All CSS lives in a <style> tag and any JS inline in a <script> tag. No external resources of any kind (no CDNs, web fonts, or remote images; use system font stacks, CSS gradients, and inline SVG). Responsive down to 375px wide. Polished and modern: real visual hierarchy, generous whitespace, consistent spacing scale, believable placeholder content. Add hover/focus states and small interactions where they sell the design.',
   'Output ONLY the HTML document. No explanations, no code fences.',
@@ -120,6 +120,55 @@ const DESIGN_SYSTEM = [
  * prompt → design, or sketch (+ optional notes) → code prototype. Writes the
  * prototype into the workspace and upserts the concept page on the board.
  */
+/**
+ * The request a design generation sends: refine the existing prototype, turn
+ * a sketch into one, or design from the prompt. Pure, so the engine daemon's
+ * port (crates/nekko-workspace design.rs) is held to it.
+ */
+export function designAsk(existing: DesignPage | undefined, input: GenerateDesignInput, prompt: string): string {
+  if (existing?.html) {
+    return `Here is the current prototype:\n\n${existing.html.slice(0, 60000)}\n\nApply this change and output the full updated document, keeping everything else intact: ${prompt}`;
+  }
+  if (input.sketchDataUrl) {
+    return `Turn the attached hand-drawn sketch into a working, polished HTML prototype. Follow the sketch's layout, boxes, and annotations faithfully, then fill in professional visual design (type, color, spacing).${prompt ? `\n\nAdditional instructions: ${prompt}` : ''}`;
+  }
+  return `Design this: ${prompt}`;
+}
+
+/** The model's answer as a document: code fences and any preamble dropped. Throws when it holds no HTML. */
+export function cleanDesignOutput(raw: string): string {
+  let out = raw.replace(/^```(?:html)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  const lower = out.toLowerCase();
+  const docStart = lower.indexOf('<!doctype');
+  const htmlStart = lower.indexOf('<html');
+  const start = docStart >= 0 ? docStart : htmlStart;
+  if (start > 0) out = out.slice(start);
+  if (!out.includes('<')) throw new Error('The model returned no HTML. Try again, or pick a stronger default model in Models.');
+  return out;
+}
+
+/** A concept card's label, and the slug its prototype file is named after. */
+export function designLabel(input: GenerateDesignInput, existing: DesignPage | undefined, prompt: string): string {
+  return (input.label?.trim() || existing?.label || prompt.slice(0, 42) || 'Concept').trim();
+}
+
+export function designSlug(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'design';
+}
+
+/**
+ * The default provider, resolved (a subscription token refreshed), and model
+ * a design is generated with. The engine daemon asks for it (`design:provider`)
+ * when it generates, since sign-ins still live here.
+ */
+export async function designProvider(): Promise<{ provider: import('@nekko-agent/shared').ProviderConfig; model: string; promptCaching: boolean }> {
+  const settings = getSettings();
+  const providerCfg = settings.providers.find((p) => p.id === settings.defaultProviderId);
+  const model = settings.defaultModelId;
+  if (!providerCfg || !model) throw new Error('Set a default provider and model in Models first.');
+  return { provider: hostProviderConfig(await resolveSubscriptionProvider(providerCfg)), model, promptCaching: promptCachingForHost() };
+}
+
 export async function generateDesign(workspaceId: string, input: GenerateDesignInput): Promise<DesignBoard> {
   const prompt = (input.prompt ?? '').trim();
   if (!prompt && !input.sketchDataUrl) throw new Error('Describe the design or draw a sketch first.');
@@ -131,15 +180,7 @@ export async function generateDesign(workspaceId: string, input: GenerateDesignI
 
   const store = load();
   const existing = input.pageId ? (store[workspaceId] ?? []).find((p) => p.id === input.pageId) : undefined;
-
-  let ask: string;
-  if (existing?.html) {
-    ask = `Here is the current prototype:\n\n${existing.html.slice(0, 60000)}\n\nApply this change and output the full updated document, keeping everything else intact: ${prompt}`;
-  } else if (input.sketchDataUrl) {
-    ask = `Turn the attached hand-drawn sketch into a working, polished HTML prototype. Follow the sketch's layout, boxes, and annotations faithfully, then fill in professional visual design (type, color, spacing).${prompt ? `\n\nAdditional instructions: ${prompt}` : ''}`;
-  } else {
-    ask = `Design this: ${prompt}`;
-  }
+  const ask = designAsk(existing, input, prompt);
 
   let out = '';
   try {
@@ -162,15 +203,8 @@ export async function generateDesign(workspaceId: string, input: GenerateDesignI
     throw new Error(`Design generation failed: ${(e as Error).message}`);
   }
 
-  out = out.replace(/^```(?:html)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-  const lower = out.toLowerCase();
-  const docStart = lower.indexOf('<!doctype');
-  const htmlStart = lower.indexOf('<html');
-  const start = docStart >= 0 ? docStart : htmlStart;
-  if (start > 0) out = out.slice(start);
-  if (!out.includes('<')) throw new Error('The model returned no HTML. Try again, or pick a stronger default model in Models.');
-
-  const label = (input.label?.trim() || existing?.label || prompt.slice(0, 42) || 'Concept').trim();
+  out = cleanDesignOutput(out);
+  const label = designLabel(input, existing, prompt);
 
   // Mirror the prototype into the workspace so it's real, editable code.
   let filePath = existing?.file;
@@ -180,8 +214,7 @@ export async function generateDesign(workspaceId: string, input: GenerateDesignI
       let dir = join(ws.path, 'nekko-designs');
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
       if (!filePath) {
-        const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'design';
-        filePath = join(dir, `${slug}-${randomUUID().slice(0, 6)}.html`);
+        filePath = join(dir, `${designSlug(label)}-${randomUUID().slice(0, 6)}.html`);
       }
       writeFileSync(filePath, out, 'utf8');
     } catch {

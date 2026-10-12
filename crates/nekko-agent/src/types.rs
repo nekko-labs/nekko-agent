@@ -315,6 +315,24 @@ pub enum ProviderChunk {
 }
 
 /// Why a chat failed. `message` is the text the TS provider throws, word for
+/// What a provider's connection test reports (`test()`), as the Providers
+/// settings show it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TestResult {
+    pub ok: bool,
+    pub message: String,
+}
+
+impl TestResult {
+    pub fn ok(message: impl Into<String>) -> Self {
+        Self { ok: true, message: message.into() }
+    }
+
+    pub fn fail(message: impl Into<String>) -> Self {
+        Self { ok: false, message: message.into() }
+    }
+}
+
 /// word; the host matches on it (`/\b401\b/` starts a token refresh).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderError {

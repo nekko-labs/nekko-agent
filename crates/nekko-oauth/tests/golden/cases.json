@@ -1,0 +1,426 @@
+{
+  "authorizeUrls": [
+    {
+      "provider": "claude",
+      "redirectUri": "https://platform.claude.com/oauth/code/callback",
+      "challenge": "ch-_x",
+      "state": "st/+= "
+    },
+    {
+      "provider": "claude",
+      "redirectUri": "http://localhost:8765/callback",
+      "challenge": "ch",
+      "state": "st"
+    },
+    {
+      "provider": "chatgpt",
+      "redirectUri": "http://localhost:1455/auth/callback",
+      "challenge": "c!*'()~",
+      "state": "é ü&"
+    },
+    {
+      "provider": "openrouter",
+      "redirectUri": "http://localhost:51234/callback",
+      "challenge": "abc",
+      "state": "ignored"
+    }
+  ],
+  "pasted": [
+    {
+      "pasted": "  abc  ",
+      "redirectUri": "http://localhost:1455/auth/callback"
+    },
+    {
+      "pasted": "code#state#more",
+      "redirectUri": "https://platform.claude.com/oauth/code/callback"
+    },
+    {
+      "pasted": "#",
+      "redirectUri": "https://platform.claude.com/oauth/code/callback"
+    },
+    {
+      "pasted": "http://LOCALHOST:1455/auth/callback?code=a+b%20c&state=s1",
+      "redirectUri": "http://localhost:1455/auth/callback"
+    },
+    {
+      "pasted": "http://localhost:9999/auth/callback?code=x",
+      "redirectUri": "http://localhost:1455/auth/callback"
+    },
+    {
+      "pasted": "http://localhost:1455/other?code=x",
+      "redirectUri": "http://localhost:1455/auth/callback"
+    },
+    {
+      "pasted": "http://localhost:1455/auth/callback?state=s",
+      "redirectUri": "http://localhost:1455/auth/callback"
+    },
+    {
+      "pasted": "http://localhost:1455/auth/callback?code=&state=s",
+      "redirectUri": "http://localhost:1455/auth/callback"
+    },
+    {
+      "pasted": "https://example.com/auth/callback?code=x",
+      "redirectUri": "http://localhost:1455/auth/callback"
+    },
+    {
+      "pasted": "http://localhost:1455/auth/./callback?code=k&code=j",
+      "redirectUri": "http://localhost:1455/auth/callback"
+    },
+    {
+      "pasted": "http://[bad",
+      "redirectUri": "http://localhost:1455/auth/callback"
+    }
+  ],
+  "exchangeRequests": [
+    {
+      "provider": "claude",
+      "code": "c",
+      "redirectUri": "https://platform.claude.com/oauth/code/callback",
+      "verifier": "v",
+      "state": "s"
+    },
+    {
+      "provider": "chatgpt",
+      "code": "c d&e",
+      "redirectUri": "http://localhost:1455/auth/callback",
+      "verifier": "v~",
+      "state": "s"
+    },
+    {
+      "provider": "openrouter",
+      "code": "c\"",
+      "redirectUri": "http://localhost:1/callback",
+      "verifier": "v",
+      "state": "s"
+    }
+  ],
+  "exchangeResults": [
+    {
+      "provider": "claude",
+      "ok": true,
+      "status": 200,
+      "text": "{\"access_token\":\"at\",\"refresh_token\":\"rt\",\"expires_in\":28800,\"scope\":\"user:inference\"}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "claude",
+      "ok": true,
+      "status": 200,
+      "text": "{\"access_token\":\"at\",\"expires_in\":\"60\"}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000005
+    },
+    {
+      "provider": "chatgpt",
+      "ok": true,
+      "status": 200,
+      "text": "{\"access_token\":\"eyJhbGciOiJub25lIn0.eyJleHAiOjE3NjAwMDcyMDAuNX0.sig\",\"refresh_token\":\"rt\",\"id_token\":\"eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF8xMjMifSwiZXhwIjoxNzYwMDAzNjAwfQ.sig\",\"expires_in\":10}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "chatgpt",
+      "ok": true,
+      "status": 200,
+      "text": "{\"access_token\":\"opaque\",\"id_token\":\"bad\"}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "chatgpt",
+      "ok": false,
+      "status": 400,
+      "text": "{\"error_description\":\"bad code\"}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "claude",
+      "ok": false,
+      "status": 500,
+      "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "claude",
+      "ok": false,
+      "status": 502,
+      "text": "",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "claude",
+      "ok": true,
+      "status": 200,
+      "text": "not json",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "claude",
+      "ok": true,
+      "status": 200,
+      "text": "{\"token_type\":\"x\"}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "openrouter",
+      "ok": true,
+      "status": 200,
+      "text": "{\"key\":\"sk-or-1\",\"user_id\":\"u\"}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "openrouter",
+      "ok": true,
+      "status": 200,
+      "text": "{\"nope\":1}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "openrouter",
+      "ok": false,
+      "status": 403,
+      "text": "{\"error\":{\"message\":\"denied\",\"code\":403}}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "openrouter",
+      "ok": false,
+      "status": 404,
+      "text": "",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "openrouter",
+      "ok": false,
+      "status": 400,
+      "text": "{\"error_description\":\"nah\"}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    }
+  ],
+  "refreshRequests": [
+    {
+      "provider": "claude",
+      "accessToken": "a",
+      "refreshToken": "r",
+      "scopes": "user:inference user:profile"
+    },
+    {
+      "provider": "claude",
+      "accessToken": "a",
+      "refreshToken": "r"
+    },
+    {
+      "provider": "chatgpt",
+      "accessToken": "a",
+      "refreshToken": "r =&"
+    }
+  ],
+  "refreshResults": [
+    {
+      "tokenSet": {
+        "provider": "claude",
+        "accessToken": "a",
+        "refreshToken": "r",
+        "scopes": "x y",
+        "obtainedAt": 1
+      },
+      "ok": true,
+      "status": 200,
+      "text": "{\"access_token\":\"a2\",\"expires_in\":3600}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "tokenSet": {
+        "provider": "chatgpt",
+        "accessToken": "a",
+        "refreshToken": "r",
+        "accountId": "acct",
+        "obtainedAt": 1
+      },
+      "ok": true,
+      "status": 200,
+      "text": "{\"access_token\":\"eyJhbGciOiJub25lIn0.eyJleHAiOjE3NjAwMDcyMDAuNX0.sig\",\"refresh_token\":\"r2\"}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "tokenSet": {
+        "provider": "claude",
+        "accessToken": "a",
+        "refreshToken": "r",
+        "obtainedAt": 1
+      },
+      "ok": false,
+      "status": 401,
+      "text": "{}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "tokenSet": {
+        "provider": "claude",
+        "accessToken": "a",
+        "refreshToken": "r",
+        "obtainedAt": 1
+      },
+      "ok": false,
+      "status": 400,
+      "text": "{\"error_description\":\"Refresh token REVOKED\"}",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "tokenSet": {
+        "provider": "claude",
+        "accessToken": "a",
+        "refreshToken": "r",
+        "obtainedAt": 1
+      },
+      "ok": false,
+      "status": 500,
+      "text": "oops",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "tokenSet": {
+        "provider": "claude",
+        "accessToken": "a",
+        "refreshToken": "r",
+        "obtainedAt": 1
+      },
+      "ok": true,
+      "status": 200,
+      "text": "[",
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    }
+  ],
+  "statuses": [
+    {
+      "tokenKey": "k",
+      "state": "missing",
+      "now": 1760000000000
+    },
+    {
+      "tokenKey": "k",
+      "tokenSet": {
+        "provider": "claude",
+        "accessToken": "a",
+        "expiresAt": 1760000000001,
+        "scopes": "s",
+        "obtainedAt": 1
+      },
+      "state": "success",
+      "now": 1760000000000
+    },
+    {
+      "tokenKey": "k",
+      "tokenSet": {
+        "provider": "claude",
+        "accessToken": "a",
+        "expiresAt": 1759999999999,
+        "obtainedAt": 1
+      },
+      "state": "success",
+      "message": "m",
+      "now": 1760000000000
+    },
+    {
+      "tokenKey": "k",
+      "tokenSet": {
+        "provider": "chatgpt",
+        "accessToken": "eyJhbGciOiJub25lIn0.eyJleHAiOjF9.sig",
+        "accountId": "acct",
+        "obtainedAt": 1
+      },
+      "state": "success",
+      "now": 1760000000000
+    },
+    {
+      "tokenKey": "k",
+      "tokenSet": {
+        "provider": "openrouter",
+        "accessToken": "sk",
+        "obtainedAt": 1
+      },
+      "state": "success",
+      "now": 1760000000000
+    }
+  ],
+  "cli": [
+    {
+      "kind": "claude",
+      "raw": "{\"claudeAiOauth\":{\"accessToken\":\"a\",\"refreshToken\":\"r\",\"expiresAt\":1760000000010,\"scopes\":[\"user:inference\",\"user:profile\"],\"subscriptionType\":\"max\"}}",
+      "now": 1760000000000
+    },
+    {
+      "kind": "claude",
+      "raw": "{\"access_token\":\"a\",\"refresh_token\":\"r\",\"expires_at\":5,\"scopes\":\"one two\"}",
+      "now": 1760000000000
+    },
+    {
+      "kind": "claude",
+      "raw": "{\"claudeAiOauth\":{}}",
+      "now": 1760000000000
+    },
+    {
+      "kind": "claude",
+      "raw": "{bad",
+      "now": 1760000000000
+    },
+    {
+      "kind": "codex",
+      "raw": "{\"tokens\":{\"access_token\":\"eyJhbGciOiJub25lIn0.eyJleHAiOjE3NjAwMDcyMDAuNX0.sig\",\"refresh_token\":\"r\",\"account_id\":\"acct\",\"id_token\":\"eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF8xMjMifSwiZXhwIjoxNzYwMDAzNjAwfQ.sig\"},\"last_refresh\":\"2025-10-01T00:00:00.000Z\"}",
+      "now": 1760000000000
+    },
+    {
+      "kind": "codex",
+      "raw": "{\"tokens\":{\"access_token\":\"opaque\",\"id_token\":\"eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF8xMjMifSwiZXhwIjoxNzYwMDAzNjAwfQ.sig\"},\"last_refresh\":12345}",
+      "now": 1760000000000
+    },
+    {
+      "kind": "codex",
+      "raw": "{\"tokens\":{\"access_token\":\"opaque\"},\"last_refresh\":\"not a date\"}",
+      "now": 1760000000000
+    },
+    {
+      "kind": "codex",
+      "raw": "{\"tokens\":{\"access_token\":\"opaque\"}}",
+      "now": 1760000000000
+    },
+    {
+      "kind": "codex",
+      "raw": "{\"tokens\":{\"access_token\":\"opaque\"},\"last_refresh\":\"2025-10-01T09:00:00+09:00\"}",
+      "now": 1760000000000
+    },
+    {
+      "kind": "codex",
+      "raw": "{\"tokens\":{}}",
+      "now": 1760000000000
+    }
+  ],
+  "tokenKeys": [
+    {
+      "provider": "chatgpt",
+      "accountId": "acct_1",
+      "sessionId": "0123456789abcdef"
+    },
+    {
+      "provider": "claude",
+      "sessionId": "abcdef0123456789"
+    }
+  ]
+}

@@ -302,6 +302,27 @@ impl ChatGptProvider {
         (!models.is_empty()).then_some(models)
     }
 
+    /// `test()`: a real check, the catalog route, which needs the same auth
+    /// and account as chat.
+    pub async fn test(&self) -> TestResult {
+        if self.config.api_key.as_deref().is_none_or(str::is_empty) {
+            return TestResult::fail("Not signed in. Sign in with ChatGPT in the provider settings.");
+        }
+        let Some(req) = self.catalog_request() else { return TestResult::fail(MISSING_ACCOUNT_ID) };
+        let mut res = match self.io.transport.send(&req).await {
+            Ok(res) => res,
+            Err(e) => {
+                let reach = || format!("Can't reach ChatGPT at {}. Check the network connection.", self.base());
+                return TestResult::fail(friendly_error(&e.message, reach));
+            }
+        };
+        if !res.ok() {
+            let text = res.text().await;
+            return TestResult::fail(format!("chatgpt {}: {}", res.status, js::slice16(&text, 200)));
+        }
+        TestResult::ok("Signed in with a ChatGPT subscription")
+    }
+
     pub async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
         let mut all = self.fetch_catalog().await.unwrap_or_else(|| {
             CHATGPT_MODELS

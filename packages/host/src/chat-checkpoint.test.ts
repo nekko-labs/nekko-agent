@@ -85,30 +85,25 @@ async function run(session: Session, opts: { resume?: boolean; text?: string } =
 }
 
 describe('failed daemon reply start', () => {
-  it('clears the active reply gate and permits a fresh synthetic reply', async () => {
+  it('runs the reply here when the daemon refuses the turn, and clears the active reply gate', async () => {
     const session = createSession('w1');
     session.titleAuto = false; // Keep sideband title generation from consuming the scripted reply.
     saveSession(session);
-    const events: AgentEvent[] = [];
     const call = vi.fn(async (channel: string) => {
-      if (channel === 'daemon:info') return { owned: ['loop:run', 'loop:unbounded', 'loop:prompt-caching'] };
-      if (channel === 'loop:run') throw new Error('Synthetic daemon start failure');
-      throw new Error(`Unexpected channel: ${channel}`);
+      if (channel === 'daemon:info') return { owned: ['chat:turn'] };
+      if (channel === 'chat:turn') throw new Error('Synthetic daemon start failure');
+      return null;
     });
     daemonCall.mockReturnValue(call);
+    rounds = [[{ type: 'text', delta: 'Ran in process' }, { type: 'done' }]];
+    const events: AgentEvent[] = [];
     await sendChat({ sessionId: session.id, providerId: 'p1', modelId: 'm', text: 'first' }, (e) => events.push(e));
-    expect(events.at(-1)).toMatchObject({ type: 'error', message: 'Synthetic daemon start failure' });
-    expect(call).toHaveBeenCalledWith('loop:run', expect.any(Object));
+    expect(call).toHaveBeenCalledWith('chat:turn', expect.any(Object));
+    expect(events.some((e) => e.type === 'done')).toBe(true);
+    expect(getSession(session.id)?.messages.at(-1)?.content).toBe('Ran in process');
     expect(getRunningSessionIds()).not.toContain(session.id);
     expect(getSession(session.id)?.activeRun).toBeUndefined();
-
     daemonCall.mockReturnValue(undefined);
-    rounds = [[{ type: 'text', delta: 'Second reply succeeded' }, { type: 'done' }]];
-    const second: AgentEvent[] = [];
-    await sendChat({ sessionId: session.id, providerId: 'p1', modelId: 'm', text: 'second' }, (e) => second.push(e));
-    expect(second.some((e) => e.type === 'done')).toBe(true);
-    expect(getSession(session.id)?.messages.at(-1)?.content).toBe('Second reply succeeded');
-    expect(getRunningSessionIds()).not.toContain(session.id);
   });
 });
 

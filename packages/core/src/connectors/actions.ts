@@ -154,14 +154,14 @@ function required(value: string, label: string): string {
 
 function needToken(config: ConnectorConfig | undefined, name: string): string {
   const t = config?.token?.trim();
-  if (!t) throw new Error(`The ${name} connector has no token saved — reconnect it under Connectors.`);
+  if (!t) throw new Error(`The ${name} connector has no token saved. Reconnect it under Connectors.`);
   return t;
 }
 
 /** Read a short error out of a failed response. */
 async function httpError(res: Response, label: string): Promise<WorkflowActionResult> {
   const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 300);
-  return fail(`${label} failed: ${res.status}${body ? ` — ${body}` : ''}`);
+  return fail(`${label} failed: ${res.status}${body ? `: ${body}` : ''}`);
 }
 
 /** Linear's GraphQL door; every op goes through this one POST. */

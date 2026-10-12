@@ -6,7 +6,7 @@ import { getToken, ensureFreshToken } from './oauth.js';
 import { getSettings } from './store.js';
 import { recordQuotaHistory } from './quota-history.js';
 import { daemonCall } from './engine/daemon.js';
-import { daemonOwns } from './daemon-loop.js';
+import { daemonOwns } from './daemon-caps.js';
 
 let events: EventEmitter | null = null;
 

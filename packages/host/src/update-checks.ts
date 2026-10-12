@@ -1,6 +1,6 @@
 import type { AppSettings, ModelInfo, VaizerCatalog } from '@nekko-agent/shared';
 import { updateChecks } from '@nekko-agent/shared';
-import { getVaizerCatalog } from './vaizer.js';
+import { refreshVaizerCatalog } from './vaizer.js';
 
 /**
  * The host's periodic refresh checks (Settings → Updates): re-list every
@@ -53,7 +53,7 @@ export function startUpdateChecks(deps: {
   }
 
   async function checkSkills() {
-    const catalog: VaizerCatalog = await (deps.fetchSkillsCatalog ?? (() => getVaizerCatalog(true)))();
+    const catalog: VaizerCatalog = await (deps.fetchSkillsCatalog ?? refreshVaizerCatalog)();
     const sig = catalog.skills
       .map((s) => s.id)
       .sort()

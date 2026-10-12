@@ -77,7 +77,22 @@ function loadTokens(): Record<string, OAuthTokenSet> {
   }
 }
 
+/**
+ * Under the engine daemon, tokens.json is the daemon's to write
+ * (crates/nekkod/src/oauth.rs): sign-in, renewal, sign-out and the CLI import
+ * all happen there, and this host asks it for a usable token (`oauth:fresh`)
+ * instead of renewing one itself. A renewal rotates the refresh token, so two
+ * writers would sign each other out.
+ */
+type OAuthDaemon = <T>(channel: string, ...args: unknown[]) => Promise<T>;
+let daemon: OAuthDaemon | undefined;
+
+export function useOAuthDaemon(call: OAuthDaemon | null): void {
+  daemon = call ?? undefined;
+}
+
 function saveTokens(tokens: Record<string, OAuthTokenSet>): void {
+  if (daemon) throw new Error('tokens.json is written by the engine daemon under nekkod.');
   writeJsonAtomic(tokenStorePath(), tokens);
 }
 
@@ -98,7 +113,7 @@ export function deleteToken(tokenKey: string): void {
 }
 
 /** Build a sanitized status object. Never includes the access token. */
-function buildStatus(
+export function buildStatus(
   tokenKey: string,
   tokenSet?: OAuthTokenSet,
   state: OAuthStatus['state'] = 'success',
@@ -135,7 +150,7 @@ function generateState(): string {
   return randomBytes(16).toString('base64url');
 }
 
-function buildAuthorizeUrl(
+export function buildAuthorizeUrl(
   provider: OAuthProvider,
   redirectUri: string,
   challenge: string,
@@ -422,16 +437,16 @@ export async function beginOAuth(provider: OAuthProvider): Promise<OAuthSessionI
   };
 }
 
-function makeTokenKey(provider: OAuthProvider, accountId: string | undefined, sessionId: string): string {
+export function makeTokenKey(provider: OAuthProvider, accountId: string | undefined, sessionId: string): string {
   return `${provider}:${accountId ?? sessionId.slice(0, 8)}`;
 }
 
 /** Extract a code and optional state from a raw code, code#state, or full URL. */
-function parsePasted(pasted: string, session: OAuthSession): { code: string; state?: string } {
+export function parsePasted(pasted: string, redirectUri: string): { code: string; state?: string } {
   const trimmed = pasted.trim();
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     const url = new URL(trimmed);
-    const redirect = new URL(session.redirectUri);
+    const redirect = new URL(redirectUri);
     if (url.hostname.toLowerCase() !== redirect.hostname.toLowerCase() || url.pathname !== redirect.pathname) {
       throw new Error('Pasted URL does not match this session\'s redirect URI.');
     }
@@ -455,7 +470,7 @@ export async function finishOAuth(sessionId: string, pasted: string): Promise<OA
     throw new Error('OAuth session has expired. Start again.');
   }
 
-  const { code, state } = parsePasted(pasted, session);
+  const { code, state } = parsePasted(pasted, session.redirectUri);
   // A pasted code without a state (bare code or a URL without a state) is accepted
   // as the documented manual-fallback behavior.
   if (state && state !== session.state) {
@@ -477,7 +492,7 @@ export function cancelOAuth(sessionId: string): void {
   closeSession(session);
 }
 
-function extractAccountId(idToken: string): string | undefined {
+export function extractAccountId(idToken: string): string | undefined {
   const parts = idToken.split('.');
   if (parts.length < 2) return undefined;
   try {
@@ -491,7 +506,7 @@ function extractAccountId(idToken: string): string | undefined {
 }
 
 /** Decode the `exp` claim from an unvalidated JWT, returning epoch milliseconds. */
-function expFromJwt(jwt: string | undefined): number | undefined {
+export function expFromJwt(jwt: string | undefined): number | undefined {
   if (typeof jwt !== 'string') return undefined;
   const parts = jwt.split('.');
   if (parts.length < 2) return undefined;
@@ -512,7 +527,7 @@ function tokenExpiresAt(tokenSet: OAuthTokenSet): number | undefined {
   return undefined;
 }
 
-function tokenFromResponse(provider: OAuthProvider, json: Record<string, unknown>, obtainedAt: number): OAuthTokenSet {
+export function tokenFromResponse(provider: OAuthProvider, json: Record<string, unknown>, obtainedAt: number): OAuthTokenSet {
   // OpenRouter's exchange returns the API key itself as `key`, not a token pair.
   const accessToken = (json.access_token ?? json.key) as string | undefined;
   if (!accessToken) throw new Error('Token response missing access_token.');
@@ -543,67 +558,74 @@ function tokenFromResponse(provider: OAuthProvider, json: Record<string, unknown
   };
 }
 
-async function exchangeCode(
+/** A token endpoint request: where, with which headers, and the body. */
+export interface TokenRequest {
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+/** The request that redeems an authorization code (OpenRouter: for its API key). */
+export function exchangeRequest(
   provider: OAuthProvider,
   code: string,
   redirectUri: string,
   verifier: string,
   state: string,
-): Promise<OAuthTokenSet> {
-  const obtainedAt = Date.now();
-
+): TokenRequest {
   if (provider === 'openrouter') {
-    const res = await fetch(OPENROUTER_KEY_URL, {
-      method: 'POST',
+    return {
+      url: OPENROUTER_KEY_URL,
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: 'S256' }),
-    });
-    const text = await res.text().catch(() => '');
-    if (!res.ok) {
+    };
+  }
+  if (provider === 'claude') {
+    // Anthropic's token endpoint validates the whole body against a schema and
+    // rejects it with "Invalid request format" when `state` is absent, even
+    // though the code alone would identify the grant.
+    return {
+      url: CLAUDE_TOKEN_URL,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        client_id: CLAUDE_CLIENT_ID,
+        grant_type: 'authorization_code',
+        code,
+        state,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+      }),
+    };
+  }
+  const params = new URLSearchParams({
+    grant_type: 'authorization_code',
+    client_id: CHATGPT_CLIENT_ID,
+    code,
+    redirect_uri: redirectUri,
+    code_verifier: verifier,
+  });
+  return {
+    url: CHATGPT_TOKEN_URL,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: params.toString(),
+  };
+}
+
+/** What a redeemed code's response becomes: the token set, or the error the sign-in fails with. */
+export function exchangeResult(provider: OAuthProvider, ok: boolean, status: number, text: string, obtainedAt: number): OAuthTokenSet {
+  if (provider === 'openrouter') {
+    if (!ok) {
       const errBody = safeJson(text);
       const errField = errBody?.error as { message?: unknown } | undefined;
-      const err = String(errField?.message ?? errBody?.error_description ?? (text.slice(0, 200) || `HTTP ${res.status}`));
+      const err = String(errField?.message ?? errBody?.error_description ?? (text.slice(0, 200) || `HTTP ${status}`));
       throw new Error(`Key exchange failed: ${err}`);
     }
     const json = safeJson(text);
     if (!json?.key) throw new Error('OpenRouter returned no API key.');
     return tokenFromResponse(provider, json, obtainedAt);
   }
-
-  const isClaude = provider === 'claude';
-  const tokenUrl = isClaude ? CLAUDE_TOKEN_URL : CHATGPT_TOKEN_URL;
-
-  let body: string;
-  let headers: Record<string, string>;
-  if (isClaude) {
-    headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
-    // Anthropic's token endpoint validates the whole body against a schema and
-    // rejects it with "Invalid request format" when `state` is absent, even
-    // though the code alone would identify the grant.
-    body = JSON.stringify({
-      client_id: CLAUDE_CLIENT_ID,
-      grant_type: 'authorization_code',
-      code,
-      state,
-      redirect_uri: redirectUri,
-      code_verifier: verifier,
-    });
-  } else {
-    headers = { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' };
-    const params = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: CHATGPT_CLIENT_ID,
-      code,
-      redirect_uri: redirectUri,
-      code_verifier: verifier,
-    });
-    body = params.toString();
-  }
-
-  const res = await fetch(tokenUrl, { method: 'POST', headers, body });
-  const text = await res.text().catch(() => '');
-  if (!res.ok) {
-    const err = String(safeJson(text)?.error_description ?? text.slice(0, 200) ?? `HTTP ${res.status}`);
+  if (!ok) {
+    const err = String(safeJson(text)?.error_description ?? text.slice(0, 200) ?? `HTTP ${status}`);
     throw new Error(`Token exchange failed: ${err}`);
   }
   const json = safeJson(text);
@@ -615,40 +637,53 @@ async function exchangeCode(
   return tokenSet;
 }
 
-async function refreshTokenSet(tokenSet: OAuthTokenSet): Promise<OAuthTokenSet> {
-  const isClaude = tokenSet.provider === 'claude';
-  const tokenUrl = isClaude ? CLAUDE_TOKEN_URL : CHATGPT_TOKEN_URL;
+async function exchangeCode(
+  provider: OAuthProvider,
+  code: string,
+  redirectUri: string,
+  verifier: string,
+  state: string,
+): Promise<OAuthTokenSet> {
   const obtainedAt = Date.now();
-
-  if (!tokenSet.refreshToken) throw new Error('No refresh token available.');
-
-  let body: string;
-  let headers: Record<string, string>;
-  if (isClaude) {
-    headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
-    body = JSON.stringify({
-      client_id: CLAUDE_CLIENT_ID,
-      grant_type: 'refresh_token',
-      refresh_token: tokenSet.refreshToken,
-      // The first-party client echoes the granted scope set on refresh; the
-      // endpoint's strict body validation rejects a grant missing it.
-      scope: tokenSet.scopes ?? CLAUDE_SCOPES,
-    });
-  } else {
-    headers = { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' };
-    const params = new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: CHATGPT_CLIENT_ID,
-      refresh_token: tokenSet.refreshToken,
-    });
-    body = params.toString();
-  }
-
-  const res = await fetch(tokenUrl, { method: 'POST', headers, body });
+  const req = exchangeRequest(provider, code, redirectUri, verifier, state);
+  const res = await fetch(req.url, { method: 'POST', headers: req.headers, body: req.body });
   const text = await res.text().catch(() => '');
-  if (!res.ok) {
-    const err = String(safeJson(text)?.error_description ?? text.slice(0, 200) ?? `HTTP ${res.status}`);
-    if (res.status === 401 || /invalid_grant|expired|revoked/i.test(err)) {
+  return exchangeResult(provider, res.ok, res.status, text, obtainedAt);
+}
+
+/** The request that renews a token set that has a refresh token. */
+export function refreshRequest(tokenSet: OAuthTokenSet): TokenRequest {
+  if (tokenSet.provider === 'claude') {
+    return {
+      url: CLAUDE_TOKEN_URL,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        client_id: CLAUDE_CLIENT_ID,
+        grant_type: 'refresh_token',
+        refresh_token: tokenSet.refreshToken,
+        // The first-party client echoes the granted scope set on refresh; the
+        // endpoint's strict body validation rejects a grant missing it.
+        scope: tokenSet.scopes ?? CLAUDE_SCOPES,
+      }),
+    };
+  }
+  const params = new URLSearchParams({
+    grant_type: 'refresh_token',
+    client_id: CHATGPT_CLIENT_ID,
+    refresh_token: tokenSet.refreshToken ?? '',
+  });
+  return {
+    url: CHATGPT_TOKEN_URL,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: params.toString(),
+  };
+}
+
+/** What a renewal's response becomes: the next token set, or the error. */
+export function refreshResult(tokenSet: OAuthTokenSet, ok: boolean, status: number, text: string, obtainedAt: number): OAuthTokenSet {
+  if (!ok) {
+    const err = String(safeJson(text)?.error_description ?? text.slice(0, 200) ?? `HTTP ${status}`);
+    if (status === 401 || /invalid_grant|expired|revoked/i.test(err)) {
       throw new Error('Subscription session expired. Sign in again.');
     }
     throw new Error(`Token refresh failed: ${err}`);
@@ -660,6 +695,15 @@ async function refreshTokenSet(tokenSet: OAuthTokenSet): Promise<OAuthTokenSet> 
   if (next.accountId == null && tokenSet.accountId) next.accountId = tokenSet.accountId;
   if (next.scopes == null && tokenSet.scopes) next.scopes = tokenSet.scopes;
   return next;
+}
+
+async function refreshTokenSet(tokenSet: OAuthTokenSet): Promise<OAuthTokenSet> {
+  const obtainedAt = Date.now();
+  if (!tokenSet.refreshToken) throw new Error('No refresh token available.');
+  const req = refreshRequest(tokenSet);
+  const res = await fetch(req.url, { method: 'POST', headers: req.headers, body: req.body });
+  const text = await res.text().catch(() => '');
+  return refreshResult(tokenSet, res.ok, res.status, text, obtainedAt);
 }
 
 function safeJson(text: string): Record<string, unknown> | undefined {
@@ -674,6 +718,7 @@ export async function ensureFreshToken(tokenKey: string, force = false): Promise
   if (!tokenKey) {
     throw new Error('No token key specified.');
   }
+  if (daemon) return daemon<string>('oauth:fresh', tokenKey, force);
   if (!force) {
     const existing = inFlight.get(tokenKey);
     if (existing) return existing;
@@ -745,13 +790,47 @@ export function getOAuthStatus(tokenKey: string): OAuthStatus {
 }
 
 /** Parse a timestamp from a CLI credential file, which may be a number or an ISO string. */
-function parseCliTimestamp(raw: unknown): number {
+function parseCliTimestamp(raw: unknown, now: number): number {
   if (typeof raw === 'number') return raw;
   if (typeof raw === 'string') {
     const ms = Date.parse(raw);
-    return Number.isNaN(ms) ? Date.now() : ms;
+    return Number.isNaN(ms) ? now : ms;
   }
-  return Date.now();
+  return now;
+}
+
+/** The Claude CLI's credential file (`~/.claude/.credentials.json`) as a token set, if it holds one. Throws on bad JSON. */
+export function claudeCliToken(raw: string, now: number): OAuthTokenSet | undefined {
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  const block = (parsed.claudeAiOauth as Record<string, unknown> | undefined) ?? parsed;
+  const accessToken = (block.accessToken as string) ?? (block.access_token as string);
+  if (!accessToken) return undefined;
+  const scopesRaw = block.scopes;
+  const scopes = Array.isArray(scopesRaw) ? scopesRaw.join(' ') : (scopesRaw as string | undefined);
+  return {
+    provider: 'claude',
+    accessToken,
+    refreshToken: (block.refreshToken as string) ?? (block.refresh_token as string),
+    expiresAt: (block.expiresAt as number) ?? (block.expires_at as number),
+    scopes,
+    obtainedAt: now,
+  };
+}
+
+/** The Codex CLI's auth file (`~/.codex/auth.json`) as a token set, if it holds one. Throws on bad JSON. */
+export function codexCliToken(raw: string, now: number): OAuthTokenSet | undefined {
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  const tokens = parsed.tokens as Record<string, unknown> | undefined;
+  if (!tokens?.access_token) return undefined;
+  const accessToken = tokens.access_token as string;
+  const refreshToken = tokens.refresh_token as string | undefined;
+  const accountId = tokens.account_id as string | undefined;
+  const obtainedAt = parseCliTimestamp(parsed.last_refresh, now);
+  const expiresAt =
+    expFromJwt(accessToken) ??
+    expFromJwt(tokens.id_token as string) ??
+    obtainedAt + CHATGPT_CLI_TOKEN_TTL_MS;
+  return { provider: 'chatgpt', accessToken, refreshToken, accountId, expiresAt, obtainedAt };
 }
 
 export function importCliAuth(): Record<OAuthProvider, boolean> {
@@ -761,21 +840,9 @@ export function importCliAuth(): Record<OAuthProvider, boolean> {
   const claudePath = join(homedir(), '.claude', '.credentials.json');
   if (existsSync(claudePath)) {
     try {
-      const raw = readFileSync(claudePath, 'utf8');
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      const block = (parsed.claudeAiOauth as Record<string, unknown> | undefined) ?? parsed;
-      const accessToken = (block.accessToken as string) ?? (block.access_token as string);
-      if (accessToken) {
-        const scopesRaw = block.scopes;
-        const scopes = Array.isArray(scopesRaw) ? scopesRaw.join(' ') : (scopesRaw as string | undefined);
-        setToken('claude', {
-          provider: 'claude',
-          accessToken,
-          refreshToken: (block.refreshToken as string) ?? (block.refresh_token as string),
-          expiresAt: (block.expiresAt as number) ?? (block.expires_at as number),
-          scopes,
-          obtainedAt: Date.now(),
-        });
+      const token = claudeCliToken(readFileSync(claudePath, 'utf8'), Date.now());
+      if (token) {
+        setToken('claude', token);
         result.claude = true;
       }
     } catch {
@@ -786,26 +853,9 @@ export function importCliAuth(): Record<OAuthProvider, boolean> {
   const chatgptPath = join(homedir(), '.codex', 'auth.json');
   if (existsSync(chatgptPath)) {
     try {
-      const raw = readFileSync(chatgptPath, 'utf8');
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      const tokens = parsed.tokens as Record<string, unknown> | undefined;
-      if (tokens?.access_token) {
-        const accessToken = tokens.access_token as string;
-        const refreshToken = tokens.refresh_token as string | undefined;
-        const accountId = tokens.account_id as string | undefined;
-        const obtainedAt = parseCliTimestamp(parsed.last_refresh);
-        const expiresAt =
-          expFromJwt(accessToken) ??
-          expFromJwt(tokens.id_token as string) ??
-          obtainedAt + CHATGPT_CLI_TOKEN_TTL_MS;
-        setToken('chatgpt', {
-          provider: 'chatgpt',
-          accessToken,
-          refreshToken,
-          accountId,
-          expiresAt,
-          obtainedAt,
-        });
+      const token = codexCliToken(readFileSync(chatgptPath, 'utf8'), Date.now());
+      if (token) {
+        setToken('chatgpt', token);
         result.chatgpt = true;
       }
     } catch {

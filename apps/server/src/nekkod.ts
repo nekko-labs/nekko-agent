@@ -187,6 +187,8 @@ export class DaemonProcess {
       allowedOrigins: [],
       backend: this.opts.backend,
       dataDir: this.opts.dataDir,
+      // OAuth sign-in is desktop-only (web-channels.ts): the daemon answers its channels with the same refusal.
+      signIn: false,
     };
     const child = spawn(this.opts.exe, [], {
       env: { ...childEnv(), NEKKOD_CONFIG: JSON.stringify(config) },

@@ -1,0 +1,991 @@
+{
+  "ops": [
+    {
+      "op": "targets",
+      "result": [
+        {
+          "id": "nekko-agent",
+          "label": "Nekko Agent",
+          "hint": "joins the / menu and Skills tab",
+          "available": true
+        },
+        {
+          "id": "claude",
+          "label": "Claude Code",
+          "hint": "~/.claude/skills/<name>/SKILL.md",
+          "available": true,
+          "dir": "<home>/.claude/skills"
+        },
+        {
+          "id": "codex",
+          "label": "Codex",
+          "hint": "~/.codex/skills/<name>/SKILL.md",
+          "available": true,
+          "dir": "<home>/.codex/skills"
+        }
+      ]
+    },
+    {
+      "op": "list",
+      "result": []
+    },
+    {
+      "op": "install",
+      "result": {
+        "ok": true,
+        "installed": [
+          {
+            "skillId": "nekko-agent-review-council",
+            "target": "nekko-agent",
+            "installedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "install",
+      "result": {
+        "ok": true,
+        "message": "Already installed.",
+        "installed": [
+          {
+            "skillId": "nekko-agent-review-council",
+            "target": "nekko-agent",
+            "installedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "install",
+      "result": {
+        "ok": false,
+        "message": "A skill named \"review-council\" already exists there.",
+        "installed": [
+          {
+            "skillId": "nekko-agent-review-council",
+            "target": "nekko-agent",
+            "installedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "install",
+      "result": {
+        "ok": true,
+        "message": "Already installed.",
+        "installed": [
+          {
+            "skillId": "nekko-agent-review-council",
+            "target": "nekko-agent",
+            "installedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "install",
+      "result": {
+        "ok": false,
+        "message": "Unknown skill.",
+        "installed": [
+          {
+            "skillId": "nekko-agent-review-council",
+            "target": "nekko-agent",
+            "installedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "install",
+      "result": {
+        "ok": true,
+        "installed": [
+          {
+            "skillId": "nekko-agent-review-council",
+            "target": "nekko-agent",
+            "installedAt": 0
+          },
+          {
+            "skillId": "vaizer-x",
+            "target": "codex",
+            "path": "<home>/.codex/skills/vx",
+            "installedAt": 0,
+            "skill": {
+              "id": "vaizer-x",
+              "name": "vx",
+              "description": "From Vaizer",
+              "author": "A",
+              "source": "vaizer",
+              "category": "Automation",
+              "template": "t",
+              "instructions": "i",
+              "markdown": "---\nname: vx\n---\nverbatim"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "install",
+      "result": {
+        "ok": false,
+        "message": "Invalid skill name.",
+        "installed": [
+          {
+            "skillId": "nekko-agent-review-council",
+            "target": "nekko-agent",
+            "installedAt": 0
+          },
+          {
+            "skillId": "vaizer-x",
+            "target": "codex",
+            "path": "<home>/.codex/skills/vx",
+            "installedAt": 0,
+            "skill": {
+              "id": "vaizer-x",
+              "name": "vx",
+              "description": "From Vaizer",
+              "author": "A",
+              "source": "vaizer",
+              "category": "Automation",
+              "template": "t",
+              "instructions": "i",
+              "markdown": "---\nname: vx\n---\nverbatim"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "install",
+      "result": {
+        "ok": false,
+        "message": "Unknown skill.",
+        "installed": [
+          {
+            "skillId": "nekko-agent-review-council",
+            "target": "nekko-agent",
+            "installedAt": 0
+          },
+          {
+            "skillId": "vaizer-x",
+            "target": "codex",
+            "path": "<home>/.codex/skills/vx",
+            "installedAt": 0,
+            "skill": {
+              "id": "vaizer-x",
+              "name": "vx",
+              "description": "From Vaizer",
+              "author": "A",
+              "source": "vaizer",
+              "category": "Automation",
+              "template": "t",
+              "instructions": "i",
+              "markdown": "---\nname: vx\n---\nverbatim"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "install",
+      "result": {
+        "ok": false,
+        "message": "A skill named \"alpha\" already exists there.",
+        "installed": [
+          {
+            "skillId": "nekko-agent-review-council",
+            "target": "nekko-agent",
+            "installedAt": 0
+          },
+          {
+            "skillId": "vaizer-x",
+            "target": "codex",
+            "path": "<home>/.codex/skills/vx",
+            "installedAt": 0,
+            "skill": {
+              "id": "vaizer-x",
+              "name": "vx",
+              "description": "From Vaizer",
+              "author": "A",
+              "source": "vaizer",
+              "category": "Automation",
+              "template": "t",
+              "instructions": "i",
+              "markdown": "---\nname: vx\n---\nverbatim"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "external",
+      "result": [
+        {
+          "id": "external:claude:project:alpha",
+          "name": "alpha",
+          "description": "project alpha wins",
+          "template": "Use the \"alpha\" skill below.\n\nProject alpha.",
+          "category": "Imported",
+          "origin": {
+            "tool": "claude",
+            "scope": "project",
+            "dir": "<project>/.claude/skills/alpha"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/alpha",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:agents:project:proj",
+          "name": "proj",
+          "description": "single quoted",
+          "template": "Use the \"proj\" skill below.\n\nProject skill.",
+          "category": "Imported",
+          "origin": {
+            "tool": "agents",
+            "scope": "project",
+            "dir": "<project>/.agents/skills/proj"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/proj",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:claude:user:beta",
+          "name": "beta",
+          "description": "First real line of beta.",
+          "template": "Use the \"beta\" skill below. Its own files (scripts, references) are in <home>/.claude/skills/beta. That folder belongs to the skill, not to the user's project: do the work in the project as usual, and only read from that folder when the instructions point at one of its files.\n\n# Beta\n\nFirst real line of beta.\nMore.",
+          "category": "Imported",
+          "origin": {
+            "tool": "claude",
+            "scope": "user",
+            "dir": "<home>/.claude/skills/beta"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/beta",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:codex:user:gamma-two",
+          "name": "gamma-two",
+          "description": "folded over two lines",
+          "template": "Use the \"gamma-two\" skill below.\n\nGamma body",
+          "category": "Imported",
+          "origin": {
+            "tool": "codex",
+            "scope": "user",
+            "dir": "<home>/.codex/skills/Gamma"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/gamma-two",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:gemini:user:nometa",
+          "name": "nometa",
+          "description": "Just a body, no frontmatter.",
+          "template": "Use the \"nometa\" skill below.\n\nJust a body, no frontmatter.",
+          "category": "Imported",
+          "origin": {
+            "tool": "gemini",
+            "scope": "user",
+            "dir": "<home>/.gemini/skills/nometa"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/nometa",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:agents:user:hidden",
+          "name": "hidden",
+          "description": "still read",
+          "template": "Use the \"hidden\" skill below.\n\nstill read",
+          "category": "Imported",
+          "origin": {
+            "tool": "agents",
+            "scope": "user",
+            "dir": "<home>/.agents/skills/.hidden"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/hidden",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:agents:user:literal",
+          "name": "literal",
+          "description": "line one\nline two",
+          "template": "Use the \"literal\" skill below.\n\nLiteral body",
+          "category": "Imported",
+          "origin": {
+            "tool": "agents",
+            "scope": "user",
+            "dir": "<home>/.agents/skills/literal"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/literal",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "op": "skillFile",
+      "result": "---\nname: review-council\ndescription: shadowed by the built-in\n---\nbody\n"
+    },
+    {
+      "op": "skillFile",
+      "result": "---\nname: vx\n---\nverbatim\n"
+    },
+    {
+      "op": "uninstall",
+      "result": [
+        {
+          "skillId": "nekko-agent-review-council",
+          "target": "nekko-agent",
+          "installedAt": 0
+        },
+        {
+          "skillId": "vaizer-x",
+          "target": "codex",
+          "path": "<home>/.codex/skills/vx",
+          "installedAt": 0,
+          "skill": {
+            "id": "vaizer-x",
+            "name": "vx",
+            "description": "From Vaizer",
+            "author": "A",
+            "source": "vaizer",
+            "category": "Automation",
+            "template": "t",
+            "instructions": "i",
+            "markdown": "---\nname: vx\n---\nverbatim"
+          }
+        }
+      ]
+    },
+    {
+      "op": "exists",
+      "result": true
+    },
+    {
+      "op": "removeHome",
+      "result": null
+    },
+    {
+      "op": "list",
+      "result": [
+        {
+          "skillId": "nekko-agent-review-council",
+          "target": "nekko-agent",
+          "installedAt": 0
+        }
+      ]
+    },
+    {
+      "op": "uninstall",
+      "result": []
+    },
+    {
+      "op": "uninstall",
+      "result": []
+    },
+    {
+      "op": "list",
+      "result": []
+    },
+    {
+      "op": "external",
+      "result": [
+        {
+          "id": "external:claude:project:alpha",
+          "name": "alpha",
+          "description": "project alpha wins",
+          "template": "Use the \"alpha\" skill below.\n\nProject alpha.",
+          "category": "Imported",
+          "origin": {
+            "tool": "claude",
+            "scope": "project",
+            "dir": "<project>/.claude/skills/alpha"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/alpha",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:agents:project:proj",
+          "name": "proj",
+          "description": "single quoted",
+          "template": "Use the \"proj\" skill below.\n\nProject skill.",
+          "category": "Imported",
+          "origin": {
+            "tool": "agents",
+            "scope": "project",
+            "dir": "<project>/.agents/skills/proj"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/proj",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:claude:user:beta",
+          "name": "beta",
+          "description": "First real line of beta.",
+          "template": "Use the \"beta\" skill below. Its own files (scripts, references) are in <home>/.claude/skills/beta. That folder belongs to the skill, not to the user's project: do the work in the project as usual, and only read from that folder when the instructions point at one of its files.\n\n# Beta\n\nFirst real line of beta.\nMore.",
+          "category": "Imported",
+          "origin": {
+            "tool": "claude",
+            "scope": "user",
+            "dir": "<home>/.claude/skills/beta"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/beta",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:claude:user:review-council",
+          "name": "review-council",
+          "description": "shadowed by the built-in",
+          "template": "Use the \"review-council\" skill below.\n\nbody",
+          "category": "Imported",
+          "origin": {
+            "tool": "claude",
+            "scope": "user",
+            "dir": "<home>/.claude/skills/review-council"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/review-council",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:codex:user:gamma-two",
+          "name": "gamma-two",
+          "description": "folded over two lines",
+          "template": "Use the \"gamma-two\" skill below.\n\nGamma body",
+          "category": "Imported",
+          "origin": {
+            "tool": "codex",
+            "scope": "user",
+            "dir": "<home>/.codex/skills/Gamma"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/gamma-two",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:gemini:user:nometa",
+          "name": "nometa",
+          "description": "Just a body, no frontmatter.",
+          "template": "Use the \"nometa\" skill below.\n\nJust a body, no frontmatter.",
+          "category": "Imported",
+          "origin": {
+            "tool": "gemini",
+            "scope": "user",
+            "dir": "<home>/.gemini/skills/nometa"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/nometa",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:agents:user:hidden",
+          "name": "hidden",
+          "description": "still read",
+          "template": "Use the \"hidden\" skill below.\n\nstill read",
+          "category": "Imported",
+          "origin": {
+            "tool": "agents",
+            "scope": "user",
+            "dir": "<home>/.agents/skills/.hidden"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/hidden",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "external:agents:user:literal",
+          "name": "literal",
+          "description": "line one\nline two",
+          "template": "Use the \"literal\" skill below.\n\nLiteral body",
+          "category": "Imported",
+          "origin": {
+            "tool": "agents",
+            "scope": "user",
+            "dir": "<home>/.agents/skills/literal"
+          },
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/literal",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Follow SKILL.md",
+                "detail": "Instructions from the skill file"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "markdown": [
+    "---\nname: review-council\ndescription: Summon a council of specialised reviewers over your diff: correctness, security, and simplicity, each reporting separately\n---\n\n# review-council\n\nReview the working diff with a council of three parallel reviewer agents, each with one lens: (1) correctness bugs and edge cases, (2) security (injection, auth, secrets, unsafe input), (3) simplification and reuse. Spawn them with spawn_agent, give each the diff, then merge their findings into a single report ranked by severity, dropping duplicates. Verify each finding against the code before reporting it.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs, https://github.com/nekko-labs/nekko-agent).\n",
+    "---\nname: spec-sync\ndescription: Reconcile SPEC.md with the code: find shipped features the spec missed and spec promises the code broke\n---\n\n# spec-sync\n\nRead the workspace SPEC.md, then survey the codebase (entry points, routes, views, commands). Produce two lists: features that exist in code but are missing from the spec, and spec statements the code contradicts. Update SPEC.md so it describes the system as it actually is, keeping its existing voice and structure.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs, https://github.com/nekko-labs/nekko-agent).\n",
+    "---\nname: changelog\ndescription: Write a user-facing changelog entry from the commits since the last release tag\n---\n\n# changelog\n\nRun git log from the last release tag to HEAD. Group the changes into Added / Changed / Fixed sections written for end users (plain language, no commit hashes, no internal refactors unless user-visible). Prepend the entry to CHANGELOG.md with the version and date.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs, https://github.com/nekko-labs/nekko-agent).\n",
+    "---\nname: standup\ndescription: Summarize what changed in this workspace since yesterday, written as a standup update\n---\n\n# standup\n\nInspect git log and the working tree for the last 24 hours. Write a standup update with three short sections: Done (merged/committed), In progress (uncommitted or branch work), Blockers (failing tests, TODOs, unresolved conflicts). Keep each section to three bullets.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs, https://github.com/nekko-labs/nekko-agent).\n",
+    "---\nname: dep-audit\ndescription: Audit dependencies for known vulnerabilities, unused packages, and majors you are behind on\n---\n\n# dep-audit\n\nRun the package manager audit (npm audit / cargo audit / pip-audit as appropriate), cross-check package manifests against actual imports to find unused dependencies, and list major versions the project is behind on. Produce a prioritized plan: security fixes first, then easy majors, then risky ones with their breaking changes.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs, https://github.com/nekko-labs/nekko-agent).\n",
+    "---\nname: a11y-audit\ndescription: Audit UI code for accessibility: contrast, keyboard navigation, labels, and focus handling\n---\n\n# a11y-audit\n\nSweep the UI components for accessibility problems: interactive elements without accessible names, missing alt text, keyboard traps or unreachable controls, missing focus styles, and color pairs likely to fail WCAG AA contrast. Report findings grouped by severity, each with the file, the problem, and a concrete fix.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs, https://github.com/nekko-labs/nekko-agent).\n",
+    "---\nname: i18n-sweep\ndescription: Find hardcoded user-facing strings and move them into the translation files\n---\n\n# i18n-sweep\n\nSearch the UI code for hardcoded user-facing strings (labels, toasts, placeholders, errors). Move each into the project’s i18n catalog with a sensible key, replace the literal with the lookup, and flag strings whose meaning needs a translator note. Do not touch log lines or developer-only text.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs, https://github.com/nekko-labs/nekko-agent).\n",
+    "---\nname: pdf\ndescription: Read, create, merge, split, and fill PDF files\n---\n\n# pdf\n\nHandle PDF work end to end: extract text and tables from PDFs, combine or split documents, rotate pages, fill form fields, and create new PDFs from content. Prefer well-known Python libraries (pypdf, reportlab) run via the shell; verify the output file opens cleanly.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs).\n> Based on https://github.com/anthropics/skills/tree/main/skills/pdf; this is our own summary, see the original for its full text.\n",
+    "---\nname: docx\ndescription: Create and edit Word documents with proper formatting, styles, and tracked changes\n---\n\n# docx\n\nCreate or edit .docx files with professional formatting: headings, tables of contents, page numbers, styled tables, and letterheads. Use python-docx via the shell. When editing an existing document, preserve its styles and structure.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs).\n> Based on https://github.com/anthropics/skills/tree/main/skills/docx; this is our own summary, see the original for its full text.\n",
+    "---\nname: xlsx\ndescription: Read, clean, analyze, and build spreadsheets with formulas and charts\n---\n\n# xlsx\n\nWork with spreadsheet files: read and clean messy tabular data, compute columns and formulas, add charts, and produce well-formatted .xlsx output. Use openpyxl/pandas via the shell and sanity-check the numbers before delivering.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs).\n> Based on https://github.com/anthropics/skills/tree/main/skills/xlsx; this is our own summary, see the original for its full text.\n",
+    "---\nname: brainstorm\ndescription: Structured brainstorming that interrogates the problem before proposing solutions\n---\n\n# brainstorm\n\nRun a structured brainstorm: first ask the clarifying questions that actually change the answer, then generate several genuinely distinct solution directions, each with its tradeoffs and a cheap way to validate it. Converge on a recommendation only after laying out the space.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs).\n> Based on https://github.com/obra/superpowers/tree/main/skills/brainstorming; this is our own summary, see the original for its full text.\n",
+    "---\nname: systematic-debug\ndescription: Systematic root-cause debugging: reproduce, bisect, instrument, prove the fix\n---\n\n# systematic-debug\n\nDebug systematically instead of guessing: reproduce the failure first, then isolate the cause by bisecting the input/commit/code path and adding targeted instrumentation. Fix the root cause, not the symptom, and prove the fix with a test that failed before and passes after.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs).\n> Based on https://github.com/obra/superpowers/tree/main/skills/systematic-debugging; this is our own summary, see the original for its full text.\n",
+    "---\nname: conventional-commits\ndescription: Stage and commit with strict Conventional Commits messages, splitting unrelated changes\n---\n\n# conventional-commits\n\nInspect the working tree and group related changes. Commit each group with a strict Conventional Commits message (type(scope): subject, imperative, <72 chars, body explaining why when non-obvious). Never mix unrelated changes in one commit.\n\n> Installed from the Nekko Agent skills marketplace (author: Nekko Labs).\n> Based on https://www.conventionalcommits.org; this is our own summary, see the original for its full text.\n"
+  ],
+  "parse": [
+    {
+      "body": ""
+    },
+    {
+      "body": "no frontmatter"
+    },
+    {
+      "name": "x",
+      "body": ""
+    },
+    {
+      "name": "x",
+      "body": "body"
+    },
+    {
+      "body": "b"
+    },
+    {
+      "name": "lower",
+      "body": "b"
+    },
+    {
+      "description": "a b",
+      "body": "b"
+    },
+    {
+      "name": "'mis\"",
+      "body": "b"
+    }
+  ]
+}

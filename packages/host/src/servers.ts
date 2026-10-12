@@ -13,7 +13,7 @@ export async function stopLocalServer(baseUrl: string): Promise<{ ok: boolean; m
 
   const pids = await pidsOnPort(port);
   if (pids.length === 0) {
-    return { ok: false, message: `Nothing is listening on port ${port} — it may already be stopped.` };
+    return { ok: false, message: `Nothing is listening on port ${port}; it may already be stopped.` };
   }
 
   let killed = 0;

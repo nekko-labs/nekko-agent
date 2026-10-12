@@ -1,0 +1,17 @@
+[package]
+name = "nekko-oauth"
+description = "Subscription sign-in for the Nekko Agent engine daemon: authorize URLs, token requests and what their responses become, the CLI credential imports and tokens.json, exactly as the TS host's oauth.ts did them."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+getrandom.workspace = true
+nekko-js = { path = "../nekko-js" }
+nekko-settings = { path = "../nekko-settings" }
+serde_json.workspace = true
+sha2 = "0.10"
+url = "2.5"

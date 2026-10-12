@@ -5,6 +5,10 @@ import { getExecutionMode, getSessionWorkspaceIds, type Session, type SandboxSta
 import { ContainerSandbox } from './container-sandbox.js';
 import { dataDir, getSettings } from './store.js';
 import { getSession, saveSession } from './sessions.js';
+import { daemonCall, daemonOwns } from './engine/daemon.js';
+
+/** The engine daemon owns the containers (crates/nekkod/src/sandbox.rs). */
+export const DAEMON_SANDBOX = 'sandbox';
 
 export const SANDBOX_TOOLS = new Set(['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash']);
 const runtimes = new Map<string, { sandbox: ContainerSandbox; identity: string; signal?: AbortSignal; error?: string; ready: boolean }>();
@@ -55,17 +59,25 @@ function runtime(s: Session) {
   runtimes.set(key, entry);
   return entry;
 }
-/** Calling this user-facing API is explicit consent to copy selected folders using a local image. */
-export async function configureSandbox(sessionId: string, image: string): Promise<SandboxStatus> {
-  const s = getSession(sessionId);
-  if (!s) throw new Error('Session not found');
+/**
+ * The chat's side of sandbox setup: only an empty, idle, unconfigured chat
+ * becomes a sandbox chat (the engine daemon's port is nekko-store's
+ * `configure_sandbox`, held to this by the session-writes golden set).
+ */
+export function applySandboxSetup(s: Session, image: string, identity: string, now: number): void {
   if (s.activeRun || s.sandbox || s.messages.length) throw new Error('Sandbox setup is immutable and requires an empty, idle, unconfigured session');
   // Setup is the explicit transition, not a later renderer option patch.
   s.executionMode = 'sandbox';
   s.gitIsolation = false;
   if (!/^\S+@sha256:[a-f0-9]{64}$/.test(image)) throw new Error('A digest-pinned, already installed Linux image is required');
-  s.sandbox = { image, identity: randomUUID(), configuredAt: Date.now(), sourceWorkspaceIds: getSessionWorkspaceIds(s) };
+  s.sandbox = { image, identity, configuredAt: now, sourceWorkspaceIds: getSessionWorkspaceIds(s) };
   s.mode = 'ask'; s.gitWorktrees = undefined;
+}
+/** Calling this user-facing API is explicit consent to copy selected folders using a local image. */
+export async function configureSandbox(sessionId: string, image: string): Promise<SandboxStatus> {
+  const s = getSession(sessionId);
+  if (!s) throw new Error('Session not found');
+  applySandboxSetup(s, image, randomUUID(), Date.now());
   saveSession(s);
   const r = runtime(s);
   try { await r.sandbox.initialize(); r.ready = true; } catch (error) { r.error = (error as Error).message; throw error; }
@@ -110,6 +122,15 @@ export async function executeSandboxTool(sessionId: string, call: ToolCall, appr
     if (signal?.aborted) return failure('Sandbox execution cancelled');
     if (!await approve(call, `Sandbox ${call.name}: access only the copied workspace`, call.name === 'bash' ? 'high' : call.name === 'write_file' || call.name === 'edit_file' ? 'medium' : 'low')) return failure('Sandbox action not approved');
     if (signal?.aborted) return failure('Sandbox execution cancelled');
+    // Under a daemon that owns the containers, the call runs there; a Stop stops it there.
+    const call_ = daemonOwns(DAEMON_SANDBOX) ? daemonCall() : undefined;
+    if (call_) {
+      const abort = () => { void call_('sandbox:abort', sessionId).catch(() => {}); };
+      signal?.addEventListener('abort', abort, { once: true });
+      try {
+        return await call_<ToolResult>('sandbox:tool', sessionId, call);
+      } finally { signal?.removeEventListener('abort', abort); }
+    }
     const s = sessionFor(sessionId);
     const r = runtime(s);
     // Own the signal before readiness checks. Reject overlapping calls rather than

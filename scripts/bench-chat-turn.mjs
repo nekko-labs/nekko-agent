@@ -41,6 +41,13 @@
 // `echo`), so the write_file approval's timing includes running them (in the
 // daemon when it runs hooks, through the TS host otherwise).
 //
+// `--workspace N` times N rounds of the file explorer and workspace index
+// calls (`workspace:index`, `workspace:search`, `workspace:files`, `dir:list`,
+// `file:read`, `workspace:gitStatus` forced, `design:get`) on the 400-file project and the 2,500-file load project, under
+// the same load. The daemon serves them when it owns them; the load then runs
+// the same search in the host through `bench:hostLoad`, so it still keeps the
+// host's event loop busy.
+//
 // `--route ts` sets NEKKO_AGENT_LOOP=ts on the backend: every turn runs in
 // the TS host, the escape hatch. Nothing touches the user's data directory or
 // a running app; every spawned process is ended on exit.
@@ -168,9 +175,10 @@ process.on('exit', cleanup);
 process.on('SIGINT', () => process.exit(130));
 
 function startDaemon() {
-  const env = { ELECTRON_RUN_AS_NODE: '1', NEKKO_BACKEND_DATA_DIR: data, NEKKO_BACKEND_APP: '{}', NEKKO_BACKEND_ORIGINS: '["null"]' };
+  const env = { ELECTRON_RUN_AS_NODE: '1', NEKKO_BACKEND_DATA_DIR: data, NEKKO_BACKEND_APP: '{}', NEKKO_BACKEND_ORIGINS: '["null"]', NEKKO_BENCH_LOAD: '1' };
   if (route === 'ts') env.NEKKO_AGENT_LOOP = 'ts';
-  const config = { token, allowedOrigins: ['null'], dataDir: data, backend: { exe: electron, args: [backendJs], env } };
+  // As the desktop app starts it (engine-process.ts): its host lets the agent drive a browser.
+  const config = { token, allowedOrigins: ['null'], dataDir: data, allowBrowserControl: true, backend: { exe: electron, args: [backendJs], env } };
   const child = spawn(daemonExe, [], { env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   children.push(child);
   child.stderr.on('data', (d) => { if (args.verbose) process.stderr.write(d); });
@@ -207,10 +215,17 @@ ws.onmessage = (m) => {
   for (const l of listeners) l(frame.payload, at);
 };
 
-// Wait for the backend (forwarded channels work once it is up).
+// Wait for the backend: the daemon answers settings itself, so ask it whether
+// its TS backend is up (the host adjusts the engine's provider entry as it starts).
 for (let i = 0; ; i++) {
-  try { await call('settings:get'); break; } catch (e) { if (i > 120) throw e; await new Promise((r) => setTimeout(r, 500)); }
+  try {
+    if ((await call('daemon:info')).backend === 'ready') { await call('settings:get'); break; }
+  } catch (e) { if (i > 120) throw e; }
+  if (i > 120) throw new Error('the backend never became ready');
+  await new Promise((r) => setTimeout(r, 500));
 }
+// Let the host's startup writes (the engine provider entry) land before ours.
+await new Promise((r) => setTimeout(r, 1000));
 await call('settings:update', {
   workspaces: [{ id: 'w1', name: 'project', path: workspace, addedAt: Date.now() }, { id: 'w2', name: 'load', path: loadProject, addedAt: Date.now() }],
   providers: [{ id: 'local', kind: 'llamacpp', label: 'Local', baseUrl: modelUrl, enabled: true }],
@@ -232,6 +247,8 @@ if (load > 0) {
 const info = await call('daemon:info');
 console.log(`route=${route} daemon owns chat:turn=${info.owned.includes('chat:turn')} load=${load}`);
 
+// The host-side search keeps the host busy whoever serves `workspace:search`.
+const loadSearch = info.owned.includes('workspace:search') ? 'bench:hostLoad' : 'workspace:search';
 let busy = load > 0;
 let loadCalls = 0;
 const loadMs = [];
@@ -239,7 +256,7 @@ async function loadLoop(sessionId) {
   while (busy) {
     const t0 = performance.now();
     const kind = args['load-kind'] ?? 'search';
-    if (kind === 'search') await call('workspace:search', 'w2', 'zzz-no-match').catch(() => {});
+    if (kind === 'search') await call(loadSearch, 'w2', 'zzz-no-match').catch(() => {});
     else await Promise.all([kind !== 'folders' ? call('context:preview', sessionId, []).catch(() => {}) : null, kind !== 'preview' ? call('engine:folders').catch(() => {}) : null]);
     loadMs.push(performance.now() - t0);
     loadCalls++;
@@ -358,6 +375,29 @@ try {
     }
     results.usage = { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms), before };
     console.log(`usage:summary over 20k records: median ${results.usage.median.toFixed(1)} ms, p95 ${results.usage.p95.toFixed(1)} ms, max ${results.usage.max.toFixed(1)} ms`);
+  }
+  if (args.workspace) {
+    const timings = {};
+    const time = async (name, fn) => {
+      const t0 = performance.now();
+      await fn();
+      (timings[name] ??= []).push(performance.now() - t0);
+    };
+    for (let i = 0; i < Number(args.workspace); i++) {
+      await time('index 400 files', () => call('workspace:index', 'w1'));
+      await time('index 2500 files', () => call('workspace:index', 'w2'));
+      await time('search 400 files', () => call('workspace:search', 'w1', 'value1'));
+      await time('search 2500 files (no match)', () => call('workspace:search', 'w2', 'zzz-no-match'));
+      await time('files 400', () => call('workspace:files', 'w1'));
+      await time('dir:list 400', () => call('dir:list', workspace));
+      await time('file:read', () => call('file:read', join(workspace, 'file0.ts')));
+      await time('indexStatus', () => call('workspace:indexStatus', 'w1'));
+      await time('gitStatus (forced)', () => call('workspace:gitStatus', 'w1', true));
+      await time('design:get', () => call('design:get', 'w1'));
+    }
+    results.workspace = Object.fromEntries(Object.entries(timings).map(([k, ms]) => [k, { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms) }]));
+    console.log(`workspace calls (daemon owns workspace:search=${info.owned.includes('workspace:search')}):`);
+    for (const [k, v] of Object.entries(results.workspace)) console.log(`  ${k}: median ${v.median.toFixed(1)} ms, p95 ${v.p95.toFixed(1)} ms, max ${v.max.toFixed(1)} ms`);
   }
   if (args.stats) {
     // The monitor meters' polls and the readiness advisor, under the same load.

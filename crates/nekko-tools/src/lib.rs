@@ -25,7 +25,7 @@ mod guardrails;
 pub mod hooks;
 mod js;
 pub mod jsre;
-mod nodefs;
+pub mod nodefs;
 pub mod path;
 pub mod process;
 mod sandbox;

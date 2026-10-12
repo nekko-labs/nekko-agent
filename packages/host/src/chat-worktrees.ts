@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
-import { basename, join, resolve, relative, sep } from 'node:path';
+import { cpSync, existsSync, mkdirSync, realpathSync, writeFileSync, unlinkSync } from 'node:fs';
+import { basename, join, resolve, relative, sep, isAbsolute } from 'node:path';
 import type { AppSettings, ChatWorktreeInfo, Session, WorkspaceFolder } from '@nekko-agent/shared';
 import { getSessionWorkspaceIds } from '@nekko-agent/shared';
 
@@ -19,7 +19,10 @@ function gitOk(cwd: string, args: string[]): boolean {
 }
 
 // Windows paths compare case-insensitively; Git reports them with forward slashes.
-const norm = (p: string) => process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p);
+function diskPath(p: string): string {
+  try { return realpathSync.native(p); } catch { return resolve(p); }
+}
+const norm = (p: string) => process.platform === 'win32' ? diskPath(p).toLowerCase() : diskPath(p);
 
 /**
  * The words a checkout's folder and branch are made of when the chat has no
@@ -78,9 +81,15 @@ export function prepareChatWorktrees(session: Session, settings: AppSettings): A
   session.gitWorktrees ??= {};
   const created = restoreRemovedWorktrees(session);
   for (const id of getSessionWorkspaceIds(session)) {
-    if (session.gitWorktrees[id]) continue;
     const folder = settings.workspaces.find((w) => w.id === id);
     if (!folder) continue;
+    const saved = session.gitWorktrees[id];
+    if (saved) {
+      const sub = relative(diskPath(saved.sourceRoot), diskPath(folder.path));
+      if (sub === '..' || sub.startsWith('..' + sep) || isAbsolute(sub)) throw new Error('The configured folder no longer belongs to this chat worktree.');
+      saved.path = join(saved.root, sub);
+      continue;
+    }
     // Distinguish ordinary folders from Git failures; a broken Git checkout must not silently run shared.
     let root: string;
     try { root = git(folder.path, ['rev-parse', '--show-toplevel']); }
@@ -89,9 +98,9 @@ export function prepareChatWorktrees(session: Session, settings: AppSettings): A
       if (/not a git repository/i.test(message)) continue;
       throw new Error(`Could not inspect Git project ${folder.name}: ${message}`);
     }
-    const existing = Object.values(session.gitWorktrees).find((w) => resolve(w.sourceRoot) === resolve(root));
+    const existing = Object.values(session.gitWorktrees).find((w) => norm(w.sourceRoot) === norm(root));
     if (existing) {
-      session.gitWorktrees[id] = { ...existing, path: join(existing.root, relative(root, folder.path)) };
+      session.gitWorktrees[id] = { ...existing, path: join(existing.root, relative(diskPath(root), diskPath(folder.path))) };
       continue;
     }
     const dirty = !!git(root, ['status', '--porcelain']);
@@ -128,7 +137,7 @@ export function prepareChatWorktrees(session: Session, settings: AppSettings): A
         : 'This chat starts in an isolated worktree from committed HEAD. Existing local changes are not included.'
       : 'This chat uses an isolated Git worktree from committed HEAD.';
     const checkout: Checkout = {
-      sourceRoot: root, root: target, path: join(target, relative(root, folder.path)), branch,
+      sourceRoot: root, root: target, path: join(target, relative(diskPath(root), diskPath(folder.path))), branch,
       notice: copied.length ? `${base} Copied from .worktreeinclude: ${copied.join(', ')}.` : base,
     };
     session.gitWorktrees[id] = checkout;

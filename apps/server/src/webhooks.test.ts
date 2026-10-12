@@ -30,18 +30,18 @@ describe('POST /api/hooks/:slug', () => {
   });
 
   it('rejects a bad secret and does not start a workflow', async () => {
-    const wf = host.createWorkflow({
+    const wf = await host.createWorkflow({
       name: 'My Workflow',
       steps: [{ id: 's1', name: 'Echo', kind: 'shell', run: 'echo ok' }],
       triggers: [{ id: 't1', kind: 'webhook', webhookSecret: 'good-secret' }],
     });
     const res = await app.inject({ method: 'POST', url: '/api/hooks/my-workflow?key=bad-secret', payload: { foo: 1 } });
     expect(res.statusCode).toBe(403);
-    expect(host.listWorkflowRuns(wf.id)).toHaveLength(0);
+    expect(await host.listWorkflowRuns(wf.id)).toHaveLength(0);
   });
 
   it('dispatches a workflow with a valid secret', async () => {
-    const wf = host.createWorkflow({
+    const wf = await host.createWorkflow({
       name: 'My Workflow',
       steps: [{ id: 's1', name: 'Echo', kind: 'shell', run: 'echo ok' }],
       triggers: [{ id: 't1', kind: 'webhook', webhookSecret: 'good-secret' }],
@@ -49,7 +49,7 @@ describe('POST /api/hooks/:slug', () => {
     const res = await app.inject({ method: 'POST', url: '/api/hooks/my-workflow?key=good-secret', payload: { branch: 'main' } });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).started).toBe(1);
-    const runs = host.listWorkflowRuns(wf.id);
+    const runs = await host.listWorkflowRuns(wf.id);
     expect(runs).toHaveLength(1);
     expect(runs[0].triggerKind).toBe('webhook');
     expect(runs[0].triggerLabel).toContain('Webhook');

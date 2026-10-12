@@ -284,11 +284,14 @@ fn is_daemon_terminal_echo(text: &str) -> bool {
     !id.starts_with("agent_")
 }
 
-/// True for a backend agent event the daemon already sent: a run the daemon
-/// drives (`loop:run`) publishes its events itself, in order, and the backend
-/// re-emits its copies only for its own listeners (the phone relay, messaging).
+/// True for a backend event the daemon already sent: a run the daemon drives
+/// publishes its agent events itself, in order, and a limit change the daemon
+/// made is published by it too. The backend re-emits its copies, marked
+/// `relayOnly`, only for its own listeners (messaging).
 fn is_relay_only(text: &str) -> bool {
-    text.contains("\"relayOnly\":true") && text.contains("\"agent:event\"")
+    text.contains("\"relayOnly\":true")
+        && serde_json::from_str::<Value>(text)
+            .is_ok_and(|v| v.pointer("/payload/relayOnly") == Some(&Value::Bool(true)))
 }
 
 async fn relay_events(port: u16, token: String, hub: Hub) {
@@ -325,6 +328,14 @@ mod tests {
             r#"{"channel":"agent:event","payload":{"type":"text","sessionId":"s","delta":"x","relayOnly":true}}"#
         ));
         assert!(!is_relay_only(r#"{"channel":"agent:event","payload":{"type":"text","sessionId":"s","delta":"x"}}"#));
+        // The host's echo of a limit change the daemon published itself.
+        assert!(is_relay_only(
+            r#"{"channel":"limits:updated","payload":{"tokenKey":"k","limits":{},"relayOnly":true}}"#
+        ));
+        // Only the payload's own flag counts, not text that mentions it.
+        assert!(!is_relay_only(
+            r#"{"channel":"agent:event","payload":{"type":"text","delta":"{\"relayOnly\":true}","inner":{"relayOnly":true}}}"#
+        ));
     }
 
     #[test]

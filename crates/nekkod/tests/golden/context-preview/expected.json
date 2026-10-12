@@ -1,0 +1,196 @@
+[
+  {
+    "items": [
+      {
+        "id": "system:base",
+        "source": "system",
+        "label": "System prompt",
+        "origin": "Nekko Agent",
+        "tokens": 2783,
+        "pinned": false,
+        "included": true,
+        "preview": "You are Nekko, the assistant inside Nekko Agent, a local-first coding and cowork app. You unify chat, cowork, and code: you hold normal conversations, help with…"
+      },
+      {
+        "id": "conversation",
+        "source": "conversation",
+        "label": "Conversation (2 messages)",
+        "origin": "chat",
+        "tokens": 10,
+        "pinned": false,
+        "included": true,
+        "preview": "Explain the code It exports an answer."
+      },
+      {
+        "id": "guideline:<root>/project/AGENTS.md",
+        "source": "guideline",
+        "label": "AGENTS.md",
+        "origin": "<root>/project/AGENTS.md",
+        "tokens": 6,
+        "pinned": false,
+        "included": true,
+        "preview": "Always run the tests."
+      },
+      {
+        "id": "file:<root>/notes.md",
+        "source": "attached-file",
+        "label": "notes.md",
+        "origin": "<root>/notes.md",
+        "tokens": 9,
+        "pinned": false,
+        "included": true,
+        "preview": "Remember the milk. And the eggs."
+      },
+      {
+        "id": "file:<root>/project/src/app.ts",
+        "source": "attached-file",
+        "label": "app.ts",
+        "origin": "<root>/project/src/app.ts",
+        "tokens": 7,
+        "pinned": false,
+        "included": true,
+        "preview": "export const answer = 42;"
+      },
+      {
+        "id": "mem:m-global",
+        "source": "memory",
+        "label": "Deploy",
+        "origin": "memory/global",
+        "tokens": 7,
+        "pinned": false,
+        "included": true,
+        "preview": "Ship every change as a PR."
+      },
+      {
+        "id": "mem:m-ws",
+        "source": "memory",
+        "label": "Workspace note",
+        "origin": "memory/workspace",
+        "tokens": 3,
+        "pinned": false,
+        "included": true,
+        "preview": "Only for w1."
+      }
+    ],
+    "totalTokens": 2825,
+    "contextWindow": 1000000
+  },
+  {
+    "items": [
+      {
+        "id": "system:base",
+        "source": "system",
+        "label": "System prompt",
+        "origin": "Nekko Agent",
+        "tokens": 2783,
+        "pinned": false,
+        "included": true,
+        "preview": "You are Nekko, the assistant inside Nekko Agent, a local-first coding and cowork app. You unify chat, cowork, and code: you hold normal conversations, help with…"
+      },
+      {
+        "id": "conversation",
+        "source": "conversation",
+        "label": "Conversation (4 messages)",
+        "origin": "chat",
+        "tokens": 24,
+        "pinned": false,
+        "included": true,
+        "preview": "Summary of everything so far. And now? read_file {\"path\":\"src/app.ts\"} export const answer = 42;"
+      },
+      {
+        "id": "guideline:<root>/project/AGENTS.md",
+        "source": "guideline",
+        "label": "AGENTS.md",
+        "origin": "<root>/project/AGENTS.md",
+        "tokens": 6,
+        "pinned": false,
+        "included": true,
+        "preview": "Always run the tests."
+      },
+      {
+        "id": "mem:m-global",
+        "source": "memory",
+        "label": "Deploy",
+        "origin": "memory/global",
+        "tokens": 7,
+        "pinned": true,
+        "included": true,
+        "preview": "Ship every change as a PR."
+      },
+      {
+        "id": "mem:m-ws",
+        "source": "memory",
+        "label": "Workspace note",
+        "origin": "memory/workspace",
+        "tokens": 3,
+        "pinned": false,
+        "included": false,
+        "preview": "Only for w1."
+      }
+    ],
+    "totalTokens": 2820,
+    "contextWindow": 400000
+  },
+  {
+    "items": [
+      {
+        "id": "system:base",
+        "source": "system",
+        "label": "System prompt",
+        "origin": "Nekko Agent",
+        "tokens": 2754,
+        "pinned": false,
+        "included": true,
+        "preview": "You are Nekko, the assistant inside Nekko Agent, a local-first coding and cowork app. You unify chat, cowork, and code: you hold normal conversations, help with…"
+      },
+      {
+        "id": "mem:m-global",
+        "source": "memory",
+        "label": "Deploy",
+        "origin": "memory/global",
+        "tokens": 7,
+        "pinned": false,
+        "included": true,
+        "preview": "Ship every change as a PR."
+      }
+    ],
+    "totalTokens": 2761,
+    "contextWindow": 128000
+  },
+  {
+    "items": [
+      {
+        "id": "system:base",
+        "source": "system",
+        "label": "System prompt",
+        "origin": "Nekko Agent",
+        "tokens": 2783,
+        "pinned": false,
+        "included": true,
+        "preview": "You are Nekko, the assistant inside Nekko Agent, a local-first coding and cowork app. You unify chat, cowork, and code: you hold normal conversations, help with…"
+      },
+      {
+        "id": "guideline:<root>/project/AGENTS.md",
+        "source": "guideline",
+        "label": "AGENTS.md",
+        "origin": "<root>/project/AGENTS.md",
+        "tokens": 6,
+        "pinned": false,
+        "included": true,
+        "preview": "Always run the tests."
+      },
+      {
+        "id": "mem:m-global",
+        "source": "memory",
+        "label": "Deploy",
+        "origin": "memory/global",
+        "tokens": 7,
+        "pinned": false,
+        "included": true,
+        "preview": "Ship every change as a PR."
+      }
+    ],
+    "totalTokens": 2796,
+    "contextWindow": 128000
+  }
+]

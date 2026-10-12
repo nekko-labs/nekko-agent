@@ -37,6 +37,15 @@ function targetDir(target: InstallTarget): string | undefined {
   return undefined;
 }
 
+/**
+ * The installed records without the self-heal write: what this host reads
+ * for its own use (workflow skill steps, external-skill exclusions). Under
+ * the engine daemon skills.json is the daemon's to write (`skill:*`).
+ */
+export function readInstalledSkills(): InstalledSkillRecord[] {
+  return load().filter((r) => !r.path || existsSync(r.path));
+}
+
 export function listInstalledSkills(): InstalledSkillRecord[] {
   // Self-heal: drop records whose file-based install was deleted out-of-band.
   const records = load();
@@ -51,7 +60,7 @@ export function listInstalledSkills(): InstalledSkillRecord[] {
  * workflow's skill step to find what it should run.
  */
 export function listInstalledSkillDefs(): SkillDef[] {
-  return listInstalledSkills()
+  return readInstalledSkills()
     .filter((r) => normalizeInstallTarget(r.target) === 'nekko-agent')
     .map((r) => r.skill ?? getMarketSkill(r.skillId))
     .filter((m): m is MarketplaceSkill => !!m)
