@@ -26,6 +26,7 @@ mod providers;
 mod remote;
 mod resource_queue;
 mod routes;
+mod sandbox;
 mod settings;
 mod sideband;
 mod tooling;
@@ -86,7 +87,16 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             if cfg.data_dir.is_some() {
                 cmd.env.insert(
                     "NEKKOD_OWNS".into(),
-                    [settings::OWNS, voice::OWNS, oauth::OWNS, automation::OWNS, remote::OWNS, watches::OWNS].join(","),
+                    [
+                        settings::OWNS,
+                        voice::OWNS,
+                        oauth::OWNS,
+                        automation::OWNS,
+                        remote::OWNS,
+                        watches::OWNS,
+                        sandbox::OWNS,
+                    ]
+                    .join(","),
                 );
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
@@ -196,6 +206,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         workspace: Arc::new(workspace::Workspace::new(cfg.data_dir.clone().map(std::path::PathBuf::from))),
         automation: automation.clone(),
         remote: remote.clone(),
+        sandboxes: cfg.data_dir.clone().filter(|_| sessions.is_some()).map(|d| sandbox::Sandboxes::new(d.into())),
     };
     routes::forward_terminal_events(&ctx);
     if let Some(adm) = ctx.admission.clone() {

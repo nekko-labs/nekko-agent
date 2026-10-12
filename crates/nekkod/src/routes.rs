@@ -47,6 +47,8 @@ pub struct Ctx {
     pub machine: Arc<nekko_machine::Machine>,
     /// The experimental resource-queue client, when the data directory is known.
     pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
+    /// Sandbox chats' containers (sandbox.rs), with a data directory.
+    pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -293,6 +295,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "session:nextWatch" if ctx.turns.watches.is_some() => {
             Ok(ctx.turns.watches.as_ref().expect("checked").next_wake_at(str_arg(&args, 0).unwrap_or_default()))
         }
+        c if crate::sandbox::CHANNELS.contains(&c) && ctx.sandboxes.is_some() => {
+            ctx.sandboxes.clone().expect("checked").route(ctx, c, &args).await
+        }
         c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
             crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
         }
@@ -374,6 +379,9 @@ fn merge_pending(host: Value, daemon: Value) -> Value {
 fn owned(ctx: &Ctx) -> Vec<&'static str> {
     let mut all = OWNED.to_vec();
     all.extend_from_slice(crate::tooling::CHANNELS);
+    if ctx.sandboxes.is_some() {
+        all.extend_from_slice(crate::sandbox::CHANNELS);
+    }
     if ctx.accounts.enabled() {
         all.extend_from_slice(crate::accounts::OWNED);
     }
