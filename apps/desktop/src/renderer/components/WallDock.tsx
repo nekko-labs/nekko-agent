@@ -10,14 +10,14 @@ import { InsightsBox, type Vitals } from './InsightsBox.js';
 import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { useMonitors, useResourceSample } from './ResourceMonitor.js';
-import { BoltIcon, BrainIcon, ServerIcon, MoneyIcon, ListIcon, GearIcon, CloseIcon, MinimizeIcon } from '../icons.js';
+import { BrainIcon, ServerIcon, MoneyIcon, ListIcon, GearIcon, CloseIcon, MinimizeIcon } from '../icons.js';
 import './wallDock.css';
 import type { OAuthStatus } from '@nekko-agent/shared';
 import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
 import { dockMinimizeTransition } from './dockMinimize.js';
 
-const PANEL_ICONS = { vitals: BoltIcon, automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon };
+const PANEL_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon };
 
 export interface WallDockProps {
   state: CommandWallState;
@@ -231,7 +231,6 @@ export function WallDock(props: WallDockProps) {
               if (target) reorder(p.key, target.key);
             }}><span aria-hidden="true" title="Drag to reorder" className="text-ink-faint">⠿</span><span className="wall-dock__panel-icon">{React.createElement(PANEL_ICONS[p.key], { className: 'wall-dock__icon' })}</span><h2>{p.label}</h2><button type="button" title={`Minimize ${p.label}`} aria-label={`Minimize ${p.label} panel`} aria-expanded={true} disabled={collapsing !== null} onClick={() => minimize(p.key, true)}><MinimizeIcon className="wall-dock__icon" /></button><button type="button" title={`Remove ${p.label}`} aria-label={`Remove ${p.label} panel`} onClick={() => panel(p.key, false)}><CloseIcon className="wall-dock__icon" /></button></header>
           <ResizablePanelBody label={p.label}>
-            {p.key === 'vitals' && <VitalsGrid vitals={props.vitals} />}
             {p.key === 'automations' && <AutomationsPane tasks={props.tasks} running={props.running} now={props.now} onOpen={props.onOpenChat} />}
             {p.key === 'utilization' && <Utilization providers={props.providers} usage={props.usage} now={props.now} onOpenModels={props.onOpenModels} />}
             {p.key === 'budget' && <Budget usage={props.usage} sessions={props.sessions} providers={props.providers} now={props.now} />}
@@ -287,17 +286,6 @@ function ResizablePanelBody({ label, children }: { label: string; children: Reac
   </>;
 }
 
-function VitalsGrid({ vitals }: { vitals: Vitals }) {
-  const cells = [
-    { value: vitals.working, label: 'working', tone: 'var(--info)' },
-    { value: vitals.waiting, label: 'waiting on you', tone: 'var(--warning)' },
-    { value: vitals.automations, label: 'automations active' },
-    { value: vitals.terminals, label: 'terminals live' },
-    { value: new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(vitals.tokensToday), label: 'tokens today' },
-    { value: vitals.spend === 'Included in plan' ? 'Included' : vitals.spend, label: 'est. spend' },
-  ];
-  return <div className="wall-dock__vitals">{cells.map(c => <div key={c.label}><strong style={{ color: c.tone }} title={c.label === 'tokens today' ? vitals.tokensToday.toLocaleString() : undefined}>{c.value}</strong><span>{c.label}</span></div>)}</div>;
-}
 
 function Utilization({ providers, usage, now, onOpenModels }: Pick<WallDockProps, 'providers' | 'usage' | 'now' | 'onOpenModels'>) {
   const enabled = providers.filter((p) => p.enabled && !isLocalProvider(p.kind));
