@@ -33,4 +33,10 @@ describe('startup settings and theme recovery', () => {
     await useStore.getState().refreshSettings();
     expect(useStore.getState().settingsError).toContain('no settings');
   });
+  it('does not reopen dismissed setup when Settings refreshes', async () => {
+    window.nekko = { getSettings: vi.fn().mockResolvedValue({ theme: 'system', providers: [], workspaces: [] }) } as any;
+    useStore.setState({ onboardingOpen: false });
+    await useStore.getState().refreshSettings(false);
+    expect(useStore.getState().onboardingOpen).toBe(false);
+  });
 });

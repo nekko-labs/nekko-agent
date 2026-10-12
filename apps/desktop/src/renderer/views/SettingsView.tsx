@@ -36,17 +36,18 @@ export function SettingsView() {
   const { applyTheme, onboardingOpen, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
   const prevOnboardingOpen = useRef(onboardingOpen);
+  const reload = useCallback(() => refreshSettings(false), [refreshSettings]);
 
-  useEffect(() => { void refreshSettings(); }, [refreshSettings]);
+  useEffect(() => { void reload(); }, [reload]);
 
   // When the wizard overlay closes, re-read settings so the Settings view
   // behind it reflects any theme/onboarding changes made inside the wizard.
   useEffect(() => {
     if (prevOnboardingOpen.current && !onboardingOpen) {
-      void refreshSettings();
+      void reload();
     }
     prevOnboardingOpen.current = onboardingOpen;
-  }, [onboardingOpen, refreshSettings]);
+  }, [onboardingOpen, reload]);
 
   const update = async (patch: Partial<AppSettings>) => {
     try {
@@ -55,9 +56,6 @@ export function SettingsView() {
       applyTheme();
     } catch (e) { useStore.getState().pushToast('error', (e as Error).message); }
   };
-
-  /** Re-read settings the host changed on its own (connecting Hypergate writes an MCP entry). */
-  const reload = useCallback(async () => refreshSettings(), [refreshSettings]);
 
   /** Reopen the first-run wizard: clear the completion flag, then show it. */
   const replaySetup = async () => {
@@ -71,12 +69,12 @@ export function SettingsView() {
     update({ guardrails });
   };
 
-  if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={refreshSettings} />;
+  if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={reload} />;
 
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl px-8 py-8">
-        {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={refreshSettings} />}
+        {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
 
         {/* Appearance */}

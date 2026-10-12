@@ -265,7 +265,7 @@ interface UiState {
   setMascotMood: (m: MascotMood) => void;
   setView: (v: View) => void;
   setOnboardingOpen: (open: boolean) => void;
-  refreshSettings: () => Promise<void>;
+  refreshSettings: (autoOpenOnboarding?: boolean) => Promise<void>;
   refreshSessions: () => Promise<void>;
   setActiveSession: (id: string | null) => void;
   refreshProviders: () => Promise<void>;
@@ -608,12 +608,12 @@ export const useStore = create<UiState>((set, get) => ({
   setView: (v) => set((s) => ({ view: viewEnabled(v, s.settings) ? v : 'command' })),
   setOnboardingOpen: (open) => set({ onboardingOpen: open }),
 
-  refreshSettings: async () => {
+  refreshSettings: async (autoOpenOnboarding = true) => {
     set({ settingsError: null });
     try {
       const settings = await window.nekko.getSettings();
       if (!settings) throw new Error('Nekko service returned no settings.');
-      const onboardingOpen = shouldAutoOpenOnboarding(settings);
+      const onboardingOpen = autoOpenOnboarding ? shouldAutoOpenOnboarding(settings) : get().onboardingOpen;
       set({ settings, onboardingOpen, settingsLoaded: true, settingsError: null });
       get().applyTheme();
       if (!get().activeProviderId && settings.defaultProviderId) {
