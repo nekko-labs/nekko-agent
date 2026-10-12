@@ -52,7 +52,7 @@ The mascot redesign is in draft review: an icon-inspired 8-bit cat head in cream
 
 ### Development build workflow
 
-`npm run dev` runs the complete build, including the Rust daemon, before starting the desktop development server with hot reload. A failed build prevents startup. Production renderer builds retain lazy diagram loading and all supported Mermaid layouts; build optimizations must preserve diagram rendering and normal application tree shaking.
+`npm run dev` rebuilds the Rust daemon and every workspace the app imports before starting the desktop development server with hot reload, so it never runs stale output; a failed build prevents startup. It skips the production desktop bundle (electron-vite dev builds its own) and compiles the daemon with the `dev-daemon` Cargo profile (release optimizations without LTO, incremental), which the development app runs straight from `target/` as the newest local build: a one-file daemon change rebuilds in about 9 seconds instead of a minute. `npm run build` and packaging still use the release profile. Production renderer builds retain lazy diagram loading and all supported Mermaid layouts; build optimizations must preserve diagram rendering and normal application tree shaking.
 
 People who want to run AI models locally are stuck choosing between two kinds of tool, each blind in its own way:
 
