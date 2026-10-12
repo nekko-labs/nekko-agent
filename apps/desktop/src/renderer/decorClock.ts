@@ -34,7 +34,7 @@ export interface DecorAnimation {
   readonly playState: string;
   readonly startTime: number | null | CSSNumberish;
   currentTime: number | null | CSSNumberish;
-  readonly effect: { readonly target?: Element | null } | null;
+  readonly effect: { readonly target?: Element | null; getTiming?(): EffectTiming; getKeyframes?(): ComputedKeyframe[] } | null;
   pause(): void;
 }
 
@@ -59,15 +59,21 @@ export function startDecorClock(doc: DecorDocument = document as unknown as Deco
   // Each animation's start time and element, read once: a CSS animation's
   // playState (or effect) brings the page's styles up to date when read, so
   // the tick touches neither.
-  const held = new Map<DecorAnimation, { start: number; target: Element | null | undefined }>();
+  const held = new Map<DecorAnimation, { start: number; target: Element | null | undefined; stepMs: number; lastStep: number }>();
   let timer: unknown = null;
   const now = () => Number(doc.timeline.currentTime ?? 0);
 
   const tick = () => {
     if (doc.hidden || doc.documentElement.hasAttribute('data-app-inactive')) return;
     const t = now();
-    for (const [a, { start, target }] of held) {
+    for (const [a, state] of held) {
+      const { start, target, stepMs } = state;
       if (!target?.isConnected) { held.delete(a); continue; }
+      // The beam has only two keyframes. Between its discrete steps, another
+      // currentTime write invalidates styles without changing a single pixel.
+      const step = stepMs ? Math.floor((t - start) / stepMs + 1e-9) : NaN;
+      if (stepMs && step === state.lastStep) continue;
+      state.lastStep = step;
       a.currentTime = t - start;
     }
     if (!held.size && timer !== null) { timers.clearInterval(timer); timer = null; }
@@ -75,8 +81,17 @@ export function startDecorClock(doc: DecorDocument = document as unknown as Deco
   const hold = (a: DecorAnimation) => {
     if (held.has(a) || a.playState === 'idle' || !isDecor(a)) return;
     const start = a.startTime == null ? now() - Number(a.currentTime ?? 0) : Number(a.startTime);
+    const effect = a.effect;
+    const timing = effect?.getTiming?.();
+    const keys = effect?.getKeyframes?.();
+    const steps = timing?.easing?.match(/^steps\((\d+),\s*(?:end|jump-end)\)$/);
+    const stepMs = a.animationName === 'composer-beam-spin' && steps && Number(steps[1]) > 0
+      && typeof timing?.duration === 'number' && timing.duration > 0 && !timing.delay
+      && (timing.direction ?? 'normal') === 'normal' && timing.iterations === Infinity
+      && keys?.length === 2 && keys[0].computedOffset === 0 && keys[1].computedOffset === 1
+      ? timing.duration / Number(steps[1]) : 0;
     a.pause();
-    held.set(a, { start, target: a.effect?.target });
+    held.set(a, { start, target: effect?.target, stepMs, lastStep: NaN });
     if (timer === null) timer = timers.setInterval(tick, 1000 / DECOR_HZ);
   };
   const onStart = (e: { animationName: string; target: EventTarget | null }) => {
