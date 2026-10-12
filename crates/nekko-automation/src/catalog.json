@@ -1,0 +1,90 @@
+{
+ "actions": [
+  {
+   "op": "slack.postMessage",
+   "connector": "slack"
+  },
+  {
+   "op": "linear.createIssue",
+   "connector": "linear"
+  },
+  {
+   "op": "linear.commentIssue",
+   "connector": "linear"
+  },
+  {
+   "op": "jira.createIssue",
+   "connector": "jira"
+  },
+  {
+   "op": "jira.commentIssue",
+   "connector": "jira"
+  },
+  {
+   "op": "github.commentPR",
+   "connector": "github"
+  },
+  {
+   "op": "github.setCommitStatus",
+   "connector": "github"
+  },
+  {
+   "op": "gitlab.setCommitStatus",
+   "connector": "gitlab"
+  },
+  {
+   "op": "gitlab.commentMR",
+   "connector": "gitlab"
+  },
+  {
+   "op": "discord.postMessage",
+   "connector": "discord"
+  },
+  {
+   "op": "teams.postMessage",
+   "connector": "teams"
+  },
+  {
+   "op": "webhook.post",
+   "connector": null
+  }
+ ],
+ "connectors": [
+  {
+   "kind": "github",
+   "label": "GitHub"
+  },
+  {
+   "kind": "gitlab",
+   "label": "GitLab"
+  },
+  {
+   "kind": "linear",
+   "label": "Linear"
+  },
+  {
+   "kind": "slack",
+   "label": "Slack"
+  },
+  {
+   "kind": "discord",
+   "label": "Discord"
+  },
+  {
+   "kind": "jira",
+   "label": "Jira"
+  },
+  {
+   "kind": "teams",
+   "label": "Microsoft Teams"
+  },
+  {
+   "kind": "gmail",
+   "label": "Gmail"
+  },
+  {
+   "kind": "gdrive",
+   "label": "Google Drive"
+  }
+ ]
+}

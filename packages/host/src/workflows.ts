@@ -492,7 +492,7 @@ async function runAction(step: WorkflowStep, sctx: StepContext): Promise<StepRes
     config = getSettings().connectors.find((c) => c.kind === spec.connector && c.connected);
     if (!config) {
       const label = CONNECTOR_CATALOG.find((c) => c.kind === spec.connector)?.label ?? spec.connector;
-      return { ok: false, error: `The ${label} connector isn't connected — connect it under Connectors.` };
+      return { ok: false, error: `The ${label} connector isn't connected. Connect it under Connectors.` };
     }
   }
   const params = Object.fromEntries(
@@ -620,7 +620,7 @@ function findSkill(ref: string) {
 }
 
 /** Short human label for what set a run off, shown on the run row. */
-function describeEvent(e: WorkflowEvent): string {
+export function describeEvent(e: WorkflowEvent): string {
   switch (e.kind) {
     case 'git': {
       const provider = GIT_PROVIDERS.find((p) => p.id === e.provider)?.label ?? e.provider ?? 'Git';
@@ -652,7 +652,7 @@ function describeEvent(e: WorkflowEvent): string {
 }
 
 /** Thrown when a request reaches a webhook trigger with the wrong secret. */
-class WebhookUnauthorizedError extends Error {
+export class WebhookUnauthorizedError extends Error {
   readonly code = 'WEBHOOK_UNAUTHORIZED' as const;
   constructor(message = 'unauthorized') {
     super(message);

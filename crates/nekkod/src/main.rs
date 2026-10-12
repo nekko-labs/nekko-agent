@@ -135,6 +135,14 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         automation: automation.clone(),
     };
     routes::forward_terminal_events(&ctx);
+    {
+        // A workflow stops a chat through the router, as the UI would.
+        let ctx = ctx.clone();
+        automation.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
+            let ctx = ctx.clone();
+            Box::pin(async move { routes::route(&ctx, &channel, args).await })
+        }));
+    }
     automation.start();
     let processes = ctx.turns.processes.clone();
 

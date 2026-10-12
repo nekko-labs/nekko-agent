@@ -1,6 +1,7 @@
 import { IpcChannels } from '@nekko-agent/shared';
 import type { Host } from './host.js';
 import { deleteAgentLog } from './agent-log.js';
+import { listInstalledSkillDefs } from './skills.js';
 
 /**
  * Maps an IPC channel + positional args to the matching Host method. Shared by
@@ -69,6 +70,9 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     // Internal daemon callback, using the host queue and deletion tombstone.
     'sessions:deleteAgentLog': ([id]) => deleteAgentLog(String(id)),
     'changes:notify': ([sessionId]) => host.changesNotify(String(sessionId)),
+    // A daemon-run workflow's skill step (crates/nekko-automation): the installed
+    // skills with their templates, from the marketplace catalog this host keeps.
+    'workflow:skillDefs': () => listInstalledSkillDefs(),
     // The daemon writes settings.json (crates/nekkod/src/settings.rs) and tells this host what changed.
     'settings:changed': ([next, patch]) => host.settingsChanged(next as never, (patch ?? null) as never),
     // The daemon keeps limit state (crates/nekkod/src/limits.rs) and asks this

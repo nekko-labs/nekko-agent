@@ -1,0 +1,3131 @@
+{
+ "cron": [
+  {
+   "tz": "UTC",
+   "expr": "* * * * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772921760000
+  },
+  {
+   "tz": "UTC",
+   "expr": "* * * * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792890000000
+  },
+  {
+   "tz": "UTC",
+   "expr": "* * * * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "UTC",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773046800000
+  },
+  {
+   "tz": "UTC",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793005200000
+  },
+  {
+   "tz": "UTC",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772442000000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 9 * * 1",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773046800000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 9 * * 1",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793005200000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 9 * * 1",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772442000000
+  },
+  {
+   "tz": "UTC",
+   "expr": "30 2 * * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772937000000
+  },
+  {
+   "tz": "UTC",
+   "expr": "30 2 * * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792895400000
+  },
+  {
+   "tz": "UTC",
+   "expr": "30 2 * * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772332200000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 0 1 * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1775001600000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 0 1 * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793491200000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 0 1 * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 12 13 * 5",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773403200000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 12 13 * 5",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793361600000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 12 13 * 5",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772798400000
+  },
+  {
+   "tz": "UTC",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1782864300000
+  },
+  {
+   "tz": "UTC",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1798761900000
+  },
+  {
+   "tz": "UTC",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1782864300000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 0 30 2 *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 0 30 2 *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 0 30 2 *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "60 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "60 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "60 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "* * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "* * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "* * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "1-2/0 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "1-2/0 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "1-2/0 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "5-1 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "5-1 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "5-1 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "a * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "a * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "a * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": " 0  0 * * * ",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772928000000
+  },
+  {
+   "tz": "UTC",
+   "expr": " 0  0 * * * ",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792972800000
+  },
+  {
+   "tz": "UTC",
+   "expr": " 0  0 * * * ",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 0 * * 7",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 0 * * 7",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "0 0 * * 7",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "UTC",
+   "expr": "*/7 * * * 0",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772928000000
+  },
+  {
+   "tz": "UTC",
+   "expr": "*/7 * * * 0",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792890000000
+  },
+  {
+   "tz": "UTC",
+   "expr": "*/7 * * * 0",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "* * * * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772921760000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "* * * * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792890000000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "* * * * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773061200000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793019600000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772460000000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 9 * * 1",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773061200000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 9 * * 1",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793019600000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 9 * * 1",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772460000000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "30 2 * * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773037800000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "30 2 * * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792909800000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "30 2 * * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772350200000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 0 1 * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1775016000000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 0 1 * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793505600000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 0 1 * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772341200000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 12 13 * 5",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773417600000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 12 13 * 5",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793376000000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 12 13 * 5",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772816400000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1782878700000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1798779900000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1782878700000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 0 30 2 *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 0 30 2 *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 0 30 2 *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "60 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "60 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "60 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "* * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "* * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "* * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "1-2/0 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "1-2/0 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "1-2/0 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "5-1 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "5-1 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "5-1 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "a * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "a * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "a * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": " 0  0 * * * ",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772946000000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": " 0  0 * * * ",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792900800000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": " 0  0 * * * ",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772341200000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 0 * * 7",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 0 * * 7",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "0 0 * * 7",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "*/7 * * * 0",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772946000000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "*/7 * * * 0",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792900800000
+  },
+  {
+   "tz": "America/New_York",
+   "expr": "*/7 * * * 0",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772341200000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "* * * * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772921760000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "* * * * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792890000000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "* * * * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773014400000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792972800000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772409600000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 9 * * 1",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773014400000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 9 * * 1",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792972800000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 9 * * 1",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772409600000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "30 2 * * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772991000000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "30 2 * * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792949400000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "30 2 * * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772386200000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 0 1 * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1774969200000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 0 1 * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793458800000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 0 1 * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1774969200000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 12 13 * 5",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773370800000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 12 13 * 5",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793329200000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 12 13 * 5",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772766000000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1782831900000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1798729500000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1782831900000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 0 30 2 *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 0 30 2 *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 0 30 2 *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "60 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "60 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "60 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "* * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "* * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "* * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "1-2/0 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "1-2/0 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "1-2/0 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "5-1 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "5-1 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "5-1 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "a * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "a * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "a * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": " 0  0 * * * ",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772982000000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": " 0  0 * * * ",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792940400000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": " 0  0 * * * ",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772377200000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 0 * * 7",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 0 * * 7",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "0 0 * * 7",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "*/7 * * * 0",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772922060000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "*/7 * * * 0",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792890000000
+  },
+  {
+   "tz": "Asia/Tokyo",
+   "expr": "*/7 * * * 0",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "* * * * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772921760000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "* * * * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792886400000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "* * * * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773046800000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793005200000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772442000000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 9 * * 1",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773046800000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 9 * * 1",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793005200000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 9 * * 1",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772442000000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "30 2 * * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772937000000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "30 2 * * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792895400000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "30 2 * * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772332200000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 0 1 * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1774998000000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 0 1 * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793491200000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 0 1 * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 12 13 * 5",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773403200000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 12 13 * 5",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793361600000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 12 13 * 5",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772798400000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1782860700000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1798761900000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1782860700000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 0 30 2 *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 0 30 2 *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 0 30 2 *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "60 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "60 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "60 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "* * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "* * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "* * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "1-2/0 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "1-2/0 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "1-2/0 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "5-1 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "5-1 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "5-1 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "a * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "a * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "a * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": " 0  0 * * * ",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772928000000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": " 0  0 * * * ",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792972800000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": " 0  0 * * * ",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 0 * * 7",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 0 * * 7",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "0 0 * * 7",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "*/7 * * * 0",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772928000000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "*/7 * * * 0",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792886400000
+  },
+  {
+   "tz": "Europe/London",
+   "expr": "*/7 * * * 0",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "* * * * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772921760000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "* * * * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792890000000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "* * * * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773007200000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792965600000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "*/15 9-17 * * 1-5",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772402400000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 9 * * 1",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773007200000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 9 * * 1",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792965600000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 9 * * 1",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772402400000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "30 2 * * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772983800000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "30 2 * * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792942200000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "30 2 * * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772379000000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 0 1 * *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1774962000000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 0 1 * *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793451600000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 0 1 * *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1774962000000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 12 13 * 5",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1773363600000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 12 13 * 5",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1793322000000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 12 13 * 5",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772758800000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1782826500000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1798722300000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "5,10 */6 * 1,7 *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1782826500000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 0 30 2 *",
+   "from": 1772921730123,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 0 30 2 *",
+   "from": 1792889999999,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 0 30 2 *",
+   "from": 1772323140000,
+   "valid": true,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "60 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "60 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "60 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "* * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "* * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "* * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "1-2/0 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "1-2/0 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "1-2/0 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "5-1 * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "5-1 * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "5-1 * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "a * * * *",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "a * * * *",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "a * * * *",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": " 0  0 * * * ",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772974800000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": " 0  0 * * * ",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792933200000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": " 0  0 * * * ",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772370000000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 0 * * 7",
+   "from": 1772921730123,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 0 * * 7",
+   "from": 1792889999999,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "0 0 * * 7",
+   "from": 1772323140000,
+   "valid": false,
+   "next": null
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "*/7 * * * 0",
+   "from": 1772921730123,
+   "valid": true,
+   "next": 1772922060000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "*/7 * * * 0",
+   "from": 1792889999999,
+   "valid": true,
+   "next": 1792890000000
+  },
+  {
+   "tz": "Australia/Lord_Howe",
+   "expr": "*/7 * * * 0",
+   "from": 1772323140000,
+   "valid": true,
+   "next": 1772323200000
+  }
+ ],
+ "scheduled": [
+  {
+   "workflow": {
+    "id": "w",
+    "name": "W",
+    "category": "C",
+    "enabled": true,
+    "steps": [],
+    "triggers": [
+     {
+      "id": "t",
+      "kind": "schedule",
+      "intervalMs": 1000
+     }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1
+   },
+   "from": 1772921730123,
+   "next": 1772921790123
+  },
+  {
+   "workflow": {
+    "id": "w",
+    "name": "W",
+    "category": "C",
+    "enabled": true,
+    "steps": [],
+    "triggers": [
+     {
+      "id": "t",
+      "kind": "schedule",
+      "intervalMs": 3600000
+     }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1,
+    "lastRunAt": 1772921729123
+   },
+   "from": 1772921730123,
+   "next": 1772925329123
+  },
+  {
+   "workflow": {
+    "id": "w",
+    "name": "W",
+    "category": "C",
+    "enabled": true,
+    "steps": [],
+    "triggers": [
+     {
+      "id": "t",
+      "kind": "schedule",
+      "cron": "0 * * * *"
+     },
+     {
+      "id": "u",
+      "kind": "schedule",
+      "intervalMs": 600000
+     }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1
+   },
+   "from": 1772921730123,
+   "next": 1772922330123
+  },
+  {
+   "workflow": {
+    "id": "w",
+    "name": "W",
+    "category": "C",
+    "enabled": true,
+    "steps": [],
+    "triggers": [
+     {
+      "id": "t",
+      "kind": "schedule",
+      "cron": "0 * * * *",
+      "enabled": false
+     }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1
+   },
+   "from": 1772921730123,
+   "next": null
+  },
+  {
+   "workflow": {
+    "id": "w",
+    "name": "W",
+    "category": "C",
+    "enabled": true,
+    "steps": [],
+    "triggers": [
+     {
+      "id": "t",
+      "kind": "schedule",
+      "cron": "bad"
+     },
+     {
+      "id": "u",
+      "kind": "manual"
+     }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1
+   },
+   "from": 1772921730123,
+   "next": null
+  },
+  {
+   "workflow": {
+    "id": "w",
+    "name": "W",
+    "category": "C",
+    "enabled": true,
+    "steps": [],
+    "triggers": [
+     {
+      "id": "t",
+      "kind": "schedule",
+      "intervalMs": 0
+     }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1
+   },
+   "from": 1772921730123,
+   "next": null
+  }
+ ],
+ "list": [
+  {
+   "id": "cli",
+   "name": "Deploy Prod!",
+   "category": "C",
+   "enabled": true,
+   "steps": [],
+   "triggers": [
+    {
+     "id": "a",
+     "kind": "cli"
+    },
+    {
+     "id": "b",
+     "kind": "cli",
+     "command": " ship "
+    }
+   ],
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  {
+   "id": "slack",
+   "name": "W",
+   "category": "C",
+   "enabled": true,
+   "steps": [],
+   "triggers": [
+    {
+     "id": "a",
+     "kind": "slack",
+     "channel": "#Ops ",
+     "keyword": "Deploy"
+    }
+   ],
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  {
+   "id": "git",
+   "name": "W",
+   "category": "C",
+   "enabled": true,
+   "steps": [],
+   "triggers": [
+    {
+     "id": "a",
+     "kind": "git",
+     "events": [
+      "push",
+      "pr_opened"
+     ],
+     "repo": " o/r ",
+     "branches": [
+      "main",
+      "release/*",
+      " ",
+      "v1.(x)*"
+     ]
+    }
+   ],
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  {
+   "id": "gitlab",
+   "name": "W",
+   "category": "C",
+   "enabled": true,
+   "steps": [],
+   "triggers": [
+    {
+     "id": "a",
+     "kind": "git",
+     "provider": "gitlab"
+    }
+   ],
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  {
+   "id": "conn",
+   "name": "W",
+   "category": "C",
+   "enabled": true,
+   "steps": [],
+   "triggers": [
+    {
+     "id": "a",
+     "kind": "connector",
+     "connector": "linear",
+     "event": "issue",
+     "filter": "Crash"
+    }
+   ],
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  {
+   "id": "hook",
+   "name": "W",
+   "category": "C",
+   "enabled": true,
+   "steps": [],
+   "triggers": [
+    {
+     "id": "a",
+     "kind": "webhook",
+     "webhookSecret": "s3",
+     "filter": ""
+    }
+   ],
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  {
+   "id": "off",
+   "name": "W",
+   "category": "C",
+   "enabled": false,
+   "steps": [],
+   "triggers": [
+    {
+     "id": "a",
+     "kind": "manual"
+    },
+    {
+     "id": "b",
+     "kind": "cli"
+    }
+   ],
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  {
+   "id": "disarmed",
+   "name": "W",
+   "category": "C",
+   "enabled": true,
+   "steps": [],
+   "triggers": [
+    {
+     "id": "a",
+     "kind": "cli",
+     "enabled": false
+    }
+   ],
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  {
+   "id": "manual",
+   "name": "W",
+   "category": "C",
+   "enabled": true,
+   "steps": [],
+   "triggers": [
+    {
+     "id": "a",
+     "kind": "manual"
+    }
+   ],
+   "createdAt": 1,
+   "updatedAt": 1
+  }
+ ],
+ "matches": [
+  {
+   "event": {
+    "kind": "cli"
+   },
+   "matched": [
+    "cli"
+   ],
+   "accepts": [
+    [
+     true,
+     true
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     true
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "cli",
+    "command": "deploy-prod"
+   },
+   "matched": [
+    "cli"
+   ],
+   "accepts": [
+    [
+     true,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "cli",
+    "command": "ship"
+   },
+   "matched": [
+    "cli"
+   ],
+   "accepts": [
+    [
+     false,
+     true
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "cli",
+    "command": "nope"
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "slack",
+    "channel": "ops",
+    "text": "please DEPLOY now"
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "slack",
+    "channel": "#ops",
+    "text": "hi"
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "slack",
+    "text": "deploy"
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "git",
+    "event": "push",
+    "repo": "o/r",
+    "branch": "main"
+   },
+   "matched": [
+    "git"
+   ],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     true
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "git",
+    "event": "push",
+    "repo": "o/r",
+    "branch": "release/1.2"
+   },
+   "matched": [
+    "git"
+   ],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     true
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "git",
+    "event": "push",
+    "repo": "o/r",
+    "branch": "feature"
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "git",
+    "event": "pr_closed",
+    "repo": "o/r"
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "git",
+    "provider": "gitlab",
+    "event": "tag"
+   },
+   "matched": [
+    "gitlab"
+   ],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     true
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "git",
+    "event": "push",
+    "branch": "v1.(x)9"
+   },
+   "matched": [
+    "git"
+   ],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     true
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "git",
+    "event": "push",
+    "branch": "v1x9"
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "connector",
+    "connector": "linear",
+    "event": "issue",
+    "text": "App crash on login"
+   },
+   "matched": [
+    "conn"
+   ],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     true
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "connector",
+    "connector": "linear",
+    "event": "issue",
+    "text": "x",
+    "payload": {
+     "body": "CRASH"
+    }
+   },
+   "matched": [
+    "conn"
+   ],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     true
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "connector",
+    "connector": "slack",
+    "event": "issue",
+    "text": "crash"
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "webhook",
+    "secret": "s3"
+   },
+   "matched": [
+    "hook"
+   ],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     true
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "webhook",
+    "secret": "nope"
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "webhook",
+    "secret": "s3",
+    "workflowId": "other"
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "manual"
+   },
+   "matched": [
+    "manual"
+   ],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     true,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     true
+    ]
+   ]
+  }
+ ],
+ "contexts": [
+  {
+   "event": {
+    "kind": "git",
+    "provider": "github",
+    "event": "push",
+    "repo": "o/r",
+    "branch": "main",
+    "channel": "c",
+    "text": "t",
+    "payload": {
+     "sha": "abc",
+     "n": 1,
+     "o": {
+      "a": 1
+     },
+     "nul": null,
+     "arr": [
+      1,
+      2
+     ]
+    }
+   },
+   "context": "This run was triggered by an event:\nprovider: github\nevent: push\nrepo: o/r\nbranch: main\nchannel: c\nmessage: t\nsha: abc\nn: 1\no: [object Object]\nnul: null\narr: 1,2"
+  },
+  {
+   "event": {
+    "kind": "manual"
+   },
+   "context": ""
+  },
+  {
+   "event": {
+    "kind": "cli",
+    "payload": {}
+   },
+   "context": ""
+  }
+ ],
+ "outcomes": [
+  {
+   "text": "",
+   "outcome": "pass"
+  },
+  {
+   "text": "done ⟦PASS⟧",
+   "outcome": "pass"
+  },
+  {
+   "text": "x ⟦FAIL⟧",
+   "outcome": "fail"
+  },
+  {
+   "text": "⟦FAIL⟧ then ⟦PASS⟧",
+   "outcome": "pass"
+  },
+  {
+   "text": "⟦PASS⟧ then ⟦FAIL⟧ more",
+   "outcome": "fail"
+  }
+ ],
+ "slugs": [
+  {
+   "name": "Deploy Prod!",
+   "slug": "deploy-prod"
+  },
+  {
+   "name": "  ",
+   "slug": "workflow"
+  },
+  {
+   "name": "***",
+   "slug": "workflow"
+  },
+  {
+   "name": "Ünïcode Name 2",
+   "slug": "n-code-name-2"
+  },
+  {
+   "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-b",
+   "slug": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+   "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "slug": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  {
+   "name": "A--B__C",
+   "slug": "a-b-c"
+  }
+ ],
+ "commands": [
+  {
+   "workflow": {
+    "id": "cli",
+    "name": "Deploy Prod!",
+    "category": "C",
+    "enabled": true,
+    "steps": [],
+    "triggers": [
+     {
+      "id": "a",
+      "kind": "cli"
+     },
+     {
+      "id": "b",
+      "kind": "cli",
+      "command": " ship "
+     }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1
+   },
+   "trigger": {
+    "id": "a",
+    "kind": "cli"
+   },
+   "command": "deploy-prod"
+  },
+  {
+   "workflow": {
+    "id": "cli",
+    "name": "Deploy Prod!",
+    "category": "C",
+    "enabled": true,
+    "steps": [],
+    "triggers": [
+     {
+      "id": "a",
+      "kind": "cli"
+     },
+     {
+      "id": "b",
+      "kind": "cli",
+      "command": " ship "
+     }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1
+   },
+   "trigger": {
+    "id": "b",
+    "kind": "cli",
+    "command": " ship "
+   },
+   "command": "ship"
+  },
+  {
+   "workflow": {
+    "id": "off",
+    "name": "W",
+    "category": "C",
+    "enabled": false,
+    "steps": [],
+    "triggers": [
+     {
+      "id": "a",
+      "kind": "manual"
+     },
+     {
+      "id": "b",
+      "kind": "cli"
+     }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1
+   },
+   "trigger": {
+    "id": "b",
+    "kind": "cli"
+   },
+   "command": "w"
+  },
+  {
+   "workflow": {
+    "id": "disarmed",
+    "name": "W",
+    "category": "C",
+    "enabled": true,
+    "steps": [],
+    "triggers": [
+     {
+      "id": "a",
+      "kind": "cli",
+      "enabled": false
+     }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1
+   },
+   "trigger": {
+    "id": "a",
+    "kind": "cli",
+    "enabled": false
+   },
+   "command": "w"
+  }
+ ],
+ "branches": [
+  {
+   "branch": "main",
+   "patterns": null,
+   "matches": true
+  },
+  {
+   "branch": "main",
+   "patterns": [],
+   "matches": true
+  },
+  {
+   "branch": "main",
+   "patterns": [
+    "main"
+   ],
+   "matches": true
+  },
+  {
+   "branch": "dev",
+   "patterns": [
+    "main"
+   ],
+   "matches": false
+  },
+  {
+   "branch": "release/1",
+   "patterns": [
+    "release/*"
+   ],
+   "matches": true
+  },
+  {
+   "branch": "x.y",
+   "patterns": [
+    "x?y*"
+   ],
+   "matches": false
+  },
+  {
+   "branch": "ab",
+   "patterns": [
+    "a*b*"
+   ],
+   "matches": true
+  },
+  {
+   "branch": "a",
+   "patterns": [
+    " "
+   ],
+   "matches": false
+  }
+ ],
+ "instructions": [
+  "When you are done, end your reply with ⟦PASS⟧ if this step succeeded, or ⟦FAIL⟧ if it did not. A ⟦FAIL⟧ sends the run back for another attempt, so say what went wrong before the token.",
+  "When you are done, end your reply with ⟦PASS⟧ if this step succeeded, or ⟦FAIL⟧ if it did not. A ⟦FAIL⟧ ends the run, so say what blocked you before the token."
+ ],
+ "actions": [
+  {
+   "op": "slack.postMessage",
+   "connector": "slack"
+  },
+  {
+   "op": "linear.createIssue",
+   "connector": "linear"
+  },
+  {
+   "op": "linear.commentIssue",
+   "connector": "linear"
+  },
+  {
+   "op": "jira.createIssue",
+   "connector": "jira"
+  },
+  {
+   "op": "jira.commentIssue",
+   "connector": "jira"
+  },
+  {
+   "op": "github.commentPR",
+   "connector": "github"
+  },
+  {
+   "op": "github.setCommitStatus",
+   "connector": "github"
+  },
+  {
+   "op": "gitlab.setCommitStatus",
+   "connector": "gitlab"
+  },
+  {
+   "op": "gitlab.commentMR",
+   "connector": "gitlab"
+  },
+  {
+   "op": "discord.postMessage",
+   "connector": "discord"
+  },
+  {
+   "op": "teams.postMessage",
+   "connector": "teams"
+  },
+  {
+   "op": "webhook.post",
+   "connector": null
+  }
+ ]
+}

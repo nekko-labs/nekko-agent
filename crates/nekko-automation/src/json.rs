@@ -99,6 +99,17 @@ pub fn has_word_phrase(text: &str, phrase: &str) -> bool {
     })
 }
 
+/// `writeJsonAtomic`: [`write_json`], owner-only where the platform has modes.
+pub fn write_json_private(path: &Path, value: &Value) -> std::io::Result<()> {
+    write_json(path, value)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

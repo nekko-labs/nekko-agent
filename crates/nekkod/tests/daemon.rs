@@ -1711,3 +1711,62 @@ async fn the_daemon_keeps_and_reads_connectors() {
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_runs_workflows_with_shell_prompt_and_webhook() {
+    let data = std::env::temp_dir().join(format!("nekkod-workflows-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let work = data.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "workspaces": [{ "id": "w1", "path": work }], "defaultProviderId": "p1", "defaultModelId": "m1" })
+            .to_string(),
+    )
+    .unwrap();
+    // A run interrupted by the last shutdown is written off at startup.
+    std::fs::write(
+        data.join("workflow-runs.json"),
+        r#"[{"id":"old","workflowId":"gone","status":"running","triggerKind":"manual","startedAt":1,"steps":[]}]"#,
+    )
+    .unwrap();
+    let d = start_with(true, Some(&data));
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("workflow:run")), "{info}");
+    wait_for("the reconcile", || {
+        std::fs::read_to_string(data.join("workflow-runs.json")).unwrap_or_default().contains("Interrupted")
+    })
+    .await;
+
+    let input = json!({
+        "name": "Echo Flow",
+        "steps": [
+            { "id": "a", "name": "Say", "kind": "shell", "run": "echo hello-{{run.workflowName}}" },
+            { "id": "b", "name": "Ask", "kind": "prompt", "run": "Summarize {{steps.a.output}}" },
+        ],
+        "triggers": [{ "id": "t", "kind": "webhook", "webhookSecret": "sekret" }],
+    });
+    let (_, wf) = post(d.port, "workflow:create", json!([input]), Some(TOKEN)).await;
+    assert_eq!(wf["workspaceId"], "w1", "{wf}");
+    let (_, run) = post(d.port, "workflow:run", json!([wf["id"]]), Some(TOKEN)).await;
+    // The shell step ran for real; the fake host's turn left no answer.
+    assert_eq!(run["steps"][0]["status"], "success", "{run}");
+    assert!(run["steps"][0]["output"].as_str().unwrap().contains("hello-Echo Flow"), "{run}");
+    assert_eq!(run["status"], "failure");
+    assert_eq!(run["message"], "\"Ask\" failed: The model produced no answer for this step.");
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let sent: Vec<&Value> = calls.as_array().unwrap().iter().filter(|c| c[0] == "chat:send").collect();
+    assert!(sent[0][1][0]["text"].as_str().unwrap().contains("Summarize hello-Echo Flow"), "{calls}");
+
+    // Webhooks: the right secret starts a run, a wrong one is refused.
+    let (status, bad) = post(d.port, "workflow:webhook", json!(["echo-flow", "nope", {}]), Some(TOKEN)).await;
+    assert_ne!(status, 200, "{bad}");
+    let (_, runs) =
+        post(d.port, "workflow:webhook", json!(["echo-flow", "sekret", { "ref": "main" }]), Some(TOKEN)).await;
+    assert_eq!(runs[0]["triggerKind"], "webhook", "{runs}");
+    let (_, history) = post(d.port, "workflow:runs", json!([wf["id"]]), Some(TOKEN)).await;
+    assert_eq!(history.as_array().unwrap().len(), 2);
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}

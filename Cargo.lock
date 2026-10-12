@@ -1253,7 +1253,10 @@ dependencies = [
 name = "nekko-automation"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "chrono-tz",
  "getrandom",
+ "nekko-connectors",
  "nekko-js",
  "serde_json",
  "tokio",
@@ -1453,6 +1456,7 @@ dependencies = [
  "anyhow",
  "axum",
  "bytes",
+ "chrono",
  "futures-util",
  "getrandom",
  "libc",
