@@ -41,6 +41,23 @@ function setup(animations: ReturnType<typeof fakeAnimation>[]) {
 }
 
 describe('decorClock', () => {
+  it('does not invalidate beam styles twice inside the same discrete step', () => {
+    const beam = fakeAnimation('composer-beam-spin', 0);
+    Object.assign(beam.effect, {
+      getTiming: () => ({ duration: 3200, easing: 'steps(48, end)', iterations: Infinity, direction: 'normal' }),
+      getKeyframes: () => [{ computedOffset: 0 }, { computedOffset: 1 }],
+    });
+    let writes = 0, time = 0;
+    Object.defineProperty(beam, 'currentTime', { get: () => time, set: value => { time = value; writes++; } });
+    const clock = setup([beam]);
+    clock.doc.timeline.currentTime = 1000; clock.tick();
+    clock.doc.timeline.currentTime = 1033; clock.tick();
+    expect(writes).toBe(1);
+    clock.doc.timeline.currentTime = 1067; clock.tick();
+    expect(writes).toBe(2);
+    expect(time).toBe(1067);
+  });
+
   it('pauses the decorations and steps them itself, DECOR_HZ times a second', () => {
     const beam = fakeAnimation('composer-beam-spin', 400);
     const other = fakeAnimation('pr-deck-pop');
