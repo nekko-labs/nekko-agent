@@ -335,9 +335,11 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     const fn = handlers.get(channel);
     if (typeof fn !== 'function') throw new Error(`Unknown channel: ${channel}`);
     const daemon = DAEMON_SERVED.has(channel) ? daemonCall() : undefined;
-    if (daemon) {
-      return daemonOwns(daemon, channel).then((owned) => (owned ? daemon(channel, ...(args ?? [])) : fn(args ?? [])));
-    }
-    return fn(args ?? []);
+    if (!daemon) return fn(args ?? []);
+    return (async () => {
+      if (await daemonOwns(daemon, channel)) return daemon(channel, ...(args ?? []));
+      if (typeof fn !== 'function') throw new Error(`Unknown channel: ${channel}`);
+      return fn(args ?? []);
+    })();
   };
 }
