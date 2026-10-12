@@ -9,6 +9,7 @@ mod automation;
 mod backend;
 mod catalog;
 mod config;
+mod connectors;
 mod decide;
 mod decisions;
 mod engine;

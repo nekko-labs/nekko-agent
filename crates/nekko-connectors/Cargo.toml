@@ -1,0 +1,24 @@
+[package]
+name = "nekko-connectors"
+description = "Connectors and workflow actions for the Nekko Agent engine daemon: the GitHub, GitLab, Linear, Slack, Discord, Jira, Teams and Google reads and polls, and the workflow action runners, sending and returning what the TS host did."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+base64 = "0.22"
+futures-util.workspace = true
+nekko-js = { path = "../nekko-js" }
+nekko-usage = { path = "../nekko-usage" }
+# native-tls: every connector is HTTPS. It is the TLS stack reqwest already uses here.
+reqwest = { workspace = true, features = ["native-tls"] }
+# Numbers must parse to the exact double JavaScript has, or a payload prints differently.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+tokio.workspace = true
+# WHATWG URL parsing, as `new URL` does.
+url = "2"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }

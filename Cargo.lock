@@ -1283,6 +1283,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "nekko-connectors"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "futures-util",
+ "nekko-js",
+ "nekko-usage",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "nekko-context"
 version = "0.1.0"
 dependencies = [
@@ -1445,6 +1459,7 @@ dependencies = [
  "nekko-agent",
  "nekko-automation",
  "nekko-chat",
+ "nekko-connectors",
  "nekko-context",
  "nekko-decide",
  "nekko-engine",
