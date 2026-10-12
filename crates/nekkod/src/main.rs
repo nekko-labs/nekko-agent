@@ -22,6 +22,7 @@ mod sideband;
 mod tooling;
 mod turns;
 mod voice;
+mod watches;
 mod wire;
 
 use backend::Backend;
@@ -72,7 +73,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS].join(","));
+                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS, watches::OWNS].join(","));
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -105,6 +106,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
     });
     let catalog = settings.as_deref().map(catalog::new);
+    // Agent watches, when the daemon knows the data directory (watches.rs).
+    let agent_watches = match (&cfg.data_dir, &sessions) {
+        (Some(d), Some(store)) => Some(watches::Watches::new(d.into(), store.clone(), backend.clone())),
+        _ => None,
+    };
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -121,7 +127,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 mcp.clone(),
                 engine.decide.clone(),
             )
-            .with_settings(settings.as_ref().map(|s| s.store.clone())),
+            .with_settings(settings.as_ref().map(|s| s.store.clone()))
+            .with_watches(agent_watches.clone()),
         ),
         mcp: mcp.clone(),
         accounts,
@@ -130,6 +137,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         catalog,
     };
     routes::forward_terminal_events(&ctx);
+    if let Some(w) = &agent_watches {
+        w.start(ctx.turns.clone());
+    }
     let processes = ctx.turns.processes.clone();
 
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };

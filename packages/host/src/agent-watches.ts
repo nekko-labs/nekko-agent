@@ -5,6 +5,10 @@ import { parsePrUrl } from '@nekko-agent/shared';
 import type { ToolSpec } from '@nekko-agent/core';
 import { dataDir } from './paths.js';
 import { writeJsonAtomic } from './secure-file.js';
+import { daemonCall, daemonOwns } from './engine/daemon.js';
+
+/** The engine daemon writes agent-watches.json and runs the scheduler (crates/nekkod/src/watches.rs). */
+export const DAEMON_WATCHES = 'agent-watches';
 
 export interface AgentWatch {
   id: string;
@@ -147,15 +151,40 @@ export class AgentWatchService {
 }
 
 let service: AgentWatchService | null = null;
+let dependencies: WatchDependencies | null = null;
 export function configureAgentWatches(deps: WatchDependencies): AgentWatchService {
   service?.stop();
+  dependencies = deps;
   service = new AgentWatchService(() => join(dataDir(), 'agent-watches.json'), deps);
-  service.start();
+  // Under a daemon that owns the file, its scheduler runs the watches; this
+  // host only answers its callbacks (`watch:snapshot`, `watch:resume`).
+  if (!daemonOwns(DAEMON_WATCHES)) service.start();
   return service;
 }
 export async function agentWatchTool(sessionId: string, input: Record<string, unknown>): Promise<string> {
+  const call = daemonOwns(DAEMON_WATCHES) ? daemonCall() : undefined;
+  if (call) {
+    const out = await call<string | { error: string }>('watch:tool', sessionId, input);
+    if (typeof out === 'string') return out;
+    throw new Error(out.error);
+  }
   if (!service) throw new Error('Agent watch scheduler is unavailable');
   return service.tool(sessionId, input);
+}
+/** `watch:snapshot`: a PR's state, for the daemon's scheduler. */
+export async function watchSnapshot(url: string): Promise<string> {
+  if (!dependencies) throw new Error('Agent watch scheduler is unavailable');
+  return dependencies.snapshot(url);
+}
+/** `watch:resume`: continue a chat for the daemon's scheduler; the failure, if any. */
+export async function watchResume(sessionId: string, text: string): Promise<{ error?: string }> {
+  if (!dependencies) return { error: 'Agent watch scheduler is unavailable' };
+  try {
+    await dependencies.resume(sessionId, text);
+    return {};
+  } catch (e) {
+    return { error: (e as Error).message ?? String(e) };
+  }
 }
 export function nextAgentWatchAt(sessionId: string): number | null {
   return service?.nextWakeAt(sessionId) ?? null;

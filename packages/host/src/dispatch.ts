@@ -1,6 +1,7 @@
 import { IpcChannels } from '@nekko-agent/shared';
 import type { Host } from './host.js';
 import { deleteAgentLog } from './agent-log.js';
+import { watchResume, watchSnapshot } from './agent-watches.js';
 
 /**
  * Maps an IPC channel + positional args to the matching Host method. Shared by
@@ -77,6 +78,10 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'oauth:refresh': ([tokenKey]) => host.oauthRefresh(String(tokenKey)),
     // The daemon resolved a Hypergate gateway (crates/nekkod/src/hypergate.rs); the entry is a setting.
     'mcp:hypergate:save': ([info]) => host.hypergateSave(info as never),
+    // The daemon runs agent watches (crates/nekkod/src/watches.rs) and asks this
+    // host for a PR's state and to continue a chat.
+    'watch:snapshot': ([url]) => watchSnapshot(String(url)),
+    'watch:resume': ([sessionId, text]) => watchResume(String(sessionId), String(text)),
     'engine:routerModels': () => host.engineRouterModels(),
     'engine:routerModel': ([id]) => host.engineRouterModel(String(id)),
     [C.engineInstall]: ([buildId, runtime]) => host.engineInstall(buildId, runtime),

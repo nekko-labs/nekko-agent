@@ -20,12 +20,12 @@
 //!   trip never passes through the TS event loop. Tools that still run in the
 //!   host park their approvals here too (`turn:approval`).
 //!
-//! It runs `fetch_url` (`nekko-web`) and the background-process tools
-//! (`nekko-tools`) itself, and calls back for what has not moved: `turn:tool`
-//! (the browser and window capture, watches, delegation targets, training
-//! reports, and MCP, sub-agents or `decide` for a host that keeps them),
-//! `turn:hook` (tool hooks, for a host that keeps them; given `facts.hookRules`
-//! they run here), `turn:headers` (Anthropic subscription rate
+//! It runs `fetch_url` (`nekko-web`), the background-process tools
+//! (`nekko-tools`) and `agent_watch` (watches.rs) itself, and calls back for
+//! what has not moved: `turn:tool` (the browser and window capture,
+//! delegation targets, training reports, and MCP, sub-agents or `decide` for
+//! a host that keeps them), `turn:hook` (tool hooks, for a host that keeps
+//! them; given `facts.hookRules` they run here), `turn:headers` (Anthropic subscription rate
 //! limits), `loop:log` (the agent terminal); and it sends the host every
 //! event (`turn:event`, deltas batched) for the phone relay and usage and
 //! reply accounting, then `turn:end`.
@@ -266,6 +266,8 @@ pub struct Turns {
     /// settings.json, when the daemon writes it: tool hooks are re-read
     /// from it per call, as the TS host did.
     settings: Option<Arc<nekko_settings::SettingsStore>>,
+    /// `agent_watch` and its scheduler (watches.rs), with a data directory.
+    pub watches: Option<Arc<crate::watches::Watches>>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
 }
@@ -290,6 +292,7 @@ impl Turns {
             decide,
             processes: Processes::new(),
             settings: None,
+            watches: None,
             running: Mutex::default(),
             pending: Pending::default(),
         }
@@ -298,6 +301,12 @@ impl Turns {
     /// The daemon's settings store (settings.rs).
     pub fn with_settings(mut self, settings: Option<Arc<nekko_settings::SettingsStore>>) -> Self {
         self.settings = settings;
+        self
+    }
+
+    /// `agent_watch` runs here (watches.rs).
+    pub fn with_watches(mut self, watches: Option<Arc<crate::watches::Watches>>) -> Self {
+        self.watches = watches;
         self
     }
 
@@ -1342,6 +1351,11 @@ impl TurnTools {
         if name == "fetch_url" {
             return Ok(self.fetch_url(call).await);
         }
+        if name == "agent_watch"
+            && let Some(watches) = self.turns.watches.clone()
+        {
+            return Ok(self.agent_watch(&watches, call).await);
+        }
         if let Some(ctx) = &self.native
             && NATIVE.contains(&name)
             && (is_ported(name) || PROCESS_TOOLS.contains(&name))
@@ -1363,6 +1377,38 @@ impl TurnTools {
             self.shared.emit(json!({ "type": "session_meta", "sessionId": self.shared.session_id }));
         }
         Ok(reply.get("result").cloned().unwrap_or_else(|| error(id, "The host returned no result.")))
+    }
+
+    /// `agent_watch` (chat.ts `runHostTool`): not in incognito, goal-run or
+    /// offline chats; arming one asks first in ask mode or the ask-everything
+    /// sandbox.
+    async fn agent_watch(&self, watches: &crate::watches::Watches, call: &Value) -> Value {
+        let id = str_at(call, "id").unwrap_or_default();
+        let input = call.get("input").cloned().unwrap_or(json!({}));
+        let offline = js::truthy(lock(&self.session).get("offline"));
+        let failed = |e: &str| error(id, format!("Agent watch failed: {e}"));
+        if self.incognito || self.training || offline {
+            return failed("Durable watches are unavailable in incognito, goal runs, or offline chats");
+        }
+        let asks = self.mode == "ask" || self.sandbox_mode.as_deref() == Some("ask-everything");
+        if input.get("action") == Some(&json!("create"))
+            && asks
+            && !self
+                .turns
+                .request_approval(
+                    &self.shared,
+                    call,
+                    "Schedule an automatic continuation of this chat",
+                    &json!("medium"),
+                )
+                .await
+        {
+            return failed("Watch registration not approved");
+        }
+        match watches.tool(&self.shared.session_id, &input).await {
+            Ok(out) => result(id, out),
+            Err(e) => failed(&e),
+        }
     }
 
     /// `fetch_url` (tools.ts): reading a page is as safe as reading a file,
