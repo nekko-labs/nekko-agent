@@ -104,12 +104,16 @@ impl OAuth {
         sign_in: bool,
         endpoints: Endpoints,
     ) -> Arc<Self> {
+        let http = reqwest::Client::builder().timeout(Duration::from_secs(60)).https_only(true);
+        // Synthetic OAuth servers use loopback HTTP only in unit-test binaries.
+        #[cfg(test)]
+        let http = http.https_only(false);
         Arc::new(OAuth {
             tokens: o::TokenStore::new(dir),
             settings,
             accounts,
             hub,
-            http: reqwest::Client::builder().timeout(Duration::from_secs(60)).build().unwrap_or_default(),
+            http: http.build().expect("OAuth HTTPS client"),
             endpoints,
             sign_in,
             sessions: Mutex::default(),
