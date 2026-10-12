@@ -31,6 +31,7 @@ mod sideband;
 mod tooling;
 mod turns;
 mod voice;
+mod watches;
 mod wire;
 mod workspace;
 mod worktrees;
@@ -85,7 +86,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             if cfg.data_dir.is_some() {
                 cmd.env.insert(
                     "NEKKOD_OWNS".into(),
-                    [settings::OWNS, voice::OWNS, oauth::OWNS, automation::OWNS, remote::OWNS].join(","),
+                    [settings::OWNS, voice::OWNS, oauth::OWNS, automation::OWNS, remote::OWNS, watches::OWNS].join(","),
                 );
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
@@ -136,6 +137,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let read = read_settings(&settings);
         move || nekko_js::truthy_str(read().get("engineBinPath")).map(str::to_string)
     };
+    // Agent watches, when the daemon knows the data directory (watches.rs).
+    let agent_watches = match (&cfg.data_dir, &sessions) {
+        (Some(d), Some(store)) => Some(watches::Watches::new(d.into(), store.clone(), backend.clone())),
+        _ => None,
+    };
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -153,7 +159,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 engine.decide.clone(),
             )
             .with_settings(settings.as_ref().map(|s| s.store.clone()))
-            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
+            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token)))
+            .with_watches(agent_watches.clone()),
         ),
         mcp: mcp.clone(),
         accounts: accounts.clone(),
@@ -207,6 +214,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }));
     }
     automation.start();
+    if let Some(w) = &agent_watches {
+        w.start(ctx.turns.clone());
+    }
     let processes = ctx.turns.processes.clone();
     {
         // A paired phone reaches what the UI reaches: the router.

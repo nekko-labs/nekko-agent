@@ -2394,3 +2394,46 @@ async fn the_daemon_runs_workflows_with_shell_prompt_and_webhook() {
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_arms_agent_watches_itself_and_owns_their_file() {
+    let session = json!({
+        "id": "s_turn_w", "title": "Named", "mode": "yolo", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("watch", session);
+    let model = scripted_model(vec![
+        call_tool(
+            "c_arm",
+            "agent_watch",
+            json!({ "action": "create", "kind": "timer", "prompt": "Check the build", "delay_seconds": 120 }),
+        ),
+        call_tool("c_bad", "agent_watch", json!({ "action": "create", "kind": "pr", "prompt": "x", "url": "nope" })),
+        say_text("armed"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_w", "s_turn_w", json!({}));
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, end) = turn_record(rig.d.port, "turn_w").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_turn_w");
+    let messages = saved["messages"].as_array().unwrap();
+    let tool_out = |id: &str| -> String {
+        let m = messages.iter().find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id).unwrap();
+        m["toolResult"]["output"].as_str().unwrap().to_string()
+    };
+    assert!(tool_out("c_arm").starts_with("Watch armed: "), "{}", tool_out("c_arm"));
+    assert_eq!(tool_out("c_bad"), "Agent watch failed: A valid GitHub PR URL is required");
+    let file: Value =
+        serde_json::from_str(&std::fs::read_to_string(rig.data.join("agent-watches.json")).unwrap()).unwrap();
+    assert_eq!(file[0]["prompt"], "Check the build");
+    assert_eq!(file[0]["status"], "active");
+    let (_, wake) = post(rig.d.port, "session:nextWatch", json!(["s_turn_w"]), Some(TOKEN)).await;
+    assert_eq!(wake, file[0]["deadlineAt"]);
+    let (_, listed) = post(rig.d.port, "watch:tool", json!(["s_turn_w", { "action": "list" }]), Some(TOKEN)).await;
+    assert!(listed.as_str().unwrap().contains("\"Check the build\""), "{listed}");
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("session:nextWatch")));
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "the host ran nothing: {all}");
+}

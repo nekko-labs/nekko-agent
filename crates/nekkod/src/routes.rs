@@ -282,6 +282,17 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             None => ctx.backend.call(c, Value::Array(args)).await,
         },
         c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
+        // A host running a turn itself (NEKKO_AGENT_LOOP=ts) sends its agent_watch calls here.
+        "watch:tool" if ctx.turns.watches.is_some() => {
+            let w = ctx.turns.watches.clone().expect("checked");
+            w.tool(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1))
+                .await
+                .map(Value::String)
+                .or_else(|e| Ok(json!({ "error": e })))
+        }
+        "session:nextWatch" if ctx.turns.watches.is_some() => {
+            Ok(ctx.turns.watches.as_ref().expect("checked").next_wake_at(str_arg(&args, 0).unwrap_or_default()))
+        }
         c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
             crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
         }
@@ -407,6 +418,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.automation.owns_workflows() {
         all.extend_from_slice(crate::automation::WORKFLOW_CHANNELS);
+    }
+    if ctx.turns.watches.is_some() {
+        all.extend_from_slice(crate::watches::CHANNELS);
     }
     all
 }

@@ -64,6 +64,27 @@ pub fn iso_date(t: f64) -> Option<String> {
     Some(full.chars().take(10).collect())
 }
 
+/// `new Date(t).toISOString()`, or `None` for an invalid date.
+pub fn iso_string(t: f64) -> Option<String> {
+    let t = time_clip(t);
+    if t.is_nan() {
+        return None;
+    }
+    let date = iso_date(t)?;
+    let ms_of_day = t.rem_euclid(86_400_000.0) as i64;
+    let (h, mi, s, ms) = (ms_of_day / 3_600_000, ms_of_day / 60_000 % 60, ms_of_day / 1000 % 60, ms_of_day % 1000);
+    // Outside years 0..=9999 the date part is longer than the ten `iso_date` keeps.
+    let days = (t / 86_400_000.0).floor() as i64;
+    let (y, m, d) = civil_from_days(days);
+    let date = if (0..=9999).contains(&y) {
+        date
+    } else {
+        let sign = if y < 0 { '-' } else { '+' };
+        format!("{sign}{:06}-{m:02}-{d:02}", y.abs())
+    };
+    Some(format!("{date}T{h:02}:{mi:02}:{s:02}.{ms:03}Z"))
+}
+
 struct Cursor<'a> {
     b: &'a [u8],
     i: usize,
@@ -288,6 +309,14 @@ mod tests {
         let off =
             Local.offset_from_utc_datetime(&chrono::DateTime::from_timestamp_millis(utc as i64).unwrap().naive_utc());
         assert_eq!(utc - local, f64::from(off.local_minus_utc()) * 1000.0);
+    }
+
+    #[test]
+    fn iso_strings_match_to_iso_string() {
+        assert_eq!(iso_string(0.0).as_deref(), Some("1970-01-01T00:00:00.000Z"));
+        assert_eq!(iso_string(1_760_000_000_123.0).as_deref(), Some("2025-10-09T08:53:20.123Z"));
+        assert_eq!(iso_string(-1.0).as_deref(), Some("1969-12-31T23:59:59.999Z"));
+        assert_eq!(iso_string(f64::NAN), None);
     }
 
     #[test]
