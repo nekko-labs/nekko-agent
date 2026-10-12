@@ -121,7 +121,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 mcp.clone(),
                 engine.decide.clone(),
             )
-            .with_settings(settings.as_ref().map(|s| s.store.clone())),
+            .with_settings(settings.as_ref().map(|s| s.store.clone()))
+            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
         ),
         mcp: mcp.clone(),
         accounts,
