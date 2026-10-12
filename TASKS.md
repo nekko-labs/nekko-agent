@@ -326,12 +326,6 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
-### GitHub dependent chat worktrees (2026-10-12)
-
-- [x] **GS1**: Optional [Continue as stacked PR](SPEC.md#continue-dependent-work-with-github-pr-stacks). Pin the selected parent commit, provision an isolated checkout lazily, retain model/tool policy and configure the PR base. Preserve the source checkout's edits.
-- [x] **GS2**: Native GitHub stack create/append APIs, strict same-repository/branch/order checks, idempotent retries and desktop/web bridge actions. Stack merges route to GitHub; active local worktrees are never silently rebased or reset.
-- [x] **GS3**: Real Git isolation tests, mocked native API and privacy guards, hidden renderer interactions and matched inspected light/dark desktop/mobile-web screenshots. Publication/CI/landing tracked in the feature PR. API writes and stack merges are not executed against live user PRs by the automated tests.
-
 ### Folders and execution modes (implemented subset, draft; not shipped)
 
 - [ ] FM1: Land persisted primary-folder/No-folder defaults and saved-access revocation. Implemented with regression coverage; Added: 2026-10-09. See SPEC.md, Primary folder defaults and saved access revocation. Await parent visual inspection and release review.
@@ -872,6 +866,12 @@ Observation: the fixed per-reply step budget (`DEFAULT_MAX_STEPS`, was 80) was h
 - [ ] Stripe billing keys to enable live charges (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`, `CLOUD_PUBLIC_URL`); integration is built + tested, just unconfigured.
 
 ## Shipped
+
+### GitHub dependent chat worktrees (2026-10-12, PR #482)
+
+- [x] **GS1**: Optional [Continue as stacked PR](SPEC.md#continue-dependent-work-with-github-pr-stacks). Pin the selected parent commit, provision an isolated checkout lazily, retain model/tool policy and configure the PR base. Preserve the source checkout's edits.
+- [x] **GS2**: Native GitHub stack create/append APIs, strict same-repository/branch/order checks, idempotent retries and desktop/web bridge actions. Stack merges route to GitHub; active local worktrees are never silently rebased or reset.
+- [x] **GS3**: Real Git isolation tests, mocked native API and privacy guards, a real isolated continuation from PR #482, hidden renderer interactions and matched inspected light/dark desktop/mobile-web screenshots. [PR #482](https://github.com/nekko-labs/nekko-agent/pull/482) tracks publication/CI/landing. API writes and stack merges are not executed against live user PRs by the automated tests.
 
 - [x] **Default folders + Logs drawer** (2026-10-11, [SPEC.md](SPEC.md#default-folders-for-new-agents-and-the-logs-drawer-2026-10-11)): `AppSettings.defaultWorkspaceIds` (ordered, first is primary; stale ids ignored via `defaultFolderIds`). Add window's Folders step saves/clears it and preticks it; `CommandCenterView.newChat` applies it to picker-less chats with supporting folders, and the store's `defaultChatFolder` takes the first. The wall's Logs bubble (`AgentLogsBubble`, inside ChatPane) is replaced by `AgentLogsDrawer`, rendered by `CommandWall` from a small zustand store (`wallLogs.ts`: one open session, `closing` kept mounted for the absorb animation). `layoutWithLogsDrawer` is pure: drawer at 90% height off the target's right edge; same-row windows to the right shift and squeeze (min 240px; the drawer narrows to 280px first); the rightmost target narrows instead. The saved split tree is never touched. Clip-path keyframes for slide-out/absorb, existing 260ms left/width transitions move the neighbours. Tests: layout, toggle state, picker defaults; full desktop suite 848 passing.
 

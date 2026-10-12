@@ -27,7 +27,7 @@ async function main() {
   const out = path.join(repo, '.shots', 'pr-stacks-' + Date.now());
   fs.mkdirSync(out, {recursive:true});
   console.log('Evidence: ' + out);
-  const base = process.env.NEKKO_STACK_BASE || cp.execFileSync('git', ['merge-base','HEAD','origin/main'], {cwd:repo,encoding:'utf8',windowsHide:true}).trim();
+  const base = process.env.NEKKO_STACK_BASE || '3d0bb6e0';
   for (const kind of ['before','after']) {
     const dir = path.join(out,kind);fs.mkdirSync(dir);
     let source=repo;
