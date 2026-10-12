@@ -1,0 +1,23 @@
+[package]
+name = "nekko-workspace"
+description = "The user's projects for the Nekko Agent engine daemon: the file explorer's reads and writes, memory notes, line comments, and the workspace index, ported from the TS host with its exact results."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dev-dependencies]
+nekko-store = { path = "../nekko-store" }
+
+[dependencies]
+futures-util.workspace = true
+getrandom.workspace = true
+memchr.workspace = true
+nekko-context = { path = "../nekko-context" }
+nekko-js = { path = "../nekko-js" }
+nekko-tools = { path = "../nekko-tools" }
+regress.workspace = true
+reqwest = { workspace = true, features = ["native-tls"] }
+serde_json.workspace = true
+tokio.workspace = true

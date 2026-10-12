@@ -12,6 +12,7 @@ import { TitleBar } from './components/TitleBar.js';
 import { BrandMark } from './components/BrandMark.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { syncAppActivity } from './appActivity.js';
+import { startDecorClock } from './decorClock.js';
 import { Mascot, NekkoAvatar } from './components/Mascot.js';
 import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
@@ -112,6 +113,8 @@ export function App() {
   useEffect(() => startDesktopNotifications(), []);
   // Hold looping decorations still while the window is unfocused or hidden.
   useEffect(() => syncAppActivity(), []);
+  // Step the looping decorations on a clock of their own, not every frame.
+  useEffect(() => startDecorClock(), []);
 
   // Archived chats past the retention window are deleted at launch and every
   // few hours after, whichever view the app opens on, so a long-running window

@@ -4,7 +4,7 @@ import type { ToolSpec } from '@nekko-agent/core';
 import { brandEnv } from '@nekko-agent/shared';
 import type { McpServerConfig, McpServerStatus, HypergateInfo, ToolResult, ToolCall } from '@nekko-agent/shared';
 import { daemonCall } from './engine/daemon.js';
-import { daemonOwns } from './daemon-loop.js';
+import { daemonOwns } from './daemon-caps.js';
 
 /**
  * Minimal MCP client, hand-rolled so we add no dependency. Two transports:

@@ -20,6 +20,8 @@ it('real daemon awaits real host log queue before deleting or clearing JSON', as
   const token = 'isolated-daemon-test-token';
   const server = createServer(async (req, res) => {
     try {
+      // This fixture serves authenticated POST callbacks, not the event socket.
+      if (req.method !== 'POST') { res.writeHead(404).end(); return; }
       expect(req.headers.authorization).toMatch(/^Bearer .+/);
       const chunks: Buffer[] = [];
       for await (const chunk of req) chunks.push(Buffer.from(chunk));

@@ -1,0 +1,802 @@
+{
+ "providers": [
+  {
+   "id": "ollama",
+   "kind": "ollama",
+   "name": "Ollama",
+   "baseUrl": "http://127.0.0.1:11434"
+  },
+  {
+   "id": "lms",
+   "kind": "lmstudio",
+   "name": "LM Studio",
+   "baseUrl": "http://localhost:1234/v1/"
+  },
+  {
+   "id": "lms-remote",
+   "kind": "lmstudio",
+   "name": "LM Studio (lab)",
+   "baseUrl": "http://10.0.0.5:1234/v1"
+  },
+  {
+   "id": "vllm",
+   "kind": "vllm",
+   "name": "vLLM",
+   "baseUrl": "http://127.0.0.1:8000/v1"
+  },
+  {
+   "id": "nekko-engine",
+   "kind": "llamacpp",
+   "name": "Nekko engine",
+   "baseUrl": "http://127.0.0.1:18431/v1"
+  },
+  {
+   "id": "openai",
+   "kind": "openai",
+   "name": "OpenAI",
+   "baseUrl": "https://api.openai.com/v1"
+  }
+ ],
+ "http": {
+  "GET http://127.0.0.1:11434/api/version ": {
+   "status": 200,
+   "body": "{\"version\":\"0.12.3\"}"
+  },
+  "GET http://127.0.0.1:11434/api/ps ": {
+   "status": 200,
+   "body": "{\"models\":[{\"name\":\"qwen3:8b\",\"model\":\"qwen3:8b\",\"size\":6000000000,\"size_vram\":5500000000,\"context_length\":8192,\"expires_at\":\"2026-10-12T10:00:00Z\",\"details\":{\"parameter_size\":\"8.2B\",\"quantization_level\":\"Q4_K_M\"}},{\"model\":\"embed:latest\",\"size\":300000000,\"expires_at\":\"soon\"}]}"
+  },
+  "GET http://127.0.0.1:11434/api/tags ": {
+   "status": 200,
+   "body": "{\"models\":[{\"name\":\"qwen3:8b\",\"size\":5200000000},{\"name\":\"llama3.2:3b\",\"size\":2000000000},{\"model\":\"embed:latest\",\"size\":300000000},{\"name\":\"\"},{\"name\":\"broken:1b\"}]}"
+  },
+  "POST http://127.0.0.1:11434/api/show {\"model\":\"qwen3:8b\"}": {
+   "status": 200,
+   "body": "{\"details\":{\"parameter_size\":\"8.2B\",\"quantization_level\":\"Q4_K_M\"},\"model_info\":{\"general.architecture\":\"qwen3\",\"qwen3.block_count\":36,\"qwen3.attention.head_count\":32,\"qwen3.attention.head_count_kv\":8,\"qwen3.embedding_length\":4096,\"qwen3.context_length\":40960,\"qwen3.rope.freq_base\":\"x\"}}"
+  },
+  "POST http://127.0.0.1:11434/api/show {\"model\":\"llama3.2:3b\"}": {
+   "status": 200,
+   "body": "{\"details\":{\"parameter_size\":\"3.2B\"},\"model_info\":{\"llama.block_count\":28,\"llama.attention.head_count\":24,\"llama.embedding_length\":3072,\"llama.context_length\":131072}}"
+  },
+  "POST http://127.0.0.1:11434/api/show {\"model\":\"embed:latest\"}": {
+   "status": 200,
+   "body": "not json"
+  },
+  "POST http://127.0.0.1:11434/api/show {\"model\":\"broken:1b\"}": {
+   "status": 500,
+   "body": ""
+  },
+  "POST http://127.0.0.1:11434/api/generate {\"model\":\"qwen3:8b\",\"prompt\":\"\",\"options\":{\"num_ctx\":16384,\"num_gpu\":20},\"keep_alive\":\"300s\"}": {
+   "status": 200,
+   "body": "{}"
+  },
+  "POST http://127.0.0.1:11434/api/generate {\"model\":\"llama3.2:3b\",\"prompt\":\"\",\"options\":{}}": {
+   "status": 500,
+   "body": "no"
+  },
+  "POST http://127.0.0.1:11434/api/generate {\"model\":\"qwen3:8b\",\"prompt\":\"\",\"keep_alive\":0}": {
+   "status": 200,
+   "body": "{}"
+  },
+  "GET http://localhost:1234/api/v0/models ": {
+   "status": 200,
+   "body": "{\"data\":[{\"id\":\"qwen/qwen3-4b\",\"state\":\"loaded\",\"type\":\"llm\",\"quantization\":\"Q4_K_M\",\"max_context_length\":32768,\"loaded_context_length\":8192},{\"id\":\"google/gemma-3-12b\",\"state\":\"not-loaded\",\"max_context_length\":131072},{\"id\":\"nomic-embed\",\"state\":\"not-loaded\"}]}"
+  },
+  "GET http://localhost:1234/v1/models ": {
+   "status": 200,
+   "body": "{\"data\":[]}"
+  },
+  "GET http://10.0.0.5:1234/api/v0/models ": "throw",
+  "GET http://10.0.0.5:1234/v1/models ": {
+   "status": 200,
+   "body": "{\"data\":[{\"id\":\"x\"}]}"
+  },
+  "GET http://127.0.0.1:8000/v1/models ": {
+   "status": 200,
+   "body": "{\"data\":[{\"id\":\"meta-llama/Llama-3.1-8B-Instruct\",\"max_model_len\":32768}]}"
+  },
+  "GET http://127.0.0.1:8000/metrics ": {
+   "status": 200,
+   "body": "# HELP vllm:num_requests_running x\nvllm:num_requests_running{model_name=\"m\"} 2.0\nvllm:num_requests_waiting{model_name=\"m\"} 0\nvllm:kv_cache_usage_perc{model_name=\"m\"} 0.375\n"
+  }
+ },
+ "run": {
+  "ollama --version": "ollama version is 0.12.3",
+  "lms version": "\u001b[1mlms\u001b[0m - LM Studio CLI - v0.3.27\n",
+  "lms ls --json": "Loading...\n[{\"type\":\"llm\",\"modelKey\":\"qwen/qwen3-4b\",\"sizeBytes\":2500000000,\"paramsString\":\"4B\",\"quantization\":{\"name\":\"Q4_K_M\",\"bits\":4},\"maxContextLength\":32768},{\"type\":\"llm\",\"modelKey\":\"google/gemma-3-12b\",\"sizeBytes\":8100000000,\"paramsString\":\"12B\",\"maxContextLength\":131072},{\"type\":\"embedding\"}]",
+  "lms load qwen/qwen3-4b -y --context-length 8192 --gpu max --ttl 60": "Model loaded successfully in 3.2s",
+  "lms load google/gemma-3-12b -y --gpu off": "Error: Model not found\nTry lms ls\nthird line",
+  "lms unload qwen/qwen3-4b": "Model unloaded.",
+  "lms server start --port 1234": "Success! Server is now running on port 1234\n",
+  "lms server stop": "Stopped the server on port 1234."
+ },
+ "engineStatus": {
+  "running": true,
+  "install": {
+   "binPath": "C:/engine/llama-server.exe",
+   "version": "b6000"
+  },
+  "startedAt": 1700000000000,
+  "resident": [
+   {
+    "id": "gemma",
+    "sizeBytes": 4200000000,
+    "vramBytes": 4000000000,
+    "contextLength": 4096
+   }
+  ],
+  "log": [
+   "server ready"
+  ],
+  "port": 18431
+ },
+ "steps": [
+  {
+   "op": "status",
+   "args": [
+    "ollama"
+   ],
+   "out": "{\"kind\":\"ollama\",\"running\":true,\"installed\":true,\"owned\":false,\"version\":\"0.12.3\",\"baseUrl\":\"http://127.0.0.1:11434\",\"resident\":[{\"id\":\"qwen3:8b\",\"sizeBytes\":6000000000,\"vramBytes\":5500000000,\"contextLength\":8192,\"expiresAt\":1791799200000},{\"id\":\"embed:latest\",\"sizeBytes\":300000000}]}",
+   "requests": [
+    "GET http://127.0.0.1:11434/api/ps ",
+    "GET http://127.0.0.1:11434/api/version "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "facts",
+   "args": [
+    "ollama"
+   ],
+   "out": "[{\"id\":\"qwen3:8b\",\"providerId\":\"http://127.0.0.1:11434\",\"weightsBytes\":6000000000,\"layers\":36,\"kvHeads\":8,\"headDim\":128,\"maxContext\":40960,\"quantization\":\"Q4_K_M\",\"parameterSize\":\"8.2B\",\"loaded\":true,\"vramBytes\":5500000000,\"loadedContext\":8192},{\"id\":\"llama3.2:3b\",\"providerId\":\"http://127.0.0.1:11434\",\"weightsBytes\":2000000000,\"layers\":28,\"kvHeads\":24,\"headDim\":128,\"maxContext\":131072,\"parameterSize\":\"3.2B\",\"loaded\":false},{\"id\":\"embed:latest\",\"providerId\":\"http://127.0.0.1:11434\",\"weightsBytes\":300000000,\"loaded\":true},{\"id\":\"broken:1b\",\"providerId\":\"http://127.0.0.1:11434\",\"loaded\":false}]",
+   "requests": [
+    "GET http://127.0.0.1:11434/api/ps ",
+    "GET http://127.0.0.1:11434/api/tags ",
+    "POST http://127.0.0.1:11434/api/show {\"model\":\"broken:1b\"}",
+    "POST http://127.0.0.1:11434/api/show {\"model\":\"embed:latest\"}",
+    "POST http://127.0.0.1:11434/api/show {\"model\":\"llama3.2:3b\"}",
+    "POST http://127.0.0.1:11434/api/show {\"model\":\"qwen3:8b\"}"
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "plan",
+   "args": [
+    "ollama",
+    "qwen3:8b"
+   ],
+   "out": "{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":32093765632,\"totalLayers\":36,\"verdict\":\"fits\",\"weightsBytes\":6000000000,\"kvCacheBytes\":1207959552,\"overheadBytes\":419430400,\"requiredBytes\":7627389952,\"spillBytes\":0,\"reasons\":[],\"suggestions\":[],\"gpuLayers\":36}",
+   "requests": [
+    "GET http://127.0.0.1:11434/api/ps ",
+    "GET http://127.0.0.1:11434/api/tags ",
+    "GET http://127.0.0.1:11434/api/version "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "plan",
+   "args": [
+    "ollama",
+    "llama3.2:3b",
+    {
+     "contextTokens": 131072,
+     "parallelSlots": 2,
+     "kvCacheDtype": "q8_0",
+     "gpuLayerFraction": 1
+    }
+   ],
+   "out": "{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":32093765632,\"totalLayers\":28,\"verdict\":\"spills\",\"weightsBytes\":2000000000,\"kvCacheBytes\":45097156608,\"overheadBytes\":385875968,\"requiredBytes\":47483032576,\"spillBytes\":15389266944,\"reasons\":[{\"code\":\"kv-cache-dominates\",\"bytes\":45097156608,\"sharePct\":95},{\"code\":\"partial-offload\",\"bytes\":15389266944,\"sharePct\":32.4}],\"suggestions\":[{\"label\":\"Drop context to 64k to fit\",\"savesBytes\":22548578304,\"apply\":{\"contextTokens\":65536}},{\"label\":\"Cut parallel slots to 1 to save 21.0 GB\",\"savesBytes\":22548578304,\"apply\":{\"parallelSlots\":1}}],\"gpuLayers\":0}",
+   "requests": [
+    "GET http://127.0.0.1:11434/api/ps ",
+    "GET http://127.0.0.1:11434/api/tags ",
+    "GET http://127.0.0.1:11434/api/version "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "plan",
+   "args": [
+    "ollama",
+    "missing"
+   ],
+   "out": "null",
+   "requests": [
+    "GET http://127.0.0.1:11434/api/ps ",
+    "GET http://127.0.0.1:11434/api/tags "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "autoPlan",
+   "args": [
+    "ollama",
+    "qwen3:8b",
+    0.5,
+    2
+   ],
+   "out": "{\"request\":{\"contextTokens\":32768,\"parallelSlots\":2,\"kvCacheDtype\":\"q8_0\",\"gpuLayerFraction\":1},\"plan\":{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":16046882816,\"totalLayers\":36,\"verdict\":\"fits\",\"weightsBytes\":6000000000,\"kvCacheBytes\":4831838208,\"overheadBytes\":419430400,\"requiredBytes\":11251268608,\"spillBytes\":0,\"reasons\":[{\"code\":\"kv-cache-dominates\",\"bytes\":4831838208,\"sharePct\":42.9}],\"suggestions\":[],\"gpuLayers\":36},\"headline\":\"32k of context, entirely on the GPU.\",\"tradeoff\":\"About 10.5 GB of VRAM, leaving 19.4 GB for everything else.\",\"compromises\":[\"Used a smaller KV cache element (q8_0) to keep this much context.\"]}",
+   "requests": [
+    "GET http://127.0.0.1:11434/api/ps ",
+    "GET http://127.0.0.1:11434/api/tags ",
+    "GET http://127.0.0.1:11434/api/version "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "load",
+   "args": [
+    "ollama",
+    "qwen3:8b",
+    {
+     "contextTokens": 16384,
+     "gpuLayers": 20,
+     "ttlSeconds": 300
+    }
+   ],
+   "out": "{\"ok\":true,\"message\":\"Loaded qwen3:8b\"}",
+   "requests": [
+    "GET http://127.0.0.1:11434/api/ps ",
+    "GET http://127.0.0.1:11434/api/ps ",
+    "GET http://127.0.0.1:11434/api/tags ",
+    "GET http://127.0.0.1:11434/api/version ",
+    "GET http://127.0.0.1:11434/api/version ",
+    "GET http://127.0.0.1:11434/api/version ",
+    "POST http://127.0.0.1:11434/api/generate {\"model\":\"qwen3:8b\",\"prompt\":\"\",\"options\":{\"num_ctx\":16384,\"num_gpu\":20},\"keep_alive\":\"300s\"}"
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "load",
+   "args": [
+    "ollama",
+    "llama3.2:3b",
+    {}
+   ],
+   "out": "{\"ok\":false,\"message\":\"Ollama refused the load (HTTP 500).\"}",
+   "requests": [
+    "GET http://127.0.0.1:11434/api/ps ",
+    "GET http://127.0.0.1:11434/api/tags ",
+    "GET http://127.0.0.1:11434/api/version ",
+    "POST http://127.0.0.1:11434/api/generate {\"model\":\"llama3.2:3b\",\"prompt\":\"\",\"options\":{}}"
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "unload",
+   "args": [
+    "ollama",
+    "qwen3:8b"
+   ],
+   "out": "{\"ok\":true,\"message\":\"Unloaded qwen3:8b\"}",
+   "requests": [
+    "POST http://127.0.0.1:11434/api/generate {\"model\":\"qwen3:8b\",\"prompt\":\"\",\"keep_alive\":0}"
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "start",
+   "args": [
+    "ollama"
+   ],
+   "out": "{\"kind\":\"ollama\",\"running\":true,\"installed\":true,\"owned\":false,\"version\":\"0.12.3\",\"baseUrl\":\"http://127.0.0.1:11434\",\"resident\":[{\"id\":\"qwen3:8b\",\"sizeBytes\":6000000000,\"vramBytes\":5500000000,\"contextLength\":8192,\"expiresAt\":1791799200000},{\"id\":\"embed:latest\",\"sizeBytes\":300000000}]}",
+   "requests": [
+    "GET http://127.0.0.1:11434/api/ps ",
+    "GET http://127.0.0.1:11434/api/version ",
+    "GET http://127.0.0.1:11434/api/version ",
+    "GET http://127.0.0.1:11434/api/version "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "stop",
+   "args": [
+    "ollama"
+   ],
+   "out": "{\"ok\":false,\"message\":\"This server was not started by Nekko Agent. Stopping it means ending a process something else may be using.\",\"needsConfirmation\":true,\"processName\":\"http://127.0.0.1:11434\"}",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "capabilities",
+   "args": [
+    "ollama"
+   ],
+   "out": "{\"canStart\":true,\"canStop\":true,\"canLoad\":true,\"canSetContext\":true,\"canSetGpuLayers\":true,\"canSetParallel\":\"server-env\",\"canSetKvCacheType\":\"server-env\",\"canSetTtl\":true,\"configuredAtLaunch\":false,\"reportsPerModelVram\":true}",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "status",
+   "args": [
+    "lms"
+   ],
+   "out": "{\"kind\":\"lmstudio\",\"running\":true,\"installed\":true,\"owned\":false,\"version\":\"0.3.27\",\"baseUrl\":\"http://localhost:1234/v1/\",\"resident\":[{\"id\":\"qwen/qwen3-4b\",\"contextLength\":8192}]}",
+   "requests": [
+    "GET http://localhost:1234/api/v0/models ",
+    "GET http://localhost:1234/api/v0/models "
+   ],
+   "runs": [
+    "lms version"
+   ],
+   "calls": []
+  },
+  {
+   "op": "facts",
+   "args": [
+    "lms"
+   ],
+   "out": "[{\"id\":\"qwen/qwen3-4b\",\"providerId\":\"http://localhost:1234/v1/\",\"weightsBytes\":2500000000,\"maxContext\":32768,\"quantization\":\"Q4_K_M\",\"parameterSize\":\"4B\",\"loaded\":true,\"loadedContext\":8192},{\"id\":\"google/gemma-3-12b\",\"providerId\":\"http://localhost:1234/v1/\",\"weightsBytes\":8100000000,\"maxContext\":131072,\"parameterSize\":\"12B\",\"loaded\":false},{\"id\":\"nomic-embed\",\"providerId\":\"http://localhost:1234/v1/\",\"loaded\":false}]",
+   "requests": [
+    "GET http://localhost:1234/api/v0/models "
+   ],
+   "runs": [
+    "lms ls --json"
+   ],
+   "calls": []
+  },
+  {
+   "op": "load",
+   "args": [
+    "lms",
+    "qwen/qwen3-4b",
+    {
+     "contextTokens": 8192,
+     "gpuLayers": 18,
+     "ttlSeconds": 60
+    }
+   ],
+   "out": "{\"ok\":true,\"message\":\"Loaded qwen/qwen3-4b\"}",
+   "requests": [
+    "GET http://localhost:1234/api/v0/models ",
+    "GET http://localhost:1234/api/v0/models ",
+    "GET http://localhost:1234/api/v0/models "
+   ],
+   "runs": [
+    "lms ls --json",
+    "lms version",
+    "lms ls --json",
+    "lms load qwen/qwen3-4b -y --context-length 8192 --gpu max --ttl 60"
+   ],
+   "calls": []
+  },
+  {
+   "op": "load",
+   "args": [
+    "lms",
+    "google/gemma-3-12b",
+    {
+     "gpuLayers": 0
+    }
+   ],
+   "out": "{\"ok\":false,\"message\":\"Error: Model not found. Try lms ls\"}",
+   "requests": [
+    "GET http://localhost:1234/api/v0/models ",
+    "GET http://localhost:1234/api/v0/models "
+   ],
+   "runs": [
+    "lms ls --json",
+    "lms version",
+    "lms load google/gemma-3-12b -y --gpu off"
+   ],
+   "calls": []
+  },
+  {
+   "op": "unload",
+   "args": [
+    "lms",
+    "qwen/qwen3-4b"
+   ],
+   "out": "{\"ok\":true,\"message\":\"Unloaded qwen/qwen3-4b\"}",
+   "requests": [],
+   "runs": [
+    "lms unload qwen/qwen3-4b"
+   ],
+   "calls": []
+  },
+  {
+   "op": "start",
+   "args": [
+    "lms"
+   ],
+   "out": "{\"kind\":\"lmstudio\",\"running\":true,\"owned\":false,\"baseUrl\":\"http://localhost:1234/v1/\",\"startedAt\":\"<now>\",\"resident\":[],\"log\":[\"Success! Server is now running on port 1234\"]}",
+   "requests": [],
+   "runs": [
+    "lms server start --port 1234"
+   ],
+   "calls": []
+  },
+  {
+   "op": "stop",
+   "args": [
+    "lms"
+   ],
+   "out": "{\"ok\":true,\"message\":\"Stopped the LM Studio server.\"}",
+   "requests": [],
+   "runs": [
+    "lms server stop"
+   ],
+   "calls": []
+  },
+  {
+   "op": "status",
+   "args": [
+    "lms-remote"
+   ],
+   "out": "{\"kind\":\"lmstudio\",\"running\":true,\"installed\":false,\"reason\":\"This LM Studio looks remote. Starting, stopping, and loading need the lms CLI on the machine running it.\",\"owned\":false,\"baseUrl\":\"http://10.0.0.5:1234/v1\",\"resident\":[]}",
+   "requests": [
+    "GET http://10.0.0.5:1234/api/v0/models ",
+    "GET http://10.0.0.5:1234/api/v0/models ",
+    "GET http://10.0.0.5:1234/v1/models "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "stop",
+   "args": [
+    "lms-remote"
+   ],
+   "out": "{\"ok\":false,\"message\":\"This LM Studio looks remote. Starting, stopping, and loading need the lms CLI on the machine running it.\"}",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "load",
+   "args": [
+    "lms-remote",
+    "x",
+    {}
+   ],
+   "out": "{\"ok\":false,\"message\":\"This LM Studio looks remote. Starting, stopping, and loading need the lms CLI on the machine running it.\"}",
+   "requests": [
+    "GET http://10.0.0.5:1234/api/v0/models "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "status",
+   "args": [
+    "vllm"
+   ],
+   "out": "{\"kind\":\"vllm\",\"running\":true,\"installed\":false,\"owned\":false,\"baseUrl\":\"http://127.0.0.1:8000/v1\",\"resident\":[{\"id\":\"meta-llama/Llama-3.1-8B-Instruct\"}],\"metrics\":{\"requestsRunning\":2,\"requestsWaiting\":0,\"kvCacheUsagePct\":37.5}}",
+   "requests": [
+    "GET http://127.0.0.1:8000/metrics ",
+    "GET http://127.0.0.1:8000/v1/models "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "facts",
+   "args": [
+    "vllm"
+   ],
+   "out": "[{\"id\":\"meta-llama/Llama-3.1-8B-Instruct\",\"providerId\":\"http://127.0.0.1:8000/v1\",\"maxContext\":32768,\"loaded\":true}]",
+   "requests": [
+    "GET http://127.0.0.1:8000/v1/models "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "start",
+   "args": [
+    "vllm"
+   ],
+   "out": "{\"error\":\"vLLM is managed outside Nekko Agent: it serves one model per process, configured at launch. Start it yourself with the command shown in the fit drawer.\"}",
+   "requests": [
+    "GET http://127.0.0.1:8000/v1/models "
+   ],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "load",
+   "args": [
+    "vllm",
+    "x",
+    {}
+   ],
+   "out": "{\"ok\":false,\"message\":\"This runtime loads its model at launch.\"}",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "unload",
+   "args": [
+    "vllm",
+    "x"
+   ],
+   "out": "{\"ok\":false,\"message\":\"This runtime cannot unload a single model.\"}",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "stop",
+   "args": [
+    "vllm"
+   ],
+   "out": "{\"ok\":false,\"message\":\"This server was not started by Nekko Agent. Stopping it means ending a process something else may be using.\",\"needsConfirmation\":true,\"processName\":\"http://127.0.0.1:8000/v1\"}",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "status",
+   "args": [
+    "nekko-engine"
+   ],
+   "out": "{\"kind\":\"llamacpp\",\"running\":true,\"installed\":true,\"owned\":false,\"version\":\"b6000\",\"baseUrl\":\"http://127.0.0.1:18431/v1\",\"startedAt\":1700000000000,\"resident\":[{\"id\":\"gemma\",\"sizeBytes\":4200000000,\"vramBytes\":4000000000,\"contextLength\":4096}],\"log\":[\"server ready\"]}",
+   "requests": [],
+   "runs": [],
+   "calls": [
+    [
+     "status"
+    ]
+   ]
+  },
+  {
+   "op": "facts",
+   "args": [
+    "nekko-engine"
+   ],
+   "out": "[{\"id\":\"gemma\",\"providerId\":\"http://127.0.0.1:18431/v1\",\"weightsBytes\":3300000000,\"layers\":34,\"kvHeads\":4,\"headDim\":256,\"maxContext\":131072,\"quantization\":\"Q4_K_M\",\"parameterSize\":\"4B\",\"loaded\":true,\"vramBytes\":4000000000,\"loadedContext\":4096},{\"id\":\"nogeo\",\"providerId\":\"http://127.0.0.1:18431/v1\",\"weightsBytes\":1000000,\"loaded\":false}]",
+   "requests": [],
+   "runs": [],
+   "calls": [
+    [
+     "models"
+    ],
+    [
+     "resident"
+    ]
+   ]
+  },
+  {
+   "op": "plan",
+   "args": [
+    "nekko-engine",
+    "gemma",
+    {
+     "contextTokens": 32768,
+     "parallelSlots": 1,
+     "kvCacheDtype": "f16",
+     "gpuLayerFraction": 1
+    }
+   ],
+   "out": "{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":32093765632,\"totalLayers\":34,\"verdict\":\"fits\",\"weightsBytes\":3300000000,\"kvCacheBytes\":4563402752,\"overheadBytes\":553648128,\"requiredBytes\":8417050880,\"spillBytes\":0,\"reasons\":[{\"code\":\"kv-cache-dominates\",\"bytes\":4563402752,\"sharePct\":54.2}],\"suggestions\":[],\"gpuLayers\":34}",
+   "requests": [],
+   "runs": [],
+   "calls": [
+    [
+     "models"
+    ],
+    [
+     "resident"
+    ],
+    [
+     "detectEngine"
+    ],
+    [
+     "isRunning"
+    ]
+   ]
+  },
+  {
+   "op": "load",
+   "args": [
+    "nekko-engine",
+    "gemma",
+    {
+     "contextTokens": 4096
+    }
+   ],
+   "out": "{\"ok\":true,\"message\":\"Loaded gemma\"}",
+   "requests": [],
+   "runs": [],
+   "calls": [
+    [
+     "models"
+    ],
+    [
+     "resident"
+    ],
+    [
+     "detectEngine"
+    ],
+    [
+     "isRunning"
+    ],
+    [
+     "load",
+     "gemma",
+     {
+      "contextTokens": 4096
+     }
+    ],
+    [
+     "status"
+    ],
+    [
+     "detectEngine"
+    ],
+    [
+     "isRunning"
+    ]
+   ]
+  },
+  {
+   "op": "unload",
+   "args": [
+    "nekko-engine",
+    "gemma"
+   ],
+   "out": "{\"ok\":true,\"message\":\"Unloaded gemma\"}",
+   "requests": [],
+   "runs": [],
+   "calls": [
+    [
+     "unload",
+     "gemma"
+    ]
+   ]
+  },
+  {
+   "op": "start",
+   "args": [
+    "nekko-engine"
+   ],
+   "out": "{\"error\":\"Port 18431 is in use.\"}",
+   "requests": [],
+   "runs": [],
+   "calls": [
+    [
+     "start"
+    ],
+    [
+     "status"
+    ]
+   ]
+  },
+  {
+   "op": "stop",
+   "args": [
+    "nekko-engine"
+   ],
+   "out": "{\"ok\":true,\"message\":\"Stopped the engine.\"}",
+   "requests": [],
+   "runs": [],
+   "calls": [
+    [
+     "stop"
+    ]
+   ]
+  },
+  {
+   "op": "autoPlan",
+   "args": [
+    "nekko-engine",
+    "nogeo",
+    1
+   ],
+   "out": "{\"request\":{\"contextTokens\":131072,\"parallelSlots\":1,\"kvCacheDtype\":\"f16\",\"gpuLayerFraction\":1},\"plan\":{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":32093765632,\"verdict\":\"unknown\",\"weightsBytes\":1000000,\"kvCacheBytes\":0,\"overheadBytes\":420994944,\"requiredBytes\":421994944,\"spillBytes\":0,\"reasons\":[{\"code\":\"missing-metadata\",\"detail\":\"layer count, KV head count, head dimension\"}],\"suggestions\":[]},\"headline\":\"We cannot tell what this model needs.\",\"tradeoff\":\"This file does not publish its layer geometry, so any figure here would be invented. Load it and we'll measure what it actually takes.\",\"compromises\":[]}",
+   "requests": [],
+   "runs": [],
+   "calls": [
+    [
+     "models"
+    ],
+    [
+     "resident"
+    ],
+    [
+     "detectEngine"
+    ],
+    [
+     "isRunning"
+    ]
+   ]
+  },
+  {
+   "op": "status",
+   "args": [
+    "openai"
+   ],
+   "out": "null",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "start",
+   "args": [
+    "openai"
+   ],
+   "out": "{\"error\":\"Not a local model server.\"}",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "stop",
+   "args": [
+    "openai"
+   ],
+   "out": "{\"ok\":false,\"message\":\"Only local model servers can be stopped from here.\"}",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "load",
+   "args": [
+    "openai",
+    "gpt",
+    {}
+   ],
+   "out": "{\"ok\":false,\"message\":\"This runtime loads its model at launch.\"}",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "facts",
+   "args": [
+    "openai"
+   ],
+   "out": "[]",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "plan",
+   "args": [
+    "nope",
+    "x"
+   ],
+   "out": "null",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "capabilities",
+   "args": [
+    "openai"
+   ],
+   "out": "null",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  },
+  {
+   "op": "capabilities",
+   "args": [
+    "nekko-engine"
+   ],
+   "out": "{\"canStart\":true,\"canStop\":true,\"canLoad\":true,\"canSetContext\":true,\"canSetGpuLayers\":true,\"canSetParallel\":\"per-load\",\"canSetKvCacheType\":\"per-load\",\"canSetTtl\":true,\"configuredAtLaunch\":false,\"reportsPerModelVram\":true,\"managed\":true,\"canSetCompute\":true}",
+   "requests": [],
+   "runs": [],
+   "calls": []
+  }
+ ],
+ "calibration": "{\n  \"llamacpp:b6000\": {\n    \"overheadFloorBytes\": 286777216,\n    \"samples\": 1\n  }\n}",
+ "gb": 1073741824
+}

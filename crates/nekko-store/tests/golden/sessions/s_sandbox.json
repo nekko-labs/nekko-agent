@@ -1,0 +1,11 @@
+{
+  "id": "s_sandbox",
+  "title": "Sandbox setup",
+  "workspaceId": "w1",
+  "supportingWorkspaceIds": ["w2", "", "w1", "w3"],
+  "mode": "guardrails",
+  "gitWorktrees": { "w1": { "path": "C:/tmp/wt", "branch": "nekko/x" } },
+  "messages": [],
+  "createdAt": 1,
+  "updatedAt": 1
+}

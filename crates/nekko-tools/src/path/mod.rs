@@ -111,6 +111,176 @@ pub(crate) fn normalize_string(path: &[u16], allow_above_root: bool, sep: u16, i
     res
 }
 
+fn win_sep(c: u16) -> bool {
+    c == SLASH || c == BACKSLASH
+}
+
+fn posix_sep(c: u16) -> bool {
+    c == SLASH
+}
+
+fn device_root(c: u16) -> bool {
+    (b'a' as u16..=b'z' as u16).contains(&c) || (b'A' as u16..=b'Z' as u16).contains(&c)
+}
+
+/// `path.posix.dirname` / `path.win32.dirname` from `lib/path.js`.
+pub(crate) fn dirname_units(path: &[u16], win: bool) -> U16 {
+    let is_sep: fn(u16) -> bool = if win { win_sep } else { posix_sep };
+    let len = path.len();
+    if len == 0 {
+        return vec![DOT];
+    }
+    if !win {
+        let has_root = path[0] == SLASH;
+        let mut end: Option<usize> = None;
+        let mut matched_slash = true;
+        for i in (1..len).rev() {
+            if path[i] == SLASH {
+                if !matched_slash {
+                    end = Some(i);
+                    break;
+                }
+            } else {
+                matched_slash = false;
+            }
+        }
+        return match end {
+            None if has_root => vec![SLASH],
+            None => vec![DOT],
+            Some(1) if has_root => vec![SLASH, SLASH],
+            Some(e) => path[..e].to_vec(),
+        };
+    }
+    let mut root_end: Option<usize> = None;
+    let mut offset = 0;
+    let code = path[0];
+    if len == 1 {
+        return if is_sep(code) { path.to_vec() } else { vec![DOT] };
+    }
+    if is_sep(code) {
+        root_end = Some(1);
+        offset = 1;
+        if is_sep(path[1]) {
+            let mut j = 2;
+            let mut last = j;
+            while j < len && !is_sep(path[j]) {
+                j += 1;
+            }
+            if j < len && j != last {
+                last = j;
+                while j < len && is_sep(path[j]) {
+                    j += 1;
+                }
+                if j < len && j != last {
+                    last = j;
+                    while j < len && !is_sep(path[j]) {
+                        j += 1;
+                    }
+                    if j == len {
+                        return path.to_vec();
+                    }
+                    if j != last {
+                        root_end = Some(j + 1);
+                        offset = j + 1;
+                    }
+                }
+            }
+        }
+    } else if device_root(code) && path[1] == COLON {
+        let r = if len > 2 && is_sep(path[2]) { 3 } else { 2 };
+        root_end = Some(r);
+        offset = r;
+    }
+    let mut end: Option<usize> = None;
+    let mut matched_slash = true;
+    for i in (offset..len).rev() {
+        if is_sep(path[i]) {
+            if !matched_slash {
+                end = Some(i);
+                break;
+            }
+        } else {
+            matched_slash = false;
+        }
+    }
+    match end.or(root_end) {
+        Some(e) => path[..e].to_vec(),
+        None => vec![DOT],
+    }
+}
+
+/// `path.posix.basename` / `path.win32.basename` (no suffix) from `lib/path.js`.
+pub(crate) fn basename_units(path: &[u16], win: bool) -> U16 {
+    let is_sep: fn(u16) -> bool = if win { win_sep } else { posix_sep };
+    let mut start = 0;
+    if win && path.len() >= 2 && path[1] == COLON && device_root(path[0]) {
+        start = 2;
+    }
+    let mut first = start;
+    let mut end: Option<usize> = None;
+    let mut matched_slash = true;
+    for i in (start..path.len()).rev() {
+        if is_sep(path[i]) {
+            if !matched_slash {
+                first = i + 1;
+                break;
+            }
+        } else if end.is_none() {
+            matched_slash = false;
+            end = Some(i + 1);
+        }
+    }
+    match end {
+        Some(e) => path[first..e].to_vec(),
+        None => Vec::new(),
+    }
+}
+
+/// `path.posix.extname` / `path.win32.extname` from `lib/path.js`.
+pub(crate) fn extname_units(path: &[u16], win: bool) -> U16 {
+    let is_sep: fn(u16) -> bool = if win { win_sep } else { posix_sep };
+    let mut start = 0;
+    let mut start_part = 0;
+    if win && path.len() >= 2 && path[1] == COLON && device_root(path[0]) {
+        start = 2;
+        start_part = 2;
+    }
+    let mut start_dot: Option<usize> = None;
+    let mut end: Option<usize> = None;
+    let mut matched_slash = true;
+    // 0: no dot run seen before the last dot, 1: only dots, -1: something else.
+    let mut pre_dot_state = 0;
+    for i in (start..path.len()).rev() {
+        let code = path[i];
+        if is_sep(code) {
+            if !matched_slash {
+                start_part = i + 1;
+                break;
+            }
+            continue;
+        }
+        if end.is_none() {
+            matched_slash = false;
+            end = Some(i + 1);
+        }
+        if code == DOT {
+            if start_dot.is_none() {
+                start_dot = Some(i);
+            } else if pre_dot_state != 1 {
+                pre_dot_state = 1;
+            }
+        } else if start_dot.is_some() {
+            pre_dot_state = -1;
+        }
+    }
+    match (start_dot, end) {
+        (Some(d), Some(e)) if pre_dot_state != 0 && !(pre_dot_state == 1 && d + 1 == e && d == start_part + 1) => {
+            path[d..e].to_vec()
+        }
+        _ => Vec::new(),
+    }
+}
+
 /// The process working directory as Node reports it.
 pub fn process_cwd() -> String {
     std::env::current_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| ".".into())
@@ -144,6 +314,21 @@ pub mod win32 {
     /// `path.win32.normalize(p)`.
     pub fn normalize(p: &str) -> String {
         string(&imp::normalize(&units(p)))
+    }
+
+    /// `path.win32.basename(p)`.
+    pub fn basename(p: &str) -> String {
+        string(&super::basename_units(&units(p), true))
+    }
+
+    /// `path.win32.dirname(p)`.
+    pub fn dirname(p: &str) -> String {
+        string(&super::dirname_units(&units(p), true))
+    }
+
+    /// `path.win32.extname(p)`.
+    pub fn extname(p: &str) -> String {
+        string(&super::extname_units(&units(p), true))
     }
 
     /// `path.win32.join(...parts)`.
@@ -191,6 +376,21 @@ pub mod posix {
     /// `path.posix.normalize(p)`.
     pub fn normalize(p: &str) -> String {
         string(&imp::normalize(&units(p)))
+    }
+
+    /// `path.posix.basename(p)`.
+    pub fn basename(p: &str) -> String {
+        string(&super::basename_units(&units(p), false))
+    }
+
+    /// `path.posix.dirname(p)`.
+    pub fn dirname(p: &str) -> String {
+        string(&super::dirname_units(&units(p), false))
+    }
+
+    /// `path.posix.extname(p)`.
+    pub fn extname(p: &str) -> String {
+        string(&super::extname_units(&units(p), false))
     }
 
     /// `path.posix.join(...parts)`.

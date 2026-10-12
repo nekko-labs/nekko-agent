@@ -5,26 +5,37 @@
 //! is listening; everything else goes to stderr. Exits when its stdin closes.
 
 mod accounts;
+mod admission;
+mod automation;
 mod backend;
 mod catalog;
 mod config;
+mod connectors;
+mod context;
 mod decide;
 mod decisions;
 mod engine;
 mod hub;
 mod hypergate;
-mod loops;
 mod machine;
 mod mcp;
+mod oauth;
 mod procgroup;
+mod providers;
+mod remote;
 mod resource_queue;
 mod routes;
+mod runtimes;
+mod sandbox;
 mod settings;
 mod sideband;
 mod tooling;
 mod turns;
 mod voice;
+mod watches;
 mod wire;
+mod workspace;
+mod worktrees;
 
 use backend::Backend;
 use hub::Hub;
@@ -74,7 +85,19 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS].join(","));
+                cmd.env.insert(
+                    "NEKKOD_OWNS".into(),
+                    [
+                        settings::OWNS,
+                        voice::OWNS,
+                        oauth::OWNS,
+                        automation::OWNS,
+                        remote::OWNS,
+                        watches::OWNS,
+                        sandbox::OWNS,
+                    ]
+                    .join(","),
+                );
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -106,7 +129,15 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let read: Arc<dyn Fn() -> serde_json::Value + Send + Sync> = Arc::new(move || store.get());
         voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
     });
+    // `NEKKO_AGENT_LOOP=ts` (here or set for the backend) keeps every turn in the host.
+    let ts_loop = std::env::var("NEKKO_AGENT_LOOP").is_ok_and(|v| v == "ts")
+        || cfg.backend.as_ref().is_some_and(|b| b.env.get("NEKKO_AGENT_LOOP").is_some_and(|v| v == "ts"));
+    let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
+        .then(|| admission::Admission::new(&hub, cfg.allow_browser_control, ts_loop));
     let catalog = settings.as_deref().map(catalog::new);
+    let automation =
+        Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), backend.clone(), hub.clone()));
+    let remote = Arc::new(remote::Remote::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
     // The machine probes and the resource queue read the daemon's settings store.
     let read_settings = |s: &Option<Arc<settings::Settings>>| {
         let store = s.as_ref().map(|s| s.store.clone());
@@ -116,13 +147,21 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let read = read_settings(&settings);
         move || nekko_js::truthy_str(read().get("engineBinPath")).map(str::to_string)
     };
+    // Agent watches, when the daemon knows the data directory (watches.rs).
+    let agent_watches = match (&cfg.data_dir, &sessions) {
+        (Some(d), Some(store)) => Some(watches::Watches::new(d.into(), store.clone(), backend.clone())),
+        _ => None,
+    };
+    let machine =
+        Arc::new(nekko_machine::Machine::new(cfg.data_dir.clone().map(std::path::PathBuf::from), Box::new(engine_bin)));
+    let runtimes = settings.as_deref().map(|s| runtimes::new(s, backend.clone(), machine.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
-        hub,
+        hub: hub.clone(),
         engine: engine.clone(),
         sessions: sessions.clone(),
-        loops: Arc::new(loops::Loops::new(changes.clone())),
+        changes: changes.clone(),
         turns: Arc::new(
             turns::Turns::new(
                 sessions.clone(),
@@ -133,26 +172,79 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 engine.decide.clone(),
             )
             .with_settings(settings.as_ref().map(|s| s.store.clone()))
-            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
+            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token)))
+            .with_watches(agent_watches.clone()),
         ),
         mcp: mcp.clone(),
-        accounts,
-        machine: Arc::new(nekko_machine::Machine::new(
-            cfg.data_dir.clone().map(std::path::PathBuf::from),
-            Box::new(engine_bin),
-        )),
+        accounts: accounts.clone(),
+        settings: settings.clone(),
+        admission,
+        oauth: match (&cfg.data_dir, &settings) {
+            (Some(d), Some(s)) => {
+                let o = oauth::OAuth::new(
+                    d.into(),
+                    s.store.clone(),
+                    accounts.clone(),
+                    hub.clone(),
+                    cfg.sign_in,
+                    oauth::Endpoints::default(),
+                );
+                let _ = accounts.oauth.set(Arc::downgrade(&o));
+                Some(o)
+            }
+            _ => None,
+        },
+        machine,
+        runtimes: runtimes.clone(),
         resource_queue: cfg.data_dir.clone().map(|d| {
             Arc::new(resource_queue::ResourceQueue::new(
                 std::path::PathBuf::from(d),
                 Box::new(read_settings(&settings)),
             ))
         }),
-        settings,
         voice: voice.clone(),
         catalog,
+        workspace: Arc::new(workspace::Workspace::new(cfg.data_dir.clone().map(std::path::PathBuf::from))),
+        automation: automation.clone(),
+        remote: remote.clone(),
+        sandboxes: cfg.data_dir.clone().filter(|_| sessions.is_some()).map(|d| sandbox::Sandboxes::new(d.into())),
     };
     routes::forward_terminal_events(&ctx);
+    if let Some(adm) = ctx.admission.clone() {
+        let c = ctx.clone();
+        ctx.turns.set_preparer(Arc::new(move |payload| {
+            let (c, adm) = (c.clone(), adm.clone());
+            Box::pin(async move { admission::admit_queued(&c, &adm, &payload).await })
+        }));
+    }
+    {
+        // A workflow stops a chat through the router, as the UI would.
+        let ctx = ctx.clone();
+        automation.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
+            let ctx = ctx.clone();
+            Box::pin(async move { routes::route(&ctx, &channel, args).await })
+        }));
+    }
+    automation.start();
+    if let Some(w) = &agent_watches {
+        w.start(ctx.turns.clone());
+    }
     let processes = ctx.turns.processes.clone();
+    {
+        // A paired phone reaches what the UI reaches: the router.
+        let ctx = ctx.clone();
+        remote.set_dispatcher(Arc::new(move |channel: String, args: serde_json::Value| {
+            let ctx = ctx.clone();
+            Box::pin(async move {
+                // The TS dispatcher destructures the list and threw on anything else.
+                let serde_json::Value::Array(args) = args else {
+                    return Err(format!("{channel}: args is not a list"));
+                };
+                routes::route(&ctx, &channel, args).await
+            })
+        }));
+    }
+    remote.start();
 
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
     let router = wire::router(app);
@@ -165,7 +257,12 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
 
     axum::serve(listener, router).with_graceful_shutdown(shutdown_signal(cfg.exit_on_stdin_close)).await?;
 
+    remote.stop();
     engine.shutdown();
+    // The servers this daemon started (Ollama) go down with it.
+    if let Some(rt) = &runtimes {
+        rt.kill_all().await;
+    }
     if let Some(voice) = &voice {
         voice.stop().await;
     }

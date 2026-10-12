@@ -89,3 +89,14 @@ describe('random material', () => {
     expect(newRoomSecret()).not.toBe(newRoomSecret());
   });
 });
+
+describe('a HELLO with fields of the wrong type', () => {
+  it('ignores a non-string name or platform instead of throwing', () => {
+    const v = verifyHello([], { type: 'hello', deviceId: 'new', pair: 'ABCD2345', name: 12, platform: 3 }, grant(), NOW);
+    expect(v).toEqual({
+      action: 'welcome',
+      enrolled: true,
+      device: { id: 'new', name: 'Device', platform: 'unknown', createdAt: NOW, lastSeenAt: NOW },
+    });
+  });
+});

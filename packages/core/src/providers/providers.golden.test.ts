@@ -179,4 +179,18 @@ describe('provider golden set', () => {
     }
     check('models.json', actual);
   });
+
+  it('answers every connection test exactly', async () => {
+    const cases = read<
+      Array<{ name: string; provider: string; patch?: Partial<ProviderConfig>; responses: Record<string, FakeResponse> }>
+    >('test-cases.json');
+    const actual: Record<string, unknown> = {};
+    for (const c of cases) {
+      const requests = fakeFetch((url) => c.responses[url]);
+      const result = await createProvider({ ...providers[c.provider], ...c.patch }).test();
+      actual[c.name] = { requests, result };
+      vi.restoreAllMocks();
+    }
+    check('tests.json', actual);
+  });
 });

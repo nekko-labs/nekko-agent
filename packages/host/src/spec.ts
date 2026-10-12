@@ -1,7 +1,7 @@
 import { assertHostExecution } from './indirect-execution-guard.js';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { createHostProvider as createProvider } from './prompt-caching.js';
+import { createHostProvider as createProvider, hostProviderConfig, promptCachingForHost } from './prompt-caching.js';
 import type { SpecDocDef, SpecDocRole, SpecDocStatus } from '@nekko-agent/shared';
 import { getMethodology, getSessionWorkspaceIds, toggleTaskLine } from '@nekko-agent/shared';
 import { getSettings } from './store.js';
@@ -192,4 +192,15 @@ export function toggleSpecTask(
   } catch (e) {
     return { ok: false, message: (e as Error).message };
   }
+}
+
+/**
+ * A saved provider, signed in (a subscription token refreshed) and ready for
+ * the engine daemon's Rust providers: what it asks for (`provider:resolved`)
+ * when it builds a spec doc, since sign-ins still live here.
+ */
+export async function resolvedProvider(providerId: string): Promise<{ provider: import('@nekko-agent/shared').ProviderConfig; promptCaching: boolean }> {
+  const provider = getSettings().providers.find((p) => p.id === providerId);
+  if (!provider) throw new Error('Pick a provider and model, then chat first.');
+  return { provider: hostProviderConfig(await resolveSubscriptionProvider(provider)), promptCaching: promptCachingForHost() };
 }

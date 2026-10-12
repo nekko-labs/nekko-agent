@@ -316,6 +316,53 @@ pub fn spread_into(target: &mut serde_json::Map<String, Value>, source: &Value) 
     }
 }
 
+/// `x.toFixed(digits)` for `digits` up to 100: the exact value rounded half
+/// away from zero (Rust's own `{:.2}` rounds an exact tie to even, so
+/// `0.125` would print `0.12` where JavaScript prints `0.13`). NaN prints
+/// `NaN`; from 1e21 up, the number's own string, as JavaScript does.
+pub fn to_fixed(x: f64, digits: usize) -> String {
+    if x.is_nan() {
+        return "NaN".into();
+    }
+    if x.abs() >= 1e21 || x.is_infinite() {
+        return number_to_string(x);
+    }
+    // Every finite double has a terminating decimal expansion of at most 1074 places.
+    let exact = format!("{:.1100}", x.abs());
+    let (int_part, frac) = exact.split_once('.').unwrap_or((&exact, ""));
+    let (kept, rest) = frac.split_at(digits.min(frac.len()));
+    let mut digits_out: Vec<u8> = int_part.bytes().chain(kept.bytes()).map(|b| b - b'0').collect();
+    if rest.as_bytes().first().is_some_and(|&b| b >= b'5') {
+        let mut i = digits_out.len();
+        loop {
+            if i == 0 {
+                digits_out.insert(0, 1);
+                break;
+            }
+            i -= 1;
+            if digits_out[i] == 9 {
+                digits_out[i] = 0;
+            } else {
+                digits_out[i] += 1;
+                break;
+            }
+        }
+    }
+    let text: String = digits_out.iter().map(|d| char::from(b'0' + d)).collect();
+    let split = text.len() - kept.len();
+    let mut out = String::new();
+    // (-0.001).toFixed(2) is "-0.00": the sign survives rounding to zero.
+    if x < 0.0 {
+        out.push('-');
+    }
+    out.push_str(&text[..split]);
+    if digits > 0 {
+        out.push('.');
+        out.push_str(&text[split..]);
+    }
+    out
+}
+
 /// A value as a template literal prints it (`${v}`).
 pub fn display(v: &Value) -> String {
     match v {
@@ -431,10 +478,54 @@ pub fn decode_text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// `a.localeCompare(b)`: V8 hands it to ICU's root collation.
+pub fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
+    use icu_collator::options::CollatorOptions;
+    use icu_collator::{Collator, CollatorBorrowed};
+    use std::sync::OnceLock;
+    static C: OnceLock<Option<CollatorBorrowed<'static>>> = OnceLock::new();
+    match C.get_or_init(|| Collator::try_new(Default::default(), CollatorOptions::default()).ok()).as_ref() {
+        Some(c) => c.compare(a, b),
+        None => a.cmp(b),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn to_fixed_rounds_as_javascript_does() {
+        // What V8 prints for each, `x.toFixed(2)`.
+        let cases = [
+            (0.125, "0.13"),
+            (12.345, "12.35"),
+            (1.005, "1.00"),
+            (-0.001, "-0.00"),
+            (0.0, "0.00"),
+            (99.995, "100.00"),
+            (1e20 + 0.5, "100000000000000000000.00"),
+            (2.5, "2.50"),
+            (0.5, "0.50"),
+        ];
+        for (x, want) in cases {
+            assert_eq!(to_fixed(x, 2), want, "{x}");
+        }
+        assert_eq!(to_fixed(f64::NAN, 2), "NaN");
+        assert_eq!(to_fixed(2.5, 0), "3");
+    }
     use serde_json::json;
+
+    #[test]
+    fn pretty_prints_like_json_stringify_with_two_spaces() {
+        let v = json!({ "a": [], "b": {}, "c": [1, { "d": 1.5e21 }], "e": "x\"" });
+        assert_eq!(
+            stringify_pretty(&v, "  "),
+            "{\n  \"a\": [],\n  \"b\": {},\n  \"c\": [\n    1,\n    {\n      \"d\": 1.5e+21\n    }\n  ],\n  \"e\": \"x\\\"\"\n}"
+        );
+        let ordered = js_order(json!({ "b": 1, "10": 2, "2": 3, "07": 4 }));
+        assert_eq!(ordered.as_object().unwrap().keys().collect::<Vec<_>>(), ["2", "10", "b", "07"]);
+    }
 
     #[test]
     fn measures_caps_and_folds_like_javascript() {

@@ -1,0 +1,26 @@
+[package]
+name = "nekko-remote"
+description = "Phone remote access for the Nekko Agent engine daemon: the relay v2 agent, its E2E sealing, the HELLO handshake and the paired-device registry (remote.json), byte for byte as the TS host speaks them."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+# WebCrypto's AES-256-GCM and PBKDF2-SHA256, the phone apps' E2E layer.
+aes-gcm = "0.10"
+base64 = "0.22"
+futures-util.workspace = true
+getrandom.workspace = true
+nekko-js = { path = "../nekko-js" }
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+# Numbers must parse to the exact double JavaScript has, or a re-sealed frame differs.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+sha2 = "0.10"
+tokio.workspace = true
+# native-tls: the managed relay is wss://. It is the TLS stack reqwest already uses here.
+tokio-tungstenite = { workspace = true, features = ["native-tls"] }
+
+[dev-dependencies]
+tempfile = "3"

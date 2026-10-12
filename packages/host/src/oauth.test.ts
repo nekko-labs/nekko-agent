@@ -14,6 +14,7 @@ import {
   getToken,
   ensureFreshToken,
   importCliAuth,
+  useOAuthDaemon,
 } from './oauth.js';
 
 describe('OAuth core', () => {
@@ -479,3 +480,22 @@ function requestStatus(path: string): Promise<number> {
     }).on('error', reject);
   });
 }
+
+describe('OAuth under the engine daemon', () => {
+  it('asks the daemon for a usable token and never writes tokens.json itself', async () => {
+    setDataDir(mkdtempSync(join(tmpdir(), 'nekko-oauth-daemon-')));
+    const calls: unknown[][] = [];
+    useOAuthDaemon((async (...args: unknown[]) => {
+      calls.push(args);
+      return 'fresh-token';
+    }) as never);
+    try {
+      expect(await ensureFreshToken('claude:a')).toBe('fresh-token');
+      expect(await ensureFreshToken('claude:a', true)).toBe('fresh-token');
+      expect(calls).toEqual([['oauth:fresh', 'claude:a', false], ['oauth:fresh', 'claude:a', true]]);
+      expect(() => setToken('claude:a', { provider: 'claude', accessToken: 'x', obtainedAt: 1 })).toThrow(/engine daemon/);
+    } finally {
+      useOAuthDaemon(null);
+    }
+  });
+});

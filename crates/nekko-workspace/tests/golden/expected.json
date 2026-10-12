@@ -1,0 +1,1427 @@
+[
+  {
+    "op": "read",
+    "result": {
+      "content": "export function main() {}\nexport class App {}\n  const helper = async () => 1\nexport const Config = {}\n// TODO search me\n",
+      "truncated": false,
+      "binary": false
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "",
+      "binary": true,
+      "truncated": false,
+      "imageDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "not a png\n",
+      "truncated": false,
+      "binary": false
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "",
+      "binary": true,
+      "truncated": false,
+      "imageDataUrl": "data:image/gif;base64,R0lGODlhAQABAA=="
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "",
+      "truncated": false,
+      "binary": true
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "",
+      "binary": true,
+      "truncated": false,
+      "imageDataUrl": "data:image/jpeg;base64,/9j/4AAQ"
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "",
+      "binary": true,
+      "truncated": false,
+      "imageDataUrl": "data:image/webp;base64,UklGRgQAAABXRUJQVlA="
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "",
+      "truncated": false,
+      "binary": true
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": {
+        "length": 1000000,
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "tail": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa�"
+      },
+      "truncated": true,
+      "binary": false
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "﻿export function bom() {}\n",
+      "truncated": false,
+      "binary": false
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "",
+      "truncated": false,
+      "binary": false
+    }
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "",
+      "truncated": false,
+      "binary": false
+    }
+  },
+  {
+    "op": "list",
+    "result": [
+      {
+        "name": ".cache",
+        "path": "<root>/.cache",
+        "dir": true
+      },
+      {
+        "name": ".git",
+        "path": "<root>/.git",
+        "dir": true
+      },
+      {
+        "name": ".hidden",
+        "path": "<root>/.hidden",
+        "dir": true
+      },
+      {
+        "name": "assets",
+        "path": "<root>/assets",
+        "dir": true
+      },
+      {
+        "name": "data",
+        "path": "<root>/data",
+        "dir": true
+      },
+      {
+        "name": "docs",
+        "path": "<root>/docs",
+        "dir": true
+      },
+      {
+        "name": "empty",
+        "path": "<root>/empty",
+        "dir": true
+      },
+      {
+        "name": "node_modules",
+        "path": "<root>/node_modules",
+        "dir": true
+      },
+      {
+        "name": "src",
+        "path": "<root>/src",
+        "dir": true
+      },
+      {
+        "name": "vendor",
+        "path": "<root>/vendor",
+        "dir": true
+      },
+      {
+        "name": ".env",
+        "path": "<root>/.env",
+        "dir": false
+      },
+      {
+        "name": "readme.md",
+        "path": "<root>/readme.md",
+        "dir": false
+      }
+    ]
+  },
+  {
+    "op": "list",
+    "result": [
+      {
+        "name": "Beta",
+        "path": "<root>/vendor/Beta",
+        "dir": true
+      },
+      {
+        "name": "sub",
+        "path": "<root>/vendor/sub",
+        "dir": true
+      },
+      {
+        "name": "_under.txt",
+        "path": "<root>/vendor/_under.txt",
+        "dir": false
+      },
+      {
+        "name": "10.txt",
+        "path": "<root>/vendor/10.txt",
+        "dir": false
+      },
+      {
+        "name": "9.txt",
+        "path": "<root>/vendor/9.txt",
+        "dir": false
+      },
+      {
+        "name": "a_b.txt",
+        "path": "<root>/vendor/a_b.txt",
+        "dir": false
+      },
+      {
+        "name": "a-b.txt",
+        "path": "<root>/vendor/a-b.txt",
+        "dir": false
+      },
+      {
+        "name": "alpha.txt",
+        "path": "<root>/vendor/alpha.txt",
+        "dir": false
+      },
+      {
+        "name": "Ärger.txt",
+        "path": "<root>/vendor/Ärger.txt",
+        "dir": false
+      },
+      {
+        "name": "Zeta.txt",
+        "path": "<root>/vendor/Zeta.txt",
+        "dir": false
+      }
+    ]
+  },
+  {
+    "op": "list",
+    "result": []
+  },
+  {
+    "op": "list",
+    "result": []
+  },
+  {
+    "op": "write",
+    "result": null
+  },
+  {
+    "op": "read",
+    "result": {
+      "content": "héllo\n",
+      "truncated": false,
+      "binary": false
+    }
+  },
+  {
+    "op": "write",
+    "error": "The \"data\" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received null"
+  },
+  {
+    "op": "list",
+    "result": [
+      {
+        "name": "deep",
+        "path": "<root>/new/deep",
+        "dir": true
+      }
+    ]
+  },
+  {
+    "op": "index",
+    "result": {
+      "done": {
+        "workspaceId": "w1",
+        "fileCount": 17,
+        "symbolCount": 15,
+        "progress": 1,
+        "state": "ready",
+        "updatedAt": 0
+      },
+      "progress": [
+        {
+          "workspaceId": "w1",
+          "fileCount": 0,
+          "symbolCount": 0,
+          "progress": 0,
+          "state": "indexing",
+          "updatedAt": 0
+        },
+        {
+          "workspaceId": "w1",
+          "fileCount": 17,
+          "symbolCount": 15,
+          "progress": 1,
+          "state": "ready",
+          "updatedAt": 0
+        }
+      ]
+    }
+  },
+  {
+    "op": "files",
+    "result": [
+      {
+        "path": "<root>/.env",
+        "relPath": ".env",
+        "sizeBytes": 11,
+        "symbols": []
+      },
+      {
+        "path": "<root>/.hidden/x.txt",
+        "relPath": ".hidden/x.txt",
+        "sizeBytes": 12,
+        "symbols": []
+      },
+      {
+        "path": "<root>/assets/notes.txt",
+        "relPath": "assets/notes.txt",
+        "sizeBytes": 17,
+        "symbols": []
+      },
+      {
+        "path": "<root>/data/bom.ts",
+        "relPath": "data/bom.ts",
+        "sizeBytes": 28,
+        "language": "typescript",
+        "symbols": [
+          {
+            "name": "bom",
+            "kind": "function",
+            "line": 1
+          }
+        ]
+      },
+      {
+        "path": "<root>/data/crlf.ts",
+        "relPath": "data/crlf.ts",
+        "sizeBytes": 60,
+        "language": "typescript",
+        "symbols": [
+          {
+            "name": "crlf",
+            "kind": "function",
+            "line": 1
+          },
+          {
+            "name": "K",
+            "kind": "class",
+            "line": 2
+          }
+        ]
+      },
+      {
+        "path": "<root>/data/emoji.md",
+        "relPath": "data/emoji.md",
+        "sizeBytes": 607,
+        "language": "markdown",
+        "symbols": []
+      },
+      {
+        "path": "<root>/data/long.ts",
+        "relPath": "data/long.ts",
+        "sizeBytes": 444,
+        "language": "typescript",
+        "symbols": [
+          {
+            "name": "short",
+            "kind": "function",
+            "line": 2
+          }
+        ]
+      },
+      {
+        "path": "<root>/data/noext",
+        "relPath": "data/noext",
+        "sizeBytes": 18,
+        "symbols": []
+      },
+      {
+        "path": "<root>/data/nul.txt",
+        "relPath": "data/nul.txt",
+        "sizeBytes": 9,
+        "symbols": []
+      },
+      {
+        "path": "<root>/data/unicode.md",
+        "relPath": "data/unicode.md",
+        "sizeBytes": 37,
+        "language": "markdown",
+        "symbols": []
+      },
+      {
+        "path": "<root>/docs/dist",
+        "relPath": "docs/dist",
+        "sizeBytes": 15,
+        "symbols": []
+      },
+      {
+        "path": "<root>/new/deep/file.txt",
+        "relPath": "new/deep/file.txt",
+        "sizeBytes": 7,
+        "symbols": []
+      },
+      {
+        "path": "<root>/readme.md",
+        "relPath": "readme.md",
+        "sizeBytes": 48,
+        "language": "markdown",
+        "symbols": []
+      },
+      {
+        "path": "<root>/src/app.ts",
+        "relPath": "src/app.ts",
+        "sizeBytes": 120,
+        "language": "typescript",
+        "symbols": [
+          {
+            "name": "main",
+            "kind": "function",
+            "line": 1
+          },
+          {
+            "name": "App",
+            "kind": "class",
+            "line": 2
+          },
+          {
+            "name": "helper",
+            "kind": "function",
+            "line": 3
+          },
+          {
+            "name": "Config",
+            "kind": "const",
+            "line": 4
+          }
+        ]
+      },
+      {
+        "path": "<root>/src/lib/mod.rs",
+        "relPath": "src/lib/mod.rs",
+        "sizeBytes": 40,
+        "language": "rust",
+        "symbols": [
+          {
+            "name": "go",
+            "kind": "function",
+            "line": 1
+          },
+          {
+            "name": "S",
+            "kind": "class",
+            "line": 2
+          },
+          {
+            "name": "T",
+            "kind": "interface",
+            "line": 3
+          }
+        ]
+      },
+      {
+        "path": "<root>/src/lib/util.py",
+        "relPath": "src/lib/util.py",
+        "sizeBytes": 46,
+        "language": "python",
+        "symbols": [
+          {
+            "name": "run",
+            "kind": "function",
+            "line": 1
+          },
+          {
+            "name": "Thing",
+            "kind": "class",
+            "line": 3
+          }
+        ]
+      },
+      {
+        "path": "<root>/src/main.go",
+        "relPath": "src/main.go",
+        "sizeBytes": 40,
+        "language": "go",
+        "symbols": [
+          {
+            "name": "Serve",
+            "kind": "function",
+            "line": 1
+          },
+          {
+            "name": "S",
+            "kind": "class",
+            "line": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "op": "search",
+    "result": [
+      {
+        "path": "<root>/.env",
+        "relPath": ".env",
+        "line": 1,
+        "text": "TOKEN=todo"
+      },
+      {
+        "path": "<root>/.hidden/x.txt",
+        "relPath": ".hidden/x.txt",
+        "line": 1,
+        "text": "hidden todo"
+      },
+      {
+        "path": "<root>/assets/notes.txt",
+        "relPath": "assets/notes.txt",
+        "line": 1,
+        "text": "plain notes todo"
+      },
+      {
+        "path": "<root>/data/crlf.ts",
+        "relPath": "data/crlf.ts",
+        "line": 3,
+        "text": "// todo crlf"
+      },
+      {
+        "path": "<root>/data/emoji.md",
+        "relPath": "data/emoji.md",
+        "line": 1,
+        "text": "todo: 😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      },
+      {
+        "path": "<root>/data/noext",
+        "relPath": "data/noext",
+        "line": 1,
+        "text": "TODO no extension"
+      },
+      {
+        "path": "<root>/data/nul.txt",
+        "relPath": "data/nul.txt",
+        "line": 1,
+        "text": "a\u0000b todo"
+      },
+      {
+        "path": "<root>/data/unicode.md",
+        "relPath": "data/unicode.md",
+        "line": 1,
+        "text": "Ünïcödé TODO ✓"
+      },
+      {
+        "path": "<root>/docs/dist",
+        "relPath": "docs/dist",
+        "line": 1,
+        "text": "todo dist file"
+      },
+      {
+        "path": "<root>/readme.md",
+        "relPath": "readme.md",
+        "line": 3,
+        "text": "trimmed line, todo"
+      },
+      {
+        "path": "<root>/src/app.ts",
+        "relPath": "src/app.ts",
+        "line": 5,
+        "text": "// TODO search me"
+      },
+      {
+        "path": "<root>/src/lib/util.py",
+        "relPath": "src/lib/util.py",
+        "line": 4,
+        "text": "TODO = 1"
+      }
+    ]
+  },
+  {
+    "op": "search",
+    "result": [
+      {
+        "path": "<root>/readme.md",
+        "relPath": "readme.md",
+        "line": 2,
+        "text": "Search Me here"
+      },
+      {
+        "path": "<root>/src/app.ts",
+        "relPath": "src/app.ts",
+        "line": 5,
+        "text": "// TODO search me"
+      }
+    ]
+  },
+  {
+    "op": "search",
+    "result": [
+      {
+        "path": "<root>/data/unicode.md",
+        "relPath": "data/unicode.md",
+        "line": 2,
+        "text": "KELVIN K sign"
+      }
+    ]
+  },
+  {
+    "op": "search",
+    "result": [
+      {
+        "path": "<root>/.env",
+        "relPath": ".env",
+        "line": 1,
+        "text": "TOKEN=todo"
+      },
+      {
+        "path": "<root>/.env",
+        "relPath": ".env",
+        "line": 2,
+        "text": ""
+      },
+      {
+        "path": "<root>/.hidden/x.txt",
+        "relPath": ".hidden/x.txt",
+        "line": 1,
+        "text": "hidden todo"
+      },
+      {
+        "path": "<root>/.hidden/x.txt",
+        "relPath": ".hidden/x.txt",
+        "line": 2,
+        "text": ""
+      },
+      {
+        "path": "<root>/assets/notes.txt",
+        "relPath": "assets/notes.txt",
+        "line": 1,
+        "text": "plain notes todo"
+      },
+      {
+        "path": "<root>/assets/notes.txt",
+        "relPath": "assets/notes.txt",
+        "line": 2,
+        "text": ""
+      },
+      {
+        "path": "<root>/data/bom.ts",
+        "relPath": "data/bom.ts",
+        "line": 1,
+        "text": "export function bom() {}"
+      },
+      {
+        "path": "<root>/data/bom.ts",
+        "relPath": "data/bom.ts",
+        "line": 2,
+        "text": ""
+      },
+      {
+        "path": "<root>/data/crlf.ts",
+        "relPath": "data/crlf.ts",
+        "line": 1,
+        "text": "export function crlf() {}"
+      },
+      {
+        "path": "<root>/data/crlf.ts",
+        "relPath": "data/crlf.ts",
+        "line": 2,
+        "text": "export class K {}"
+      },
+      {
+        "path": "<root>/data/crlf.ts",
+        "relPath": "data/crlf.ts",
+        "line": 3,
+        "text": "// todo crlf"
+      },
+      {
+        "path": "<root>/data/crlf.ts",
+        "relPath": "data/crlf.ts",
+        "line": 4,
+        "text": ""
+      },
+      {
+        "path": "<root>/data/emoji.md",
+        "relPath": "data/emoji.md",
+        "line": 1,
+        "text": "todo: 😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      },
+      {
+        "path": "<root>/data/emoji.md",
+        "relPath": "data/emoji.md",
+        "line": 2,
+        "text": ""
+      },
+      {
+        "path": "<root>/data/long.ts",
+        "relPath": "data/long.ts",
+        "line": 1,
+        "text": "export function xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      {
+        "path": "<root>/data/long.ts",
+        "relPath": "data/long.ts",
+        "line": 2,
+        "text": "export function short() {}"
+      },
+      {
+        "path": "<root>/data/long.ts",
+        "relPath": "data/long.ts",
+        "line": 3,
+        "text": ""
+      },
+      {
+        "path": "<root>/data/noext",
+        "relPath": "data/noext",
+        "line": 1,
+        "text": "TODO no extension"
+      },
+      {
+        "path": "<root>/data/noext",
+        "relPath": "data/noext",
+        "line": 2,
+        "text": ""
+      },
+      {
+        "path": "<root>/data/nul.txt",
+        "relPath": "data/nul.txt",
+        "line": 1,
+        "text": "a\u0000b todo"
+      },
+      {
+        "path": "<root>/data/nul.txt",
+        "relPath": "data/nul.txt",
+        "line": 2,
+        "text": ""
+      },
+      {
+        "path": "<root>/data/unicode.md",
+        "relPath": "data/unicode.md",
+        "line": 1,
+        "text": "Ünïcödé TODO ✓"
+      },
+      {
+        "path": "<root>/data/unicode.md",
+        "relPath": "data/unicode.md",
+        "line": 2,
+        "text": "KELVIN K sign"
+      },
+      {
+        "path": "<root>/data/unicode.md",
+        "relPath": "data/unicode.md",
+        "line": 3,
+        "text": ""
+      },
+      {
+        "path": "<root>/docs/dist",
+        "relPath": "docs/dist",
+        "line": 1,
+        "text": "todo dist file"
+      },
+      {
+        "path": "<root>/docs/dist",
+        "relPath": "docs/dist",
+        "line": 2,
+        "text": ""
+      },
+      {
+        "path": "<root>/new/deep/file.txt",
+        "relPath": "new/deep/file.txt",
+        "line": 1,
+        "text": "héllo"
+      },
+      {
+        "path": "<root>/new/deep/file.txt",
+        "relPath": "new/deep/file.txt",
+        "line": 2,
+        "text": ""
+      },
+      {
+        "path": "<root>/readme.md",
+        "relPath": "readme.md",
+        "line": 1,
+        "text": "# Title"
+      },
+      {
+        "path": "<root>/readme.md",
+        "relPath": "readme.md",
+        "line": 2,
+        "text": "Search Me here"
+      },
+      {
+        "path": "<root>/readme.md",
+        "relPath": "readme.md",
+        "line": 3,
+        "text": "trimmed line, todo"
+      },
+      {
+        "path": "<root>/readme.md",
+        "relPath": "readme.md",
+        "line": 4,
+        "text": ""
+      },
+      {
+        "path": "<root>/src/app.ts",
+        "relPath": "src/app.ts",
+        "line": 1,
+        "text": "export function main() {}"
+      },
+      {
+        "path": "<root>/src/app.ts",
+        "relPath": "src/app.ts",
+        "line": 2,
+        "text": "export class App {}"
+      },
+      {
+        "path": "<root>/src/app.ts",
+        "relPath": "src/app.ts",
+        "line": 3,
+        "text": "const helper = async () => 1"
+      },
+      {
+        "path": "<root>/src/app.ts",
+        "relPath": "src/app.ts",
+        "line": 4,
+        "text": "export const Config = {}"
+      },
+      {
+        "path": "<root>/src/app.ts",
+        "relPath": "src/app.ts",
+        "line": 5,
+        "text": "// TODO search me"
+      },
+      {
+        "path": "<root>/src/app.ts",
+        "relPath": "src/app.ts",
+        "line": 6,
+        "text": ""
+      },
+      {
+        "path": "<root>/src/lib/mod.rs",
+        "relPath": "src/lib/mod.rs",
+        "line": 1,
+        "text": "pub fn go() {}"
+      },
+      {
+        "path": "<root>/src/lib/mod.rs",
+        "relPath": "src/lib/mod.rs",
+        "line": 2,
+        "text": "pub struct S;"
+      },
+      {
+        "path": "<root>/src/lib/mod.rs",
+        "relPath": "src/lib/mod.rs",
+        "line": 3,
+        "text": "trait T {}"
+      },
+      {
+        "path": "<root>/src/lib/mod.rs",
+        "relPath": "src/lib/mod.rs",
+        "line": 4,
+        "text": ""
+      },
+      {
+        "path": "<root>/src/lib/util.py",
+        "relPath": "src/lib/util.py",
+        "line": 1,
+        "text": "def run():"
+      },
+      {
+        "path": "<root>/src/lib/util.py",
+        "relPath": "src/lib/util.py",
+        "line": 2,
+        "text": "pass"
+      },
+      {
+        "path": "<root>/src/lib/util.py",
+        "relPath": "src/lib/util.py",
+        "line": 3,
+        "text": "class Thing:"
+      },
+      {
+        "path": "<root>/src/lib/util.py",
+        "relPath": "src/lib/util.py",
+        "line": 4,
+        "text": "TODO = 1"
+      },
+      {
+        "path": "<root>/src/lib/util.py",
+        "relPath": "src/lib/util.py",
+        "line": 5,
+        "text": ""
+      },
+      {
+        "path": "<root>/src/main.go",
+        "relPath": "src/main.go",
+        "line": 1,
+        "text": "func (s *S) Serve() {}"
+      },
+      {
+        "path": "<root>/src/main.go",
+        "relPath": "src/main.go",
+        "line": 2,
+        "text": "type S struct {}"
+      },
+      {
+        "path": "<root>/src/main.go",
+        "relPath": "src/main.go",
+        "line": 3,
+        "text": ""
+      }
+    ]
+  },
+  {
+    "op": "search",
+    "result": []
+  },
+  {
+    "op": "status",
+    "result": {
+      "workspaceId": "w1",
+      "fileCount": 17,
+      "symbolCount": 15,
+      "progress": 1,
+      "state": "ready",
+      "updatedAt": 0
+    }
+  },
+  {
+    "op": "status",
+    "result": null
+  },
+  {
+    "op": "files",
+    "result": []
+  },
+  {
+    "op": "append",
+    "result": null
+  },
+  {
+    "op": "index",
+    "result": {
+      "done": {
+        "workspaceId": "w1",
+        "fileCount": 17,
+        "symbolCount": 16,
+        "progress": 1,
+        "state": "ready",
+        "updatedAt": 0
+      },
+      "progress": [
+        {
+          "workspaceId": "w1",
+          "fileCount": 0,
+          "symbolCount": 0,
+          "progress": 0,
+          "state": "indexing",
+          "updatedAt": 0
+        },
+        {
+          "workspaceId": "w1",
+          "fileCount": 17,
+          "symbolCount": 16,
+          "progress": 1,
+          "state": "ready",
+          "updatedAt": 0
+        }
+      ]
+    }
+  },
+  {
+    "op": "search",
+    "result": [
+      {
+        "path": "<root>/src/app.ts",
+        "relPath": "src/app.ts",
+        "line": 6,
+        "text": "export function added() {}"
+      }
+    ]
+  },
+  {
+    "op": "snippets",
+    "result": [
+      {
+        "relPath": "src/app.ts",
+        "path": "<root>/src/app.ts",
+        "body": "5: // TODO search me\n3: const helper = async () => 1\n5: // TODO search me\n4: export const Config = {}"
+      },
+      {
+        "relPath": "data/crlf.ts",
+        "path": "<root>/data/crlf.ts",
+        "body": "3: // todo crlf\n1: export function crlf() {}\n3: // todo crlf"
+      },
+      {
+        "relPath": "readme.md",
+        "path": "<root>/readme.md",
+        "body": "3: trimmed line, todo\n2: Search Me here"
+      },
+      {
+        "relPath": ".env",
+        "path": "<root>/.env",
+        "body": "1: TOKEN=todo"
+      }
+    ]
+  },
+  {
+    "op": "snippets",
+    "result": []
+  },
+  {
+    "op": "snippets",
+    "result": []
+  },
+  {
+    "op": "memList",
+    "result": [
+      {
+        "id": "m_mid",
+        "scope": "global",
+        "title": "Mid",
+        "body": "Mid body",
+        "tags": [],
+        "createdAt": 1500,
+        "updatedAt": 2000
+      },
+      {
+        "id": "m_old",
+        "scope": "global",
+        "title": "Old: note",
+        "body": "Old body",
+        "tags": [
+          "a",
+          "b"
+        ],
+        "createdAt": 1000,
+        "updatedAt": 1000
+      }
+    ]
+  },
+  {
+    "op": "memList",
+    "result": [
+      {
+        "id": "m_ws",
+        "scope": "workspace",
+        "workspaceId": "w1",
+        "title": "Workspace",
+        "body": "Ws body",
+        "tags": [
+          "x"
+        ],
+        "createdAt": 1200,
+        "updatedAt": 1200
+      }
+    ]
+  },
+  {
+    "op": "memList",
+    "result": [
+      {
+        "id": "m_ws2",
+        "scope": "workspace",
+        "title": "No workspace",
+        "body": "Orphan",
+        "tags": [],
+        "createdAt": 1300,
+        "updatedAt": 1300
+      }
+    ]
+  },
+  {
+    "op": "memList",
+    "result": []
+  },
+  {
+    "op": "memSave",
+    "result": [
+      {
+        "id": "m_new",
+        "scope": "global",
+        "title": "New #1",
+        "body": "New body",
+        "tags": [
+          "t1",
+          "t2"
+        ],
+        "createdAt": 3000,
+        "updatedAt": 0
+      },
+      {
+        "id": "m_mid",
+        "scope": "global",
+        "title": "Mid",
+        "body": "Mid body",
+        "tags": [],
+        "createdAt": 1500,
+        "updatedAt": 2000
+      },
+      {
+        "id": "m_old",
+        "scope": "global",
+        "title": "Old: note",
+        "body": "Old body",
+        "tags": [
+          "a",
+          "b"
+        ],
+        "createdAt": 1000,
+        "updatedAt": 1000
+      }
+    ]
+  },
+  {
+    "op": "memFile",
+    "result": "---\nid: m_new\nscope: global\ntitle: \"New #1\"\ntags: [t1, t2]\ncreatedAt: 3000\nupdatedAt: 0\n---\n\nNew body\n"
+  },
+  {
+    "op": "memList",
+    "result": [
+      {
+        "id": "m_new",
+        "scope": "global",
+        "title": "New #1",
+        "body": "New body",
+        "tags": [
+          "t1",
+          "t2"
+        ],
+        "createdAt": 3000,
+        "updatedAt": 0
+      },
+      {
+        "id": "m_mid",
+        "scope": "global",
+        "title": "Mid",
+        "body": "Mid body",
+        "tags": [],
+        "createdAt": 1500,
+        "updatedAt": 2000
+      },
+      {
+        "id": "m_old",
+        "scope": "global",
+        "title": "Old: note",
+        "body": "Old body",
+        "tags": [
+          "a",
+          "b"
+        ],
+        "createdAt": 1000,
+        "updatedAt": 1000
+      }
+    ]
+  },
+  {
+    "op": "memSave",
+    "result": [
+      {
+        "id": "m_ws3",
+        "scope": "workspace",
+        "workspaceId": "w2",
+        "title": "Plain",
+        "body": "",
+        "tags": [],
+        "createdAt": 1,
+        "updatedAt": 0
+      }
+    ]
+  },
+  {
+    "op": "memFile",
+    "result": "---\nid: m_ws3\nscope: workspace\nworkspaceId: w2\ntitle: Plain\ntags: []\ncreatedAt: 1\nupdatedAt: 0\n---\n\n"
+  },
+  {
+    "op": "memDelete",
+    "result": null
+  },
+  {
+    "op": "memDelete",
+    "result": null
+  },
+  {
+    "op": "memList",
+    "result": [
+      {
+        "id": "m_mid",
+        "scope": "global",
+        "title": "Mid",
+        "body": "Mid body",
+        "tags": [],
+        "createdAt": 1500,
+        "updatedAt": 2000
+      },
+      {
+        "id": "m_old",
+        "scope": "global",
+        "title": "Old: note",
+        "body": "Old body",
+        "tags": [
+          "a",
+          "b"
+        ],
+        "createdAt": 1000,
+        "updatedAt": 1000
+      }
+    ]
+  },
+  {
+    "op": "cList",
+    "result": []
+  },
+  {
+    "op": "cAdd",
+    "result": [
+      {
+        "id": "<uuid>",
+        "path": "/p/a.ts",
+        "line": 5,
+        "lineText": "line five",
+        "comment": "fix this",
+        "createdAt": 0
+      }
+    ]
+  },
+  {
+    "op": "cAdd",
+    "result": [
+      {
+        "id": "<uuid>",
+        "path": "/p/a.ts",
+        "line": 2,
+        "lineText": "two",
+        "comment": "earlier line",
+        "createdAt": 0
+      },
+      {
+        "id": "<uuid>",
+        "path": "/p/a.ts",
+        "line": 5,
+        "lineText": "line five",
+        "comment": "fix this",
+        "createdAt": 0
+      }
+    ]
+  },
+  {
+    "op": "cAdd",
+    "result": [
+      {
+        "id": "<uuid>",
+        "path": "/p/a.ts",
+        "line": 2,
+        "lineText": "two",
+        "comment": "earlier line",
+        "createdAt": 0
+      },
+      {
+        "id": "<uuid>",
+        "path": "/p/a.ts",
+        "line": 5,
+        "lineText": "line five",
+        "comment": "fix this",
+        "createdAt": 0
+      },
+      {
+        "id": "<uuid>",
+        "path": "/p/a.ts",
+        "line": 5,
+        "lineText": "line five",
+        "comment": "second on five",
+        "createdAt": 0
+      }
+    ]
+  },
+  {
+    "op": "cAdd",
+    "result": [
+      {
+        "id": "<uuid>",
+        "path": "123",
+        "line": 1,
+        "lineText": "x",
+        "comment": "integer key",
+        "createdAt": 0
+      }
+    ]
+  },
+  {
+    "op": "cAdd",
+    "result": [
+      {
+        "id": "<uuid>",
+        "path": "/p/b.ts",
+        "line": "3",
+        "lineText": "str line",
+        "comment": "string line",
+        "createdAt": 0
+      }
+    ]
+  },
+  {
+    "op": "cFile",
+    "result": [
+      "{",
+      "  \"123\": [",
+      "    {",
+      "      \"id\": \"<uuid>\",",
+      "      \"path\": \"123\",",
+      "      \"line\": 1,",
+      "      \"lineText\": \"x\",",
+      "      \"comment\": \"integer key\",",
+      "      \"createdAt\": 0",
+      "    }",
+      "  ],",
+      "  \"/p/a.ts\": [",
+      "    {",
+      "      \"id\": \"<uuid>\",",
+      "      \"path\": \"/p/a.ts\",",
+      "      \"line\": 5,",
+      "      \"lineText\": \"line five\",",
+      "      \"comment\": \"fix this\",",
+      "      \"createdAt\": 0",
+      "    },",
+      "    {",
+      "      \"id\": \"<uuid>\",",
+      "      \"path\": \"/p/a.ts\",",
+      "      \"line\": 2,",
+      "      \"lineText\": \"two\",",
+      "      \"comment\": \"earlier line\",",
+      "      \"createdAt\": 0",
+      "    },",
+      "    {",
+      "      \"id\": \"<uuid>\",",
+      "      \"path\": \"/p/a.ts\",",
+      "      \"line\": 5,",
+      "      \"lineText\": \"line five\",",
+      "      \"comment\": \"second on five\",",
+      "      \"createdAt\": 0",
+      "    }",
+      "  ],",
+      "  \"/p/b.ts\": [",
+      "    {",
+      "      \"id\": \"<uuid>\",",
+      "      \"path\": \"/p/b.ts\",",
+      "      \"line\": \"3\",",
+      "      \"lineText\": \"str line\",",
+      "      \"comment\": \"string line\",",
+      "      \"createdAt\": 0",
+      "    }",
+      "  ]",
+      "}"
+    ]
+  },
+  {
+    "op": "cResolve",
+    "result": [
+      {
+        "id": "<uuid>",
+        "path": "/p/a.ts",
+        "line": 5,
+        "lineText": "line five",
+        "comment": "fix this",
+        "createdAt": 0
+      },
+      {
+        "id": "<uuid>",
+        "path": "/p/a.ts",
+        "line": 5,
+        "lineText": "line five",
+        "comment": "second on five",
+        "createdAt": 0
+      }
+    ]
+  },
+  {
+    "op": "cResolve",
+    "result": []
+  },
+  {
+    "op": "cResolve",
+    "result": []
+  },
+  {
+    "op": "cFile",
+    "result": [
+      "{",
+      "  \"123\": [",
+      "    {",
+      "      \"id\": \"<uuid>\",",
+      "      \"path\": \"123\",",
+      "      \"line\": 1,",
+      "      \"lineText\": \"x\",",
+      "      \"comment\": \"integer key\",",
+      "      \"createdAt\": 0",
+      "    }",
+      "  ],",
+      "  \"/p/a.ts\": [",
+      "    {",
+      "      \"id\": \"<uuid>\",",
+      "      \"path\": \"/p/a.ts\",",
+      "      \"line\": 5,",
+      "      \"lineText\": \"line five\",",
+      "      \"comment\": \"fix this\",",
+      "      \"createdAt\": 0",
+      "    },",
+      "    {",
+      "      \"id\": \"<uuid>\",",
+      "      \"path\": \"/p/a.ts\",",
+      "      \"line\": 5,",
+      "      \"lineText\": \"line five\",",
+      "      \"comment\": \"second on five\",",
+      "      \"createdAt\": 0",
+      "    }",
+      "  ]",
+      "}"
+    ]
+  },
+  {
+    "op": "cList",
+    "result": [
+      {
+        "id": "<uuid>",
+        "path": "/p/a.ts",
+        "line": 5,
+        "lineText": "line five",
+        "comment": "fix this",
+        "createdAt": 0
+      },
+      {
+        "id": "<uuid>",
+        "path": "/p/a.ts",
+        "line": 5,
+        "lineText": "line five",
+        "comment": "second on five",
+        "createdAt": 0
+      }
+    ]
+  }
+]

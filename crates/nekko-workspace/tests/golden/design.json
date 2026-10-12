@@ -1,0 +1,1395 @@
+{
+  "ops": [
+    {
+      "op": "get",
+      "result": {
+        "workspaceId": "w1",
+        "pages": []
+      }
+    },
+    {
+      "op": "add",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://localhost:3000/",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "add",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://localhost:3000/",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "  http://localhost:3000/about  ",
+            "url": "http://localhost:3000/about",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "add",
+      "error": "label.trim is not a function"
+    },
+    {
+      "op": "addImport",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://localhost:3000/",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "  http://localhost:3000/about  ",
+            "url": "http://localhost:3000/about",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "addImport",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://localhost:3000/",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "  http://localhost:3000/about  ",
+            "url": "http://localhost:3000/about",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Imported design",
+            "url": "",
+            "kind": "concept",
+            "html": "<html><body>htm</body></html>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "addImport",
+      "error": "Import requires a complete HTML file under 1 MB."
+    },
+    {
+      "op": "addImport",
+      "error": "Design file does not exist."
+    },
+    {
+      "op": "addImport",
+      "error": "Choose an existing project."
+    },
+    {
+      "op": "add",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://localhost:3000/",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "  http://localhost:3000/about  ",
+            "url": "http://localhost:3000/about",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Imported design",
+            "url": "",
+            "kind": "concept",
+            "html": "<html><body>htm</body></html>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "file",
+      "result": "<html><body>htm</body></html>"
+    },
+    {
+      "op": "update",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://localhost:3000/",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "  http://localhost:3000/about  ",
+            "url": "http://localhost:3000/about",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Imported design",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "file",
+      "result": "<p>v2</p>"
+    },
+    {
+      "op": "update",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://localhost:3000/",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "  http://localhost:3000/about  ",
+            "url": "http://localhost:3000/about",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "update",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://localhost:3000/",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<p>first</p>",
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "  http://localhost:3000/about  ",
+            "url": "http://localhost:3000/about",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "update",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<p>second</p>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "  http://localhost:3000/about  ",
+            "url": "http://localhost:3000/about",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "update",
+      "error": "Design HTML must be under 1 MB."
+    },
+    {
+      "op": "update",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<p>second</p>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Renamed",
+            "url": "http://localhost:3000/about",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "extra": true,
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "note",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<p>second</p>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Renamed",
+            "url": "http://localhost:3000/about",
+            "notes": [
+              {
+                "id": "<uuid>",
+                "text": "look here",
+                "createdAt": 0
+              }
+            ],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "extra": true,
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "note",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<p>second</p>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Renamed",
+            "url": "http://localhost:3000/about",
+            "notes": [
+              {
+                "id": "<uuid>",
+                "text": "look here",
+                "createdAt": 0
+              },
+              {
+                "id": "<uuid>",
+                "text": "second",
+                "createdAt": 0
+              }
+            ],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "extra": true,
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "resolve",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<p>second</p>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Renamed",
+            "url": "http://localhost:3000/about",
+            "notes": [
+              {
+                "id": "<uuid>",
+                "text": "second",
+                "createdAt": 0
+              }
+            ],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "extra": true,
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "Mock",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "note",
+      "error": "text.trim is not a function"
+    },
+    {
+      "op": "remove",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<p>second</p>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Renamed",
+            "url": "http://localhost:3000/about",
+            "notes": [
+              {
+                "id": "<uuid>",
+                "text": "second",
+                "createdAt": 0
+              }
+            ],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "extra": true,
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "get",
+      "result": {
+        "workspaceId": "w2",
+        "pages": []
+      }
+    },
+    {
+      "op": "generate",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<p>second</p>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Renamed",
+            "url": "http://localhost:3000/about",
+            "notes": [
+              {
+                "id": "<uuid>",
+                "text": "second",
+                "createdAt": 0
+              }
+            ],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "extra": true,
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "kind": "concept",
+            "label": "A pricing page",
+            "url": "",
+            "html": "<!DOCTYPE html><html><body>Pricing</body></html>",
+            "prompt": "A pricing page",
+            "origin": "prompt",
+            "file": "<root>/nekko-designs/a-pricing-page-<id6>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "generate",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<p>second</p>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Renamed",
+            "url": "http://localhost:3000/about",
+            "notes": [
+              {
+                "id": "<uuid>",
+                "text": "second",
+                "createdAt": 0
+              }
+            ],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "extra": true,
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "kind": "concept",
+            "label": "A pricing page",
+            "url": "",
+            "html": "<!DOCTYPE html><html><body>Pricing</body></html>",
+            "prompt": "A pricing page",
+            "origin": "prompt",
+            "file": "<root>/nekko-designs/a-pricing-page-<id6>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "kind": "concept",
+            "label": "Sketched!",
+            "url": "",
+            "html": "<html><p>sketch</p></html>",
+            "prompt": "",
+            "origin": "sketch",
+            "file": "<root>/nekko-designs/sketched-<id6>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "generate",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<html><p>blue</p></html>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              },
+              {
+                "id": "<uuid>",
+                "html": "<p>second</p>",
+                "createdAt": 0
+              }
+            ],
+            "prompt": "make it blue",
+            "file": "<root>/nekko-designs/home-<id6>.html"
+          },
+          {
+            "id": "<uuid>",
+            "label": "Renamed",
+            "url": "http://localhost:3000/about",
+            "notes": [
+              {
+                "id": "<uuid>",
+                "text": "second",
+                "createdAt": 0
+              }
+            ],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "extra": true,
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<p>v2</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              }
+            ]
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "kind": "concept",
+            "label": "A pricing page",
+            "url": "",
+            "html": "<!DOCTYPE html><html><body>Pricing</body></html>",
+            "prompt": "A pricing page",
+            "origin": "prompt",
+            "file": "<root>/nekko-designs/a-pricing-page-<id6>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "kind": "concept",
+            "label": "Sketched!",
+            "url": "",
+            "html": "<html><p>sketch</p></html>",
+            "prompt": "",
+            "origin": "sketch",
+            "file": "<root>/nekko-designs/sketched-<id6>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "generate",
+      "error": "Describe the design or draw a sketch first."
+    },
+    {
+      "op": "generate",
+      "error": "The model returned no HTML. Try again, or pick a stronger default model in Models."
+    },
+    {
+      "op": "generate",
+      "result": {
+        "workspaceId": "w2",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "kind": "concept",
+            "label": "Elsewhere concept, a long prompt that runs",
+            "url": "",
+            "html": "<html>w2</html>",
+            "prompt": "Elsewhere concept, a long prompt that runs past forty two characters",
+            "origin": "prompt",
+            "file": "<root>/w2/nekko-designs/elsewhere-concept-a-long-prompt-that-run-<id6>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "generate",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<html><p>blue</p></html>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              },
+              {
+                "id": "<uuid>",
+                "html": "<p>second</p>",
+                "createdAt": 0
+              }
+            ],
+            "prompt": "make it blue",
+            "file": "<root>/nekko-designs/home-<id6>.html"
+          },
+          {
+            "id": "<uuid>",
+            "label": "Renamed",
+            "url": "http://localhost:3000/about",
+            "notes": [
+              {
+                "id": "<uuid>",
+                "text": "second",
+                "createdAt": 0
+              }
+            ],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "extra": true,
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><p>refined</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              },
+              {
+                "id": "<uuid>",
+                "html": "<p>v2</p>",
+                "createdAt": 0
+              }
+            ],
+            "prompt": "refine an import"
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "kind": "concept",
+            "label": "A pricing page",
+            "url": "",
+            "html": "<!DOCTYPE html><html><body>Pricing</body></html>",
+            "prompt": "A pricing page",
+            "origin": "prompt",
+            "file": "<root>/nekko-designs/a-pricing-page-<id6>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "kind": "concept",
+            "label": "Sketched!",
+            "url": "",
+            "html": "<html><p>sketch</p></html>",
+            "prompt": "",
+            "origin": "sketch",
+            "file": "<root>/nekko-designs/sketched-<id6>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    },
+    {
+      "op": "file",
+      "result": "<!doctype html><p>refined</p>"
+    },
+    {
+      "op": "get",
+      "result": {
+        "workspaceId": "w1",
+        "pages": [
+          {
+            "id": "<uuid>",
+            "label": "Home",
+            "url": "http://y",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "html": "<html><p>blue</p></html>",
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<p>first</p>",
+                "createdAt": 0
+              },
+              {
+                "id": "<uuid>",
+                "html": "<p>second</p>",
+                "createdAt": 0
+              }
+            ],
+            "prompt": "make it blue",
+            "file": "<root>/nekko-designs/home-<id6>.html"
+          },
+          {
+            "id": "<uuid>",
+            "label": "Renamed",
+            "url": "http://localhost:3000/about",
+            "notes": [
+              {
+                "id": "<uuid>",
+                "text": "second",
+                "createdAt": 0
+              }
+            ],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "extra": true,
+            "revisions": []
+          },
+          {
+            "id": "<uuid>",
+            "label": "Same html",
+            "url": "",
+            "kind": "concept",
+            "html": "<!doctype html><p>refined</p>",
+            "file": "<root>/nekko-designs/import-<uuid>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0,
+            "revisions": [
+              {
+                "id": "<uuid>",
+                "html": "<html><body>htm</body></html>",
+                "createdAt": 0
+              },
+              {
+                "id": "<uuid>",
+                "html": "<p>v2</p>",
+                "createdAt": 0
+              }
+            ],
+            "prompt": "refine an import"
+          },
+          {
+            "id": "<uuid>",
+            "label": "Text",
+            "url": "plain.txt",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "kind": "concept",
+            "label": "A pricing page",
+            "url": "",
+            "html": "<!DOCTYPE html><html><body>Pricing</body></html>",
+            "prompt": "A pricing page",
+            "origin": "prompt",
+            "file": "<root>/nekko-designs/a-pricing-page-<id6>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          },
+          {
+            "id": "<uuid>",
+            "kind": "concept",
+            "label": "Sketched!",
+            "url": "",
+            "html": "<html><p>sketch</p></html>",
+            "prompt": "",
+            "origin": "sketch",
+            "file": "<root>/nekko-designs/sketched-<id6>.html",
+            "notes": [],
+            "createdAt": 0,
+            "updatedAt": 0
+          }
+        ]
+      }
+    }
+  ],
+  "asks": [
+    "Design this: x",
+    "Here is the current prototype:\n\n<p>old</p>\n\nApply this change and output the full updated document, keeping everything else intact: y",
+    "Turn the attached hand-drawn sketch into a working, polished HTML prototype. Follow the sketch's layout, boxes, and annotations faithfully, then fill in professional visual design (type, color, spacing).",
+    "Turn the attached hand-drawn sketch into a working, polished HTML prototype. Follow the sketch's layout, boxes, and annotations faithfully, then fill in professional visual design (type, color, spacing).\n\nAdditional instructions: with notes",
+    "Design this: z"
+  ],
+  "cleans": [
+    "<html></html>",
+    "<body>only</body>",
+    "<!DOCTYPE html> and <html>",
+    {
+      "error": "The model returned no HTML. Try again, or pick a stronger default model in Models."
+    },
+    "<HTML lang=en>"
+  ],
+  "labels": [
+    "Mine",
+    "Existing",
+    "a prompt that is definitely longer than",
+    "Concept"
+  ],
+  "slugs": [
+    "hello-world",
+    "a-b",
+    "design",
+    "design",
+    "a-very-long-label-that-keeps-going-and-g"
+  ],
+  "system": "You are a world-class product designer and front-end engineer producing a single, self-contained HTML prototype.\nRules: output ONE complete HTML document. All CSS lives in a <style> tag and any JS inline in a <script> tag. No external resources of any kind (no CDNs, web fonts, or remote images; use system font stacks, CSS gradients, and inline SVG). Responsive down to 375px wide. Polished and modern: real visual hierarchy, generous whitespace, consistent spacing scale, believable placeholder content. Add hover/focus states and small interactions where they sell the design.\nOutput ONLY the HTML document. No explanations, no code fences."
+}
