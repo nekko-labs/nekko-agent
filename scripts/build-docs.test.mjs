@@ -1,9 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { build, loadNav, slugify, stale } from './build-docs.mjs';
+import { readFileSync } from 'node:fs';
+import { build, loadNav, slugify } from './build-docs.mjs';
 
-test('the committed docs site matches its Markdown (run `npm run docs`)', () => {
-  assert.deepEqual(stale(), []);
+// Staleness itself is not a test: the Docs site workflow regenerates the pages
+// and commits them to the PR, so failing CI on the author's commit would only
+// add a red run before the fix lands. It does need to run for every source.
+test('the Docs site workflow runs for every page source', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/docs-site.yml', import.meta.url), 'utf8');
+  const block = workflow.split(/\n  push:/)[0].split(/\n    paths:\n/)[1];
+  const paths = [...block.matchAll(/^\s+- '([^']+)'$/gm)].map((m) => m[1]);
+  const covered = (file) => paths.some((p) => (p.endsWith('/**') ? file.startsWith(p.slice(0, -2)) : file === p));
+  const missing = loadNav().pages.map((p) => p.source).filter((s) => !covered(s));
+  assert.deepEqual(missing, [], 'add these to the paths in .github/workflows/docs-site.yml');
 });
 
 test('every nav page has a unique slug and its own output page', () => {
