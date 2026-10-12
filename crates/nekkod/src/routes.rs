@@ -31,6 +31,8 @@ pub struct Ctx {
     pub settings: Option<Arc<crate::settings::Settings>>,
     /// Nekko Voice (`voice:*`), when the data directory is known.
     pub voice: Option<Arc<crate::voice::Voice>>,
+    /// Sign-in and tokens.json, when the data directory is known (`oauth:*`).
+    pub oauth: Option<Arc<crate::oauth::OAuth>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -258,6 +260,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf)).unwrap_or_default();
             crate::decisions::route(ctx, &data_dir, c, &args).await
         }
+        c if crate::oauth::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
+            ctx.oauth.as_ref().expect("checked").route(c, &args).await
+        }
         c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
             crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
         }
@@ -317,6 +322,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.voice.is_some() {
         all.extend_from_slice(crate::voice::CHANNELS);
+    }
+    if ctx.oauth.is_some() {
+        all.extend_from_slice(crate::oauth::CHANNELS);
     }
     all
 }

@@ -1324,6 +1324,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nekko-oauth"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "getrandom",
+ "nekko-js",
+ "nekko-settings",
+ "serde_json",
+ "sha2",
+ "url",
+]
+
+[[package]]
 name = "nekko-settings"
 version = "0.1.0"
 dependencies = [
@@ -1426,6 +1439,7 @@ dependencies = [
  "nekko-infer",
  "nekko-js",
  "nekko-loop",
+ "nekko-oauth",
  "nekko-settings",
  "nekko-store",
  "nekko-term",
@@ -1439,6 +1453,7 @@ dependencies = [
  "sha2",
  "tokio",
  "tokio-tungstenite 0.27.0",
+ "url",
  "windows-sys",
 ]
 

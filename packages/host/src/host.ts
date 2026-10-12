@@ -180,6 +180,7 @@ import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemo
 import { startWorkflowListeners } from './listeners.js';
 import {
   initOAuth,
+  useOAuthDaemon,
   beginOAuth,
   finishOAuth,
   cancelOAuth,
@@ -595,6 +596,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // Under nekkod, settings.json is the daemon's to write (crates/nekkod/src/settings.rs).
   const call = daemonOwns('settings') ? daemonCall() : undefined;
   useSettingsDaemon(call ? (channel, args) => call<AppSettings>(channel, ...args) : null);
+  // And tokens.json (crates/nekkod/src/oauth.rs): this host asks it for a usable token.
+  useOAuthDaemon(daemonOwns('tokens') ? (daemonCall() ?? null) : null);
   const voice = createVoiceService(join(opts.dataDir, 'voice'), getSettings);
   /** Stop the speech server, wherever it runs: the daemon serves `voice:*` when it knows the data dir. */
   const stopVoice = () => {

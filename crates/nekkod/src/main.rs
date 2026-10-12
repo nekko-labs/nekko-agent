@@ -14,6 +14,7 @@ mod hub;
 mod hypergate;
 mod loops;
 mod mcp;
+mod oauth;
 mod procgroup;
 mod routes;
 mod settings;
@@ -70,7 +71,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS].join(","));
+                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS, oauth::OWNS].join(","));
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -105,7 +106,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
-        hub,
+        hub: hub.clone(),
         engine: engine.clone(),
         sessions: sessions.clone(),
         loops: Arc::new(loops::Loops::new(changes.clone())),
@@ -121,8 +122,23 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             .with_settings(settings.as_ref().map(|s| s.store.clone())),
         ),
         mcp: mcp.clone(),
-        accounts,
-        settings,
+        accounts: accounts.clone(),
+        settings: settings.clone(),
+        oauth: match (&cfg.data_dir, &settings) {
+            (Some(d), Some(s)) => {
+                let o = oauth::OAuth::new(
+                    d.into(),
+                    s.store.clone(),
+                    accounts.clone(),
+                    hub.clone(),
+                    cfg.sign_in,
+                    oauth::Endpoints::default(),
+                );
+                let _ = accounts.oauth.set(Arc::downgrade(&o));
+                Some(o)
+            }
+            _ => None,
+        },
         voice: voice.clone(),
     };
     routes::forward_terminal_events(&ctx);

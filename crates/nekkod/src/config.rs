@@ -31,6 +31,11 @@ pub struct Config {
     /// started it (the parent holds our stdin open for its whole life).
     #[serde(default = "yes")]
     pub exit_on_stdin_close: bool,
+    /// Whether subscription sign-in is offered (the desktop app). The web
+    /// edition passes `false`: its browser is not on the machine whose
+    /// loopback port receives the sign-in callback.
+    #[serde(default = "yes")]
+    pub sign_in: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

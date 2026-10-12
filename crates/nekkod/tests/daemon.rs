@@ -651,6 +651,43 @@ async fn settings_are_the_daemons_to_write_when_it_knows_the_data_dir() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn tokens_are_the_daemons_to_read_renew_and_forget() {
+    let data = std::env::temp_dir().join(format!("nekkod-tokens-{}", std::process::id()));
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(
+        data.join("settings.json"),
+        r#"{"providers":[{"id":"or","kind":"openrouter","tokenKey":"openrouter:k","auth":"apikey"},{"id":"plain","kind":"openai"}]}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        data.join("tokens.json"),
+        r#"{"openrouter:k":{"provider":"openrouter","accessToken":"sk-or","obtainedAt":1}}"#,
+    )
+    .unwrap();
+    let d = start_with(true, Some(&data));
+
+    let (_, status) = post(d.port, "oauth:status", json!(["or"]), Some(TOKEN)).await;
+    assert_eq!(
+        status,
+        json!({ "tokenKey": "openrouter:k", "provider": "openrouter", "connected": true, "state": "success" })
+    );
+    let (_, plain) = post(d.port, "oauth:status", json!(["plain"]), Some(TOKEN)).await;
+    assert_eq!(plain["message"], "Provider has no token key.");
+    // The host's question: a permanent key needs no renewal.
+    let (_, fresh) = post(d.port, "oauth:fresh", json!(["openrouter:k", false]), Some(TOKEN)).await;
+    assert_eq!(fresh, json!("sk-or"));
+    let (status_code, missing) = post(d.port, "oauth:fresh", json!(["claude:none", false]), Some(TOKEN)).await;
+    assert_ne!(status_code, 200, "{missing}");
+    post(d.port, "oauth:signout", json!(["or"]), Some(TOKEN)).await;
+    let tokens: Value = serde_json::from_str(&std::fs::read_to_string(data.join("tokens.json")).unwrap()).unwrap();
+    assert_eq!(tokens, json!({}));
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!calls.to_string().contains("oauth"), "nothing about sign-in reached the host: {calls}");
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn failed_log_callback_retains_json_for_delete_and_clear() {
     assert_log_callback_failure_retains_json(true).await;
 }
