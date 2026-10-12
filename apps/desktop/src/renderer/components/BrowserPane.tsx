@@ -8,16 +8,33 @@ import { ExternalIcon } from '../icons.js';
  * has no Node access.
  */
 
-/** Turn whatever the user typed into a navigable URL (or a web search). */
-function normalizeUrl(input: string): string {
+/**
+ * Only http(s) ever reaches the frame. Anything else typed with a scheme
+ * (`javascript:`, `file:`, `data:`) would run in, or read from, the app's
+ * own origin through the web edition's iframe, so it shows nothing; so does
+ * the app's own origin, which the sandbox cannot contain.
+ */
+function safeUrl(candidate: string): string {
+  try {
+    const u = new URL(candidate);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return 'about:blank';
+    if (typeof location !== 'undefined' && u.origin === location.origin) return 'about:blank';
+    return u.href;
+  } catch {
+    return 'about:blank';
+  }
+}
+
+/** Turn whatever the user typed into a navigable http(s) URL (or a web search). */
+export function normalizeUrl(input: string): string {
   const s = input.trim();
-  if (!s) return 'about:blank';
-  if (/^[a-z]+:\/\//i.test(s) || s === 'about:blank') return s;
+  if (!s || s === 'about:blank') return 'about:blank';
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s) && !/^(localhost|\d{1,3}(\.\d{1,3}){3}):\d/i.test(s)) return safeUrl(s);
   const looksLocal = /^localhost(:\d+)?(\/|$)/i.test(s) || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?/.test(s);
-  if (looksLocal) return `http://${s}`;
+  if (looksLocal) return safeUrl(`http://${s}`);
   // A bare domain (has a dot, no spaces) → https; otherwise treat as a search.
-  if (/^[^\s]+\.[^\s]+$/.test(s)) return `https://${s}`;
-  return `https://duckduckgo.com/?q=${encodeURIComponent(s)}`;
+  if (/^[^\s]+\.[^\s]+$/.test(s)) return safeUrl(`https://${s}`);
+  return safeUrl(`https://duckduckgo.com/?q=${encodeURIComponent(s)}`);
 }
 
 /** Electron renders <webview>; a plain browser (the web edition) does not, so it gets an iframe. */
