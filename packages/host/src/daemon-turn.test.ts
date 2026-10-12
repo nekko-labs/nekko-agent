@@ -232,6 +232,30 @@ describe('a daemon-driven turn', () => {
     expect(isChatRunning(s.id)).toBe(false);
   });
 
+  it('follows a chain the daemon admitted onto the queued turn it admitted too, even when that adoption comes late', async () => {
+    const s = named();
+    const { adoptAdmittedTurn } = await import('./chat.js');
+    fakeDaemon(async () => {});
+    const events: AgentEvent[] = [];
+    const send = (e: AgentEvent) => events.push(e);
+    const base = { workspaces: [], mode: 'ask' as const, decideWith: null, allowBrowserControl: false };
+    const opts = { sessionId: s.id, providerId: 'p1', modelId: 'm', text: 'first' };
+    await adoptAdmittedTurn({ ...base, turnId: 'turn_d1_a', opts }, send);
+    expect(isChatRunning(s.id)).toBe(true);
+    // The first turn ends naming its successor before the host has heard of it.
+    await turnCallback('turn:end', ['turn_d1_a', { stop: 'complete', aborted: false, next: 'turn_d2_b' }]);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(isChatRunning(s.id)).toBe(true);
+    await adoptAdmittedTurn({ ...base, turnId: 'turn_d2_b', opts: { ...opts, text: 'next one' }, chained: true }, send);
+    await turnCallback('turn:event', ['turn_d2_b', { events: [{ sessionId: s.id, type: 'text', delta: 'second' }] }]);
+    expect(events.some((e) => e.type === 'text' && (e as { delta: string }).delta === 'second')).toBe(true);
+    await turnCallback('turn:end', ['turn_d2_b', { stop: 'complete', aborted: false }]);
+    await vi.waitFor(() => expect(isChatRunning(s.id)).toBe(false));
+    // A chained adoption with no chain to join is dropped.
+    await adoptAdmittedTurn({ ...base, turnId: 'turn_d3_c', opts, chained: true }, send);
+    expect(isChatRunning(s.id)).toBe(false);
+  });
+
   it('runs the queued prompt here when the daemon hands it back', async () => {
     const s = named();
     s.queue = ['next one'];

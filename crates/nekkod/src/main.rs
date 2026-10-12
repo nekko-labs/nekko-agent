@@ -5,9 +5,11 @@
 //! is listening; everything else goes to stderr. Exits when its stdin closes.
 
 mod accounts;
+mod admission;
 mod backend;
 mod catalog;
 mod config;
+mod context;
 mod decide;
 mod decisions;
 mod engine;
@@ -16,7 +18,9 @@ mod hypergate;
 mod loops;
 mod machine;
 mod mcp;
+mod oauth;
 mod procgroup;
+mod providers;
 mod resource_queue;
 mod routes;
 mod settings;
@@ -25,6 +29,7 @@ mod tooling;
 mod turns;
 mod voice;
 mod wire;
+mod worktrees;
 
 use backend::Backend;
 use hub::Hub;
@@ -74,7 +79,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS].join(","));
+                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS, oauth::OWNS].join(","));
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -106,6 +111,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let read: Arc<dyn Fn() -> serde_json::Value + Send + Sync> = Arc::new(move || store.get());
         voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
     });
+    // `NEKKO_AGENT_LOOP=ts` (here or set for the backend) keeps every turn in the host.
+    let ts_loop = std::env::var("NEKKO_AGENT_LOOP").is_ok_and(|v| v == "ts")
+        || cfg.backend.as_ref().is_some_and(|b| b.env.get("NEKKO_AGENT_LOOP").is_some_and(|v| v == "ts"));
+    let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
+        .then(|| admission::Admission::new(&hub, cfg.allow_browser_control, ts_loop));
     let catalog = settings.as_deref().map(catalog::new);
     // The machine probes and the resource queue read the daemon's settings store.
     let read_settings = |s: &Option<Arc<settings::Settings>>| {
@@ -119,7 +129,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
-        hub,
+        hub: hub.clone(),
         engine: engine.clone(),
         sessions: sessions.clone(),
         loops: Arc::new(loops::Loops::new(changes.clone())),
@@ -136,7 +146,24 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
         ),
         mcp: mcp.clone(),
-        accounts,
+        accounts: accounts.clone(),
+        settings: settings.clone(),
+        admission,
+        oauth: match (&cfg.data_dir, &settings) {
+            (Some(d), Some(s)) => {
+                let o = oauth::OAuth::new(
+                    d.into(),
+                    s.store.clone(),
+                    accounts.clone(),
+                    hub.clone(),
+                    cfg.sign_in,
+                    oauth::Endpoints::default(),
+                );
+                let _ = accounts.oauth.set(Arc::downgrade(&o));
+                Some(o)
+            }
+            _ => None,
+        },
         machine: Arc::new(nekko_machine::Machine::new(
             cfg.data_dir.clone().map(std::path::PathBuf::from),
             Box::new(engine_bin),
@@ -147,11 +174,17 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 Box::new(read_settings(&settings)),
             ))
         }),
-        settings,
         voice: voice.clone(),
         catalog,
     };
     routes::forward_terminal_events(&ctx);
+    if let Some(adm) = ctx.admission.clone() {
+        let c = ctx.clone();
+        ctx.turns.set_preparer(Arc::new(move |payload| {
+            let (c, adm) = (c.clone(), adm.clone());
+            Box::pin(async move { admission::admit_queued(&c, &adm, &payload).await })
+        }));
+    }
     let processes = ctx.turns.processes.clone();
 
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };

@@ -64,6 +64,10 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'turn:prepare': (args) => host.turnCallback('turn:prepare', args),
     'turn:usage': (args) => host.turnCallback('turn:usage', args),
     'turn:notify': (args) => host.turnCallback('turn:notify', args),
+    // A chat:send the daemon admitted itself (crates/nekkod/src/admission.rs).
+    'turn:adopt': ([payload]) => host.adoptTurn(payload as never),
+    'chat:connectorSnippets': ([text]) => host.admissionSnippets('connector', [typeof text === 'string' ? text : undefined]),
+    'chat:indexSnippets': ([ids, text]) => host.admissionSnippets('index', [Array.isArray(ids) ? ids.map(String) : [], String(text ?? '')]),
     // The daemon merges its own pending input with this process's.
     'chat:pending:host': () => host.hostPendingInput(),
     // Internal daemon callback, using the host queue and deletion tombstone.

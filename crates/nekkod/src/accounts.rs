@@ -6,10 +6,10 @@
 //! the TS functions by a golden set). This is the stateful half of
 //! `packages/host/src/limits.ts`: the snapshot per token key, the 30-second
 //! poll throttle, one poll at a time per key, why the last read failed and
-//! the backoff before the next. The TS host keeps two things: renewing a
-//! sign-in (`oauth:refresh`, since a refresh rotates the refresh token and so
-//! needs a single writer; the renewed token is read back from `tokens.json`,
-//! so no token crosses the wire) and the phone relay (`limits:notify`).
+//! the backoff before the next. A sign-in is renewed by the daemon's own
+//! OAuth service (`oauth.rs`, tokens.json's single writer), or by the TS host
+//! (`oauth:refresh`) when there is none; the TS host keeps the phone relay
+//! (`limits:notify`).
 //!
 //! Owned only when the daemon knows the data directory; otherwise every one
 //! of these channels goes to the TS host as before.
@@ -115,6 +115,9 @@ pub struct Accounts {
     state: Mutex<State>,
     /// Appends from this process, one at a time, so lines never interleave.
     append: Mutex<()>,
+    /// The daemon's own sign-in service, which renews tokens; without it the
+    /// host renews them (`oauth:refresh`).
+    pub oauth: std::sync::OnceLock<std::sync::Weak<crate::oauth::OAuth>>,
 }
 
 impl Accounts {
@@ -129,7 +132,16 @@ impl Accounts {
         anthropic_usage_url: String,
     ) -> Self {
         let http = reqwest::Client::builder().timeout(READ_TIMEOUT).build().unwrap_or_default();
-        Self { dir, backend, hub, http, anthropic_usage_url, state: Mutex::default(), append: Mutex::new(()) }
+        Self {
+            dir,
+            backend,
+            hub,
+            http,
+            anthropic_usage_url,
+            state: Mutex::default(),
+            append: Mutex::new(()),
+            oauth: std::sync::OnceLock::new(),
+        }
     }
 
     /// Whether this daemon owns accounting (it knows the data directory).
@@ -422,7 +434,14 @@ impl Accounts {
         if let Some(t) = self.token(key).filter(usable) {
             return Ok(Some(t));
         }
-        self.backend.call("oauth:refresh", json!([key])).await.map_err(Problem::Message)?;
+        match self.oauth.get().and_then(std::sync::Weak::upgrade) {
+            Some(oauth) => {
+                oauth.ensure_fresh(key, false).await.map_err(Problem::Message)?;
+            }
+            None => {
+                self.backend.call("oauth:refresh", json!([key])).await.map_err(Problem::Message)?;
+            }
+        }
         Ok(self.token(key))
     }
 

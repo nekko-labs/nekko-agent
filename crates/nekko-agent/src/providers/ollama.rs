@@ -127,6 +127,16 @@ impl OllamaProvider {
         sink.emit(ProviderChunk::Done).await
     }
 
+    /// `test()`: whether `/api/tags` answers.
+    pub async fn test(&self) -> TestResult {
+        let req = HttpRequest::get(format!("{}/api/tags", self.base()), Vec::new());
+        match self.io.transport.send(&req).await {
+            Ok(res) if res.ok() => TestResult::ok("Connected"),
+            Ok(res) => TestResult::fail(format!("HTTP {}", res.status)),
+            Err(e) => TestResult::fail(e.message),
+        }
+    }
+
     pub async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
         let tags_req = HttpRequest::get(format!("{}/api/tags", self.base()), Vec::new());
         let ps_req = HttpRequest::get(format!("{}/api/ps", self.base()), Vec::new());

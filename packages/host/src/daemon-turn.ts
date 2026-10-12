@@ -97,14 +97,45 @@ interface Registered extends HostTurn {
 }
 
 const turns = new Map<string, Registered>();
+/** Callbacks waiting for a turn the daemon admitted to be adopted here (`turn:adopt`). */
+const awaited = new Map<string, Array<() => void>>();
+/** How long a callback waits for a turn this host has not registered yet. */
+const ADOPT_WAIT_MS = 5000;
+
+/** The registered turn, waiting briefly for one the daemon admitted and is still handing over. */
+async function registeredTurn(turnId: string): Promise<Registered | undefined> {
+  const now = turns.get(turnId);
+  if (now) return now;
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(done, ADOPT_WAIT_MS);
+    function done() {
+      clearTimeout(timer);
+      const list = awaited.get(turnId)?.filter((f) => f !== done) ?? [];
+      if (list.length) awaited.set(turnId, list);
+      else awaited.delete(turnId);
+      resolve();
+    }
+    awaited.set(turnId, [...(awaited.get(turnId) ?? []), done]);
+  });
+  return turns.get(turnId);
+}
 /** Approvals for tools run here, parked in the daemon, by tool call id. */
 const approvals = new Map<string, (approved: boolean) => void>();
+
+/**
+ * A turn the daemon admitted itself: its id starts `turn_d` (admission.rs
+ * `daemon_turn_id`), and its `turn:adopt` may still be on its way.
+ */
+function pendingAdoption(turnId: string): boolean {
+  return turnId.startsWith('turn_d');
+}
 
 /** Register a turn the daemon is about to drive, so its callbacks find it. */
 export function registerTurn(turnId: string, turn: HostTurn, chain: TurnChain): void {
   let end!: (summary: TurnSummary) => void;
   const ended = new Promise<TurnSummary>((resolve) => { end = resolve; });
   turns.set(turnId, { ...turn, chain, end, ended, heard: false });
+  for (const wake of awaited.get(turnId) ?? []) wake();
 }
 
 /**
@@ -121,6 +152,10 @@ export function adoptTurn(turnId: string, turn: HostTurn, chain: TurnChain, done
       const registered = turns.get(current);
       if (!registered) break;
       const summary = await registered.ended;
+      // A next turn the daemon admitted itself may still be on its way
+      // (`turn:adopt`, chained): it joins this turn's chain, so this one stays
+      // registered until it lands.
+      if (summary.next && pendingAdoption(summary.next)) await registeredTurn(summary.next);
       turns.delete(current);
       if (!summary.early) registered.afterEach(summary);
       if (summary.next && turns.has(summary.next)) {
@@ -148,6 +183,12 @@ export function setTurnPreparer(fn: Preparer): void {
 let notify: ((event: AgentEvent) => void) | undefined;
 export function setTurnNotifier(fn: (event: AgentEvent) => void): void {
   notify = fn;
+}
+
+/** The chain of the turn the daemon drives for this session, if any. */
+export function chainOf(sessionId: string): TurnChain | undefined {
+  for (const t of turns.values()) if (t.sessionId === sessionId) return t.chain;
+  return undefined;
 }
 
 /** Whether the daemon drives this session's running turn. */
@@ -210,7 +251,8 @@ export async function turnCallback(channel: string, args: unknown[]): Promise<un
   if (channel === 'turn:approved') return approved(String(args[0]), args[1] === true);
   if (channel === 'turn:usage') return sideUsage(args[0] as never);
   if (channel === 'turn:notify') return notify?.({ ...(args[0] as AgentEvent), relayOnly: true } as unknown as AgentEvent);
-  const turn = turns.get(String(turnId));
+  // A turn the daemon admitted may still be on its way here (`turn:adopt`).
+  const turn = turns.get(String(turnId)) ?? (pendingAdoption(String(turnId)) ? await registeredTurn(String(turnId)) : undefined);
   switch (channel) {
     case 'turn:event': {
       if (!turn) return; // a turn a restarted host never started: the daemon saved it already

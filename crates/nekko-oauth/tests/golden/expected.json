@@ -1,0 +1,194 @@
+{
+  "authorizeUrls": [
+    {
+      "value": "\"https://claude.com/cai/oauth/authorize?code=true&response_type=code&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference&code_challenge=ch-_x&code_challenge_method=S256&state=st%2F%2B%3D+\""
+    },
+    {
+      "value": "\"https://claude.com/cai/oauth/authorize?response_type=code&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&redirect_uri=http%3A%2F%2Flocalhost%3A8765%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference&code_challenge=ch&code_challenge_method=S256&state=st\""
+    },
+    {
+      "value": "\"https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid+profile+email+offline_access&code_challenge=c%21*%27%28%29%7E&code_challenge_method=S256&state=%C3%A9+%C3%BC%26\""
+    },
+    {
+      "value": "\"https://openrouter.ai/auth?callback_url=http%3A%2F%2Flocalhost%3A51234%2Fcallback&code_challenge=abc&code_challenge_method=S256\""
+    }
+  ],
+  "pasted": [
+    {
+      "value": "{\"code\":\"abc\"}"
+    },
+    {
+      "value": "{\"code\":\"code\",\"state\":\"state\"}"
+    },
+    {
+      "value": "{\"code\":\"\",\"state\":\"\"}"
+    },
+    {
+      "value": "{\"code\":\"a b c\",\"state\":\"s1\"}"
+    },
+    {
+      "value": "{\"code\":\"x\"}"
+    },
+    {
+      "error": "Pasted URL does not match this session's redirect URI."
+    },
+    {
+      "error": "No authorization code found in the URL."
+    },
+    {
+      "error": "No authorization code found in the URL."
+    },
+    {
+      "error": "Pasted URL does not match this session's redirect URI."
+    },
+    {
+      "value": "{\"code\":\"k\"}"
+    },
+    {
+      "error": "Invalid URL"
+    }
+  ],
+  "exchangeRequests": [
+    {
+      "value": "{\"url\":\"https://platform.claude.com/v1/oauth/token\",\"headers\":{\"Content-Type\":\"application/json\",\"Accept\":\"application/json\"},\"body\":\"{\\\"client_id\\\":\\\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\\\",\\\"grant_type\\\":\\\"authorization_code\\\",\\\"code\\\":\\\"c\\\",\\\"state\\\":\\\"s\\\",\\\"redirect_uri\\\":\\\"https://platform.claude.com/oauth/code/callback\\\",\\\"code_verifier\\\":\\\"v\\\"}\"}"
+    },
+    {
+      "value": "{\"url\":\"https://auth.openai.com/oauth/token\",\"headers\":{\"Content-Type\":\"application/x-www-form-urlencoded\",\"Accept\":\"application/json\"},\"body\":\"grant_type=authorization_code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&code=c+d%26e&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&code_verifier=v%7E\"}"
+    },
+    {
+      "value": "{\"url\":\"https://openrouter.ai/api/v1/auth/keys\",\"headers\":{\"Content-Type\":\"application/json\",\"Accept\":\"application/json\"},\"body\":\"{\\\"code\\\":\\\"c\\\\\\\"\\\",\\\"code_verifier\\\":\\\"v\\\",\\\"code_challenge_method\\\":\\\"S256\\\"}\"}"
+    }
+  ],
+  "exchangeResults": [
+    {
+      "value": "{\"provider\":\"claude\",\"accessToken\":\"at\",\"refreshToken\":\"rt\",\"expiresAt\":1760028800000,\"scopes\":\"user:inference\",\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"claude\",\"accessToken\":\"at\",\"expiresAt\":1760003600005,\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"eyJhbGciOiJub25lIn0.eyJleHAiOjE3NjAwMDcyMDAuNX0.sig\",\"refreshToken\":\"rt\",\"expiresAt\":1760007200500,\"accountId\":\"acct_123\",\"obtainedAt\":1760000000000}"
+    },
+    {
+      "error": "Could not read your ChatGPT account id from the sign-in response."
+    },
+    {
+      "error": "Token exchange failed: bad code"
+    },
+    {
+      "error": "Token exchange failed: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "error": "Token exchange failed: "
+    },
+    {
+      "error": "Token response was not valid JSON."
+    },
+    {
+      "error": "Token response missing access_token."
+    },
+    {
+      "value": "{\"provider\":\"openrouter\",\"accessToken\":\"sk-or-1\",\"obtainedAt\":1760000000000}"
+    },
+    {
+      "error": "OpenRouter returned no API key."
+    },
+    {
+      "error": "Key exchange failed: denied"
+    },
+    {
+      "error": "Key exchange failed: HTTP 404"
+    },
+    {
+      "error": "Key exchange failed: nah"
+    }
+  ],
+  "refreshRequests": [
+    {
+      "value": "{\"url\":\"https://platform.claude.com/v1/oauth/token\",\"headers\":{\"Content-Type\":\"application/json\",\"Accept\":\"application/json\"},\"body\":\"{\\\"client_id\\\":\\\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\\\",\\\"grant_type\\\":\\\"refresh_token\\\",\\\"refresh_token\\\":\\\"r\\\",\\\"scope\\\":\\\"user:inference user:profile\\\"}\"}"
+    },
+    {
+      "value": "{\"url\":\"https://platform.claude.com/v1/oauth/token\",\"headers\":{\"Content-Type\":\"application/json\",\"Accept\":\"application/json\"},\"body\":\"{\\\"client_id\\\":\\\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\\\",\\\"grant_type\\\":\\\"refresh_token\\\",\\\"refresh_token\\\":\\\"r\\\",\\\"scope\\\":\\\"org:create_api_key user:profile user:inference\\\"}\"}"
+    },
+    {
+      "value": "{\"url\":\"https://auth.openai.com/oauth/token\",\"headers\":{\"Content-Type\":\"application/x-www-form-urlencoded\",\"Accept\":\"application/json\"},\"body\":\"grant_type=refresh_token&client_id=app_EMoamEEZ73f0CkXaXp7hrann&refresh_token=r+%3D%26\"}"
+    }
+  ],
+  "refreshResults": [
+    {
+      "value": "{\"provider\":\"claude\",\"accessToken\":\"a2\",\"refreshToken\":\"r\",\"expiresAt\":1760003600000,\"scopes\":\"x y\",\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"eyJhbGciOiJub25lIn0.eyJleHAiOjE3NjAwMDcyMDAuNX0.sig\",\"refreshToken\":\"r2\",\"expiresAt\":1760007200500,\"accountId\":\"acct\",\"obtainedAt\":1760000000000}"
+    },
+    {
+      "error": "Subscription session expired. Sign in again."
+    },
+    {
+      "error": "Subscription session expired. Sign in again."
+    },
+    {
+      "error": "Token refresh failed: oops"
+    },
+    {
+      "error": "Token refresh response was not valid JSON."
+    }
+  ],
+  "statuses": [
+    {
+      "value": "{\"tokenKey\":\"k\",\"connected\":false,\"state\":\"missing\"}"
+    },
+    {
+      "value": "{\"tokenKey\":\"k\",\"provider\":\"claude\",\"connected\":true,\"expiresAt\":1760000000001,\"scopes\":\"s\",\"state\":\"success\"}"
+    },
+    {
+      "value": "{\"tokenKey\":\"k\",\"provider\":\"claude\",\"connected\":false,\"expiresAt\":1759999999999,\"state\":\"success\",\"message\":\"m\"}"
+    },
+    {
+      "value": "{\"tokenKey\":\"k\",\"provider\":\"chatgpt\",\"connected\":false,\"accountId\":\"acct\",\"state\":\"success\"}"
+    },
+    {
+      "value": "{\"tokenKey\":\"k\",\"provider\":\"openrouter\",\"connected\":true,\"state\":\"success\"}"
+    }
+  ],
+  "cli": [
+    {
+      "value": "{\"provider\":\"claude\",\"accessToken\":\"a\",\"refreshToken\":\"r\",\"expiresAt\":1760000000010,\"scopes\":\"user:inference user:profile\",\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"claude\",\"accessToken\":\"a\",\"refreshToken\":\"r\",\"expiresAt\":5,\"scopes\":\"one two\",\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "undefined"
+    },
+    {
+      "error": true
+    },
+    {
+      "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"eyJhbGciOiJub25lIn0.eyJleHAiOjE3NjAwMDcyMDAuNX0.sig\",\"refreshToken\":\"r\",\"accountId\":\"acct\",\"expiresAt\":1760007200500,\"obtainedAt\":1759276800000}"
+    },
+    {
+      "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"opaque\",\"expiresAt\":1760003600000,\"obtainedAt\":12345}"
+    },
+    {
+      "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"opaque\",\"expiresAt\":1760864000000,\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"opaque\",\"expiresAt\":1760864000000,\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"opaque\",\"expiresAt\":1760140800000,\"obtainedAt\":1759276800000}"
+    },
+    {
+      "value": "undefined"
+    }
+  ],
+  "tokenKeys": [
+    {
+      "value": "\"chatgpt:acct_1\""
+    },
+    {
+      "value": "\"claude:abcdef01\""
+    }
+  ]
+}

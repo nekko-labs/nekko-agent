@@ -17,6 +17,7 @@ axum.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
+icu_normalizer = "2"
 nekko-agent = { path = "../nekko-agent" }
 nekko-chat = { path = "../nekko-chat" }
 nekko-context = { path = "../nekko-context" }
@@ -25,6 +26,7 @@ nekko-engine = { path = "../nekko-engine" }
 nekko-infer = { path = "../nekko-infer" }
 nekko-js = { path = "../nekko-js" }
 nekko-loop = { path = "../nekko-loop" }
+nekko-oauth = { path = "../nekko-oauth" }
 nekko-settings = { path = "../nekko-settings" }
 nekko-machine = { path = "../nekko-machine" }
 nekko-store = { path = "../nekko-store" }
@@ -33,12 +35,14 @@ nekko-tools = { path = "../nekko-tools" }
 nekko-turn = { path = "../nekko-turn" }
 nekko-usage = { path = "../nekko-usage" }
 nekko-web = { path = "../nekko-web" }
+regress.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
 tokio.workspace = true
 tokio-tungstenite.workspace = true
+url = "2.5"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true

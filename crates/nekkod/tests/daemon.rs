@@ -63,6 +63,10 @@ fn fake_backend() {
                                 (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "command log unlink failed" })))
                             }
                             "chat:pending:host" => (axum::http::StatusCode::OK, axum::Json(json!({}))),
+                            "chat:indexSnippets" | "chat:connectorSnippets" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                (axum::http::StatusCode::OK, axum::Json(json!([{ "relPath": "app.ts", "path": "app.ts", "body": "1: pineapple" }])))
+                            }
                             "chat:running" => (axum::http::StatusCode::OK, axum::Json(json!([]))),
                             // A daemon-driven turn's host-run tool (MCP, sub-agents, the browser...).
                             "turn:tool" => (
@@ -105,7 +109,7 @@ fn fake_backend() {
                                 (axum::http::StatusCode::OK, axum::Json(json!({ "spec": spec })))
                             }
                             "turn:event" | "turn:end" | "turn:approved" | "turn:usage" | "turn:notify" | "loop:log" | "limits:notify"
-                            | "settings:changed" => {
+                            | "settings:changed" | "turn:adopt" => {
                                 recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
                             }
@@ -658,6 +662,89 @@ async fn settings_are_the_daemons_to_write_when_it_knows_the_data_dir() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn tokens_are_the_daemons_to_read_renew_and_forget() {
+    let data = std::env::temp_dir().join(format!("nekkod-tokens-{}", std::process::id()));
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(
+        data.join("settings.json"),
+        r#"{"providers":[{"id":"or","kind":"openrouter","tokenKey":"openrouter:k","auth":"apikey"},{"id":"plain","kind":"openai"}]}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        data.join("tokens.json"),
+        r#"{"openrouter:k":{"provider":"openrouter","accessToken":"sk-or","obtainedAt":1}}"#,
+    )
+    .unwrap();
+    let d = start_with(true, Some(&data));
+
+    let (_, status) = post(d.port, "oauth:status", json!(["or"]), Some(TOKEN)).await;
+    assert_eq!(
+        status,
+        json!({ "tokenKey": "openrouter:k", "provider": "openrouter", "connected": true, "state": "success" })
+    );
+    let (_, plain) = post(d.port, "oauth:status", json!(["plain"]), Some(TOKEN)).await;
+    assert_eq!(plain["message"], "Provider has no token key.");
+    // The host's question: a permanent key needs no renewal.
+    let (_, fresh) = post(d.port, "oauth:fresh", json!(["openrouter:k", false]), Some(TOKEN)).await;
+    assert_eq!(fresh, json!("sk-or"));
+    let (status_code, missing) = post(d.port, "oauth:fresh", json!(["claude:none", false]), Some(TOKEN)).await;
+    assert_ne!(status_code, 200, "{missing}");
+    post(d.port, "oauth:signout", json!(["or"]), Some(TOKEN)).await;
+    let tokens: Value = serde_json::from_str(&std::fs::read_to_string(data.join("tokens.json")).unwrap()).unwrap();
+    assert_eq!(tokens, json!({}));
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!calls.to_string().contains("oauth"), "nothing about sign-in reached the host: {calls}");
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn providers_are_listed_saved_tested_and_asked_for_models_by_the_daemon() {
+    let data = std::env::temp_dir().join(format!("nekkod-providers-{}", std::process::id()));
+    std::fs::create_dir_all(&data).unwrap();
+    // An OpenAI-compatible server that wants a key.
+    let app = axum::Router::new().route(
+        "/v1/models",
+        axum::routing::get(|headers: axum::http::HeaderMap| async move {
+            if headers.get("authorization").and_then(|v| v.to_str().ok()) == Some("Bearer k1") {
+                (axum::http::StatusCode::OK, axum::Json(json!({ "data": [{ "id": "m1" }, { "id": "m2" }] })))
+            } else {
+                (axum::http::StatusCode::UNAUTHORIZED, axum::Json(json!({ "error": { "message": "bad key" } })))
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}/v1", l.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    let d = start_with(true, Some(&data));
+
+    let p = json!({ "id": "p1", "kind": "openai-compat", "label": "Local", "baseUrl": base, "apiKey": "k1", "enabled": true });
+    let (_, saved) = post(d.port, "providers:save", json!([p]), Some(TOKEN)).await;
+    assert_eq!(saved, json!([p]));
+    let (_, listed) = post(d.port, "providers:list", json!([]), Some(TOKEN)).await;
+    assert_eq!(listed, json!([p]));
+    let (_, ok) = post(d.port, "providers:test", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(ok, json!({ "ok": true, "message": "Connected" }));
+    let mut bad = p.clone();
+    bad["apiKey"] = json!("nope");
+    let (_, refused) = post(d.port, "providers:testConfig", json!([bad]), Some(TOKEN)).await;
+    assert_eq!(refused, json!({ "ok": false, "message": "HTTP 401, check your API key: bad key" }));
+    let (_, missing) = post(d.port, "providers:test", json!(["nope"]), Some(TOKEN)).await;
+    assert_eq!(missing, json!({ "ok": false, "message": "Not found" }));
+    let (_, models) = post(d.port, "models:list", json!(["p1"]), Some(TOKEN)).await;
+    let ids: Vec<&str> = models.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["m1", "m2"]);
+    let (_, none) = post(d.port, "lms:probe", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(none, json!({ "available": false }));
+    let (_, removed) = post(d.port, "providers:remove", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(removed, json!([]));
+    let on_disk: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert_eq!(on_disk["providers"], json!([]));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn failed_log_callback_retains_json_for_delete_and_clear() {
     assert_log_callback_failure_retains_json(true).await;
 }
@@ -884,6 +971,57 @@ fn saved_session(rig: &TurnRig, id: &str) -> Value {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn chat_send_is_admitted_and_driven_by_the_daemon() {
+    let session = json!({
+        "id": "s_admit", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("admit", session);
+    let model = scripted_model(vec![say_text("the answer")]).await;
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let settings = json!({
+        "providers": [provider, { "id": "off", "kind": "openai", "label": "Off", "enabled": false, "baseUrl": "https://api.openai.com/v1" }],
+        "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+    });
+    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("chat:send")));
+    // A disabled provider is refused here, as admitTurn refuses it.
+    let opts = json!({ "sessionId": "s_admit", "providerId": "off", "modelId": "m", "text": "hello" });
+    let (status, _) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+
+    // The whole chain runs before chat:send answers, as sendChat resolved.
+    let opts =
+        json!({ "sessionId": "s_admit", "providerId": "p1", "modelId": "synthetic", "text": "Explain the pineapple" });
+    let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, Value::Null));
+    let saved = saved_session(&rig, "s_admit");
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages.first().unwrap()["content"], "Explain the pineapple");
+    assert_eq!(messages.last().unwrap()["content"], "the answer");
+
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    let adopt = calls.iter().find(|c| c[0] == "turn:adopt").expect("the host was handed the turn");
+    let turn_id = adopt[1][0]["turnId"].as_str().unwrap().to_string();
+    assert!(turn_id.starts_with("turn_d"), "{turn_id}");
+    assert_eq!(adopt[1][0]["workspaces"][0]["id"], "w1");
+    assert!(calls.iter().any(|c| c[0] == "turn:end" && c[1][0] == turn_id.as_str()));
+    assert!(calls.iter().any(|c| c[0] == "chat:indexSnippets"), "the prompt had words to search for");
+    assert!(!calls.iter().any(|c| c[0] == "chat:connectorSnippets"), "no connector is connected");
+    // The snippets and the guidelines reached the model.
+    let requests = model.requests.lock().unwrap().clone();
+    let system = requests[0]["messages"][0]["content"].as_str().unwrap().to_string();
+    assert!(system.contains("Always run the tests."), "{system}");
+    assert!(system.contains("1: pineapple"), "{system}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
     let session = json!({
         "id": "s_turn_q", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
@@ -1067,6 +1205,49 @@ async fn a_queued_turn_whose_prompt_changed_ends_before_it_starts() {
     assert_eq!(end["early"], true);
     assert_eq!(events[0]["events"][0]["message"], "Queued prompt changed before it could start.");
     assert!(model.requests.lock().unwrap().is_empty(), "no model call for a turn that never started");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chain_the_daemon_admitted_admits_its_queued_prompts_too() {
+    let session = json!({
+        "id": "s_chain", "title": "New chat", "workspaceId": "w1", "messages": [], "queue": ["and then this"],
+        "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("chain", session);
+    let model = scripted_model(vec![say_text("first answer"), say_text("second answer")]).await;
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let settings = json!({
+        "providers": [provider],
+        "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+    });
+    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+
+    let opts = json!({ "sessionId": "s_chain", "providerId": "p1", "modelId": "synthetic", "text": "first" });
+    let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, Value::Null));
+    let saved = saved_session(&rig, "s_chain");
+    let contents: Vec<&str> =
+        saved["messages"].as_array().unwrap().iter().filter_map(|m| m["content"].as_str()).collect();
+    assert_eq!(contents, ["first", "first answer", "and then this", "second answer"]);
+    assert_eq!(saved["queue"], json!([]));
+
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(!calls.iter().any(|c| c[0] == "turn:prepare"), "the daemon admitted the follow-up itself");
+    let adopts: Vec<&Value> = calls.iter().filter(|c| c[0] == "turn:adopt").collect();
+    assert_eq!(adopts.len(), 2, "{adopts:?}");
+    assert_eq!(adopts[0][1][0]["chained"], false);
+    assert_eq!(adopts[1][1][0]["chained"], true);
+    assert_eq!(adopts[1][1][0]["opts"]["text"], "and then this");
+    let (first, second) = (adopts[0][1][0]["turnId"].as_str().unwrap(), adopts[1][1][0]["turnId"].as_str().unwrap());
+    assert!(second.starts_with("turn_d"), "{second}");
+    let ends: Vec<&Value> = calls.iter().filter(|c| c[0] == "turn:end").collect();
+    let first_end = ends.iter().find(|c| c[1][0] == first).expect("the first turn ended");
+    assert_eq!(first_end[1][1]["next"], second);
 }
 
 #[tokio::test(flavor = "multi_thread")]

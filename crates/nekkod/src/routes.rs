@@ -31,6 +31,10 @@ pub struct Ctx {
     pub settings: Option<Arc<crate::settings::Settings>>,
     /// Nekko Voice (`voice:*`), when the data directory is known.
     pub voice: Option<Arc<crate::voice::Voice>>,
+    /// Sign-in and tokens.json, when the data directory is known (`oauth:*`).
+    pub oauth: Option<Arc<crate::oauth::OAuth>>,
+    /// `chat:send` admitted here, when the daemon owns settings, tokens and sessions.
+    pub admission: Option<Arc<crate::admission::Admission>>,
     /// The model catalog, when the daemon has the settings store (for the Hugging Face token).
     pub catalog: Option<Arc<nekko_engine::catalog::Catalog>>,
     /// GPU and system stats and the readiness advisor (`gpu:stats`, `system:stats`, `machine:readiness`).
@@ -179,19 +183,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             };
             Ok(merge_pending(host, ctx.turns.pending.snapshot()))
         }
-        "chat:running" => {
-            let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call(channel, json!([]))).await;
-            let mut ids: Vec<Value> = match host {
-                Ok(Ok(Value::Array(a))) => a,
-                _ => Vec::new(),
-            };
-            for id in ctx.turns.running_sessions() {
-                if !ids.iter().any(|v| v.as_str() == Some(&id)) {
-                    ids.push(json!(id));
-                }
-            }
-            Ok(Value::Array(ids))
-        }
+        "chat:running" => Ok(json!(running_chats(ctx).await)),
         "chat:steer" => {
             let sid = str_arg(&args, 0).unwrap_or_default().to_string();
             let content = nekko_js::trim(str_arg(&args, 1).unwrap_or_default()).to_string();
@@ -264,6 +256,21 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf)).unwrap_or_default();
             crate::decisions::route(ctx, &data_dir, c, &args).await
         }
+        c if crate::context::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
+            crate::context::route(ctx, c, args).await
+        }
+        "chat:send" if ctx.admission.is_some() => {
+            crate::admission::send(ctx, ctx.admission.as_ref().expect("checked"), args).await
+        }
+        c if crate::worktrees::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
+            crate::worktrees::route(ctx, c, &args).await
+        }
+        c if crate::providers::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
+            crate::providers::route(ctx, c, &args).await
+        }
+        c if crate::oauth::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
+            ctx.oauth.as_ref().expect("checked").route(c, &args).await
+        }
         c if crate::catalog::CHANNELS.contains(&c) && ctx.catalog.is_some() => match &ctx.catalog {
             Some(catalog) => crate::catalog::route(catalog, c, &args).await,
             None => ctx.backend.call(c, Value::Array(args)).await,
@@ -296,6 +303,21 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
 
 /// Merge the host's pending input with the daemon's, the daemon's winning
 /// field by field (`mergePending` in daemon-turn.ts).
+/// The chats with a turn running, the host's and the daemon's.
+pub async fn running_chats(ctx: &Ctx) -> Vec<String> {
+    let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:running", json!([]))).await;
+    let mut ids: Vec<String> = match host {
+        Ok(Ok(Value::Array(a))) => a.into_iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
+        _ => Vec::new(),
+    };
+    for id in ctx.turns.running_sessions() {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
+}
+
 fn merge_pending(host: Value, daemon: Value) -> Value {
     let mut out = host.as_object().cloned().unwrap_or_default();
     for (id, p) in daemon.as_object().cloned().unwrap_or_default() {
@@ -338,6 +360,19 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.voice.is_some() {
         all.extend_from_slice(crate::voice::CHANNELS);
+    }
+    if ctx.oauth.is_some() {
+        all.extend_from_slice(crate::oauth::CHANNELS);
+        all.extend_from_slice(crate::providers::CHANNELS);
+    }
+    if ctx.settings.is_some() && ctx.sessions.is_some() {
+        all.extend_from_slice(crate::worktrees::CHANNELS);
+    }
+    if ctx.admission.is_some() {
+        all.extend_from_slice(crate::admission::CHANNELS);
+    }
+    if ctx.settings.is_some() && ctx.sessions.is_some() {
+        all.extend_from_slice(crate::context::CHANNELS);
     }
     all.extend_from_slice(crate::machine::CHANNELS);
     if ctx.resource_queue.is_some() {

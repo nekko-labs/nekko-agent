@@ -1,0 +1,62 @@
+{
+  "files": {
+    "project/AGENTS.md": "Always run the tests.\n",
+    "project/CLAUDE.md": "See AGENTS.md\n",
+    "project/src/app.ts": "export const answer = 42;\n",
+    "notes.md": "Remember the milk.\r\nAnd the eggs.\n",
+    "data/memory/m-global.md": "---\nid: m-global\nscope: global\ntitle: Deploy\ntags: [release]\ncreatedAt: 1790000000000\nupdatedAt: 1790000000500\n---\nShip every change as a PR.\n",
+    "data/memory/m-ws.md": "---\nid: m-ws\nscope: workspace\nworkspaceId: w1\ntitle: Workspace note\ntags: [x]\ncreatedAt: 1790000000000\nupdatedAt: 1790000000100\n---\nOnly for w1.\n"
+  },
+  "settings": {
+    "workspaces": [{ "id": "w1", "name": "project", "path": "<root>/project", "addedAt": 1 }],
+    "systemInstructions": "Answer briefly.",
+    "aboutUser": "I write Rust.",
+    "connectors": []
+  },
+  "sessions": [
+    {
+      "id": "s_plain",
+      "title": "Plain",
+      "workspaceId": "w1",
+      "modelId": "claude-opus-4-7",
+      "attachedPaths": ["<root>/notes.md"],
+      "messages": [
+        { "id": "u1", "role": "user", "content": "Explain the code", "createdAt": 1 },
+        { "id": "a1", "role": "assistant", "content": "It exports an answer.", "createdAt": 2 }
+      ],
+      "createdAt": 1,
+      "updatedAt": 2
+    },
+    {
+      "id": "s_compacted",
+      "title": "Compacted",
+      "workspaceId": "w1",
+      "modelId": "gpt-5",
+      "gitIsolation": false,
+      "contextPrefs": { "excluded": ["mem:m-ws", "conversation"], "pinned": ["mem:m-global"] },
+      "messages": [
+        { "id": "u1", "role": "user", "content": "A long time ago", "createdAt": 1 },
+        { "id": "c1", "role": "assistant", "content": "Summary of everything so far.", "compaction": true, "createdAt": 2 },
+        { "id": "u2", "role": "user", "content": "And now?", "createdAt": 3 },
+        { "id": "a2", "role": "assistant", "content": "", "toolCalls": [{ "id": "t1", "name": "read_file", "input": { "path": "src/app.ts" } }], "createdAt": 4 },
+        { "id": "r2", "role": "tool", "content": "", "toolResult": { "toolCallId": "t1", "output": "export const answer = 42;" }, "createdAt": 5 }
+      ],
+      "createdAt": 1,
+      "updatedAt": 5
+    },
+    {
+      "id": "s_nofolder",
+      "title": "No folder",
+      "modelId": "gemma-4-12b",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 1
+    }
+  ],
+  "cases": [
+    { "session": "s_plain", "attached": ["<root>/project/src/app.ts"] },
+    { "session": "s_compacted", "attached": [] },
+    { "session": "s_nofolder", "attached": [] },
+    { "session": null, "attached": [] }
+  ]
+}
