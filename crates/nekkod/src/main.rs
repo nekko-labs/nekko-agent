@@ -19,6 +19,7 @@ mod mcp;
 mod procgroup;
 mod resource_queue;
 mod routes;
+mod runtimes;
 mod settings;
 mod sideband;
 mod tooling;
@@ -116,6 +117,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let read = read_settings(&settings);
         move || nekko_js::truthy_str(read().get("engineBinPath")).map(str::to_string)
     };
+    let machine =
+        Arc::new(nekko_machine::Machine::new(cfg.data_dir.clone().map(std::path::PathBuf::from), Box::new(engine_bin)));
+    let runtimes = settings.as_deref().map(|s| runtimes::new(s, backend.clone(), machine.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -136,10 +140,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         ),
         mcp: mcp.clone(),
         accounts,
-        machine: Arc::new(nekko_machine::Machine::new(
-            cfg.data_dir.clone().map(std::path::PathBuf::from),
-            Box::new(engine_bin),
-        )),
+        machine,
+        runtimes: runtimes.clone(),
         resource_queue: cfg.data_dir.clone().map(|d| {
             Arc::new(resource_queue::ResourceQueue::new(
                 std::path::PathBuf::from(d),
@@ -165,6 +167,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     axum::serve(listener, router).with_graceful_shutdown(shutdown_signal(cfg.exit_on_stdin_close)).await?;
 
     engine.shutdown();
+    // The servers this daemon started (Ollama) go down with it.
+    if let Some(rt) = &runtimes {
+        rt.kill_all().await;
+    }
     if let Some(voice) = &voice {
         voice.stop().await;
     }

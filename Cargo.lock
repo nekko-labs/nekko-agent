@@ -1295,12 +1295,14 @@ name = "nekko-engine"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "libc",
  "nekko-js",
  "nekko-usage",
  "regress",
  "reqwest",
  "serde_json",
  "tokio",
+ "url",
 ]
 
 [[package]]

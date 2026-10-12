@@ -35,6 +35,8 @@ pub struct Ctx {
     pub catalog: Option<Arc<nekko_engine::catalog::Catalog>>,
     /// GPU and system stats and the readiness advisor (`gpu:stats`, `system:stats`, `machine:readiness`).
     pub machine: Arc<nekko_machine::Machine>,
+    /// The runtime control plane (`runtime:*`, `model:*`, `lms:probe`, `server:stop`), with the settings store.
+    pub runtimes: Option<Arc<nekko_engine::runtimes::Runtimes>>,
     /// The experimental resource-queue client, when the data directory is known.
     pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
 }
@@ -276,6 +278,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Some(voice) => voice.route(c, &args).await,
             None => Err("voice needs the data directory".into()),
         },
+        c if crate::runtimes::CHANNELS.contains(&c) && ctx.runtimes.is_some() => match &ctx.runtimes {
+            Some(rt) => crate::runtimes::route(ctx, rt, c, &args).await,
+            None => ctx.backend.call(c, Value::Array(args)).await,
+        },
         c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
         // Without a data directory the host keeps the coordinator file.
         "resource:queue" => match &ctx.resource_queue {
@@ -340,6 +346,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
         all.extend_from_slice(crate::voice::CHANNELS);
     }
     all.extend_from_slice(crate::machine::CHANNELS);
+    if ctx.runtimes.is_some() {
+        all.extend_from_slice(crate::runtimes::CHANNELS);
+    }
     if ctx.resource_queue.is_some() {
         all.extend_from_slice(crate::resource_queue::CHANNELS);
     }

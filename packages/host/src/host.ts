@@ -269,6 +269,8 @@ export interface Host {
   engineStatus(): Promise<EngineStatus>;
   /** For the engine daemon's router: load a model it was asked for, or say why not. */
   engineRouterLoad(modelId: string, image: boolean): Promise<{ ok: boolean; status?: number; message?: string }>;
+  /** The daemon's runtime control plane calling the engine it does not run yet (its `llamacpp` adapter). */
+  engineRuntime(method: string, args: unknown[]): Promise<unknown>;
   /** A daemon-driven run's callbacks (daemon-loop.ts): a tool call, its events, its end. */
   loopTool(runId: string, call: import('@nekko-agent/shared').ToolCall): Promise<import('@nekko-agent/shared').ToolResult>;
   loopEvent(runId: string, payload: { events?: import('@nekko-agent/shared').AgentEvent[]; history?: import('@nekko-agent/shared').ChatMessage[] }): Promise<void>;
@@ -870,6 +872,20 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     voiceTranscribe: (wav) => voice.transcribe(wav),
     engineStatus: () => engine.status(),
     engineRouterLoad: (modelId, image) => engine.routerLoad(modelId, image),
+    engineRuntime: async (method, args) => {
+      switch (method) {
+        case 'detectEngine': return engine.detectEngine();
+        case 'isRunning': return engine.isRunning();
+        case 'status': return engine.status();
+        case 'models': return engine.models();
+        case 'resident': return engine.resident();
+        case 'start': return engine.start();
+        case 'stop': return engine.stop();
+        case 'load': return engine.load(String(args[0]), (args[1] ?? {}) as LoadParams);
+        case 'unload': return engine.unload(String(args[0]));
+        default: throw new Error(`Unknown engine call: ${method}`);
+      }
+    },
     loopTool,
     loopEvent,
     loopEnd,

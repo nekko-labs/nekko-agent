@@ -47,6 +47,8 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     // Internal: the engine daemon's router (crates/nekko-infer) asking the
     // engine's policy about a model it does not have running.
     'engine:routerLoad': ([id, image]) => host.engineRouterLoad(String(id), Boolean(image)),
+    // Internal: the daemon's runtime control plane asking the engine (its `llamacpp` adapter).
+    'engine:runtime': ([method, ...args]) => host.engineRuntime(String(method), args),
     // A daemon-driven agent run calling back (daemon-loop.ts).
     'loop:tool': ([runId, call]) => host.loopTool(String(runId), call as never),
     'loop:event': ([runId, payload]) => host.loopEvent(String(runId), payload as never),
