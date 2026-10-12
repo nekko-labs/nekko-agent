@@ -15,6 +15,9 @@ import { daemonCall } from './engine/daemon.js';
  * or a call would loop.
  */
 export const DAEMON_SERVED = new Set<string>([
+  IpcChannels.workspaceList,
+  IpcChannels.workspaceAddByPath,
+  IpcChannels.workspaceRemove,
   IpcChannels.fileRead,
   IpcChannels.fileWrite,
   IpcChannels.dirList,
@@ -114,6 +117,8 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'index:progress': ([status]) => host.indexProgressRelay(status as never),
     // The daemon generates a design (crates/nekkod/src/workspace.rs) with the default provider, signed in here.
     'design:provider': () => designProvider(),
+    // The daemon revoking a folder asks which chats are mid-turn here.
+    'chats:busy': () => host.busySessions(),
     // The daemon keeps limit state (crates/nekkod/src/limits.rs) and asks this
     // host only for what still lives here: a refreshed sign-in, and the relay.
     'limits:notify': ([payload]) => host.limitsNotify(payload as never),

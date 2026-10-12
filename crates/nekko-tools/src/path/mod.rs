@@ -209,6 +209,33 @@ pub(crate) fn dirname_units(path: &[u16], win: bool) -> U16 {
     }
 }
 
+/// `path.posix.basename` / `path.win32.basename` (no suffix) from `lib/path.js`.
+pub(crate) fn basename_units(path: &[u16], win: bool) -> U16 {
+    let is_sep: fn(u16) -> bool = if win { win_sep } else { posix_sep };
+    let mut start = 0;
+    if win && path.len() >= 2 && path[1] == COLON && device_root(path[0]) {
+        start = 2;
+    }
+    let mut first = start;
+    let mut end: Option<usize> = None;
+    let mut matched_slash = true;
+    for i in (start..path.len()).rev() {
+        if is_sep(path[i]) {
+            if !matched_slash {
+                first = i + 1;
+                break;
+            }
+        } else if end.is_none() {
+            matched_slash = false;
+            end = Some(i + 1);
+        }
+    }
+    match end {
+        Some(e) => path[first..e].to_vec(),
+        None => Vec::new(),
+    }
+}
+
 /// `path.posix.extname` / `path.win32.extname` from `lib/path.js`.
 pub(crate) fn extname_units(path: &[u16], win: bool) -> U16 {
     let is_sep: fn(u16) -> bool = if win { win_sep } else { posix_sep };
@@ -289,6 +316,11 @@ pub mod win32 {
         string(&imp::normalize(&units(p)))
     }
 
+    /// `path.win32.basename(p)`.
+    pub fn basename(p: &str) -> String {
+        string(&super::basename_units(&units(p), true))
+    }
+
     /// `path.win32.dirname(p)`.
     pub fn dirname(p: &str) -> String {
         string(&super::dirname_units(&units(p), true))
@@ -344,6 +376,11 @@ pub mod posix {
     /// `path.posix.normalize(p)`.
     pub fn normalize(p: &str) -> String {
         string(&imp::normalize(&units(p)))
+    }
+
+    /// `path.posix.basename(p)`.
+    pub fn basename(p: &str) -> String {
+        string(&super::basename_units(&units(p), false))
     }
 
     /// `path.posix.dirname(p)`.

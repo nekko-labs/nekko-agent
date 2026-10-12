@@ -282,6 +282,8 @@ export interface Host {
   settingsChanged(next: AppSettings, patch: Partial<AppSettings> | null): void;
   /** The daemon indexed a workspace (`index:progress`) and told the UI; this host's listeners (the phone relay) hear it. */
   indexProgressRelay(status: IndexStatus): void;
+  /** Chats being admitted or running here, for the daemon revoking a folder (`chats:busy`). */
+  busySessions(): string[];
   /** The daemon changed a limits snapshot (`limits:notify`): the phone relay hears it. */
   limitsNotify(payload: { tokenKey: string; limits: SubscriptionLimits }): void;
   /**
@@ -897,6 +899,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       }
     },
     indexProgressRelay: (status) => events.emit('indexProgress', { ...status, relayOnly: true }),
+    busySessions: () => [...new Set([...activeChats.keys(), ...getRunningSessionIds()])],
     limitsNotify: notifyLimits,
     oauthRefresh: async (tokenKey) => { await ensureFreshToken(tokenKey); },
     hypergateSave: (info) => saveSettings({ mcpServers: withHypergate(getSettings().mcpServers ?? [], info) }).mcpServers ?? [],

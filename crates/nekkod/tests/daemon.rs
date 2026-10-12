@@ -74,6 +74,7 @@ fn fake_backend() {
                                 },
                                 axum::Json(json!({ "result": { "toolCallId": body.0["args"][1]["id"], "output": "host tool ran" } })),
                             ),
+                            "chats:busy" => (axum::http::StatusCode::OK, axum::Json(json!(["s_busy"]))),
                             "test:designProvider" => {
                                 *design_provider.lock().unwrap() = Some(body.0["args"][0].clone());
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
@@ -1699,6 +1700,55 @@ async fn generates_a_design_on_the_default_provider() {
     assert_eq!(again, board);
     let (_, noted) = post(d.port, "design:addNote", json!(["w1", page["id"], " tighter "]), Some(TOKEN)).await;
     assert_eq!(noted["pages"][0]["notes"][0]["text"], json!("tighter"));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn adds_and_revokes_folders_through_the_daemons_settings() {
+    let data = std::env::temp_dir().join(format!("nekkod-folders-{}", std::process::id()));
+    let project = data.join("My Project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(project.join("src").join("x.rs"), "pub fn x() {}\n").unwrap();
+    let path = project.to_string_lossy().into_owned();
+    let d = start_with(true, Some(&data));
+    let (_, added) = post(d.port, "workspace:addByPath", json!([path]), Some(TOKEN)).await;
+    let folder = added[0].clone();
+    assert_eq!((folder["name"].clone(), folder["path"].clone()), (json!("My Project"), json!(path)));
+    let id = folder["id"].as_str().unwrap().to_string();
+    assert!(id.starts_with("ws_"));
+    // The same folder spelled differently is not added twice.
+    let respelled = format!("{path}{}", std::path::MAIN_SEPARATOR);
+    let (_, again) = post(d.port, "workspace:addByPath", json!([respelled]), Some(TOKEN)).await;
+    assert_eq!(again.as_array().unwrap().len(), 1);
+    let (_, listed) = post(d.port, "workspace:list", json!([]), Some(TOKEN)).await;
+    assert_eq!(listed, added);
+    // Indexed shortly after it was added.
+    let mut status = Value::Null;
+    for _ in 0..50 {
+        status = post(d.port, "workspace:indexStatus", json!([id]), Some(TOKEN)).await.1;
+        if status["state"] == "ready" {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!((status["state"].clone(), status["symbolCount"].clone()), (json!("ready"), json!(1)));
+    // A chat using it loses it when access is revoked; a running one blocks that.
+    let sessions = data.join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let chat = |sid: &str| json!({ "id": sid, "title": sid, "workspaceId": id, "supportingWorkspaceIds": [id], "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(sessions.join("s_busy.json"), chat("s_busy").to_string()).unwrap();
+    let (status, refused) = post(d.port, "workspace:remove", json!([id]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
+    assert!(refused.to_string().contains("Wait for chats"), "{refused}");
+    std::fs::remove_file(sessions.join("s_busy.json")).unwrap();
+    std::fs::write(sessions.join("s_idle.json"), chat("s_idle").to_string()).unwrap();
+    let (status, left) = post(d.port, "workspace:remove", json!([id]), Some(TOKEN)).await;
+    assert_eq!((status, left), (200, json!([])));
+    let (_, saved) = post(d.port, "session:get", json!(["s_idle"]), Some(TOKEN)).await;
+    assert!(saved.get("workspaceId").is_none());
+    assert_eq!(saved["supportingWorkspaceIds"], json!([]));
+    assert!(project.join("src").join("x.rs").exists(), "the folder itself is never touched");
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }

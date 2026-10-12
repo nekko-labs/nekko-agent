@@ -36,6 +36,10 @@ pub const CHANNELS: &[&str] = &[
 /// Channels that keep their files in the data directory, served only when
 /// this daemon knows it.
 pub const DATA_CHANNELS: &[&str] = &[
+    // The saved folders: settings writes, and chats that lose a folder.
+    "workspace:list",
+    "workspace:addByPath",
+    "workspace:remove",
     "memory:list",
     "memory:save",
     "memory:delete",
@@ -250,6 +254,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 None => Ok(out),
             }
         }
+        "workspace:list" => Ok(settings(ctx).await.get("workspaces").cloned().unwrap_or(json!([]))),
+        "workspace:addByPath" => add_folder(ctx, arg(&args, 0)).await,
+        "workspace:remove" => remove_folder(ctx, &text(&args, 0)).await,
         "design:addPage" => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
             let folder = folder_path(&folders(ctx).await, &arg(&args, 0).map(nekko_js::display).unwrap_or_default());
@@ -297,6 +304,110 @@ pub async fn index_snippets(ctx: &Ctx, workspace_ids: &[String], text: &str) -> 
         workspace_ids.iter().map(|id| (id.clone(), folder_path(&saved, id).is_some())).collect();
     let (index, query) = (ctx.workspace.index.clone(), text.to_string());
     blocking(move || index.snippets(&found, &query)).await.unwrap_or_default()
+}
+
+/// `addWorkspaceByPath(path)`: a folder already saved (by `folderPathKey`)
+/// is reused; a new one is saved through the settings and indexed shortly
+/// after. Returns the list as the host did (its own copy, not the saved one).
+async fn add_folder(ctx: &Ctx, path: Option<&Value>) -> Result<Value, String> {
+    let Some(Value::String(path)) = path else {
+        return Err("The \"path\" argument must be of type string.".into());
+    };
+    let current = folders(ctx).await;
+    let key = nekko_settings::folder_path_key(path);
+    let shown = |w: &Value| w.get("path").map(nekko_js::display).unwrap_or_default();
+    if current.iter().any(|w| nekko_settings::folder_path_key(&shown(w)) == key) {
+        return Ok(Value::Array(current));
+    }
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+    // Two folders added in the same millisecond must not share an id.
+    let stamp = format!("ws_{}", base36(now));
+    let taken = |id: &str| current.iter().any(|w| w.get("id").and_then(Value::as_str) == Some(id));
+    let mut id = stamp.clone();
+    let mut n = 1;
+    while taken(&id) {
+        id = format!("{stamp}_{n}");
+        n += 1;
+    }
+    let folder = json!({ "id": id, "name": nekko_tools::path::native::basename(path), "path": path, "addedAt": now });
+    let mut workspaces = current;
+    workspaces.push(folder);
+    crate::settings::update(ctx, json!({ "workspaces": workspaces })).await?;
+    let (index, backend, hub, root) = (ctx.workspace.index.clone(), ctx.backend.clone(), ctx.hub.clone(), path.clone());
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let _ = index_now(index, backend, hub, id, root).await;
+    });
+    Ok(Value::Array(workspaces))
+}
+
+fn base36(mut n: u64) -> String {
+    const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
+    if n == 0 {
+        return "0".into();
+    }
+    let mut out = Vec::new();
+    while n > 0 {
+        out.push(DIGITS[(n % 36) as usize]);
+        n /= 36;
+    }
+    out.reverse();
+    String::from_utf8(out).unwrap_or_default()
+}
+
+/// The chats the host or this daemon is running right now.
+async fn busy_chats(ctx: &Ctx) -> Result<Vec<String>, String> {
+    let host = tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("chats:busy", json!([]))).await;
+    let mut ids: Vec<String> = match host {
+        Ok(Ok(Value::Array(a))) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
+        Ok(Err(e)) if e.contains("Unknown channel") => Vec::new(),
+        _ => return Err("Could not check which chats are running. Try again in a moment.".into()),
+    };
+    ids.extend(ctx.turns.running_sessions());
+    Ok(ids)
+}
+
+/// `removeWorkspace(id)`: revoke saved access only, never touching the
+/// folder. Refused while a chat using it runs; chats using it lose it.
+async fn remove_folder(ctx: &Ctx, id: &str) -> Result<Value, String> {
+    let Some(store) = ctx.sessions.clone() else { return Err("workspace:remove needs the data directory".into()) };
+    let wid = id.to_string();
+    let affected: Vec<String> = blocking({
+        let store = store.clone();
+        move || {
+            store
+                .list()
+                .into_iter()
+                .filter(|s| {
+                    s.get("workspaceId").and_then(Value::as_str) == Some(wid.as_str())
+                        || s.get("supportingWorkspaceIds")
+                            .and_then(Value::as_array)
+                            .is_some_and(|a| a.iter().any(|w| w.as_str() == Some(wid.as_str())))
+                })
+                .filter_map(|s| s.get("id").and_then(Value::as_str).map(str::to_string))
+                .collect()
+        }
+    })
+    .await?;
+    if !affected.is_empty() {
+        let busy = busy_chats(ctx).await?;
+        if affected.iter().any(|s| busy.contains(s)) {
+            return Err("Wait for chats using this folder to finish before revoking access.".into());
+        }
+    }
+    let wid = id.to_string();
+    blocking(move || {
+        for sid in &affected {
+            store.revoke_workspace(sid, &wid)?;
+        }
+        Ok::<(), String>(())
+    })
+    .await??;
+    let kept: Vec<Value> =
+        folders(ctx).await.into_iter().filter(|w| w.get("id").and_then(Value::as_str) != Some(id)).collect();
+    let saved = crate::settings::update(ctx, json!({ "workspaces": kept })).await?;
+    ctx.workspace.index.forget(id);
+    Ok(saved.get("workspaces").cloned().unwrap_or(json!([])))
 }
 
 /// `fetchPrInfo(url)`: one PR's live state, read now (gh, else the REST API
