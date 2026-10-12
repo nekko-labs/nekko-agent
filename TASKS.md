@@ -1507,9 +1507,9 @@ Add window sits to the right of the shared composer in the same row, including t
   - [ ] Not verified: a full electron-builder installer build, macOS and Linux runs, and live model use of the new actions.
   - [ ] The `capture` tool's owned-window screenshot still uses `capturePage`, which returned a stale frame after scrolling a hidden window in the smoke run; the browser `screenshot` action uses Playwright instead. Move capture's owned-window path to a fresh frame too.
 
-## 2026-10-12: Outstanding PR integration verification
+## 2026-10-12: Landed PR integration and remaining acceptance
 
 - Integrated all 20 ermish PR heads using forward merges, preserving their ancestry and excluding other authors. Final integration lands by a merge commit so every contained PR can be reconciled on main.
 - Corrected OAuth HTTPS enforcement, process-exit output draining, absolute-path token fixture drift, stale workspace-index API calls, legacy-loop imports, merged service ownership and test assumptions for migrated native services. Added preparation cancellation and duplicate-send protection. SPEC records ownership, guardrails and follow-up acceptance.
 - Remaining host callbacks are deliberate migration/fallback work: session creation defaults, host turn adoption/end hooks, child admission and training/model adapters. Live OAuth/provider/device/service accounts are not part of isolated verification. The managed llama runtime adapter and sandbox reply execution remain in the host. Native device parity and live subscription sign-in are follow-up checks.
-- Final production build, tests, type checking, lint, performance and hosted checks are being verified. Do not read this entry as a passed or shipped claim until the published integration PR records those results.
+- #480 landed all 20 original PRs with a merge commit. Final build, Linux/macOS/Windows daemon tests, both platform capture jobs and the hosted performance gate passed. Live OAuth and native-device acceptance remain explicitly deferred follow-up checks. The local Windows terminal gate remains a recorded pre-existing limitation; budgets were not weakened.
