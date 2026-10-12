@@ -38,3 +38,13 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_
 lto = "thin"
 codegen-units = 4
 strip = true
+
+# `npm run dev`'s daemon: optimized like release, but without LTO and with
+# incremental compilation, so a one-file change rebuilds in seconds rather than
+# a minute. Never packaged (stage-daemon.mjs only stages release).
+[profile.dev-daemon]
+inherits = "release"
+lto = false
+codegen-units = 256
+incremental = true
+strip = false

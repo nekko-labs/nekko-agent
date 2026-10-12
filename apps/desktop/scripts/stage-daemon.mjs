@@ -4,6 +4,10 @@
 // `--optional` is for local runs (`npm run local`): without cargo it warns and
 // exits 0, and the app runs the TS backend directly. Packaging never passes
 // it, so an installer can never ship without its daemon by accident.
+//
+// `--dev` is for `npm run dev`: it builds the `dev-daemon` profile (no LTO,
+// incremental) and stages nothing, because a development app runs the newest
+// build straight out of target/ (findDaemon in engine-process.ts).
 import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -11,6 +15,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const optional = process.argv.includes('--optional');
+const dev = process.argv.includes('--dev');
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../../..');
 const exe = process.platform === 'win32' ? 'nekkod.exe' : 'nekkod';
@@ -27,6 +32,11 @@ if (!cargo) {
   }
   console.error(msg);
   process.exit(1);
+}
+
+if (dev) {
+  execFileSync(cargo, ['build', '--profile', 'dev-daemon', '--locked', '-p', 'nekkod'], { cwd: repo, stdio: 'inherit' });
+  process.exit(0);
 }
 
 execFileSync(cargo, ['build', '--release', '--locked', '-p', 'nekkod'], { cwd: repo, stdio: 'inherit' });

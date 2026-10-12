@@ -43,9 +43,10 @@ const MAX_BACKOFF_MS = 5000;
 
 /**
  * The daemon binary: packaged resources, an explicit override, or a local cargo
- * build. In a development checkout the newer of the release and debug builds
- * wins: always preferring release once ran a days-old release daemon against a
- * fresh host, and the two disagreed about what the host was asking for.
+ * build. In a development checkout the newest of the release, dev-daemon
+ * (`npm run dev`'s profile) and debug builds wins: always preferring release
+ * once ran a days-old release daemon against a fresh host, and the two
+ * disagreed about what the host was asking for.
  */
 export function findDaemon(opts: Pick<EngineOptions, 'app'>): string | null {
   const exe = process.platform === 'win32' ? 'nekkod.exe' : 'nekkod';
@@ -57,6 +58,7 @@ export function findDaemon(opts: Pick<EngineOptions, 'app'>): string | null {
   }
   const builds = [
     resolve(opts.app.appPath, '../../target/release', exe),
+    resolve(opts.app.appPath, '../../target/dev-daemon', exe),
     resolve(opts.app.appPath, '../../target/debug', exe),
   ].flatMap((p) => {
     try {
