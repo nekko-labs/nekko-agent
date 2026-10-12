@@ -6,6 +6,7 @@
 
 mod accounts;
 mod backend;
+mod catalog;
 mod config;
 mod decide;
 mod decisions;
@@ -102,6 +103,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let read: Arc<dyn Fn() -> serde_json::Value + Send + Sync> = Arc::new(move || store.get());
         voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
     });
+    let catalog = settings.as_deref().map(catalog::new);
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -124,6 +126,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         accounts,
         settings,
         voice: voice.clone(),
+        catalog,
     };
     routes::forward_terminal_events(&ctx);
     let processes = ctx.turns.processes.clone();

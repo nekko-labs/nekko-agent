@@ -1291,6 +1291,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nekko-engine"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "nekko-js",
+ "nekko-usage",
+ "regress",
+ "reqwest",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "nekko-infer"
 version = "0.1.0"
 dependencies = [
@@ -1423,6 +1436,7 @@ dependencies = [
  "nekko-chat",
  "nekko-context",
  "nekko-decide",
+ "nekko-engine",
  "nekko-infer",
  "nekko-js",
  "nekko-loop",

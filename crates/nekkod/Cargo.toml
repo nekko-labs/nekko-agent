@@ -21,6 +21,7 @@ nekko-agent = { path = "../nekko-agent" }
 nekko-chat = { path = "../nekko-chat" }
 nekko-context = { path = "../nekko-context" }
 nekko-decide = { path = "../nekko-decide" }
+nekko-engine = { path = "../nekko-engine" }
 nekko-infer = { path = "../nekko-infer" }
 nekko-js = { path = "../nekko-js" }
 nekko-loop = { path = "../nekko-loop" }
