@@ -122,7 +122,9 @@ export class EngineProcess {
     if (daemon) {
       mode = 'daemon';
       marker = DAEMON_READY;
-      const config = { token: this.token, allowedOrigins: this.opts.origins, backend, dataDir: this.opts.dataDir };
+      // The daemon runs the browser and capture tools itself and reaches the
+      // in-app browser through the same bridge (in its config, not its env).
+      const config = { token: this.token, allowedOrigins: this.opts.origins, backend, dataDir: this.opts.dataDir, ...(this.opts.browserBridge ? { browserBridge: this.opts.browserBridge } : {}) };
       child = spawn(daemon, [], {
         env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) },
         stdio: ['pipe', 'pipe', 'inherit'],

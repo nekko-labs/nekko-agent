@@ -48,24 +48,31 @@ export async function gatherMachineFacts(): Promise<MachineFacts> {
 async function probeCpuFeatures(): Promise<string[] | null> {
   if (process.platform === 'linux') {
     const text = await readFile('/proc/cpuinfo', 'utf8').catch(() => null);
-    if (!text) return null;
-    const line = text.split('\n').find((l) => /^(flags|Features)\s*:/.test(l));
-    if (!line) return null;
-    const wanted = ['avx', 'avx2', 'avx512f', 'fma', 'f16c', 'asimd', 'neon', 'sve'];
-    const flags = new Set(line.split(':')[1].trim().toLowerCase().split(/\s+/));
-    return wanted.filter((f) => flags.has(f));
+    return text ? cpuinfoFeatures(text) : null;
   }
   if (process.platform === 'darwin') {
     const out = await run('sysctl', ['-a'], 4000);
-    if (!out) return null;
-    // hw.optional.* keys that equal 1 are the OS's own capability list.
-    return out
-      .split('\n')
-      .map((l) => l.match(/^hw\.optional\.([\w.]+):\s*1$/)?.[1])
-      .filter((f): f is string => Boolean(f))
-      .map((f) => f.toLowerCase());
+    return out ? sysctlFeatures(out) : null;
   }
   return null;
+}
+
+/** The wanted flags in Linux's `/proc/cpuinfo` (nekkod's `machine:readiness` ports this). */
+export function cpuinfoFeatures(text: string): string[] | null {
+  const line = text.split('\n').find((l) => /^(flags|Features)\s*:/.test(l));
+  if (!line) return null;
+  const wanted = ['avx', 'avx2', 'avx512f', 'fma', 'f16c', 'asimd', 'neon', 'sve'];
+  const flags = new Set(line.split(':')[1].trim().toLowerCase().split(/\s+/));
+  return wanted.filter((f) => flags.has(f));
+}
+
+/** hw.optional.* keys that equal 1 in `sysctl -a`: the OS's own capability list. */
+export function sysctlFeatures(out: string): string[] {
+  return out
+    .split('\n')
+    .map((l) => l.match(/^hw\.optional\.([\w.]+):\s*1$/)?.[1])
+    .filter((f): f is string => Boolean(f))
+    .map((f) => f.toLowerCase());
 }
 
 /**
@@ -74,15 +81,17 @@ async function probeCpuFeatures(): Promise<string[] | null> {
  * installed, tolerable to miss). 'cpu' is always available.
  */
 async function probeBackends(): Promise<string[]> {
+  if (process.platform === 'darwin') return os.arch() === 'arm64' ? ['metal', 'cpu'] : ['cpu'];
+  const smi = await run('nvidia-smi', ['-L'], 4000);
+  const vk = await run('vulkaninfo', ['--summary'], 4000);
+  return gpuBackends(smi, vk);
+}
+
+/** Backends proven by `nvidia-smi -L` and `vulkaninfo --summary` (null = did not run), plus the CPU. */
+export function gpuBackends(smi: string | null, vk: string | null): string[] {
   const out: string[] = [];
-  if (process.platform === 'darwin') {
-    if (os.arch() === 'arm64') out.push('metal');
-  } else {
-    const smi = await run('nvidia-smi', ['-L'], 4000);
-    if (smi && /GPU\s+\d+:/.test(smi)) out.push('cuda');
-    const vk = await run('vulkaninfo', ['--summary'], 4000);
-    if (vk && /apiVersion|deviceName/i.test(vk)) out.push('vulkan');
-  }
+  if (smi && /GPU\s+\d+:/.test(smi)) out.push('cuda');
+  if (vk && /apiVersion|deviceName/i.test(vk)) out.push('vulkan');
   out.push('cpu');
   return out;
 }

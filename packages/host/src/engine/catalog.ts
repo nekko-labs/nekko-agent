@@ -69,7 +69,7 @@ const SIDECAR_MAX_BYTES = 64 * 1024 * 1024;
  * repo rather than hardcoded, so a repo adding a build shows up without an edit
  * here.
  */
-const CURATED: Array<Omit<CatalogModel, 'quants'>> = [
+export const CURATED: Array<Omit<CatalogModel, 'quants'>> = [
   {
     id: 'bartowski/Qwen2.5-7B-Instruct-GGUF',
     name: 'Qwen2.5 7B Instruct',

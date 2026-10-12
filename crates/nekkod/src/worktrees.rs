@@ -565,6 +565,7 @@ pub async fn run_setup(
     };
     let pid = child.id();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let mut readers = Vec::new();
     for pipe in [
         child.stdout.take().map(|p| Box::new(p) as Box<dyn tokio::io::AsyncRead + Unpin + Send>),
         child.stderr.take().map(|p| Box::new(p) as Box<dyn tokio::io::AsyncRead + Unpin + Send>),
@@ -573,7 +574,7 @@ pub async fn run_setup(
     .flatten()
     {
         let tx = tx.clone();
-        tokio::spawn(async move {
+        readers.push(tokio::spawn(async move {
             let mut pipe = pipe;
             let mut buf = vec![0u8; 8192];
             while let Ok(n) = pipe.read(&mut buf).await {
@@ -582,7 +583,7 @@ pub async fn run_setup(
                 }
                 let _ = tx.send(String::from_utf8_lossy(&buf[..n]).into_owned());
             }
-        });
+        }));
     }
     drop(tx);
     let deadline = tokio::time::sleep(limit);
@@ -594,7 +595,22 @@ pub async fn run_setup(
             _ = &mut deadline => break None,
         }
     };
-    // Drain what the pipes still hold.
+    // Exit can win the select before the pipe tasks have published final output.
+    // Wait for EOF within the original deadline, then stop any lingering readers.
+    if status.is_some() {
+        loop {
+            tokio::select! {
+                text = rx.recv() => match text {
+                    Some(text) => on_output(text),
+                    None => break,
+                },
+                _ = &mut deadline => break,
+            }
+        }
+    }
+    for reader in readers {
+        reader.abort();
+    }
     while let Ok(text) = rx.try_recv() {
         on_output(text);
     }
@@ -923,9 +939,12 @@ mod tests {
     async fn setup_commands_report_failures_without_failing() {
         let repo = Repo::new("setup");
         let mut out = String::new();
-        let ok = run_setup("echo setup-ran", &repo.root, |t| out.push_str(&t), Duration::from_secs(60)).await;
-        assert_eq!(ok, (true, String::new()));
-        assert!(out.contains("setup-ran"), "{out}");
+        for _ in 0..20 {
+            out.clear();
+            let ok = run_setup("echo setup-ran", &repo.root, |t| out.push_str(&t), Duration::from_secs(60)).await;
+            assert_eq!(ok, (true, String::new()));
+            assert!(out.contains("setup-ran"), "{out}");
+        }
         let bad = run_setup("exit 3", &repo.root, |_| {}, Duration::from_secs(60)).await;
         assert_eq!(bad, (false, "exit code 3".to_string()));
     }

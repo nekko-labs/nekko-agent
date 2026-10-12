@@ -33,6 +33,12 @@ pub struct Ctx {
     pub voice: Option<Arc<crate::voice::Voice>>,
     /// Sign-in and tokens.json, when the data directory is known (`oauth:*`).
     pub oauth: Option<Arc<crate::oauth::OAuth>>,
+    /// The model catalog, when the daemon has the settings store (for the Hugging Face token).
+    pub catalog: Option<Arc<nekko_engine::catalog::Catalog>>,
+    /// GPU and system stats and the readiness advisor (`gpu:stats`, `system:stats`, `machine:readiness`).
+    pub machine: Arc<nekko_machine::Machine>,
+    /// The experimental resource-queue client, when the data directory is known.
+    pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -257,12 +263,23 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::oauth::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
             ctx.oauth.as_ref().expect("checked").route(c, &args).await
         }
+        c if crate::catalog::CHANNELS.contains(&c) && ctx.catalog.is_some() => match &ctx.catalog {
+            Some(catalog) => crate::catalog::route(catalog, c, &args).await,
+            None => ctx.backend.call(c, Value::Array(args)).await,
+        },
+        c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
         c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
             crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
         }
         c if crate::voice::CHANNELS.contains(&c) && ctx.voice.is_some() => match &ctx.voice {
             Some(voice) => voice.route(c, &args).await,
             None => Err("voice needs the data directory".into()),
+        },
+        c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
+        // Without a data directory the host keeps the coordinator file.
+        "resource:queue" => match &ctx.resource_queue {
+            Some(queue) => queue.route(&args).await,
+            None => ctx.backend.call(channel, Value::Array(args)).await,
         },
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
             session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
@@ -320,8 +337,12 @@ fn merge_pending(host: Value, daemon: Value) -> Value {
 /// when they are really served here.
 fn owned(ctx: &Ctx) -> Vec<&'static str> {
     let mut all = OWNED.to_vec();
+    all.extend_from_slice(crate::tooling::CHANNELS);
     if ctx.accounts.enabled() {
         all.extend_from_slice(crate::accounts::OWNED);
+    }
+    if ctx.catalog.is_some() {
+        all.extend_from_slice(crate::catalog::CHANNELS);
     }
     if ctx.settings.is_some() {
         all.extend_from_slice(crate::decisions::CHANNELS);
@@ -338,6 +359,10 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.settings.is_some() && ctx.sessions.is_some() {
         all.extend_from_slice(crate::worktrees::CHANNELS);
+    }
+    all.extend_from_slice(crate::machine::CHANNELS);
+    if ctx.resource_queue.is_some() {
+        all.extend_from_slice(crate::resource_queue::CHANNELS);
     }
     all
 }

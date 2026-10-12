@@ -1,0 +1,472 @@
+{
+ "version": "2026-09-11.1",
+ "entries": [
+  {
+   "id": "llama-server-cuda",
+   "role": "runtime",
+   "name": "llama.cpp server (CUDA)",
+   "languages": "any",
+   "artifact": {
+    "repo": "ggml-org/llama.cpp",
+    "file": "llama-{ver}-bin-win-cuda-x64.zip",
+    "license": "MIT"
+   },
+   "installBytes": 419430400,
+   "memoryBytes": 314572800,
+   "requires": {
+    "os": [
+     "win32",
+     "linux"
+    ],
+    "arch": [
+     "x64"
+    ],
+    "backends": [
+     "cuda"
+    ],
+    "cpuFeatures": [
+     "avx2"
+    ]
+   },
+   "recommended": {
+    "backends": [
+     "cuda"
+    ]
+   }
+  },
+  {
+   "id": "llama-server-vulkan",
+   "role": "runtime",
+   "name": "llama.cpp server (Vulkan)",
+   "languages": "any",
+   "artifact": {
+    "repo": "ggml-org/llama.cpp",
+    "file": "llama-{ver}-bin-win-vulkan-x64.zip",
+    "license": "MIT"
+   },
+   "installBytes": 367001600,
+   "memoryBytes": 314572800,
+   "requires": {
+    "os": [
+     "win32",
+     "linux"
+    ],
+    "arch": [
+     "x64"
+    ],
+    "backends": [
+     "vulkan"
+    ],
+    "cpuFeatures": [
+     "avx2"
+    ]
+   },
+   "recommended": {
+    "backends": [
+     "vulkan"
+    ]
+   }
+  },
+  {
+   "id": "llama-server-metal",
+   "role": "runtime",
+   "name": "llama.cpp server (Metal)",
+   "languages": "any",
+   "artifact": {
+    "repo": "ggml-org/llama.cpp",
+    "file": "llama-{ver}-bin-macos-arm64.zip",
+    "license": "MIT"
+   },
+   "installBytes": 314572800,
+   "memoryBytes": 314572800,
+   "requires": {
+    "os": [
+     "darwin"
+    ],
+    "arch": [
+     "arm64"
+    ],
+    "backends": [
+     "metal"
+    ]
+   },
+   "recommended": {
+    "backends": [
+     "metal"
+    ]
+   }
+  },
+  {
+   "id": "llama-server-cpu",
+   "role": "runtime",
+   "name": "llama.cpp server (portable CPU)",
+   "languages": "any",
+   "artifact": {
+    "repo": "ggml-org/llama.cpp",
+    "file": "llama-{ver}-bin-{os}-{arch}.zip",
+    "license": "MIT"
+   },
+   "installBytes": 262144000,
+   "memoryBytes": 314572800,
+   "requires": {
+    "os": [
+     "win32",
+     "linux",
+     "darwin"
+    ],
+    "arch": [
+     "x64",
+     "arm64"
+    ]
+   }
+  },
+  {
+   "id": "qwen25-14b-q4km",
+   "role": "intent",
+   "name": "Qwen2.5 14B Instruct (Q4_K_M)",
+   "languages": "any",
+   "quantization": "Q4_K_M",
+   "artifact": {
+    "repo": "bartowski/Qwen2.5-14B-Instruct-GGUF",
+    "file": "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+    "license": "Apache-2.0"
+   },
+   "installBytes": 9663676416,
+   "memoryBytes": 12348030976,
+   "prefersGpu": true,
+   "recommended": {
+    "minVramBytes": 12884901888
+   }
+  },
+  {
+   "id": "llama31-8b-q4km",
+   "role": "intent",
+   "name": "Llama 3.1 8B Instruct (Q4_K_M)",
+   "languages": "any",
+   "quantization": "Q4_K_M",
+   "artifact": {
+    "repo": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+    "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+    "license": "Llama-3.1-Community"
+   },
+   "installBytes": 5261334937.6,
+   "memoryBytes": 6764573491.2,
+   "prefersGpu": true,
+   "recommended": {
+    "minVramBytes": 8589934592
+   }
+  },
+  {
+   "id": "qwen25-7b-q4km",
+   "role": "intent",
+   "name": "Qwen2.5 7B Instruct (Q4_K_M)",
+   "languages": "any",
+   "quantization": "Q4_K_M",
+   "artifact": {
+    "repo": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+    "file": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+    "license": "Apache-2.0"
+   },
+   "installBytes": 5046586572.8,
+   "memoryBytes": 6442450944,
+   "prefersGpu": true,
+   "recommended": {
+    "minVramBytes": 8589934592
+   }
+  },
+  {
+   "id": "qwen25-3b-q4km",
+   "role": "intent",
+   "name": "Qwen2.5 3B Instruct (Q4_K_M)",
+   "languages": "any",
+   "quantization": "Q4_K_M",
+   "artifact": {
+    "repo": "bartowski/Qwen2.5-3B-Instruct-GGUF",
+    "file": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+    "license": "Apache-2.0"
+   },
+   "installBytes": 2147483648,
+   "memoryBytes": 3006477107.2,
+   "prefersGpu": true,
+   "recommended": {
+    "minVramBytes": 4294967296
+   }
+  },
+  {
+   "id": "qwen25-1.5b-q4km",
+   "role": "intent",
+   "name": "Qwen2.5 1.5B Instruct (Q4_K_M)",
+   "languages": "any",
+   "quantization": "Q4_K_M",
+   "artifact": {
+    "repo": "bartowski/Qwen2.5-1.5B-Instruct-GGUF",
+    "file": "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+    "license": "Apache-2.0"
+   },
+   "installBytes": 1181116006.4,
+   "memoryBytes": 1825361100.8,
+   "prefersGpu": true,
+   "recommended": {
+    "minVramBytes": 3221225472
+   },
+   "requires": {
+    "minRamBytes": 4294967296
+   }
+  },
+  {
+   "id": "whisper-small-en",
+   "role": "stt",
+   "name": "Whisper small.en",
+   "languages": [
+    "en"
+   ],
+   "artifact": {
+    "repo": "ggerganov/whisper.cpp",
+    "file": "ggml-small.en.bin",
+    "license": "MIT"
+   },
+   "installBytes": 510656512,
+   "memoryBytes": 838860800,
+   "requires": {
+    "minRamBytes": 2147483648
+   }
+  },
+  {
+   "id": "whisper-small-multi",
+   "role": "stt",
+   "name": "Whisper small (multilingual)",
+   "languages": [
+    "en",
+    "zh",
+    "de",
+    "es",
+    "ru",
+    "ko",
+    "fr",
+    "ja",
+    "pt",
+    "tr",
+    "pl",
+    "ca",
+    "nl",
+    "ar",
+    "sv",
+    "it",
+    "id",
+    "hi",
+    "fi",
+    "vi",
+    "he",
+    "uk",
+    "el",
+    "ms",
+    "cs",
+    "ro",
+    "da",
+    "hu",
+    "ta",
+    "no",
+    "th",
+    "ur",
+    "hr",
+    "bg",
+    "lt",
+    "la",
+    "mi",
+    "ml",
+    "cy",
+    "sk",
+    "te",
+    "fa",
+    "lv",
+    "bn",
+    "sr",
+    "az",
+    "sl",
+    "kn",
+    "et",
+    "mk",
+    "br",
+    "eu",
+    "is",
+    "hy",
+    "ne",
+    "mn",
+    "bs",
+    "kk",
+    "sq",
+    "sw",
+    "gl",
+    "mr",
+    "pa",
+    "si",
+    "km",
+    "sn",
+    "yo",
+    "so",
+    "af",
+    "oc",
+    "ka",
+    "be",
+    "tg",
+    "sd",
+    "gu",
+    "am",
+    "yi",
+    "lo",
+    "uz",
+    "fo",
+    "ht",
+    "ps",
+    "tk",
+    "nn",
+    "mt",
+    "sa",
+    "lb",
+    "my",
+    "bo",
+    "tl",
+    "mg",
+    "as",
+    "tt",
+    "haw",
+    "ln",
+    "ha",
+    "ba",
+    "jw",
+    "su"
+   ],
+   "artifact": {
+    "repo": "ggerganov/whisper.cpp",
+    "file": "ggml-small.bin",
+    "license": "MIT"
+   },
+   "installBytes": 510656512,
+   "memoryBytes": 891289600,
+   "requires": {
+    "minRamBytes": 2147483648
+   }
+  },
+  {
+   "id": "parakeet-tdt-v3",
+   "role": "stt",
+   "name": "Parakeet TDT 0.6B v3 (multilingual)",
+   "languages": [
+    "en",
+    "de",
+    "fr",
+    "es",
+    "it",
+    "pt",
+    "pl",
+    "nl",
+    "sv",
+    "da",
+    "no",
+    "fi",
+    "cs",
+    "sk",
+    "hr",
+    "bg",
+    "ro",
+    "uk",
+    "ru",
+    "el",
+    "et",
+    "lv",
+    "lt",
+    "sl",
+    "hu"
+   ],
+   "artifact": {
+    "repo": "istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "file": "parakeet-tdt-0.6b-v3.onnx",
+    "license": "CC-BY-4.0"
+   },
+   "installBytes": 1288490188.8,
+   "memoryBytes": 1610612736,
+   "requires": {
+    "minRamBytes": 3221225472
+   }
+  },
+  {
+   "id": "whisper-base-en",
+   "role": "stt",
+   "name": "Whisper base.en",
+   "languages": [
+    "en"
+   ],
+   "artifact": {
+    "repo": "ggerganov/whisper.cpp",
+    "file": "ggml-base.en.bin",
+    "license": "MIT"
+   },
+   "installBytes": 155189248,
+   "memoryBytes": 314572800,
+   "requires": {
+    "minRamBytes": 1073741824
+   }
+  },
+  {
+   "id": "kokoro-82m",
+   "role": "tts",
+   "name": "Kokoro 82M (multilingual)",
+   "languages": [
+    "en",
+    "ja",
+    "zh",
+    "es",
+    "fr",
+    "hi",
+    "it",
+    "pt"
+   ],
+   "artifact": {
+    "repo": "hexgrad/Kokoro-82M",
+    "file": "kokoro-v1.0.onnx",
+    "license": "Apache-2.0"
+   },
+   "installBytes": 346030080,
+   "memoryBytes": 629145600,
+   "requires": {
+    "minRamBytes": 2147483648
+   }
+  },
+  {
+   "id": "piper-amy-medium",
+   "role": "tts",
+   "name": "Piper en_US Amy (medium)",
+   "languages": [
+    "en"
+   ],
+   "artifact": {
+    "repo": "rhasspy/piper-voices",
+    "file": "en/en_US/amy/medium/en_US-amy-medium.onnx",
+    "license": "per-voice (see repo)"
+   },
+   "installBytes": 66060288,
+   "memoryBytes": 209715200,
+   "requires": {
+    "minRamBytes": 1073741824
+   }
+  },
+  {
+   "id": "piper-libritts-medium",
+   "role": "tts",
+   "name": "Piper en_US LibriTTS-R (medium)",
+   "languages": [
+    "en"
+   ],
+   "artifact": {
+    "repo": "rhasspy/piper-voices",
+    "file": "en/en_US/libritts_r/medium/en_US-libritts_r-medium.onnx",
+    "license": "per-voice (see repo)"
+   },
+   "installBytes": 69206016,
+   "memoryBytes": 209715200,
+   "requires": {
+    "minRamBytes": 1073741824
+   }
+  }
+ ]
+}
