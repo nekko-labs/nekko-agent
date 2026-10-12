@@ -875,6 +875,8 @@ Observation: the fixed per-reply step budget (`DEFAULT_MAX_STEPS`, was 80) was h
 
 ## Shipped
 
+- [x] **Star default folders + provider on/off switch** (2026-10-13, [SPEC.md](SPEC.md#default-folders-for-new-agents-and-the-logs-drawer-2026-10-11), [provider switch](SPEC.md#models--providers)): `defaultFolders.ts` (`nextDefaultFolders`, `toggleDefaultFolder`) writes the existing `defaultWorkspaceIds`; a star sits in the composer `FolderPickerMenu` (optional `defaults`/`onToggleDefault` props) and the Context Inspector's `FolderAccordion`. Provider cards get the shared `Toggle` writing `ProviderConfig.enabled`; a disabled card renders only its header and runs no effects. Guards so nothing probes a disabled provider: host `testProvider`/`listModels`/`lmsAvailable`/`runtimeStatus`/`runtimeFacts`/`runtimePlan`/`runtimeAutoFit`, and in nekkod `providers:test`/`models:list`/`lms:probe` (providers.rs, checked before an OAuth refresh) plus `runtime:status|facts|plan|autoFit` and `lms:probe` (runtimes.rs). `ModelPicker` drops disabled providers itself. Only `enabled === false` disables, so older entries stay on. Tests: `provider-disabled.test.ts`, `FolderPicker.test.tsx`, nekkod `tests/runtimes.rs`. Visual desktop check pending.
+
 ### GitHub dependent chat worktrees (2026-10-12, PR #482)
 
 - [x] **GS1**: Optional [Continue as stacked PR](SPEC.md#continue-dependent-work-with-github-pr-stacks). Pin the selected parent commit, provision an isolated checkout lazily, retain model/tool policy and configure the PR base. Preserve the source checkout's edits.

@@ -52,5 +52,24 @@ describe('composer folder picker', () => {
     expect(out).toContain('Add folder…');
     expect(out).toContain('aria-label="Revoke access to nekko-agent"');
     expect(out).toContain('Revoke saved folder access, not delete files');
+    // No star toggle unless the host wires one.
+    expect(out).not.toContain('aria-pressed');
+  });
+
+  it('stars the default folders new chats start with', () => {
+    const out = renderToStaticMarkup(<FolderPickerMenu folders={folders} chat={null} defaults={['b']} onPick={() => {}} onClear={() => {}} onAdd={() => {}} onRemove={() => {}} onToggleDefault={() => {}} />);
+    expect(out.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(out).toContain('aria-label="Stop starting new chats in hypergate"');
+    expect(out).toContain('aria-label="Start new chats in nekko-agent"');
+  });
+});
+
+describe('nextDefaultFolders', () => {
+  it('stars by appending, unstars by removing, and drops folders that are gone', async () => {
+    const { nextDefaultFolders } = await import('../defaultFolders.js');
+    expect(nextDefaultFolders(undefined, 'a', folders)).toEqual(['a']);
+    expect(nextDefaultFolders(['a'], 'b', folders)).toEqual(['a', 'b']);
+    expect(nextDefaultFolders(['a', 'b'], 'a', folders)).toEqual(['b']);
+    expect(nextDefaultFolders(['gone', 'a', 'a'], 'b', folders)).toEqual(['a', 'b']);
   });
 });

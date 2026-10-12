@@ -87,6 +87,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             let Some(p) = find(&providers(ctx).await, &id(0)).cloned() else {
                 return Ok(json!({ "ok": false, "message": "Not found" }));
             };
+            if !is_enabled(&p) {
+                return Ok(json!({ "ok": false, "message": DISABLED }));
+            }
             Ok(test(ctx, &p).await)
         }
         "providers:testConfig" => Ok(test(ctx, &arg(0)).await),
@@ -97,6 +100,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             };
             if p.get("kind").and_then(Value::as_str) != Some("lmstudio") {
                 return Ok(json!({ "available": false }));
+            }
+            if !is_enabled(&p) {
+                return Ok(json!({ "available": false, "reason": DISABLED }));
             }
             let base = p.get("baseUrl").map(nekko_js::display).unwrap_or_default();
             if !is_localhost_url(&base) {
@@ -114,6 +120,15 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
 
 async fn providers(ctx: &Ctx) -> Vec<Value> {
     crate::settings::current(ctx).await.get("providers").and_then(Value::as_array).cloned().unwrap_or_default()
+}
+
+/// A provider switched off on the Models page is never contacted or launched.
+pub const DISABLED: &str = "This provider is disabled. Turn it on in Model Providers to use it.";
+
+/// Only an explicit `enabled: false` switches a provider off for probing, so
+/// an older entry saved without the field keeps being checked.
+pub fn is_enabled(p: &Value) -> bool {
+    p.get("enabled") != Some(&Value::Bool(false))
 }
 
 fn find<'a>(list: &'a [Value], id: &str) -> Option<&'a Value> {
@@ -182,6 +197,10 @@ async fn test(ctx: &Ctx, config: &Value) -> Value {
 /// `listModels(providerId)`: the provider's models, `[]` on any failure.
 pub async fn list_models(ctx: &Ctx, id: &str) -> Value {
     use nekko_agent::Provider;
+    // Checked before resolving, so a disabled subscription is not refreshed either.
+    if find(&providers(ctx).await, id).is_some_and(|p| !is_enabled(p)) {
+        return json!([]);
+    }
     let Ok(config) = resolve_provider(ctx, id).await else { return json!([]) };
     let Ok(provider) = build(&config) else { return json!([]) };
     match provider.list_models().await {
