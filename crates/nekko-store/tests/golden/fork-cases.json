@@ -1,0 +1,43 @@
+[
+  { "name": "middle", "before": "a1", "session": {
+    "id": "s_fork_middle", "title": "Plan the release", "workspaceId": "w1", "supportingWorkspaceIds": ["w2", "w3"],
+    "executionMode": "worktree", "gitIsolation": true, "gitWorktrees": [{ "workspaceId": "w1", "path": "/tmp/wt" }],
+    "providerId": "p1", "modelId": "m1", "autoModel": false, "autoQuality": "balanced", "mode": "guardrails", "thinking": "high",
+    "attachedPaths": ["C:/src/a.ts"], "disabledTools": ["bash"], "pinned": true, "tags": ["x"], "queue": ["later"],
+    "titleAuto": true, "specLinked": true,
+    "messages": [
+      { "id": "u1", "role": "user", "content": "hello \ud83d\ude3a", "createdAt": 1 },
+      { "id": "a1", "role": "assistant", "content": "hi", "toolCalls": [{ "id": "t1", "name": "read_file", "args": { "path": "a" } }], "createdAt": 2 },
+      { "id": "u2", "role": "user", "content": "more", "createdAt": 3 }
+    ],
+    "createdAt": 100, "updatedAt": 200 } },
+  { "name": "whole", "session": {
+    "id": "s_fork_whole", "title": "Whole", "messages": [{ "id": "u1", "role": "user", "content": "x", "createdAt": 1 }],
+    "createdAt": 1, "updatedAt": 2 } },
+  { "name": "not_found", "before": "nope", "session": {
+    "id": "s_fork_missing", "title": "Missing", "workspaceId": "w1", "chatType": "image",
+    "imageParams": { "width": 1024, "height": 768, "steps": 4, "cfgScale": 4.5, "seed": -1 },
+    "messages": [{ "id": "u1", "role": "user", "content": "x", "createdAt": 1 }, { "id": "a1", "role": "assistant", "content": "y", "createdAt": 2 }],
+    "createdAt": 1, "updatedAt": 2 } },
+  { "name": "first", "before": "u1", "session": {
+    "id": "s_fork_first", "title": "First", "messages": [{ "id": "u1", "role": "user", "content": "x", "createdAt": 1 }],
+    "createdAt": 1, "updatedAt": 2 } },
+  { "name": "sandbox", "before": "u2", "session": {
+    "id": "s_fork_sandbox", "title": "Boxed", "workspaceId": "w1", "executionMode": "sandbox", "gitIsolation": false, "mode": "yolo",
+    "sandbox": { "image": "example/sandbox@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "identity": "id", "configuredAt": 5, "sourceWorkspaceIds": ["w1"] },
+    "providerId": "p1",
+    "messages": [{ "id": "u1", "role": "user", "content": "x", "createdAt": 1 }, { "id": "u2", "role": "user", "content": "y", "createdAt": 2 }],
+    "createdAt": 1, "updatedAt": 2 } },
+  { "name": "sandbox_no_mode", "session": {
+    "id": "s_fork_sandbox2", "title": "Boxed again", "executionMode": "sandbox", "messages": [], "createdAt": 1, "updatedAt": 2 } },
+  { "name": "unified_nulls", "before": "", "session": {
+    "id": "s_fork_unified", "title": null, "workspaceId": null, "supportingWorkspaceIds": [], "gitIsolation": false,
+    "attachedPaths": null, "thinking": false, "modelId": null,
+    "messages": [{ "id": "u1", "role": "user", "content": "x", "createdAt": 1 }], "createdAt": 1, "updatedAt": 2 } },
+  { "name": "odd_title", "before": "a1", "session": {
+    "id": "s_fork_odd", "title": 42, "executionMode": null, "gitIsolation": true, "mode": "ask",
+    "messages": [{ "id": "a1", "role": "assistant", "content": "x", "createdAt": 1 }], "createdAt": 1, "updatedAt": 2 } },
+  { "name": "untitled", "session": {
+    "id": "s_fork_untitled", "executionMode": "unified", "disabledTools": [],
+    "messages": [{ "id": "u1", "role": "user", "content": "x", "createdAt": 1.5 }], "createdAt": 1, "updatedAt": 2 } }
+]

@@ -622,6 +622,54 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn forks_chats_and_purges_expired_archives_itself() {
+    let data = std::env::temp_dir().join(format!("nekkod-fork-purge-{}", std::process::id()));
+    let sessions = data.join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let chat = json!({ "id": "s_src", "title": "Source", "workspaceId": "w1", "providerId": "p1", "updatedAt": 5, "messages": [
+        { "id": "u1", "role": "user", "content": "one", "createdAt": 1 },
+        { "id": "u2", "role": "user", "content": "two", "createdAt": 2 },
+    ] });
+    let src_bytes = serde_json::to_vec_pretty(&chat).unwrap();
+    std::fs::write(sessions.join("s_src.json"), &src_bytes).unwrap();
+    // Archived long ago (gone), archived just now (kept), never archived (kept).
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+    for (id, archived) in [("s_old", json!(1)), ("s_recent", json!(now)), ("s_live", Value::Null)] {
+        let s = json!({ "id": id, "title": id, "updatedAt": 1, "messages": [], "archivedAt": archived });
+        std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec(&s).unwrap()).unwrap();
+    }
+    let d = start_with(true, Some(&data));
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for channel in ["session:fork", "sessions:purgeArchived"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
+    }
+    // Served here, not echoed by the backend.
+    let (status, fork) = post(d.port, "session:fork", json!(["s_src", "u2"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{fork}");
+    assert_eq!(fork["title"], "Source (split)");
+    assert_eq!((fork["workspaceId"].clone(), fork["providerId"].clone()), (json!("w1"), json!("p1")));
+    assert_eq!(fork["messages"].as_array().unwrap().len(), 1);
+    let fork_id = fork["id"].as_str().unwrap();
+    assert_ne!(fork_id, "s_src");
+    let (_, saved) = post(d.port, "session:get", json!([fork_id]), Some(TOKEN)).await;
+    assert_eq!(saved, fork);
+    assert_eq!(std::fs::read(sessions.join("s_src.json")).unwrap(), src_bytes, "the source is untouched");
+    let (_, none) = post(d.port, "session:fork", json!(["s_absent"]), Some(TOKEN)).await;
+    assert_eq!(none, Value::Null);
+
+    let (status, purged) = post(d.port, "sessions:purgeArchived", json!([]), Some(TOKEN)).await;
+    assert_eq!((status, purged), (200, json!(1)));
+    assert!(!sessions.join("s_old.json").exists());
+    assert!(sessions.join("s_recent.json").exists() && sessions.join("s_live.json").exists());
+    // The host dropped the purged chat's command log first.
+    let (_, callbacks) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert_eq!(callbacks, json!([["s_old"]]));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn settings_are_the_daemons_to_write_when_it_knows_the_data_dir() {
     let data = std::env::temp_dir().join(format!("nekkod-settings-{}", std::process::id()));
     std::fs::create_dir_all(&data).unwrap();
@@ -1401,6 +1449,36 @@ async fn without_a_data_dir_accounting_stays_with_the_host() {
 }
 
 /// A streamable-HTTP MCP server with one tool, `echo`, on a loopback port.
+#[tokio::test(flavor = "multi_thread")]
+async fn reports_mcp_status_from_its_own_servers() {
+    let (mcp_port, mcp_server, _) = http_mcp().await;
+    let data = std::env::temp_dir().join(format!("nekkod-mcp-status-{}", std::process::id()));
+    std::fs::create_dir_all(&data).unwrap();
+    let settings = json!({ "mcpServers": [
+        { "id": "srv", "name": "Echo", "enabled": true, "command": "", "args": [], "url": format!("http://127.0.0.1:{mcp_port}/mcp") },
+        { "id": "off", "name": "Off", "enabled": false, "command": "nope", "args": [] },
+    ] });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with(true, Some(&data));
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("mcp:status")), "{info}");
+    let (status, rows) = post(d.port, "mcp:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(
+        rows,
+        json!([
+            { "id": "srv", "name": "Echo", "connected": true, "tools": [{ "name": "echo", "description": "Echo it" }] },
+            { "id": "off", "name": "Off", "connected": false, "tools": [] },
+        ])
+    );
+    // Answered here: the backend never heard of it.
+    let (_, all) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "mcp:status"), "{all}");
+    mcp_server.abort();
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
 async fn http_mcp() -> (u16, tokio::task::JoinHandle<()>, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
     use axum::routing::post as route_post;
     let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -2004,6 +2082,85 @@ async fn generates_a_design_on_the_default_provider() {
     assert_eq!(again, board);
     let (_, noted) = post(d.port, "design:addNote", json!(["w1", page["id"], " tighter "]), Some(TOKEN)).await;
     assert_eq!(noted["pages"][0]["notes"][0]["text"], json!("tighter"));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn suggests_replies_and_fills_prompt_parts_on_the_chats_model() {
+    let data = std::env::temp_dir().join(format!("nekkod-side-{}", std::process::id()));
+    let sessions = data.join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let model = scripted_model(vec![
+        say_text("Sure: {\"options\":[\"Commit it\",\"commit IT\",\"Run the tests\"],\"next\":\"Commit it and push\"}"),
+        say_text("  \"You are a careful code reviewer.\"  "),
+    ])
+    .await;
+    let settings = json!({
+        "providers": [
+            { "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) },
+            { "id": "off", "kind": "openai", "label": "Off", "enabled": false, "baseUrl": "https://api.openai.com/v1" },
+        ],
+        "defaultProviderId": "p1",
+        "defaultModelId": "synthetic",
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let messages = json!([
+        { "id": "u1", "role": "user", "content": "Fix the bug", "createdAt": 1 },
+        { "id": "a1", "role": "assistant", "content": "Fixed. Want me to commit?", "createdAt": 2 },
+    ]);
+    let chats = [
+        ("s_side", json!({})),
+        ("s_task", json!({ "taskId": "t1" })),
+        ("s_offline", json!({ "offline": true, "providerId": "remote" })),
+        ("s_disabled", json!({ "providerId": "off" })),
+    ];
+    for (id, extra) in &chats {
+        let mut s = json!({ "id": id, "title": "Side", "messages": messages, "createdAt": 1, "updatedAt": 2 });
+        for (k, v) in extra.as_object().unwrap() {
+            s[k] = v.clone();
+        }
+        std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec_pretty(&s).unwrap()).unwrap();
+    }
+    let d = start_with(true, Some(&data));
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for channel in ["chat:suggest", "chat:fillPrompt"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
+    }
+
+    let (status, suggested) = post(d.port, "chat:suggest", json!(["s_side"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{suggested}");
+    assert_eq!(suggested, json!({ "options": ["Commit it", "Run the tests"], "next": "Commit it and push" }));
+    let (_, filled) = post(d.port, "chat:fillPrompt", json!(["s_side", "Role", "Review this PR"]), Some(TOKEN)).await;
+    assert_eq!(filled, json!("You are a careful code reviewer."));
+    // Both ran on the chat's provider and default model, with the ported prompts.
+    let sent = model.requests.lock().unwrap().clone();
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[0]["model"], "synthetic");
+    let content =
+        |i: usize| sent[i]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_string();
+    assert_eq!(content(0), nekko_turn::suggest_prompt(&json!({ "messages": messages })).unwrap());
+    assert_eq!(content(1), nekko_turn::fill_prompt("Role", "Review this PR"));
+    assert_eq!(sent[0]["max_tokens"].as_u64().or(sent[0]["max_completion_tokens"].as_u64()), Some(220), "{}", sent[0]);
+    // Usage written by the daemon, as the host's sideband wrote it.
+    let usage = std::fs::read_to_string(data.join("usage.jsonl")).unwrap();
+    let lines: Vec<Value> = usage.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(lines.len(), 2, "{usage}");
+    assert!(lines.iter().all(|l| l["sessionId"] == "s_side" && l["providerId"] == "p1" && l["modelId"] == "synthetic"));
+
+    // Nobody to suggest to, an offline chat without a local provider, a disabled
+    // provider, a chat that does not exist: null, and no model call.
+    for id in ["s_task", "s_offline", "s_disabled", "s_absent"] {
+        let (status, none) = post(d.port, "chat:suggest", json!([id]), Some(TOKEN)).await;
+        assert_eq!((status, none), (200, Value::Null), "{id}");
+    }
+    let (_, none) = post(d.port, "chat:fillPrompt", json!(["s_disabled", "Role", "x"]), Some(TOKEN)).await;
+    assert_eq!(none, Value::Null);
+    assert_eq!(model.requests.lock().unwrap().len(), 2);
+    // A failed call is null too: the model is gone.
+    drop(model);
+    let (status, none) = post(d.port, "chat:suggest", json!(["s_side"]), Some(TOKEN)).await;
+    assert_eq!((status, none), (200, Value::Null));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }

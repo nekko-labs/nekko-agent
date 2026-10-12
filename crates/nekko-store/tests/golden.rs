@@ -213,3 +213,118 @@ fn a_running_turn_saves_exactly_as_save_turn_session_does() {
         std::fs::remove_dir_all(data).ok();
     }
 }
+
+/// A fork's new id and save times, the top-level lines only
+/// (`normalizeFork` in session-fork.golden.test.ts).
+fn normalize_fork(text: &str) -> String {
+    let mut seen = [false; 3];
+    text.lines()
+        .map(|line| {
+            for (i, (key, out)) in [
+                ("  \"id\": \"", "  \"id\": \"<fork>\","),
+                ("  \"createdAt\": ", "  \"createdAt\": 0"),
+                ("  \"updatedAt\": ", "  \"updatedAt\": 0"),
+            ]
+            .iter()
+            .enumerate()
+            {
+                if !seen[i] && line.starts_with(key) {
+                    seen[i] = true;
+                    let comma = if i > 0 && line.ends_with(',') { "," } else { "" };
+                    return format!("{out}{comma}");
+                }
+            }
+            line.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn a_fork_is_the_file_the_ts_host_would_write() {
+    let expected: serde_json::Map<String, Value> =
+        serde_json::from_str(&std::fs::read_to_string(golden().join("forks.json")).unwrap()).unwrap();
+    let cases: Vec<Value> =
+        serde_json::from_str(&std::fs::read_to_string(golden().join("fork-cases.json")).unwrap()).unwrap();
+    assert!(cases.len() >= 8, "the golden set is too small to mean anything");
+    for case in cases {
+        let name = case["name"].as_str().unwrap();
+        let src = &case["session"];
+        let id = src["id"].as_str().unwrap();
+        let data = std::env::temp_dir().join(format!("nekko-fork-{}-{name}", std::process::id()));
+        std::fs::create_dir_all(data.join("sessions")).unwrap();
+        let src_file = data.join("sessions").join(format!("{id}.json"));
+        let src_text = pretty(src);
+        std::fs::write(&src_file, &src_text).unwrap();
+        let store = SessionStore::new(&data);
+        let fork = store.fork(id, case.get("before").unwrap_or(&Value::Null)).unwrap().expect("a fork");
+        assert_eq!(std::fs::read_to_string(&src_file).unwrap(), src_text, "{name}: the source changed");
+        let fork_id = fork["id"].as_str().unwrap();
+        assert!(fork_id.starts_with("s_") && fork_id != id, "{name}: {fork_id}");
+        let text = std::fs::read_to_string(data.join("sessions").join(format!("{fork_id}.json"))).unwrap();
+        assert_eq!(normalize_fork(&text), expected[name].as_str().unwrap(), "{name}: fork differs");
+        // What the call returns is what it wrote.
+        assert_eq!(pretty(&fork), text, "{name}: returned chat differs from the file");
+        std::fs::remove_dir_all(&data).ok();
+    }
+    assert_eq!(expected["no_such_chat"], Value::Null);
+    let data = std::env::temp_dir().join(format!("nekko-fork-{}-absent", std::process::id()));
+    assert!(SessionStore::new(&data).fork("s_absent", &Value::Null).unwrap().is_none());
+    assert!(SessionStore::new(&data).fork("../escape", &Value::Null).unwrap().is_none());
+}
+
+#[test]
+fn archive_purge_deletes_what_the_ts_host_deletes() {
+    let c: Value = serde_json::from_str(&std::fs::read_to_string(golden().join("purge.json")).unwrap()).unwrap();
+    let data = std::env::temp_dir().join(format!("nekko-purge-{}", std::process::id()));
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    for s in c["sessions"].as_array().unwrap() {
+        let id = s["id"].as_str().unwrap();
+        std::fs::write(data.join("sessions").join(format!("{id}.json")), s.to_string()).unwrap();
+    }
+    std::fs::write(data.join("sessions/broken.json"), "{").unwrap();
+    std::fs::write(data.join("sessions/s_null.json"), "null").unwrap();
+    // An archived chat whose id names no file of its own is left alone.
+    std::fs::write(
+        data.join("sessions/s_bad.json"),
+        serde_json::json!({ "id": "../s_bad", "messages": [], "archivedAt": 1 }).to_string(),
+    )
+    .unwrap();
+    let store = SessionStore::new(&data);
+    store.summaries();
+    let seen = std::sync::Mutex::new(Vec::new());
+    let count = store
+        .purge_archived_with(c["now"].as_f64().unwrap(), |id| {
+            seen.lock().unwrap().push(id.to_string());
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(count, c["count"].as_u64().unwrap() as usize);
+    assert_eq!(seen.lock().unwrap().len(), count, "the host is told about each chat before it goes");
+    let mut remaining: Vec<String> = std::fs::read_dir(data.join("sessions"))
+        .unwrap()
+        .filter_map(|e| e.ok()?.file_name().to_str()?.strip_suffix(".json").map(str::to_string))
+        .filter(|n| n != "s_bad")
+        .collect();
+    remaining.sort();
+    let want: Vec<String> =
+        c["remaining"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+    assert_eq!(remaining, want);
+    assert!(data.join("sessions/s_bad.json").exists());
+    assert_eq!(store.summaries().len(), want.iter().filter(|n| n.starts_with("s_") && *n != "s_null").count() + 1);
+    std::fs::remove_dir_all(&data).ok();
+}
+
+#[test]
+fn a_failed_purge_callback_keeps_the_chat() {
+    let data = std::env::temp_dir().join(format!("nekko-purge-fail-{}", std::process::id()));
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let file = data.join("sessions/s_old.json");
+    std::fs::write(&file, serde_json::json!({ "id": "s_old", "messages": [], "archivedAt": 1 }).to_string()).unwrap();
+    let store = SessionStore::new(&data);
+    assert!(store.purge_archived(|_| Err("log busy".into())).is_err());
+    assert!(file.exists());
+    assert_eq!(store.purge_archived(|_| Ok(())).unwrap(), 1);
+    assert!(!file.exists());
+    std::fs::remove_dir_all(&data).ok();
+}

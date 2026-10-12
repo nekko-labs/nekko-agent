@@ -255,6 +255,13 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Ok(info)
         }
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
+        // `mcpStatus`: sync the configured servers here, then report them.
+        "mcp:status" if ctx.settings.is_some() => {
+            let settings = crate::settings::current(ctx).await;
+            let configs = settings.get("mcpServers").filter(|v| v.is_array()).cloned().unwrap_or(json!([]));
+            let snapshot = ctx.mcp.sync(&configs).await;
+            Ok(crate::mcp::status(&configs, &snapshot))
+        }
         "provider:complete" => crate::sideband::complete(arg(&args, 0)).await,
         c if crate::accounts::CHANNELS.contains(&c) && ctx.accounts.enabled() => ctx.accounts.route(c, &args).await,
         // The daemon's settings store says where the data directory is.
@@ -266,6 +273,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::context::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
             crate::context::route(ctx, c, args).await
         }
+        c if crate::side::CHANNELS.contains(&c) && crate::side::owned(ctx) => crate::side::route(ctx, c, &args).await,
         "chat:send" if ctx.admission.is_some() => {
             crate::admission::send(ctx, ctx.admission.as_ref().expect("checked"), args).await
         }
@@ -399,6 +407,7 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.settings.is_some() {
         all.extend_from_slice(crate::settings::CHANNELS);
+        all.push("mcp:status");
     }
     if ctx.voice.is_some() {
         all.extend_from_slice(crate::voice::CHANNELS);
@@ -412,6 +421,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.admission.is_some() {
         all.extend_from_slice(crate::admission::CHANNELS);
+    }
+    if crate::side::owned(ctx) {
+        all.extend_from_slice(crate::side::CHANNELS);
     }
     if ctx.settings.is_some() && ctx.sessions.is_some() {
         all.extend_from_slice(crate::context::CHANNELS);
@@ -480,6 +492,7 @@ pub const OWNED: &[&str] = &[
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",
+    "sessions:purgeArchived",
     "session:get",
     "session:images",
     "session:create",
@@ -489,6 +502,7 @@ pub const OWNED: &[&str] = &[
     "session:setSupportingWorkspaces",
     "session:setAttachments",
     "session:truncate",
+    "session:fork",
     "spec:setLinked",
     "chat:queue",
     "chat:dequeue",
@@ -641,6 +655,7 @@ const SESSION_CHANNELS: &[&str] = &[
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",
+    "sessions:purgeArchived",
     "session:get",
     "session:images",
     "session:create",
@@ -650,6 +665,7 @@ const SESSION_CHANNELS: &[&str] = &[
     "session:setSupportingWorkspaces",
     "session:setAttachments",
     "session:truncate",
+    "session:fork",
     "spec:setLinked",
     "chat:queue",
     "chat:dequeue",
@@ -673,6 +689,7 @@ async fn session_op(
             "sessions:summaries" => Ok(Value::Array(store.summaries())),
             "sessions:list" => Ok(Value::Array(store.list())),
             "sessions:clear" => store.clear_with(id, delete_log).map(|n| json!(n)),
+            "sessions:purgeArchived" => store.purge_archived(delete_log).map(|n| json!(n)),
             "session:get" => Ok(store.get(id).unwrap_or(Value::Null)),
             "session:images" => Ok(Value::Array(store.images(id, arg(&args, 1).as_f64().unwrap_or(1.0)))),
             "session:create" => store.create(str_arg(&args, 0)),
@@ -690,6 +707,7 @@ async fn session_op(
             "session:setSupportingWorkspaces" => or_null(store.set_supporting(id, arg(&args, 1))),
             "session:setAttachments" => or_null(store.set_attachments(id, arg(&args, 1))),
             "session:truncate" => or_null(store.truncate(id, arg(&args, 1))),
+            "session:fork" => or_null(store.fork(id, arg(&args, 1))),
             "spec:setLinked" => or_null(store.set_spec_linked(id, arg(&args, 1))),
             "chat:queue" => or_null(store.queue(id, arg(&args, 1))),
             "chat:dequeue" => or_null(store.dequeue(id, arg(&args, 1))),

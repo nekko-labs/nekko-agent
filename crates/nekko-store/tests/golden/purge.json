@@ -1,0 +1,113 @@
+{
+  "now": 1760000000000,
+  "sessions": [
+    {
+      "id": "s_0",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 1000
+    },
+    {
+      "id": "s_1",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 999,
+      "archivedAt": null
+    },
+    {
+      "id": "s_2",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 998,
+      "archivedAt": 0
+    },
+    {
+      "id": "s_3",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 997,
+      "archivedAt": -5
+    },
+    {
+      "id": "s_4",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 996,
+      "archivedAt": "1754815999999"
+    },
+    {
+      "id": "s_5",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 995,
+      "archivedAt": true
+    },
+    {
+      "id": "s_6",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 994,
+      "archivedAt": 1754815999999
+    },
+    {
+      "id": "s_7",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 993,
+      "archivedAt": 1754816000000
+    },
+    {
+      "id": "s_8",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 992,
+      "archivedAt": 1754816000001
+    },
+    {
+      "id": "s_9",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 991,
+      "archivedAt": 1760000000000
+    },
+    {
+      "id": "s_10",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 990,
+      "archivedAt": 1
+    },
+    {
+      "id": "s_11",
+      "title": "Test",
+      "messages": [],
+      "createdAt": 1,
+      "updatedAt": 989,
+      "archivedAt": 0.5
+    }
+  ],
+  "count": 4,
+  "remaining": [
+    "broken",
+    "s_0",
+    "s_1",
+    "s_2",
+    "s_3",
+    "s_4",
+    "s_5",
+    "s_8",
+    "s_9",
+    "s_null"
+  ]
+}

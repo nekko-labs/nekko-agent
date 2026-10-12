@@ -8,7 +8,8 @@
 //! - `ask`: reading an `ask_user` call and writing back the answers;
 //! - `plan_update`: `update_plan` on a chat's live plan;
 //! - `stats`: a reply's totals, kept on its last message;
-//! - `delegate`: what a `spawn_agent` child's run comes back as.
+//! - `delegate`: what a `spawn_agent` child's run comes back as;
+//! - `side`: the suggested-replies and prompt-fill side calls.
 //!
 //! The tool specs and the fixed text a turn uses come from the TS sources
 //! through `src/catalog.json`, which `turn-plan.golden.test.ts` writes and
@@ -22,12 +23,14 @@ pub mod delegate;
 pub mod input;
 pub mod plan;
 pub mod plan_update;
+pub mod side;
 pub mod stats;
 
 pub use ask::{format_ask_answers, parse_ask_request};
 pub use input::{apply_turn_input, clean_title, send_options_for_queued_item, title_prompt};
 pub use plan::{host_tool_approval, turn_can_ask, turn_system_prompt, turn_tools};
 pub use plan_update::{PlanOutcome, apply_plan_update, plan_echo};
+pub use side::{clean_fill, fill_prompt, parse_reply_suggestions, suggest_prompt};
 pub use stats::{TurnStats, attach_turn_stats};
 
 use serde_json::{Value, json};
