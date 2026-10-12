@@ -87,7 +87,7 @@ describe('reinstalling a build', () => {
     const requested: string[] = [];
     const fetchFn = (async (url: string | URL) => {
       requested.push(String(url));
-      return String(url).includes('api.github.com') ? new Response(JSON.stringify(release)) : new Response('archive bytes');
+      return new URL(String(url)).hostname === 'api.github.com' ? new Response(JSON.stringify(release)) : new Response('archive bytes');
     }) as typeof fetch;
 
     // Stand-in for tar: "unpacking" an archive drops the files it would hold.
