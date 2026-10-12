@@ -470,9 +470,8 @@ async fn admit(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Valu
         spec["queued"] = q.clone();
     }
 
-    // The host registers the turn for its callbacks. A first turn does not
-    // wait on it; a queued one does, so the host follows the chain onto it
-    // before it hears the previous turn end.
+    // The host registers the turn for its callbacks; nothing here waits on it
+    // (a queued turn's previous turn stays registered there until it lands).
     {
         let backend = ctx.backend.clone();
         let payload = json!([{
@@ -486,16 +485,11 @@ async fn admit(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Valu
             // A queued turn joins the chain the host already follows.
             "chained": queued.is_some(),
         }]);
-        let adopt = async move {
+        tokio::spawn(async move {
             if let Err(e) = backend.call("turn:adopt", payload).await {
                 eprintln!("nekkod: the host could not adopt a turn: {e}");
             }
-        };
-        if queued.is_some() {
-            adopt.await;
-        } else {
-            tokio::spawn(adopt);
-        }
+        });
     }
 
     Ok(Admit::Spec(spec))

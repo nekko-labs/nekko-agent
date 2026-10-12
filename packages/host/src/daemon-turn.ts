@@ -152,6 +152,10 @@ export function adoptTurn(turnId: string, turn: HostTurn, chain: TurnChain, done
       const registered = turns.get(current);
       if (!registered) break;
       const summary = await registered.ended;
+      // A next turn the daemon admitted itself may still be on its way
+      // (`turn:adopt`, chained): it joins this turn's chain, so this one stays
+      // registered until it lands.
+      if (summary.next && pendingAdoption(summary.next)) await registeredTurn(summary.next);
       turns.delete(current);
       if (!summary.early) registered.afterEach(summary);
       if (summary.next && turns.has(summary.next)) {
