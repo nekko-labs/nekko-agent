@@ -1,4 +1,5 @@
-//! MCP servers, run by the daemon (PF14): `mcp:sync` and `mcp:call`.
+//! MCP servers, run by the daemon (PF14): `mcp:sync`, `mcp:call` and,
+//! with the settings store, `mcp:status`.
 //!
 //! A port of `packages/host/src/mcp.ts`'s client: JSON-RPC 2.0 over the
 //! newline-delimited stdio of a spawned process, or streamable HTTP when the
@@ -425,9 +426,63 @@ impl Mcp {
     }
 }
 
+/// `mcpStatus(configs)` over a [`Mcp::snapshot`], as the TS host reports it
+/// once the daemon runs the servers: one row per configured server, enabled
+/// or not, in the settings' order. Keys the TS leaves `undefined` are left
+/// out; a `null` it copies stays.
+pub fn status(configs: &Value, snapshot: &Value) -> Value {
+    let rows = configs.as_array().map(Vec::as_slice).unwrap_or_default().iter().map(|c| {
+        let srv = c.get("id").and_then(Value::as_str).and_then(|id| snapshot["servers"].get(id));
+        let mut row = serde_json::Map::new();
+        for key in ["id", "name"] {
+            if let Some(v) = c.get(key) {
+                row.insert(key.into(), v.clone());
+            }
+        }
+        row.insert("connected".into(), json!(nekko_js::truthy(srv.and_then(|s| s.get("connected")))));
+        let tools: Vec<Value> = srv
+            .and_then(|s| s.get("tools"))
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .map(|t| {
+                let mut tool = serde_json::Map::new();
+                for key in ["name", "description"] {
+                    if let Some(v) = t.get(key) {
+                        tool.insert(key.into(), v.clone());
+                    }
+                }
+                Value::Object(tool)
+            })
+            .collect();
+        row.insert("tools".into(), Value::Array(tools));
+        if let Some(e) = srv.and_then(|s| s.get("error")) {
+            row.insert("error".into(), e.clone());
+        }
+        Value::Object(row)
+    });
+    Value::Array(rows.collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The rows the TS host reports for the same configs and daemon snapshot
+    /// (packages/host/src/mcp-status.golden.test.ts), compared as text so
+    /// key order and left-out keys count.
+    #[test]
+    fn status_matches_the_ts_host() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/mcp-status.json");
+        let cases: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert!(cases.len() >= 4);
+        for c in cases {
+            let got = status(&c["configs"], &c["snapshot"]);
+            assert_eq!(nekko_js::stringify(&got), nekko_js::stringify(&c["status"]), "{}", c["name"]);
+        }
+        assert_eq!(status(&json!({ "not": "a list" }), &json!({})), json!([]));
+    }
 
     /// A scripted stdio MCP server on an in-memory pipe.
     fn fake_stdio() -> Server {

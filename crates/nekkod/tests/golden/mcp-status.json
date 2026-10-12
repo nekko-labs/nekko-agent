@@ -1,0 +1,167 @@
+[
+  {
+    "name": "connected, failed and disabled servers in settings order",
+    "configs": [
+      {
+        "id": "b",
+        "name": "Beta",
+        "command": "npx",
+        "args": [],
+        "enabled": true
+      },
+      {
+        "id": "a",
+        "name": "Alpha",
+        "command": "",
+        "args": [],
+        "enabled": true,
+        "url": "http://127.0.0.1:9/mcp"
+      },
+      {
+        "id": "off",
+        "name": "Off",
+        "command": "x",
+        "args": [],
+        "enabled": false
+      }
+    ],
+    "snapshot": {
+      "specs": [],
+      "servers": {
+        "a": {
+          "connected": true,
+          "tools": [
+            {
+              "name": "echo",
+              "description": "Echo it back"
+            },
+            {
+              "name": "plain"
+            }
+          ]
+        },
+        "b": {
+          "connected": false,
+          "tools": [],
+          "error": "spawn npx ENOENT"
+        }
+      }
+    },
+    "status": [
+      {
+        "id": "b",
+        "name": "Beta",
+        "connected": false,
+        "tools": [],
+        "error": "spawn npx ENOENT"
+      },
+      {
+        "id": "a",
+        "name": "Alpha",
+        "connected": true,
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo it back"
+          },
+          {
+            "name": "plain"
+          }
+        ]
+      },
+      {
+        "id": "off",
+        "name": "Off",
+        "connected": false,
+        "tools": []
+      }
+    ]
+  },
+  {
+    "name": "no servers",
+    "configs": [],
+    "snapshot": {
+      "specs": [],
+      "servers": {}
+    },
+    "status": []
+  },
+  {
+    "name": "a nameless config and null fields",
+    "configs": [
+      {
+        "id": "n",
+        "command": "c",
+        "args": [],
+        "enabled": true
+      }
+    ],
+    "snapshot": {
+      "specs": [],
+      "servers": {
+        "n": {
+          "connected": true,
+          "tools": [
+            {
+              "name": "t",
+              "description": null
+            },
+            {
+              "name": null
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    "status": [
+      {
+        "id": "n",
+        "connected": true,
+        "tools": [
+          {
+            "name": "t",
+            "description": null
+          },
+          {
+            "name": null
+          }
+        ],
+        "error": null
+      }
+    ]
+  },
+  {
+    "name": "a server the daemon does not know",
+    "configs": [
+      {
+        "id": "ghost",
+        "name": "Ghost",
+        "command": "c",
+        "args": [],
+        "enabled": true
+      }
+    ],
+    "snapshot": {
+      "specs": [],
+      "servers": {
+        "other": {
+          "connected": true,
+          "tools": [
+            {
+              "name": "x"
+            }
+          ]
+        }
+      }
+    },
+    "status": [
+      {
+        "id": "ghost",
+        "name": "Ghost",
+        "connected": false,
+        "tools": []
+      }
+    ]
+  }
+]
