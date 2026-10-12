@@ -1,0 +1,134 @@
+{
+  "root": {
+    "src/app.ts": "export function main() {}\nexport class App {}\n  const helper = async () => 1\nexport const Config = {}\n// TODO search me\n",
+    "src/lib/util.py": "def run():\n    pass\nclass Thing:\n    TODO = 1\n",
+    "src/lib/mod.rs": "pub fn go() {}\npub struct S;\ntrait T {}\n",
+    "src/main.go": "func (s *S) Serve() {}\ntype S struct {}\n",
+    ".env": "TOKEN=todo\n",
+    ".hidden/x.txt": "hidden todo\n",
+    ".git/config": "todo\n",
+    ".cache/c.txt": "todo\n",
+    "node_modules/pkg/index.js": "export function todo() {}\n",
+    "docs/dist": "todo dist file\n",
+    "docs/out/ignored.md": "todo\n",
+    "assets/logo.png": {
+      "bytes": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+        0,
+        0,
+        0,
+        13,
+        73,
+        72,
+        68,
+        82
+      ]
+    },
+    "assets/fake.png": "not a png\n",
+    "assets/anim.gif": {
+      "bytes": [
+        71,
+        73,
+        70,
+        56,
+        57,
+        97,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    "assets/old.gif": {
+      "bytes": [
+        71,
+        73,
+        70,
+        56,
+        56,
+        97,
+        1,
+        0
+      ]
+    },
+    "assets/pic.JPG": {
+      "bytes": [
+        255,
+        216,
+        255,
+        224,
+        0,
+        16
+      ]
+    },
+    "assets/photo.webp": {
+      "bytes": [
+        82,
+        73,
+        70,
+        70,
+        4,
+        0,
+        0,
+        0,
+        87,
+        69,
+        66,
+        80,
+        86,
+        80
+      ]
+    },
+    "assets/notes.txt": "plain notes todo\n",
+    "data/nul.txt": "a\u0000b todo\n",
+    "data/big.txt": {
+      "repeat": "a",
+      "count": 999999,
+      "tail": "é todo"
+    },
+    "data/crlf.ts": "export function crlf() {}\r\nexport class K {}\r\n// todo crlf\r\n",
+    "data/bom.ts": "﻿export function bom() {}\n",
+    "data/unicode.md": "Ünïcödé TODO ✓\nKELVIN K sign\n",
+    "data/long.ts": {
+      "repeat": "x",
+      "count": 400,
+      "head": "export function ",
+      "tail": "\nexport function short() {}\n"
+    },
+    "data/noext": "TODO no extension\n",
+    "data/emoji.md": {
+      "repeat": "😀",
+      "count": 150,
+      "head": "todo: ",
+      "tail": "\n"
+    },
+    "vendor/Zeta.txt": "z\n",
+    "vendor/alpha.txt": "a\n",
+    "vendor/Ärger.txt": "ä\n",
+    "vendor/_under.txt": "_\n",
+    "vendor/10.txt": "10\n",
+    "vendor/9.txt": "9\n",
+    "vendor/a-b.txt": "-\n",
+    "vendor/a_b.txt": "_\n",
+    "vendor/sub/x.txt": "x\n",
+    "vendor/Beta/y.txt": "y\n",
+    "readme.md": "# Title\nSearch Me here\n\t  trimmed line, todo   \n"
+  },
+  "rootDirs": [
+    "empty"
+  ],
+  "data": {
+    "memory/m_old.md": "---\nid: m_old\nscope: global\ntitle: \"Old: note\"\ntags: [a, b]\ncreatedAt: 1000\nupdatedAt: 1000\n---\n\nOld body\n",
+    "memory/m_mid.md": "---\nid: m_mid\nscope: global\ntitle: Mid\ntags: []\ncreatedAt: 1500\nupdatedAt: 2000\n---\n\nMid body\n",
+    "memory/m_ws.md": "---\nid: m_ws\nscope: workspace\nworkspaceId: w1\ntitle: Workspace\ntags: [x]\ncreatedAt: 1200\nupdatedAt: 1200\n---\n\nWs body\n",
+    "memory/m_ws2.md": "---\nid: m_ws2\nscope: workspace\ntitle: No workspace\ntags: []\ncreatedAt: 1300\nupdatedAt: 1300\n---\n\nOrphan\n",
+    "memory/readme.txt": "not a note\n"
+  }
+}

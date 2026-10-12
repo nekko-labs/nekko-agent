@@ -1,0 +1,479 @@
+{
+  "market": [
+    {
+      "id": "nekko-agent-review-council",
+      "name": "review-council",
+      "description": "Summon a council of specialised reviewers over your diff: correctness, security, and simplicity, each reporting separately",
+      "author": "Nekko Labs",
+      "source": "nekkolabs",
+      "category": "Code quality",
+      "url": "https://github.com/nekko-labs/nekko-agent",
+      "installs": 4820,
+      "tools": [
+        "git diff",
+        "read_file",
+        "spawn_agent"
+      ],
+      "template": "Run a review council over the current changes: spawn three parallel reviewers (correctness bugs, security, simplification), then merge their findings into one ranked report.",
+      "instructions": "Review the working diff with a council of three parallel reviewer agents, each with one lens: (1) correctness bugs and edge cases, (2) security (injection, auth, secrets, unsafe input), (3) simplification and reuse. Spawn them with spawn_agent, give each the diff, then merge their findings into a single report ranked by severity, dropping duplicates. Verify each finding against the code before reporting it.",
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/review-council"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Load diff",
+            "detail": "Changed files + context"
+          },
+          {
+            "id": "r1",
+            "kind": "agent",
+            "label": "Correctness cat",
+            "detail": "Bugs + edge cases"
+          },
+          {
+            "id": "r2",
+            "kind": "agent",
+            "label": "Security cat",
+            "detail": "Injection, auth, secrets"
+          },
+          {
+            "id": "r3",
+            "kind": "agent",
+            "label": "Simplicity cat",
+            "detail": "Reuse + clarity"
+          },
+          {
+            "id": "merge",
+            "kind": "agent",
+            "label": "Merge findings",
+            "detail": "Dedupe + rank by severity"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Council report"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "r1"
+          },
+          {
+            "from": "ctx",
+            "to": "r2"
+          },
+          {
+            "from": "ctx",
+            "to": "r3"
+          },
+          {
+            "from": "r1",
+            "to": "merge"
+          },
+          {
+            "from": "r2",
+            "to": "merge"
+          },
+          {
+            "from": "r3",
+            "to": "merge"
+          },
+          {
+            "from": "merge",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nekko-agent-spec-sync",
+      "name": "spec-sync",
+      "description": "Reconcile SPEC.md with the code: find shipped features the spec missed and spec promises the code broke",
+      "author": "Nekko Labs",
+      "source": "nekkolabs",
+      "category": "Research & planning",
+      "url": "https://github.com/nekko-labs/nekko-agent",
+      "installs": 3110,
+      "tools": [
+        "read_file",
+        "search"
+      ],
+      "template": "Compare SPEC.md against the actual code: list shipped features the spec does not mention, and spec claims the code no longer satisfies. Then update SPEC.md to match reality.",
+      "instructions": "Read the workspace SPEC.md, then survey the codebase (entry points, routes, views, commands). Produce two lists: features that exist in code but are missing from the spec, and spec statements the code contradicts. Update SPEC.md so it describes the system as it actually is, keeping its existing voice and structure."
+    },
+    {
+      "id": "nekko-agent-changelog",
+      "name": "changelog",
+      "description": "Write a user-facing changelog entry from the commits since the last release tag",
+      "author": "Nekko Labs",
+      "source": "nekkolabs",
+      "category": "Delivery",
+      "url": "https://github.com/nekko-labs/nekko-agent",
+      "installs": 2740,
+      "tools": [
+        "git log",
+        "write_file"
+      ],
+      "template": "Write a user-facing changelog entry from the commits since the last release tag: group by Added / Changed / Fixed, plain language, no commit hashes.",
+      "instructions": "Run git log from the last release tag to HEAD. Group the changes into Added / Changed / Fixed sections written for end users (plain language, no commit hashes, no internal refactors unless user-visible). Prepend the entry to CHANGELOG.md with the version and date."
+    },
+    {
+      "id": "nekko-agent-standup",
+      "name": "standup",
+      "description": "Summarize what changed in this workspace since yesterday, written as a standup update",
+      "author": "Nekko Labs",
+      "source": "nekkolabs",
+      "category": "Delivery",
+      "url": "https://github.com/nekko-labs/nekko-agent",
+      "installs": 1980,
+      "tools": [
+        "git log",
+        "git diff"
+      ],
+      "template": "Summarize what changed in this repo in the last 24h as a standup update: done / in progress / blockers, three bullets each max.",
+      "instructions": "Inspect git log and the working tree for the last 24 hours. Write a standup update with three short sections: Done (merged/committed), In progress (uncommitted or branch work), Blockers (failing tests, TODOs, unresolved conflicts). Keep each section to three bullets."
+    },
+    {
+      "id": "nekko-agent-dep-audit",
+      "name": "dep-audit",
+      "description": "Audit dependencies for known vulnerabilities, unused packages, and majors you are behind on",
+      "author": "Nekko Labs",
+      "source": "nekkolabs",
+      "category": "Code quality",
+      "url": "https://github.com/nekko-labs/nekko-agent",
+      "installs": 1540,
+      "tools": [
+        "bash",
+        "read_file"
+      ],
+      "template": "Audit the dependencies: run the package manager audit, find unused packages, and list majors we are behind on, with a prioritized upgrade plan.",
+      "instructions": "Run the package manager audit (npm audit / cargo audit / pip-audit as appropriate), cross-check package manifests against actual imports to find unused dependencies, and list major versions the project is behind on. Produce a prioritized plan: security fixes first, then easy majors, then risky ones with their breaking changes."
+    },
+    {
+      "id": "nekko-agent-a11y-audit",
+      "name": "a11y-audit",
+      "description": "Audit UI code for accessibility: contrast, keyboard navigation, labels, and focus handling",
+      "author": "Nekko Labs",
+      "source": "nekkolabs",
+      "category": "Code quality",
+      "url": "https://github.com/nekko-labs/nekko-agent",
+      "installs": 1210,
+      "tools": [
+        "read_file",
+        "search"
+      ],
+      "template": "Audit the UI components for accessibility issues: missing labels/alt text, keyboard traps, focus handling, contrast risks. Report by severity with fixes.",
+      "instructions": "Sweep the UI components for accessibility problems: interactive elements without accessible names, missing alt text, keyboard traps or unreachable controls, missing focus styles, and color pairs likely to fail WCAG AA contrast. Report findings grouped by severity, each with the file, the problem, and a concrete fix."
+    },
+    {
+      "id": "community-i18n-sweep",
+      "name": "i18n-sweep",
+      "description": "Find hardcoded user-facing strings and move them into the translation files",
+      "author": "Nekko Labs",
+      "source": "nekkolabs",
+      "category": "Code quality",
+      "url": "https://github.com/nekko-labs/nekko-agent",
+      "tools": [
+        "search",
+        "edit_file"
+      ],
+      "template": "Sweep the UI code for hardcoded user-facing strings, move them into the i18n catalog, and flag any that need context notes for translators.",
+      "instructions": "Search the UI code for hardcoded user-facing strings (labels, toasts, placeholders, errors). Move each into the project’s i18n catalog with a sensible key, replace the literal with the lookup, and flag strings whose meaning needs a translator note. Do not touch log lines or developer-only text."
+    },
+    {
+      "id": "anthropic-pdf",
+      "name": "pdf",
+      "description": "Read, create, merge, split, and fill PDF files",
+      "author": "Nekko Labs",
+      "source": "community",
+      "category": "Automation",
+      "basedOn": "https://github.com/anthropics/skills/tree/main/skills/pdf",
+      "stars": 180100,
+      "tools": [
+        "bash",
+        "read_file",
+        "write_file"
+      ],
+      "template": "Work with the PDF file(s) I attach: extract text/tables, or create/merge/split/fill as I describe:\n\n",
+      "instructions": "Handle PDF work end to end: extract text and tables from PDFs, combine or split documents, rotate pages, fill form fields, and create new PDFs from content. Prefer well-known Python libraries (pypdf, reportlab) run via the shell; verify the output file opens cleanly."
+    },
+    {
+      "id": "anthropic-docx",
+      "name": "docx",
+      "description": "Create and edit Word documents with proper formatting, styles, and tracked changes",
+      "author": "Nekko Labs",
+      "source": "community",
+      "category": "Automation",
+      "basedOn": "https://github.com/anthropics/skills/tree/main/skills/docx",
+      "stars": 180100,
+      "tools": [
+        "bash",
+        "write_file"
+      ],
+      "template": "Create or edit the Word document as described, keeping professional formatting:\n\n",
+      "instructions": "Create or edit .docx files with professional formatting: headings, tables of contents, page numbers, styled tables, and letterheads. Use python-docx via the shell. When editing an existing document, preserve its styles and structure."
+    },
+    {
+      "id": "anthropic-xlsx",
+      "name": "xlsx",
+      "description": "Read, clean, analyze, and build spreadsheets with formulas and charts",
+      "author": "Nekko Labs",
+      "source": "community",
+      "category": "Automation",
+      "basedOn": "https://github.com/anthropics/skills/tree/main/skills/xlsx",
+      "stars": 180100,
+      "tools": [
+        "bash",
+        "read_file",
+        "write_file"
+      ],
+      "template": "Work with the spreadsheet as described (read/clean/compute/chart):\n\n",
+      "instructions": "Work with spreadsheet files: read and clean messy tabular data, compute columns and formulas, add charts, and produce well-formatted .xlsx output. Use openpyxl/pandas via the shell and sanity-check the numbers before delivering."
+    },
+    {
+      "id": "superpowers-brainstorm",
+      "name": "brainstorm",
+      "description": "Structured brainstorming that interrogates the problem before proposing solutions",
+      "author": "Nekko Labs",
+      "source": "community",
+      "category": "Research & planning",
+      "basedOn": "https://github.com/obra/superpowers/tree/main/skills/brainstorming",
+      "stars": 296700,
+      "tools": [],
+      "template": "Brainstorm with me on the following. First interrogate the problem with clarifying questions, then propose distinct solution directions with tradeoffs:\n\n",
+      "instructions": "Run a structured brainstorm: first ask the clarifying questions that actually change the answer, then generate several genuinely distinct solution directions, each with its tradeoffs and a cheap way to validate it. Converge on a recommendation only after laying out the space."
+    },
+    {
+      "id": "superpowers-debug",
+      "name": "systematic-debug",
+      "description": "Systematic root-cause debugging: reproduce, bisect, instrument, prove the fix",
+      "author": "Nekko Labs",
+      "source": "community",
+      "category": "Code quality",
+      "basedOn": "https://github.com/obra/superpowers/tree/main/skills/systematic-debugging",
+      "stars": 296700,
+      "tools": [
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "template": "Debug this systematically: reproduce it first, isolate the cause (bisect/instrument), fix the root cause, and prove the fix with a test:\n\n",
+      "instructions": "Debug systematically instead of guessing: reproduce the failure first, then isolate the cause by bisecting the input/commit/code path and adding targeted instrumentation. Fix the root cause, not the symptom, and prove the fix with a test that failed before and passes after.",
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/systematic-debug"
+          },
+          {
+            "id": "repro",
+            "kind": "context",
+            "label": "Reproduce",
+            "detail": "Make it fail on demand"
+          },
+          {
+            "id": "bisect",
+            "kind": "loop",
+            "label": "Isolate",
+            "detail": "Bisect + instrument"
+          },
+          {
+            "id": "cause",
+            "kind": "decision",
+            "label": "Root cause found?"
+          },
+          {
+            "id": "fix",
+            "kind": "tool",
+            "label": "Apply fix"
+          },
+          {
+            "id": "prove",
+            "kind": "tool",
+            "label": "Prove with test"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Fix + proof"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "repro"
+          },
+          {
+            "from": "repro",
+            "to": "bisect"
+          },
+          {
+            "from": "bisect",
+            "to": "cause"
+          },
+          {
+            "from": "cause",
+            "to": "bisect",
+            "label": "no",
+            "back": true
+          },
+          {
+            "from": "cause",
+            "to": "fix",
+            "label": "yes"
+          },
+          {
+            "from": "fix",
+            "to": "prove"
+          },
+          {
+            "from": "prove",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "community-conventional-commits",
+      "name": "conventional-commits",
+      "description": "Stage and commit with strict Conventional Commits messages, splitting unrelated changes",
+      "author": "Nekko Labs",
+      "source": "community",
+      "category": "Delivery",
+      "basedOn": "https://www.conventionalcommits.org",
+      "stars": 9300,
+      "tools": [
+        "git status",
+        "git diff",
+        "git commit"
+      ],
+      "template": "Commit the current changes using Conventional Commits. Split unrelated changes into separate commits.",
+      "instructions": "Inspect the working tree and group related changes. Commit each group with a strict Conventional Commits message (type(scope): subject, imperative, <72 chars, body explaining why when non-obvious). Never mix unrelated changes in one commit."
+    }
+  ],
+  "builtinNames": [
+    "goal",
+    "research",
+    "plan",
+    "review",
+    "security-review",
+    "simplify",
+    "test",
+    "explain",
+    "fix",
+    "commit",
+    "pr"
+  ],
+  "vaizerSnapshot": {
+    "marketplace": "vaizer",
+    "addCommand": "/plugin marketplace add nekko-labs/vaizer",
+    "source": "bundled",
+    "skills": [
+      {
+        "id": "domain-finder",
+        "name": "Domain Finder",
+        "slug": "domain-finder",
+        "tier": "nekko-official",
+        "category": "research",
+        "description": "Brainstorm startup/project names, check domain availability across TLDs via RDAP, and vet brand/trademark conflicts.",
+        "tags": [
+          "domains",
+          "naming",
+          "branding",
+          "rdap",
+          "startup",
+          "trademark"
+        ],
+        "author": "Nekko Labs",
+        "version": "1.0.0",
+        "license": "MIT",
+        "installCommand": "/plugin install vaizer@vaizer",
+        "sourceUrl": "https://github.com/nekko-labs/vaizer/tree/main/plugins/vaizer/skills/domain-finder"
+      },
+      {
+        "id": "nyaa",
+        "name": "nyaa",
+        "slug": "nyaa",
+        "tier": "nekko-official",
+        "category": "engineering",
+        "description": "Five reviewer cats read your PR or working diff, one lens each. The first checks the code against what the PR description promised and against SPEC.md; the rest cover security, dependencies, correctness, and style. Choose which cats sit, and external bot reviews fold into a single verdict.",
+        "tags": [
+          "code-review",
+          "pull-request",
+          "pr-description",
+          "spec",
+          "spec-conformance",
+          "product-intent",
+          "security",
+          "dependencies",
+          "supply-chain",
+          "concurrency",
+          "lint"
+        ],
+        "author": "Nekko Labs",
+        "version": "1.3.0",
+        "license": "MIT",
+        "installCommand": "/plugin install vaizer@vaizer",
+        "sourceUrl": "https://github.com/nekko-labs/vaizer/tree/main/plugins/vaizer/skills/nyaa"
+      },
+      {
+        "id": "resume-checker",
+        "name": "Resume Checker",
+        "slug": "resume-checker",
+        "tier": "nekko-official",
+        "category": "career",
+        "description": "Check a resume against automated candidate-screening (ATS) signals and AI-centric job expectations, score it against specific job postings, then interactively apply fixes and show exactly what changed.",
+        "tags": [
+          "resume",
+          "cv",
+          "ats",
+          "job-hunt",
+          "career",
+          "screening",
+          "ai-roles"
+        ],
+        "author": "Nekko Labs",
+        "version": "1.0.0",
+        "license": "MIT",
+        "installCommand": "/plugin install vaizer@vaizer",
+        "sourceUrl": "https://github.com/nekko-labs/vaizer/tree/main/plugins/vaizer/skills/resume-checker"
+      },
+      {
+        "id": "codereview-spec",
+        "name": "codereview-spec",
+        "slug": "codereview-spec",
+        "tier": "nekko-official",
+        "category": "engineering",
+        "description": "Reviews a change against what its PR description promised and against your spec, then reviews the spec itself. Catches stated goals the code does not actually deliver, features shipped without a spec update, and the gaps in the spec that let them through.",
+        "tags": [
+          "code-review",
+          "spec",
+          "spec-conformance",
+          "product-intent",
+          "pr-description",
+          "drift",
+          "documentation",
+          "pull-request"
+        ],
+        "author": "Nekko Labs",
+        "version": "1.2.0",
+        "license": "MIT",
+        "installCommand": "/plugin install vaizer@vaizer",
+        "sourceUrl": "https://github.com/nekko-labs/vaizer/tree/main/plugins/vaizer/skills/codereview-spec"
+      }
+    ]
+  },
+  "vaizerCatalogUrl": "https://raw.githubusercontent.com/nekko-labs/vaizer/main/catalog.json",
+  "vaizerRepo": "nekko-labs/vaizer"
+}

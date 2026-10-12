@@ -478,6 +478,18 @@ pub fn decode_text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// `a.localeCompare(b)`: V8 hands it to ICU's root collation.
+pub fn locale_compare(a: &str, b: &str) -> std::cmp::Ordering {
+    use icu_collator::options::CollatorOptions;
+    use icu_collator::{Collator, CollatorBorrowed};
+    use std::sync::OnceLock;
+    static C: OnceLock<Option<CollatorBorrowed<'static>>> = OnceLock::new();
+    match C.get_or_init(|| Collator::try_new(Default::default(), CollatorOptions::default()).ok()).as_ref() {
+        Some(c) => c.compare(a, b),
+        None => a.cmp(b),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -503,6 +515,17 @@ mod tests {
         assert_eq!(to_fixed(2.5, 0), "3");
     }
     use serde_json::json;
+
+    #[test]
+    fn pretty_prints_like_json_stringify_with_two_spaces() {
+        let v = json!({ "a": [], "b": {}, "c": [1, { "d": 1.5e21 }], "e": "x\"" });
+        assert_eq!(
+            stringify_pretty(&v, "  "),
+            "{\n  \"a\": [],\n  \"b\": {},\n  \"c\": [\n    1,\n    {\n      \"d\": 1.5e+21\n    }\n  ],\n  \"e\": \"x\\\"\"\n}"
+        );
+        let ordered = js_order(json!({ "b": 1, "10": 2, "2": 3, "07": 4 }));
+        assert_eq!(ordered.as_object().unwrap().keys().collect::<Vec<_>>(), ["2", "10", "b", "07"]);
+    }
 
     #[test]
     fn measures_caps_and_folds_like_javascript() {

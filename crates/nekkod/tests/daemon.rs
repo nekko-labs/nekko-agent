@@ -34,6 +34,8 @@ fn fake_backend() {
         // What `turn:prepare` admits a queued prompt as: a test sets the spec's template.
         let template = std::sync::Arc::new(std::sync::Mutex::new(None::<Value>));
         let prepared = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        // What `design:provider` answers: a test points it at its scripted model.
+        let design_provider = std::sync::Arc::new(std::sync::Mutex::new(None::<Value>));
         // Checkpoint events and loop:end carry the same image-bearing transcript.
         // The fake host must accept it rather than silently rejecting >2 MiB JSON.
         let app = axum::Router::new()
@@ -76,6 +78,22 @@ fn fake_backend() {
                                 },
                                 axum::Json(json!({ "result": { "toolCallId": body.0["args"][1]["id"], "output": "host tool ran" } })),
                             ),
+                            "chats:busy" => (axum::http::StatusCode::OK, axum::Json(json!(["s_busy"]))),
+                            "test:designProvider" => {
+                                *design_provider.lock().unwrap() = Some(body.0["args"][0].clone());
+                                (axum::http::StatusCode::OK, axum::Json(Value::Null))
+                            }
+                            "provider:resolved" => match design_provider.lock().unwrap().clone() {
+                                Some(v) => (axum::http::StatusCode::OK, axum::Json(v)),
+                                None => (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "no provider" }))),
+                            },
+                            "design:provider" => match design_provider.lock().unwrap().clone() {
+                                Some(v) => (axum::http::StatusCode::OK, axum::Json(v)),
+                                None => (
+                                    axum::http::StatusCode::BAD_REQUEST,
+                                    axum::Json(json!({ "error": "Set a default provider and model in Models first." })),
+                                ),
+                            },
                             "test:prepareTemplate" => {
                                 *template.lock().unwrap() = Some(body.0["args"][0].clone());
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
@@ -1769,6 +1787,235 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     assert!(tools[0]["description"].as_str().is_some_and(|d| !d.is_empty()));
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn serves_files_memory_and_comments_itself() {
+    let data = std::env::temp_dir().join(format!("nekkod-workspace-{}", std::process::id()));
+    let project = data.join("project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(project.join("src").join("a.ts"), "export function a() {}\n").unwrap();
+    let d = start_with(true, Some(&data));
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in ["file:read", "dir:list", "workspace:search", "memory:save", "comment:add"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
+    }
+    let file = project.join("src").join("a.ts").to_string_lossy().into_owned();
+    let (status, read) = post(d.port, "file:read", json!([file]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(read, json!({ "content": "export function a() {}\n", "truncated": false, "binary": false }));
+    let written = project.join("new").join("b.txt").to_string_lossy().into_owned();
+    post(d.port, "file:write", json!([written, "hi"]), Some(TOKEN)).await;
+    assert_eq!(std::fs::read_to_string(&written).unwrap(), "hi");
+    let (_, listed) = post(d.port, "dir:list", json!([project.to_string_lossy()]), Some(TOKEN)).await;
+    assert_eq!(
+        listed.as_array().unwrap().iter().map(|e| e["name"].clone()).collect::<Vec<_>>(),
+        [json!("new"), json!("src")]
+    );
+
+    let (_, saved) = post(
+        d.port,
+        "memory:save",
+        json!([{ "id": "m_1", "scope": "global", "title": "T", "body": "B", "tags": [], "createdAt": 1, "updatedAt": 1 }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(saved[0]["id"], "m_1");
+    assert!(data.join("memory").join("m_1.md").exists());
+    let (status, refused) = post(d.port, "memory:delete", json!(["../x"]), Some(TOKEN)).await;
+    assert_ne!(status, 200, "{refused}");
+    post(d.port, "memory:delete", json!(["m_1"]), Some(TOKEN)).await;
+    assert!(!data.join("memory").join("m_1.md").exists());
+
+    let (_, added) = post(d.port, "comment:add", json!(["/p.ts", 3, "x", "look"]), Some(TOKEN)).await;
+    let id = added[0]["id"].clone();
+    let (_, listed) = post(d.port, "comments:list", json!(["/p.ts"]), Some(TOKEN)).await;
+    assert_eq!(listed, added);
+    let (_, resolved) = post(d.port, "comment:resolve", json!(["/p.ts", id]), Some(TOKEN)).await;
+    assert_eq!(resolved, json!([]));
+    // A folder the settings do not list is not searched.
+    let (_, hits) = post(d.port, "workspace:search", json!(["w_missing", "a"]), Some(TOKEN)).await;
+    assert_eq!(hits, json!([]));
+    // The folder list is the daemon's own settings.
+    let folder =
+        json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": project.to_string_lossy(), "addedAt": 1 }] }]);
+    post(d.port, "settings:update", folder, Some(TOKEN)).await;
+    let (_, done) = post(d.port, "workspace:index", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(
+        (done["state"].clone(), done["fileCount"].clone(), done["symbolCount"].clone()),
+        (json!("ready"), json!(2), json!(1))
+    );
+    let (_, hits) = post(d.port, "workspace:search", json!(["w1", "FUNCTION A"]), Some(TOKEN)).await;
+    assert_eq!(hits[0]["relPath"], json!("src/a.ts"));
+    assert_eq!(hits[0]["line"], json!(1));
+    let (_, listed) = post(d.port, "workspace:files", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(listed.as_array().unwrap().len(), 2);
+    let (_, snippets) =
+        post(d.port, "workspace:snippets", json!([["w1"], "where is function defined"]), Some(TOKEN)).await;
+    assert_eq!(snippets[0]["body"], json!("1: export function a() {}"));
+    let (_, status) = post(d.port, "workspace:indexStatus", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(status["state"], json!("ready"));
+    // Skills (the nekko-agent target only: nothing is written outside the data dir).
+    let (_, installed) =
+        post(d.port, "skill:install", json!(["nekko-agent-review-council", "nekko-agent"]), Some(TOKEN)).await;
+    assert_eq!(installed["ok"], json!(true));
+    assert!(data.join("skills.json").exists());
+    let (_, listed) = post(d.port, "skills:installed", json!([]), Some(TOKEN)).await;
+    assert_eq!(listed[0]["skillId"], json!("nekko-agent-review-council"));
+    let (_, left) =
+        post(d.port, "skill:uninstall", json!(["nekko-agent-review-council", "nekko-agent"]), Some(TOKEN)).await;
+    assert_eq!(left, json!([]));
+    let (_, catalog) = post(d.port, "vaizer:catalog", json!([]), Some(TOKEN)).await;
+    assert_eq!(catalog["source"], json!("bundled"));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn generates_a_design_on_the_default_provider() {
+    let data = std::env::temp_dir().join(format!("nekkod-design-{}", std::process::id()));
+    std::fs::create_dir_all(&data).unwrap();
+    let model = scripted_model(vec![say_text("```html\n<!DOCTYPE html><p>Pricing</p>\n```")]).await;
+    let d = start_with(true, Some(&data));
+    // No default provider yet: the host's answer is the error.
+    let (status, refused) =
+        post(d.port, "design:generate", json!(["w1", { "prompt": "A pricing page" }]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
+    assert!(refused.to_string().contains("default provider"), "{refused}");
+    let (status, _) = post(d.port, "design:generate", json!(["w1", { "prompt": "  " }]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
+    let provider = json!({ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) });
+    post(
+        d.port,
+        "test:designProvider",
+        json!([{ "provider": provider, "model": "synthetic", "promptCaching": true }]),
+        Some(TOKEN),
+    )
+    .await;
+    let (status, board) =
+        post(d.port, "design:generate", json!(["w1", { "prompt": "  A pricing page  " }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{board}");
+    let page = &board["pages"][0];
+    assert_eq!(
+        (page["kind"].clone(), page["label"].clone(), page["html"].clone()),
+        (json!("concept"), json!("A pricing page"), json!("<!DOCTYPE html><p>Pricing</p>"))
+    );
+    let sent = model.requests.lock().unwrap().clone();
+    let user = sent[0]["messages"].as_array().unwrap().iter().find(|m| m["role"] == "user").unwrap().clone();
+    assert_eq!(user["content"], json!("Design this: A pricing page"));
+    let (_, again) = post(d.port, "design:get", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(again, board);
+    let (_, noted) = post(d.port, "design:addNote", json!(["w1", page["id"], " tighter "]), Some(TOKEN)).await;
+    assert_eq!(noted["pages"][0]["notes"][0]["text"], json!("tighter"));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn adds_and_revokes_folders_through_the_daemons_settings() {
+    let data = std::env::temp_dir().join(format!("nekkod-folders-{}", std::process::id()));
+    let project = data.join("My Project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(project.join("src").join("x.rs"), "pub fn x() {}\n").unwrap();
+    let path = project.to_string_lossy().into_owned();
+    let d = start_with(true, Some(&data));
+    let (_, added) = post(d.port, "workspace:addByPath", json!([path]), Some(TOKEN)).await;
+    let folder = added[0].clone();
+    assert_eq!((folder["name"].clone(), folder["path"].clone()), (json!("My Project"), json!(path)));
+    let id = folder["id"].as_str().unwrap().to_string();
+    assert!(id.starts_with("ws_"));
+    // The same folder spelled differently is not added twice.
+    let respelled = format!("{path}{}", std::path::MAIN_SEPARATOR);
+    let (_, again) = post(d.port, "workspace:addByPath", json!([respelled]), Some(TOKEN)).await;
+    assert_eq!(again.as_array().unwrap().len(), 1);
+    let (_, listed) = post(d.port, "workspace:list", json!([]), Some(TOKEN)).await;
+    assert_eq!(listed, added);
+    // Indexed shortly after it was added.
+    let mut status = Value::Null;
+    for _ in 0..50 {
+        status = post(d.port, "workspace:indexStatus", json!([id]), Some(TOKEN)).await.1;
+        if status["state"] == "ready" {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!((status["state"].clone(), status["symbolCount"].clone()), (json!("ready"), json!(1)));
+    // A chat using it loses it when access is revoked; a running one blocks that.
+    let sessions = data.join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let chat = |sid: &str| json!({ "id": sid, "title": sid, "workspaceId": id, "supportingWorkspaceIds": [id], "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(sessions.join("s_busy.json"), chat("s_busy").to_string()).unwrap();
+    let (status, refused) = post(d.port, "workspace:remove", json!([id]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
+    assert!(refused.to_string().contains("Wait for chats"), "{refused}");
+    std::fs::remove_file(sessions.join("s_busy.json")).unwrap();
+    std::fs::write(sessions.join("s_idle.json"), chat("s_idle").to_string()).unwrap();
+    let (status, left) = post(d.port, "workspace:remove", json!([id]), Some(TOKEN)).await;
+    assert_eq!((status, left), (200, json!([])));
+    let (_, saved) = post(d.port, "session:get", json!(["s_idle"]), Some(TOKEN)).await;
+    assert!(saved.get("workspaceId").is_none());
+    assert_eq!(saved["supportingWorkspaceIds"], json!([]));
+    assert!(project.join("src").join("x.rs").exists(), "the folder itself is never touched");
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn builds_a_linked_spec_on_the_chats_provider() {
+    let data = std::env::temp_dir().join(format!("nekkod-spec-{}", std::process::id()));
+    let project = data.join("project");
+    std::fs::create_dir_all(project.join("x")).unwrap();
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::write(
+        project.join("tasks.md"),
+        "- [ ] a
+",
+    )
+    .unwrap();
+    let chat = json!({ "id": "s_spec", "title": "t", "workspaceId": "w1", "providerId": "p1", "modelId": "synthetic", "messages": [
+        { "id": "u", "role": "user", "content": "Make a todo app", "createdAt": 1 }
+    ], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions").join("s_spec.json"), chat.to_string()).unwrap();
+    let model = scripted_model(vec![say_text(
+        "```markdown
+# Todo spec
+```",
+    )])
+    .await;
+    let d = start_with(true, Some(&data));
+    let provider = json!({ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) });
+    let folder = json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": project.to_string_lossy(), "addedAt": 1 }], "providers": [provider] }]);
+    post(d.port, "settings:update", folder, Some(TOKEN)).await;
+    post(d.port, "test:designProvider", json!([{ "provider": provider, "promptCaching": true }]), Some(TOKEN)).await;
+    let (status, built) = post(d.port, "spec:build", json!(["s_spec"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{built}");
+    assert_eq!(built["ok"], json!(true), "{built}");
+    assert_eq!(
+        std::fs::read_to_string(project.join("spec.md")).unwrap(),
+        "# Todo spec
+"
+    );
+    let (_, toggled) = post(d.port, "spec:toggleTask", json!(["s_spec", 0]), Some(TOKEN)).await;
+    assert_eq!(toggled, json!({ "ok": true }));
+    assert_eq!(
+        std::fs::read_to_string(project.join("tasks.md")).unwrap(),
+        "- [x] a
+"
+    );
+    let (_, docs) = post(d.port, "spec:readDocs", json!(["s_spec"]), Some(TOKEN)).await;
+    assert_eq!(
+        docs["docs"][0]["content"],
+        json!(
+            "# Todo spec
+"
+        )
+    );
+    post(d.port, "spec:setMethodology", json!(["s_spec", "kiro"]), Some(TOKEN)).await;
+    let (_, saved) = post(d.port, "session:get", json!(["s_spec"]), Some(TOKEN)).await;
+    assert_eq!(saved["specMethodology"], json!("kiro"));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -49,7 +49,7 @@ import { turnReplyRecord, turnUsageRecord } from './usage-records.js';
 import * as LimitsService from './limits.js';
 import { listMemory } from './memory.js';
 import { ensureFreshToken, resolveSubscriptionProvider } from './oauth.js';
-import { searchWorkspace } from './workspace.js';
+import { collectIndexSnippets } from './workspace.js';
 import { buildSpec } from './spec.js';
 import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool, DAEMON_MCP } from './mcp.js';
 import { daemonCall } from './engine/daemon.js';
@@ -63,36 +63,14 @@ import { completeText } from './sideband.js';
 import { createHostProvider as createProvider, promptCachingForHost } from './prompt-caching.js';
 import { appendAgentTerminal, finishAgentTerminal } from './terminal.js';
 
-/**
- * Retrieve code snippets from the session's workspace index relevant to the
- * query, so the model gets grounding without having to grep first. Keyword
- * tokens are searched, hits grouped per file, and the top few files included.
- */
-function collectIndexSnippets(
-  workspaceIds: string[],
-  query: string,
-): Array<{ relPath: string; path: string; body: string }> {
-  if (!workspaceIds.length || !query.trim()) return [];
-  const tokens = Array.from(new Set(query.toLowerCase().match(/[a-z0-9_]{4,}/g) ?? [])).slice(0, 6);
-  if (tokens.length === 0) return [];
-
-  const byFile = new Map<string, { relPath: string; path: string; lines: string[]; workspaceRank: number }>();
-  for (const [workspaceRank, workspaceId] of workspaceIds.entries()) {
-    const folder = getSettings().workspaces.find((w) => w.id === workspaceId);
-    if (!folder) continue;
-    for (const token of tokens) {
-      for (const hit of searchWorkspace(folder, token)) {
-        const entry = byFile.get(hit.path) ?? { relPath: hit.relPath, path: hit.path, lines: [], workspaceRank };
-        if (entry.lines.length < 8) entry.lines.push(`${hit.line}: ${hit.text}`);
-        byFile.set(hit.path, entry);
-      }
-    }
+/** The chat's index snippets, from the engine daemon when it holds the index. */
+async function indexSnippetsFor(workspaceIds: string[], query: string): Promise<Array<{ relPath: string; path: string; body: string }>> {
+  const daemon = daemonCall();
+  if (daemon && workspaceIds.length && (await daemonOwns(daemon, 'workspace:snippets'))) {
+    return daemon<Array<{ relPath: string; path: string; body: string }>>('workspace:snippets', workspaceIds, query).catch(() => []);
   }
-
-  return [...byFile.entries()]
-    .sort((a, b) => a[1].workspaceRank - b[1].workspaceRank || b[1].lines.length - a[1].lines.length)
-    .slice(0, 4)
-    .map(([, v]) => ({ relPath: v.relPath, path: v.path, body: v.lines.join('\n') }));
+  const saved = getSettings().workspaces;
+  return collectIndexSnippets(workspaceIds.map((id) => saved.find((w) => w.id === id)), query);
 }
 
 type Sender = (event: AgentEvent) => void;
@@ -1008,7 +986,7 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   // of the context is read from disk by whichever route builds the prompt.
   // Offline mode skips internet connectors.
   const connectorSnippets = sandbox || offline ? [] : await collectConnectorSnippets(opts.text);
-  const indexSnippets = sandbox ? [] : session.gitWorktrees && Object.keys(session.gitWorktrees).length ? [] : collectIndexSnippets(getSessionWorkspaceIds(session), opts.text);
+  const indexSnippets = sandbox ? [] : session.gitWorktrees && Object.keys(session.gitWorktrees).length ? [] : await indexSnippetsFor(getSessionWorkspaceIds(session), opts.text);
 
   return { settings, provider, session, sandbox, workspaces, toolSettings, mode, offline, incognito, abort, allowSpawn, decideWith, tools, connectorSnippets, indexSnippets, daemonMcp };
 }
@@ -1331,6 +1309,13 @@ interface AfterTurn {
   aborted: boolean;
 }
 
+/** The linked spec, built by the engine daemon when it owns spec files. */
+async function buildLinkedSpec(sessionId: string): Promise<unknown> {
+  const daemon = daemonCall();
+  if (daemon && (await daemonOwns(daemon, 'spec:build'))) return daemon('spec:build', sessionId);
+  return buildSpec(sessionId);
+}
+
 /** What follows any turn here: TurnEnd hooks and the linked spec. */
 function afterTurnHooks(t: Omit<AfterTurn, 'send' | 'allowBrowserControl' | 'aborted'>): void {
   const { opts, sandbox, incognito, offline } = t;
@@ -1344,7 +1329,7 @@ function afterTurnHooks(t: Omit<AfterTurn, 'send' | 'allowBrowserControl' | 'abo
 
   // Keep the linked spec.md in sync with the conversation (best-effort).
   if (!sandbox && t.session.specLinked && !incognito && !offline) {
-    buildSpec(opts.sessionId).catch(() => {});
+    void buildLinkedSpec(opts.sessionId).catch(() => {});
   }
 }
 

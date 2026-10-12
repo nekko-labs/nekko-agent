@@ -89,7 +89,7 @@ import type {
   ModelFolderReport,
   SkillDef,
 } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, isLocalProvider, isRuntimeKind, queueItemPayload, SKILLS, sameFolderPath } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, queueItemPayload, SKILLS, sameFolderPath } from '@nekko-agent/shared';
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
@@ -128,7 +128,7 @@ import {
   resolveDesignNote,
   generateDesign,
 } from './design.js';
-import { listInstalledSkills, skillTargets, installSkill, uninstallSkill, listInstalledSkillDefs } from './skills.js';
+import { listInstalledSkills, readInstalledSkills, skillTargets, installSkill, uninstallSkill, listInstalledSkillDefs } from './skills.js';
 import { discoverExternalSkills } from './external-skills.js';
 import { getVaizerCatalog, getVaizerSkillMd } from './vaizer.js';
 import {
@@ -173,7 +173,7 @@ import {
 import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
 import { adoptAdmittedTurn, connectorSnippetsFor, indexSnippetsForAdmission, isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
-import { loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
+import { daemonOwns as daemonServes, loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
 import { setTurnNotifier, turnCallback } from './daemon-turn.js';
 import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
 import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemon as notifyLimits } from './limits.js';
@@ -285,6 +285,10 @@ export interface Host {
   changesNotify(sessionId: string): void;
   /** The daemon saved a settings change made elsewhere (the UI's update or reset): follow it. */
   settingsChanged(next: AppSettings, patch: Partial<AppSettings> | null): void;
+  /** The daemon indexed a workspace (`index:progress`) and told the UI; this host's listeners (the phone relay) hear it. */
+  indexProgressRelay(status: IndexStatus): void;
+  /** Chats being admitted or running here, for the daemon revoking a folder (`chats:busy`). */
+  busySessions(): string[];
   /** The daemon changed a limits snapshot (`limits:notify`): the phone relay hears it. */
   limitsNotify(payload: { tokenKey: string; limits: SubscriptionLimits }): void;
   /**
@@ -615,6 +619,15 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   initOAuth(events);
   initLimits(events);
   const onIndexProgress = (s: IndexStatus) => events.emit('indexProgress', s);
+  // The engine daemon holds the index when it serves `workspace:index`.
+  const indexNewFolder = async (folder: WorkspaceFolder) => {
+    const daemon = daemonCall();
+    if (daemon && (await daemonServes(daemon, IpcChannels.workspaceIndex))) {
+      await daemon(IpcChannels.workspaceIndex, folder.id).catch(() => {});
+    } else {
+      indexWorkspace(folder, onIndexProgress);
+    }
+  };
   // Fan terminal output out to renderers over the same event bus.
   setTerminalSender((e) => events.emit('terminalEvent', e));
   // Notify renderers when a session's tracked file changes shift.
@@ -895,6 +908,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
         if (patch.messaging !== undefined) messaging.update(getSettings().messaging);
       }
     },
+    indexProgressRelay: (status) => events.emit('indexProgress', { ...status, relayOnly: true }),
+    busySessions: () => [...new Set([...activeChats.keys(), ...getRunningSessionIds()])],
     limitsNotify: notifyLimits,
     oauthRefresh: async (tokenKey) => { await ensureFreshToken(tokenKey); },
     hypergateSave: (info) => saveSettings({ mcpServers: withHypergate(getSettings().mcpServers ?? [], info) }).mcpServers ?? [],
@@ -1093,7 +1108,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       };
       const workspaces = [...current, folder];
       saveSettings({ workspaces });
-      setTimeout(() => indexWorkspace(folder, onIndexProgress), 50);
+      setTimeout(() => void indexNewFolder(folder), 50);
       return workspaces;
     },
     removeWorkspace: (id) => {
@@ -1147,7 +1162,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     listExternalSkills: () =>
       discoverExternalSkills({
         projectRoots: getSettings().workspaces.map((w) => w.path),
-        exclude: listInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
+        exclude: readInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
         reserved: [...SKILLS, ...listInstalledSkillDefs()].map((s) => s.name),
       }),
     skillTargets,

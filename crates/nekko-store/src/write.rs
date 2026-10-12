@@ -383,6 +383,33 @@ impl SessionStore {
         })
     }
 
+    /// `setSpecMethodology(sessionId, id)`: `id` already resolved to a known
+    /// methodology. `None` when there is no such chat.
+    pub fn set_spec_methodology(&self, id: &str, methodology: &Value) -> Result<Option<Value>, String> {
+        let methodology = methodology.clone();
+        self.patch(id, |s| {
+            s.insert("specMethodology".into(), methodology);
+            true
+        })
+    }
+
+    /// What `removeWorkspace` in host.ts does to a chat using a folder whose
+    /// access is revoked: the primary cleared when it is that folder, the
+    /// folder dropped from the supporting list (an emptied list stays `[]`).
+    /// `None` when there is no such chat.
+    pub fn revoke_workspace(&self, id: &str, workspace_id: &str) -> Result<Option<Value>, String> {
+        self.patch(id, |s| {
+            if s.get("workspaceId").and_then(Value::as_str) == Some(workspace_id) {
+                s.shift_remove("workspaceId");
+            }
+            if let Some(Value::Array(sup)) = s.get("supportingWorkspaceIds").cloned() {
+                let kept: Vec<Value> = sup.into_iter().filter(|w| w.as_str() != Some(workspace_id)).collect();
+                s.insert("supportingWorkspaceIds".into(), Value::Array(kept));
+            }
+            true
+        })
+    }
+
     /// `setSessionSupportingWorkspaces`: unique, non-empty, never the primary.
     pub fn set_supporting(&self, id: &str, ids: &Value) -> Result<Option<Value>, String> {
         let wanted: Vec<String> =

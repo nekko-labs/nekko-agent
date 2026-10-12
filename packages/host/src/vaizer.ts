@@ -8,6 +8,8 @@ import {
   vaizerSkillMdUrl,
 } from '@nekko-agent/shared';
 import { dataDir } from './store.js';
+import { daemonCall } from './engine/daemon.js';
+import { daemonOwns } from './daemon-loop.js';
 
 /**
  * Vaizer skills marketplace (github.com/nekko-labs/vaizer), an optional
@@ -97,4 +99,14 @@ export async function getVaizerSkillMd(slug: string): Promise<string | null> {
     }
   }
   return null;
+}
+
+/**
+ * A live catalog refresh for the update checks: from the engine daemon when
+ * it owns the catalog (it writes vaizer.json then), else here.
+ */
+export async function refreshVaizerCatalog(): Promise<VaizerCatalog> {
+  const daemon = daemonCall();
+  if (daemon && (await daemonOwns(daemon, 'vaizer:catalog'))) return daemon<VaizerCatalog>('vaizer:catalog', true);
+  return getVaizerCatalog(true);
 }

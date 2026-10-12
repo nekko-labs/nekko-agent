@@ -1,6 +1,62 @@
 import { IpcChannels } from '@nekko-agent/shared';
 import type { Host } from './host.js';
 import { deleteAgentLog } from './agent-log.js';
+import { benchHostLoad } from './workspace.js';
+import { designProvider } from './design.js';
+import { resolvedProvider } from './spec.js';
+import { daemonOwns } from './daemon-loop.js';
+import { daemonCall } from './engine/daemon.js';
+
+/**
+ * Channels the engine daemon answers itself once it lists them in
+ * `daemon:info` `owned`, and never hands back to this host. A call that
+ * reaches this dispatcher anyway (the local API server, the phone relay)
+ * goes to the daemon, which holds their state (the workspace index lives in
+ * its memory). Only channels the daemon never forwards here may be listed,
+ * or a call would loop.
+ */
+export const DAEMON_SERVED = new Set<string>([
+  IpcChannels.workspaceList,
+  IpcChannels.workspaceAddByPath,
+  IpcChannels.workspaceRemove,
+  IpcChannels.fileRead,
+  IpcChannels.fileWrite,
+  IpcChannels.dirList,
+  IpcChannels.workspaceIndex,
+  IpcChannels.workspaceIndexStatus,
+  IpcChannels.workspaceSearch,
+  IpcChannels.workspaceFiles,
+  IpcChannels.workspaceGitStatus,
+  IpcChannels.prSessionList,
+  IpcChannels.prDiff,
+  IpcChannels.prAction,
+  IpcChannels.designGet,
+  IpcChannels.designAddPage,
+  IpcChannels.designUpdatePage,
+  IpcChannels.designRemovePage,
+  IpcChannels.designAddNote,
+  IpcChannels.designResolveNote,
+  IpcChannels.designGenerate,
+  IpcChannels.skillsInstalled,
+  IpcChannels.skillsExternal,
+  IpcChannels.skillsTargets,
+  IpcChannels.skillInstall,
+  IpcChannels.skillUninstall,
+  IpcChannels.vaizerCatalog,
+  IpcChannels.vaizerSkillMd,
+  IpcChannels.specPath,
+  IpcChannels.specReadDocs,
+  IpcChannels.specSetMethodology,
+  IpcChannels.specToggleTask,
+  IpcChannels.specBuild,
+  IpcChannels.specBuildDoc,
+  IpcChannels.memoryList,
+  IpcChannels.memorySave,
+  IpcChannels.memoryDelete,
+  IpcChannels.commentsList,
+  IpcChannels.commentAdd,
+  IpcChannels.commentResolve,
+]);
 
 /**
  * Maps an IPC channel + positional args to the matching Host method. Shared by
@@ -75,6 +131,14 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'changes:notify': ([sessionId]) => host.changesNotify(String(sessionId)),
     // The daemon writes settings.json (crates/nekkod/src/settings.rs) and tells this host what changed.
     'settings:changed': ([next, patch]) => host.settingsChanged(next as never, (patch ?? null) as never),
+    // The daemon indexed a workspace (crates/nekkod/src/workspace.rs); it told the UI itself.
+    'index:progress': ([status]) => host.indexProgressRelay(status as never),
+    // The daemon generates a design (crates/nekkod/src/workspace.rs) with the default provider, signed in here.
+    'design:provider': () => designProvider(),
+    // The daemon revoking a folder asks which chats are mid-turn here.
+    'chats:busy': () => host.busySessions(),
+    // The daemon builds a spec doc (crates/nekkod/src/workspace.rs) with the chat's provider, signed in here.
+    'provider:resolved': ([providerId]) => resolvedProvider(String(providerId)),
     // The daemon keeps limit state (crates/nekkod/src/limits.rs) and asks this
     // host only for what still lives here: a refreshed sign-in, and the relay.
     'limits:notify': ([payload]) => host.limitsNotify(payload as never),
@@ -294,11 +358,27 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.mcpHypergateConnect]: ([port]) => host.connectHypergate(port),
   };
 
+  // Benchmarks only (scripts/bench-chat-turn.mjs sets the variable on the
+  // backend it starts): the host-side work the old in-host index search did,
+  // to keep this process's event loop busy now that the daemon searches.
+  if (process.env.NEKKO_BENCH_LOAD === '1') {
+    table['bench:hostLoad'] = ([id, q]) => {
+      const folder = host.listWorkspaces().find((w) => w.id === id);
+      return folder ? benchHostLoad(folder, String(q)) : [];
+    };
+  }
+
   // A Map: a channel named constructor or __proto__ is unknown, never Object.prototype's.
   const handlers = new Map(Object.entries(table));
   return (channel, args) => {
     const fn = handlers.get(channel);
     if (typeof fn !== 'function') throw new Error(`Unknown channel: ${channel}`);
-    return fn(args ?? []);
+    const daemon = DAEMON_SERVED.has(channel) ? daemonCall() : undefined;
+    if (!daemon) return fn(args ?? []);
+    return (async () => {
+      if (await daemonOwns(daemon, channel)) return daemon(channel, ...(args ?? []));
+      if (typeof fn !== 'function') throw new Error(`Unknown channel: ${channel}`);
+      return fn(args ?? []);
+    })();
   };
 }

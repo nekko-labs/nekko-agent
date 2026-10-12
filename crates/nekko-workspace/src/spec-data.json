@@ -1,0 +1,95 @@
+{
+  "methodologies": [
+    {
+      "id": "spec-tasks",
+      "label": "Spec → Tasks",
+      "description": "A spec then a task checklist, no separate plan.",
+      "docs": [
+        {
+          "id": "spec",
+          "filename": "spec.md",
+          "label": "Spec",
+          "role": "spec",
+          "description": "What & why, vision, users, requirements."
+        },
+        {
+          "id": "tasks",
+          "filename": "tasks.md",
+          "label": "Tasks",
+          "role": "tasks",
+          "description": "Discrete, checkable work items."
+        }
+      ]
+    },
+    {
+      "id": "nekko-agent",
+      "label": "Spec → Plan → Tasks",
+      "description": "Nekko Agent default: a spec, a technical plan, then a task checklist.",
+      "docs": [
+        {
+          "id": "spec",
+          "filename": "spec.md",
+          "label": "Spec",
+          "role": "spec",
+          "description": "What & why, vision, users, requirements."
+        },
+        {
+          "id": "plan",
+          "filename": "plan.md",
+          "label": "Plan",
+          "role": "plan",
+          "description": "How, architecture, stack, conventions."
+        },
+        {
+          "id": "tasks",
+          "filename": "tasks.md",
+          "label": "Tasks",
+          "role": "tasks",
+          "description": "Discrete, checkable work items."
+        }
+      ]
+    },
+    {
+      "id": "kiro",
+      "label": "Requirements → Design → Tasks",
+      "description": "Kiro-style: requirements (user stories), technical design, tasks.",
+      "docs": [
+        {
+          "id": "requirements",
+          "filename": "requirements.md",
+          "label": "Requirements",
+          "role": "spec",
+          "description": "User stories & acceptance criteria."
+        },
+        {
+          "id": "design",
+          "filename": "design.md",
+          "label": "Design",
+          "role": "plan",
+          "description": "Architecture, data model, sequencing."
+        },
+        {
+          "id": "tasks",
+          "filename": "tasks.md",
+          "label": "Tasks",
+          "role": "tasks",
+          "description": "Discrete, trackable implementation tasks."
+        }
+      ]
+    },
+    {
+      "id": "lean",
+      "label": "Single spec",
+      "description": "Just one living spec.md, synthesized from the conversation.",
+      "docs": [
+        {
+          "id": "spec",
+          "filename": "spec.md",
+          "label": "Spec",
+          "role": "spec",
+          "description": "A single living spec for the workspace."
+        }
+      ]
+    }
+  ]
+}
