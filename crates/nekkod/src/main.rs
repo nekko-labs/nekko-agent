@@ -23,6 +23,7 @@ mod sideband;
 mod turns;
 mod voice;
 mod wire;
+mod worktrees;
 
 use backend::Backend;
 use hub::Hub;

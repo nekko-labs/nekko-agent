@@ -1431,6 +1431,7 @@ dependencies = [
  "bytes",
  "futures-util",
  "getrandom",
+ "icu_normalizer",
  "libc",
  "nekko-agent",
  "nekko-chat",
