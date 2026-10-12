@@ -14,7 +14,12 @@ app.whenReady().then(async()=>{
   win.webContents.on('console-message',e=>{if(e.level==='error')report.errors.push(e.message)});
   const run=code=>win.webContents.executeJavaScript(code,true);
   const check=(name,value)=>{report.checks.push({name,passed:!!value});if(!value)throw Error(name);};
-  const click=async label=>{await run(`(()=>{const b=[...document.querySelectorAll('[data-pr-action-controls] button')].find(b=>b.textContent===${JSON.stringify(label)});if(!b)throw Error('Missing action');b.click()})()`);await sleep(250);};
+  const clickCommands=new Map([
+    ['Continue as stacked PR', "(()=>{const b=[...document.querySelectorAll('[data-pr-action-controls] button')].find(b=>b.textContent==='Continue as stacked PR');if(!b)throw Error('Missing action');b.click()})()"],
+    ['Link stack', "(()=>{const b=[...document.querySelectorAll('[data-pr-action-controls] button')].find(b=>b.textContent==='Link stack');if(!b)throw Error('Missing action');b.click()})()"],
+    ['Merge on GitHub', "(()=>{const b=[...document.querySelectorAll('[data-pr-action-controls] button')].find(b=>b.textContent==='Merge on GitHub');if(!b)throw Error('Missing action');b.click()})()"],
+  ]);
+  const click=async label=>{const code=clickCommands.get(label);if(!code)throw Error('Unknown fixture action');await run(code);await sleep(250);};
   const shot=async name=>{await sleep(100);const file=path.join(dir,name+'.png');fs.writeFileSync(file,(await win.capturePage(undefined,{stayHidden:true,stayAwake:false})).toPNG());report.captures.push(file);};
   try {
     await win.loadFile(path.join(dir,'index.html'));win.setPosition(-10000,-10000);win.showInactive();await sleep(1000);
