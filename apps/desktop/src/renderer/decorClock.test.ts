@@ -44,8 +44,8 @@ describe('decorClock', () => {
   it('does not invalidate beam styles twice inside the same discrete step', () => {
     const beam = fakeAnimation('composer-beam-spin', 0);
     Object.assign(beam.effect, {
-      getTiming: () => ({ duration: 3200, easing: 'steps(48, end)', iterations: Infinity, direction: 'normal' }),
-      getKeyframes: () => [{ computedOffset: 0 }, { computedOffset: 1 }],
+      getTiming: () => ({ duration: 3200, easing: 'linear', iterations: Infinity, direction: 'normal' }),
+      getKeyframes: () => [{ computedOffset: 0, easing: 'steps(48)' }, { computedOffset: 1, easing: 'steps(48)' }],
     });
     let writes = 0, time = 0;
     Object.defineProperty(beam, 'currentTime', { get: () => time, set: value => { time = value; writes++; } });
