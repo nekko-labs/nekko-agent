@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_GUARDRAILS, promptCachingEnabled } from '@nekko-agent/shared';
-import type { AppSettings, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
+import type { AppSettings, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
 import { Badge } from '../components/primitives/index.js';
@@ -482,9 +482,19 @@ function HooksSection({ settings, update }: { settings: AppSettings; update: (pa
  * an experiment until its canvas renderer does too.
  */
 function TerminalSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  const [shells, setShells] = useState<ShellOption[]>([]);
+  useEffect(() => { window.nekko.listShells().then(setShells).catch(() => {}); }, []);
   return (
     <section className="card mt-5 p-5">
       <div className="flex items-center gap-2"><h2 className="font-semibold">Terminal</h2></div>
+      <label className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+        <span className="text-[13px]">Default shell</span>
+        <select className="input max-w-[180px] py-1.5" aria-label="Default shell" value={settings.defaultShellPath ?? ''} onChange={(e) => update({ defaultShellPath: e.target.value || undefined })}>
+          <option value="">Auto-detect</option>
+          {settings.defaultShellPath && !shells.some((shell) => shell.path === settings.defaultShellPath) && <option value={settings.defaultShellPath}>{settings.defaultShellPath} (unavailable)</option>}
+          {shells.map((shell) => <option key={shell.id} value={shell.path}>{shell.label}</option>)}
+        </select>
+      </label>
       <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
         <div className="min-w-0">
           <span className="text-[13px]">Renderer</span>

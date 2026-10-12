@@ -1,7 +1,7 @@
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { AgentEvent, SessionSummary, ShellOption, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
+import type { AgentEvent, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
 import { AUTO_MODEL_ID, archiveDaysLeft, archiveDeletesAt, parsePrUrl } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
@@ -135,13 +135,6 @@ function readSidebarWidth(): number {
   } catch { /* private mode */ }
   return SIDEBAR_DEFAULT_W;
 }
-
-/**
- * Hues the shell rows cycle through, so a machine with PowerShell, Git Bash and
- * WSL reads as three things rather than one repeated three times. Semantic
- * tokens only: a theme change moves them with everything else.
- */
-const SHELL_TONES = ['var(--success)', 'var(--info)', 'var(--warning)', 'var(--accent-2)'];
 
 /** One colored row of the create menu: a tinted icon tile and a label. */
 function CreateRow({
@@ -336,7 +329,6 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   };
   const [mobileNav, setMobileNav] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
-  const [shells, setShells] = useState<ShellOption[]>([]);
   const [drag, setDrag] = useState<DragItem | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const newMenuRef = useRef<HTMLDivElement>(null);
@@ -362,7 +354,6 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   }, [newMenuOpen]);
 
   useEffect(() => { refreshTerminals(); }, [refreshTerminals]);
-  useEffect(() => { window.nekko.listShells().then(setShells).catch(() => {}); }, []);
 
   // Close the "+" create menu on an outside click.
   useEffect(() => {
@@ -610,6 +601,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
             aria-haspopup="menu"
             aria-expanded={newMenuOpen}
             onMouseEnter={openNewMenu}
+            onMouseLeave={closeNewMenuSoon}
             onFocus={openNewMenu}
             onClick={() => { closeNewMenu(); void newTerminalWorkspace().catch(e => useStore.getState().pushToast('error', e.message)); }}
           >
@@ -635,7 +627,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                   <ChatIcon className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold">New agent</span>
+                  <span className="block text-[13px] font-semibold">Agent</span>
                   <span className="block text-[11px] text-ink-faint">A fresh chat, with room for windows around it</span>
                 </span>
                 <kbd className="kbd">{SHORTCUTS.newAgent.label}</kbd>
@@ -644,32 +636,15 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
               <CreateRow
                 tone="var(--accent)"
                 icon={<ChatIcon className="h-4 w-4" />}
-                label="New image session"
+                label="Media gen"
                 onClick={() => { closeNewMenu(); void newImageChat().catch((e: Error) => useStore.getState().pushToast('error', e.message)); }}
               />
-              <div className="flex items-center justify-between gap-2 px-2.5 pb-0.5 pt-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Terminal</p>
-                <kbd className="kbd">{SHORTCUTS.newTerminal.label}</kbd>
-              </div>
-              {shells.length === 0 ? (
-                <CreateRow
-                  tone="var(--success)"
-                  icon={<TerminalIcon className="h-4 w-4" />}
-                  label="New terminal"
-                  onClick={() => { closeNewMenu(); void newTerminalWorkspace(); }}
-                />
-              ) : (
-                shells.map((sh, i) => (
-                  <CreateRow
-                    key={sh.id}
-                    tone={SHELL_TONES[i % SHELL_TONES.length]}
-                    icon={<TerminalIcon className="h-4 w-4" />}
-                    label={sh.label}
-                    title={sh.path}
-                    onClick={() => { closeNewMenu(); void newTerminalWorkspace(undefined, sh.path); }}
-                  />
-                ))
-              )}
+              <CreateRow
+                tone="var(--success)"
+                icon={<TerminalIcon className="h-4 w-4" />}
+                label="Terminal"
+                onClick={() => { closeNewMenu(); void newTerminalWorkspace().catch((e: Error) => useStore.getState().pushToast('error', e.message)); }}
+              />
             </div>,
             document.body,
           )}
