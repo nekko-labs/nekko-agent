@@ -326,6 +326,10 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
+### Docs hub (added 2026-10-12)
+
+- [ ] T189: Documentation hub at nekkoagent.com/docs, modelled on svelte.dev/docs, generated from repo Markdown by `scripts/build-docs.mjs` (`npm run docs`), with per-page Markdown, `llms-full.txt`, search and a staleness test in `npm test`. Added: 2026-10-12. See SPEC.md, Documentation hub. Remaining after merge: confirm the Vercel production deploy serves `/docs`, `/docs/<page>.md` and `/llms-full.txt`.
+
 ### Folders and execution modes (implemented subset, draft; not shipped)
 
 - [ ] FM1: Land persisted primary-folder/No-folder defaults and saved-access revocation. Implemented with regression coverage; Added: 2026-10-09. See SPEC.md, Primary folder defaults and saved access revocation. Await parent visual inspection and release review.

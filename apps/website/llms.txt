@@ -88,3 +88,35 @@ For the browser version you run yourself, use a source checkout, install depende
 - [Remote access](https://github.com/nekko-labs/nekko-agent/blob/main/docs/REMOTE.md): phone pairing and self-hosting the relay.
 - [Contributing](https://github.com/nekko-labs/nekko-agent/blob/main/CONTRIBUTING.md): how to contribute.
 - [Releases](https://github.com/nekko-labs/nekko-agent/releases): current installers.
+
+<!-- docs:start -->
+## Documentation
+
+Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also available as Markdown at the .md URL below.
+
+### Introduction
+
+- [Getting started](https://nekkoagent.com/docs/index.md): What Nekko Agent is, who makes it, and how to install it or run it from source.
+- [Walkthrough](https://nekkoagent.com/docs/walkthrough.md): A picture-by-picture tour of the app.
+
+### Using Nekko Agent
+
+- [Running models locally](https://nekkoagent.com/docs/local-models.md): Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM).
+- [Subscription sign-in](https://nekkoagent.com/docs/subscriptions.md): Use your Claude or ChatGPT subscription instead of a metered API key.
+- [Usage limits and prices](https://nekkoagent.com/docs/usage-limits.md): Where the usage numbers and price estimates come from, and what they mean.
+- [Phone remote control](https://nekkoagent.com/docs/remote.md): Drive the agent on your computer from your phone, end-to-end encrypted.
+- [CLI and MCP](https://nekkoagent.com/docs/cli.md): Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor.
+- [Local CI runner](https://nekkoagent.com/docs/local-ci-runner.md): Run a GitHub or GitLab repo's builds and tests on your own machine.
+- [Decision models](https://nekkoagent.com/docs/decision-models.md): Typed questions answered with calibrated probabilities, in one forward pass.
+- [Local inference benchmarks](https://nekkoagent.com/docs/benchmarks.md): How fast the engine runs a model compared with Ollama and LM Studio.
+
+### Contributing
+
+- [Contributing](https://nekkoagent.com/docs/contributing.md): Set up a development checkout, the project layout, and what a pull request needs.
+- [Architecture](https://nekkoagent.com/docs/architecture.md): How the desktop app, the TypeScript host and the Rust engine daemon fit together.
+- [Release signing](https://nekkoagent.com/docs/release-signing.md): How the macOS and Windows builds are signed and notarized.
+
+### For AI agents
+
+- [Docs for AI agents](https://nekkoagent.com/docs/for-agents.md): Machine-readable docs (llms.txt, Markdown pages) and the files an agent should read before changing the code.
+<!-- docs:end -->

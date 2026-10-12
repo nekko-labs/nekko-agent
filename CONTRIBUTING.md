@@ -54,6 +54,16 @@ npm run typecheck   # every TypeScript workspace
 - For provider changes, you can verify against a real local server:
   `node scripts/itest-local.mjs http://your-host:port your-model-id`
 
+## Documentation
+
+The docs at [nekkoagent.com/docs](https://nekkoagent.com/docs) are rendered from Markdown in this repo. `docs/hub/nav.json` lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change:
+
+```bash
+npm run docs
+```
+
+`npm test` fails when the generated pages are out of date.
+
 ## Commit messages
 
 Conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
