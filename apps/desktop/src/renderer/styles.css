@@ -1723,10 +1723,11 @@
 
 /* ---------- Command Center wall ---------- */
 
-/* The brand mark at the leading edge of the desktop title bar. Nudged 4px down:
-   centred by its box it sits visibly high next to the heading, whose x-height
-   (not its line box) is what the eye lines up with. */
-.titlebar-mark { flex: none; display: block; color: var(--ink-soft); position: relative; top: 4px; }
+/* The brand mark at the leading edge of the desktop title bar. BrandMark centres
+   the cat on its own ink, so centred in the bar it lines up with the heading's
+   capitals (top of the "A" to the baseline) with no nudge. It used to sit 4px
+   lower to make up for the old drawing riding high in its box. */
+.titlebar-mark { flex: none; display: block; color: var(--ink-soft); }
 /* Off macOS it sits straight above the rail's first icon: the 28px mark is
    centred on the 64px rail's midline (14px strip padding + 4px = 18px = 32 - 14). */
 .titlebar:not(.titlebar-mac) .titlebar-mark { margin-left: 4px; }
