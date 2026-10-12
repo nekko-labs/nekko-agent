@@ -110,3 +110,7 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 - Set up [local models](/docs/local-models) or [sign in with a subscription](/docs/subscriptions).
 - [Pair your phone](/docs/remote) to use the agent away from your desk.
 - Want to help build it? Read [Contributing](/docs/contributing) and the [architecture](/docs/architecture).
+
+### Create an agent, media session or terminal
+
+Hover over the sidebar **+** to choose **Agent**, **Media gen** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Media gen opens an image session; video generation is not available.
