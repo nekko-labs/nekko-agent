@@ -1178,3 +1178,11 @@ When the daemon owns the data directory, it is the single writer of tokens.json 
 ### Worktree setup output
 
 New chat worktrees retain setup-command output through process exit. The daemon drains output readers to EOF within the original setup timeout and stops readers afterward, so an immediately exiting command cannot lose its final output. Exit status and failure details remain visible.
+
+### Integrated local engine ownership (PF14)
+
+With a configured data directory, the local engine owns sign-in tokens, providers, chat worktrees and admission, queued turns, context inspection, folder/index/memory/comment/spec/skill services, automation/workflows, watches, sandbox containers, runtime controls and the encrypted phone relay. Connector and index grounding for a normal reply is collected in that engine. Desktop, web and CLI use the same services; editions without that engine retain their host fallback. Offline chats continue to refuse remote endpoints and connector context. Sandbox replies still use the host executor while their container lifecycle is owned by the engine.
+
+A chat preparing a reply admits only one send at a time. Stop cancels its preparation and setup command before inference begins, clears the preparation guard and lets a later send run. Setup output drains through process exit; cancellation stops the owned process tree. Production token exchanges require HTTPS, and sign-in callbacks bind loopback only. Activity decorations retain their frames and reduced-motion behavior while a shared 30 Hz clock lets the page rest between changes.
+
+Live subscription sign-in and native phone-device/managed-relay verification remain follow-up acceptance work. Synthetic providers, a real loopback relay, isolated browser fixtures and a pinned local Docker image cover the integration without accessing real account credentials or device data.

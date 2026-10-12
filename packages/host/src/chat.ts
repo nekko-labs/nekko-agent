@@ -1577,8 +1577,8 @@ export function connectorSnippetsFor(text?: string): Promise<Array<{ label: stri
 }
 
 /** `chat:indexSnippets`: the workspace-index context for a turn the daemon admits. */
-export function indexSnippetsForAdmission(workspaceIds: string[], text: string): Array<{ relPath: string; path: string; body: string }> {
-  return collectIndexSnippets(workspaceIds, text);
+export function indexSnippetsForAdmission(workspaceIds: string[], text: string): Promise<Array<{ relPath: string; path: string; body: string }>> {
+  return indexSnippetsFor(workspaceIds, text);
 }
 
 /**

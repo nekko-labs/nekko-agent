@@ -166,10 +166,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
     let connector = if session.is_none() || offline || !connected {
         Vec::new()
     } else {
-        match ctx.backend.call("chat:connectorSnippets", json!([])).await {
-            Ok(Value::Array(a)) => a,
-            _ => Vec::new(),
-        }
+        crate::connectors::snippets(ctx, None).await
     };
     let data_dir: PathBuf = store.dir().parent().map(PathBuf::from).unwrap_or_default();
     tokio::task::spawn_blocking(move || {

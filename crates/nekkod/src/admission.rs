@@ -21,8 +21,9 @@
 //! the host whole, as before.
 
 use crate::routes::Ctx;
+use nekko_loop::Cancel;
 use serde_json::{Map, Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -35,6 +36,7 @@ const SETUP_LIMIT: Duration = Duration::from_secs(15 * 60);
 /// compacts, and says so with `compaction` events, which pass through here).
 pub struct Admission {
     compacting: Mutex<HashSet<String>>,
+    pending: Mutex<HashMap<String, Cancel>>,
     /// The desktop app's host lets the agent drive a browser; the web edition's does not.
     pub allow_browser_control: bool,
     /// `NEKKO_AGENT_LOOP=ts`: every turn stays in the host.
@@ -43,7 +45,12 @@ pub struct Admission {
 
 impl Admission {
     pub fn new(hub: &crate::hub::Hub, allow_browser_control: bool, ts_loop: bool) -> Arc<Self> {
-        let me = Arc::new(Admission { compacting: Mutex::default(), allow_browser_control, ts_loop });
+        let me = Arc::new(Admission {
+            compacting: Mutex::default(),
+            pending: Mutex::default(),
+            allow_browser_control,
+            ts_loop,
+        });
         let (weak, mut rx) = (Arc::downgrade(&me), hub.subscribe());
         tokio::spawn(async move {
             loop {
@@ -60,6 +67,26 @@ impl Admission {
             }
         });
         me
+    }
+
+    fn begin(self: &Arc<Self>, id: &str) -> Result<AdmissionGuard, String> {
+        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+        if pending.contains_key(id) {
+            return Err("A reply is already being prepared or running in this chat.".into());
+        }
+        let cancel = Cancel::default();
+        pending.insert(id.into(), cancel.clone());
+        Ok(AdmissionGuard { admission: self.clone(), id: id.into(), cancel })
+    }
+
+    fn cancellation(&self, id: &str) -> Option<Cancel> {
+        self.pending.lock().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
+    }
+
+    pub fn abort(&self, id: &str) {
+        if let Some(cancel) = self.cancellation(id) {
+            cancel.cancel();
+        }
     }
 
     /// Note a `compaction` progress event: running starts one, anything else ends it.
@@ -85,6 +112,22 @@ impl Admission {
 
 fn s<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(Value::as_str).unwrap_or_default()
+}
+
+struct AdmissionGuard {
+    admission: Arc<Admission>,
+    id: String,
+    cancel: Cancel,
+}
+impl Drop for AdmissionGuard {
+    fn drop(&mut self) {
+        self.admission.pending.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.id);
+    }
+}
+
+async fn stopped(ctx: &Ctx, session_id: &str) -> Result<Admit, String> {
+    emit(ctx, json!({ "type": "done", "sessionId": session_id, "aborted": true })).await;
+    Ok(Admit::Ended)
 }
 
 /// Tell the UI (and, through the host, the phone relay) what happened.
@@ -264,8 +307,17 @@ async fn ended(ctx: &Ctx, session_id: &str, message: &str) -> Result<Admit, Stri
 pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<Value, String> {
     let opts = args.first().cloned().unwrap_or(Value::Null);
     let session_id = s(&opts, "sessionId").to_string();
-    let spec = match admit(ctx, adm, opts, None).await? {
-        Admit::Host => return ctx.backend.call("chat:send", Value::Array(args)).await,
+    let pending = adm.begin(&session_id)?;
+    let result = admit(ctx, adm, opts, None, &pending.cancel).await?;
+    if pending.cancel.is_cancelled() && !matches!(&result, Admit::Ended) {
+        stopped(ctx, &session_id).await?;
+        return Ok(Value::Null);
+    }
+    let spec = match result {
+        Admit::Host => {
+            drop(pending);
+            return ctx.backend.call("chat:send", Value::Array(args)).await;
+        }
         Admit::Ended => return Ok(Value::Null),
         Admit::Spec(spec) => spec,
     };
@@ -284,7 +336,8 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
 /// `None` (a sandbox chat, or the kill switch) leaves it to the host's `turn:prepare`.
 pub async fn admit_queued(ctx: &Ctx, adm: &Arc<Admission>, payload: &Value) -> Option<Value> {
     let opts = payload.get("opts").cloned().unwrap_or(Value::Null);
-    match admit(ctx, adm, opts, payload.get("queued").cloned()).await {
+    let cancel = adm.cancellation(s(&opts, "sessionId")).unwrap_or_default();
+    match admit(ctx, adm, opts, payload.get("queued").cloned(), &cancel).await {
         Ok(Admit::Spec(spec)) => Some(json!({ "spec": spec })),
         Ok(Admit::Host) => None,
         Ok(Admit::Ended) | Err(_) => Some(json!({ "ended": true })),
@@ -293,7 +346,13 @@ pub async fn admit_queued(ctx: &Ctx, adm: &Arc<Admission>, payload: &Value) -> O
 
 /// `admitTurn` and `buildDaemonTurn`: check, provision and describe a turn,
 /// and hand it to the host for its callbacks.
-async fn admit(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Value>) -> Result<Admit, String> {
+async fn admit(
+    ctx: &Ctx,
+    adm: &Arc<Admission>,
+    opts: Value,
+    queued: Option<Value>,
+    cancel: &Cancel,
+) -> Result<Admit, String> {
     let session_id = s(&opts, "sessionId").to_string();
     let store = ctx.sessions.clone().ok_or("chat:send needs the data directory")?;
     let session = {
@@ -324,9 +383,12 @@ async fn admit(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Valu
     if mode_name == "worktree"
         && !incognito
         && !offline
-        && let Err(message) = provision(ctx, &store, &mut session, &settings).await
+        && let Err(message) = provision(ctx, &store, &mut session, &settings, cancel).await
     {
         return ended(ctx, &session_id, &message).await;
+    }
+    if cancel.is_cancelled() {
+        return stopped(ctx, &session_id).await;
     }
     let mut chat = session.clone();
     chat["gitIsolation"] = json!(mode_name == "worktree");
@@ -372,7 +434,7 @@ async fn admit(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Valu
     let connector_snippets = if offline || !connected {
         json!([])
     } else {
-        ctx.backend.call("chat:connectorSnippets", json!([text])).await.unwrap_or(json!([]))
+        Value::Array(crate::connectors::snippets(ctx, Some(&text)).await)
     };
     let has_worktrees = session.get("gitWorktrees").and_then(Value::as_object).is_some_and(|m| !m.is_empty());
     let ids = crate::worktrees::session_workspace_ids(&session);
@@ -380,11 +442,15 @@ async fn admit(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Valu
         if has_worktrees || ids.is_empty() || nekko_js::trim(&text).is_empty() || !has_index_words(&text) {
             json!([])
         } else {
-            ctx.backend.call("chat:indexSnippets", json!([ids, text])).await.unwrap_or(json!([]))
+            Value::Array(crate::workspace::index_snippets(ctx, &ids, &text).await)
         };
 
     let turn_id = daemon_turn_id();
-    let (resolved, provider_error) = match crate::providers::resolve(ctx, &provider).await {
+    let resolution = tokio::select! {
+        _ = cancel.cancelled() => return stopped(ctx, &session_id).await,
+        result = crate::providers::resolve(ctx, &provider) => result,
+    };
+    let (resolved, provider_error) = match resolution {
         Ok(p) => (Some(host_provider_config(ctx, &p)), None),
         Err(e) => (None, Some(e)),
     };
@@ -470,10 +536,14 @@ async fn admit(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Valu
         spec["queued"] = q.clone();
     }
 
+    if cancel.is_cancelled() {
+        return stopped(ctx, &session_id).await;
+    }
     // The host registers the turn for its callbacks; nothing here waits on it
     // (a queued turn's previous turn stays registered there until it lands).
     {
         let backend = ctx.backend.clone();
+        let cancel = cancel.clone();
         let payload = json!([{
             "turnId": turn_id,
             "opts": opts,
@@ -486,6 +556,9 @@ async fn admit(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Valu
             "chained": queued.is_some(),
         }]);
         tokio::spawn(async move {
+            if cancel.is_cancelled() {
+                return;
+            }
             if let Err(e) = backend.call("turn:adopt", payload).await {
                 eprintln!("nekkod: the host could not adopt a turn: {e}");
             }
@@ -516,6 +589,7 @@ async fn provision(
     store: &Arc<nekko_store::SessionStore>,
     session: &mut Value,
     settings: &Value,
+    cancel: &Cancel,
 ) -> Result<(), String> {
     let before = nekko_js::stringify(session.get("gitWorktrees").unwrap_or(&Value::Null));
     let (mut s2, set) = (session.clone(), settings.clone());
@@ -580,13 +654,14 @@ async fn provision(
                 }
             })
         };
-        let (ok, detail) = crate::worktrees::run_setup(
+        let (ok, detail) = crate::worktrees::run_setup_with_cancel(
             &command,
             &path,
             move |text| {
                 let _ = tx.send(terminal_text(&text));
             },
             SETUP_LIMIT,
+            Some(cancel),
         )
         .await;
         let _ = writer.await;

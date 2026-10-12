@@ -992,6 +992,11 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     let (status, _) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
     assert_eq!(status, 200);
 
+    // The workspace index now lives in this daemon, not in the fake host.
+    let (status, indexed) = post(rig.d.port, "workspace:index", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{indexed}");
+    assert_eq!(indexed["state"], "ready");
+
     // The whole chain runs before chat:send answers, as sendChat resolved.
     let opts =
         json!({ "sessionId": "s_admit", "providerId": "p1", "modelId": "synthetic", "text": "Explain the pineapple" });
@@ -1009,13 +1014,13 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     assert!(turn_id.starts_with("turn_d"), "{turn_id}");
     assert_eq!(adopt[1][0]["workspaces"][0]["id"], "w1");
     assert!(calls.iter().any(|c| c[0] == "turn:end" && c[1][0] == turn_id.as_str()));
-    assert!(calls.iter().any(|c| c[0] == "chat:indexSnippets"), "the prompt had words to search for");
+    assert!(!calls.iter().any(|c| c[0] == "chat:indexSnippets"), "the daemon gathers its own index snippets");
     assert!(!calls.iter().any(|c| c[0] == "chat:connectorSnippets"), "no connector is connected");
     // The snippets and the guidelines reached the model.
     let requests = model.requests.lock().unwrap().clone();
     let system = requests[0]["messages"][0]["content"].as_str().unwrap().to_string();
     assert!(system.contains("Always run the tests."), "{system}");
-    assert!(system.contains("1: pineapple"), "{system}");
+    assert!(system.contains("1: export const secret = 'pineapple';"), "{system}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1031,7 +1036,7 @@ async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
             json!({ "questions": [{ "question": "Which bug?", "options": ["Login", "Logout"] }] }),
         ),
         call_tool("c_read", "read_file", json!({ "path": "app.ts" })),
-        call_tool("c_host", "agent_watch", json!({ "action": "list" })),
+        call_tool("c_host", "delegation_targets", json!({})),
         say_text("all done"),
     ])
     .await;
@@ -1845,11 +1850,18 @@ async fn a_task_cut_short_by_a_restart_fires_again() {
     .unwrap();
     let d = start_with(true, Some(&data));
     wait_for("the fire after restart", || read_tasks(&data)[0]["runCount"] == json!(3)).await;
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(
-        calls.as_array().unwrap().iter().any(|c| c[0] == "chat:send" && c[1][0]["sessionId"] == "s_old"),
-        "{calls}"
-    );
+    // runCount is saved before the asynchronous send reaches the backend.
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+            if calls.as_array().unwrap().iter().any(|c| c[0] == "chat:send" && c[1][0]["sessionId"] == "s_old") {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("restarted task reaches the backend");
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
@@ -2208,9 +2220,9 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     agent.send(client("c1", json!({ "type": "req", "id": 2, "channel": "remote:devices", "args": [] }))).await.unwrap();
     let (_, res) = next_agent_frame(&mut agent, &key).await;
     assert_eq!(res.unwrap()["result"][0]["id"], "phone-1");
-    agent.send(client("c1", json!({ "type": "req", "id": 3, "channel": "tasks:list", "args": [] }))).await.unwrap();
+    agent.send(client("c1", json!({ "type": "req", "id": 3, "channel": "training:list", "args": [] }))).await.unwrap();
     let (_, res) = next_agent_frame(&mut agent, &key).await;
-    assert_eq!(res.unwrap()["result"], json!({ "echo": "tasks:list", "args": [] }));
+    assert_eq!(res.unwrap()["result"], json!({ "echo": "training:list", "args": [] }));
     agent.send(client("c1", json!({ "type": "req", "id": 4, "channel": "turn:pending", "args": [] }))).await.unwrap();
     let (_, res) = next_agent_frame(&mut agent, &key).await;
     assert_eq!(res.unwrap()["error"], "Unknown channel: turn:pending");
@@ -2497,4 +2509,67 @@ async fn a_sandbox_chat_runs_its_tools_in_a_container_the_daemon_owns() {
     if let Err(panic) = outcome {
         std::panic::resume_unwind(panic);
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stop_during_admission_cancels_setup_and_refuses_duplicate_send() {
+    let session = json!({ "id": "s_prepare_stop", "title": "Prepared", "titleAuto": false, "workspaceId": "w1", "gitIsolation": true, "executionMode": "worktree", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("prepare-stop", session);
+    for args in [
+        vec!["init", "-q"],
+        vec!["add", "."],
+        vec!["-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-qm", "Fixture"],
+    ] {
+        let mut cmd = Command::new("git");
+        cmd.args(args).current_dir(&rig.workspace);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000);
+        }
+        let out = cmd.output().unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    }
+    let model = scripted_model(vec![say_text("after stop")]).await;
+    let setup =
+        if cfg!(windows) { "echo setup-begun & ping -n 30 127.0.0.1 >nul" } else { "echo setup-begun; sleep 30" };
+    let settings = json!({ "providers": [{ "id": "p1", "kind": "openai-compat", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }], "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy(), "worktreeSetup": setup }], "defaultChatMode": "yolo" });
+    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    let opts =
+        json!({ "sessionId": "s_prepare_stop", "providerId": "p1", "modelId": "synthetic", "text": "prepare this" });
+    let send_opts = opts.clone();
+    let port = rig.d.port;
+    let sender = tokio::spawn(async move { post(port, "chat:send", json!([send_opts]), Some(TOKEN)).await });
+    let mut last_calls = Value::Null;
+    let setup_wait =
+        tokio::time::timeout(Duration::from_secs(20), async {
+            loop {
+                let (_, calls) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
+                last_calls = calls.clone();
+                if calls.as_array().unwrap().iter().any(|c| {
+                    c[0] == "loop:log" && c[1][2].as_str().is_some_and(|s| s.trim().starts_with("setup-begun"))
+                }) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await;
+    assert!(setup_wait.is_ok(), "setup command started: {last_calls}");
+    let (status, refused) = post(port, "chat:send", json!([opts.clone()]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "{refused}");
+    assert!(refused.to_string().contains("already being prepared"));
+    post(port, "chat:abort", json!(["s_prepare_stop"]), Some(TOKEN)).await;
+    let (status, reply) =
+        tokio::time::timeout(Duration::from_secs(5), sender).await.expect("Stop ends admission promptly").unwrap();
+    assert_eq!((status, reply), (200, Value::Null));
+    assert!(model.requests.lock().unwrap().is_empty(), "a stopped preparation must never reach a model");
+    assert!(saved_session(&rig, "s_prepare_stop")["messages"].as_array().unwrap().is_empty());
+    // The admission guard releases; a fresh send on the prepared checkout can run.
+    let (status, reply) = post(port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, reply), (200, Value::Null));
+    assert_eq!(
+        saved_session(&rig, "s_prepare_stop")["messages"].as_array().unwrap().last().unwrap()["content"],
+        "after stop"
+    );
 }

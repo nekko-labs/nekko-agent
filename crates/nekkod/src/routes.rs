@@ -207,6 +207,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         // Stop the daemon's turn at once, then the host's part of stopping
         // (its own turns, image turns, the chat's dev servers).
         "chat:abort" => {
+            if let Some(admission) = &ctx.admission {
+                admission.abort(str_arg(&args, 0).unwrap_or_default());
+            }
             ctx.turns.abort_session(str_arg(&args, 0).unwrap_or_default());
             // A dev server the agent started belongs to the work it was doing.
             ctx.turns.processes.kill_session(str_arg(&args, 0).unwrap_or_default());

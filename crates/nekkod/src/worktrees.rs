@@ -534,11 +534,22 @@ fn copy_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
 
 /// `runWorktreeSetup`: a project's setup command in a new checkout, its
 /// output streamed to `on_output`. Never fails: `(ok, detail)`.
+#[cfg(test)]
 pub async fn run_setup(
+    command: &str,
+    cwd: &str,
+    on_output: impl FnMut(String) + Send,
+    limit: Duration,
+) -> (bool, String) {
+    run_setup_with_cancel(command, cwd, on_output, limit, None).await
+}
+
+pub async fn run_setup_with_cancel(
     command: &str,
     cwd: &str,
     mut on_output: impl FnMut(String) + Send,
     limit: Duration,
+    cancel: Option<&nekko_loop::Cancel>,
 ) -> (bool, String) {
     use tokio::io::AsyncReadExt;
     let mut cmd = if cfg!(windows) {
@@ -555,6 +566,8 @@ pub async fn run_setup(
     cmd.current_dir(cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000);
+    #[cfg(unix)]
+    cmd.process_group(0);
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => return (false, e.to_string()),
@@ -584,11 +597,12 @@ pub async fn run_setup(
     drop(tx);
     let deadline = tokio::time::sleep(limit);
     tokio::pin!(deadline);
-    let status = loop {
+    let mut status = loop {
         tokio::select! {
             Some(text) = rx.recv() => on_output(text),
             status = child.wait() => break Some(status),
             _ = &mut deadline => break None,
+            _ = async { match cancel { Some(c) => c.cancelled().await, None => std::future::pending::<()>().await } } => break None,
         }
     };
     // Exit can win the select before the pipe tasks have published final output.
@@ -601,6 +615,7 @@ pub async fn run_setup(
                     None => break,
                 },
                 _ = &mut deadline => break,
+                _ = async { match cancel { Some(c) => c.cancelled().await, None => std::future::pending::<()>().await } } => { status = None; break; },
             }
         }
     }
@@ -624,8 +639,21 @@ pub async fn run_setup(
                 no_window(&mut k);
                 let _ = k.status();
             }
+            #[cfg(unix)]
+            if let Some(pid) = pid {
+                unsafe {
+                    libc::kill(-(pid as i32), libc::SIGKILL);
+                }
+            }
             let _ = child.kill().await;
-            (false, format!("stopped after {} minutes", (limit.as_secs_f64() / 60.0).round()))
+            (
+                false,
+                if cancel.is_some_and(|c| c.is_cancelled()) {
+                    "cancelled".into()
+                } else {
+                    format!("stopped after {} minutes", (limit.as_secs_f64() / 60.0).round())
+                },
+            )
         }
     }
 }
