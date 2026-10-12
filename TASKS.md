@@ -328,7 +328,7 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ### Docs hub (added 2026-10-12)
 
-- [ ] T189: Documentation hub at nekkoagent.com/docs, modelled on svelte.dev/docs, generated from repo Markdown by `scripts/build-docs.mjs` (`npm run docs`), with per-page Markdown, `llms-full.txt`, search, and the Docs site workflow that regenerates and commits the pages on any PR (or a regenerate PR on main) only when the output changed. Added: 2026-10-12. See SPEC.md, Documentation hub. Remaining after merge: confirm the Vercel production deploy serves `/docs`, `/docs/<page>.md` and `/llms-full.txt`; confirm the first real run of the Docs site workflow pushes with the App token (its installation needs contents and pull-requests write, which runtime-updates.yml already uses).
+- [ ] T189: Documentation hub at nekkoagent.com/docs, modelled on svelte.dev/docs, generated from repo Markdown by `scripts/build-docs.mjs` (`npm run docs`), with per-page Markdown, `llms-full.txt`, search, and the Docs site workflow that regenerates and commits the pages on any PR (or a regenerate PR on main) only when the output changed. Added: 2026-10-12. See SPEC.md, Documentation hub. Hub merged in #485; production verified 2026-10-12 (`/docs`, `/docs/cli.md`, `/llms-full.txt`, search index and images all 200). Remaining: confirm the first real run of the Docs site workflow pushes with the App token (its installation needs contents and pull-requests write, which runtime-updates.yml already uses).
 
 ### Folders and execution modes (implemented subset, draft; not shipped)
 
