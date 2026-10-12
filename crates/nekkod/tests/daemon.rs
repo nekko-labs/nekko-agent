@@ -1510,3 +1510,46 @@ async fn a_daemon_turn_fetches_pages_and_runs_background_processes_itself() {
     assert!(logged().contains("[echoer, background]"), "{}", logged());
     server.abort();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_runs_its_tool_hooks_itself() {
+    let session = json!({
+        "id": "s_turn_h", "title": "Named", "mode": "yolo", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("hooks", session);
+    let model = scripted_model(vec![
+        call_tool("c_bash", "bash", json!({ "command": "echo should-not-run > ran.txt" })),
+        call_tool("c_read", "read_file", json!({ "path": "app.ts" })),
+        say_text("done"),
+    ])
+    .await;
+    let (pre_cmd, post_cmd) = if cfg!(windows) {
+        ("echo no shell today 1>&2 & exit /b 2", "echo saw %NEKKO_TOOL_NAME% in %CD%")
+    } else {
+        ("echo no shell today 1>&2; exit 2", "echo saw $NEKKO_TOOL_NAME in $(pwd)")
+    };
+    let mut spec = turn_spec(&rig, &model, "turn_h", "s_turn_h", json!({}));
+    spec["facts"]["hookRules"] = json!([
+        { "id": "h1", "event": "PreToolUse", "name": "guard", "matcher": "bash", "command": pre_cmd },
+        { "id": "h2", "event": "PostToolUse", "name": "note", "matcher": "read_file", "command": post_cmd },
+    ]);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, end) = turn_record(rig.d.port, "turn_h").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_turn_h");
+    let messages = saved["messages"].as_array().unwrap();
+    let tool = |id: &str| -> Value {
+        messages.iter().find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id).unwrap()["toolResult"]
+            .clone()
+    };
+    assert_eq!(tool("c_bash")["output"], "Blocked by hook guard: no shell today");
+    assert_eq!(tool("c_bash")["isError"], true);
+    assert!(!rig.workspace.join("ran.txt").exists(), "the blocked command never ran");
+    let read = tool("c_read")["output"].as_str().unwrap().to_string();
+    assert!(read.contains("pineapple"), "{read}");
+    assert!(read.contains("\n\n[hook note]: saw read_file in "), "{read}");
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = all.as_array().unwrap();
+    assert!(!calls.iter().any(|e| e[0] == "turn:hook" || e[0] == "turn:tool"), "the host ran nothing: {all}");
+}
