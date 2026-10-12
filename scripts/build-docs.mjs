@@ -37,7 +37,7 @@ const ASSET_VERSION = 'docs-1';
 export function slugify(text) {
   return text
     .toLowerCase()
-    .replace(/<[^>]+>/g, '')
+    .replace(/[<>]/g, '')
     .replace(/&[a-z]+;|&#\d+;/g, '')
     .replace(/[`*_~]/g, '')
     .replace(/[^\p{L}\p{N}\s-]/gu, '')
