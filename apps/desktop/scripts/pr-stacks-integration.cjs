@@ -48,6 +48,9 @@ async function main() {
     const binary=process.env.NEKKO_ELECTRON_BINARY || require(path.join(modules,'electron'));
     const env={...process.env,NEKKO_STACK_FIXTURE_DIR:dir,NEKKO_STACK_FIXTURE_KIND:kind};delete env.ELECTRON_RUN_AS_NODE;
     const result=cp.spawnSync(binary,[path.join(__dirname,'pr-stacks-sandbox.cjs')],{cwd:repo,env,windowsHide:true,stdio:'inherit',timeout:90000});
+    const profile=path.resolve(dir,'profile');
+    if(!profile.startsWith(path.resolve(out)+path.sep))throw Error('Profile cleanup escaped evidence directory');
+    fs.rmSync(profile,{recursive:true,force:true});
     if(result.error)throw result.error;if(result.status)throw Error(kind+' renderer checks failed');
   }
 }
