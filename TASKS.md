@@ -330,6 +330,10 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 - [ ] T189: Documentation hub at nekkoagent.com/docs, modelled on svelte.dev/docs, generated from repo Markdown by `scripts/build-docs.mjs` (`npm run docs`), with per-page Markdown, `llms-full.txt`, search, and the Docs site workflow that regenerates and commits the pages on any PR (or a regenerate PR on main) only when the output changed. Added: 2026-10-12. See SPEC.md, Documentation hub. Hub merged in #485; production verified 2026-10-12 (`/docs`, `/docs/cli.md`, `/llms-full.txt`, search index and images all 200). Remaining: confirm the first real run of the Docs site workflow pushes with the App token (its installation needs contents and pull-requests write, which runtime-updates.yml already uses).
 
+### Windows installs and engine choice (added 2026-10-12)
+
+- [ ] T190: Benchmark CUDA against Vulkan llama.cpp on our NVIDIA hardware (RTX 5090 first, then an older RTX card) and replace the "roughly 15-20% faster" claim (`CUDA_FASTER` in `packages/host/src/engine/builds.ts`, `docs/local-models.md`) with measured numbers. Use `llama-bench` from both builds of the pinned release (`runtime-releases.ts`) on the same GGUF, at a short prompt (512) and a long agent-sized prompt (16k+), reporting prompt processing and generation separately; keep runs small and sequential (no concurrent model servers). Added: 2026-10-12. See SPEC.md, Windows installs without Visual Studio.
+
 ### Folders and execution modes (implemented subset, draft; not shipped)
 
 - [ ] FM1: Land persisted primary-folder/No-folder defaults and saved-access revocation. Implemented with regression coverage; Added: 2026-10-09. See SPEC.md, Primary folder defaults and saved access revocation. Await parent visual inspection and release review.
