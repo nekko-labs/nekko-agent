@@ -12,6 +12,7 @@ publish.workspace = true
 cuda = ["nekko-decide/cuda"]
 
 [dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 anyhow.workspace = true
 axum.workspace = true
 bytes.workspace = true

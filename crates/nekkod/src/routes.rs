@@ -291,6 +291,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::automation::TASK_CHANNELS.contains(&c) && ctx.automation.owns_tasks() => {
             ctx.automation.route(c, &args).await
         }
+        c if crate::automation::WORKFLOW_CHANNELS.contains(&c) && ctx.automation.owns_workflows() => {
+            ctx.automation.route(c, &args).await
+        }
         c if crate::connectors::CHANNELS.contains(&c) && crate::connectors::owned(ctx) => {
             crate::connectors::route(ctx, c, &args).await
         }
@@ -395,6 +398,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     all.extend_from_slice(crate::machine::CHANNELS);
     if ctx.resource_queue.is_some() {
         all.extend_from_slice(crate::resource_queue::CHANNELS);
+    }
+    if ctx.automation.owns_workflows() {
+        all.extend_from_slice(crate::automation::WORKFLOW_CHANNELS);
     }
     all
 }

@@ -5,5 +5,9 @@
 
 pub mod json;
 pub mod tasks;
+pub mod templates;
+pub mod workflow_rules;
+pub mod workflows;
 
 pub use tasks::{TaskHost, Tasks};
+pub use workflows::{ShellResult, WorkflowHost, Workflows};

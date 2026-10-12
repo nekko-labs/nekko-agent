@@ -10,8 +10,8 @@ mod automation;
 mod backend;
 mod catalog;
 mod config;
-mod context;
 mod connectors;
+mod context;
 mod decide;
 mod decisions;
 mod engine;
@@ -31,8 +31,8 @@ mod tooling;
 mod turns;
 mod voice;
 mod wire;
-mod worktrees;
 mod workspace;
+mod worktrees;
 
 use backend::Backend;
 use hub::Hub;
@@ -82,7 +82,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS, oauth::OWNS, automation::OWNS].join(","));
+                cmd.env.insert(
+                    "NEKKOD_OWNS".into(),
+                    [settings::OWNS, voice::OWNS, oauth::OWNS, automation::OWNS].join(","),
+                );
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -190,6 +193,14 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         ctx.turns.set_preparer(Arc::new(move |payload| {
             let (c, adm) = (c.clone(), adm.clone());
             Box::pin(async move { admission::admit_queued(&c, &adm, &payload).await })
+        }));
+    }
+    {
+        // A workflow stops a chat through the router, as the UI would.
+        let ctx = ctx.clone();
+        automation.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
+            let ctx = ctx.clone();
+            Box::pin(async move { routes::route(&ctx, &channel, args).await })
         }));
     }
     automation.start();

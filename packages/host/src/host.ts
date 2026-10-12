@@ -170,6 +170,7 @@ import {
   setWorkflowsNotifier,
   startWorkflowScheduler,
   reconcileWorkflowRuns,
+  WebhookUnauthorizedError,
 } from './workflows.js';
 import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
 import { adoptAdmittedTurn, connectorSnippetsFor, indexSnippetsForAdmission, isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
@@ -516,14 +517,14 @@ export interface Host {
   stopTrainingRun(id: string): TrainingRun[];
   addTrainingHint(id: string, text: string): TrainingRun[];
 
-  listWorkflows(): WorkflowsSnapshot;
-  createWorkflow(input: NewWorkflow): Workflow;
-  updateWorkflow(id: string, patch: Partial<Workflow>): Workflow | undefined;
-  deleteWorkflow(id: string): WorkflowsSnapshot;
-  duplicateWorkflow(id: string): Workflow | undefined;
+  listWorkflows(): Promise<WorkflowsSnapshot>;
+  createWorkflow(input: NewWorkflow): Promise<Workflow>;
+  updateWorkflow(id: string, patch: Partial<Workflow>): Promise<Workflow | undefined>;
+  deleteWorkflow(id: string): Promise<WorkflowsSnapshot>;
+  duplicateWorkflow(id: string): Promise<Workflow | undefined>;
   runWorkflow(id: string): Promise<WorkflowRun | undefined>;
-  cancelWorkflowRun(runId: string): void;
-  listWorkflowRuns(workflowId?: string): WorkflowRun[];
+  cancelWorkflowRun(runId: string): Promise<void>;
+  listWorkflowRuns(workflowId?: string): Promise<WorkflowRun[]>;
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
   dispatchWebhook(slug: string, secret: string, payload: Record<string, unknown>): Promise<WorkflowRun[]>;
 
@@ -678,7 +679,9 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // written off before the scheduler starts, so it can't look stuck forever.
   setWorkflowSender((e) => events.emit('agentEvent', e));
   setWorkflowsNotifier((snapshot) => events.emit('workflowsUpdated', snapshot));
-  reconcileWorkflowRuns();
+  // A daemon that owns workflows (crates/nekko-automation) reconciles, runs
+  // the schedule and polls the connectors itself.
+  unlessDaemonOwns('workflows', reconcileWorkflowRuns);
   {
     // A daemon-driven turn survives this host restarting: ask which chats it
     // still drives before writing the rest off.
@@ -692,8 +695,10 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       reconcileInterruptedChats();
     }
   }
-  startWorkflowScheduler();
-  startWorkflowListeners();
+  unlessDaemonOwns('workflows', () => {
+    startWorkflowScheduler();
+    startWorkflowListeners();
+  });
 
   const findProvider = (id: string) => getSettings().providers.find((p) => p.id === id);
 
@@ -1188,19 +1193,29 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     stopTrainingRun,
     addTrainingHint,
 
-    listWorkflows: workflowsSnapshot,
-    createWorkflow,
-    updateWorkflow,
-    deleteWorkflow: (id: string) => {
-      deleteWorkflow(id);
-      return workflowsSnapshot();
-    },
-    duplicateWorkflow,
-    runWorkflow: (id: string) => runWorkflow(id),
-    cancelWorkflowRun,
-    listWorkflowRuns,
-    dispatchWorkflowEvent,
-    dispatchWebhook,
+    // The daemon runs workflows when it owns them (crates/nekko-automation).
+    listWorkflows: () => viaDaemon('workflows', 'workflows:list', [], workflowsSnapshot),
+    createWorkflow: (input) => viaDaemon('workflows', 'workflow:create', [input], () => createWorkflow(input)),
+    updateWorkflow: async (id, patch) =>
+      (await viaDaemon('workflows', 'workflow:update', [id, patch], () => updateWorkflow(id, patch))) ?? undefined,
+    deleteWorkflow: (id: string) =>
+      viaDaemon('workflows', 'workflow:delete', [id], () => {
+        deleteWorkflow(id);
+        return workflowsSnapshot();
+      }),
+    duplicateWorkflow: async (id) =>
+      (await viaDaemon('workflows', 'workflow:duplicate', [id], () => duplicateWorkflow(id))) ?? undefined,
+    runWorkflow: async (id: string) => (await viaDaemon('workflows', 'workflow:run', [id], () => runWorkflow(id))) ?? undefined,
+    cancelWorkflowRun: (runId) => viaDaemon('workflows', 'workflow:cancel', [runId], () => cancelWorkflowRun(runId)),
+    listWorkflowRuns: (workflowId) => viaDaemon('workflows', 'workflow:runs', [workflowId], () => listWorkflowRuns(workflowId)),
+    dispatchWorkflowEvent: (event) => viaDaemon('workflows', 'workflow:event', [event], () => dispatchWorkflowEvent(event)),
+    dispatchWebhook: (slug, secret, payload) =>
+      viaDaemon('workflows', 'workflow:webhook', [slug, secret, payload], () => dispatchWebhook(slug, secret, payload)).catch(
+        (e: Error) => {
+          // The daemon's refusal crosses the wire as a message; the webhook routes look for the code.
+          throw e.message === 'unauthorized' || e.message.endsWith(': unauthorized') ? new WebhookUnauthorizedError() : e;
+        },
+      ),
 
     listConnectors: () => getSettings().connectors,
     connectConnector: (kind, token, settings) => {
