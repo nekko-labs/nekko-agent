@@ -29,6 +29,8 @@ pub struct Ctx {
     pub accounts: Arc<crate::accounts::Accounts>,
     /// settings.json, when the data directory is known (`settings:*`).
     pub settings: Option<Arc<crate::settings::Settings>>,
+    /// Nekko Voice (`voice:*`), when the data directory is known.
+    pub voice: Option<Arc<crate::voice::Voice>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -253,6 +255,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
             crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
         }
+        c if crate::voice::CHANNELS.contains(&c) && ctx.voice.is_some() => match &ctx.voice {
+            Some(voice) => voice.route(c, &args).await,
+            None => Err("voice needs the data directory".into()),
+        },
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
             session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
         }
@@ -299,6 +305,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.settings.is_some() {
         all.extend_from_slice(crate::settings::CHANNELS);
+    }
+    if ctx.voice.is_some() {
+        all.extend_from_slice(crate::voice::CHANNELS);
     }
     all
 }
