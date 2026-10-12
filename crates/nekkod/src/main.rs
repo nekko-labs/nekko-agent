@@ -11,6 +11,7 @@ mod backend;
 mod catalog;
 mod config;
 mod context;
+mod connectors;
 mod decide;
 mod decisions;
 mod engine;

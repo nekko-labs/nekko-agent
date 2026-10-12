@@ -291,6 +291,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::automation::TASK_CHANNELS.contains(&c) && ctx.automation.owns_tasks() => {
             ctx.automation.route(c, &args).await
         }
+        c if crate::connectors::CHANNELS.contains(&c) && crate::connectors::owned(ctx) => {
+            crate::connectors::route(ctx, c, &args).await
+        }
         c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
         // Without a data directory the host keeps the coordinator file.
         "resource:queue" => match &ctx.resource_queue {
@@ -359,6 +362,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.catalog.is_some() {
         all.extend_from_slice(crate::catalog::CHANNELS);
+    }
+    if crate::connectors::owned(ctx) {
+        all.extend_from_slice(crate::connectors::CHANNELS);
     }
     if ctx.settings.is_some() {
         all.extend_from_slice(crate::decisions::CHANNELS);

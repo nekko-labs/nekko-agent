@@ -1,0 +1,3698 @@
+{
+ "fetches": [
+  {
+   "kind": "github",
+   "token": "gh",
+   "replies": [
+    {
+     "json": [
+      {
+       "id": 1,
+       "full_name": "o/r",
+       "private": true,
+       "html_url": "https://g/o/r",
+       "description": "d"
+      },
+      {
+       "id": 2,
+       "full_name": "o/s",
+       "private": false,
+       "html_url": "u"
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.github.com/user/repos?sort=updated&per_page=25",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer gh"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "1",
+     "title": "o/r",
+     "subtitle": "private repo",
+     "url": "https://g/o/r",
+     "body": "d"
+    },
+    {
+     "id": "2",
+     "title": "o/s",
+     "subtitle": "repo",
+     "url": "u",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "github",
+   "token": "gh",
+   "query": "is:pr \"fix\" ü",
+   "replies": [
+    {
+     "json": {
+      "items": [
+       {
+        "id": 7,
+        "title": "T",
+        "pull_request": {},
+        "repository_url": "https://api.github.com/repos/o/r",
+        "number": 3,
+        "html_url": "h",
+        "body": null
+       },
+       {
+        "id": 8,
+        "title": "I",
+        "number": 4,
+        "html_url": "h2",
+        "body": "b"
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.github.com/search/issues?q=is%3Apr%20%22fix%22%20%C3%BC&per_page=20",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer gh"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "7",
+     "title": "T",
+     "subtitle": "PR o/r #3",
+     "url": "h",
+     "body": ""
+    },
+    {
+     "id": "8",
+     "title": "I",
+     "subtitle": "Issue  #4",
+     "url": "h2",
+     "body": "b"
+    }
+   ]
+  },
+  {
+   "kind": "github",
+   "token": "gh",
+   "replies": [
+    {
+     "status": 401,
+     "json": {
+      "message": "bad"
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.github.com/user/repos?sort=updated&per_page=25",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer gh"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "GitHub 401"
+  },
+  {
+   "kind": "github",
+   "token": "gh",
+   "query": "x",
+   "replies": [
+    {
+     "json": {}
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.github.com/search/issues?q=x&per_page=20",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer gh"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": []
+  },
+  {
+   "kind": "linear",
+   "token": "lin",
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "issues": {
+        "nodes": [
+         {
+          "id": "a",
+          "identifier": "ENG-1",
+          "title": "Fix",
+          "url": "u",
+          "description": null
+         }
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"{ issues(first:25, orderBy:updatedAt){ nodes{ id identifier title url description } } }\"}",
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "a",
+     "title": "ENG-1 Fix",
+     "subtitle": "Linear issue",
+     "url": "u",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "linear",
+   "token": "lin",
+   "query": "crash \"x\"",
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "searchIssues": {
+        "nodes": [
+         {
+          "id": "b",
+          "identifier": "ENG-2",
+          "title": "Crash",
+          "url": "u2",
+          "description": "d"
+         }
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"query($q:String!){ searchIssues(term:$q){ nodes{ id identifier title url description } } }\",\"variables\":{\"q\":\"crash \\\"x\\\"\"}}",
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "b",
+     "title": "ENG-2 Crash",
+     "subtitle": "Linear issue",
+     "url": "u2",
+     "body": "d"
+    }
+   ]
+  },
+  {
+   "kind": "linear",
+   "token": "lin",
+   "replies": [
+    {
+     "status": 500,
+     "text": "oops"
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"{ issues(first:25, orderBy:updatedAt){ nodes{ id identifier title url description } } }\"}",
+     "redirect": null
+    }
+   ],
+   "error": "Linear 500"
+  },
+  {
+   "kind": "slack",
+   "token": "xoxb",
+   "replies": [
+    {
+     "json": {
+      "ok": true,
+      "channels": [
+       {
+        "id": "C1",
+        "name": "general",
+        "is_private": false,
+        "purpose": {
+         "value": "talk"
+        }
+       },
+       {
+        "id": "C2",
+        "name": "sec",
+        "is_private": true
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://slack.com/api/conversations.list?limit=50&exclude_archived=true",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "C1",
+     "title": "#general",
+     "subtitle": "channel",
+     "body": "talk"
+    },
+    {
+     "id": "C2",
+     "title": "#sec",
+     "subtitle": "private channel",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "slack",
+   "token": "xoxb",
+   "query": "deploy & ship",
+   "replies": [
+    {
+     "json": {
+      "ok": true,
+      "messages": {
+       "matches": [
+        {
+         "iid": "i1",
+         "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+         "channel": {
+          "name": "ops"
+         },
+         "permalink": "p"
+        },
+        {
+         "ts": "1.2",
+         "text": null
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://slack.com/api/search.messages?query=deploy%20%26%20ship&count=20",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "i1",
+     "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "subtitle": "#ops",
+     "url": "p",
+     "body": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+     "id": "1.2",
+     "title": "(message)",
+     "subtitle": "#",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "slack",
+   "token": "xoxb",
+   "replies": [
+    {
+     "json": {
+      "ok": false,
+      "error": "invalid_auth"
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://slack.com/api/conversations.list?limit=50&exclude_archived=true",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Slack: invalid_auth"
+  },
+  {
+   "kind": "slack",
+   "token": "xoxb",
+   "replies": [
+    {
+     "json": {
+      "ok": false
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://slack.com/api/conversations.list?limit=50&exclude_archived=true",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Slack: error"
+  },
+  {
+   "kind": "discord",
+   "token": "bot",
+   "replies": [
+    {
+     "json": [
+      {
+       "id": "g1",
+       "name": "Guild"
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://discord.com/api/v10/users/@me/guilds",
+     "headers": [
+      [
+       "Authorization",
+       "Bot bot"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "g1",
+     "title": "Guild",
+     "subtitle": "Discord server",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "discord",
+   "token": "bot",
+   "replies": [
+    {
+     "status": 403
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://discord.com/api/v10/users/@me/guilds",
+     "headers": [
+      [
+       "Authorization",
+       "Bot bot"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Discord 403"
+  },
+  {
+   "kind": "gitlab",
+   "token": "glpat",
+   "replies": [
+    {
+     "json": [
+      {
+       "id": 5,
+       "path_with_namespace": "g/p",
+       "web_url": "w",
+       "description": null
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://gitlab.com/api/v4/projects?membership=true&order_by=updated_at&per_page=25",
+     "headers": [
+      [
+       "PRIVATE-TOKEN",
+       "glpat"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "5",
+     "title": "g/p",
+     "subtitle": "GitLab project",
+     "url": "w",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "gitlab",
+   "token": "glpat",
+   "query": "my proj",
+   "settings": {
+    "site": "https://gitlab.example.com/"
+   },
+   "replies": [
+    {
+     "json": []
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://gitlab.example.com/api/v4/projects?membership=true&order_by=updated_at&per_page=25&search=my%20proj",
+     "headers": [
+      [
+       "PRIVATE-TOKEN",
+       "glpat"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": []
+  },
+  {
+   "kind": "gitlab",
+   "token": "glpat",
+   "settings": {
+    "site": "http://gitlab.example.com"
+   },
+   "replies": [],
+   "requests": [],
+   "error": "The GitLab instance URL must be https."
+  },
+  {
+   "kind": "gitlab",
+   "token": "glpat",
+   "settings": {
+    "site": "not a url"
+   },
+   "replies": [],
+   "requests": [],
+   "error": "GitLab site \"not a url\" isn't a valid URL."
+  },
+  {
+   "kind": "gitlab",
+   "token": "glpat",
+   "settings": {
+    "site": "https://gitlab.example.com/sub"
+   },
+   "replies": [],
+   "requests": [],
+   "error": "The GitLab instance URL should be the instance origin (e.g. https://gitlab.example.com), not \"https://gitlab.example.com/sub\"."
+  },
+  {
+   "kind": "gitlab",
+   "token": "glpat",
+   "replies": [
+    {
+     "status": 404
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://gitlab.com/api/v4/projects?membership=true&order_by=updated_at&per_page=25",
+     "headers": [
+      [
+       "PRIVATE-TOKEN",
+       "glpat"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "GitLab 404"
+  },
+  {
+   "kind": "jira",
+   "token": "jt",
+   "settings": {
+    "site": "https://acme.atlassian.net/",
+    "email": " me@acme.io "
+   },
+   "replies": [
+    {
+     "json": {
+      "issues": [
+       {
+        "id": "10",
+        "key": "AC-1",
+        "fields": {
+         "summary": "Sum",
+         "issuetype": {
+          "name": "Bug"
+         },
+         "status": {
+          "name": "Open"
+         },
+         "description": "plain"
+        }
+       },
+       {
+        "key": "AC-2",
+        "fields": {
+         "description": {
+          "type": "doc"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://acme.atlassian.net/rest/api/3/search/jql?jql=order%20by%20updated%20desc&maxResults=25&fields=summary,status,issuetype,description",
+     "headers": [
+      [
+       "Authorization",
+       "Basic bWVAYWNtZS5pbzpqdA=="
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "10",
+     "title": "AC-1 Sum",
+     "subtitle": "Bug · Open",
+     "url": "https://acme.atlassian.net/browse/AC-1",
+     "body": "plain"
+    },
+    {
+     "id": "AC-2",
+     "title": "AC-2",
+     "subtitle": "Jira issue",
+     "url": "https://acme.atlassian.net/browse/AC-2",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "jira",
+   "token": "jt",
+   "query": "a \"b\" + c (d) [e] : f/g \\ h",
+   "settings": {
+    "site": "https://acme.atlassian.net",
+    "email": "me@acme.io"
+   },
+   "replies": [
+    {
+     "status": 410
+    },
+    {
+     "json": {
+      "issues": []
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://acme.atlassian.net/rest/api/3/search/jql?jql=text%20~%20%22a%20b%20c%20d%20e%20f%20g%20h%22%20order%20by%20updated%20desc&maxResults=25&fields=summary,status,issuetype,description",
+     "headers": [
+      [
+       "Authorization",
+       "Basic bWVAYWNtZS5pbzpqdA=="
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    },
+    {
+     "method": "GET",
+     "url": "https://acme.atlassian.net/rest/api/3/search?jql=text%20~%20%22a%20b%20c%20d%20e%20f%20g%20h%22%20order%20by%20updated%20desc&maxResults=25&fields=summary,status,issuetype,description",
+     "headers": [
+      [
+       "Authorization",
+       "Basic bWVAYWNtZS5pbzpqdA=="
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": []
+  },
+  {
+   "kind": "jira",
+   "token": "jt",
+   "settings": {
+    "site": "https://acme.atlassian.net",
+    "email": "me@acme.io"
+   },
+   "replies": [
+    {
+     "status": 404
+    },
+    {
+     "status": 404
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://acme.atlassian.net/rest/api/3/search/jql?jql=order%20by%20updated%20desc&maxResults=25&fields=summary,status,issuetype,description",
+     "headers": [
+      [
+       "Authorization",
+       "Basic bWVAYWNtZS5pbzpqdA=="
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    },
+    {
+     "method": "GET",
+     "url": "https://acme.atlassian.net/rest/api/3/search?jql=order%20by%20updated%20desc&maxResults=25&fields=summary,status,issuetype,description",
+     "headers": [
+      [
+       "Authorization",
+       "Basic bWVAYWNtZS5pbzpqdA=="
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Jira 404"
+  },
+  {
+   "kind": "jira",
+   "token": "jt",
+   "settings": {
+    "site": "",
+    "email": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "error": "Jira needs a site URL and the account email."
+  },
+  {
+   "kind": "jira",
+   "token": "jt",
+   "settings": {
+    "site": "http://acme",
+    "email": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "error": "Jira site URL must be https."
+  },
+  {
+   "kind": "jira",
+   "token": "jt",
+   "settings": {
+    "site": "acme",
+    "email": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "error": "Jira site \"acme\" isn't a valid URL."
+  },
+  {
+   "kind": "teams",
+   "token": "graph",
+   "replies": [
+    {
+     "json": {
+      "value": [
+       {
+        "id": "t1",
+        "displayName": "Eng",
+        "description": "d"
+       },
+       {
+        "id": "t2"
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://graph.microsoft.com/v1.0/me/joinedTeams",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer graph"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "t1",
+     "title": "Eng",
+     "subtitle": "Microsoft Teams",
+     "body": "d"
+    },
+    {
+     "id": "t2",
+     "title": "Team",
+     "subtitle": "Microsoft Teams",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "teams",
+   "token": "graph",
+   "query": "EN",
+   "replies": [
+    {
+     "json": {
+      "value": [
+       {
+        "id": "t1",
+        "displayName": "Eng"
+       },
+       {
+        "id": "t2",
+        "displayName": "Ops"
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://graph.microsoft.com/v1.0/me/joinedTeams",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer graph"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "t1",
+     "title": "Eng",
+     "subtitle": "Microsoft Teams",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "teams",
+   "token": "graph",
+   "replies": [
+    {
+     "status": 401
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://graph.microsoft.com/v1.0/me/joinedTeams",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer graph"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Graph 401"
+  },
+  {
+   "kind": "teams",
+   "token": "",
+   "settings": {
+    "webhookUrl": " https://acme.webhook.office.com/x "
+   },
+   "replies": [],
+   "requests": [],
+   "result": [
+    {
+     "id": "webhook",
+     "title": "Incoming webhook",
+     "subtitle": "acme.webhook.office.com",
+     "body": "Nekko Agent can post messages to this channel. Add a Graph token to read teams."
+    }
+   ]
+  },
+  {
+   "kind": "teams",
+   "token": "",
+   "settings": {
+    "webhookUrl": "https://WEBHOOK.office.com/x"
+   },
+   "replies": [],
+   "requests": [],
+   "result": [
+    {
+     "id": "webhook",
+     "title": "Incoming webhook",
+     "subtitle": "webhook.office.com",
+     "body": "Nekko Agent can post messages to this channel. Add a Graph token to read teams."
+    }
+   ]
+  },
+  {
+   "kind": "teams",
+   "token": "",
+   "settings": {
+    "webhookUrl": "https://evil.com/x"
+   },
+   "replies": [],
+   "requests": [],
+   "error": "The Teams webhook URL must be an https URL on *.webhook.office.com (the Incoming Webhook URL from the Teams channel)."
+  },
+  {
+   "kind": "teams",
+   "token": "",
+   "settings": {
+    "webhookUrl": "nope"
+   },
+   "replies": [],
+   "requests": [],
+   "error": "The Teams webhook URL isn't a valid https URL."
+  },
+  {
+   "kind": "teams",
+   "token": "",
+   "replies": [],
+   "requests": [],
+   "error": "Teams needs an incoming webhook URL or a Microsoft Graph token."
+  },
+  {
+   "kind": "gmail",
+   "token": "g",
+   "query": "from:me",
+   "replies": [
+    {
+     "json": {
+      "messages": [
+       {
+        "id": "m1"
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=from%3Ame",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer g"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "m1",
+     "title": "Message m1",
+     "subtitle": "Gmail",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "gmail",
+   "token": "g",
+   "replies": [
+    {
+     "status": 401
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer g"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Gmail 401, connect via OAuth"
+  },
+  {
+   "kind": "gdrive",
+   "token": "g",
+   "query": "q's",
+   "replies": [
+    {
+     "json": {
+      "files": [
+       {
+        "id": "f1",
+        "name": "Doc",
+        "mimeType": "text/plain"
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://www.googleapis.com/drive/v3/files?pageSize=20&q=name%20contains%20'q's'",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer g"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "f1",
+     "title": "Doc",
+     "subtitle": "text/plain",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "gdrive",
+   "token": "g",
+   "replies": [
+    {
+     "status": 403
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://www.googleapis.com/drive/v3/files?pageSize=20",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer g"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Drive 403, connect via OAuth"
+  },
+  {
+   "kind": "github",
+   "token": "gh",
+   "replies": [],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.github.com/user/repos?sort=updated&per_page=25",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer gh"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "fetch failed"
+  }
+ ],
+ "polls": [
+  {
+   "kind": "github",
+   "token": "gh",
+   "settings": {},
+   "cursor": 1767323045006,
+   "replies": [
+    {
+     "json": [
+      {
+       "id": "1",
+       "type": "PushEvent",
+       "created_at": "2026-01-02T03:04:06.006Z",
+       "repo": {
+        "name": "o/r"
+       },
+       "payload": {
+        "ref": "main"
+       }
+      },
+      {
+       "id": "2",
+       "type": "PullRequestEvent",
+       "created_at": "2026-01-02T03:04:04.006Z",
+       "payload": {
+        "number": 3,
+        "action": "opened"
+       }
+      },
+      {
+       "id": "3",
+       "type": "PullRequestEvent",
+       "created_at": "2026-01-02T03:04:10.006Z",
+       "payload": {
+        "number": 4,
+        "action": "closed"
+       }
+      },
+      {
+       "id": "4",
+       "created_at": "garbage"
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.github.com/events?per_page=25",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer gh"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": {
+    "events": [
+     {
+      "id": "1",
+      "cursor": 1767323046006,
+      "event": "PushEvent",
+      "text": "PushEvent",
+      "source": "o/r",
+      "payload": {
+       "ref": "main"
+      }
+     },
+     {
+      "id": "3",
+      "cursor": 1767323050006,
+      "event": "PullRequestEvent",
+      "text": "PullRequestEvent #4 closed",
+      "source": "",
+      "payload": {
+       "number": 4,
+       "action": "closed"
+      }
+     },
+     {
+      "id": "4",
+      "cursor": null,
+      "event": "event",
+      "text": "event",
+      "source": "",
+      "payload": {}
+     }
+    ],
+    "nextCursor": null
+   }
+  },
+  {
+   "kind": "github",
+   "token": "gh",
+   "settings": {
+    "repo": " o/r ",
+    "event": "pullrequest",
+    "filter": "CLOSED"
+   },
+   "cursor": 1767323045006,
+   "replies": [
+    {
+     "json": [
+      {
+       "id": "3",
+       "type": "PullRequestEvent",
+       "created_at": "2026-01-02T03:04:10.006Z",
+       "payload": {
+        "number": 4,
+        "action": "closed"
+       }
+      },
+      {
+       "id": "5",
+       "type": "PullRequestEvent",
+       "created_at": "2026-01-02T03:04:11.006Z",
+       "payload": {
+        "number": 5,
+        "action": "opened"
+       }
+      },
+      {
+       "id": "6",
+       "type": "IssuesEvent",
+       "created_at": "2026-01-02T03:04:12.006Z",
+       "payload": {
+        "action": "closed"
+       }
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.github.com/repos/o%2Fr/events?per_page=25",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer gh"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": {
+    "events": [
+     {
+      "id": "3",
+      "cursor": 1767323050006,
+      "event": "PullRequestEvent",
+      "text": "PullRequestEvent #4 closed",
+      "source": "o/r",
+      "payload": {
+       "number": 4,
+       "action": "closed"
+      }
+     }
+    ],
+    "nextCursor": 1767323050006
+   }
+  },
+  {
+   "kind": "github",
+   "token": "gh",
+   "settings": {},
+   "cursor": 1767323045006,
+   "replies": [
+    {
+     "json": []
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.github.com/events?per_page=25",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer gh"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": {
+    "events": [],
+    "nextCursor": 1767323045006
+   }
+  },
+  {
+   "kind": "github",
+   "token": "gh",
+   "settings": {},
+   "cursor": 1767323045006,
+   "replies": [
+    {
+     "status": 500
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.github.com/events?per_page=25",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer gh"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "GitHub 500"
+  },
+  {
+   "kind": "linear",
+   "token": "lin",
+   "settings": {},
+   "cursor": 1767323045006,
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "issues": {
+        "nodes": [
+         {
+          "id": "a",
+          "identifier": "ENG-1",
+          "title": "Fix",
+          "url": "u",
+          "description": null,
+          "updatedAt": "2026-01-02T03:04:05.016Z",
+          "state": {
+           "name": "Done"
+          }
+         },
+         {
+          "id": "b",
+          "identifier": "ENG-2",
+          "title": "Old",
+          "updatedAt": "2026-01-02T03:04:05.006Z"
+         }
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"{ issues(first: 25, filter: { updatedAt: { gt: \\\"2026-01-02T03:04:05.006Z\\\" } }, orderBy: updatedAt) { nodes { id identifier title url description updatedAt state { name } } } }\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "events": [
+     {
+      "id": "a:2026-01-02T03:04:05.016Z",
+      "cursor": 1767323045016,
+      "event": "issue",
+      "text": "ENG-1 Fix",
+      "payload": {
+       "id": "a",
+       "identifier": "ENG-1",
+       "title": "Fix",
+       "url": "u",
+       "description": null,
+       "updatedAt": 1767323045016,
+       "state": {
+        "name": "Done"
+       }
+      }
+     }
+    ],
+    "nextCursor": 1767323045016
+   }
+  },
+  {
+   "kind": "slack",
+   "token": "xoxb",
+   "settings": {
+    "channel": "C123",
+    "filter": "Deploy"
+   },
+   "cursor": 1767323045006,
+   "replies": [
+    {
+     "json": {
+      "ok": true,
+      "messages": [
+       {
+        "ts": "1767323047.006",
+        "text": "deploy done"
+       },
+       {
+        "ts": "1767323046.006",
+        "text": "other"
+       },
+       {
+        "ts": "1767323048.006",
+        "text": "deploy joined",
+        "subtype": "channel_join"
+       },
+       {
+        "ts": "1767323044.006",
+        "text": "deploy old"
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://slack.com/api/conversations.history?channel=C123&limit=50&oldest=1767323045.006",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": {
+    "events": [
+     {
+      "id": "C123:1767323047.006",
+      "cursor": 1767323047006,
+      "event": "message",
+      "text": "deploy done",
+      "source": "C123",
+      "payload": {
+       "ts": "1767323047.006",
+       "text": "deploy done",
+       "channel": "C123"
+      }
+     }
+    ],
+    "nextCursor": 1767323047006
+   }
+  },
+  {
+   "kind": "slack",
+   "token": "xoxb",
+   "settings": {
+    "channel": "#ops"
+   },
+   "cursor": 0,
+   "replies": [
+    {
+     "json": {
+      "ok": true,
+      "channels": [
+       {
+        "id": "C9",
+        "name": "ops"
+       }
+      ]
+     }
+    },
+    {
+     "json": {
+      "ok": true,
+      "messages": [
+       {
+        "ts": "1700000000.000100",
+        "text": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://slack.com/api/conversations.list?limit=200&exclude_archived=true&types=public_channel,private_channel",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    },
+    {
+     "method": "GET",
+     "url": "https://slack.com/api/conversations.history?channel=C9&limit=50",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": {
+    "events": [
+     {
+      "id": "C9:1700000000.000100",
+      "cursor": 1700000000000,
+      "event": "message",
+      "text": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+      "source": "#ops",
+      "payload": {
+       "ts": "1700000000.000100",
+       "text": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+       "channel": "C9"
+      }
+     }
+    ],
+    "nextCursor": 1700000000000
+   }
+  },
+  {
+   "kind": "slack",
+   "token": "xoxb",
+   "settings": {
+    "channel": "#missing"
+   },
+   "cursor": 0,
+   "replies": [
+    {
+     "json": {
+      "ok": true,
+      "channels": []
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://slack.com/api/conversations.list?limit=200&exclude_archived=true&types=public_channel,private_channel",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Slack channel \"#missing\" not found."
+  },
+  {
+   "kind": "slack",
+   "token": "xoxb",
+   "settings": {
+    "channel": "  "
+   },
+   "cursor": 0,
+   "replies": [],
+   "requests": [],
+   "error": "Slack poll needs a channel id or #channel name in the trigger."
+  },
+  {
+   "kind": "slack",
+   "token": "xoxb",
+   "settings": {
+    "channel": "C1"
+   },
+   "cursor": 0,
+   "replies": [
+    {
+     "json": {
+      "ok": false,
+      "error": "not_in_channel"
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://slack.com/api/conversations.history?channel=C1&limit=50",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Slack: not_in_channel"
+  },
+  {
+   "kind": "gitlab",
+   "token": "glpat",
+   "settings": {
+    "project": "g/p",
+    "event": "pushed",
+    "filter": "fix"
+   },
+   "cursor": 1767323045006,
+   "replies": [
+    {
+     "json": [
+      {
+       "id": 1,
+       "project_id": 5,
+       "action_name": "pushed to",
+       "created_at": "2026-01-02T03:04:05.007Z",
+       "target_title": "fix bug",
+       "target_iid": 7
+      },
+      {
+       "id": 2,
+       "project_id": 5,
+       "action_name": "pushed to",
+       "created_at": "2026-01-02T03:04:05.008Z",
+       "push_data": {
+        "commit_title": "fix again"
+       }
+      },
+      {
+       "id": 3,
+       "action_name": "opened",
+       "created_at": "2026-01-02T03:04:05.009Z",
+       "target_title": "fix"
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://gitlab.com/api/v4/projects/g%2Fp/events?per_page=25&after=2026-01-02",
+     "headers": [
+      [
+       "PRIVATE-TOKEN",
+       "glpat"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": {
+    "events": [
+     {
+      "id": "5:2026-01-02T03:04:05.007Z",
+      "cursor": 1767323045007,
+      "event": "pushed to",
+      "text": "fix bug #7",
+      "source": "5",
+      "payload": {
+       "id": 1,
+       "project_id": 5,
+       "action_name": "pushed to",
+       "created_at": "2026-01-02T03:04:05.007Z",
+       "target_title": "fix bug",
+       "target_iid": 7
+      }
+     },
+     {
+      "id": "5:2026-01-02T03:04:05.008Z",
+      "cursor": 1767323045008,
+      "event": "pushed to",
+      "text": "pushed to",
+      "source": "5",
+      "payload": {
+       "id": 2,
+       "project_id": 5,
+       "action_name": "pushed to",
+       "created_at": "2026-01-02T03:04:05.008Z",
+       "push_data": {
+        "commit_title": "fix again"
+       }
+      }
+     }
+    ],
+    "nextCursor": 1767323045008
+   }
+  },
+  {
+   "kind": "gitlab",
+   "token": "glpat",
+   "settings": {},
+   "cursor": 1767323045006,
+   "replies": [
+    {
+     "json": [
+      {
+       "id": 9,
+       "created_at": "2026-01-02T03:04:05.015Z",
+       "target_type": "Issue"
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://gitlab.com/api/v4/events?per_page=25&after=2026-01-02",
+     "headers": [
+      [
+       "PRIVATE-TOKEN",
+       "glpat"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": {
+    "events": [
+     {
+      "id": "9:2026-01-02T03:04:05.015Z",
+      "cursor": 1767323045015,
+      "event": "Issue",
+      "text": "issue",
+      "source": "",
+      "payload": {
+       "id": 9,
+       "created_at": "2026-01-02T03:04:05.015Z",
+       "target_type": "Issue"
+      }
+     }
+    ],
+    "nextCursor": 1767323045015
+   }
+  },
+  {
+   "kind": "jira",
+   "token": "jt",
+   "settings": {
+    "site": "https://acme.atlassian.net",
+    "email": "me@acme.io",
+    "filter": "login"
+   },
+   "cursor": 1767323045006,
+   "replies": [
+    {
+     "status": 404
+    },
+    {
+     "json": {
+      "issues": [
+       {
+        "key": "AC-1",
+        "fields": {
+         "summary": "Login broken",
+         "updated": "2026-01-02T03:04:06.000+0000",
+         "description": "x"
+        }
+       },
+       {
+        "key": "AC-2",
+        "fields": {
+         "summary": "Other",
+         "updated": "2026-01-02T03:04:07.000+0000",
+         "description": "about LOGIN"
+        }
+       },
+       {
+        "key": "AC-3",
+        "fields": {
+         "summary": "Login old",
+         "updated": "2026-01-01T00:00:00.000+0000"
+        }
+       },
+       {
+        "key": "AC-4",
+        "fields": {
+         "summary": "login no date"
+        }
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://acme.atlassian.net/rest/api/3/search/jql?jql=updated%20%3E%3D%20%222026-01-02%2003%3A04%22%20order%20by%20updated%20desc&maxResults=25&fields=summary,status,issuetype,description,updated",
+     "headers": [
+      [
+       "Authorization",
+       "Basic bWVAYWNtZS5pbzpqdA=="
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    },
+    {
+     "method": "GET",
+     "url": "https://acme.atlassian.net/rest/api/3/search?jql=updated%20%3E%3D%20%222026-01-02%2003%3A04%22%20order%20by%20updated%20desc&maxResults=25&fields=summary,status,issuetype,description,updated",
+     "headers": [
+      [
+       "Authorization",
+       "Basic bWVAYWNtZS5pbzpqdA=="
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": {
+    "events": [
+     {
+      "id": "AC-1:2026-01-02T03:04:06.000+0000",
+      "cursor": 1767323046000,
+      "event": "issue",
+      "text": "AC-1 Login broken",
+      "payload": {
+       "summary": "Login broken",
+       "updated": 1767323046000,
+       "description": "x",
+       "key": "AC-1"
+      }
+     },
+     {
+      "id": "AC-2:2026-01-02T03:04:07.000+0000",
+      "cursor": 1767323047000,
+      "event": "issue",
+      "text": "AC-2 Other",
+      "payload": {
+       "summary": "Other",
+       "updated": 1767323047000,
+       "description": "about LOGIN",
+       "key": "AC-2"
+      }
+     }
+    ],
+    "nextCursor": 1767323047000
+   }
+  },
+  {
+   "kind": "jira",
+   "token": "jt",
+   "settings": {
+    "site": "https://acme.atlassian.net",
+    "email": ""
+   },
+   "cursor": 1767323045006,
+   "replies": [],
+   "requests": [],
+   "error": "Jira needs a site URL and the account email."
+  }
+ ],
+ "actions": [
+  {
+   "op": "slack.postMessage",
+   "config": {
+    "kind": "slack",
+    "connected": true,
+    "token": " xoxb-1 "
+   },
+   "params": {
+    "channel": "#ops",
+    "text": "Shipped 🐱"
+   },
+   "replies": [
+    {
+     "json": {
+      "ok": true,
+      "channel": "C1",
+      "ts": "1.2"
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://slack.com/api/chat.postMessage",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb-1"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"channel\":\"ops\",\"text\":\"Shipped 🐱\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Posted to Slack (C1, ts 1.2)"
+   }
+  },
+  {
+   "op": "slack.postMessage",
+   "config": {
+    "kind": "slack",
+    "connected": true,
+    "token": " xoxb-1 "
+   },
+   "params": {
+    "channel": "C1",
+    "text": "x"
+   },
+   "replies": [
+    {
+     "json": {
+      "ok": false,
+      "error": "channel_not_found"
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://slack.com/api/chat.postMessage",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb-1"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"channel\":\"C1\",\"text\":\"x\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Slack postMessage failed: channel_not_found",
+    "isError": true
+   }
+  },
+  {
+   "op": "slack.postMessage",
+   "config": {
+    "kind": "slack",
+    "connected": true,
+    "token": " xoxb-1 "
+   },
+   "params": {
+    "channel": "C1",
+    "text": "x"
+   },
+   "replies": [
+    {
+     "status": 500,
+     "text": "not json"
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://slack.com/api/chat.postMessage",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer xoxb-1"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"channel\":\"C1\",\"text\":\"x\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Slack postMessage failed: HTTP 500",
+    "isError": true
+   }
+  },
+  {
+   "op": "slack.postMessage",
+   "config": {
+    "kind": "slack",
+    "connected": true,
+    "token": " xoxb-1 "
+   },
+   "params": {
+    "channel": "",
+    "text": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "Channel is required.",
+    "isError": true
+   }
+  },
+  {
+   "op": "slack.postMessage",
+   "config": {
+    "kind": "slack",
+    "connected": true
+   },
+   "params": {
+    "channel": "C",
+    "text": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "The Slack connector has no token saved. Reconnect it under Connectors.",
+    "isError": true
+   }
+  },
+  {
+   "op": "slack.postMessage",
+   "params": {
+    "channel": "C",
+    "text": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "The Slack connector has no token saved. Reconnect it under Connectors.",
+    "isError": true
+   }
+  },
+  {
+   "op": "linear.createIssue",
+   "config": {
+    "kind": "linear",
+    "connected": true,
+    "token": "lin"
+   },
+   "params": {
+    "team": "eng",
+    "title": "Bug",
+    "description": " d "
+   },
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "teams": {
+        "nodes": [
+         {
+          "id": "t1",
+          "key": "ENG",
+          "name": "Engineering"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "json": {
+      "data": {
+       "issueCreate": {
+        "success": true,
+        "issue": {
+         "identifier": "ENG-9",
+         "url": "https://linear/ENG-9"
+        }
+       }
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"{ teams(first: 100) { nodes { id key name } } }\"}",
+     "redirect": null
+    },
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { identifier url } } }\",\"variables\":{\"input\":{\"teamId\":\"t1\",\"title\":\"Bug\",\"description\":\"d\"}}}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Created ENG-9 https://linear/ENG-9"
+   }
+  },
+  {
+   "op": "linear.createIssue",
+   "config": {
+    "kind": "linear",
+    "connected": true,
+    "token": "lin"
+   },
+   "params": {
+    "team": "nope",
+    "title": "Bug"
+   },
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "teams": {
+        "nodes": []
+       }
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"{ teams(first: 100) { nodes { id key name } } }\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "No Linear team matches \"nope\".",
+    "isError": true
+   }
+  },
+  {
+   "op": "linear.createIssue",
+   "config": {
+    "kind": "linear",
+    "connected": true,
+    "token": "lin"
+   },
+   "params": {
+    "team": "t1",
+    "title": "Bug"
+   },
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "teams": {
+        "nodes": [
+         {
+          "id": "t1",
+          "key": "ENG",
+          "name": "Engineering"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "json": {
+      "errors": [
+       {
+        "message": "title too long"
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"{ teams(first: 100) { nodes { id key name } } }\"}",
+     "redirect": null
+    },
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { identifier url } } }\",\"variables\":{\"input\":{\"teamId\":\"t1\",\"title\":\"Bug\"}}}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Linear: title too long",
+    "isError": true
+   }
+  },
+  {
+   "op": "linear.createIssue",
+   "config": {
+    "kind": "linear",
+    "connected": true,
+    "token": "lin"
+   },
+   "params": {
+    "team": "Engineering",
+    "title": "Bug"
+   },
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "teams": {
+        "nodes": [
+         {
+          "id": "t1",
+          "key": "ENG",
+          "name": "Engineering"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "json": {
+      "data": {
+       "issueCreate": {
+        "success": false
+       }
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"{ teams(first: 100) { nodes { id key name } } }\"}",
+     "redirect": null
+    },
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { identifier url } } }\",\"variables\":{\"input\":{\"teamId\":\"t1\",\"title\":\"Bug\"}}}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Linear issueCreate did not succeed.",
+    "isError": true
+   }
+  },
+  {
+   "op": "linear.createIssue",
+   "config": {
+    "kind": "linear",
+    "connected": true,
+    "token": "lin"
+   },
+   "params": {
+    "team": "eng",
+    "title": "Bug"
+   },
+   "replies": [
+    {
+     "status": 401,
+     "json": {}
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"{ teams(first: 100) { nodes { id key name } } }\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Linear 401",
+    "isError": true
+   }
+  },
+  {
+   "op": "linear.commentIssue",
+   "config": {
+    "kind": "linear",
+    "connected": true,
+    "token": "lin"
+   },
+   "params": {
+    "issue": "ENG-1",
+    "body": "Looks good"
+   },
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "issue": {
+        "id": "i1",
+        "identifier": "ENG-1"
+       }
+      }
+     }
+    },
+    {
+     "json": {
+      "data": {
+       "commentCreate": {
+        "success": true
+       }
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"query($id: String!) { issue(id: $id) { id identifier } }\",\"variables\":{\"id\":\"ENG-1\"}}",
+     "redirect": null
+    },
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"mutation($input: CommentCreateInput!) { commentCreate(input: $input) { success } }\",\"variables\":{\"input\":{\"issueId\":\"i1\",\"body\":\"Looks good\"}}}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Commented on ENG-1"
+   }
+  },
+  {
+   "op": "linear.commentIssue",
+   "config": {
+    "kind": "linear",
+    "connected": true,
+    "token": "lin"
+   },
+   "params": {
+    "issue": "ENG-404",
+    "body": "x"
+   },
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "issue": null
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.linear.app/graphql",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "Authorization",
+       "lin"
+      ]
+     ],
+     "body": "{\"query\":\"query($id: String!) { issue(id: $id) { id identifier } }\",\"variables\":{\"id\":\"ENG-404\"}}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "No Linear issue matches \"ENG-404\".",
+    "isError": true
+   }
+  },
+  {
+   "op": "jira.createIssue",
+   "config": {
+    "kind": "jira",
+    "connected": true,
+    "token": "jt",
+    "settings": {
+     "site": "https://acme.atlassian.net/",
+     "email": "me@acme.io"
+    }
+   },
+   "params": {
+    "project": "AC",
+    "summary": "S",
+    "description": ""
+   },
+   "replies": [
+    {
+     "status": 201,
+     "json": {
+      "key": "AC-5"
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://acme.atlassian.net/rest/api/3/issue",
+     "headers": [
+      [
+       "Authorization",
+       "Basic bWVAYWNtZS5pbzpqdA=="
+      ],
+      [
+       "Accept",
+       "application/json"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"fields\":{\"project\":{\"key\":\"AC\"},\"summary\":\"S\",\"issuetype\":{\"name\":\"Task\"},\"description\":{\"version\":1,\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[]}]}}}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Created AC-5 https://acme.atlassian.net/browse/AC-5"
+   }
+  },
+  {
+   "op": "jira.createIssue",
+   "config": {
+    "kind": "jira",
+    "connected": true,
+    "token": "jt",
+    "settings": {
+     "site": "https://acme.atlassian.net/",
+     "email": "me@acme.io"
+    }
+   },
+   "params": {
+    "project": "AC",
+    "summary": "S",
+    "issueType": "Bug",
+    "description": "Details"
+   },
+   "replies": [
+    {
+     "status": 400,
+     "text": "{\"errors\":\n  {\"summary\": \"too long\"}}"
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://acme.atlassian.net/rest/api/3/issue",
+     "headers": [
+      [
+       "Authorization",
+       "Basic bWVAYWNtZS5pbzpqdA=="
+      ],
+      [
+       "Accept",
+       "application/json"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"fields\":{\"project\":{\"key\":\"AC\"},\"summary\":\"S\",\"issuetype\":{\"name\":\"Bug\"},\"description\":{\"version\":1,\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Details\"}]}]}}}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Jira createIssue failed: 400: {\"errors\": {\"summary\": \"too long\"}}",
+    "isError": true
+   }
+  },
+  {
+   "op": "jira.createIssue",
+   "config": {
+    "kind": "jira",
+    "connected": true,
+    "token": "jt",
+    "settings": {
+     "site": "http://acme",
+     "email": "e"
+    }
+   },
+   "params": {
+    "project": "AC",
+    "summary": "S"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "The Jira site URL must be https.",
+    "isError": true
+   }
+  },
+  {
+   "op": "jira.commentIssue",
+   "config": {
+    "kind": "jira",
+    "connected": true,
+    "token": "jt",
+    "settings": {
+     "site": "https://acme.atlassian.net/",
+     "email": "me@acme.io"
+    }
+   },
+   "params": {
+    "issue": "AC 1",
+    "body": "Note"
+   },
+   "replies": [
+    {
+     "status": 201,
+     "json": {}
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://acme.atlassian.net/rest/api/3/issue/AC%201/comment",
+     "headers": [
+      [
+       "Authorization",
+       "Basic bWVAYWNtZS5pbzpqdA=="
+      ],
+      [
+       "Accept",
+       "application/json"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"body\":{\"version\":1,\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Note\"}]}]}}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Commented on AC 1"
+   }
+  },
+  {
+   "op": "github.commentPR",
+   "config": {
+    "kind": "github",
+    "connected": true,
+    "token": "ghp"
+   },
+   "params": {
+    "body": "LGTM"
+   },
+   "ctx": {
+    "event": {
+     "kind": "git",
+     "provider": "github",
+     "event": "push",
+     "repo": "o/r",
+     "branch": "main",
+     "payload": {
+      "after": "abcdef0123456789",
+      "head_commit": {
+       "id": "h"
+      },
+      "repository": {
+       "full_name": "o/payload"
+      },
+      "pull_request": {
+       "number": 12,
+       "head": {
+        "sha": "prsha"
+       }
+      }
+     }
+    },
+    "run": {
+     "id": "r1",
+     "workflowId": "w1",
+     "workflowName": "Ship It!",
+     "status": "success",
+     "triggerKind": "git"
+    }
+   },
+   "replies": [
+    {
+     "status": 201,
+     "json": {
+      "html_url": "https://g/c/1"
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.github.com/repos/o/r/issues/12/comments",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer ghp"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"body\":\"LGTM\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Commented on o/r#12 https://g/c/1"
+   }
+  },
+  {
+   "op": "github.commentPR",
+   "config": {
+    "kind": "github",
+    "connected": true,
+    "token": "ghp"
+   },
+   "params": {
+    "repo": "bad repo",
+    "number": "1",
+    "body": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "Repo \"bad repo\" should look like owner/name.",
+    "isError": true
+   }
+  },
+  {
+   "op": "github.commentPR",
+   "config": {
+    "kind": "github",
+    "connected": true,
+    "token": "ghp"
+   },
+   "params": {
+    "repo": "o/r",
+    "number": "#7",
+    "body": "x"
+   },
+   "replies": [
+    {
+     "status": 404,
+     "text": "{\"message\": \"Not Found\"}"
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.github.com/repos/o/r/issues/7/comments",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer ghp"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"body\":\"x\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "GitHub comment on o/r#7 failed: 404: {\"message\": \"Not Found\"}",
+    "isError": true
+   }
+  },
+  {
+   "op": "github.setCommitStatus",
+   "config": {
+    "kind": "github",
+    "connected": true,
+    "token": "ghp"
+   },
+   "params": {
+    "state": "FAILED",
+    "description": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "targetUrl": "https://ci/1"
+   },
+   "ctx": {
+    "event": {
+     "kind": "git",
+     "provider": "github",
+     "event": "push",
+     "repo": "o/r",
+     "branch": "main",
+     "payload": {
+      "after": "abcdef0123456789",
+      "head_commit": {
+       "id": "h"
+      },
+      "repository": {
+       "full_name": "o/payload"
+      },
+      "pull_request": {
+       "number": 12,
+       "head": {
+        "sha": "prsha"
+       }
+      }
+     }
+    },
+    "run": {
+     "id": "r1",
+     "workflowId": "w1",
+     "workflowName": "Ship It!",
+     "status": "success",
+     "triggerKind": "git"
+    }
+   },
+   "replies": [
+    {
+     "status": 201,
+     "json": {}
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.github.com/repos/o/r/statuses/abcdef0123456789",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer ghp"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"state\":\"failure\",\"context\":\"nekko-agent/ship-it\",\"description\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_url\":\"https://ci/1\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Set o/r@abcdef01 → failure"
+   }
+  },
+  {
+   "op": "github.setCommitStatus",
+   "config": {
+    "kind": "github",
+    "connected": true,
+    "token": "ghp"
+   },
+   "params": {
+    "repo": "o/r",
+    "sha": "abc",
+    "state": "success",
+    "context": "ci/x"
+   },
+   "replies": [
+    {
+     "status": 201,
+     "json": {}
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://api.github.com/repos/o/r/statuses/abc",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer ghp"
+      ],
+      [
+       "Accept",
+       "application/vnd.github+json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"state\":\"success\",\"context\":\"ci/x\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Set o/r@abc → success"
+   }
+  },
+  {
+   "op": "github.setCommitStatus",
+   "config": {
+    "kind": "github",
+    "connected": true,
+    "token": "ghp"
+   },
+   "params": {
+    "repo": "o/r",
+    "sha": "abc",
+    "state": "done"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "GitHub commit state \"done\" must be success, failure, error, or pending.",
+    "isError": true
+   }
+  },
+  {
+   "op": "github.setCommitStatus",
+   "config": {
+    "kind": "github",
+    "connected": true,
+    "token": "ghp"
+   },
+   "params": {
+    "repo": "o/r",
+    "state": "success"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "Commit SHA is required.",
+    "isError": true
+   }
+  },
+  {
+   "op": "gitlab.setCommitStatus",
+   "config": {
+    "kind": "gitlab",
+    "connected": true,
+    "token": "glpat",
+    "settings": {
+     "site": "https://gl.example.com"
+    }
+   },
+   "params": {
+    "state": "failure",
+    "description": "Built & tested",
+    "targetUrl": "https://ci/2"
+   },
+   "ctx": {
+    "event": {
+     "kind": "git",
+     "repo": "grp/proj",
+     "payload": {
+      "checkout_sha": "cs1"
+     }
+    },
+    "run": {
+     "id": "r1",
+     "workflowId": "w1",
+     "workflowName": "Ship It!",
+     "status": "success",
+     "triggerKind": "git"
+    }
+   },
+   "replies": [
+    {
+     "status": 201,
+     "json": {}
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://gl.example.com/api/v4/projects/grp%2Fproj/statuses/cs1?state=failed&name=nekko-agent%2Fship-it&description=Built+%26+tested&target_url=https%3A%2F%2Fci%2F2",
+     "headers": [
+      [
+       "PRIVATE-TOKEN",
+       "glpat"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Set grp/proj@cs1 → failed"
+   }
+  },
+  {
+   "op": "gitlab.setCommitStatus",
+   "config": {
+    "kind": "gitlab",
+    "connected": true,
+    "token": "glpat",
+    "settings": {
+     "site": "https://gl.example.com"
+    }
+   },
+   "params": {
+    "project": "grp/proj",
+    "sha": "x",
+    "state": "weird"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "GitLab commit state \"weird\" must be success, failed, running, pending, or canceled.",
+    "isError": true
+   }
+  },
+  {
+   "op": "gitlab.setCommitStatus",
+   "config": {
+    "kind": "gitlab",
+    "connected": true,
+    "token": "glpat",
+    "settings": {
+     "site": "https://gl.example.com"
+    }
+   },
+   "params": {
+    "project": "grp/proj",
+    "sha": "x",
+    "state": "success",
+    "name": "n"
+   },
+   "replies": [
+    {
+     "status": 403,
+     "text": ""
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://gl.example.com/api/v4/projects/grp%2Fproj/statuses/x?state=success&name=n",
+     "headers": [
+      [
+       "PRIVATE-TOKEN",
+       "glpat"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "GitLab commit status on grp/proj@x failed: 403",
+    "isError": true
+   }
+  },
+  {
+   "op": "gitlab.commentMR",
+   "config": {
+    "kind": "gitlab",
+    "connected": true,
+    "token": "glpat",
+    "settings": {
+     "site": "https://gl.example.com"
+    }
+   },
+   "params": {
+    "mr": "!4",
+    "body": "Nice"
+   },
+   "ctx": {
+    "event": {
+     "kind": "git",
+     "payload": {
+      "project": {
+       "path_with_namespace": "g/p"
+      }
+     }
+    }
+   },
+   "replies": [
+    {
+     "status": 201,
+     "json": {}
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://gl.example.com/api/v4/projects/g%2Fp/merge_requests/4/notes",
+     "headers": [
+      [
+       "PRIVATE-TOKEN",
+       "glpat"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"body\":\"Nice\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Commented on g/p!4"
+   }
+  },
+  {
+   "op": "discord.postMessage",
+   "config": {
+    "kind": "discord",
+    "connected": true,
+    "token": "bot"
+   },
+   "params": {
+    "channel": "123",
+    "text": "hi"
+   },
+   "replies": [
+    {
+     "json": {}
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://discord.com/api/v10/channels/123/messages",
+     "headers": [
+      [
+       "Authorization",
+       "Bot bot"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"content\":\"hi\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Posted to Discord channel 123"
+   }
+  },
+  {
+   "op": "discord.postMessage",
+   "config": {
+    "kind": "discord",
+    "connected": true,
+    "token": "bot"
+   },
+   "params": {
+    "channel": "123",
+    "text": "hi"
+   },
+   "replies": [
+    {
+     "status": 429,
+     "text": "slow   down\n now"
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://discord.com/api/v10/channels/123/messages",
+     "headers": [
+      [
+       "Authorization",
+       "Bot bot"
+      ],
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"content\":\"hi\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Discord postMessage failed: 429: slow down now",
+    "isError": true
+   }
+  },
+  {
+   "op": "teams.postMessage",
+   "config": {
+    "kind": "teams",
+    "connected": true,
+    "settings": {
+     "webhookUrl": "https://acme.webhook.office.com/hook"
+    }
+   },
+   "params": {
+    "text": "Ship"
+   },
+   "replies": [
+    {
+     "json": {}
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://acme.webhook.office.com/hook",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ]
+     ],
+     "body": "{\"text\":\"Ship\"}",
+     "redirect": null
+    }
+   ],
+   "result": {
+    "output": "Posted to the Teams channel."
+   }
+  },
+  {
+   "op": "teams.postMessage",
+   "config": {
+    "kind": "teams",
+    "connected": true,
+    "settings": {
+     "webhookUrl": "https://evil.com"
+    }
+   },
+   "params": {
+    "text": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "The Teams webhook URL must be an https URL on *.webhook.office.com.",
+    "isError": true
+   }
+  },
+  {
+   "op": "teams.postMessage",
+   "config": {
+    "kind": "teams",
+    "connected": true
+   },
+   "params": {
+    "text": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "The Teams connector has no incoming webhook URL saved.",
+    "isError": true
+   }
+  },
+  {
+   "op": "webhook.post",
+   "params": {
+    "url": "https://hooks.example.com/a/b?x=1",
+    "body": "{\"a\":1}"
+   },
+   "replies": [
+    {
+     "status": 202
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://hooks.example.com/a/b?x=1",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent-workflow"
+      ]
+     ],
+     "body": "{\"a\":1}",
+     "redirect": "manual"
+    }
+   ],
+   "result": {
+    "output": "POST hooks.example.com/a/b → 202"
+   }
+  },
+  {
+   "op": "webhook.post",
+   "params": {
+    "url": "https://hooks.example.com",
+    "body": "text",
+    "contentType": "text/plain"
+   },
+   "replies": [
+    {
+     "status": 200
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://hooks.example.com",
+     "headers": [
+      [
+       "Content-Type",
+       "text/plain"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent-workflow"
+      ]
+     ],
+     "body": "text",
+     "redirect": "manual"
+    }
+   ],
+   "result": {
+    "output": "POST hooks.example.com → 200"
+   }
+  },
+  {
+   "op": "webhook.post",
+   "params": {
+    "url": "http://hooks.example.com",
+    "body": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "webhook.post only sends to https URLs.",
+    "isError": true
+   }
+  },
+  {
+   "op": "webhook.post",
+   "params": {
+    "url": "nope",
+    "body": "x"
+   },
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "\"nope\" isn't a valid URL.",
+    "isError": true
+   }
+  },
+  {
+   "op": "webhook.post",
+   "params": {
+    "url": "https://h.example.com",
+    "body": "x"
+   },
+   "replies": [
+    {
+     "status": 500,
+     "text": "down"
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://h.example.com",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent-workflow"
+      ]
+     ],
+     "body": "x",
+     "redirect": "manual"
+    }
+   ],
+   "result": {
+    "output": "POST h.example.com failed: 500: down",
+    "isError": true
+   }
+  },
+  {
+   "op": "webhook.post",
+   "params": {
+    "url": "https://h.example.com",
+    "body": "x"
+   },
+   "replies": [],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "https://h.example.com",
+     "headers": [
+      [
+       "Content-Type",
+       "application/json"
+      ],
+      [
+       "User-Agent",
+       "nekko-agent-workflow"
+      ]
+     ],
+     "body": "x",
+     "redirect": "manual"
+    }
+   ],
+   "result": {
+    "output": "fetch failed",
+    "isError": true
+   }
+  },
+  {
+   "op": "nope.nothing",
+   "params": {},
+   "replies": [],
+   "requests": [],
+   "result": {
+    "output": "Unknown action \"nope.nothing\". Pick one from the action list.",
+    "isError": true
+   }
+  }
+ ],
+ "templateContext": {
+  "trigger": {
+   "kind": "git",
+   "provider": "github",
+   "repo": "o/r",
+   "branch": "main",
+   "sha": "abc",
+   "n": 5,
+   "obj": {
+    "a": [
+     1,
+     2
+    ]
+   },
+   "nul": null,
+   "flag": false
+  },
+  "steps": {
+   "build": {
+    "output": "ok\nlines"
+   },
+   "test": {
+    "output": ""
+   }
+  },
+  "run": {
+   "id": "r1",
+   "workflowId": "w1",
+   "workflowName": "Ship It!",
+   "status": "success",
+   "triggerKind": "git"
+  }
+ },
+ "templates": [
+  {
+   "template": "plain",
+   "rendered": "plain"
+  },
+  {
+   "template": "{{trigger.repo}}@{{trigger.sha}}",
+   "rendered": "o/r@abc"
+  },
+  {
+   "template": "{{ trigger.branch }}",
+   "rendered": "main"
+  },
+  {
+   "template": "{{trigger.missing}}",
+   "rendered": ""
+  },
+  {
+   "template": "{{trigger.obj}}",
+   "rendered": "{\"a\":[1,2]}"
+  },
+  {
+   "template": "{{trigger.obj.a}}",
+   "rendered": "[1,2]"
+  },
+  {
+   "template": "{{trigger.n}} {{trigger.flag}} {{trigger.nul}}",
+   "rendered": "5 false "
+  },
+  {
+   "template": "{{steps.build.output}}",
+   "rendered": "ok\nlines"
+  },
+  {
+   "template": "{{steps.test.output}}",
+   "rendered": ""
+  },
+  {
+   "template": "{{steps.none.output}}",
+   "rendered": ""
+  },
+  {
+   "template": "{{run.workflowName}} {{run.status}}",
+   "rendered": "Ship It! success"
+  },
+  {
+   "template": "{{unknown.x}}",
+   "rendered": "{{unknown.x}}"
+  },
+  {
+   "template": "{{trigger}}",
+   "rendered": "{{trigger}}"
+  },
+  {
+   "template": "{ {trigger.repo} }",
+   "rendered": "{ {trigger.repo} }"
+  },
+  {
+   "template": "{{trigger.repo.length}}",
+   "rendered": ""
+  },
+  {
+   "template": "{{trigger.obj.a.0}}",
+   "rendered": "1"
+  },
+  {
+   "template": "{{ bad path! }}",
+   "rendered": "{{ bad path! }}"
+  },
+  {
+   "template": "{{trigger.kind}}{{trigger.kind}}",
+   "rendered": "gitgit"
+  }
+ ]
+}
