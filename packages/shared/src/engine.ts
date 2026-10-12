@@ -70,6 +70,12 @@ export interface EngineInstall {
   installedAt?: number;
   /** Why no engine is usable, when `binPath` is absent. */
   reason?: string;
+  /**
+   * The engine is installed and starts, but not the way it should: a managed
+   * GPU build missing the libraries its backend needs, so every model runs on
+   * the CPU without any error. `repairBuildId` reinstalls that build cleanly.
+   */
+  problem?: { message: string; repairBuildId: string };
   /** Builds offered for this machine, best first. */
   available: EngineBuild[];
   /** The build we would install if asked, from the hardware probe. */

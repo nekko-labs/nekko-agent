@@ -227,11 +227,19 @@ export function matchCompanion(
   assetNames: string[],
 ): string | undefined {
   if (!build.companionPattern) return undefined;
-  // `llama-b10996-bin-win-cuda-13.4-x64.zip` -> `cuda-13.4-x64`
-  const variant = assetName.replace(ARCHIVE_RE, '').match(/(cuda-[\d.]+-\w+)$/)?.[1];
+  // The platform is part of the key, not just the toolkit and arch: every
+  // release carries an Ubuntu runtime beside the Windows one with the same
+  // `cuda-13.4-x64` tail (`cudart-llama-bNNNN-bin-ubuntu-cuda-13.4-x64.tar.gz`).
+  // Matching on that tail alone gave Windows the Linux `.so` files; the CUDA
+  // backend then found no GPU and every model ran on the CPU, silently.
+  // `llama-b10996-bin-win-cuda-13.4-x64` -> `bin-win-cuda-13.4-x64`.
+  const variant = assetName.replace(ARCHIVE_RE, '').match(/(bin-[a-z]+-cuda-[\d.]+-\w+)$/)?.[1];
   if (!variant) return undefined;
   return assetNames.find(
-    (n) => n.includes(build.companionPattern as string) && n.includes(variant) && ARCHIVE_RE.test(n),
+    (n) =>
+      n.startsWith(build.companionPattern as string) &&
+      ARCHIVE_RE.test(n) &&
+      n.replace(ARCHIVE_RE, '').endsWith(`-${variant}`),
   );
 }
 
