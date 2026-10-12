@@ -987,7 +987,7 @@ Agents now hosts the existing Chat grouped sidebar, retaining WorkspaceCard pres
 `[Implemented; isolated renderer checks and hidden-sandbox dark/light before/after evidence. A live agent question, a real OAuth sign-in from the dock, the real desktop window and macOS are unverified.]`
 
 - **Agent questions stand out and stay on top.** When an agent window is waiting on a question, the question is pinned at the top of the window, above the transcript, so it cannot scroll away or sit under the history. It opens with a bold warning-toned "Asked you a question" label, and the card itself wears the warning tone (stronger border, tinted background, soft halo) with the question text a size larger. The pin is capped at about 60% of the window and scrolls inside itself. The old strip banner, which sat underneath the window's absolutely positioned content and could not be seen, is removed. Other surfaces (the composer's question, board cards) keep the accent tone.
-- **Plan panel toggle.** The plan / sub-agents / queue panel no longer has a close (×) button or a header toggle. A plan icon floats in the chat area's top-right corner and opens or closes it; with the panel closed, it shows plan progress (done/total). The panel is on by default (a saved choice still wins) and is fixed at 280px. It only gives way when the window is narrower than two panels (560px), where the toggle is hidden too. Beside the open panel the transcript keeps clear of the toggle.
+- **Plan panel toggle.** The plan / sub-agents / queue panel no longer has a close (×) button or a header toggle. A plan icon floats in the chat area's top-right corner and opens or closes only its correlated chat's panel; with the panel closed, it shows plan progress (done/total). The panel is on by default (a saved choice still wins) and is fixed at 280px. It only gives way when the window is narrower than two panels (560px), where the toggle is hidden too. Beside the open panel the transcript keeps clear of the toggle.
 - **Sign in again from Utilization.** When a subscription's sign-in has expired or is missing, the Utilization panel says "Sign-in expired." (or "Not signed in.") with a **Sign in again** button right there, instead of "Sign in again in Settings". It opens the same sign-in flow as the provider card (browser OAuth, paste fallback, CLI import) and folds the new token onto that provider, then refreshes the quota.
 - Privacy: the sign-in uses the existing OAuth flow and token store; the access token never reaches the renderer.
 
@@ -1210,3 +1210,13 @@ A chat preparing a reply admits only one send at a time. Stop cancels its prepar
 Live subscription sign-in and native phone-device/managed-relay verification remain follow-up acceptance work. Synthetic providers, a real loopback relay, isolated browser fixtures and a pinned local Docker image cover the integration without accessing real account credentials or device data.
 
 Worktree routing compares canonical filesystem locations, including Windows short-name aliases and directory links. Existing chat mappings are repaired from the configured folder and saved source repository; a folder moved outside that repository is refused. Alias spelling must never route an isolated chat back into the shared source checkout.
+
+### Agent plan visibility, context capacity and GPU identity
+
+Implemented: plan-panel visibility is remembered locally per chat, so toggling one agent never changes another agent. The legacy saved preference remains the default for chats without their own choice. Narrow panes still fold their rails without changing the saved choice.
+
+The context-window gauge has a subtle full background: green below 60%, yellow from 60% to below 85%, and red at 85% or higher. Its fill and sidebar context counts use the same thresholds. Unknown window limits remain neutral and token estimates retain their existing labels.
+
+Hardware reports each detected GPU by its probe-reported device name, paired with that device's utilization instead of an unnamed peak. Missing utilization stays Unavailable, disabled monitoring stays Monitor off, and aggregate VRAM remains explicitly separate. No additional probes, permissions, provider requests or external data are introduced.
+
+Verification: focused tests and isolated Windows Electron renderer checks pass, including two independent plan toggles, threshold boundaries and synthetic multi-GPU readings. Matched wide/narrow light/dark evidence captured; live multi-GPU hardware and macOS/Linux native app behavior are unverified.

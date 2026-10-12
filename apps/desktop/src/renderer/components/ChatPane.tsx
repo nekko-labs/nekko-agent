@@ -619,7 +619,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // so a viewport breakpoint would keep the rail open in a pane squeezed to a
   // third of a wide screen and drop it from a narrow window that has nothing
   // else on it.
-  const planRailWanted = useStore((s) => s.planRailOpen);
+  const planRailWanted = useStore((s) => s.planRailOpenBySession[sessionId] ?? s.planRailOpen);
   const paneRef = useRef<HTMLDivElement>(null);
   const paneWidth = useElementWidth(paneRef, sessionId);
   const planRailOpen = planRailWanted && paneWidth >= PLAN_RAIL_MIN_PANE;
@@ -2270,7 +2270,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               type="button"
               className={`plan-rail-toggle ${planRailOpen ? 'is-open' : ''}`}
               data-plan-toggle
-              onClick={() => useStore.getState().togglePlanRail()}
+              onClick={() => useStore.getState().togglePlanRail(sessionId)}
               title={planRailOpen ? 'Hide the plan panel' : 'Show the plan, sub-agents and queue panel'}
               aria-label={planRailOpen ? 'Hide the plan panel' : 'Show the plan panel'}
               aria-pressed={planRailOpen}

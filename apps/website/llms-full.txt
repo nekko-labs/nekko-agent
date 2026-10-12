@@ -227,6 +227,14 @@ list dirs, run shell commands).
 
 ---
 
+### Plan and capacity at a glance
+
+The plan icon in an agent window opens or closes only that chat's plan, sub-agents and queue panel. Each chat remembers its own choice locally. Narrow windows fold the panel automatically without changing that choice.
+
+The context-window gauge has a subtle green background below 60% full, yellow from 60% to below 85%, and red at 85% or higher. Counts remain estimated; an unknown window limit stays neutral.
+
+In Agents, the Hardware panel names each detected GPU and shows its own utilization. Missing readings say Unavailable rather than zero; switching monitoring off says Monitor off. VRAM remains the aggregate memory reading across devices.
+
 ## 4. The Context Inspector
 
 The right-hand panel (toggle it with the panel icon) is Nekko Agent's signature
