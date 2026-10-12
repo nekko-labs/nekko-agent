@@ -26,6 +26,7 @@ mod providers;
 mod remote;
 mod resource_queue;
 mod routes;
+mod runtimes;
 mod sandbox;
 mod settings;
 mod sideband;
@@ -152,6 +153,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         (Some(d), Some(store)) => Some(watches::Watches::new(d.into(), store.clone(), backend.clone())),
         _ => None,
     };
+    let machine =
+        Arc::new(nekko_machine::Machine::new(cfg.data_dir.clone().map(std::path::PathBuf::from), Box::new(engine_bin)));
+    let runtimes = settings.as_deref().map(|s| runtimes::new(s, backend.clone(), machine.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -191,10 +195,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             }
             _ => None,
         },
-        machine: Arc::new(nekko_machine::Machine::new(
-            cfg.data_dir.clone().map(std::path::PathBuf::from),
-            Box::new(engine_bin),
-        )),
+        machine,
+        runtimes: runtimes.clone(),
         resource_queue: cfg.data_dir.clone().map(|d| {
             Arc::new(resource_queue::ResourceQueue::new(
                 std::path::PathBuf::from(d),
@@ -258,6 +260,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
 
     remote.stop();
     engine.shutdown();
+    // The servers this daemon started (Ollama) go down with it.
+    if let Some(rt) = &runtimes {
+        rt.kill_all().await;
+    }
     if let Some(voice) = &voice {
         voice.stop().await;
     }

@@ -49,6 +49,8 @@ pub struct Ctx {
     pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
     /// Sandbox chats' containers (sandbox.rs), with a data directory.
     pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
+    /// The runtime control plane, with the settings store.
+    pub runtimes: Option<Arc<nekko_engine::runtimes::Runtimes>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -316,6 +318,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             crate::connectors::route(ctx, c, &args).await
         }
         c if crate::remote::CHANNELS.contains(&c) && ctx.remote.enabled() => ctx.remote.route(c, &args).await,
+        c if crate::runtimes::CHANNELS.contains(&c) && ctx.runtimes.is_some() => match &ctx.runtimes {
+            Some(rt) => crate::runtimes::route(ctx, rt, c, &args).await,
+            None => ctx.backend.call(c, Value::Array(args)).await,
+        },
         c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
         // Without a data directory the host keeps the coordinator file.
         "resource:queue" => match &ctx.resource_queue {
@@ -429,6 +435,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.turns.watches.is_some() {
         all.extend_from_slice(crate::watches::CHANNELS);
+    }
+    if ctx.runtimes.is_some() {
+        all.extend_from_slice(crate::runtimes::CHANNELS);
     }
     all
 }
