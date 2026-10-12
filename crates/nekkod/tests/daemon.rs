@@ -2151,6 +2151,126 @@ async fn the_daemon_keeps_and_reads_connectors() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
+/// A relay socket as the test sees it (it plays apps/relay).
+type RelaySide = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
+
+/// The agent's next frame other than the backend's repeating test event.
+async fn next_agent_frame(agent: &mut RelaySide, key: &nekko_remote::e2e::Key) -> (Value, Option<Value>) {
+    loop {
+        let f = next_json(agent, Duration::from_secs(20)).await.expect("an agent frame");
+        let sealed = (f["type"] == "d")
+            .then(|| serde_json::from_str::<Value>(f["data"].as_str().unwrap()).unwrap())
+            .and_then(|d| nekko_remote::e2e::open(key, d["enc"].as_str().unwrap()));
+        if sealed.as_ref().is_some_and(|s| s["type"] == "event" && s["payload"]["type"] == "hello-from-backend") {
+            continue;
+        }
+        return (f, sealed);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_runs_the_phone_relay_agent() {
+    let data = std::env::temp_dir().join(format!("nekkod-remote-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    let d = start_with(true, Some(&data));
+    let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let relay_port = relay.local_addr().unwrap().port();
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("remote:status")), "{info}");
+    let (_, status) =
+        post(d.port, "remote:enable", json!([format!("ws://127.0.0.1:{relay_port}/")]), Some(TOKEN)).await;
+    assert_eq!(status["enabled"], true, "{status}");
+    let (_, pairing) = post(d.port, "remote:pairing", json!([]), Some(TOKEN)).await;
+    let (room, secret) = (pairing["room"].as_str().unwrap().to_string(), pairing["key"].as_str().unwrap().to_string());
+    let (_, grant) = post(d.port, "remote:pair", json!([]), Some(TOKEN)).await;
+    let code = grant["code"].as_str().unwrap().to_string();
+
+    // The agent dials out to the relay with the room and key, as relay.ts did.
+    let (tcp, _) =
+        tokio::time::timeout(Duration::from_secs(20), relay.accept()).await.expect("the agent dials").unwrap();
+    let mut path = String::new();
+    #[allow(clippy::result_large_err)] // tungstenite's callback signature
+    let mut agent = tokio_tungstenite::accept_hdr_async(
+        tcp,
+        |req: &tokio_tungstenite::tungstenite::handshake::server::Request,
+         res: tokio_tungstenite::tungstenite::handshake::server::Response| {
+            path = req.uri().to_string();
+            Ok(res)
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(path, format!("/relay?role=agent&room={room}&key={secret}"));
+    let key = nekko_remote::e2e::derive_key(&secret, &room);
+    let seal = |v: Value| {
+        json!({ "enc": nekko_remote::e2e::seal_with_iv(&key, &v, nekko_remote::e2e::random_iv()) }).to_string()
+    };
+    let client = |cid: &str, v: Value| Message::text(json!({ "type": "c", "cid": cid, "data": seal(v) }).to_string());
+
+    agent.send(Message::text(json!({ "type": "client-open", "cid": "c1" }).to_string())).await.unwrap();
+    // Nothing is served before the handshake.
+    agent.send(client("c1", json!({ "type": "req", "id": 1, "channel": "tasks:list", "args": [] }))).await.unwrap();
+    let (_, res) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(res.unwrap(), json!({ "type": "res", "id": 1, "error": "not paired (send hello first)" }));
+    // Enroll with the one-time code.
+    let hello = json!({ "type": "hello", "deviceId": "phone-1", "name": "Pixel", "platform": "android", "pair": code });
+    agent.send(client("c1", hello)).await.unwrap();
+    let (f, welcome) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(f["cid"], "c1");
+    let welcome = welcome.unwrap();
+    assert_eq!(welcome["type"], "welcome", "{welcome}");
+    assert_eq!(welcome["device"]["name"], "Pixel");
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
+    assert_eq!(saved["devices"][0]["id"], "phone-1");
+
+    // A daemon channel, a channel the host serves, and an internal callback a phone may not call.
+    agent.send(client("c1", json!({ "type": "req", "id": 2, "channel": "remote:devices", "args": [] }))).await.unwrap();
+    let (_, res) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(res.unwrap()["result"][0]["id"], "phone-1");
+    agent.send(client("c1", json!({ "type": "req", "id": 3, "channel": "tasks:list", "args": [] }))).await.unwrap();
+    let (_, res) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(res.unwrap()["result"], json!({ "echo": "tasks:list", "args": [] }));
+    agent.send(client("c1", json!({ "type": "req", "id": 4, "channel": "turn:pending", "args": [] }))).await.unwrap();
+    let (_, res) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(res.unwrap()["error"], "Unknown channel: turn:pending");
+
+    // The host's events reach the welcomed phone.
+    let f = next_json(&mut agent, Duration::from_secs(20)).await.expect("a relayed event");
+    let frame_data: Value = serde_json::from_str(f["data"].as_str().unwrap()).unwrap();
+    let event = nekko_remote::e2e::open(&key, frame_data["enc"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        event,
+        json!({ "type": "event", "channel": "agent:event", "payload": { "type": "hello-from-backend" } })
+    );
+    let (_, status) = post(d.port, "remote:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(status["connected"], json!(["phone-1"]), "{status}");
+    assert_eq!(status["online"], true);
+
+    // Revoking kicks the phone live and drops its push token.
+    post(d.port, "remote:revoke", json!(["phone-1"]), Some(TOKEN)).await;
+    let (kick, _) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(kick, json!({ "type": "kick", "cid": "c1" }));
+    let (remove, _) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(remove, json!({ "type": "push-remove", "deviceId": "phone-1" }));
+
+    // Disabling closes the agent's socket.
+    post(d.port, "remote:disable", json!([]), Some(TOKEN)).await;
+    let closed = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            match agent.next().await {
+                Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                _ => {}
+            }
+        }
+    })
+    .await;
+    assert!(closed.is_ok(), "the agent hung up");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_daemon_turn_drives_the_in_app_browser_and_capture_through_the_bridge() {
     use axum::routing::post as route_post;

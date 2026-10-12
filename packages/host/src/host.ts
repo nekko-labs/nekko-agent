@@ -193,7 +193,7 @@ import {
   ensureFreshToken,
 } from './oauth.js';
 import { buildSpec, buildSpecDoc, readSpecDocs, setSpecMethodology, toggleSpecTask, specPathForSession } from './spec.js';
-import { createRemoteService } from './remote.js';
+import { createRemoteService, DAEMON_REMOTE } from './remote.js';
 import { createMessagingService } from './messaging/service.js';
 import { detectAgentTools, installSubagent, refreshSubagent, subagentSnippet } from './integrations.js';
 import { getGpuStats, getGpuStatsFresh } from './gpu.js';
@@ -1304,7 +1304,12 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // Remote access needs the finished host (it dispatches into it); reconnect if
   // remote access was left enabled when the host last shut down.
   host.remote = createRemoteService(host);
-  host.remote.startIfEnabled();
+  {
+    // A daemon that owns remote access (crates/nekko-remote) runs the relay
+    // agent and writes remote.json itself; this one stays off so the file has
+    // one writer and the room one agent.
+    if (!daemonOwns(DAEMON_REMOTE)) host.remote.startIfEnabled();
+  }
   // Messaging channels likewise drive the host; configured adapters come up
   // with the process and reconfigure through updateSettings above.
   const messaging = createMessagingService(host);

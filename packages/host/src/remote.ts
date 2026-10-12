@@ -27,6 +27,14 @@ import type { Host } from './host.js';
  * reconnects on boot when enabled).
  */
 
+/**
+ * What the daemon puts in `NEKKOD_OWNS` when it runs remote access itself
+ * (crates/nekko-remote): remote.json and the relay agent. The desktop and the
+ * web edition behind nekkod then never start this service's agent; the
+ * headless relay-agent mode and the editions without a daemon still do.
+ */
+export const DAEMON_REMOTE = 'remote';
+
 interface RemoteConfig {
   enabled: boolean;
   relayUrl?: string;

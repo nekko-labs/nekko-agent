@@ -109,10 +109,14 @@ export function verifyHello(
   if (!pairing || pairing.code !== h.pair || pairing.expiresAt <= now) {
     return { action: 'deny', reason: 'bad-code' };
   }
+  // A device sends these, so a non-string is ignored rather than trusted (a
+  // number here used to throw, leaving the phone with no reply at all).
+  const name = typeof h.name === 'string' ? h.name : '';
+  const platform = typeof h.platform === 'string' ? h.platform : undefined;
   const device: RemoteDevice = {
     id: h.deviceId,
-    name: (h.name || '').trim().slice(0, 60) || defaultDeviceName(h.platform),
-    platform: normalizePlatform(h.platform),
+    name: name.trim().slice(0, 60) || defaultDeviceName(platform),
+    platform: normalizePlatform(platform),
     createdAt: now,
     lastSeenAt: now,
   };
