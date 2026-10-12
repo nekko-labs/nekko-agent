@@ -5,9 +5,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import type { AgentEvent, AutomationTask, PendingInput, SessionSummary, UsageSummary } from '@nekko-agent/shared';
 import type { AgentType } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD, summarizeSession } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
-import { useStore } from '../store.js';
+import { addCreatedSession, useStore } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { GridIcon, MoreVerticalIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
 import { COMPANION_OPENED_EVENT } from '../components/AgentCompanionButtons.js';
@@ -270,7 +270,7 @@ export function CommandCenterView() {
       }
     }
     unfinishedChat.current = null;
-    useStore.setState((state) => ({ sessions: [summarizeSession(s), ...state.sessions.filter((existing) => existing.id !== s.id)] }));
+    addCreatedSession(s);
     return s.id;
   };
   const newTerminal = async (workspaceId = activeProjectId ?? undefined, shell?: string): Promise<string> => {
@@ -284,6 +284,8 @@ export function CommandCenterView() {
     setWall((w) => ({ ...w, root: hasPane(w.root, kind, ref) ? w.root : addPane(w.root, wallPane(kind, ref), aspectRef.current), ...(kind === 'chat' ? { hero: ref } : {}) }));
     if (kind === 'chat') setSelected(ref);
   };
+  /** A one-click add that failed says so, instead of silently opening nothing. */
+  const reportAddFailure = (e: unknown) => useStore.getState().pushToast('error', `Could not add the window: ${e instanceof Error ? e.message : String(e)}`);
   const autoArrange = () => setWall((w) => w.layout.mode === 'grid' ? { ...w, root: tileTree(allPanes(w.root), aspectRef.current) } : w);
 
   // The agent the composer speaks for: the window clicked last, or the first
@@ -374,7 +376,7 @@ export function CommandCenterView() {
         selectAgent(id);
         setWall((w) => ({ ...w, hero: id, layout: { ...w.layout, mode: 'focus' } }));
       }}
-      onNewAgent={() => { void addFromToolbar('chat'); }}
+      onNewAgent={() => { void addFromToolbar('chat').catch(reportAddFailure); }}
       panelRef={composerRef}
     />
   );
@@ -396,7 +398,7 @@ export function CommandCenterView() {
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-3 px-4 pb-4 pt-1 xl:px-6">
       <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen}
-        onAdd={(kind) => { setCompletedId(null); void addFromToolbar(kind); }} />
+        onAdd={(kind) => { setCompletedId(null); void addFromToolbar(kind).catch(reportAddFailure); }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <WallDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
         <div className="wall-agent-workspace" data-tabs={panel.show && panel.orientation === 'horizontal' ? 'top' : 'left'}>
