@@ -58,3 +58,15 @@ describe('the widest the composer can be', () => {
     expect(composerMaxWidth(null)).toBe(1000);
   });
 });
+
+describe('saving the composer size when leaving the page', () => {
+  it('flushes a change still inside the settle delay on unmount and on window close', async () => {
+    const { readFileSync } = await import('node:fs');
+    const view = readFileSync(new URL('./views/CommandCenterView.tsx', import.meta.url), 'utf8');
+    // Otherwise a resize just before switching tabs is lost: the next load
+    // prefers the host's older setting over the browser copy.
+    expect(view).toContain('unsaved.current = wall;');
+    expect(view).toContain("window.addEventListener('beforeunload', flushWall);");
+    expect(view).toContain("return () => { window.removeEventListener('beforeunload', flushWall); flushWall(); };");
+  });
+});
