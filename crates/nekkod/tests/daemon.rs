@@ -1578,3 +1578,86 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+/// A sandbox chat's whole container life through the daemon against a real
+/// Docker engine (opt-in: `NEKKO_SANDBOX_TEST_IMAGE` names a locally
+/// installed, digest-pinned Linux image with python3).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sandbox_chat_runs_its_tools_in_a_container_the_daemon_owns() {
+    let Ok(image) = std::env::var("NEKKO_SANDBOX_TEST_IMAGE") else { return };
+    let session =
+        json!({ "id": "s_box", "title": "Box", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("sandbox", session);
+    let ws = rig.workspace.to_string_lossy().to_string();
+    let (status, _) = post(
+        rig.d.port,
+        "settings:update",
+        json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": ws, "addedAt": 1 }] }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let (status, configured) = post(rig.d.port, "sandbox:configure", json!(["s_box", image]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{configured}");
+    assert_eq!(configured["phase"], "ready", "{configured}");
+    assert_eq!(saved_session(&rig, "s_box")["executionMode"], "sandbox");
+    let identity = configured["identity"].clone();
+    // Always clean the container up, even when an assertion fails.
+    let checks = std::panic::AssertUnwindSafe(async {
+        let call = |id: &str, name: &str, input: Value| json!({ "id": id, "name": name, "input": input });
+        let (_, read) = post(
+            rig.d.port,
+            "sandbox:tool",
+            json!(["s_box", call("c1", "read_file", json!({ "path": "folder-0/app.ts" }))]),
+            Some(TOKEN),
+        )
+        .await;
+        assert!(read["output"].as_str().unwrap().contains("pineapple"), "{read}");
+        let (_, wrote) = post(
+            rig.d.port,
+            "sandbox:tool",
+            json!(["s_box", call("c2", "bash", json!({ "command": "printf hi > folder-0/new.txt; id -u" }))]),
+            Some(TOKEN),
+        )
+        .await;
+        let shell: Value = serde_json::from_str(wrote["output"].as_str().unwrap()).unwrap();
+        assert_eq!(shell["stdout"].as_str().unwrap().trim(), "1000", "{wrote}");
+        let (_, denied) =
+            post(rig.d.port, "sandbox:tool", json!(["s_box", call("c3", "fetch_url", json!({}))]), Some(TOKEN)).await;
+        assert_eq!(denied["isError"], true);
+        let (_, diff) = post(rig.d.port, "sandbox:diff", json!(["s_box"]), Some(TOKEN)).await;
+        assert_eq!(diff["changes"][0]["path"], "folder-0/new.txt", "{diff}");
+        assert!(!rig.workspace.join("new.txt").exists(), "the host folder is untouched");
+        // A Stop during a command stops the container itself, at once.
+        let port = rig.d.port;
+        let long = tokio::spawn(async move {
+            post(
+                port,
+                "sandbox:tool",
+                json!(["s_box", { "id": "c4", "name": "bash", "input": { "command": "sleep 30" } }]),
+                Some(TOKEN),
+            )
+            .await
+        });
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        let started = Instant::now();
+        let (_, aborted) = post(rig.d.port, "sandbox:abort", json!(["s_box"]), Some(TOKEN)).await;
+        assert_eq!(aborted, json!(true));
+        let (_, stopped) = long.await.unwrap();
+        assert_eq!(stopped["output"], "Sandbox execution cancelled", "{stopped}");
+        assert!(started.elapsed() < Duration::from_secs(10));
+        let (_, status) = post(rig.d.port, "sandbox:status", json!(["s_box"]), Some(TOKEN)).await;
+        assert_eq!(
+            status["error"], "Sandbox stopped by cancellation. Create a new sandbox chat to resume.",
+            "{status}"
+        );
+    });
+    let outcome = futures_util::FutureExt::catch_unwind(checks).await;
+    let (status, _) = post(rig.d.port, "sandbox:cleanup", json!(["s_box", identity]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, after) = post(rig.d.port, "sandbox:status", json!(["s_box"]), Some(TOKEN)).await;
+    assert_eq!(after["phase"], "error", "{after}");
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}

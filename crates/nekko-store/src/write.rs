@@ -344,6 +344,56 @@ impl SessionStore {
         })
     }
 
+    /// `configureSandbox`'s change to the chat (execution-router.ts): only an
+    /// empty, idle, unconfigured chat becomes a sandbox chat, pinned to a
+    /// digest image and to the folders it has now, in ask mode and without
+    /// worktrees. The image check is the router's (`^\S+@sha256:[a-f0-9]{64}$`).
+    pub fn configure_sandbox(&self, id: &str, image: &str, identity: &str, now: f64) -> Result<Value, String> {
+        let mut failure: Option<&str> = None;
+        let pinned = image.rsplit_once("@sha256:").is_some_and(|(name, digest)| {
+            !name.is_empty()
+                && !name.chars().any(char::is_whitespace)
+                && digest.len() == 64
+                && digest.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        });
+        let out = self.patch(id, |s| {
+            let has_messages = s.get("messages").and_then(Value::as_array).is_some_and(|m| !m.is_empty());
+            if js::truthy(s.get("activeRun")) || js::truthy(s.get("sandbox")) || has_messages {
+                failure = Some("Sandbox setup is immutable and requires an empty, idle, unconfigured session");
+                return false;
+            }
+            if !pinned {
+                failure = Some("A digest-pinned, already installed Linux image is required");
+                return false;
+            }
+            let mut ids: Vec<Value> = Vec::new();
+            if let Some(w) = s.get("workspaceId").filter(|w| js::truthy(Some(w))) {
+                ids.push(w.clone());
+            }
+            for w in s.get("supportingWorkspaceIds").and_then(Value::as_array).cloned().unwrap_or_default() {
+                if js::truthy(Some(&w)) && !ids.contains(&w) {
+                    ids.push(w);
+                }
+            }
+            s.insert("executionMode".into(), json!("sandbox"));
+            s.insert("gitIsolation".into(), json!(false));
+            // A whole millisecond count is written as an integer, as JSON.stringify does.
+            let at =
+                if now.fract() == 0.0 && now.abs() < 9_007_199_254_740_992.0 { json!(now as i64) } else { json!(now) };
+            s.insert(
+                "sandbox".into(),
+                json!({ "image": image, "identity": identity, "configuredAt": at, "sourceWorkspaceIds": ids }),
+            );
+            s.insert("mode".into(), json!("ask"));
+            s.shift_remove("gitWorktrees");
+            true
+        })?;
+        if let Some(e) = failure {
+            return Err(e.into());
+        }
+        out.ok_or_else(|| "Session not found".to_string())
+    }
+
     /// `setSessionWorkspace`.
     pub fn set_workspace(&self, id: &str, workspace_id: Option<&str>) -> Result<Option<Value>, String> {
         self.patch(id, |s| {

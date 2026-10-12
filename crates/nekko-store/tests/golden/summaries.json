@@ -364,6 +364,33 @@
     "prUrls": [],
     "imageCount": 0
   },
+  "s_sandbox": {
+    "id": "s_sandbox",
+    "title": "Sandbox setup",
+    "workspaceId": "w1",
+    "supportingWorkspaceIds": [
+      "w2",
+      "",
+      "w1",
+      "w3"
+    ],
+    "mode": "guardrails",
+    "gitWorktrees": {
+      "w1": {
+        "path": "C:/tmp/wt",
+        "branch": "nekko/x"
+      }
+    },
+    "createdAt": 1,
+    "updatedAt": 1,
+    "messageCount": 0,
+    "exchangeCount": 0,
+    "transcriptTokens": 0,
+    "stalled": false,
+    "recentTurns": [],
+    "prUrls": [],
+    "imageCount": 0
+  },
   "s_space": {
     "id": "s_space",
     "title": "Chat s_space",

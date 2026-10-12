@@ -17,6 +17,7 @@ mod loops;
 mod mcp;
 mod procgroup;
 mod routes;
+mod sandbox;
 mod settings;
 mod sideband;
 mod tooling;
@@ -72,7 +73,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS].join(","));
+                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS, sandbox::OWNS].join(","));
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -128,6 +129,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         settings,
         voice: voice.clone(),
         catalog,
+        sandboxes: cfg.data_dir.clone().filter(|_| sessions.is_some()).map(|d| sandbox::Sandboxes::new(d.into())),
     };
     routes::forward_terminal_events(&ctx);
     let processes = ctx.turns.processes.clone();

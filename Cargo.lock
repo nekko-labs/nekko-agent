@@ -1337,6 +1337,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "nekko-sandbox"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "getrandom",
+ "libc",
+ "nekko-js",
+ "nekko-settings",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "windows-sys",
+]
+
+[[package]]
 name = "nekko-settings"
 version = "0.1.0"
 dependencies = [
@@ -1440,6 +1455,7 @@ dependencies = [
  "nekko-infer",
  "nekko-js",
  "nekko-loop",
+ "nekko-sandbox",
  "nekko-settings",
  "nekko-store",
  "nekko-term",
