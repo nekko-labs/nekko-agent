@@ -85,9 +85,9 @@ app.whenReady().then(async () => {
           await run("document.querySelector('[aria-label=\"Resize the agent list\"]').dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}))");
           await check('keyboard resize persists', "localStorage.getItem('nekko.wsSidebarWidth') === '272'");
         }
-        await create('New agent', "integration.calls.some(call => call.method === 'create')");
-        await create('New image session', "integration.calls.some(call => call.method === 'options' && call.options.chatType === 'image')");
-        await create('New terminal', "integration.calls.some(call => call.method === 'terminal') && integration.state().terminals.length === 1");
+        await create('Agent', "integration.calls.some(call => call.method === 'create')");
+        await create('Media gen', "integration.calls.some(call => call.method === 'options' && call.options.chatType === 'image')");
+        await create('Terminal', "integration.calls.some(call => call.method === 'terminal') && integration.state().terminals.length === 1");
         await run("[...document.querySelectorAll('div[role=button]')].find(card => card.getAttribute('title')?.includes('Active conversation')).dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, clientX:60, clientY:100}))");
         await check('existing card context actions retained', "document.body.textContent.includes('Mark as completed') && document.body.textContent.includes('Change model')");
         await run("document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}))");
