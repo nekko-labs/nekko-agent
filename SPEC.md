@@ -1167,3 +1167,7 @@ New reply records include an explicit model-execution start timestamp alongside 
 ### Daemon sign-in ownership (PF14)
 
 When the daemon owns the data directory, it is the single writer of tokens.json and handles desktop sign-in, CLI token imports, refresh and sign-out. Remote token exchanges and refreshes require HTTPS, including redirects; HTTP is permitted only in unit-test binaries for synthetic loopback providers. Browser callbacks bind loopback only. The web edition refuses desktop subscription sign-in. Synthetic flow and parity tests cover the implementation; live provider sign-in remains unverified before a release.
+
+### Worktree setup output
+
+New chat worktrees retain setup-command output through process exit. The daemon drains output readers to EOF within the original setup timeout and stops readers afterward, so an immediately exiting command cannot lose its final output. Exit status and failure details remain visible.
