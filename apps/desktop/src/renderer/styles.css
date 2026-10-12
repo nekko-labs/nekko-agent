@@ -1906,6 +1906,9 @@
    beam, rocket and glow, just still, so a wall of busy agents left on screen
    behind another app stops costing the GPU. See appActivity.ts. */
 html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inactive] *::after { animation-play-state: paused !important; }
+/* One-shot motion is not a decoration: a wall drawer paused on its first
+   frame is fully clipped, and one paused while closing never unmounts. */
+html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !important; }
 .command-wall-window[data-wall-selected] .wall-num, .wall-composer[data-has-agent] .wall-num { background: var(--accent); color: var(--win); }
 .wall-layout-control { position: relative; display: inline-flex; align-items: center; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was

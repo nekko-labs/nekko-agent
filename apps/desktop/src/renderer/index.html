@@ -7,10 +7,12 @@
       'wasm-unsafe-eval' and data: in connect-src are for the terminal: ghostty-web
       compiles Ghostty's terminal core from an inlined data: URL. Neither allows
       running script text; wasm-unsafe-eval covers WebAssembly compilation only.
+      frame-src is for the Browser pane in the web edition, which has no
+      <webview> and shows the page in a sandboxed iframe instead.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ws: wss: data:; manifest-src 'self'; worker-src 'self'"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ws: wss: data:; frame-src 'self' http: https:; manifest-src 'self'; worker-src 'self'"
     />
     <meta name="theme-color" content="#0f0f11" />
     <meta name="mobile-web-app-capable" content="yes" />
