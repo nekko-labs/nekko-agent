@@ -133,17 +133,7 @@ pub async fn route(
                 .and_then(Value::as_array)
                 .map(|a| a.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect())
                 .unwrap_or_default();
-            let query = text(&args, 1);
-            let saved = if ids.is_empty() { Vec::new() } else { folders(backend).await };
-            let found: Vec<(String, bool)> = ids
-                .into_iter()
-                .map(|id| {
-                    let f = folder_path(&saved, &id).is_some();
-                    (id, f)
-                })
-                .collect();
-            let index = ws.index.clone();
-            blocking(move || Value::Array(index.snippets(&found, &query))).await
+            Ok(Value::Array(snippets_for(ws, backend, &ids, &text(&args, 1)).await))
         }
         _ => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
@@ -164,6 +154,21 @@ async fn data_route(dir: PathBuf, channel: &str, args: Vec<Value>) -> Result<Val
         other => Err(format!("{other} is not a workspace channel")),
     })
     .await?
+}
+
+/// The chat's index snippets (`collectIndexSnippets` in chat.ts): for the
+/// daemon's own turn admission, the same as `workspace:snippets`. Each is
+/// `{ relPath, path, body }`, the TS `ContextSnippet` shape.
+#[allow(dead_code, reason = "chat admission moving into the daemon calls it")]
+pub async fn index_snippets(ctx: &crate::routes::Ctx, workspace_ids: &[String], text: &str) -> Vec<Value> {
+    snippets_for(&ctx.workspace, &ctx.backend, workspace_ids, text).await
+}
+
+async fn snippets_for(ws: &Workspace, backend: &Backend, ids: &[String], query: &str) -> Vec<Value> {
+    let saved = if ids.is_empty() { Vec::new() } else { folders(backend).await };
+    let found: Vec<(String, bool)> = ids.iter().map(|id| (id.clone(), folder_path(&saved, id).is_some())).collect();
+    let (index, query) = (ws.index.clone(), query.to_string());
+    blocking(move || index.snippets(&found, &query)).await.unwrap_or_default()
 }
 
 /// Index a folder off the async threads, telling the UI and the host's

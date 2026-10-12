@@ -32,7 +32,7 @@ fn load(data_dir: &Path) -> Value {
 }
 
 fn save(data_dir: &Path, store: &Value) -> Result<(), String> {
-    crate::write_atomic(&file(data_dir)?, js::stringify_pretty(&js::js_order(store.clone())).as_bytes())
+    crate::write_atomic(&file(data_dir)?, js::stringify_pretty(&js::js_order(store.clone()), "  ").as_bytes())
 }
 
 /// `String(path)`, the store's key, for a path that may be missing.

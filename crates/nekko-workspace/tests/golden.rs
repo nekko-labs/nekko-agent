@@ -232,7 +232,7 @@ fn every_case_returns_what_the_ts_host_returns() {
             Err(e) => json!({ "op": name, "error": e }),
         });
     }
-    let text = format!("{}\n", js::stringify_pretty(&Value::Array(results)));
+    let text = format!("{}\n", js::stringify_pretty(&Value::Array(results), "  "));
     let want = std::fs::read_to_string(golden().join("expected.json")).unwrap().replace("\r\n", "\n");
     if text != want {
         let got_lines: Vec<&str> = text.lines().collect();
