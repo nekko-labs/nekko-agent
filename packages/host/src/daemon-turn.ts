@@ -22,8 +22,8 @@ import { daemonOwns, LIVENESS_INTERVAL_MS, LIVENESS_STRIKES } from './daemon-loo
  *   fetches connector and index snippets and resolves the provider (a fresh
  *   subscription token), and puts all of that in the `chat:turn` spec;
  * - during it, the daemon calls back for the tools that still live here
- *   (`turn:tool`: MCP, sub-agents, the browser, processes, fetch, watches,
- *   training reports, `decide`), for hooks (`turn:hook`) and with Anthropic
+ *   (`turn:tool`: the browser and window capture, watches, delegation
+ *   targets, training reports, and, while hooks run here, processes), for hooks (`turn:hook`) and with Anthropic
  *   rate-limit headers (`turn:headers`); a tool here that needs approval parks it in the daemon
  *   (`turn:approval`) and hears the answer through `turn:approved`;
  * - every event reaches this side too (`turn:event`, deltas batched), marked

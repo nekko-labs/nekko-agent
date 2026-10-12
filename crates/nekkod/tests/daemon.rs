@@ -847,7 +847,7 @@ async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
             json!({ "questions": [{ "question": "Which bug?", "options": ["Login", "Logout"] }] }),
         ),
         call_tool("c_read", "read_file", json!({ "path": "app.ts" })),
-        call_tool("c_host", "fetch_url", json!({ "url": "https://example.invalid" })),
+        call_tool("c_host", "agent_watch", json!({ "action": "list" })),
         say_text("all done"),
     ])
     .await;
@@ -1406,4 +1406,65 @@ async fn a_daemon_turn_runs_the_local_decide_tool_itself() {
     assert_eq!(out("c_run")["isError"], true);
     let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
     assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "decide never ran in the host");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_fetches_pages_and_runs_background_processes_itself() {
+    use axum::routing::get;
+    let app = axum::Router::new().route(
+        "/page",
+        get(|| async {
+            (
+                [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                "<html><head><title>Cats</title></head><body><p>Cats sleep &amp; purr.</p></body></html>",
+            )
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let page_port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+    let session = json!({
+        "id": "s_turn_f", "title": "Named", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("fetch", session);
+    let url = format!("http://127.0.0.1:{page_port}/page");
+    let echo = if cfg!(windows) { "echo from-the-daemon" } else { "printf 'from-the-daemon\n'" };
+    let model = scripted_model(vec![
+        call_tool("c_fetch", "fetch_url", json!({ "url": url })),
+        call_tool("c_start", "start_process", json!({ "command": echo, "name": "echoer" })),
+        say_text("started"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_f", "s_turn_f", json!({}));
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let approval = wait_pending(rig.d.port, "s_turn_f", "approval", "c_fetch").await;
+    assert_eq!(approval["reason"], format!("Fetch {url}"));
+    post(rig.d.port, "tool:approve", json!(["s_turn_f", "c_fetch", true]), Some(TOKEN)).await;
+    let approval = wait_pending(rig.d.port, "s_turn_f", "approval", "c_start").await;
+    assert_eq!(approval["reason"], "Start a background process");
+    post(rig.d.port, "tool:approve", json!(["s_turn_f", "c_start", true]), Some(TOKEN)).await;
+    let (_, end) = turn_record(rig.d.port, "turn_f").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    let saved = saved_session(&rig, "s_turn_f");
+    let messages = saved["messages"].as_array().unwrap();
+    let tool_out = |id: &str| -> String {
+        let m = messages.iter().find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id).unwrap();
+        m["toolResult"]["output"].as_str().unwrap().to_string()
+    };
+    assert_eq!(tool_out("c_fetch"), format!("{url} (HTTP 200, text/html, 26 chars)\n\n# Cats\n\nCats sleep & purr."));
+    let started = tool_out("c_start");
+    assert!(started.starts_with("Started p_"), "{started}");
+    assert!(started.contains("(echoer)"), "{started}");
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = all.as_array().unwrap();
+    assert!(!calls.iter().any(|e| e[0] == "turn:tool"), "neither tool went through the host: {all}");
+    // The output reached the agent terminal through the host's log.
+    let logged = || {
+        calls.iter().filter(|e| e[0] == "loop:log").map(|e| e[1][2].as_str().unwrap_or("").to_string()).collect::<String>()
+    };
+    assert!(logged().contains("[echoer, background]"), "{}", logged());
+    server.abort();
 }

@@ -32,6 +32,9 @@ pub async fn execute(call: &ToolCall, ctx: &ToolContext) -> ToolResult {
         "glob" => glob(call, ctx),
         "grep" => grep(call, ctx),
         "bash" => bash(call, ctx).await,
+        "start_process" | "read_process" | "kill_process" if ctx.processes.is_some() => {
+            crate::process::run_tool(call, ctx, ctx.processes.as_ref().expect("checked")).await
+        }
         _ => Ok(ToolResult::err(call, format!("Unknown tool: {}", call.name))),
     };
     outcome.unwrap_or_else(|message| ToolResult::err(call, message))
