@@ -1432,6 +1432,7 @@ dependencies = [
  "memchr",
  "nekko-context",
  "nekko-js",
+ "nekko-store",
  "nekko-tools",
  "regress",
  "reqwest",
