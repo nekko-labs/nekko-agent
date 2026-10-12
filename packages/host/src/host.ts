@@ -173,7 +173,7 @@ import {
 import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
 import { isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
-import { loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
+import { loopLog } from './daemon-caps.js';
 import { setTurnNotifier, turnCallback } from './daemon-turn.js';
 import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
 import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemon as notifyLimits } from './limits.js';
@@ -269,11 +269,7 @@ export interface Host {
   engineStatus(): Promise<EngineStatus>;
   /** For the engine daemon's router: load a model it was asked for, or say why not. */
   engineRouterLoad(modelId: string, image: boolean): Promise<{ ok: boolean; status?: number; message?: string }>;
-  /** A daemon-driven run's callbacks (daemon-loop.ts): a tool call, its events, its end. */
-  loopTool(runId: string, call: import('@nekko-agent/shared').ToolCall): Promise<import('@nekko-agent/shared').ToolResult>;
-  loopEvent(runId: string, payload: { events?: import('@nekko-agent/shared').AgentEvent[]; history?: import('@nekko-agent/shared').ChatMessage[] }): Promise<void>;
-  loopEnd(runId: string, payload: { history?: import('@nekko-agent/shared').ChatMessage[] }): void;
-  loopApprove(runId: string, call: import('@nekko-agent/shared').ToolCall, reason: string, severity: 'low' | 'medium' | 'high'): Promise<boolean>;
+  /** A daemon-driven turn's command output (`loop:log`, daemon-caps.ts). */
   loopLog(sessionId: string, workspaceId: string | undefined, data: string): void;
   /** A daemon-driven chat turn's callbacks (daemon-turn.ts `turn:*`). */
   turnCallback(channel: string, args: unknown[]): Promise<unknown>;
@@ -870,10 +866,6 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     voiceTranscribe: (wav) => voice.transcribe(wav),
     engineStatus: () => engine.status(),
     engineRouterLoad: (modelId, image) => engine.routerLoad(modelId, image),
-    loopTool,
-    loopEvent,
-    loopEnd,
-    loopApprove,
     loopLog,
     turnCallback,
     changesNotify: notifyChanges,

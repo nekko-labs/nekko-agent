@@ -53,7 +53,7 @@ import { searchWorkspace } from './workspace.js';
 import { buildSpec } from './spec.js';
 import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool, DAEMON_MCP } from './mcp.js';
 import { daemonCall } from './engine/daemon.js';
-import { daemonOwns, daemonRunsLoops, runAgentViaDaemon } from './daemon-loop.js';
+import { daemonOwns } from './daemon-caps.js';
 import { adoptTurn, answerInDaemon, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
 import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
 import { applyTurnInput, cleanTitle, hostToolApproval, sendOptionsForQueuedItem, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
@@ -97,16 +97,11 @@ function collectIndexSnippets(
 
 type Sender = (event: AgentEvent) => void;
 
-/** The built-in tools the engine daemon runs itself (crates/nekko-tools `PORTED_TOOLS`). */
-const DAEMON_TOOLS = new Set(['read_file', 'write_file', 'edit_file', 'glob', 'grep', 'list_dir', 'bash']);
-
 const abortControllers = new Map<string, AbortController>();
 const pendingApprovals = new Map<string, (approved: boolean) => void>();
 const pendingAnswers = new Map<string, (answers: AskAnswer[]) => void>();
 /** Messages sent to a running chat, waiting for its next tool boundary (TS-loop runs). */
 const steering = new Map<string, ChatMessage[]>();
-/** The daemon run id of each chat the daemon is driving, for `loop:steer`. */
-const daemonRunIds = new Map<string, string>();
 
 /**
  * What each session is waiting on a person for.
@@ -425,9 +420,9 @@ ${INTERRUPTED_NOTE}`,
  * Steer a running reply: the text becomes a user message at the chat's next
  * tool boundary (never mid-stream), so the model sees it without the turn
  * being stopped and started over, as pi's steering queue and typing into a
- * working Claude Code session do. A daemon-driven run gets it through
- * `loop:steer`; a chat that is not running (or a daemon too old to take it)
- * gets the text queued for after the turn instead.
+ * working Claude Code session do. A daemon-driven turn gets it through
+ * `turn:steer`; a chat that is not running gets the text queued for after the
+ * turn instead.
  */
 export async function steerChat(sessionId: string, text: string): Promise<Session | null> {
   const content = text.trim();
@@ -436,13 +431,6 @@ export async function steerChat(sessionId: string, text: string): Promise<Sessio
   const message: ChatMessage = { id: `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`, role: 'user', content, createdAt: Date.now() };
   if (daemonTurnFor(sessionId)) {
     if (await steerDaemonTurn(sessionId, message)) return getSession(sessionId);
-    if (!isChatRunning(sessionId)) return queuePrompt(sessionId, content);
-  }
-  const runId = daemonRunIds.get(sessionId);
-  const daemon = runId ? daemonCall() : undefined;
-  if (runId && daemon && (await daemonOwns(daemon, 'loop:steer'))) {
-    const taken = await daemon<boolean>('loop:steer', runId, message).catch(() => false);
-    if (taken) return getSession(sessionId);
     if (!isChatRunning(sessionId)) return queuePrompt(sessionId, content);
   }
   const inbox = steering.get(sessionId) ?? [];
@@ -1195,45 +1183,19 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
             ? (headers: Headers) => LimitsService.recordFromHeaders(provider.tokenKey!, provider.kind, headers)
             : undefined,
       };
-      // A daemon too old for `chat:turn` may still drive the reply alone
-      // (daemon-loop.ts): its tokens reach the UI without passing through this
-      // process. A run that reports rate-limit headers stays here, since only
-      // this side records them on that route. Only a daemon that runs with no
-      // tool-step limit gets the run (daemonRunsLoops): an older one would cap it.
-      const viaDaemon = !sandbox && !!daemon && !runOptions.onHeaders && (await daemonRunsLoops(daemon)) &&
-        (await daemonOwns(daemon, 'loop:prompt-caching'));
       // On disk while the turn runs: a host that starts and finds it knows the
       // turn was cut off, and marks the reply so the chat offers Continue
       // (reconcileInterruptedChats).
       session.activeRun = { startedAt: Date.now() };
       persist();
-      const source = viaDaemon
-        ? runAgentViaDaemon(daemon, {
-            ...runOptions,
-            provider: runOptions.provider.config,
-            requestApproval,
-            onRunId: (runId) => daemonRunIds.set(opts.sessionId, runId),
-            // The built-in file and shell tools run in the daemon too.
-            toolContext: {
-              native: sandbox || hasToolHooks(settings) ? [] : tools.map((t) => t.name).filter((n) => DAEMON_TOOLS.has(n)),
-              sessionId: opts.sessionId,
-              mode,
-              sandboxMode: settings.sandboxMode,
-              guardrails: settings.guardrails,
-              workspaces: workspaces.map((w) => ({ id: w.id, path: w.path })),
-              defaultCwd,
-            },
-          })
-        : runAgent(runOptions);
+      const source = runAgent(runOptions);
       for await (const event of source) {
         eventsSeen = true;
         if (event.type === 'usage') {
           // Older TS loops omit these fields even though their provider reports them.
-          if (!viaDaemon) {
-            event.cacheReadTokens ??= cacheUsage.cacheReadTokens;
-            event.cacheWriteTokens ??= cacheUsage.cacheWriteTokens;
-            cacheUsage = {};
-          }
+          event.cacheReadTokens ??= cacheUsage.cacheReadTokens;
+          event.cacheWriteTokens ??= cacheUsage.cacheWriteTokens;
+          cacheUsage = {};
           turnStats.add(event);
           recordTurnUsage(opts, provider, event);
         }
@@ -1283,7 +1245,6 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
       // you" lane over a question that no longer has a run behind it.
       releasePending(opts.sessionId);
       delete session.activeRun;
-      daemonRunIds.delete(opts.sessionId);
       persist();
     }
   }

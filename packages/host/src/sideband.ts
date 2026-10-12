@@ -3,7 +3,7 @@ import type { ChatRequest, ProviderChunk } from '@nekko-agent/core';
 import { recordUsage } from './usage.js';
 import { createHostProvider as createProvider, hostProviderConfig, promptCachingForHost } from './prompt-caching.js';
 import { daemonCall } from './engine/daemon.js';
-import { daemonOwns } from './daemon-loop.js';
+import { daemonOwns } from './daemon-caps.js';
 
 /** The request a one-shot completion sends: no tools, no signal, no hooks. */
 export type CompleteRequest = Pick<ChatRequest, 'model' | 'messages' | 'temperature' | 'maxOutputTokens' | 'think' | 'purpose' | 'promptCaching'>;

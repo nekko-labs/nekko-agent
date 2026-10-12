@@ -3,7 +3,7 @@ import type { AgentEvent, AskAnswer, PendingInput, QueuedPrompt, SendOptions, Se
 import { sideUsageRecord } from './usage-records.js';
 import { recordUsage } from './usage.js';
 import { daemonCall } from './engine/daemon.js';
-import { daemonOwns, LIVENESS_INTERVAL_MS, LIVENESS_STRIKES } from './daemon-loop.js';
+import { daemonOwns, LIVENESS_INTERVAL_MS, LIVENESS_STRIKES } from './daemon-caps.js';
 
 /**
  * A whole chat turn driven by the engine daemon (`chat:turn`, crates/nekkod

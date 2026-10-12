@@ -13,7 +13,6 @@ mod decisions;
 mod engine;
 mod hub;
 mod hypergate;
-mod loops;
 mod mcp;
 mod procgroup;
 mod routes;
@@ -111,7 +110,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         hub,
         engine: engine.clone(),
         sessions: sessions.clone(),
-        loops: Arc::new(loops::Loops::new(changes.clone())),
+        changes: changes.clone(),
         turns: Arc::new(
             turns::Turns::new(
                 sessions.clone(),

@@ -285,7 +285,7 @@ fn is_daemon_terminal_echo(text: &str) -> bool {
 }
 
 /// True for a backend agent event the daemon already sent: a run the daemon
-/// drives (`loop:run`) publishes its events itself, in order, and the backend
+/// drives (`chat:turn`) publishes its events itself, in order, and the backend
 /// re-emits its copies only for its own listeners (the phone relay, messaging).
 fn is_relay_only(text: &str) -> bool {
     text.contains("\"relayOnly\":true") && text.contains("\"agent:event\"")
