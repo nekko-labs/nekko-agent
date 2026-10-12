@@ -78,6 +78,18 @@ fn queue_items_equal(a: &Value, b: &Value) -> bool {
     js::stringify(&queue_payload(a)) == js::stringify(&queue_payload(b))
 }
 
+/// `ARCHIVE_RETENTION_DAYS` in shared/archive.ts, in milliseconds.
+const ARCHIVE_RETENTION_MS: f64 = 60.0 * 24.0 * 60.0 * 60.0 * 1000.0;
+
+/// `archiveExpired(s, now)`: archived (`typeof archivedAt === 'number'` and
+/// above 0) and at or past the end of the retention window.
+fn archive_expired(s: &Value, now: f64) -> bool {
+    match s.get("archivedAt").and_then(Value::as_f64) {
+        Some(at) if at > 0.0 => now >= at + ARCHIVE_RETENTION_MS,
+        _ => false,
+    }
+}
+
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
@@ -334,6 +346,143 @@ impl SessionStore {
             count += 1;
         }
         Ok(count)
+    }
+
+    /// `purgeExpiredArchives(now)`: delete every archived chat that has
+    /// outlived the retention window (`archiveExpired` in shared/archive.ts).
+    /// `before_delete` runs first for each, as `clear_with`'s does, so the
+    /// host can drop the chat's command log before its JSON goes; a failure
+    /// there keeps the chat. A chat whose id would not name a file in the
+    /// sessions folder is skipped (the TS version would build a path from it).
+    pub fn purge_archived_with(
+        &self,
+        now: f64,
+        before_delete: impl Fn(&str) -> Result<(), String>,
+    ) -> Result<usize, String> {
+        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        let mut count = 0;
+        for session in self.list() {
+            if !archive_expired(&session, now) {
+                continue;
+            }
+            let Some(id) = session.get("id").and_then(Value::as_str).filter(|id| valid_id(id)) else { continue };
+            before_delete(id)?;
+            let file = self.path(id);
+            match std::fs::remove_file(&file) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+                _ => {}
+            }
+            self.cache.lock().unwrap_or_else(|e| e.into_inner()).remove(&file);
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    /// `purgeExpiredArchives()` at the current time.
+    pub fn purge_archived(&self, before_delete: impl Fn(&str) -> Result<(), String>) -> Result<usize, String> {
+        self.purge_archived_with(now_ms() as f64, before_delete)
+    }
+
+    /// `forkSession(id, beforeMessageId)`: a new chat holding `id`'s
+    /// conversation before `before_message_id` (all of it when that is absent
+    /// or not found), with the same folders, brain and options. The source is
+    /// not touched. `None` when there is no such chat.
+    ///
+    /// Keys land where `createSession`'s object literal and the assignments
+    /// after it put them, since the file must match the TS byte for byte.
+    /// The settings defaults `createSession` reads (`executionMode`,
+    /// `gitIsolation`) are always overwritten from the source, so the fork
+    /// needs no settings.
+    pub fn fork(&self, id: &str, before_message_id: &Value) -> Result<Option<Value>, String> {
+        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(src) = self.get(id) else { return Ok(None) };
+        let Some(src) = src.as_object() else { return Ok(None) };
+        let messages = src.get("messages");
+        // `beforeMessageId ? findIndex(m => m.id === beforeMessageId) : -1`.
+        let cut =
+            if js::truthy(Some(before_message_id)) && !before_message_id.is_object() && !before_message_id.is_array() {
+                messages
+                    .and_then(Value::as_array)
+                    .and_then(|list| list.iter().position(|m| m.get("id") == Some(before_message_id)))
+            } else {
+                None
+            };
+        let now = now_ms();
+        let mut rand = [0u8; 6];
+        getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
+        let mut s = Map::new();
+        s.insert("id".into(), json!(format!("s_{}_{}", base36(now), base64url(&rand))));
+        s.insert("title".into(), json!("New chat"));
+        if let Some(w) = src.get("workspaceId") {
+            s.insert("workspaceId".into(), w.clone());
+        }
+        // getExecutionMode(src): `executionMode ?? (gitIsolation === false ? 'unified' : 'worktree')`.
+        let mode = match src.get("executionMode") {
+            Some(m) if !m.is_null() => m.clone(),
+            _ if src.get("gitIsolation") == Some(&json!(false)) => json!("unified"),
+            _ => json!("worktree"),
+        };
+        let sandbox = mode == json!("sandbox");
+        let isolated = mode == json!("worktree");
+        s.insert("executionMode".into(), mode);
+        s.insert("gitIsolation".into(), json!(isolated));
+        // `supportingWorkspaceIds?.length ? ids : undefined`.
+        if let Some(ids) = src.get("supportingWorkspaceIds") {
+            let has_length = match ids {
+                Value::Array(a) => !a.is_empty(),
+                Value::String(t) => !t.is_empty(),
+                _ => false,
+            };
+            if has_length {
+                s.insert("supportingWorkspaceIds".into(), ids.clone());
+            }
+        }
+        let kept = match (messages, cut) {
+            (Some(Value::Array(list)), Some(i)) => Some(Value::Array(list[..i].to_vec())),
+            (Some(m), _) => Some(m.clone()),
+            (None, _) => None,
+        };
+        // Present in the literal; `structuredClone(undefined)` leaves it out.
+        s.insert("messages".into(), Value::Null);
+        s.insert("createdAt".into(), json!(now));
+        s.insert("updatedAt".into(), json!(now));
+        if sandbox {
+            s.insert("mode".into(), json!("ask"));
+        }
+        s.insert(
+            "title".into(),
+            json!(format!("{} (split)", src.get("title").map_or("undefined".into(), js::display))),
+        );
+        s.insert("titleAuto".into(), json!(false));
+        match kept {
+            Some(m) => {
+                s.insert("messages".into(), m);
+            }
+            None => {
+                s.shift_remove("messages");
+            }
+        }
+        for key in [
+            "providerId",
+            "modelId",
+            "autoModel",
+            "autoQuality",
+            "mode",
+            "thinking",
+            "chatType",
+            "imageParams",
+            "attachedPaths",
+            "disabledTools",
+        ] {
+            if let Some(v) = src.get(key) {
+                s.insert(key.into(), v.clone());
+            }
+        }
+        if sandbox {
+            s.insert("mode".into(), json!("ask"));
+        }
+        self.save(&mut s)?;
+        Ok(Some(Value::Object(s)))
     }
 
     /// `setSessionOptions`.

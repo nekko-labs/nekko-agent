@@ -622,6 +622,54 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn forks_chats_and_purges_expired_archives_itself() {
+    let data = std::env::temp_dir().join(format!("nekkod-fork-purge-{}", std::process::id()));
+    let sessions = data.join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let chat = json!({ "id": "s_src", "title": "Source", "workspaceId": "w1", "providerId": "p1", "updatedAt": 5, "messages": [
+        { "id": "u1", "role": "user", "content": "one", "createdAt": 1 },
+        { "id": "u2", "role": "user", "content": "two", "createdAt": 2 },
+    ] });
+    let src_bytes = serde_json::to_vec_pretty(&chat).unwrap();
+    std::fs::write(sessions.join("s_src.json"), &src_bytes).unwrap();
+    // Archived long ago (gone), archived just now (kept), never archived (kept).
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+    for (id, archived) in [("s_old", json!(1)), ("s_recent", json!(now)), ("s_live", Value::Null)] {
+        let s = json!({ "id": id, "title": id, "updatedAt": 1, "messages": [], "archivedAt": archived });
+        std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec(&s).unwrap()).unwrap();
+    }
+    let d = start_with(true, Some(&data));
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for channel in ["session:fork", "sessions:purgeArchived"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
+    }
+    // Served here, not echoed by the backend.
+    let (status, fork) = post(d.port, "session:fork", json!(["s_src", "u2"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{fork}");
+    assert_eq!(fork["title"], "Source (split)");
+    assert_eq!((fork["workspaceId"].clone(), fork["providerId"].clone()), (json!("w1"), json!("p1")));
+    assert_eq!(fork["messages"].as_array().unwrap().len(), 1);
+    let fork_id = fork["id"].as_str().unwrap();
+    assert_ne!(fork_id, "s_src");
+    let (_, saved) = post(d.port, "session:get", json!([fork_id]), Some(TOKEN)).await;
+    assert_eq!(saved, fork);
+    assert_eq!(std::fs::read(sessions.join("s_src.json")).unwrap(), src_bytes, "the source is untouched");
+    let (_, none) = post(d.port, "session:fork", json!(["s_absent"]), Some(TOKEN)).await;
+    assert_eq!(none, Value::Null);
+
+    let (status, purged) = post(d.port, "sessions:purgeArchived", json!([]), Some(TOKEN)).await;
+    assert_eq!((status, purged), (200, json!(1)));
+    assert!(!sessions.join("s_old.json").exists());
+    assert!(sessions.join("s_recent.json").exists() && sessions.join("s_live.json").exists());
+    // The host dropped the purged chat's command log first.
+    let (_, callbacks) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert_eq!(callbacks, json!([["s_old"]]));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn settings_are_the_daemons_to_write_when_it_knows_the_data_dir() {
     let data = std::env::temp_dir().join(format!("nekkod-settings-{}", std::process::id()));
     std::fs::create_dir_all(&data).unwrap();
