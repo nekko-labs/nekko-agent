@@ -233,7 +233,7 @@ struct Shared {
 }
 
 /// How a launched turn ended: its summary and the last error it reported.
-type Ended = oneshot::Receiver<(Value, Option<String>)>;
+pub(crate) type Ended = oneshot::Receiver<(Value, Option<String>)>;
 
 /// Note an `error` event's message.
 fn note_error(slot: &Mutex<Option<String>>, event: &Value) {
@@ -268,6 +268,11 @@ pub struct Turns {
     settings: Option<Arc<nekko_settings::SettingsStore>>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
+    /// How each queued turn the daemon started as the next of a chain ends,
+    /// for a `chat:send` the daemon admitted, which waits for the whole chain.
+    chained: Mutex<HashMap<String, Ended>>,
+    /// The chats whose chain a `chat:send` here is waiting on.
+    watched: Mutex<HashMap<String, usize>>,
 }
 
 static STEER_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -292,6 +297,8 @@ impl Turns {
             settings: None,
             running: Mutex::default(),
             pending: Pending::default(),
+            chained: Mutex::default(),
+            watched: Mutex::default(),
         }
     }
 
@@ -303,6 +310,26 @@ impl Turns {
 
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
         lock(&self.running).values().find(|s| s.session_id == session_id).cloned()
+    }
+
+    /// Keep how a chat's queued turns end while a `chat:send` waits on its chain.
+    pub(crate) fn watch(&self, session_id: &str) {
+        *lock(&self.watched).entry(session_id.to_string()).or_default() += 1;
+    }
+
+    pub(crate) fn unwatch(&self, session_id: &str) {
+        let mut w = lock(&self.watched);
+        if let Some(n) = w.get_mut(session_id) {
+            *n -= 1;
+            if *n == 0 {
+                w.remove(session_id);
+            }
+        }
+    }
+
+    /// How the queued turn started as `turn_id` ends, once (see `chained`).
+    pub(crate) fn take_chained(&self, turn_id: &str) -> Option<Ended> {
+        lock(&self.chained).remove(turn_id)
     }
 
     /// `turn:alive`: whether this turn is still being driven here.
@@ -415,7 +442,12 @@ impl Turns {
     /// Start a turn and hear how it ended (its summary, after what follows
     /// it here, and the last error it reported), with its id: a `spawn_agent`
     /// child the parent turn waits on.
-    fn launch(self: &Arc<Self>, backend: Arc<Backend>, hub: Hub, spec: Value) -> Result<(String, Ended), String> {
+    pub(crate) fn launch(
+        self: &Arc<Self>,
+        backend: Arc<Backend>,
+        hub: Hub,
+        spec: Value,
+    ) -> Result<(String, Ended), String> {
         let store = self.store.clone().ok_or("chat:turn needs the daemon to know the data directory")?;
         let turn_id = str_at(&spec, "turnId").ok_or("chat:turn needs a turnId")?.to_string();
         let opts = spec.get("opts").cloned().ok_or("chat:turn needs the send options")?;
@@ -500,8 +532,13 @@ impl Turns {
             Ok(reply) if reply.get("spec").is_some_and(Value::is_object) => {
                 let next_spec = reply["spec"].clone();
                 let next_id = next_spec.get("turnId").cloned().unwrap_or(Value::Null);
-                match self.start(backend.clone(), hub.clone(), next_spec) {
-                    Ok(_) => summary["next"] = next_id,
+                match self.launch(backend.clone(), hub.clone(), next_spec) {
+                    Ok((id, ended)) => {
+                        if lock(&self.watched).contains_key(&session_id) {
+                            lock(&self.chained).insert(id, ended);
+                        }
+                        summary["next"] = next_id;
+                    }
                     Err(e) => eprintln!("nekkod: could not start the next queued turn: {e}"),
                 }
             }

@@ -171,7 +171,7 @@ import {
   reconcileWorkflowRuns,
 } from './workflows.js';
 import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
-import { isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
+import { adoptAdmittedTurn, connectorSnippetsFor, indexSnippetsForAdmission, isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
 import { loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
 import { setTurnNotifier, turnCallback } from './daemon-turn.js';
@@ -276,6 +276,10 @@ export interface Host {
   loopEnd(runId: string, payload: { history?: import('@nekko-agent/shared').ChatMessage[] }): void;
   loopApprove(runId: string, call: import('@nekko-agent/shared').ToolCall, reason: string, severity: 'low' | 'medium' | 'high'): Promise<boolean>;
   loopLog(sessionId: string, workspaceId: string | undefined, data: string): void;
+  /** Register a turn the daemon admitted itself and drives (`turn:adopt`). */
+  adoptTurn(payload: Parameters<typeof adoptAdmittedTurn>[0]): Promise<void>;
+  /** The connector or workspace-index snippets for a turn the daemon admits. */
+  admissionSnippets(kind: 'connector' | 'index', args: unknown[]): Promise<unknown>;
   /** A daemon-driven chat turn's callbacks (daemon-turn.ts `turn:*`). */
   turnCallback(channel: string, args: unknown[]): Promise<unknown>;
   changesNotify(sessionId: string): void;
@@ -880,6 +884,9 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     loopLog,
     turnCallback,
     changesNotify: notifyChanges,
+    adoptTurn: (payload) => adoptAdmittedTurn(payload, (e) => events.emit('agentEvent', e)),
+    admissionSnippets: async (kind, args) =>
+      kind === 'connector' ? connectorSnippetsFor(args[0] as string | undefined) : indexSnippetsForAdmission(args[0] as string[], String(args[1] ?? '')),
     settingsChanged: (next, patch) => {
       settingsChanged(next, patch);
       // What updateSettings does after a save, for a save the daemon made.

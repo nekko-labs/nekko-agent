@@ -36,6 +36,10 @@ pub struct Config {
     /// loopback port receives the sign-in callback.
     #[serde(default = "yes")]
     pub sign_in: bool,
+    /// Whether the host lets the agent drive a browser (the desktop app's
+    /// does); what a turn the daemon admits offers.
+    #[serde(default)]
+    pub allow_browser_control: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

@@ -344,6 +344,16 @@ impl SessionStore {
         })
     }
 
+    /// What chat admission saves after it provisions a worktree chat's
+    /// checkouts (`saveSession` of the chat with its new `gitWorktrees`),
+    /// written over the chat as it is on disk now.
+    pub fn set_git_worktrees(&self, id: &str, worktrees: &Value) -> Result<Option<Value>, String> {
+        self.patch(id, |s| {
+            s.insert("gitWorktrees".into(), worktrees.clone());
+            true
+        })
+    }
+
     /// `setSessionWorkspace`.
     pub fn set_workspace(&self, id: &str, workspace_id: Option<&str>) -> Result<Option<Value>, String> {
         self.patch(id, |s| {

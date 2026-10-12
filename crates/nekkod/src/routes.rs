@@ -33,6 +33,8 @@ pub struct Ctx {
     pub voice: Option<Arc<crate::voice::Voice>>,
     /// Sign-in and tokens.json, when the data directory is known (`oauth:*`).
     pub oauth: Option<Arc<crate::oauth::OAuth>>,
+    /// `chat:send` admitted here, when the daemon owns settings, tokens and sessions.
+    pub admission: Option<Arc<crate::admission::Admission>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -248,6 +250,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf)).unwrap_or_default();
             crate::decisions::route(ctx, &data_dir, c, &args).await
         }
+        "chat:send" if ctx.admission.is_some() => {
+            crate::admission::send(ctx, ctx.admission.as_ref().expect("checked"), args).await
+        }
         c if crate::worktrees::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
             crate::worktrees::route(ctx, c, &args).await
         }
@@ -338,6 +343,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.settings.is_some() && ctx.sessions.is_some() {
         all.extend_from_slice(crate::worktrees::CHANNELS);
+    }
+    if ctx.admission.is_some() {
+        all.extend_from_slice(crate::admission::CHANNELS);
     }
     all
 }

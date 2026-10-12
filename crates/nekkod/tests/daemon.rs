@@ -63,6 +63,10 @@ fn fake_backend() {
                                 (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "command log unlink failed" })))
                             }
                             "chat:pending:host" => (axum::http::StatusCode::OK, axum::Json(json!({}))),
+                            "chat:indexSnippets" | "chat:connectorSnippets" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                (axum::http::StatusCode::OK, axum::Json(json!([{ "relPath": "app.ts", "path": "app.ts", "body": "1: pineapple" }])))
+                            }
                             "chat:running" => (axum::http::StatusCode::OK, axum::Json(json!([]))),
                             // A daemon-driven turn's host-run tool (MCP, sub-agents, the browser...).
                             "turn:tool" => (
@@ -105,7 +109,7 @@ fn fake_backend() {
                                 (axum::http::StatusCode::OK, axum::Json(json!({ "spec": spec })))
                             }
                             "turn:event" | "turn:end" | "turn:approved" | "turn:usage" | "turn:notify" | "loop:log" | "limits:notify"
-                            | "settings:changed" => {
+                            | "settings:changed" | "turn:adopt" => {
                                 recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
                             }
@@ -953,6 +957,57 @@ fn event_types(events: &[Value]) -> Vec<String> {
 fn saved_session(rig: &TurnRig, id: &str) -> Value {
     let path = rig.data.join("sessions").join(format!("{id}.json"));
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_send_is_admitted_and_driven_by_the_daemon() {
+    let session = json!({
+        "id": "s_admit", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("admit", session);
+    let model = scripted_model(vec![say_text("the answer")]).await;
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let settings = json!({
+        "providers": [provider, { "id": "off", "kind": "openai", "label": "Off", "enabled": false, "baseUrl": "https://api.openai.com/v1" }],
+        "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+    });
+    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("chat:send")));
+    // A disabled provider is refused here, as admitTurn refuses it.
+    let opts = json!({ "sessionId": "s_admit", "providerId": "off", "modelId": "m", "text": "hello" });
+    let (status, _) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+
+    // The whole chain runs before chat:send answers, as sendChat resolved.
+    let opts =
+        json!({ "sessionId": "s_admit", "providerId": "p1", "modelId": "synthetic", "text": "Explain the pineapple" });
+    let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, Value::Null));
+    let saved = saved_session(&rig, "s_admit");
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages.first().unwrap()["content"], "Explain the pineapple");
+    assert_eq!(messages.last().unwrap()["content"], "the answer");
+
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    let adopt = calls.iter().find(|c| c[0] == "turn:adopt").expect("the host was handed the turn");
+    let turn_id = adopt[1][0]["turnId"].as_str().unwrap().to_string();
+    assert!(turn_id.starts_with("turn_d"), "{turn_id}");
+    assert_eq!(adopt[1][0]["workspaces"][0]["id"], "w1");
+    assert!(calls.iter().any(|c| c[0] == "turn:end" && c[1][0] == turn_id.as_str()));
+    assert!(calls.iter().any(|c| c[0] == "chat:indexSnippets"), "the prompt had words to search for");
+    assert!(!calls.iter().any(|c| c[0] == "chat:connectorSnippets"), "no connector is connected");
+    // The snippets and the guidelines reached the model.
+    let requests = model.requests.lock().unwrap().clone();
+    let system = requests[0]["messages"][0]["content"].as_str().unwrap().to_string();
+    assert!(system.contains("Always run the tests."), "{system}");
+    assert!(system.contains("1: pineapple"), "{system}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -167,7 +167,8 @@ process.on('SIGINT', () => process.exit(130));
 function startDaemon() {
   const env = { ELECTRON_RUN_AS_NODE: '1', NEKKO_BACKEND_DATA_DIR: data, NEKKO_BACKEND_APP: '{}', NEKKO_BACKEND_ORIGINS: '["null"]' };
   if (route === 'ts') env.NEKKO_AGENT_LOOP = 'ts';
-  const config = { token, allowedOrigins: ['null'], dataDir: data, backend: { exe: electron, args: [backendJs], env } };
+  // As the desktop app starts it (engine-process.ts): its host lets the agent drive a browser.
+  const config = { token, allowedOrigins: ['null'], dataDir: data, allowBrowserControl: true, backend: { exe: electron, args: [backendJs], env } };
   const child = spawn(daemonExe, [], { env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   children.push(child);
   child.stderr.on('data', (d) => { if (args.verbose) process.stderr.write(d); });
@@ -204,10 +205,17 @@ ws.onmessage = (m) => {
   for (const l of listeners) l(frame.payload, at);
 };
 
-// Wait for the backend (forwarded channels work once it is up).
+// Wait for the backend: the daemon answers settings itself, so ask it whether
+// its TS backend is up (the host adjusts the engine's provider entry as it starts).
 for (let i = 0; ; i++) {
-  try { await call('settings:get'); break; } catch (e) { if (i > 120) throw e; await new Promise((r) => setTimeout(r, 500)); }
+  try {
+    if ((await call('daemon:info')).backend === 'ready') { await call('settings:get'); break; }
+  } catch (e) { if (i > 120) throw e; }
+  if (i > 120) throw new Error('the backend never became ready');
+  await new Promise((r) => setTimeout(r, 500));
 }
+// Let the host's startup writes (the engine provider entry) land before ours.
+await new Promise((r) => setTimeout(r, 1000));
 await call('settings:update', {
   workspaces: [{ id: 'w1', name: 'project', path: workspace, addedAt: Date.now() }, { id: 'w2', name: 'load', path: loadProject, addedAt: Date.now() }],
   providers: [{ id: 'local', kind: 'llamacpp', label: 'Local', baseUrl: modelUrl, enabled: true }],

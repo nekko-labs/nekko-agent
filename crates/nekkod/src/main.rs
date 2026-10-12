@@ -5,6 +5,7 @@
 //! is listening; everything else goes to stderr. Exits when its stdin closes.
 
 mod accounts;
+mod admission;
 mod backend;
 mod config;
 mod decide;
@@ -105,6 +106,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let read: Arc<dyn Fn() -> serde_json::Value + Send + Sync> = Arc::new(move || store.get());
         voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
     });
+    // `NEKKO_AGENT_LOOP=ts` (here or set for the backend) keeps every turn in the host.
+    let ts_loop = std::env::var("NEKKO_AGENT_LOOP").is_ok_and(|v| v == "ts")
+        || cfg.backend.as_ref().is_some_and(|b| b.env.get("NEKKO_AGENT_LOOP").is_some_and(|v| v == "ts"));
+    let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
+        .then(|| admission::Admission::new(&hub, cfg.allow_browser_control, ts_loop));
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -126,6 +132,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         mcp: mcp.clone(),
         accounts: accounts.clone(),
         settings: settings.clone(),
+        admission,
         oauth: match (&cfg.data_dir, &settings) {
             (Some(d), Some(s)) => {
                 let o = oauth::OAuth::new(

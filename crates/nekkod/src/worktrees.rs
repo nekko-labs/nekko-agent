@@ -10,10 +10,6 @@
 //! `chatWorktrees:remove` are served here while the daemon knows the data
 //! directory; chat admission uses [`prepare`] and [`chat_workspaces`].
 
-// `prepare`, `chat_workspaces` and `run_setup` serve chat admission, which
-// lands next; until then only the tests call them.
-#![allow(dead_code)]
-
 use serde_json::{Map, Value, json};
 use std::io::Read;
 use std::path::Path;
