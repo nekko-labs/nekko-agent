@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nekko Agent walkthrough · Nekko Agent docs</title>
+    <meta name="description" content="A picture-by-picture tour of the app." />
+    <link rel="canonical" href="https://nekkoagent.com/docs/walkthrough" />
+    <link rel="alternate" type="text/markdown" href="/docs/walkthrough.md" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="theme-color" content="#101714" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/docs/walkthrough" />
+    <meta property="og:title" content="Nekko Agent walkthrough · Nekko Agent docs" />
+    <meta property="og:description" content="A picture-by-picture tour of the app." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/docs.css?v=docs-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Nekko Agent walkthrough","description":"A picture-by-picture tour of the app.","url":"https://nekkoagent.com/docs/walkthrough","inLanguage":"en","isPartOf":{"@id":"https://nekkoagent.com/#website"},"publisher":{"@id":"https://nekkolabs.com/#organization"},"about":{"@id":"https://nekkoagent.com/#app"}}</script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="docs-home" href="/docs">Docs</a>
+      <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Site">
+        <a href="https://github.com/nekko-labs/nekko-agent" rel="noopener">GitHub</a>
+        <a class="download" href="/#download">Download</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough" aria-current="page">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <main id="content">
+        <article class="prose" id="top">
+          <p class="kicker">Introduction</p>
+          <h1>Nekko Agent walkthrough</h1>
+          <p class="page-tools">
+            <a href="/docs/walkthrough.md">View as Markdown</a>
+            <a href="/llms.txt">llms.txt</a>
+          </p>
+<p>A guided tour of Nekko Agent, from install to your first agentic edit. Screenshots
+are from the running app.</p>
+<ul>
+<li><a href="#1-install">1. Install</a></li>
+<li><a href="#2-connect-a-model">2. Connect a model</a></li>
+<li><a href="#3-the-unified-chat">3. The unified chat</a></li>
+<li><a href="#4-the-context-inspector">4. The Context Inspector</a></li>
+<li><a href="#5-guardrails--sandbox">5. Guardrails &amp; sandbox</a></li>
+<li><a href="#6-projects--the-codebase-index">6. Projects &amp; the codebase index</a></li>
+<li><a href="#7-memory">7. Memory</a></li>
+<li><a href="#8-connectors">8. Connectors</a></li>
+<li><a href="#9-the-mascot">9. The mascot</a></li>
+</ul>
+<hr>
+<h2 id="1-install"><a class="anchor" href="#1-install" aria-hidden="true" tabindex="-1">#</a>1. Install</h2>
+<p><strong>Download a build</strong> for your platform from the
+<a href="https://github.com/nekko-labs/nekko-agent/releases/latest" rel="noopener">Releases page</a>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Artifact</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Windows</td>
+<td><code>NekkoAgent-&lt;version&gt;-x64.exe</code> (NSIS installer)</td>
+</tr>
+<tr>
+<td>macOS</td>
+<td><code>NekkoAgent-&lt;version&gt;-arm64.dmg</code> (Apple Silicon)</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td><code>.AppImage</code> or <code>.deb</code></td>
+</tr>
+</tbody></table></div>
+<p><strong>Or run from source:</strong></p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">git clone https://github.com/nekko-labs/nekko-agent
+cd nekko-agent
+npm install
+npm run dev          # launches the desktop app</code></pre></div>
+<p>Nekko Agent stores everything locally (under your OS app-data dir): settings,
+sessions, memory, and a usage log. No account, no telemetry.</p>
+<hr>
+<h2 id="2-connect-a-model"><a class="anchor" href="#2-connect-a-model" aria-hidden="true" tabindex="-1">#</a>2. Connect a model</h2>
+<p>Open the <strong>Models</strong> tab. This is where Nekko Agent differs from most tools, local
+model servers are first-class, not an afterthought.</p>
+<p><img src="/docs/media/models.png" alt="Models tab" loading="lazy" /></p>
+<ul>
+<li><strong>Auto-discover local</strong> probes <code>localhost:11434</code> (Ollama), <code>:1234</code> (LM Studio),
+and <code>:8000</code> (vLLM). Anything running is added with one click.</li>
+<li><strong>Add provider</strong> lets you configure a server manually, or add a cloud provider -
+Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint (just paste the
+base URL + key).</li>
+<li>For <strong>Ollama</strong>, you can <strong>pull</strong> new models and <strong>load / unload</strong> them into memory
+right from the card.</li>
+<li>The <strong>Token usage</strong> panel charts input/output tokens over time and breaks them
+down per model and per provider.</li>
+</ul>
+<blockquote>
+<p>Tip: set a default provider + model in Settings so new chats start ready to go.</p>
+</blockquote>
+<h3 id="example-connect-an-lm-studio-server"><a class="anchor" href="#example-connect-an-lm-studio-server" aria-hidden="true" tabindex="-1">#</a>Example: connect an LM Studio server</h3>
+<ol>
+<li>In LM Studio, load a model and start its server (Developer → Start Server).</li>
+<li>In Nekko Agent: <strong>Add provider → LM Studio</strong>, set the <strong>Base URL</strong> to your server,
+e.g. <code>http://10.5.0.2:1338</code> (you can paste just <code>host:port</code>, Nekko Agent appends
+<code>/v1</code> automatically). No API key needed.</li>
+<li><strong>Test connection</strong> → the model dropdown fills with whatever LM Studio is serving.</li>
+<li>Pick the model in the chat header and go.</li>
+</ol>
+<p><strong>Reasoning models</strong> (Gemma, DeepSeek-R1, Qwen-thinking, etc.) are first-class:
+their chain-of-thought streams into a collapsible <strong>Thinking</strong> block above the
+answer, so you see progress during long reasoning and the answer stays clean.</p>
+<hr>
+<h2 id="3-the-unified-chat"><a class="anchor" href="#3-the-unified-chat" aria-hidden="true" tabindex="-1">#</a>3. The unified chat</h2>
+<p>The <strong>Chat</strong> tab is the heart of the app. There are no separate &quot;chat&quot;, &quot;cowork&quot;,
+and &quot;code&quot; modes, it&#39;s one thread. Ask a question, or hand off a task and let
+Nekko Agent act on your machine through tools (read / write / edit files, glob, grep,
+list dirs, run shell commands).</p>
+<p><img src="/docs/media/chat.png" alt="Unified chat" loading="lazy" /></p>
+<ul>
+<li>Pick the <strong>provider and model</strong> from the header dropdowns at any time.</li>
+<li>Assistant messages render <strong>markdown and code</strong>; every <strong>tool call</strong> the model
+makes shows up as a card so you can see exactly what it did.</li>
+<li>Streaming is live; hit <strong>Stop</strong> to abort a turn.</li>
+</ul>
+<p><strong>Keyboard shortcuts</strong>: Nekko Agent has a command palette (think Cmd-K everywhere):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Shortcut</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Ctrl/Cmd + K</code></td>
+<td>Open the command palette</td>
+</tr>
+<tr>
+<td><code>Ctrl/Cmd + N</code></td>
+<td>New chat</td>
+</tr>
+<tr>
+<td><code>Ctrl/Cmd + \</code></td>
+<td>Toggle the context panel</td>
+</tr>
+</tbody></table></div>
+<p><img src="/docs/media/command-palette.png" alt="Command palette" loading="lazy" /></p>
+<hr>
+<h2 id="4-the-context-inspector"><a class="anchor" href="#4-the-context-inspector" aria-hidden="true" tabindex="-1">#</a>4. The Context Inspector</h2>
+<p>The right-hand panel (toggle it with the panel icon) is Nekko Agent&#39;s signature
+feature. It shows <strong>exactly what is entering the prompt this turn</strong>, grouped by
+where it came from:</p>
+<ul>
+<li><strong>Guidelines</strong>: <code>AGENTS.md</code> / <code>CLAUDE.md</code> / <code>.cursorrules</code> detected in your
+workspace folders</li>
+<li><strong>Files</strong>: anything you&#39;ve attached</li>
+<li><strong>Memory</strong>: relevant global / per-project notes</li>
+<li><strong>Connectors</strong>: issues, messages, or docs pulled in from Linear/Slack/etc.</li>
+</ul>
+<p>Each item shows a <strong>token estimate</strong>, can be <strong>toggled off</strong> to exclude it, or
+<strong>pinned</strong> to always include it. The bar at the top shows how much of the model&#39;s
+context window you&#39;re using. No more guessing what the model &quot;saw&quot;, you can see
+and shape it.</p>
+<hr>
+<h2 id="5-guardrails--sandbox"><a class="anchor" href="#5-guardrails--sandbox" aria-hidden="true" tabindex="-1">#</a>5. Guardrails &amp; sandbox</h2>
+<p>Open <strong>Settings</strong>. Two layers keep Nekko Agent from doing something you didn&#39;t intend.</p>
+<p><img src="/docs/media/guardrails.png" alt="Guardrails &amp; sandbox" loading="lazy" /></p>
+<p><strong>Sandbox mode</strong> controls how the agent may touch your machine:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Workspace jail <em>(default)</em></td>
+<td>File access confined to your added folders</td>
+</tr>
+<tr>
+<td>Ask everything</td>
+<td>Every write or command requires approval</td>
+</tr>
+<tr>
+<td>Docker</td>
+<td>Run shell commands inside a container if Docker is present</td>
+</tr>
+<tr>
+<td>Off</td>
+<td>No restrictions (power users)</td>
+</tr>
+</tbody></table></div>
+<p><strong>Guardrails</strong> classify risky shell commands and decide whether to <strong>allow</strong>, <strong>ask</strong>,
+or <strong>deny</strong>, per rule, each toggleable. Ships with sensible defaults: recursive
+force-delete, raw disk writes, <code>git push --force</code>, <code>curl | sh</code>, privilege
+escalation, secret/<code>.env</code> access, and more. When a command matches an &quot;ask&quot; rule,
+the chat shows an <strong>approval bar</strong> with the exact command and its severity before
+anything runs.</p>
+<hr>
+<h2 id="6-projects--the-codebase-index"><a class="anchor" href="#6-projects--the-codebase-index" aria-hidden="true" tabindex="-1">#</a>6. Projects &amp; the codebase index</h2>
+<p>The <strong>Projects</strong> tab manages your workspace folders, and yes, <strong>multiple roots</strong>
+are supported. Each folder is indexed for files and code symbols (functions,
+classes, interfaces, types) so the agent and search have a fast map of your code.</p>
+<p><img src="/docs/media/projects.png" alt="Projects &amp; index" loading="lazy" /></p>
+<ul>
+<li><strong>Add</strong> a folder and it indexes in the background.</li>
+<li>See <strong>file + symbol counts</strong> and index status per project.</li>
+<li><strong>Search</strong> across the indexed files instantly, or browse the file list with
+per-file symbol counts.</li>
+</ul>
+<hr>
+<h2 id="7-memory"><a class="anchor" href="#7-memory" aria-hidden="true" tabindex="-1">#</a>7. Memory</h2>
+<p>The <strong>Memory</strong> tab is a simple, durable knowledge base stored as plain markdown.
+Keep <strong>global</strong> memories (preferences, conventions) and <strong>per-project</strong> memories.
+Relevant entries are surfaced in the Context Inspector and injected automatically,
+so Nekko Agent remembers how you like to work across sessions.</p>
+<hr>
+<h2 id="8-connectors"><a class="anchor" href="#8-connectors" aria-hidden="true" tabindex="-1">#</a>8. Connectors</h2>
+<p>The <strong>Connectors</strong> tab links external sources so their content can be pulled into
+context: <strong>Linear</strong>, <strong>Slack</strong>, <strong>Discord</strong> (token-based), and <strong>Gmail</strong> /
+<strong>Google Drive</strong> (OAuth). Tokens are stored locally. Connect one, fetch a sample
+to confirm it works, and the results become available to the assistant.</p>
+<hr>
+<h2 id="9-the-mascot"><a class="anchor" href="#9-the-mascot" aria-hidden="true" tabindex="-1">#</a>9. The mascot</h2>
+<p><strong>Nekko Agent</strong> is the 8-bit cat that lives at the edge of the window. It waves to say
+hello, peeks in from the side, and <strong>&quot;makes cat biscuits&quot;</strong> (kneads its paws) while
+the model is thinking. Don&#39;t want it? Toggle it off in Settings → Appearance.</p>
+<hr>
+<p>Questions or ideas? Open an issue on
+<a href="https://github.com/nekko-labs/nekko-agent/issues" rel="noopener">GitHub</a>.</p>
+
+          <footer class="page-foot">
+            <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/docs/WALKTHROUGH.md" rel="noopener">Edit this page on GitHub</a>
+            <div class="pager"><a class="prev" href="/docs"><span>Previous</span>Getting started</a><a class="next" href="/docs/local-models"><span>Next</span>Running models locally</a></div>
+          </footer>
+        </article>
+      </main>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Nekko Agent walkthrough</a></li><li class="d2"><a href="#1-install">1. Install</a></li><li class="d2"><a href="#2-connect-a-model">2. Connect a model</a></li><li class="d3"><a href="#example-connect-an-lm-studio-server">Example: connect an LM Studio server</a></li><li class="d2"><a href="#3-the-unified-chat">3. The unified chat</a></li><li class="d2"><a href="#4-the-context-inspector">4. The Context Inspector</a></li><li class="d2"><a href="#5-guardrails--sandbox">5. Guardrails &amp; sandbox</a></li><li class="d2"><a href="#6-projects--the-codebase-index">6. Projects &amp; the codebase index</a></li><li class="d2"><a href="#7-memory">7. Memory</a></li><li class="d2"><a href="#8-connectors">8. Connectors</a></li><li class="d2"><a href="#9-the-mascot">9. The mascot</a></li></ul></nav></aside>
+    </div>
+    <dialog class="search-dialog" aria-label="Search the docs">
+      <form method="dialog" class="search-box">
+        <input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="esc" aria-label="Close search">Esc</button>
+      </form>
+      <ul class="results" role="listbox" aria-label="Results"></ul>
+    </dialog>
+    <script src="/docs.js?v=docs-1" defer></script>
+  </body>
+</html>
