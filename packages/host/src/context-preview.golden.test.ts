@@ -37,8 +37,13 @@ function normalize(v: unknown, root: string): unknown {
 describe('context preview golden set', () => {
   it('matches what previewContext returns for every case', async () => {
     const fx = JSON.parse(readFileSync(join(golden, 'fixtures.json'), 'utf8')) as Fixtures;
-    const root = mkdtempSync(join(tmpdir(), 'nekko-ctx-preview-'));
-    roots.push(root);
+    const outer = mkdtempSync(join(tmpdir(), 'nekko-ctx-preview-'));
+    roots.push(outer);
+    // The prompt counts absolute folder paths. Keep their UTF-16 length fixed
+    // across platforms so a temp-directory spelling cannot change the golden.
+    const root = join(outer, 'x'.repeat(127 - outer.length));
+    mkdirSync(root);
+    expect(root.length).toBe(128);
     const fill = (v: unknown): unknown => JSON.parse(JSON.stringify(v).split('<root>').join(root.replace(/\\/g, '\\\\')));
     for (const [rel, text] of Object.entries(fx.files)) {
       const p = join(root, rel);
