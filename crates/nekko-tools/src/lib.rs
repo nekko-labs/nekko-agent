@@ -42,5 +42,7 @@ pub use exec::execute;
 pub use guardrails::{
     Action, GuardrailDecision, GuardrailMatch, GuardrailRule, Severity, classify_command, default_guardrails,
 };
+pub use nodefs::code_name as node_error_code;
 pub use process::{Processes, describe_process};
+pub use sandbox::{assert_in_jail, resolve_path};
 pub use spec::{NOT_PORTED, PORTED_TOOLS, ToolSpec, builtin_tools, is_ported};
