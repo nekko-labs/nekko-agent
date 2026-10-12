@@ -8,6 +8,7 @@ mod accounts;
 mod backend;
 mod config;
 mod decide;
+mod decisions;
 mod engine;
 mod hub;
 mod hypergate;
