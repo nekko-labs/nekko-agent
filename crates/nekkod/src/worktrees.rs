@@ -301,6 +301,16 @@ fn s<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(Value::as_str).unwrap_or_default()
 }
 
+fn stack_notice(parent: &Value) -> String {
+    format!(
+        "This chat builds on {}, branch {}, committed snapshot {}. Create the dependent PR against {}; gh pr create uses this configured base. After publishing, use Link stack in the PR panel to register it with GitHub. Recheck the parent before publishing; if it changes or merges, explicitly rebase this branch when safe. Never automatically reset other worktrees or force push.",
+        s(parent, "url"),
+        s(parent, "branch"),
+        s(parent, "sha"),
+        s(parent, "branch")
+    )
+}
+
 /// `chatWorkspaces`: a chat's folders, each Git project pointed at its own checkout.
 pub fn chat_workspaces(session: Option<&Value>, settings: &Value) -> Vec<Value> {
     let workspaces = workspaces_of(settings);
@@ -429,8 +439,8 @@ fn make_checkout(
         // Untracked files are not copied: they may include secrets or large build artifacts.
     }
     let copied = copy_worktree_includes(root, &target).map_err(|e| e.to_string())?;
-    let stack_notice = parent.map(|p| format!("This chat builds on {}, branch {}, committed snapshot {}. Create the dependent PR against {}; gh pr create uses this configured base. After publishing, use Link stack in the PR panel to register it with GitHub. Recheck the parent before publishing; if it changes or merges, explicitly rebase this branch when safe. Never automatically reset other worktrees or force push.", s(p, "url"), s(p, "branch"), s(p, "sha"), s(p, "branch")));
-    let base = if let Some(notice) = &stack_notice {
+    let parent_notice = parent.map(stack_notice);
+    let base = if let Some(notice) = &parent_notice {
         notice.as_str()
     } else if dirty {
         if local_changes {
@@ -477,6 +487,17 @@ fn restore_removed(session: &mut Value) -> Result<Vec<(String, Value)>, String> 
         }
         let Some((first_id, first)) = entries.iter().find(|(_, w)| s(w, "root") == root).cloned() else { continue };
         let (source, branch) = (s(&first, "sourceRoot").to_string(), s(&first, "branch").to_string());
+        let parent = session
+            .get("gitStackParent")
+            .filter(|p| session["gitWorktrees"].get(s(p, "workspaceId")).is_some_and(|w| s(w, "root") == root))
+            .cloned();
+        if parent.is_some() && !git_ok(&source, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")])
+        {
+            return Err(
+                "This stacked chat's branch was deleted. Start a new stacked chat; it cannot safely resume from HEAD."
+                    .into(),
+            );
+        }
         let attempt = (|| -> Result<String, GitError> {
             git_ok(&source, &["worktree", "prune"]);
             if git_ok(&source, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")]) {
@@ -495,6 +516,9 @@ fn restore_removed(session: &mut Value) -> Result<Vec<(String, Value)>, String> 
                 e.message
             )
         })?;
+        if let Some(parent) = parent {
+            notice = format!("{} {notice}", stack_notice(&parent));
+        }
         let copied = copy_worktree_includes(&source, &root).map_err(|e| e.to_string())?;
         if !copied.is_empty() {
             notice.push_str(&format!(" Copied from .worktreeinclude: {}.", copied.join(", ")));
@@ -926,7 +950,20 @@ mod tests {
             "parent-feature"
         );
         assert!(s(wt, "notice").contains("Link stack"));
+        let checkout_root = s(wt, "root").to_string();
+        let branch = s(wt, "branch").to_string();
         assert!(prepare(&mut chat, &settings).unwrap().is_empty());
+        r.git(&["worktree", "remove", "--force", &checkout_root]);
+        assert_eq!(prepare(&mut chat, &settings).unwrap().len(), 1);
+        let restored = &chat["gitWorktrees"]["repo"];
+        assert_eq!(read(s(restored, "path"), "file.txt"), "parent PR code\n");
+        assert!(s(restored, "notice").contains("https://github.com/owner/repo/pull/12"));
+        assert!(s(restored, "notice").contains("Link stack"));
+        r.git(&["worktree", "remove", "--force", &checkout_root]);
+        r.git(&["branch", "-D", &branch]);
+        assert!(prepare(&mut chat, &settings).unwrap_err().contains("branch was deleted"));
+        assert!(!exists(&checkout_root));
+        assert_eq!(read(&r.root, "file.txt"), "user edits\n");
     }
 
     #[test]
