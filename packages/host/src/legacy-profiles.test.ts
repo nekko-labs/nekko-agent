@@ -197,6 +197,32 @@ describe('cleanup', () => {
     expect(report.removed).toContain(join(env.appData, '@kotrain'));
   });
 
+  it('treats an old engine build as superseded when the target has its own, and never mixes the two', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.appdata, 'engine', 'engine.json'), { buildId: 'win-x64-cuda', version: 'b11003' });
+    put(join(s.appdata, 'engine', 'win-x64-cuda', 'ggml-base.dll'), 'old build');
+    put(join(s.appdata, 'engine', 'win-x64-cuda', 'llama-old-only.dll'), 'old build');
+    put(join(env.target, 'engine', 'engine.json'), { buildId: 'win-x64-cuda', version: 'b11149' });
+    put(join(env.target, 'engine', 'win-x64-cuda', 'ggml-base.dll'), 'the newer, larger build');
+    const items = detectLegacy(env);
+    consolidate(items, env);
+    expect(json(join(env.target, 'engine', 'engine.json')).version).toBe('b11149');
+    expect(existsSync(join(env.target, 'engine', 'win-x64-cuda', 'llama-old-only.dll'))).toBe(false);
+    expect(unmerged(s.appdata, env.target).filter((f) => f.startsWith('engine'))).toEqual([]);
+    const report = cleanup(items, env, { uninstall: () => {} });
+    expect(report.kept).toEqual([]);
+    expect(report.removed).toContain(join(env.appData, '@agent-nekko'));
+  });
+
+  it('still moves an old engine into a target that has none', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.appdata, 'engine', 'engine.json'), { binPath: join(s.appdata, 'engine', 'win-x64-cuda', 'llama-server.exe') });
+    put(join(s.appdata, 'engine', 'win-x64-cuda', 'llama-server.exe'), 'exe');
+    consolidate(detectLegacy(env), env);
+    expect(json(join(env.target, 'engine', 'engine.json')).binPath).toBe(join(env.target, 'engine', 'win-x64-cuda', 'llama-server.exe'));
+    expect(unmerged(s.appdata, env.target).filter((f) => f.startsWith('engine'))).toEqual([]);
+  });
+
   it('never deletes anything before it has been merged', () => {
     const { env } = world(); seed(env);
     const report = cleanup(detectLegacy(env), env, { uninstall: () => {} });

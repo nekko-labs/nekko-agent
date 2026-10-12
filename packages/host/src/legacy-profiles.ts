@@ -83,6 +83,9 @@ function hasAnyFile(dir: string, budget = { n: 5000 }): boolean {
   return false;
 }
 
+/** The data root has an installed engine build of its own. */
+const hasEngine = (root: string): boolean => isFile(join(root, 'engine', 'engine.json'));
+
 function isDataRoot(dir: string): boolean {
   return isFile(join(dir, 'settings.json')) || isDir(join(dir, 'sessions')) || isFile(join(dir, 'usage.jsonl'));
 }
@@ -476,6 +479,9 @@ function mergeRoot(src: string, target: string, ci: boolean): RootReport {
   for (const dir of ['memory', 'engine']) {
     const from = join(src, dir);
     if (!isDir(from)) continue;
+    // An engine is one downloaded build, not data. Filling the target's build
+    // with an older one's missing files would mix two llama.cpp versions.
+    if (dir === 'engine' && hasEngine(target)) continue;
     const moved: string[] = [];
     moveMissing(from, join(target, dir), moved, report.conflicts);
     for (const path of moved.flatMap(jsonFilesUnder)) copyJson(path, path, allPairs, ci);
@@ -502,6 +508,8 @@ export function unmerged(root: string, target: string): string[] {
       } else if (e.name.endsWith('.json') && !SKIP_JSON.has(e.name) && !existsSync(to)) missing.push(e.name);
     } else if (e.isDirectory() && e.name === 'sessions') {
       for (const f of dirEntries(from)) if (f.isFile() && !existsSync(join(to, f.name))) missing.push(`sessions/${f.name}`);
+    } else if (e.isDirectory() && e.name === 'engine' && hasEngine(target)) {
+      // A superseded engine build: the target downloaded its own, so nothing here is lost.
     } else if (e.isDirectory() && (e.name === 'models' || e.name === 'engine' || e.name === 'memory')) {
       const leftover = (dir: string, rel: string): string[] => dirEntries(dir).flatMap((f) => {
         const p = join(dir, f.name);
