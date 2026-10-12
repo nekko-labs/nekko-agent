@@ -5,6 +5,7 @@
 //! is listening; everything else goes to stderr. Exits when its stdin closes.
 
 mod accounts;
+mod automation;
 mod backend;
 mod catalog;
 mod config;
@@ -72,7 +73,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS].join(","));
+                cmd.env.insert("NEKKOD_OWNS".into(), [settings::OWNS, voice::OWNS, automation::OWNS].join(","));
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -105,6 +106,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
     });
     let catalog = settings.as_deref().map(catalog::new);
+    let automation =
+        Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), backend.clone(), hub.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -128,8 +131,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         settings,
         voice: voice.clone(),
         catalog,
+        automation: automation.clone(),
     };
     routes::forward_terminal_events(&ctx);
+    automation.start();
     let processes = ctx.turns.processes.clone();
 
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };

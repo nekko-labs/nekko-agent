@@ -1,0 +1,15 @@
+[package]
+name = "nekko-automation"
+description = "Automation for the Nekko Agent engine daemon: scheduled, recurring and background tasks, as the TS host ran them, with the same tasks.json."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+getrandom.workspace = true
+nekko-js = { path = "../nekko-js" }
+# Numbers must parse to the exact double JavaScript has, or a rewritten file differs.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+tokio.workspace = true

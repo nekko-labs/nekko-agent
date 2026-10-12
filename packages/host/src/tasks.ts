@@ -125,6 +125,53 @@ export function runTaskNow(id: string): void {
   if (t) void fireTask(t.id);
 }
 
+/**
+ * The prompt a firing task sends: its own, plus the stop instruction for a
+ * background task that runs until a condition holds.
+ */
+export function taskPrompt(task: AutomationTask): string {
+  let prompt = task.prompt;
+  if (task.kind === 'background' && task.keepAlive === 'until' && task.condition) {
+    prompt += `\n\n(This is a background task. Keep working until: ${task.condition}. When that condition is fully satisfied, end your reply with the token ${TASK_DONE_TOKEN}.)`;
+  }
+  return prompt;
+}
+
+/** What a finished fire writes back: the answer's start, and done or the next run. */
+export function taskRunPatch(task: AutomationTask, result: string, now: number): Partial<AutomationTask> {
+  const patch: Partial<AutomationTask> = { lastResult: result.slice(0, 400) };
+  if (task.kind === 'scheduled') {
+    patch.status = 'done';
+  } else if (task.kind === 'recurring') {
+    patch.nextRunAt = now + Math.max(60_000, task.intervalMs ?? DEFAULT_BG_INTERVAL);
+  } else {
+    // background
+    if (task.keepAlive === 'until' && (result.includes(TASK_DONE_TOKEN) || /\bcondition met\b/i.test(result))) {
+      patch.status = 'done';
+    } else {
+      patch.nextRunAt = now + Math.max(60_000, task.intervalMs ?? DEFAULT_BG_INTERVAL);
+    }
+  }
+  return patch;
+}
+
+/**
+ * A task that was firing when the process stopped had its next run cleared at
+ * the start of the fire and never got one back, so it would never fire again.
+ * At startup every active task without a next run is due now.
+ */
+export function reconcileTasks(now = Date.now()): void {
+  const tasks = load();
+  let changed = false;
+  for (const t of tasks) {
+    if (t.status === 'active' && t.nextRunAt == null) {
+      t.nextRunAt = now;
+      changed = true;
+    }
+  }
+  if (changed) save(tasks);
+}
+
 /** Drive one task through a chat turn, then re-arm (or finish) it. */
 async function fireTask(id: string): Promise<void> {
   if (inFlight.has(id)) return;
@@ -153,10 +200,7 @@ async function fireTask(id: string): Promise<void> {
     sid = s.id;
   }
 
-  let prompt = task.prompt;
-  if (task.kind === 'background' && task.keepAlive === 'until' && task.condition) {
-    prompt += `\n\n(This is a background task. Keep working until: ${task.condition}. When that condition is fully satisfied, end your reply with the token ${TASK_DONE_TOKEN}.)`;
-  }
+  const prompt = taskPrompt(task);
 
   persistTask(id, { status: 'active', lastRunAt: Date.now(), runCount: task.runCount + 1, lastSessionId: sid, nextRunAt: undefined });
 
@@ -164,21 +208,7 @@ async function fireTask(id: string): Promise<void> {
     await sendChat({ sessionId: sid, providerId, modelId, text: prompt }, (e) => taskSender?.(e));
     const done = getSession(sid);
     const last = [...(done?.messages ?? [])].reverse().find((m) => m.role === 'assistant' && m.content.trim());
-    const result = last?.content ?? '';
-    const patch: Partial<AutomationTask> = { lastResult: result.slice(0, 400) };
-    if (task.kind === 'scheduled') {
-      patch.status = 'done';
-    } else if (task.kind === 'recurring') {
-      patch.nextRunAt = Date.now() + Math.max(60_000, task.intervalMs ?? DEFAULT_BG_INTERVAL);
-    } else {
-      // background
-      if (task.keepAlive === 'until' && (result.includes(TASK_DONE_TOKEN) || /\bcondition met\b/i.test(result))) {
-        patch.status = 'done';
-      } else {
-        patch.nextRunAt = Date.now() + Math.max(60_000, task.intervalMs ?? DEFAULT_BG_INTERVAL);
-      }
-    }
-    persistTask(id, patch);
+    persistTask(id, taskRunPatch(task, last?.content ?? '', Date.now()));
   } catch (e) {
     persistTask(id, { status: 'error', lastResult: `Run failed: ${(e as Error).message}` });
   } finally {
@@ -198,6 +228,7 @@ function persistTask(id: string, patch: Partial<AutomationTask>): void {
 /** Start the periodic scheduler (idempotent). */
 export function startTaskScheduler(): void {
   if (timer) return;
+  reconcileTasks();
   timer = setInterval(() => {
     const now = Date.now();
     for (const t of load()) {

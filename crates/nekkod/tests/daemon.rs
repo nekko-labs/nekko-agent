@@ -105,7 +105,7 @@ fn fake_backend() {
                                 (axum::http::StatusCode::OK, axum::Json(json!({ "spec": spec })))
                             }
                             "turn:event" | "turn:end" | "turn:approved" | "turn:usage" | "turn:notify" | "loop:log" | "limits:notify"
-                            | "settings:changed" => {
+                            | "settings:changed" | "chat:send" => {
                                 recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
                             }
@@ -1575,6 +1575,111 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     let names: Vec<&str> = tools.as_array().unwrap().iter().filter_map(|t| t["name"].as_str()).collect();
     assert!(names.contains(&"read_file") && names.contains(&"bash"), "{names:?}");
     assert!(tools[0]["description"].as_str().is_some_and(|d| !d.is_empty()));
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// The task list as the daemon wrote it.
+fn read_tasks(data: &std::path::Path) -> Value {
+    std::fs::read_to_string(data.join("tasks.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or(json!([]))
+}
+
+async fn wait_for<F: Fn() -> bool>(what: &str, f: F) {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while !f() {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("timed out waiting for {what}"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_runs_tasks_and_fires_them_on_time() {
+    let data = std::env::temp_dir().join(format!("nekkod-tasks-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let d = start_with(true, Some(&data));
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("tasks:list")), "{info}");
+
+    let input = json!({ "title": " Nightly ", "kind": "recurring", "prompt": "Summarize", "intervalMs": 3_600_000, "providerId": "p1", "modelId": "m1" });
+    let (status, list) = post(d.port, "task:create", json!([input]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{list}");
+    assert_eq!(list[0]["title"], "Nightly");
+    assert_eq!(list[0]["lastSessionId"], "s_created");
+    // The host made the chat; the daemon named it after the task.
+    let chat: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_created.json")).unwrap()).unwrap();
+    assert_eq!(chat["title"], "Nightly");
+    assert_eq!(chat["taskId"], list[0]["id"]);
+    // Due at once: fired without waiting for a tick, through the host's chat:send.
+    wait_for("the fire", || {
+        read_tasks(&data)[0]["runCount"] == json!(1) && read_tasks(&data)[0]["nextRunAt"].is_number()
+    })
+    .await;
+    let task = read_tasks(&data)[0].clone();
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let sent: Vec<&Value> = calls.as_array().unwrap().iter().filter(|c| c[0] == "chat:send").collect();
+    assert_eq!(sent.len(), 1, "{calls}");
+    assert_eq!(
+        sent[0][1][0],
+        json!({ "sessionId": "s_created", "providerId": "p1", "modelId": "m1", "text": "Summarize" })
+    );
+    let next = task["nextRunAt"].as_f64().unwrap() - task["lastRunAt"].as_f64().unwrap();
+    assert!((3_600_000.0..3_601_000.0).contains(&next), "{task}");
+
+    // Paused tasks never fire; deleting removes it.
+    let id = task["id"].as_str().unwrap().to_string();
+    let (_, list) = post(d.port, "task:update", json!([id, { "status": "paused" }]), Some(TOKEN)).await;
+    assert_eq!(list[0]["status"], "paused");
+    let (_, list) = post(d.port, "task:delete", json!([id]), Some(TOKEN)).await;
+    assert_eq!(list, json!([]));
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_task_cut_short_by_a_restart_fires_again() {
+    let data = std::env::temp_dir().join(format!("nekkod-tasks-restart-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::write(data.join("sessions/s_old.json"), r#"{"id":"s_old","title":"Old","messages":[]}"#).unwrap();
+    // Mid-fire when the last process stopped: active, no next run.
+    std::fs::write(
+        data.join("tasks.json"),
+        r#"[{"id":"t1","title":"Cut short","kind":"recurring","prompt":"Again","providerId":"p1","modelId":"m1","status":"active","createdAt":5,"runCount":2,"lastRunAt":9,"lastSessionId":"s_old"}]"#,
+    )
+    .unwrap();
+    let d = start_with(true, Some(&data));
+    wait_for("the fire after restart", || read_tasks(&data)[0]["runCount"] == json!(3)).await;
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(
+        calls.as_array().unwrap().iter().any(|c| c[0] == "chat:send" && c[1][0]["sessionId"] == "s_old"),
+        "{calls}"
+    );
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_scheduled_task_fires_when_it_is_due_not_a_tick_later() {
+    let data = std::env::temp_dir().join(format!("nekkod-tasks-due-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let d = start_with(true, Some(&data));
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as f64;
+    let run_at = now + 2_000.0;
+    let input = json!({ "title": "Soon", "kind": "scheduled", "prompt": "p", "runAt": run_at, "providerId": "p1", "modelId": "m1" });
+    post(d.port, "task:create", json!([input]), Some(TOKEN)).await;
+    wait_for("the scheduled fire", || read_tasks(&data)[0]["status"] == json!("done")).await;
+    let late = read_tasks(&data)[0]["lastRunAt"].as_f64().unwrap() - run_at;
+    // The TS scheduler looked every 15 s, so a task fired up to 15 s late.
+    assert!((0.0..1_000.0).contains(&late), "fired {late} ms after it was due");
+    eprintln!("scheduled task fired {late} ms after its runAt");
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }

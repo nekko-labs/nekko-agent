@@ -1,0 +1,4297 @@
+{
+ "start": 1760000000000,
+ "ops": [
+  {
+   "op": "list",
+   "args": [],
+   "now": 1760000000000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [],
+   "file": null,
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "start",
+   "args": [],
+   "now": 1760000000000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": null,
+   "file": null,
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "create",
+   "args": [
+    {
+     "title": "  Nightly report  ",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000
+    }
+   ],
+   "now": 1760000000000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 0,
+     "lastSessionId": "s_1",
+     "nextRunAt": 1760000000000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_1\",\n    \"nextRunAt\": 1760000000000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 0,
+      "lastSessionId": "s_1",
+      "nextRunAt": 1760000000000
+     }
+    ]
+   ],
+   "sessions": [
+    {
+     "create": "w1",
+     "id": "s_1"
+    },
+    {
+     "save": "s_1",
+     "title": "Nightly report",
+     "fields": {
+      "taskId": "00000000-0000-4000-8000-000000000001",
+      "providerId": "p-default",
+      "modelId": "m-default"
+     }
+    }
+   ],
+   "turns": []
+  },
+  {
+   "op": "create",
+   "args": [
+    {
+     "title": "   ",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "runAt": 1760000120000,
+     "providerId": "p1",
+     "modelId": "m1"
+    }
+   ],
+   "now": 1760000001000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "active",
+     "createdAt": 1760000001000,
+     "runCount": 0,
+     "lastSessionId": "s_2",
+     "nextRunAt": 1760000120000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 0,
+     "lastSessionId": "s_1",
+     "nextRunAt": 1760000000000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_1\",\n    \"nextRunAt\": 1760000000000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 0,
+      "lastSessionId": "s_1",
+      "nextRunAt": 1760000000000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     }
+    ]
+   ],
+   "sessions": [
+    {
+     "create": null,
+     "id": "s_2"
+    },
+    {
+     "save": "s_2",
+     "title": "Untitled task",
+     "fields": {
+      "taskId": "00000000-0000-4000-8000-000000000002",
+      "providerId": "p1",
+      "modelId": "m1"
+     }
+    }
+   ],
+   "turns": []
+  },
+  {
+   "op": "create",
+   "args": [
+    {
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "keepAlive": "until",
+     "condition": "all green",
+     "intervalMs": 30000
+    }
+   ],
+   "now": 1760000002000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "active",
+     "createdAt": 1760000002000,
+     "runCount": 0,
+     "lastSessionId": "s_3",
+     "nextRunAt": 1760000002000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "active",
+     "createdAt": 1760000001000,
+     "runCount": 0,
+     "lastSessionId": "s_2",
+     "nextRunAt": 1760000120000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 0,
+     "lastSessionId": "s_1",
+     "nextRunAt": 1760000000000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_1\",\n    \"nextRunAt\": 1760000000000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_3\",\n    \"nextRunAt\": 1760000002000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 0,
+      "lastSessionId": "s_1",
+      "nextRunAt": 1760000000000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "active",
+      "createdAt": 1760000002000,
+      "runCount": 0,
+      "lastSessionId": "s_3",
+      "nextRunAt": 1760000002000
+     }
+    ]
+   ],
+   "sessions": [
+    {
+     "create": null,
+     "id": "s_3"
+    },
+    {
+     "save": "s_3",
+     "title": "Watch CI",
+     "fields": {
+      "taskId": "00000000-0000-4000-8000-000000000003",
+      "providerId": "p-default",
+      "modelId": "m-default"
+     }
+    }
+   ],
+   "turns": []
+  },
+  {
+   "op": "create",
+   "args": [
+    {
+     "title": "Forever",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever"
+    }
+   ],
+   "now": 1760000003000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Forever",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 0,
+     "lastSessionId": "s_4",
+     "nextRunAt": 1760000003000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "active",
+     "createdAt": 1760000002000,
+     "runCount": 0,
+     "lastSessionId": "s_3",
+     "nextRunAt": 1760000002000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "active",
+     "createdAt": 1760000001000,
+     "runCount": 0,
+     "lastSessionId": "s_2",
+     "nextRunAt": 1760000120000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 0,
+     "lastSessionId": "s_1",
+     "nextRunAt": 1760000000000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_1\",\n    \"nextRunAt\": 1760000000000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_3\",\n    \"nextRunAt\": 1760000002000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Forever\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_4\",\n    \"nextRunAt\": 1760000003000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 0,
+      "lastSessionId": "s_1",
+      "nextRunAt": 1760000000000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "active",
+      "createdAt": 1760000002000,
+      "runCount": 0,
+      "lastSessionId": "s_3",
+      "nextRunAt": 1760000002000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Forever",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 0,
+      "lastSessionId": "s_4",
+      "nextRunAt": 1760000003000
+     }
+    ]
+   ],
+   "sessions": [
+    {
+     "create": null,
+     "id": "s_4"
+    },
+    {
+     "save": "s_4",
+     "title": "Forever",
+     "fields": {
+      "taskId": "00000000-0000-4000-8000-000000000004",
+      "providerId": "p-default",
+      "modelId": "m-default"
+     }
+    }
+   ],
+   "turns": []
+  },
+  {
+   "op": "list",
+   "args": [],
+   "now": 1760000003000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Forever",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 0,
+     "lastSessionId": "s_4",
+     "nextRunAt": 1760000003000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "active",
+     "createdAt": 1760000002000,
+     "runCount": 0,
+     "lastSessionId": "s_3",
+     "nextRunAt": 1760000002000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "active",
+     "createdAt": 1760000001000,
+     "runCount": 0,
+     "lastSessionId": "s_2",
+     "nextRunAt": 1760000120000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 0,
+     "lastSessionId": "s_1",
+     "nextRunAt": 1760000000000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_1\",\n    \"nextRunAt\": 1760000000000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_3\",\n    \"nextRunAt\": 1760000002000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Forever\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_4\",\n    \"nextRunAt\": 1760000003000\n  }\n]",
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "run",
+   "args": [
+    "00000000-0000-4000-8000-000000000001"
+   ],
+   "now": 1760000010000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [
+    {
+     "reply": "Report: all fine 🐱"
+    }
+   ],
+   "deleteSession": null,
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_3\",\n    \"nextRunAt\": 1760000002000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Forever\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_4\",\n    \"nextRunAt\": 1760000003000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "active",
+      "createdAt": 1760000002000,
+      "runCount": 0,
+      "lastSessionId": "s_3",
+      "nextRunAt": 1760000002000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Forever",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 0,
+      "lastSessionId": "s_4",
+      "nextRunAt": 1760000003000
+     }
+    ],
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "active",
+      "createdAt": 1760000002000,
+      "runCount": 0,
+      "lastSessionId": "s_3",
+      "nextRunAt": 1760000002000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Forever",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 0,
+      "lastSessionId": "s_4",
+      "nextRunAt": 1760000003000
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": [
+    {
+     "sessionId": "s_1",
+     "providerId": "p-default",
+     "modelId": "m-default",
+     "text": "Summarize the day"
+    }
+   ]
+  },
+  {
+   "op": "run",
+   "args": [
+    "00000000-0000-4000-8000-000000000003"
+   ],
+   "now": 1760000020000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [
+    {
+     "reply": "Still red."
+    }
+   ],
+   "deleteSession": null,
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000020000,\n    \"lastResult\": \"Still red.\",\n    \"nextRunAt\": 1760000080000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Forever\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_4\",\n    \"nextRunAt\": 1760000003000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "active",
+      "createdAt": 1760000002000,
+      "runCount": 1,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000020000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Forever",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 0,
+      "lastSessionId": "s_4",
+      "nextRunAt": 1760000003000
+     }
+    ],
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "active",
+      "createdAt": 1760000002000,
+      "runCount": 1,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000020000,
+      "lastResult": "Still red.",
+      "nextRunAt": 1760000080000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Forever",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 0,
+      "lastSessionId": "s_4",
+      "nextRunAt": 1760000003000
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": [
+    {
+     "sessionId": "s_3",
+     "providerId": "p-default",
+     "modelId": "m-default",
+     "text": "Check CI\n\n(This is a background task. Keep working until: all green. When that condition is fully satisfied, end your reply with the token ⟦DONE⟧.)"
+    }
+   ]
+  },
+  {
+   "op": "run",
+   "args": [
+    "00000000-0000-4000-8000-000000000003"
+   ],
+   "now": 1760000030000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [
+    {
+     "reply": "Fixed it. ⟦DONE⟧"
+    }
+   ],
+   "deleteSession": null,
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Forever\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_4\",\n    \"nextRunAt\": 1760000003000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "active",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Still red."
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Forever",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 0,
+      "lastSessionId": "s_4",
+      "nextRunAt": 1760000003000
+     }
+    ],
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Forever",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 0,
+      "lastSessionId": "s_4",
+      "nextRunAt": 1760000003000
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": [
+    {
+     "sessionId": "s_3",
+     "providerId": "p-default",
+     "modelId": "m-default",
+     "text": "Check CI\n\n(This is a background task. Keep working until: all green. When that condition is fully satisfied, end your reply with the token ⟦DONE⟧.)"
+    }
+   ]
+  },
+  {
+   "op": "run",
+   "args": [
+    "00000000-0000-4000-8000-000000000003"
+   ],
+   "now": 1760000031000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [
+    {
+     "reply": "never sent"
+    }
+   ],
+   "deleteSession": null,
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Forever\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_4\",\n    \"nextRunAt\": 1760000003000\n  }\n]",
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "run",
+   "args": [
+    "00000000-0000-4000-8000-000000000004"
+   ],
+   "now": 1760000040000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [
+    {
+     "error": "provider offline"
+    }
+   ],
+   "deleteSession": null,
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Forever\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"error\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\"\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Forever",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000
+     }
+    ],
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Forever",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "error",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000,
+      "lastResult": "Run failed: provider offline"
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": [
+    {
+     "sessionId": "s_4",
+     "providerId": "p-default",
+     "modelId": "m-default",
+     "text": "Tend"
+    }
+   ]
+  },
+  {
+   "op": "update",
+   "args": [
+    "00000000-0000-4000-8000-000000000004",
+    {
+     "status": "active"
+    }
+   ],
+   "now": 1760000041000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Forever",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 1,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760000040000,
+     "lastResult": "Run failed: provider offline",
+     "nextRunAt": 1760000041000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "active",
+     "createdAt": 1760000001000,
+     "runCount": 0,
+     "lastSessionId": "s_2",
+     "nextRunAt": 1760000120000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 1,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760000010000,
+     "lastResult": "Report: all fine 🐱",
+     "nextRunAt": 1760003610000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Forever\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\",\n    \"nextRunAt\": 1760000041000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Forever",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000,
+      "lastResult": "Run failed: provider offline",
+      "nextRunAt": 1760000041000
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "update",
+   "args": [
+    "00000000-0000-4000-8000-000000000004",
+    {
+     "status": "paused",
+     "title": "Renamed",
+     "extra": {
+      "x": 1
+     }
+    }
+   ],
+   "now": 1760000042000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Renamed",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "paused",
+     "createdAt": 1760000003000,
+     "runCount": 1,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760000040000,
+     "lastResult": "Run failed: provider offline",
+     "nextRunAt": 1760000041000,
+     "extra": {
+      "x": 1
+     }
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "active",
+     "createdAt": 1760000001000,
+     "runCount": 0,
+     "lastSessionId": "s_2",
+     "nextRunAt": 1760000120000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 1,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760000010000,
+     "lastResult": "Report: all fine 🐱",
+     "nextRunAt": 1760003610000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"paused\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\",\n    \"nextRunAt\": 1760000041000,\n    \"extra\": {\n      \"x\": 1\n    }\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "paused",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000,
+      "lastResult": "Run failed: provider offline",
+      "nextRunAt": 1760000041000,
+      "extra": {
+       "x": 1
+      }
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "update",
+   "args": [
+    "00000000-0000-4000-8000-000000000004",
+    {
+     "status": "active"
+    }
+   ],
+   "now": 1760000043000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Renamed",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 1,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760000040000,
+     "lastResult": "Run failed: provider offline",
+     "nextRunAt": 1760000041000,
+     "extra": {
+      "x": 1
+     }
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "active",
+     "createdAt": 1760000001000,
+     "runCount": 0,
+     "lastSessionId": "s_2",
+     "nextRunAt": 1760000120000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 1,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760000010000,
+     "lastResult": "Report: all fine 🐱",
+     "nextRunAt": 1760003610000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\",\n    \"nextRunAt\": 1760000041000,\n    \"extra\": {\n      \"x\": 1\n    }\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 0,
+      "lastSessionId": "s_2",
+      "nextRunAt": 1760000120000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000,
+      "lastResult": "Run failed: provider offline",
+      "nextRunAt": 1760000041000,
+      "extra": {
+       "x": 1
+      }
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "update",
+   "args": [
+    "missing",
+    {
+     "status": "active"
+    }
+   ],
+   "now": 1760000043000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Renamed",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 1,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760000040000,
+     "lastResult": "Run failed: provider offline",
+     "nextRunAt": 1760000041000,
+     "extra": {
+      "x": 1
+     }
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "active",
+     "createdAt": 1760000001000,
+     "runCount": 0,
+     "lastSessionId": "s_2",
+     "nextRunAt": 1760000120000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 1,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760000010000,
+     "lastResult": "Report: all fine 🐱",
+     "nextRunAt": 1760003610000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_2\",\n    \"nextRunAt\": 1760000120000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\",\n    \"nextRunAt\": 1760000041000,\n    \"extra\": {\n      \"x\": 1\n    }\n  }\n]",
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "run",
+   "args": [
+    "00000000-0000-4000-8000-000000000002"
+   ],
+   "now": 1760000130000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [
+    {
+     "reply": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   ],
+   "deleteSession": "s_2",
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\",\n    \"nextRunAt\": 1760000041000,\n    \"extra\": {\n      \"x\": 1\n    }\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "active",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000,
+      "lastResult": "Run failed: provider offline",
+      "nextRunAt": 1760000041000,
+      "extra": {
+       "x": 1
+      }
+     }
+    ],
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000,
+      "lastResult": "Run failed: provider offline",
+      "nextRunAt": 1760000041000,
+      "extra": {
+       "x": 1
+      }
+     }
+    ]
+   ],
+   "sessions": [
+    {
+     "create": null,
+     "id": "s_5"
+    },
+    {
+     "save": "s_5",
+     "title": "Untitled task",
+     "fields": {
+      "taskId": "00000000-0000-4000-8000-000000000002",
+      "providerId": "p1",
+      "modelId": "m1"
+     }
+    }
+   ],
+   "turns": [
+    {
+     "sessionId": "s_5",
+     "providerId": "p1",
+     "modelId": "m1",
+     "text": "Ping"
+    }
+   ]
+  },
+  {
+   "op": "run",
+   "args": [
+    "00000000-0000-4000-8000-000000000002"
+   ],
+   "now": 1760000131000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [
+    {
+     "reply": "not again"
+    }
+   ],
+   "deleteSession": null,
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\",\n    \"nextRunAt\": 1760000041000,\n    \"extra\": {\n      \"x\": 1\n    }\n  }\n]",
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "create",
+   "args": [
+    {
+     "title": "No model",
+     "kind": "recurring",
+     "prompt": "p",
+     "intervalMs": 10
+    }
+   ],
+   "now": 1760000140000,
+   "settings": {},
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000005",
+     "title": "No model",
+     "kind": "recurring",
+     "prompt": "p",
+     "intervalMs": 10,
+     "status": "active",
+     "createdAt": 1760000140000,
+     "runCount": 0,
+     "lastSessionId": "s_6",
+     "nextRunAt": 1760000140000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Renamed",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 1,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760000040000,
+     "lastResult": "Run failed: provider offline",
+     "nextRunAt": 1760000041000,
+     "extra": {
+      "x": 1
+     }
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "done",
+     "createdAt": 1760000001000,
+     "runCount": 1,
+     "lastSessionId": "s_5",
+     "lastRunAt": 1760000130000,
+     "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 1,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760000010000,
+     "lastResult": "Report: all fine 🐱",
+     "nextRunAt": 1760003610000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\",\n    \"nextRunAt\": 1760000041000,\n    \"extra\": {\n      \"x\": 1\n    }\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000005\",\n    \"title\": \"No model\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"p\",\n    \"intervalMs\": 10,\n    \"status\": \"active\",\n    \"createdAt\": 1760000140000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_6\",\n    \"nextRunAt\": 1760000140000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000,
+      "lastResult": "Run failed: provider offline",
+      "nextRunAt": 1760000041000,
+      "extra": {
+       "x": 1
+      }
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "No model",
+      "kind": "recurring",
+      "prompt": "p",
+      "intervalMs": 10,
+      "status": "active",
+      "createdAt": 1760000140000,
+      "runCount": 0,
+      "lastSessionId": "s_6",
+      "nextRunAt": 1760000140000
+     }
+    ]
+   ],
+   "sessions": [
+    {
+     "create": null,
+     "id": "s_6"
+    },
+    {
+     "save": "s_6",
+     "title": "No model",
+     "fields": {
+      "taskId": "00000000-0000-4000-8000-000000000005"
+     }
+    }
+   ],
+   "turns": []
+  },
+  {
+   "op": "run",
+   "args": [
+    "00000000-0000-4000-8000-000000000005"
+   ],
+   "now": 1760000141000,
+   "settings": {},
+   "replies": [],
+   "deleteSession": null,
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\",\n    \"nextRunAt\": 1760000041000,\n    \"extra\": {\n      \"x\": 1\n    }\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000005\",\n    \"title\": \"No model\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"p\",\n    \"intervalMs\": 10,\n    \"status\": \"error\",\n    \"createdAt\": 1760000140000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_6\",\n    \"nextRunAt\": 1760000140000,\n    \"lastResult\": \"No model configured, set a default provider/model in Models.\"\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000,
+      "lastResult": "Run failed: provider offline",
+      "nextRunAt": 1760000041000,
+      "extra": {
+       "x": 1
+      }
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "No model",
+      "kind": "recurring",
+      "prompt": "p",
+      "intervalMs": 10,
+      "status": "error",
+      "createdAt": 1760000140000,
+      "runCount": 0,
+      "lastSessionId": "s_6",
+      "nextRunAt": 1760000140000,
+      "lastResult": "No model configured, set a default provider/model in Models."
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "update",
+   "args": [
+    "00000000-0000-4000-8000-000000000005",
+    {
+     "status": "active",
+     "nextRunAt": 1760000000001
+    }
+   ],
+   "now": 1760000142000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000005",
+     "title": "No model",
+     "kind": "recurring",
+     "prompt": "p",
+     "intervalMs": 10,
+     "status": "active",
+     "createdAt": 1760000140000,
+     "runCount": 0,
+     "lastSessionId": "s_6",
+     "nextRunAt": 1760000000001,
+     "lastResult": "No model configured, set a default provider/model in Models."
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Renamed",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 1,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760000040000,
+     "lastResult": "Run failed: provider offline",
+     "nextRunAt": 1760000041000,
+     "extra": {
+      "x": 1
+     }
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "done",
+     "createdAt": 1760000001000,
+     "runCount": 1,
+     "lastSessionId": "s_5",
+     "lastRunAt": 1760000130000,
+     "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 1,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760000010000,
+     "lastResult": "Report: all fine 🐱",
+     "nextRunAt": 1760003610000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\",\n    \"nextRunAt\": 1760000041000,\n    \"extra\": {\n      \"x\": 1\n    }\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000005\",\n    \"title\": \"No model\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"p\",\n    \"intervalMs\": 10,\n    \"status\": \"active\",\n    \"createdAt\": 1760000140000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_6\",\n    \"nextRunAt\": 1760000000001,\n    \"lastResult\": \"No model configured, set a default provider/model in Models.\"\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 1,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760000010000,
+      "lastResult": "Report: all fine 🐱",
+      "nextRunAt": 1760003610000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000,
+      "lastResult": "Run failed: provider offline",
+      "nextRunAt": 1760000041000,
+      "extra": {
+       "x": 1
+      }
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "No model",
+      "kind": "recurring",
+      "prompt": "p",
+      "intervalMs": 10,
+      "status": "active",
+      "createdAt": 1760000140000,
+      "runCount": 0,
+      "lastSessionId": "s_6",
+      "nextRunAt": 1760000000001,
+      "lastResult": "No model configured, set a default provider/model in Models."
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "tick",
+   "args": [],
+   "now": 1760003700000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [
+    {
+     "reply": "Condition met, stopping."
+    },
+    {
+     "reply": "ok"
+    }
+   ],
+   "deleteSession": null,
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"Condition met, stopping.\",\n    \"nextRunAt\": 1760007300000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"ok\",\n    \"extra\": {\n      \"x\": 1\n    },\n    \"nextRunAt\": 1760004000000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000005\",\n    \"title\": \"No model\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"p\",\n    \"intervalMs\": 10,\n    \"status\": \"active\",\n    \"createdAt\": 1760000140000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_6\",\n    \"lastResult\": \"\",\n    \"lastRunAt\": 1760003700000,\n    \"nextRunAt\": 1760003760000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 2,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Report: all fine 🐱"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 1,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760000040000,
+      "lastResult": "Run failed: provider offline",
+      "nextRunAt": 1760000041000,
+      "extra": {
+       "x": 1
+      }
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "No model",
+      "kind": "recurring",
+      "prompt": "p",
+      "intervalMs": 10,
+      "status": "active",
+      "createdAt": 1760000140000,
+      "runCount": 0,
+      "lastSessionId": "s_6",
+      "nextRunAt": 1760000000001,
+      "lastResult": "No model configured, set a default provider/model in Models."
+     }
+    ],
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 2,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Report: all fine 🐱"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 2,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Run failed: provider offline",
+      "extra": {
+       "x": 1
+      }
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "No model",
+      "kind": "recurring",
+      "prompt": "p",
+      "intervalMs": 10,
+      "status": "active",
+      "createdAt": 1760000140000,
+      "runCount": 0,
+      "lastSessionId": "s_6",
+      "nextRunAt": 1760000000001,
+      "lastResult": "No model configured, set a default provider/model in Models."
+     }
+    ],
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 2,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Report: all fine 🐱"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 2,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Run failed: provider offline",
+      "extra": {
+       "x": 1
+      }
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "No model",
+      "kind": "recurring",
+      "prompt": "p",
+      "intervalMs": 10,
+      "status": "active",
+      "createdAt": 1760000140000,
+      "runCount": 1,
+      "lastSessionId": "s_6",
+      "lastResult": "No model configured, set a default provider/model in Models.",
+      "lastRunAt": 1760003700000
+     }
+    ],
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 2,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Condition met, stopping.",
+      "nextRunAt": 1760007300000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 2,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Run failed: provider offline",
+      "extra": {
+       "x": 1
+      }
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "No model",
+      "kind": "recurring",
+      "prompt": "p",
+      "intervalMs": 10,
+      "status": "active",
+      "createdAt": 1760000140000,
+      "runCount": 1,
+      "lastSessionId": "s_6",
+      "lastResult": "No model configured, set a default provider/model in Models.",
+      "lastRunAt": 1760003700000
+     }
+    ],
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 2,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Condition met, stopping.",
+      "nextRunAt": 1760007300000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 2,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760003700000,
+      "lastResult": "ok",
+      "extra": {
+       "x": 1
+      },
+      "nextRunAt": 1760004000000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "No model",
+      "kind": "recurring",
+      "prompt": "p",
+      "intervalMs": 10,
+      "status": "active",
+      "createdAt": 1760000140000,
+      "runCount": 1,
+      "lastSessionId": "s_6",
+      "lastResult": "No model configured, set a default provider/model in Models.",
+      "lastRunAt": 1760003700000
+     }
+    ],
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 2,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Condition met, stopping.",
+      "nextRunAt": 1760007300000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 2,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760003700000,
+      "lastResult": "ok",
+      "extra": {
+       "x": 1
+      },
+      "nextRunAt": 1760004000000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "No model",
+      "kind": "recurring",
+      "prompt": "p",
+      "intervalMs": 10,
+      "status": "active",
+      "createdAt": 1760000140000,
+      "runCount": 1,
+      "lastSessionId": "s_6",
+      "lastResult": "",
+      "lastRunAt": 1760003700000,
+      "nextRunAt": 1760003760000
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": [
+    {
+     "sessionId": "s_1",
+     "providerId": "p-default",
+     "modelId": "m-default",
+     "text": "Summarize the day"
+    },
+    {
+     "sessionId": "s_4",
+     "providerId": "p-default",
+     "modelId": "m-default",
+     "text": "Tend"
+    },
+    {
+     "sessionId": "s_6",
+     "providerId": "p-default",
+     "modelId": "m-default",
+     "text": "p"
+    }
+   ]
+  },
+  {
+   "op": "delete",
+   "args": [
+    "00000000-0000-4000-8000-000000000005"
+   ],
+   "now": 1760003700000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Renamed",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 2,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760003700000,
+     "lastResult": "ok",
+     "extra": {
+      "x": 1
+     },
+     "nextRunAt": 1760004000000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "done",
+     "createdAt": 1760000001000,
+     "runCount": 1,
+     "lastSessionId": "s_5",
+     "lastRunAt": 1760000130000,
+     "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 2,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760003700000,
+     "lastResult": "Condition met, stopping.",
+     "nextRunAt": 1760007300000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"Condition met, stopping.\",\n    \"nextRunAt\": 1760007300000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"ok\",\n    \"extra\": {\n      \"x\": 1\n    },\n    \"nextRunAt\": 1760004000000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 2,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Condition met, stopping.",
+      "nextRunAt": 1760007300000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 2,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760003700000,
+      "lastResult": "ok",
+      "extra": {
+       "x": 1
+      },
+      "nextRunAt": 1760004000000
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "create",
+   "args": [
+    {
+     "title": "Orphan",
+     "kind": "scheduled",
+     "prompt": "p",
+     "runAt": 1760000000000
+    }
+   ],
+   "now": 1760003800000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000006",
+     "title": "Orphan",
+     "kind": "scheduled",
+     "prompt": "p",
+     "runAt": 1760000000000,
+     "status": "active",
+     "createdAt": 1760003800000,
+     "runCount": 0,
+     "lastSessionId": "s_7",
+     "nextRunAt": 1760000000000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Renamed",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 2,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760003700000,
+     "lastResult": "ok",
+     "extra": {
+      "x": 1
+     },
+     "nextRunAt": 1760004000000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "done",
+     "createdAt": 1760000001000,
+     "runCount": 1,
+     "lastSessionId": "s_5",
+     "lastRunAt": 1760000130000,
+     "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 2,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760003700000,
+     "lastResult": "Condition met, stopping.",
+     "nextRunAt": 1760007300000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"Condition met, stopping.\",\n    \"nextRunAt\": 1760007300000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"ok\",\n    \"extra\": {\n      \"x\": 1\n    },\n    \"nextRunAt\": 1760004000000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000006\",\n    \"title\": \"Orphan\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"p\",\n    \"runAt\": 1760000000000,\n    \"status\": \"active\",\n    \"createdAt\": 1760003800000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_7\",\n    \"nextRunAt\": 1760000000000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 2,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Condition met, stopping.",
+      "nextRunAt": 1760007300000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 2,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760003700000,
+      "lastResult": "ok",
+      "extra": {
+       "x": 1
+      },
+      "nextRunAt": 1760004000000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "title": "Orphan",
+      "kind": "scheduled",
+      "prompt": "p",
+      "runAt": 1760000000000,
+      "status": "active",
+      "createdAt": 1760003800000,
+      "runCount": 0,
+      "lastSessionId": "s_7",
+      "nextRunAt": 1760000000000
+     }
+    ]
+   ],
+   "sessions": [
+    {
+     "create": null,
+     "id": "s_7"
+    },
+    {
+     "save": "s_7",
+     "title": "Orphan",
+     "fields": {
+      "taskId": "00000000-0000-4000-8000-000000000006",
+      "providerId": "p-default",
+      "modelId": "m-default"
+     }
+    }
+   ],
+   "turns": []
+  },
+  {
+   "op": "delete",
+   "args": [
+    "00000000-0000-4000-8000-000000000006"
+   ],
+   "now": 1760003800000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Renamed",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 2,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760003700000,
+     "lastResult": "ok",
+     "extra": {
+      "x": 1
+     },
+     "nextRunAt": 1760004000000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "done",
+     "createdAt": 1760000001000,
+     "runCount": 1,
+     "lastSessionId": "s_5",
+     "lastRunAt": 1760000130000,
+     "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 2,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760003700000,
+     "lastResult": "Condition met, stopping.",
+     "nextRunAt": 1760007300000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"Condition met, stopping.\",\n    \"nextRunAt\": 1760007300000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"ok\",\n    \"extra\": {\n      \"x\": 1\n    },\n    \"nextRunAt\": 1760004000000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 2,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Condition met, stopping.",
+      "nextRunAt": 1760007300000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 2,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760003700000,
+      "lastResult": "ok",
+      "extra": {
+       "x": 1
+      },
+      "nextRunAt": 1760004000000
+     }
+    ]
+   ],
+   "sessions": [
+    {
+     "delete": "s_7"
+    }
+   ],
+   "turns": []
+  },
+  {
+   "op": "delete",
+   "args": [
+    "missing"
+   ],
+   "now": 1760003800000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Renamed",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 2,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760003700000,
+     "lastResult": "ok",
+     "extra": {
+      "x": 1
+     },
+     "nextRunAt": 1760004000000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "done",
+     "createdAt": 1760000001000,
+     "runCount": 1,
+     "lastSessionId": "s_5",
+     "lastRunAt": 1760000130000,
+     "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 2,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760003700000,
+     "lastResult": "Condition met, stopping.",
+     "nextRunAt": 1760007300000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"Condition met, stopping.\",\n    \"nextRunAt\": 1760007300000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"ok\",\n    \"extra\": {\n      \"x\": 1\n    },\n    \"nextRunAt\": 1760004000000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Nightly report",
+      "kind": "recurring",
+      "prompt": "Summarize the day",
+      "workspaceId": "w1",
+      "intervalMs": 3600000,
+      "status": "active",
+      "createdAt": 1760000000000,
+      "runCount": 2,
+      "lastSessionId": "s_1",
+      "lastRunAt": 1760003700000,
+      "lastResult": "Condition met, stopping.",
+      "nextRunAt": 1760007300000
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Untitled task",
+      "kind": "scheduled",
+      "prompt": "Ping",
+      "providerId": "p1",
+      "modelId": "m1",
+      "runAt": 1760000120000,
+      "status": "done",
+      "createdAt": 1760000001000,
+      "runCount": 1,
+      "lastSessionId": "s_5",
+      "lastRunAt": 1760000130000,
+      "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Watch CI",
+      "kind": "background",
+      "prompt": "Check CI",
+      "intervalMs": 30000,
+      "keepAlive": "until",
+      "condition": "all green",
+      "status": "done",
+      "createdAt": 1760000002000,
+      "runCount": 2,
+      "lastSessionId": "s_3",
+      "lastRunAt": 1760000030000,
+      "lastResult": "Fixed it. ⟦DONE⟧"
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Renamed",
+      "kind": "background",
+      "prompt": "Tend",
+      "keepAlive": "forever",
+      "status": "active",
+      "createdAt": 1760000003000,
+      "runCount": 2,
+      "lastSessionId": "s_4",
+      "lastRunAt": 1760003700000,
+      "lastResult": "ok",
+      "extra": {
+       "x": 1
+      },
+      "nextRunAt": 1760004000000
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "list",
+   "args": [],
+   "now": 1760003800000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000004",
+     "title": "Renamed",
+     "kind": "background",
+     "prompt": "Tend",
+     "keepAlive": "forever",
+     "status": "active",
+     "createdAt": 1760000003000,
+     "runCount": 2,
+     "lastSessionId": "s_4",
+     "lastRunAt": 1760003700000,
+     "lastResult": "ok",
+     "extra": {
+      "x": 1
+     },
+     "nextRunAt": 1760004000000
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000003",
+     "title": "Watch CI",
+     "kind": "background",
+     "prompt": "Check CI",
+     "intervalMs": 30000,
+     "keepAlive": "until",
+     "condition": "all green",
+     "status": "done",
+     "createdAt": 1760000002000,
+     "runCount": 2,
+     "lastSessionId": "s_3",
+     "lastRunAt": 1760000030000,
+     "lastResult": "Fixed it. ⟦DONE⟧"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000002",
+     "title": "Untitled task",
+     "kind": "scheduled",
+     "prompt": "Ping",
+     "providerId": "p1",
+     "modelId": "m1",
+     "runAt": 1760000120000,
+     "status": "done",
+     "createdAt": 1760000001000,
+     "runCount": 1,
+     "lastSessionId": "s_5",
+     "lastRunAt": 1760000130000,
+     "lastResult": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000001",
+     "title": "Nightly report",
+     "kind": "recurring",
+     "prompt": "Summarize the day",
+     "workspaceId": "w1",
+     "intervalMs": 3600000,
+     "status": "active",
+     "createdAt": 1760000000000,
+     "runCount": 2,
+     "lastSessionId": "s_1",
+     "lastRunAt": 1760003700000,
+     "lastResult": "Condition met, stopping.",
+     "nextRunAt": 1760007300000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"Condition met, stopping.\",\n    \"nextRunAt\": 1760007300000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760003700000,\n    \"lastResult\": \"ok\",\n    \"extra\": {\n      \"x\": 1\n    },\n    \"nextRunAt\": 1760004000000\n  }\n]",
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "file",
+   "args": [],
+   "now": 1760003800000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": null,
+   "file": "[{\"id\":\"t1\",\"title\":\"Cut short\",\"kind\":\"recurring\",\"prompt\":\"p\",\"status\":\"active\",\"createdAt\":5,\"runCount\":2,\"lastRunAt\":9,\"lastSessionId\":\"gone\"},{\"id\":\"t2\",\"title\":\"Paused\",\"kind\":\"recurring\",\"prompt\":\"p\",\"status\":\"paused\",\"createdAt\":6,\"runCount\":0}]",
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "reconcile",
+   "args": [],
+   "now": 1760004000000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"t1\",\n    \"title\": \"Cut short\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"p\",\n    \"status\": \"active\",\n    \"createdAt\": 5,\n    \"runCount\": 2,\n    \"lastRunAt\": 9,\n    \"lastSessionId\": \"gone\",\n    \"nextRunAt\": 1760004000000\n  },\n  {\n    \"id\": \"t2\",\n    \"title\": \"Paused\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"p\",\n    \"status\": \"paused\",\n    \"createdAt\": 6,\n    \"runCount\": 0\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "t1",
+      "title": "Cut short",
+      "kind": "recurring",
+      "prompt": "p",
+      "status": "active",
+      "createdAt": 5,
+      "runCount": 2,
+      "lastRunAt": 9,
+      "lastSessionId": "gone",
+      "nextRunAt": 1760004000000
+     },
+     {
+      "id": "t2",
+      "title": "Paused",
+      "kind": "recurring",
+      "prompt": "p",
+      "status": "paused",
+      "createdAt": 6,
+      "runCount": 0
+     }
+    ]
+   ],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "file",
+   "args": [],
+   "now": 1760004000000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": null,
+   "file": "not json",
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "list",
+   "args": [],
+   "now": 1760004000000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [],
+   "file": "not json",
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "create",
+   "args": [
+    {
+     "title": "After corruption",
+     "kind": "recurring",
+     "prompt": "p",
+     "intervalMs": 60000
+    }
+   ],
+   "now": 1760005000000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default"
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": [
+    {
+     "id": "00000000-0000-4000-8000-000000000007",
+     "title": "After corruption",
+     "kind": "recurring",
+     "prompt": "p",
+     "intervalMs": 60000,
+     "status": "active",
+     "createdAt": 1760005000000,
+     "runCount": 0,
+     "lastSessionId": "s_8",
+     "nextRunAt": 1760005000000
+    }
+   ],
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000007\",\n    \"title\": \"After corruption\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"p\",\n    \"intervalMs\": 60000,\n    \"status\": \"active\",\n    \"createdAt\": 1760005000000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_8\",\n    \"nextRunAt\": 1760005000000\n  }\n]",
+   "notices": [
+    [
+     {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "title": "After corruption",
+      "kind": "recurring",
+      "prompt": "p",
+      "intervalMs": 60000,
+      "status": "active",
+      "createdAt": 1760005000000,
+      "runCount": 0,
+      "lastSessionId": "s_8",
+      "nextRunAt": 1760005000000
+     }
+    ]
+   ],
+   "sessions": [
+    {
+     "create": null,
+     "id": "s_8"
+    },
+    {
+     "save": "s_8",
+     "title": "After corruption",
+     "fields": {
+      "taskId": "00000000-0000-4000-8000-000000000007",
+      "providerId": "p-default",
+      "modelId": "m-default"
+     }
+    }
+   ],
+   "turns": []
+  }
+ ],
+ "prompts": [
+  {
+   "task": {
+    "kind": "recurring",
+    "prompt": "a"
+   },
+   "prompt": "a"
+  },
+  {
+   "task": {
+    "kind": "background",
+    "prompt": "b",
+    "keepAlive": "forever",
+    "condition": "x"
+   },
+   "prompt": "b"
+  },
+  {
+   "task": {
+    "kind": "background",
+    "prompt": "c",
+    "keepAlive": "until",
+    "condition": ""
+   },
+   "prompt": "c"
+  },
+  {
+   "task": {
+    "kind": "background",
+    "prompt": "d 🐱",
+    "keepAlive": "until",
+    "condition": "tests pass\nand \"lint\""
+   },
+   "prompt": "d 🐱\n\n(This is a background task. Keep working until: tests pass\nand \"lint\". When that condition is fully satisfied, end your reply with the token ⟦DONE⟧.)"
+  }
+ ],
+ "patches": [
+  {
+   "task": {
+    "kind": "scheduled"
+   },
+   "result": "",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "",
+    "status": "done"
+   }
+  },
+  {
+   "task": {
+    "kind": "scheduled"
+   },
+   "result": "done",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "done",
+    "status": "done"
+   }
+  },
+  {
+   "task": {
+    "kind": "scheduled"
+   },
+   "result": "x ⟦DONE⟧",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "x ⟦DONE⟧",
+    "status": "done"
+   }
+  },
+  {
+   "task": {
+    "kind": "scheduled"
+   },
+   "result": "The CONDITION MET now",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "The CONDITION MET now",
+    "status": "done"
+   }
+  },
+  {
+   "task": {
+    "kind": "scheduled"
+   },
+   "result": "conditions met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "conditions met",
+    "status": "done"
+   }
+  },
+  {
+   "task": {
+    "kind": "scheduled"
+   },
+   "result": "precondition met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "precondition met",
+    "status": "done"
+   }
+  },
+  {
+   "task": {
+    "kind": "scheduled"
+   },
+   "result": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+    "status": "done"
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring"
+   },
+   "result": "",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring"
+   },
+   "result": "done",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "done",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring"
+   },
+   "result": "x ⟦DONE⟧",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "x ⟦DONE⟧",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring"
+   },
+   "result": "The CONDITION MET now",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "The CONDITION MET now",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring"
+   },
+   "result": "conditions met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "conditions met",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring"
+   },
+   "result": "precondition met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "precondition met",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring"
+   },
+   "result": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 1000
+   },
+   "result": "",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "",
+    "nextRunAt": 1760000060000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 1000
+   },
+   "result": "done",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "done",
+    "nextRunAt": 1760000060000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 1000
+   },
+   "result": "x ⟦DONE⟧",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "x ⟦DONE⟧",
+    "nextRunAt": 1760000060000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 1000
+   },
+   "result": "The CONDITION MET now",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "The CONDITION MET now",
+    "nextRunAt": 1760000060000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 1000
+   },
+   "result": "conditions met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "conditions met",
+    "nextRunAt": 1760000060000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 1000
+   },
+   "result": "precondition met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "precondition met",
+    "nextRunAt": 1760000060000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 1000
+   },
+   "result": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+    "nextRunAt": 1760000060000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 120000
+   },
+   "result": "",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "",
+    "nextRunAt": 1760000120000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 120000
+   },
+   "result": "done",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "done",
+    "nextRunAt": 1760000120000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 120000
+   },
+   "result": "x ⟦DONE⟧",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "x ⟦DONE⟧",
+    "nextRunAt": 1760000120000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 120000
+   },
+   "result": "The CONDITION MET now",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "The CONDITION MET now",
+    "nextRunAt": 1760000120000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 120000
+   },
+   "result": "conditions met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "conditions met",
+    "nextRunAt": 1760000120000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 120000
+   },
+   "result": "precondition met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "precondition met",
+    "nextRunAt": 1760000120000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": 120000
+   },
+   "result": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+    "nextRunAt": 1760000120000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": null
+   },
+   "result": "",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": null
+   },
+   "result": "done",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "done",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": null
+   },
+   "result": "x ⟦DONE⟧",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "x ⟦DONE⟧",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": null
+   },
+   "result": "The CONDITION MET now",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "The CONDITION MET now",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": null
+   },
+   "result": "conditions met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "conditions met",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": null
+   },
+   "result": "precondition met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "precondition met",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "recurring",
+    "intervalMs": null
+   },
+   "result": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "forever"
+   },
+   "result": "",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "forever"
+   },
+   "result": "done",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "done",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "forever"
+   },
+   "result": "x ⟦DONE⟧",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "x ⟦DONE⟧",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "forever"
+   },
+   "result": "The CONDITION MET now",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "The CONDITION MET now",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "forever"
+   },
+   "result": "conditions met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "conditions met",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "forever"
+   },
+   "result": "precondition met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "precondition met",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "forever"
+   },
+   "result": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+    "nextRunAt": 1760000300000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "until",
+    "intervalMs": 90000
+   },
+   "result": "",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "",
+    "nextRunAt": 1760000090000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "until",
+    "intervalMs": 90000
+   },
+   "result": "done",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "done",
+    "nextRunAt": 1760000090000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "until",
+    "intervalMs": 90000
+   },
+   "result": "x ⟦DONE⟧",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "x ⟦DONE⟧",
+    "status": "done"
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "until",
+    "intervalMs": 90000
+   },
+   "result": "The CONDITION MET now",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "The CONDITION MET now",
+    "status": "done"
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "until",
+    "intervalMs": 90000
+   },
+   "result": "conditions met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "conditions met",
+    "nextRunAt": 1760000090000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "until",
+    "intervalMs": 90000
+   },
+   "result": "precondition met",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "precondition met",
+    "nextRunAt": 1760000090000
+   }
+  },
+  {
+   "task": {
+    "kind": "background",
+    "keepAlive": "until",
+    "intervalMs": 90000
+   },
+   "result": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+   "now": 1760000000000,
+   "patch": {
+    "lastResult": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+    "nextRunAt": 1760000090000
+   }
+  }
+ ]
+}
