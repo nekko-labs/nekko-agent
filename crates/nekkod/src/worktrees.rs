@@ -851,6 +851,8 @@ mod tests {
             r.git(&["config", "user.email", "test@example.com"]);
             r.git(&["config", "user.name", "Test"]);
             r.git(&["config", "commit.gpgsign", "false"]);
+            // Fixture bytes must not depend on the runner's global Git defaults.
+            r.git(&["config", "core.autocrlf", "false"]);
             r.write("file.txt", "committed\n");
             r.git(&["add", "."]);
             r.git(&["commit", "-q", "-m", "Initial"]);
