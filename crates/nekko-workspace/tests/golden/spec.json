@@ -1,0 +1,448 @@
+{
+  "ops": [
+    {
+      "op": "path",
+      "result": "<root>/w1/spec.md"
+    },
+    {
+      "op": "path",
+      "error": "Host spec access: session not found. No host fallback."
+    },
+    {
+      "op": "path",
+      "error": "Host spec access is unsupported in sandbox sessions. Use scoped container file and bash tools. No host fallback."
+    },
+    {
+      "op": "path",
+      "result": null
+    },
+    {
+      "op": "docs",
+      "result": {
+        "methodologyId": "spec-tasks",
+        "docs": [
+          {
+            "id": "spec",
+            "filename": "spec.md",
+            "label": "Spec",
+            "role": "spec",
+            "description": "What & why, vision, users, requirements.",
+            "path": "<root>/w1/spec.md",
+            "exists": true,
+            "content": "# Existing spec\nKeep this.\n"
+          },
+          {
+            "id": "tasks",
+            "filename": "tasks.md",
+            "label": "Tasks",
+            "role": "tasks",
+            "description": "Discrete, checkable work items.",
+            "path": "<root>/w1/tasks.md",
+            "exists": true,
+            "content": "- [ ] first\n  * [X] second\nnot a task\n- [ ]third"
+          }
+        ]
+      }
+    },
+    {
+      "op": "docs",
+      "result": {
+        "methodologyId": "spec-tasks",
+        "docs": [
+          {
+            "id": "spec",
+            "filename": "spec.md",
+            "label": "Spec",
+            "role": "spec",
+            "description": "What & why, vision, users, requirements.",
+            "path": "<root>/w2/spec.md",
+            "exists": false,
+            "content": ""
+          },
+          {
+            "id": "tasks",
+            "filename": "tasks.md",
+            "label": "Tasks",
+            "role": "tasks",
+            "description": "Discrete, checkable work items.",
+            "path": "<root>/w2/tasks.md",
+            "exists": false,
+            "content": ""
+          }
+        ]
+      }
+    },
+    {
+      "op": "docs",
+      "result": {
+        "methodologyId": "spec-tasks",
+        "docs": [
+          {
+            "id": "spec",
+            "filename": "spec.md",
+            "label": "Spec",
+            "role": "spec",
+            "description": "What & why, vision, users, requirements.",
+            "path": "<root>/w1/spec.md",
+            "exists": true,
+            "content": "# Existing spec\nKeep this.\n"
+          },
+          {
+            "id": "tasks",
+            "filename": "tasks.md",
+            "label": "Tasks",
+            "role": "tasks",
+            "description": "Discrete, checkable work items.",
+            "path": "<root>/w1/tasks.md",
+            "exists": true,
+            "content": "- [ ] first\n  * [X] second\nnot a task\n- [ ]third"
+          }
+        ]
+      }
+    },
+    {
+      "op": "docs",
+      "result": {
+        "methodologyId": "spec-tasks",
+        "docs": [
+          {
+            "id": "spec",
+            "filename": "spec.md",
+            "label": "Spec",
+            "role": "spec",
+            "description": "What & why, vision, users, requirements.",
+            "path": "spec.md",
+            "exists": false,
+            "content": ""
+          },
+          {
+            "id": "tasks",
+            "filename": "tasks.md",
+            "label": "Tasks",
+            "role": "tasks",
+            "description": "Discrete, checkable work items.",
+            "path": "tasks.md",
+            "exists": false,
+            "content": ""
+          }
+        ]
+      }
+    },
+    {
+      "op": "docs",
+      "result": {
+        "methodologyId": "kiro",
+        "docs": [
+          {
+            "id": "requirements",
+            "filename": "requirements.md",
+            "label": "Requirements",
+            "role": "spec",
+            "description": "User stories & acceptance criteria.",
+            "path": "<root>/w1/requirements.md",
+            "exists": true,
+            "content": "# Reqs\n"
+          },
+          {
+            "id": "design",
+            "filename": "design.md",
+            "label": "Design",
+            "role": "plan",
+            "description": "Architecture, data model, sequencing.",
+            "path": "<root>/w1/design.md",
+            "exists": false,
+            "content": ""
+          },
+          {
+            "id": "tasks",
+            "filename": "tasks.md",
+            "label": "Tasks",
+            "role": "tasks",
+            "description": "Discrete, trackable implementation tasks.",
+            "path": "<root>/w1/tasks.md",
+            "exists": true,
+            "content": "- [ ] first\n  * [X] second\nnot a task\n- [ ]third"
+          }
+        ]
+      }
+    },
+    {
+      "op": "toggle",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "op": "file",
+      "result": "- [x] first\n  * [X] second\nnot a task\n- [ ]third"
+    },
+    {
+      "op": "toggle",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "op": "toggle",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "op": "toggle",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "op": "toggle",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "op": "toggle",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "op": "file",
+      "result": "- [x] first\n  * [x] second\nnot a task\n- [x] third"
+    },
+    {
+      "op": "toggle",
+      "result": {
+        "ok": false,
+        "message": "Build the tasks document first."
+      }
+    },
+    {
+      "op": "toggle",
+      "result": {
+        "ok": false,
+        "message": "Build the tasks document first."
+      }
+    },
+    {
+      "op": "method",
+      "result": null
+    },
+    {
+      "op": "docs",
+      "result": {
+        "methodologyId": "nekko-agent",
+        "docs": [
+          {
+            "id": "spec",
+            "filename": "spec.md",
+            "label": "Spec",
+            "role": "spec",
+            "description": "What & why, vision, users, requirements.",
+            "path": "<root>/w1/spec.md",
+            "exists": true,
+            "content": "# Existing spec\nKeep this.\n"
+          },
+          {
+            "id": "plan",
+            "filename": "plan.md",
+            "label": "Plan",
+            "role": "plan",
+            "description": "How, architecture, stack, conventions.",
+            "path": "<root>/w1/plan.md",
+            "exists": false,
+            "content": ""
+          },
+          {
+            "id": "tasks",
+            "filename": "tasks.md",
+            "label": "Tasks",
+            "role": "tasks",
+            "description": "Discrete, checkable work items.",
+            "path": "<root>/w1/tasks.md",
+            "exists": true,
+            "content": "- [x] first\n  * [x] second\nnot a task\n- [x] third"
+          }
+        ]
+      }
+    },
+    {
+      "op": "method",
+      "result": null
+    },
+    {
+      "op": "field",
+      "result": "spec-tasks"
+    },
+    {
+      "op": "method",
+      "error": "Host spec access: session not found. No host fallback."
+    },
+    {
+      "op": "build",
+      "result": {
+        "result": {
+          "ok": true,
+          "path": "<root>/w1/spec.md",
+          "docId": "spec"
+        },
+        "request": {
+          "system": "You maintain a project's spec.md, part of a spec-driven development workflow (\"Spec → Tasks\"), synthesized from an ongoing working conversation between a user and an AI assistant.\nWrite a clear, well-structured spec, the source of truth for WHAT we're building and WHY.\nUse sections like: Overview, Goals, Users, Requirements (or user stories with acceptance criteria), and Open Questions.\nKeep it about the product, not the implementation.\nIf an existing spec.md is provided, UPDATE it to reflect the latest conversation, keep still-valid content, revise what changed, add what's new.\nBe concise and concrete. Output ONLY the markdown for spec.md, with no preamble or code fences.",
+          "prompt": "Existing spec.md:\n\n# Existing spec\nKeep this.\n\n\n---\n\nConversation so far:\n\n## User\nBuild a todo app\n\n## Assistant\nSure, with lists.\n\n---\n\nWrite the updated spec.md.",
+          "model": "m",
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "op": "file",
+      "result": "# Spec\nNew body\n"
+    },
+    {
+      "op": "build",
+      "result": {
+        "result": {
+          "ok": true,
+          "path": "<root>/w1/tasks.md",
+          "docId": "tasks"
+        },
+        "request": {
+          "system": "You maintain a project's tasks.md, part of a spec-driven development workflow (\"Spec → Tasks\"), synthesized from an ongoing working conversation between a user and an AI assistant.\nWrite an implementation task list as a markdown checklist.\nBreak the work into small, independently reviewable, testable items, each on its own line as \"- [ ] <task>\".\nGroup related items under `##` headings. Order them so dependencies come first. Be concrete and concise.\nDerive the tasks from the spec (and plan, if present) provided below.\nIf an existing tasks.md is provided, UPDATE it to reflect the latest conversation, keep still-valid content, revise what changed, add what's new.\nBe concise and concrete. Output ONLY the markdown for tasks.md, with no preamble or code fences.",
+          "prompt": "Earlier artifacts in this workflow:\n\n### Spec (spec.md)\n\n# Spec\nNew body\n\n\n===\n\nExisting tasks.md:\n\n- [x] first\n  * [x] second\nnot a task\n- [x] third\n\n---\n\nConversation so far:\n\n## User\nBuild a todo app\n\n## Assistant\nSure, with lists.\n\n---\n\nWrite the updated tasks.md.",
+          "model": "m",
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "op": "file",
+      "result": "- [ ] one\n- [ ] two\n"
+    },
+    {
+      "op": "build",
+      "result": {
+        "result": {
+          "ok": false,
+          "message": "Unknown spec document."
+        },
+        "request": null
+      }
+    },
+    {
+      "op": "build",
+      "result": {
+        "result": {
+          "ok": true,
+          "path": "<root>/w1/design.md",
+          "docId": "design"
+        },
+        "request": {
+          "system": "You maintain a project's design.md, part of a spec-driven development workflow (\"Requirements → Design → Tasks\"), synthesized from an ongoing working conversation between a user and an AI assistant.\nWrite a technical plan, HOW we'll build what the spec describes.\nUse sections like: Architecture, Stack & Key Decisions, Data Model, Conventions, and Risks.\nGround it in the spec (provided below). Do not restate the spec; reference it.\nIf an existing design.md is provided, UPDATE it to reflect the latest conversation, keep still-valid content, revise what changed, add what's new.\nBe concise and concrete. Output ONLY the markdown for design.md, with no preamble or code fences.",
+          "prompt": "Earlier artifacts in this workflow:\n\n### Requirements (requirements.md)\n\n# Reqs\n\n\n===\n\nConversation so far:\n\n## User\ndesign it\n\n---\n\nWrite the updated design.md.",
+          "model": "m",
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "op": "file",
+      "result": "# Design\n"
+    },
+    {
+      "op": "build",
+      "result": {
+        "result": {
+          "ok": true,
+          "path": "<root>/w2/spec.md",
+          "docId": "spec"
+        },
+        "request": {
+          "system": "You maintain a project's spec.md, part of a spec-driven development workflow (\"Spec → Tasks\"), synthesized from an ongoing working conversation between a user and an AI assistant.\nWrite a clear, well-structured spec, the source of truth for WHAT we're building and WHY.\nUse sections like: Overview, Goals, Users, Requirements (or user stories with acceptance criteria), and Open Questions.\nKeep it about the product, not the implementation.\nIf an existing spec.md is provided, UPDATE it to reflect the latest conversation, keep still-valid content, revise what changed, add what's new.\nBe concise and concrete. Output ONLY the markdown for spec.md, with no preamble or code fences.",
+          "prompt": "Conversation so far:\n\n## User\nBuild a todo app\n\n## Assistant\nSure, with lists.\n\n---\n\nWrite the updated spec.md.",
+          "model": "m",
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "op": "file",
+      "result": "# In w2\n"
+    },
+    {
+      "op": "build",
+      "result": {
+        "result": {
+          "ok": false,
+          "message": "The model returned an empty document."
+        },
+        "request": {
+          "system": "You maintain a project's spec.md, part of a spec-driven development workflow (\"Spec → Tasks\"), synthesized from an ongoing working conversation between a user and an AI assistant.\nWrite a clear, well-structured spec, the source of truth for WHAT we're building and WHY.\nUse sections like: Overview, Goals, Users, Requirements (or user stories with acceptance criteria), and Open Questions.\nKeep it about the product, not the implementation.\nIf an existing spec.md is provided, UPDATE it to reflect the latest conversation, keep still-valid content, revise what changed, add what's new.\nBe concise and concrete. Output ONLY the markdown for spec.md, with no preamble or code fences.",
+          "prompt": "Existing spec.md:\n\n# Spec\nNew body\n\n\n---\n\nConversation so far:\n\n## User\nBuild a todo app\n\n## Assistant\nSure, with lists.\n\n---\n\nWrite the updated spec.md.",
+          "model": "m",
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "op": "build",
+      "error": "Host spec access is unsupported in sandbox sessions. Use scoped container file and bash tools. No host fallback."
+    },
+    {
+      "op": "build",
+      "result": {
+        "result": {
+          "ok": false,
+          "message": "Add a project folder to this chat first."
+        },
+        "request": null
+      }
+    },
+    {
+      "op": "build",
+      "result": {
+        "result": {
+          "ok": false,
+          "message": "Pick a provider and model, then chat first."
+        },
+        "request": null
+      }
+    },
+    {
+      "op": "build",
+      "result": {
+        "result": {
+          "ok": true,
+          "path": "<root>/w1/spec.md",
+          "docId": "spec"
+        },
+        "request": {
+          "system": "You maintain a project's spec.md, part of a spec-driven development workflow (\"Spec → Tasks\"), synthesized from an ongoing working conversation between a user and an AI assistant.\nWrite a clear, well-structured spec, the source of truth for WHAT we're building and WHY.\nUse sections like: Overview, Goals, Users, Requirements (or user stories with acceptance criteria), and Open Questions.\nKeep it about the product, not the implementation.\nIf an existing spec.md is provided, UPDATE it to reflect the latest conversation, keep still-valid content, revise what changed, add what's new.\nBe concise and concrete. Output ONLY the markdown for spec.md, with no preamble or code fences.",
+          "prompt": "Existing spec.md:\n\n# Spec\nNew body\n\n\n---\n\nConversation so far:\n\n## User\n   \n\n---\n\nWrite the updated spec.md.",
+          "model": "m",
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "op": "build",
+      "result": {
+        "result": {
+          "ok": false,
+          "message": "Workspace not found."
+        },
+        "request": null
+      }
+    },
+    {
+      "op": "build",
+      "error": "Host spec access: session not found. No host fallback."
+    }
+  ],
+  "toggles": [
+    "- [x] a",
+    "- [x] a\n- [x] b",
+    "plain",
+    "- [ ] a",
+    "- [ ] a"
+  ]
+}

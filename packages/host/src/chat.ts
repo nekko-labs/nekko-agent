@@ -1309,6 +1309,13 @@ interface AfterTurn {
   aborted: boolean;
 }
 
+/** The linked spec, built by the engine daemon when it owns spec files. */
+async function buildLinkedSpec(sessionId: string): Promise<unknown> {
+  const daemon = daemonCall();
+  if (daemon && (await daemonOwns(daemon, 'spec:build'))) return daemon('spec:build', sessionId);
+  return buildSpec(sessionId);
+}
+
 /** What follows any turn here: TurnEnd hooks and the linked spec. */
 function afterTurnHooks(t: Omit<AfterTurn, 'send' | 'allowBrowserControl' | 'aborted'>): void {
   const { opts, sandbox, incognito, offline } = t;
@@ -1322,7 +1329,7 @@ function afterTurnHooks(t: Omit<AfterTurn, 'send' | 'allowBrowserControl' | 'abo
 
   // Keep the linked spec.md in sync with the conversation (best-effort).
   if (!sandbox && t.session.specLinked && !incognito && !offline) {
-    buildSpec(opts.sessionId).catch(() => {});
+    void buildLinkedSpec(opts.sessionId).catch(() => {});
   }
 }
 

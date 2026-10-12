@@ -7,6 +7,9 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[dev-dependencies]
+nekko-store = { path = "../nekko-store" }
+
 [dependencies]
 futures-util.workspace = true
 getrandom.workspace = true

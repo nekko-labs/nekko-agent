@@ -79,6 +79,10 @@ fn fake_backend() {
                                 *design_provider.lock().unwrap() = Some(body.0["args"][0].clone());
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
                             }
+                            "provider:resolved" => match design_provider.lock().unwrap().clone() {
+                                Some(v) => (axum::http::StatusCode::OK, axum::Json(v)),
+                                None => (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "no provider" }))),
+                            },
                             "design:provider" => match design_provider.lock().unwrap().clone() {
                                 Some(v) => (axum::http::StatusCode::OK, axum::Json(v)),
                                 None => (
@@ -1761,6 +1765,63 @@ async fn adds_and_revokes_folders_through_the_daemons_settings() {
     assert!(saved.get("workspaceId").is_none());
     assert_eq!(saved["supportingWorkspaceIds"], json!([]));
     assert!(project.join("src").join("x.rs").exists(), "the folder itself is never touched");
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn builds_a_linked_spec_on_the_chats_provider() {
+    let data = std::env::temp_dir().join(format!("nekkod-spec-{}", std::process::id()));
+    let project = data.join("project");
+    std::fs::create_dir_all(project.join("x")).unwrap();
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::write(
+        project.join("tasks.md"),
+        "- [ ] a
+",
+    )
+    .unwrap();
+    let chat = json!({ "id": "s_spec", "title": "t", "workspaceId": "w1", "providerId": "p1", "modelId": "synthetic", "messages": [
+        { "id": "u", "role": "user", "content": "Make a todo app", "createdAt": 1 }
+    ], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions").join("s_spec.json"), chat.to_string()).unwrap();
+    let model = scripted_model(vec![say_text(
+        "```markdown
+# Todo spec
+```",
+    )])
+    .await;
+    let d = start_with(true, Some(&data));
+    let provider = json!({ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) });
+    let folder = json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": project.to_string_lossy(), "addedAt": 1 }], "providers": [provider] }]);
+    post(d.port, "settings:update", folder, Some(TOKEN)).await;
+    post(d.port, "test:designProvider", json!([{ "provider": provider, "promptCaching": true }]), Some(TOKEN)).await;
+    let (status, built) = post(d.port, "spec:build", json!(["s_spec"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{built}");
+    assert_eq!(built["ok"], json!(true), "{built}");
+    assert_eq!(
+        std::fs::read_to_string(project.join("spec.md")).unwrap(),
+        "# Todo spec
+"
+    );
+    let (_, toggled) = post(d.port, "spec:toggleTask", json!(["s_spec", 0]), Some(TOKEN)).await;
+    assert_eq!(toggled, json!({ "ok": true }));
+    assert_eq!(
+        std::fs::read_to_string(project.join("tasks.md")).unwrap(),
+        "- [x] a
+"
+    );
+    let (_, docs) = post(d.port, "spec:readDocs", json!(["s_spec"]), Some(TOKEN)).await;
+    assert_eq!(
+        docs["docs"][0]["content"],
+        json!(
+            "# Todo spec
+"
+        )
+    );
+    post(d.port, "spec:setMethodology", json!(["s_spec", "kiro"]), Some(TOKEN)).await;
+    let (_, saved) = post(d.port, "session:get", json!(["s_spec"]), Some(TOKEN)).await;
+    assert_eq!(saved["specMethodology"], json!("kiro"));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }

@@ -3,6 +3,7 @@ import type { Host } from './host.js';
 import { deleteAgentLog } from './agent-log.js';
 import { benchHostLoad } from './workspace.js';
 import { designProvider } from './design.js';
+import { resolvedProvider } from './spec.js';
 import { daemonOwns } from './daemon-loop.js';
 import { daemonCall } from './engine/daemon.js';
 
@@ -43,6 +44,12 @@ export const DAEMON_SERVED = new Set<string>([
   IpcChannels.skillUninstall,
   IpcChannels.vaizerCatalog,
   IpcChannels.vaizerSkillMd,
+  IpcChannels.specPath,
+  IpcChannels.specReadDocs,
+  IpcChannels.specSetMethodology,
+  IpcChannels.specToggleTask,
+  IpcChannels.specBuild,
+  IpcChannels.specBuildDoc,
   IpcChannels.memoryList,
   IpcChannels.memorySave,
   IpcChannels.memoryDelete,
@@ -126,6 +133,8 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'design:provider': () => designProvider(),
     // The daemon revoking a folder asks which chats are mid-turn here.
     'chats:busy': () => host.busySessions(),
+    // The daemon builds a spec doc (crates/nekkod/src/workspace.rs) with the chat's provider, signed in here.
+    'provider:resolved': ([providerId]) => resolvedProvider(String(providerId)),
     // The daemon keeps limit state (crates/nekkod/src/limits.rs) and asks this
     // host only for what still lives here: a refreshed sign-in, and the relay.
     'limits:notify': ([payload]) => host.limitsNotify(payload as never),

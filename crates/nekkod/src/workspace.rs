@@ -11,7 +11,7 @@
 use crate::backend::Backend;
 use crate::hub::Hub;
 use crate::routes::Ctx;
-use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs, skills};
+use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs, skills, spec};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -60,6 +60,12 @@ pub const DATA_CHANNELS: &[&str] = &[
     "skill:uninstall",
     "vaizer:catalog",
     "vaizer:skillMd",
+    "spec:path",
+    "spec:readDocs",
+    "spec:setMethodology",
+    "spec:toggleTask",
+    "spec:build",
+    "spec:buildDoc",
 ];
 
 /// A design generation has no limit in the host; this keeps a stuck model
@@ -286,6 +292,35 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             Ok(ws.vaizer.catalog(&dir, nekko_js::truthy(arg(&args, 0))).await)
         }
         "vaizer:skillMd" => Ok(ws.vaizer.skill_md(&text(&args, 0)).await),
+        "spec:path" | "spec:readDocs" | "spec:setMethodology" | "spec:toggleTask" => {
+            let sid = text(&args, 0);
+            let (session, settings) = (session(ctx, &sid).await, settings(ctx).await);
+            let store = ctx.sessions.clone();
+            let channel = channel.to_string();
+            blocking(move || {
+                let wid = |i: usize| arg(&args, i).and_then(Value::as_str).map(str::to_string);
+                match channel.as_str() {
+                    "spec:path" => spec::spec_path(&sid, &session, &settings),
+                    "spec:readDocs" => spec::read_docs(&sid, &session, &settings, wid(1).as_deref()),
+                    "spec:toggleTask" => spec::toggle_task(
+                        &sid,
+                        &session,
+                        &settings,
+                        arg(&args, 1).unwrap_or(&Value::Null),
+                        wid(2).as_deref(),
+                    ),
+                    _ => {
+                        spec::assert_host(&sid, &session, "Host spec access")?;
+                        if let Some(store) = store.filter(|_| !session.is_null()) {
+                            store.set_spec_methodology(&sid, &spec::methodology_id(arg(&args, 1)))?;
+                        }
+                        Ok(Value::Null)
+                    }
+                }
+            })
+            .await?
+        }
+        "spec:build" | "spec:buildDoc" => build_spec(ctx, args).await,
         "design:addPage" => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
             let folder = folder_path(&folders(ctx).await, &arg(&args, 0).map(nekko_js::display).unwrap_or_default());
@@ -465,6 +500,43 @@ fn skills_route(dir: &std::path::Path, channel: &str, args: &[Value], roots: &[S
         }
         other => Err(format!("{other} is not a skills channel")),
     }
+}
+
+/// `buildSpecDoc(sessionId, docId, workspaceId)` (and `buildSpec`, its
+/// first-doc form): the prompt here, the chat's provider (signed in) from the
+/// host, the model call on the Rust providers, then the file written.
+async fn build_spec(ctx: &Ctx, args: Vec<Value>) -> Result<Value, String> {
+    let sid = text(&args, 0);
+    let (session, settings) = (session(ctx, &sid).await, settings(ctx).await);
+    let plan = {
+        let (sid, session, settings, args) = (sid.clone(), session.clone(), settings.clone(), args.clone());
+        blocking(move || {
+            let wid = arg(&args, 2).and_then(Value::as_str).map(str::to_string);
+            spec::build_plan(&sid, &session, &settings, arg(&args, 1), wid.as_deref())
+        })
+        .await??
+    };
+    let plan = match plan {
+        Ok(plan) => plan,
+        Err(refusal) => return Ok(refusal),
+    };
+    let resolved = match ctx.backend.call("provider:resolved", json!([plan.provider_id])).await {
+        Ok(v) => v,
+        Err(e) => return Ok(json!({ "ok": false, "message": e })),
+    };
+    let request = json!({
+        "model": plan.model,
+        "system": plan.system,
+        "messages": [{ "id": "spec", "role": "user", "content": plan.prompt, "createdAt": nekko_workspace_now() }],
+        "temperature": 0.3,
+        "promptCaching": resolved.get("promptCaching").cloned().unwrap_or(json!(true)),
+    });
+    let spec_call = json!({ "provider": resolved.get("provider").cloned().unwrap_or(Value::Null), "request": request, "timeoutMs": DESIGN_TIMEOUT_MS });
+    let raw = match crate::sideband::complete(&spec_call).await {
+        Ok(reply) => reply.get("text").and_then(Value::as_str).unwrap_or_default().to_string(),
+        Err(e) => return Ok(json!({ "ok": false, "message": e })),
+    };
+    blocking(move || spec::land(&sid, &session, &plan, &raw)).await?
 }
 
 /// `fetchPrInfo(url)`: one PR's live state, read now (gh, else the REST API

@@ -365,6 +365,16 @@ impl SessionStore {
         })
     }
 
+    /// `setSpecMethodology(sessionId, id)`: `id` already resolved to a known
+    /// methodology. `None` when there is no such chat.
+    pub fn set_spec_methodology(&self, id: &str, methodology: &Value) -> Result<Option<Value>, String> {
+        let methodology = methodology.clone();
+        self.patch(id, |s| {
+            s.insert("specMethodology".into(), methodology);
+            true
+        })
+    }
+
     /// What `removeWorkspace` in host.ts does to a chat using a folder whose
     /// access is revoked: the primary cleared when it is that folder, the
     /// folder dropped from the supporting list (an emptied list stays `[]`).
