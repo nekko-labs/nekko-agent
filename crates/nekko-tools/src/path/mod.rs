@@ -255,7 +255,7 @@ pub(crate) fn extname_units(path: &[u16], win: bool) -> U16 {
 }
 
 /// The process working directory as Node reports it.
-pub(crate) fn process_cwd() -> String {
+pub fn process_cwd() -> String {
     std::env::current_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| ".".into())
 }
 

@@ -109,7 +109,7 @@ function run(cmd: string, args: string[], timeoutMs = 4000): Promise<string | nu
 }
 
 /** Sum a device list into the aggregate the monitor surfaces read. */
-function aggregate(source: GpuStats['source'], devices: GpuStats['devices'], unified: boolean): GpuStats | null {
+export function aggregate(source: GpuStats['source'], devices: GpuStats['devices'], unified: boolean): GpuStats | null {
   if (devices.length === 0) return null;
   return {
     source,
@@ -130,8 +130,11 @@ async function queryNvidiaSmi(): Promise<GpuStats | null> {
     '--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu',
     '--format=csv,noheader,nounits',
   ]);
-  if (!stdout) return null;
+  return stdout ? parseNvidiaSmi(stdout) : null;
+}
 
+/** `nvidia-smi --query-gpu=... --format=csv,noheader,nounits` output as stats (nekkod's `gpu:stats` ports this). */
+export function parseNvidiaSmi(stdout: string): GpuStats | null {
   const devices = stdout
     .trim()
     .split('\n')
@@ -160,7 +163,11 @@ async function queryNvidiaSmi(): Promise<GpuStats | null> {
 async function queryIoreg(): Promise<GpuStats | null> {
   const stdout = await run('ioreg', ['-r', '-d', '1', '-w', '0', '-c', 'IOAccelerator']);
   if (!stdout) return null;
-  const unifiedTotalMB = Math.round(os.totalmem() / 1024 / 1024);
+  return ioregStats(stdout, Math.round(os.totalmem() / 1024 / 1024));
+}
+
+/** `ioreg` output measured against system RAM, as stats (nekkod's `gpu:stats` ports this). */
+export function ioregStats(stdout: string, unifiedTotalMB: number): GpuStats | null {
   if (unifiedTotalMB <= 0) return null;
   return aggregate('ioreg', toGpuDevices(parseIoregAccelerators(stdout), unifiedTotalMB), true);
 }
