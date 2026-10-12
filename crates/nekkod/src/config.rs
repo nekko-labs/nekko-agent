@@ -40,6 +40,16 @@ pub struct Config {
     /// does); what a turn the daemon admits offers.
     #[serde(default)]
     pub allow_browser_control: bool,
+    /// The desktop app's bridge to its in-app browser and window capturer,
+    /// for the agent's `browser` and `capture` tools. Kept in the config,
+    /// never the environment, so the shells the agent starts never see it.
+    pub browser_bridge: Option<BrowserBridge>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct BrowserBridge {
+    pub url: String,
+    pub token: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

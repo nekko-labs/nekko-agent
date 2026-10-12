@@ -208,6 +208,10 @@ fn start(with_backend: bool) -> Daemon {
 }
 
 fn start_with(with_backend: bool, data_dir: Option<&std::path::Path>) -> Daemon {
+    start_with_config(with_backend, data_dir, json!({}))
+}
+
+fn start_with_config(with_backend: bool, data_dir: Option<&std::path::Path>, extra: Value) -> Daemon {
     let backend = with_backend.then(|| {
         json!({
             "exe": std::env::current_exe().unwrap(),
@@ -215,7 +219,10 @@ fn start_with(with_backend: bool, data_dir: Option<&std::path::Path>) -> Daemon 
             "env": { FAKE_ENV: "1", "FAKE_DATA_DIR": data_dir.map(|p| p.to_string_lossy().to_string()).unwrap_or_default() },
         })
     });
-    let config = json!({ "token": TOKEN, "backend": backend, "allowedOrigins": ["null"], "dataDir": data_dir });
+    let mut config = json!({ "token": TOKEN, "backend": backend, "allowedOrigins": ["null"], "dataDir": data_dir });
+    for (k, v) in extra.as_object().cloned().unwrap_or_default() {
+        config[k] = v;
+    }
     let mut child = Command::new(env!("CARGO_BIN_EXE_nekkod"))
         .env("NEKKOD_CONFIG", config.to_string())
         .stdin(Stdio::piped())
@@ -863,6 +870,10 @@ impl Drop for TurnRig {
 }
 
 fn turn_rig(name: &str, session: Value) -> TurnRig {
+    turn_rig_with(name, session, json!({}))
+}
+
+fn turn_rig_with(name: &str, session: Value, extra: Value) -> TurnRig {
     let data = std::env::temp_dir().join(format!("nekkod-turn-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     let workspace = data.join("project");
@@ -873,7 +884,7 @@ fn turn_rig(name: &str, session: Value) -> TurnRig {
     let id = session["id"].as_str().unwrap().to_string();
     std::fs::write(data.join("sessions").join(format!("{id}.json")), serde_json::to_string_pretty(&session).unwrap())
         .unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with_config(true, Some(&data), extra);
     TurnRig { data, workspace, d }
 }
 
@@ -1738,4 +1749,89 @@ async fn a_daemon_turn_runs_its_tool_hooks_itself() {
     let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
     let calls = all.as_array().unwrap();
     assert!(!calls.iter().any(|e| e[0] == "turn:hook" || e[0] == "turn:tool"), "the host ran nothing: {all}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn classifies_commands_and_lists_tools_without_the_host() {
+    let data = std::env::temp_dir().join(format!("nekkod-tooling-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    let d = start_with(false, Some(&data));
+    let (status, decision) = post(d.port, "guardrails:classify", json!(["rm -rf /"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{decision}");
+    assert_eq!(decision["action"], "ask", "{decision}");
+    assert_eq!(decision["matches"][0]["ruleId"], "rm-rf", "{decision}");
+    let (_, safe) = post(d.port, "guardrails:classify", json!(["ls"]), Some(TOKEN)).await;
+    assert_eq!(safe["action"], "allow", "{safe}");
+    let (_, tools) = post(d.port, "tools:list", json!([]), Some(TOKEN)).await;
+    let names: Vec<&str> = tools.as_array().unwrap().iter().filter_map(|t| t["name"].as_str()).collect();
+    assert!(names.contains(&"read_file") && names.contains(&"bash"), "{names:?}");
+    assert!(tools[0]["description"].as_str().is_some_and(|d| !d.is_empty()));
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_drives_the_in_app_browser_and_capture_through_the_bridge() {
+    use axum::routing::post as route_post;
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+    let s2 = seen.clone();
+    let app = axum::Router::new().route(
+        "/bridge",
+        route_post(move |headers: axum::http::HeaderMap, axum::Json(body): axum::Json<Value>| {
+            let s2 = s2.clone();
+            async move {
+                let authorized =
+                    headers.get("authorization").and_then(|v| v.to_str().ok()) == Some("Bearer bridge-token");
+                s2.lock().unwrap().push(json!({ "authorized": authorized, "body": body }));
+                let reply = if body["tool"] == "capture" {
+                    json!({ "windows": [{ "window_id": "window:1", "title": "Editor" }] })
+                } else {
+                    json!({ "output": "Example page" })
+                };
+                axum::Json(reply)
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let bridge_port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+    let session = json!({
+        "id": "s_turn_b", "title": "Named", "mode": "yolo", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let bridge = json!({ "browserBridge": { "url": format!("http://127.0.0.1:{bridge_port}/bridge"), "token": "bridge-token" } });
+    let rig = turn_rig_with("browser", session, bridge);
+    let model = scripted_model(vec![
+        call_tool(
+            "c_nav",
+            "browser",
+            json!({ "mode": "dedicated", "action": "navigate", "url": "https://example.com" }),
+        ),
+        call_tool("c_list", "capture", json!({ "action": "list" })),
+        say_text("looked"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_b", "s_turn_b", json!({}));
+    spec["allowBrowserControl"] = json!(true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, end) = turn_record(rig.d.port, "turn_b").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_turn_b");
+    let messages = saved["messages"].as_array().unwrap();
+    let tool_out = |id: &str| -> String {
+        let m = messages.iter().find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id).unwrap();
+        m["toolResult"]["output"].as_str().unwrap().to_string()
+    };
+    assert_eq!(tool_out("c_nav"), "Example page");
+    assert!(tool_out("c_list").contains("\"window_id\": \"window:1\""), "{}", tool_out("c_list"));
+    let seen = seen.lock().unwrap().clone();
+    assert_eq!(seen.len(), 2, "{seen:?}");
+    assert!(seen.iter().all(|r| r["authorized"] == true));
+    assert_eq!(seen[0]["body"]["sessionId"], "s_turn_b");
+    assert_eq!(seen[1]["body"], json!({ "tool": "capture", "sessionId": "s_turn_b", "action": "list" }));
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "the host ran nothing: {all}");
+    server.abort();
 }

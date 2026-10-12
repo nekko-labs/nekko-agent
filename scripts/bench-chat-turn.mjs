@@ -15,6 +15,9 @@
 //   node scripts/bench-chat-turn.mjs --model-url http://127.0.0.1:18431/v1 --model gemma \
 //     --route daemon|ts [--runs 3] [--load 8] [--json out.json]
 //
+// `--stats N` times N calls each of `gpu:stats`, `system:stats` and
+// `machine:readiness` under the same load, 1.1 s apart (past the GPU cache).
+//
 // `--usage N` then checks the turns' usage and reply lines landed in the data
 // dir, seeds the usage log to 20,000 records and times N `usage:summary` calls
 // under the same load (the daemon serves it when it owns accounting; pass
@@ -363,6 +366,21 @@ try {
     }
     results.usage = { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms), before };
     console.log(`usage:summary over 20k records: median ${results.usage.median.toFixed(1)} ms, p95 ${results.usage.p95.toFixed(1)} ms, max ${results.usage.max.toFixed(1)} ms`);
+  }
+  if (args.stats) {
+    // The monitor meters' polls and the readiness advisor, under the same load.
+    results.stats = {};
+    for (const channel of ['gpu:stats', 'system:stats', 'machine:readiness']) {
+      const ms = [];
+      for (let i = 0; i < Number(args.stats); i++) {
+        const t0 = performance.now();
+        await call(channel);
+        ms.push(performance.now() - t0);
+        await new Promise((r) => setTimeout(r, 1100)); // past the GPU cache, as a polling meter is
+      }
+      results.stats[channel] = { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms), daemon: info.owned.includes(channel) };
+      console.log(`${channel}: median ${results.stats[channel].median.toFixed(1)} ms, p95 ${results.stats[channel].p95.toFixed(1)} ms, max ${results.stats[channel].max.toFixed(1)} ms (daemon owns it: ${results.stats[channel].daemon})`);
+    }
   }
   busy = false;
   await Promise.all(loaders);

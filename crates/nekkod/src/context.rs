@@ -203,8 +203,13 @@ mod tests {
         let fx: Value = serde_json::from_str(&std::fs::read_to_string(golden.join("fixtures.json")).unwrap()).unwrap();
         let expected: Value =
             serde_json::from_str(&std::fs::read_to_string(golden.join("expected.json")).unwrap()).unwrap();
-        let root_dir = std::env::temp_dir().join(format!("nekkod-ctx-preview-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root_dir);
+        // Match the host fixture: the prompt counts each absolute path.
+        let outer = std::env::temp_dir().join(format!("nekkod-ctx-preview-{}", std::process::id()));
+        let padding =
+            127usize.checked_sub(outer.to_string_lossy().encode_utf16().count()).expect("temporary path fits fixture");
+        let root_dir = outer.join("x".repeat(padding));
+        assert_eq!(root_dir.to_string_lossy().encode_utf16().count(), 128);
+        let _ = std::fs::remove_dir_all(&outer);
         let root = root_dir.to_string_lossy().into_owned();
         let fill = |v: &Value| -> Value {
             // Inside JSON text a backslash is written twice.
