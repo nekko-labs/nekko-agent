@@ -86,8 +86,8 @@ export function EngineInstallCard({
             </button>
           </div>
           <p className="mt-2 text-[11px] text-ink-faint">
-            A few hundred megabytes, from llama.cpp's own GitHub releases. Nothing is downloaded until you press the
-            button.
+            From llama.cpp's own GitHub releases: tens of megabytes for Vulkan or CPU, several hundred for CUDA.
+            Nothing is downloaded until you press the button.
           </p>
         </>
       ) : (

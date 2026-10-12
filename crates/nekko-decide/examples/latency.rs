@@ -20,7 +20,10 @@ fn main() {
     let ep = args.get(1).and_then(|e| Ep::parse(e)).unwrap_or(Ep::Auto);
     let precision = args.get(2).and_then(|p| Precision::parse(p));
     let iterations: usize = args.get(3).and_then(|n| n.parse().ok()).unwrap_or(50);
-    let model = match DecisionModel::load(std::path::Path::new(dir), &LoadOptions { precision, ep, name: None }) {
+    let model = match DecisionModel::load(
+        std::path::Path::new(dir),
+        &LoadOptions { precision, ep, ..LoadOptions::default() },
+    ) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("load failed: {e}");

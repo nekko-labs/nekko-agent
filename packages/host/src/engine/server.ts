@@ -17,6 +17,7 @@ import { defaultContextTokens, MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } f
 import { DAEMON_PORT, type EngineDaemon } from './daemon.js';
 import { mlxArgs } from './mlx.js';
 import { diffusionArgs } from './diffusion.js';
+import { ensureVcRuntime, isMissingDllExit, missingDllMessage } from './vc-runtime.js';
 
 /**
  * The Nekko engine's server: one address, several models.
@@ -423,6 +424,13 @@ export function createEngineServer(deps: EngineServerDeps) {
       return { ok: false, message: unsupported };
     }
 
+    // A Windows without the Visual C++ Redistributable gets the copy the app
+    // ships, beside the engine, before the loader goes looking for it.
+    if (!mlx) {
+      const copied = await ensureVcRuntime(dirname(bin)).catch(() => [] as string[]);
+      if (copied.length) push(`Added the Visual C++ runtime beside the engine (${copied.join(', ')}).`);
+    }
+
     const settings = deps.settings();
     const gpuCapable = (await deps.gpuCapable?.().catch(() => undefined)) ?? true;
     await sync();
@@ -520,7 +528,7 @@ export function createEngineServer(deps: EngineServerDeps) {
         .catch((e: Error) => ({ status: 'failed' as const, message: e.message, log: [] as string[] }));
       if (outcome.status === 'failed') {
         push(...outcome.log.slice(-4));
-        const message = explainLoadError(outcome.log) || outcome.message;
+        const message = isMissingDllExit(outcome.message) ? missingDllMessage() : explainLoadError(outcome.log) || outcome.message;
         lastLoadErrors.set(modelId, message);
         return { ok: false, message };
       }
@@ -581,7 +589,7 @@ export function createEngineServer(deps: EngineServerDeps) {
         // own wording is translated where a pattern is known, because "error
         // loading model" leaves a person nowhere to start.
         push(...childLog.slice(-4));
-        const message = explainLoadError(childLog) || exited;
+        const message = isMissingDllExit(exited) ? missingDllMessage() : explainLoadError(childLog) || exited;
         lastLoadErrors.set(modelId, message);
         return { ok: false, message };
       }

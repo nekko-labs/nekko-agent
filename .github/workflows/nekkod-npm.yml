@@ -11,6 +11,8 @@ on:
     paths:
       - .github/workflows/nekkod-npm.yml
       - apps/server/scripts/nekkod-packages.mjs
+      - scripts/vc-runtime.mjs
+      - crates/nekkod/build.rs
 
 permissions:
   contents: read
@@ -46,10 +48,15 @@ jobs:
           mkdir -p "$dest"
           for f in "$src"/*; do
             name=$(basename "$f")
-            if [[ "$name" == nekkod || "$name" == nekkod.exe || "$name" =~ ^(DirectML\.dll|(lib)?onnxruntime.*\.(dll|so(\.[0-9]+)*|dylib))$ ]]; then
+            if [[ "$name" == nekkod || "$name" == nekkod.exe || "$name" =~ ^(lib)?onnxruntime.*\.(dll|so(\.[0-9]+)*|dylib)$ ]]; then
               cp "$f" "$dest/"
             fi
           done
+          # The Visual C++ runtime, app-local, so nekkod starts on a PC without the
+          # redistributable (DirectML.dll is delay-loaded on demand, never shipped).
+          if [[ "${{ runner.os }}" == Windows ]]; then
+            node scripts/vc-runtime.mjs --copy "$dest"
+          fi
           ls -la "$dest"
           # The binary must start (and say its version) on the machine it was built for.
           "$dest"/nekkod* --version

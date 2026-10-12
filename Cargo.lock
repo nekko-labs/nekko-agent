@@ -1410,6 +1410,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokenizers",
+ "windows-sys",
 ]
 
 [[package]]
@@ -1518,7 +1519,6 @@ dependencies = [
  "tokio",
  "windows-sys",
 ]
-
 
 [[package]]
 name = "nekko-settings"
@@ -1646,9 +1646,10 @@ dependencies = [
  "nekko-infer",
  "nekko-js",
  "nekko-loop",
+ "nekko-machine",
  "nekko-oauth",
  "nekko-remote",
- "nekko-machine",
+ "nekko-sandbox",
  "nekko-settings",
  "nekko-store",
  "nekko-term",
@@ -1656,8 +1657,8 @@ dependencies = [
  "nekko-turn",
  "nekko-usage",
  "nekko-web",
- "regress",
  "nekko-workspace",
+ "regress",
  "reqwest",
  "serde",
  "serde_json",
@@ -1666,7 +1667,6 @@ dependencies = [
  "tokio-tungstenite 0.27.0",
  "url",
  "windows-sys",
- "nekko-sandbox",
 ]
 
 [[package]]

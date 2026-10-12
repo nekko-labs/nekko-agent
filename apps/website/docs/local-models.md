@@ -7,16 +7,30 @@ before you wait through the load. This is what the Models page shows you and why
 
 ## The Nekko engine
 
-The engine is llama.cpp, managed by Nekko Agent. You press one button, a few hundred
-megabytes come down from llama.cpp's own releases, and the app can serve models. Nothing
+The engine is llama.cpp, managed by Nekko Agent. You press one button, a build comes down
+from llama.cpp's own releases (about 30 MB for Vulkan or CPU, several hundred MB for
+CUDA), and the app can serve models. Nothing
 is downloaded before that press.
 
 **Which build.** Picked from what the GPU probe actually found, not from the platform:
-CUDA only where `nvidia-smi` answers, Vulkan for a GPU we cannot identify, Metal on Apple
-Silicon, CPU where there is no evidence of anything else. A slow engine that runs beats a
-fast one that fails to start. Every other build for your machine stays in the list if you
-disagree. If you already have a `llama-server`, point at it instead: Nekko Agent will run
-it and never update or remove it.
+CUDA where `nvidia-smi` answers and the card can run it, Vulkan for any other GPU, Metal
+on Apple Silicon, CPU where there is no evidence of anything else. A slow engine that runs
+beats a fast one that fails to start. llama.cpp's CUDA build is CUDA 13, which needs a
+GTX 16 / RTX 20 series card or newer (compute capability 7.5) and driver 580 or newer, so
+an older card or driver is recommended Vulkan and told why. The picker says CUDA is
+roughly 15-20% faster than Vulkan on NVIDIA (a rough public figure, not yet measured on
+our hardware); it is also the bigger download, about 550 MB on Windows with NVIDIA's CUDA
+runtime against Vulkan's 30 MB. A supported NVIDIA machine on a Vulkan or CPU build is
+offered **Switch to CUDA** on the Model server card. Every other build
+for your machine stays in the list if you disagree. If you already have a `llama-server`,
+point at it instead: Nekko Agent will run it and never update or remove it.
+
+**No Visual Studio, ever.** The Windows builds of llama.cpp and stable-diffusion.cpp, and
+Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`,
+`VCRUNTIME140.dll`), not Visual Studio. The installer carries those DLLs beside the daemon
+(about 1 MB), and on a PC without the Visual C++ Redistributable they are copied in beside
+the engine before it starts. If an engine still dies for a missing DLL, the error says so
+and links Microsoft's 25 MB redistributable.
 
 **Where models come from.** A short curated list answers "what should I run"; search
 covers everything else, straight against Hugging Face with no account. Each model expands

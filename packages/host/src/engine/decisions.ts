@@ -10,6 +10,7 @@ import type {
   InstalledDecisionModel,
 } from '@nekko-agent/shared';
 import type { createDownloads } from './download.js';
+import { downloadDirectml } from './directml.js';
 import type { EngineDaemon } from './daemon.js';
 
 /**
@@ -93,6 +94,9 @@ export interface DecisionsDeps {
   folders?: () => string[];
   saveFolders?: (dirs: string[]) => void;
   fetch?: typeof fetch;
+  /** Where a downloaded DirectML.dll goes (Windows); without it none is fetched. */
+  directmlDir?: () => string;
+  platform?: NodeJS.Platform;
 }
 
 const fileSize = (path: string) => stat(path).then((s) => (s.isFile() ? s.size : 0)).catch(() => 0);
@@ -235,10 +239,36 @@ export function createDecisions(deps: DecisionsDeps) {
     const model = (await models()).find((m) => m.id === id);
     if (!model) return { ok: false, message: 'That decision model is not downloaded.' };
     try {
-      const s = await daemon.decideLoad({ dir: model.dir, precision: precision ?? model.precisions[0], name: model.external ? 'laya' : model.id });
-      return { ok: true, message: `Loaded ${model.name} (${s.precision ?? precision ?? model.precisions[0]}) on ${s.ep ?? 'the CPU'}${s.loadMs ? ` in ${(Number(s.loadMs) / 1000).toFixed(1)} s` : ''}.` };
+      const dml = await directmlFor(daemon);
+      const s = await daemon.decideLoad({
+        dir: model.dir,
+        precision: precision ?? model.precisions[0],
+        name: model.external ? 'laya' : model.id,
+        ...(dml.path ? { directml: dml.path } : {}),
+      });
+      const loaded = `Loaded ${model.name} (${s.precision ?? precision ?? model.precisions[0]}) on ${s.ep ?? 'the CPU'}${s.loadMs ? ` in ${(Number(s.loadMs) / 1000).toFixed(1)} s` : ''}.`;
+      return { ok: true, message: dml.note ? `${loaded} ${dml.note}` : loaded };
     } catch (e) {
       return { ok: false, message: (e as Error).message };
+    }
+  }
+
+  /**
+   * The DirectML.dll to hand the daemon. Windows 11's own copy is new enough,
+   * and then this is nothing; Windows 10's is not, and then the copy fetched
+   * once from Microsoft (about 9 MB, see directml.ts) is used, fetched now if
+   * need be. A failed fetch is a note, not a failure: the model still loads,
+   * on the CPU.
+   */
+  async function directmlFor(daemon: EngineDaemon): Promise<{ path?: string; note?: string }> {
+    if ((deps.platform ?? process.platform) !== 'win32' || !deps.directmlDir) return {};
+    const s = await daemon.decideStatus().catch(() => null);
+    const dml = s?.directml as { available?: boolean } | undefined;
+    if (!dml || dml.available) return {};
+    try {
+      return { path: await downloadDirectml(deps.directmlDir(), { fetch: deps.fetch }) };
+    } catch (e) {
+      return { note: `${(e as Error).message} It runs on the CPU until DirectML can be fetched.` };
     }
   }
 

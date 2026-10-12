@@ -205,6 +205,11 @@ impl Backend {
             .env("NEKKO_BACKEND_TOKEN", token)
             .env("NEKKOD_URL", daemon_url)
             .env("NEKKOD_TOKEN", daemon_token)
+            // Where nekkod's app-local Visual C++ runtime lives: the host copies it into
+            // llama.cpp builds on a Windows without the redistributable.
+            .envs(
+                std::env::current_exe().ok().and_then(|p| p.parent().map(|d| ("NEKKOD_RUNTIME_DIR", d.to_path_buf()))),
+            )
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())

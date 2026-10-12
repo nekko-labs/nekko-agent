@@ -4,12 +4,14 @@
 //! engine router answers `POST /v1/decisions` and `/v1/systemone` from the same model, so an
 //! app on the OpenAI-compatible port and the UI see one state.
 //!
-//! - `decide:load` `[dir, precision?]` or `[{ dir, precision?, ep?, name? }]`: load (replacing
+//! - `decide:load` `[dir, precision?]` or `[{ dir, precision?, ep?, name?, directml? }]`: load (replacing
 //!   any resident model) and reply with the status below. Precision is `fp16` (the default
-//!   when present), `fp32` or `int8`; ep is `auto` (default), `cpu`, `directml`, `coreml`, `cuda`.
+//!   when present), `fp32` or `int8`; ep is `auto` (default), `cpu`, `directml`, `coreml`, `cuda`;
+//!   `directml` is a DirectML.dll the host downloaded, for a Windows whose own copy is too old.
 //! - `decide:unload`: free it.
 //! - `decide:status`: `{ loaded, model, dir, file, precision, ep, epFallbacks, loadMs, ... }`,
-//!   plus `loading` while a load runs and `error` after one failed.
+//!   plus `loading` while a load runs and `error` after one failed. On Windows, `directml` says
+//!   whether a new enough DirectML.dll is on the machine (`nekko_decide::directml::status`).
 //! - `decide:run` `[{ model?, state, questions }]`: the Jev-shaped answer.
 //!
 //! Loading and inference block (seconds and milliseconds of ONNX Runtime work), so both run on
@@ -38,15 +40,16 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 fn load_options(args: &[Value]) -> Result<(PathBuf, LoadOptions), String> {
     let first = args.first().unwrap_or(&Value::Null);
-    let (dir, precision, ep, name) = match first {
-        Value::String(dir) => (Some(dir.as_str()), args.get(1).and_then(Value::as_str), None, None),
+    let (dir, precision, ep, name, directml) = match first {
+        Value::String(dir) => (Some(dir.as_str()), args.get(1).and_then(Value::as_str), None, None, None),
         Value::Object(o) => (
             o.get("dir").or_else(|| o.get("path")).and_then(Value::as_str),
             o.get("precision").and_then(Value::as_str),
             o.get("ep").and_then(Value::as_str),
             o.get("name").and_then(Value::as_str),
+            o.get("directml").and_then(Value::as_str).filter(|p| !p.trim().is_empty()),
         ),
-        _ => (None, None, None, None),
+        _ => (None, None, None, None, None),
     };
     let dir = dir.filter(|d| !d.trim().is_empty()).ok_or("decide:load needs a model directory")?;
     let precision = match precision {
@@ -58,7 +61,10 @@ fn load_options(args: &[Value]) -> Result<(PathBuf, LoadOptions), String> {
         Some(e) => Ep::parse(e)
             .ok_or_else(|| format!("unknown execution provider {e:?}; use auto, cpu, directml, coreml or cuda"))?,
     };
-    Ok((PathBuf::from(dir), LoadOptions { precision, ep, name: name.map(str::to_string) }))
+    Ok((
+        PathBuf::from(dir),
+        LoadOptions { precision, ep, name: name.map(str::to_string), directml: directml.map(PathBuf::from) },
+    ))
 }
 
 impl DecideService {
@@ -76,6 +82,9 @@ impl DecideService {
         }
         if let Some(e) = lock(&self.last_error).as_ref() {
             status["error"] = json!(e);
+        }
+        if cfg!(windows) {
+            status["directml"] = nekko_decide::directml::status(None);
         }
         status
     }
@@ -153,6 +162,9 @@ mod tests {
         assert_eq!(o.precision, Some(Precision::Fp32));
         let (_, o) = load_options(&[json!({ "dir": "/m", "ep": "cpu", "name": "laya" })]).unwrap();
         assert_eq!((o.ep, o.precision, o.name.as_deref()), (Ep::Cpu, None, Some("laya")));
+        assert_eq!(o.directml, None);
+        let (_, o) = load_options(&[json!({ "dir": "/m", "directml": "C:/rt/DirectML.dll" })]).unwrap();
+        assert_eq!(o.directml, Some(PathBuf::from("C:/rt/DirectML.dll")));
         assert!(load_options(&[]).is_err());
         assert!(load_options(&[json!("/m"), json!("fp8")]).is_err());
         assert!(load_options(&[json!({ "dir": "/m", "ep": "tpu" })]).is_err());

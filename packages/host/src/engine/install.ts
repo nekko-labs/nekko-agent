@@ -5,9 +5,10 @@ import { createReadStream } from 'fs';
 import { chmod, mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises';
 import { dirname, join, relative, isAbsolute } from 'path';
 import type { EngineBuild, EngineInstall, EnginePlatform, GpuStats } from '@nekko-agent/shared';
-import { buildsFor, hasBinaries, matchAsset, matchCompanion, recommendedBuild } from './builds.js';
+import { buildsFor, CUDA_FASTER, CUDA_QUERY, cudaSupportFrom, cudaUpgrade, hasBinaries, matchAsset, matchCompanion, recommendedBuild, type CudaSupport } from './builds.js';
 import { diffusionBuilds, matchDiffusionAsset, matchDiffusionCompanion } from './diffusion.js';
 import { RUNTIME_RELEASES } from './runtime-releases.js';
+import { ensureVcRuntime } from './vc-runtime.js';
 import type { EngineInstallPreview } from '@nekko-agent/shared';
 import type { Downloads } from './download.js';
 
@@ -77,8 +78,22 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
   const releasePin = RUNTIME_RELEASES[runtime];
   const runtimeName = runtime === 'diffusion' ? 'stable-diffusion.cpp' : 'llama.cpp';
   const serverNames = runtime === 'diffusion' ? ['sd-server', 'sd-server.exe'] : SERVER_NAMES;
-  const candidates = (gpu: GpuStats | null, adapters: GpuAdapter[]) =>
-    runtime === 'diffusion' ? diffusionBuilds(platform, arch, gpu) : buildsFor(platform, arch, gpu, adapters);
+  const candidates = (gpu: GpuStats | null, adapters: GpuAdapter[], cuda?: CudaSupport) =>
+    runtime === 'diffusion' ? diffusionBuilds(platform, arch, gpu) : buildsFor(platform, arch, gpu, adapters, cuda);
+
+  // Whether the NVIDIA cards can run the CUDA build (compute capability and
+  // driver). Asked once: the card and driver do not change under a running app,
+  // and `detect` runs on every status poll. A failed query is not cached.
+  let cudaReading: Promise<CudaSupport | undefined> | undefined;
+  const cudaSupport = (gpu: GpuStats | null): Promise<CudaSupport | undefined> => {
+    if (runtime !== 'llama' || gpu?.source !== 'nvidia-smi') return Promise.resolve(undefined);
+    cudaReading ??= run('nvidia-smi', CUDA_QUERY, 5000).then((out) => {
+      const reading = cudaSupportFrom(out);
+      if (!reading) cudaReading = undefined;
+      return reading;
+    });
+    return cudaReading;
+  };
   const selectAsset = runtime === 'diffusion' ? matchDiffusionAsset : matchAsset;
   const selectCompanion = runtime === 'diffusion' ? matchDiffusionCompanion : matchCompanion;
 
@@ -86,7 +101,8 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
   async function detect(): Promise<EngineInstall> {
     const gpu = await deps.getGpuStats().catch(() => null);
     const adapters = (await deps.getGpuAdapters?.().catch(() => [])) ?? [];
-    const available = candidates(gpu, adapters);
+    const cuda = await cudaSupport(gpu);
+    const available = candidates(gpu, adapters, cuda);
     const recommended = available[0];
 
     const external = deps.externalPath?.();
@@ -103,6 +119,7 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
     const record = await readRecord();
     if (record && (await isExecutable(record.binPath))) {
       const problem = await missingGpuRuntime(record);
+      const upgrade = runtime === 'llama' && !problem ? cudaUpgrade(platform, arch, gpu, record.backend, cuda) : undefined;
       return {
         binPath: record.binPath,
         source: 'managed',
@@ -110,6 +127,14 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
         version: record.version,
         installedAt: record.installedAt,
         ...(problem ? { problem } : {}),
+        ...(upgrade
+          ? {
+              upgrade: {
+                buildId: upgrade.id,
+                message: `Your NVIDIA graphics card can run the CUDA engine, which is ${CUDA_FASTER.toLowerCase()} than Vulkan. It is a download of several hundred MB.`,
+              },
+            }
+          : {}),
         available,
         recommended,
       };
@@ -143,8 +168,8 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
     const gpu = await deps.getGpuStats().catch(() => null);
     const adapters = (await deps.getGpuAdapters?.().catch(() => [])) ?? [];
     const build = buildId
-      ? candidates(gpu, adapters).find((b) => b.id === buildId)
-      : candidates(gpu, adapters)[0];
+      ? candidates(gpu, adapters, await cudaSupport(gpu)).find((b) => b.id === buildId)
+      : candidates(gpu, adapters, await cudaSupport(gpu))[0];
     if (!build) return { ok: false, message: 'No engine build matches this machine.' };
 
     const release = await fetchRelease();
@@ -204,6 +229,9 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
           const bin = await findServerBinary(dir, 0, serverNames);
           if (!bin) return `The archive did not contain ${serverNames[0]}.`;
           if (platform !== 'win32') await chmod(bin, 0o755).catch(() => {});
+          // The Windows builds import the Visual C++ runtime; a PC without it
+          // gets the app's own copy beside the binary (vc-runtime.ts).
+          await ensureVcRuntime(dirname(bin), { platform }).catch(() => []);
           signal.throwIfAborted();
           await writeRecord({
             binPath: bin,
@@ -286,7 +314,7 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
 
   async function preview(buildId?: string): Promise<EngineInstallPreview | null> {
     const gpu = await deps.getGpuStats().catch(() => null);
-    const available = candidates(gpu, (await deps.getGpuAdapters?.().catch(() => [])) ?? []);
+    const available = candidates(gpu, (await deps.getGpuAdapters?.().catch(() => [])) ?? [], await cudaSupport(gpu));
     const build = buildId ? available.find(b => b.id === buildId) : available[0];
     const release = await fetchRelease();
     if (!build || !release) return null;
