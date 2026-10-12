@@ -15,8 +15,10 @@ mod engine;
 mod hub;
 mod hypergate;
 mod loops;
+mod machine;
 mod mcp;
 mod procgroup;
+mod resource_queue;
 mod routes;
 mod settings;
 mod sideband;
@@ -106,6 +108,15 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
     });
     let catalog = settings.as_deref().map(catalog::new);
+    // The machine probes and the resource queue read the daemon's settings store.
+    let read_settings = |s: &Option<Arc<settings::Settings>>| {
+        let store = s.as_ref().map(|s| s.store.clone());
+        move || store.as_ref().map_or(serde_json::Value::Null, |s| s.get())
+    };
+    let engine_bin = {
+        let read = read_settings(&settings);
+        move || nekko_js::truthy_str(read().get("engineBinPath")).map(str::to_string)
+    };
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -122,10 +133,21 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 mcp.clone(),
                 engine.decide.clone(),
             )
-            .with_settings(settings.as_ref().map(|s| s.store.clone())),
+            .with_settings(settings.as_ref().map(|s| s.store.clone()))
+            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
         ),
         mcp: mcp.clone(),
         accounts,
+        machine: Arc::new(nekko_machine::Machine::new(
+            cfg.data_dir.clone().map(std::path::PathBuf::from),
+            Box::new(engine_bin),
+        )),
+        resource_queue: cfg.data_dir.clone().map(|d| {
+            Arc::new(resource_queue::ResourceQueue::new(
+                std::path::PathBuf::from(d),
+                Box::new(read_settings(&settings)),
+            ))
+        }),
         settings,
         voice: voice.clone(),
         catalog,
