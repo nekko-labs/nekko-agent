@@ -1449,6 +1449,36 @@ async fn without_a_data_dir_accounting_stays_with_the_host() {
 }
 
 /// A streamable-HTTP MCP server with one tool, `echo`, on a loopback port.
+#[tokio::test(flavor = "multi_thread")]
+async fn reports_mcp_status_from_its_own_servers() {
+    let (mcp_port, mcp_server, _) = http_mcp().await;
+    let data = std::env::temp_dir().join(format!("nekkod-mcp-status-{}", std::process::id()));
+    std::fs::create_dir_all(&data).unwrap();
+    let settings = json!({ "mcpServers": [
+        { "id": "srv", "name": "Echo", "enabled": true, "command": "", "args": [], "url": format!("http://127.0.0.1:{mcp_port}/mcp") },
+        { "id": "off", "name": "Off", "enabled": false, "command": "nope", "args": [] },
+    ] });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with(true, Some(&data));
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("mcp:status")), "{info}");
+    let (status, rows) = post(d.port, "mcp:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(
+        rows,
+        json!([
+            { "id": "srv", "name": "Echo", "connected": true, "tools": [{ "name": "echo", "description": "Echo it" }] },
+            { "id": "off", "name": "Off", "connected": false, "tools": [] },
+        ])
+    );
+    // Answered here: the backend never heard of it.
+    let (_, all) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "mcp:status"), "{all}");
+    mcp_server.abort();
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
 async fn http_mcp() -> (u16, tokio::task::JoinHandle<()>, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
     use axum::routing::post as route_post;
     let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));

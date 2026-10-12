@@ -255,6 +255,13 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Ok(info)
         }
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
+        // `mcpStatus`: sync the configured servers here, then report them.
+        "mcp:status" if ctx.settings.is_some() => {
+            let settings = crate::settings::current(ctx).await;
+            let configs = settings.get("mcpServers").filter(|v| v.is_array()).cloned().unwrap_or(json!([]));
+            let snapshot = ctx.mcp.sync(&configs).await;
+            Ok(crate::mcp::status(&configs, &snapshot))
+        }
         "provider:complete" => crate::sideband::complete(arg(&args, 0)).await,
         c if crate::accounts::CHANNELS.contains(&c) && ctx.accounts.enabled() => ctx.accounts.route(c, &args).await,
         // The daemon's settings store says where the data directory is.
@@ -399,6 +406,7 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.settings.is_some() {
         all.extend_from_slice(crate::settings::CHANNELS);
+        all.push("mcp:status");
     }
     if ctx.voice.is_some() {
         all.extend_from_slice(crate::voice::CHANNELS);
