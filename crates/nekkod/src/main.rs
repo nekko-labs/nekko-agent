@@ -105,6 +105,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         accounts,
     };
     routes::forward_terminal_events(&ctx);
+    let processes = ctx.turns.processes.clone();
 
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
     let router = wire::router(app);
@@ -121,6 +122,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     backend.shutdown().await;
     terminals.close_all();
     mcp.stop_all();
+    processes.kill_all();
     Ok(())
 }
 

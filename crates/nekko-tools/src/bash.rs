@@ -120,12 +120,12 @@ impl Capture {
 /// Chunk-boundary-safe UTF-8 decoding for the live mirror, so a character
 /// split across two reads is not shown as two replacement characters.
 #[derive(Default)]
-struct Utf8Carry {
+pub(crate) struct Utf8Carry {
     pending: Vec<u8>,
 }
 
 impl Utf8Carry {
-    fn decode(&mut self, chunk: &[u8]) -> String {
+    pub(crate) fn decode(&mut self, chunk: &[u8]) -> String {
         let mut bytes = std::mem::take(&mut self.pending);
         bytes.extend_from_slice(chunk);
         let mut out = String::with_capacity(bytes.len());
@@ -155,7 +155,7 @@ impl Utf8Carry {
         out
     }
 
-    fn finish(&mut self) -> String {
+    pub(crate) fn finish(&mut self) -> String {
         if self.pending.is_empty() {
             String::new()
         } else {
@@ -197,7 +197,7 @@ fn command(req: &RunRequest<'_>, shell: &str) -> tokio::process::Command {
 /// The error code Node's `spawn` reports. libuv on Windows resolves the shell
 /// against the working directory first, so any unusable directory is ENOENT;
 /// on Unix the child's `chdir` says ENOENT or ENOTDIR.
-fn spawn_code(cwd: &str, e: &std::io::Error) -> &'static str {
+pub(crate) fn spawn_code(cwd: &str, e: &std::io::Error) -> &'static str {
     let meta = std::fs::metadata(cwd);
     if cfg!(windows) {
         if !meta.as_ref().is_ok_and(|m| m.is_dir()) {
@@ -324,7 +324,7 @@ async fn run_shell(req: RunRequest<'_>) -> RunOutcome {
 
 /// Killing everything a command started.
 #[cfg(windows)]
-mod tree {
+pub(crate) mod tree {
     use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
     use windows_sys::Win32::System::JobObjects::{AssignProcessToJobObject, CreateJobObjectW, TerminateJobObject};
 
@@ -389,7 +389,7 @@ mod tree {
 }
 
 #[cfg(unix)]
-mod tree {
+pub(crate) mod tree {
     /// The command's process group (the shell leads it).
     pub struct Tree {
         pgid: Option<i32>,

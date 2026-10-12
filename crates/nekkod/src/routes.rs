@@ -200,6 +200,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         // (its own turns, image turns, the chat's dev servers).
         "chat:abort" => {
             ctx.turns.abort_session(str_arg(&args, 0).unwrap_or_default());
+            // A dev server the agent started belongs to the work it was doing.
+            ctx.turns.processes.kill_session(str_arg(&args, 0).unwrap_or_default());
             ctx.backend.call(channel, Value::Array(args)).await
         }
         "changes:list" => {

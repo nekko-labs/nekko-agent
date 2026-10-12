@@ -26,6 +26,7 @@ mod js;
 pub mod jsre;
 mod nodefs;
 pub mod path;
+pub mod process;
 mod sandbox;
 mod search;
 mod spec;
@@ -40,4 +41,5 @@ pub use exec::execute;
 pub use guardrails::{
     Action, GuardrailDecision, GuardrailMatch, GuardrailRule, Severity, classify_command, default_guardrails,
 };
+pub use process::{Processes, describe_process};
 pub use spec::{NOT_PORTED, PORTED_TOOLS, ToolSpec, builtin_tools, is_ported};

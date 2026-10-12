@@ -20,8 +20,10 @@
 //!   trip never passes through the TS event loop. Tools that still run in the
 //!   host park their approvals here too (`turn:approval`).
 //!
-//! It calls back for what has not moved: `turn:tool` (MCP, sub-agents, the
-//! browser, processes, fetch, watches, training reports, `decide`),
+//! It runs `fetch_url` (`nekko-web`) and the background-process tools
+//! (`nekko-tools`) itself, and calls back for what has not moved: `turn:tool`
+//! (the browser and window capture, watches, delegation targets, training
+//! reports, and MCP, sub-agents or `decide` for a host that keeps them),
 //! `turn:hook` (tool hooks), `turn:headers` (Anthropic subscription rate
 //! limits), `loop:log` (the agent terminal); and it sends the host every
 //! event (`turn:event`, deltas batched) for the phone relay and usage and
@@ -42,7 +44,7 @@ use nekko_chat::ProviderClient;
 use nekko_js as js;
 use nekko_loop::{Cancel, RunOptions, Steering, ToolRunner, run_agent};
 use nekko_store::SessionStore;
-use nekko_tools::{ChangeTracker, CommandLog, ToolCall, ToolContext, approver_fn, is_ported};
+use nekko_tools::{ChangeTracker, CommandLog, Processes, ToolCall, ToolContext, approver_fn, is_ported};
 use nekko_turn as turn;
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
@@ -57,7 +59,21 @@ use tokio::sync::{mpsc, oneshot};
 const DELTA_BATCH: Duration = Duration::from_millis(100);
 
 /// The built-in tools the daemon runs itself (`nekko-tools`).
-const NATIVE: &[&str] = &["read_file", "write_file", "edit_file", "glob", "grep", "list_dir", "bash"];
+const NATIVE: &[&str] = &[
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+];
+
+/// Of [`NATIVE`], the background-process tools (`nekko_tools::process`).
+const PROCESS_TOOLS: &[&str] = &["start_process", "read_process", "kill_process"];
 
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
@@ -243,6 +259,9 @@ pub struct Turns {
     /// The resident decision model (decide.rs): the `decide` tool's local
     /// provider runs here.
     decide: Arc<DecideService>,
+    /// Background processes the agent started (`start_process`); they
+    /// outlive the turn and die with the chat's Stop or the daemon.
+    pub processes: Arc<Processes>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
 }
@@ -258,7 +277,17 @@ impl Turns {
         mcp: Arc<Mcp>,
         decide: Arc<DecideService>,
     ) -> Self {
-        Self { store, data_dir, changes, accounts, mcp, decide, running: Mutex::default(), pending: Pending::default() }
+        Self {
+            store,
+            data_dir,
+            changes,
+            accounts,
+            mcp,
+            decide,
+            processes: Processes::new(),
+            running: Mutex::default(),
+            pending: Pending::default(),
+        }
     }
 
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
@@ -1128,6 +1157,7 @@ fn native_context(
     ctx.default_cwd = workspaces.first().and_then(|w| str_at(w, "path")).map(str::to_string);
     ctx.session_id = Some(session_id.to_string());
     ctx.changes = Some(turns.changes.clone());
+    ctx.processes = Some(turns.processes.clone());
     let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
     let b = backend.clone();
     tokio::spawn(async move {
@@ -1239,9 +1269,12 @@ impl TurnTools {
         {
             return Ok(self.call_mcp(mcp, call, name).await);
         }
+        if name == "fetch_url" {
+            return Ok(self.fetch_url(call).await);
+        }
         if let Some(ctx) = &self.native
             && NATIVE.contains(&name)
-            && is_ported(name)
+            && (is_ported(name) || PROCESS_TOOLS.contains(&name))
         {
             let call: ToolCall = serde_json::from_value(call.clone()).map_err(|e| e.to_string())?;
             return serde_json::to_value(nekko_tools::execute(&call, ctx).await).map_err(|e| e.to_string());
@@ -1260,6 +1293,29 @@ impl TurnTools {
             self.shared.emit(json!({ "type": "session_meta", "sessionId": self.shared.session_id }));
         }
         Ok(reply.get("result").cloned().unwrap_or_else(|| error(id, "The host returned no result.")))
+    }
+
+    /// `fetch_url` (tools.ts): reading a page is as safe as reading a file,
+    /// so only ask mode or the ask-everything sandbox asks.
+    async fn fetch_url(&self, call: &Value) -> Value {
+        let id = str_at(call, "id").unwrap_or_default();
+        let input = call.get("input").cloned().unwrap_or(Value::Null);
+        let url = match input.get("url") {
+            Some(Value::String(u)) if !js::trim(u).is_empty() => u.clone(),
+            _ => return error(id, "A URL is required."),
+        };
+        let asks = self.mode == "ask" || self.sandbox_mode.as_deref() == Some("ask-everything");
+        if asks && !self.turns.request_approval(&self.shared, call, &format!("Fetch {url}"), &json!("low")).await {
+            return error(id, "Fetch not approved by user.");
+        }
+        let cancel = nekko_tools::Cancel::new();
+        let c2 = cancel.clone();
+        self.shared.cancel.on_cancel(move || c2.cancel());
+        let max = input.get("max_chars").and_then(Value::as_f64);
+        match nekko_web::fetch_url(&url, max, &cancel).await {
+            Ok(page) => result(id, nekko_web::describe_fetched(&page)),
+            Err(e) => error(id, e),
+        }
     }
 
     /// `spawn_agent` (chat.ts `runSubAgent`): ask first when the policy says
