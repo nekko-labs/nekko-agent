@@ -89,6 +89,21 @@ describe('decorClock', () => {
     expect(clock.running()).toBe(false);
   });
 
+  it('never reads what would bring styles up to date on a tick', () => {
+    const beam = fakeAnimation('composer-beam-spin', 0);
+    const clock = setup([beam]);
+    // Reading a CSS animation's playState or effect makes Chromium recalc style;
+    // once held, the tick may only write currentTime.
+    let reads = 0;
+    Object.defineProperty(beam, 'playState', { get: () => { reads++; return 'paused'; } });
+    Object.defineProperty(beam, 'effect', { get: () => { reads++; return null; } });
+    clock.doc.timeline.currentTime = 1234;
+    clock.tick();
+    clock.tick();
+    expect(reads).toBe(0);
+    expect(beam.currentTime).toBe(1234);
+  });
+
   it('hands every decoration back to the browser when stopped', () => {
     const beam = fakeAnimation('pixel-blink');
     const clock = setup([beam]);
