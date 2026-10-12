@@ -58,7 +58,7 @@ import { adoptTurn, answerInDaemon, approvalViaDaemon, approveInDaemon, daemonAc
 import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
 import { applyTurnInput, cleanTitle, hostToolApproval, sendOptionsForQueuedItem, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
 import { killSessionProcesses } from './processes.js';
-import { hasToolHooks, postToolHooks, preToolHooks, turnEndHooks } from './hooks.js';
+import { DAEMON_HOOKS, hasToolHooks, postToolHooks, preToolHooks, turnEndHooks } from './hooks.js';
 import { completeText } from './sideband.js';
 import { createHostProvider as createProvider, promptCachingForHost } from './prompt-caching.js';
 import { appendAgentTerminal, finishAgentTerminal } from './terminal.js';
@@ -1420,6 +1420,8 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
   // turn's lines and reads its limits itself (crates/nekkod/src/accounts.rs).
   const daemon = daemonCall();
   const daemonAccounts = !!daemon && (await daemonAccountsTurns(daemon));
+  // A daemon that runs tool hooks gets the rules; an older one calls back (`turn:hook`).
+  const daemonHooks = !!daemon && (await daemonOwns(daemon, DAEMON_HOOKS));
   const spec: TurnSpec = {
     turnId,
     opts,
@@ -1444,7 +1446,8 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
       decide: !!t.decideWith,
       // Which decision runner `decide` uses; the daemon runs the local one itself.
       decideWith: t.decideWith,
-      hooks: hasToolHooks(settings),
+      hooks: !daemonHooks && hasToolHooks(settings),
+      ...(daemonHooks ? { hookRules: settings.hooks ?? [] } : {}),
       connectorSnippets: t.connectorSnippets,
       indexSnippets: t.indexSnippets,
       platform: process.platform,

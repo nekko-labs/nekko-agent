@@ -24,7 +24,8 @@
 //! (`nekko-tools`) itself, and calls back for what has not moved: `turn:tool`
 //! (the browser and window capture, watches, delegation targets, training
 //! reports, and MCP, sub-agents or `decide` for a host that keeps them),
-//! `turn:hook` (tool hooks), `turn:headers` (Anthropic subscription rate
+//! `turn:hook` (tool hooks, for a host that keeps them; given `facts.hookRules`
+//! they run here), `turn:headers` (Anthropic subscription rate
 //! limits), `loop:log` (the agent terminal); and it sends the host every
 //! event (`turn:event`, deltas batched) for the phone relay and usage and
 //! reply accounting, then `turn:end`.
@@ -262,6 +263,9 @@ pub struct Turns {
     /// Background processes the agent started (`start_process`); they
     /// outlive the turn and die with the chat's Stop or the daemon.
     pub processes: Arc<Processes>,
+    /// settings.json, when the daemon writes it: tool hooks are re-read
+    /// from it per call, as the TS host did.
+    settings: Option<Arc<nekko_settings::SettingsStore>>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
 }
@@ -285,9 +289,16 @@ impl Turns {
             mcp,
             decide,
             processes: Processes::new(),
+            settings: None,
             running: Mutex::default(),
             pending: Pending::default(),
         }
+    }
+
+    /// The daemon's settings store (settings.rs).
+    pub fn with_settings(mut self, settings: Option<Arc<nekko_settings::SettingsStore>>) -> Self {
+        self.settings = settings;
+        self
     }
 
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
@@ -731,6 +742,10 @@ impl Turns {
             names,
             native,
             hooks,
+            hook_rules: facts.get("hookRules").filter(|r| r.is_array()).map(nekko_tools::hooks::rules),
+            hook_cwd: workspaces.first().and_then(|w| str_at(w, "path")).map(str::to_string).unwrap_or_else(|| {
+                std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
+            }),
             incognito,
             training: js::truthy(lock(&session).get("trainingRunId")),
             unattended_ms: (settings.get("unattendedQuestionMinutes").and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
@@ -1193,7 +1208,11 @@ struct TurnTools {
     session: Arc<Mutex<Value>>,
     names: HashSet<String>,
     native: Option<ToolContext>,
+    /// The host runs this turn's tool hooks (`turn:hook`): an older host.
     hooks: bool,
+    /// This turn's hook rules, run here (`facts.hookRules`), and the folder they run in.
+    hook_rules: Option<Vec<nekko_tools::hooks::HookRule>>,
+    hook_cwd: String,
     incognito: bool,
     training: bool,
     unattended_ms: u64,
@@ -1209,6 +1228,22 @@ fn error(id: &str, output: impl Into<String>) -> Value {
 
 impl ToolRunner for TurnTools {
     async fn run(&self, call: &Value) -> Result<Value, String> {
+        if let Some(spec_rules) = &self.hook_rules {
+            // Re-read per call, so a hook added mid-turn applies to the next tool.
+            let rules = match &self.turns.settings {
+                Some(store) => {
+                    let store = store.clone();
+                    let hooks =
+                        tokio::task::spawn_blocking(move || store.get()["hooks"].clone()).await.unwrap_or(Value::Null);
+                    nekko_tools::hooks::rules(&hooks)
+                }
+                None => spec_rules.clone(),
+            };
+            if nekko_tools::hooks::has_tool_hooks(&rules) {
+                return self.run_with_hooks(&rules, call).await;
+            }
+            return self.inner(call).await;
+        }
         if !self.hooks {
             return self.inner(call).await;
         }
@@ -1242,6 +1277,41 @@ impl ToolRunner for TurnTools {
 }
 
 impl TurnTools {
+    /// The hooks around a call, run here (hooks.ts `withToolHooks`).
+    async fn run_with_hooks(&self, rules: &[nekko_tools::hooks::HookRule], call: &Value) -> Result<Value, String> {
+        use nekko_tools::hooks::{post_tool_hooks, pre_tool_hooks};
+        let id = str_at(call, "id").unwrap_or_default();
+        let sid = &self.shared.session_id;
+        let (block, notes) = pre_tool_hooks(rules, call, sid, &self.hook_cwd).await;
+        if let Some(block) = block {
+            let mut lines = vec![block];
+            lines.extend(notes);
+            return Ok(error(
+                id,
+                lines.join(
+                    "
+",
+                ),
+            ));
+        }
+        let out = self.inner(call).await?;
+        let mut post = post_tool_hooks(rules, call, out, sid, &self.hook_cwd).await;
+        if !notes.is_empty() {
+            let output = format!(
+                "{}
+
+{}",
+                post.get("output").map(js::display).unwrap_or_default(),
+                notes.join(
+                    "
+"
+                )
+            );
+            post["output"] = json!(output);
+        }
+        Ok(post)
+    }
+
     async fn inner(&self, call: &Value) -> Result<Value, String> {
         let id = str_at(call, "id").unwrap_or_default();
         let name = str_at(call, "name").unwrap_or_default();

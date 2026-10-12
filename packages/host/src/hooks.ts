@@ -23,6 +23,11 @@ import type { AppSettings, HookEvent, HookRule, ToolCall, ToolResult } from '@ne
  */
 
 export const HOOK_TIMEOUT_MS = 60_000;
+/**
+ * A daemon that lists this in `daemon:info` runs a turn's PreToolUse and
+ * PostToolUse hooks itself from the rules in its spec (`facts.hookRules`).
+ */
+export const DAEMON_HOOKS = 'turn:hooks';
 /** Most output a hook may hand to the model. */
 export const HOOK_OUTPUT_MAX = 2_000;
 
@@ -120,7 +125,7 @@ function clip(s: string): string {
   return t.length <= HOOK_OUTPUT_MAX ? t : `${t.slice(0, HOOK_OUTPUT_MAX)}…`;
 }
 
-function label(rule: HookRule): string {
+export function label(rule: HookRule): string {
   return rule.name?.trim() || rule.command.trim().split(/\s+/)[0] || 'hook';
 }
 

@@ -34,6 +34,10 @@
 // for, since the chat is in ask mode), timed from `tool:approve` to their
 // `tool_result`.
 //
+// `--hooks` adds a PreToolUse and a PostToolUse hook on write_file (each
+// `echo`), so the write_file approval's timing includes running them (in the
+// daemon when it runs hooks, through the TS host otherwise).
+//
 // `--route ts` sets NEKKO_AGENT_LOOP=ts on the backend: every turn runs in
 // the TS host, the escape hatch. Nothing touches the user's data directory or
 // a running app; every spawned process is ended on exit.
@@ -208,6 +212,10 @@ await call('settings:update', {
   workspaces: [{ id: 'w1', name: 'project', path: workspace, addedAt: Date.now() }, { id: 'w2', name: 'load', path: loadProject, addedAt: Date.now() }],
   providers: [{ id: 'local', kind: 'llamacpp', label: 'Local', baseUrl: modelUrl, enabled: true }],
   defaultChatMode: 'ask',
+  ...(args.hooks ? { hooks: [
+    { id: 'bench-pre', event: 'PreToolUse', name: 'pre', matcher: 'write_file', command: 'echo ok' },
+    { id: 'bench-post', event: 'PostToolUse', name: 'post', matcher: 'write_file', command: 'echo checked' },
+  ] } : {}),
   ...(mcpUrl ? { mcpServers: [{ id: 'bench', name: 'bench', enabled: true, command: '', args: [], url: mcpUrl }] } : {}),
 });
 if (load > 0) {

@@ -22,6 +22,7 @@ mod changes;
 mod context;
 mod exec;
 mod guardrails;
+pub mod hooks;
 mod js;
 pub mod jsre;
 mod nodefs;

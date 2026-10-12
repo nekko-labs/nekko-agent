@@ -1,0 +1,466 @@
+{
+ "rules": [
+  {
+   "id": "a",
+   "event": "PreToolUse",
+   "matcher": "bash|write_file",
+   "command": "x"
+  },
+  {
+   "id": "b",
+   "event": "PreToolUse",
+   "matcher": "",
+   "command": "y"
+  },
+  {
+   "id": "c",
+   "event": "PreToolUse",
+   "matcher": "(bad",
+   "command": "z"
+  },
+  {
+   "id": "d",
+   "event": "PreToolUse",
+   "command": "  ",
+   "matcher": ""
+  },
+  {
+   "id": "e",
+   "event": "PreToolUse",
+   "command": "w",
+   "enabled": false
+  },
+  {
+   "id": "f",
+   "event": "PostToolUse",
+   "command": "v"
+  },
+  {
+   "id": "g",
+   "event": "PreToolUse",
+   "matcher": "(bad, read_file  mcp__x",
+   "command": "u"
+  },
+  {
+   "id": "h",
+   "event": "PreToolUse",
+   "matcher": "BASH",
+   "command": "t"
+  },
+  {
+   "id": "i",
+   "event": "PostToolUse",
+   "matcher": "^mcp__",
+   "command": "s",
+   "enabled": true
+  },
+  {
+   "id": "j",
+   "event": "TurnEnd",
+   "matcher": "bash",
+   "command": "r"
+  },
+  {
+   "id": "k",
+   "event": "PreToolUse",
+   "matcher": "  ",
+   "command": "q"
+  },
+  {
+   "id": "l",
+   "event": "PreToolUse",
+   "matcher": "ſ",
+   "command": "p"
+  }
+ ],
+ "matching": [
+  {
+   "event": "PreToolUse",
+   "tool": "bash",
+   "ids": [
+    "a",
+    "b",
+    "h",
+    "k"
+   ]
+  },
+  {
+   "event": "PreToolUse",
+   "tool": "read_file",
+   "ids": [
+    "b",
+    "g",
+    "k"
+   ]
+  },
+  {
+   "event": "PreToolUse",
+   "tool": "(bad",
+   "ids": [
+    "b",
+    "c",
+    "g",
+    "k"
+   ]
+  },
+  {
+   "event": "PreToolUse",
+   "tool": null,
+   "ids": [
+    "a",
+    "b",
+    "c",
+    "g",
+    "h",
+    "k",
+    "l"
+   ]
+  },
+  {
+   "event": "PreToolUse",
+   "tool": "",
+   "ids": [
+    "a",
+    "b",
+    "c",
+    "g",
+    "h",
+    "k",
+    "l"
+   ]
+  },
+  {
+   "event": "PostToolUse",
+   "tool": "mcp__x__y",
+   "ids": [
+    "f",
+    "i"
+   ]
+  },
+  {
+   "event": "PostToolUse",
+   "tool": "bash",
+   "ids": [
+    "f"
+   ]
+  },
+  {
+   "event": "TurnEnd",
+   "tool": null,
+   "ids": [
+    "j"
+   ]
+  },
+  {
+   "event": "TurnEnd",
+   "tool": "bash",
+   "ids": [
+    "j"
+   ]
+  },
+  {
+   "event": "PreToolUse",
+   "tool": "mcp__x",
+   "ids": [
+    "b",
+    "g",
+    "k"
+   ]
+  },
+  {
+   "event": "PreToolUse",
+   "tool": "S",
+   "ids": [
+    "b",
+    "k"
+   ]
+  }
+ ],
+ "hasToolHooks": [
+  {
+   "hooks": [
+    {
+     "id": "a",
+     "event": "PreToolUse",
+     "matcher": "bash|write_file",
+     "command": "x"
+    },
+    {
+     "id": "b",
+     "event": "PreToolUse",
+     "matcher": "",
+     "command": "y"
+    },
+    {
+     "id": "c",
+     "event": "PreToolUse",
+     "matcher": "(bad",
+     "command": "z"
+    },
+    {
+     "id": "d",
+     "event": "PreToolUse",
+     "command": "  ",
+     "matcher": ""
+    },
+    {
+     "id": "e",
+     "event": "PreToolUse",
+     "command": "w",
+     "enabled": false
+    },
+    {
+     "id": "f",
+     "event": "PostToolUse",
+     "command": "v"
+    },
+    {
+     "id": "g",
+     "event": "PreToolUse",
+     "matcher": "(bad, read_file  mcp__x",
+     "command": "u"
+    },
+    {
+     "id": "h",
+     "event": "PreToolUse",
+     "matcher": "BASH",
+     "command": "t"
+    },
+    {
+     "id": "i",
+     "event": "PostToolUse",
+     "matcher": "^mcp__",
+     "command": "s",
+     "enabled": true
+    },
+    {
+     "id": "j",
+     "event": "TurnEnd",
+     "matcher": "bash",
+     "command": "r"
+    },
+    {
+     "id": "k",
+     "event": "PreToolUse",
+     "matcher": "  ",
+     "command": "q"
+    },
+    {
+     "id": "l",
+     "event": "PreToolUse",
+     "matcher": "ſ",
+     "command": "p"
+    }
+   ],
+   "has": true
+  },
+  {
+   "hooks": [
+    {
+     "id": "j",
+     "event": "TurnEnd",
+     "matcher": "bash",
+     "command": "r"
+    }
+   ],
+   "has": false
+  },
+  {
+   "hooks": [
+    {
+     "id": "d",
+     "event": "PreToolUse",
+     "command": "  ",
+     "matcher": ""
+    },
+    {
+     "id": "e",
+     "event": "PreToolUse",
+     "command": "w",
+     "enabled": false
+    }
+   ],
+   "has": false
+  }
+ ],
+ "decisions": [
+  {
+   "outcome": {
+    "code": 0,
+    "stdout": " {\"decision\":\"block\",\"reason\":\" no \"}",
+    "stderr": ""
+   },
+   "decision": {
+    "block": true,
+    "reason": "no"
+   }
+  },
+  {
+   "outcome": {
+    "code": 0,
+    "stdout": "{\"decision\":\"deny\"}",
+    "stderr": ""
+   },
+   "decision": {
+    "block": true,
+    "reason": "Blocked by a hook."
+   }
+  },
+  {
+   "outcome": {
+    "code": 0,
+    "stdout": "{\"decision\":\"deny\",\"reason\":5}",
+    "stderr": ""
+   },
+   "decision": {
+    "block": false,
+    "reason": ""
+   }
+  },
+  {
+   "outcome": {
+    "code": 2,
+    "stdout": "{\"decision\":\"deny\",\"reason\":5}",
+    "stderr": ""
+   },
+   "decision": {
+    "block": true,
+    "reason": "{\"decision\":\"deny\",\"reason\":5}"
+   }
+  },
+  {
+   "outcome": {
+    "code": 0,
+    "stdout": "{\"decision\":\"allow\",\"reason\":\"fine\"}",
+    "stderr": ""
+   },
+   "decision": {
+    "block": false,
+    "reason": ""
+   }
+  },
+  {
+   "outcome": {
+    "code": 2,
+    "stdout": "out",
+    "stderr": "  err  "
+   },
+   "decision": {
+    "block": true,
+    "reason": "err"
+   }
+  },
+  {
+   "outcome": {
+    "code": 2,
+    "stdout": "  ",
+    "stderr": ""
+   },
+   "decision": {
+    "block": true,
+    "reason": "Blocked by a hook."
+   }
+  },
+  {
+   "outcome": {
+    "code": 1,
+    "stdout": "{nope",
+    "stderr": "x"
+   },
+   "decision": {
+    "block": false,
+    "reason": ""
+   }
+  },
+  {
+   "outcome": {
+    "code": null,
+    "stdout": "",
+    "stderr": "spawn failed"
+   },
+   "decision": {
+    "block": false,
+    "reason": ""
+   }
+  },
+  {
+   "outcome": {
+    "code": 2,
+    "stdout": "",
+    "stderr": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   },
+   "decision": {
+    "block": true,
+    "reason": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee…"
+   }
+  },
+  {
+   "outcome": {
+    "code": 0,
+    "stdout": "{\"decision\":\"block\",\"reason\":\"\"}",
+    "stderr": ""
+   },
+   "decision": {
+    "block": true,
+    "reason": "Blocked by a hook."
+   }
+  },
+  {
+   "outcome": {
+    "code": 0,
+    "stdout": "{\"decision\":\"block\",\"reason\":null}",
+    "stderr": ""
+   },
+   "decision": {
+    "block": true,
+    "reason": "Blocked by a hook."
+   }
+  },
+  {
+   "outcome": {
+    "code": 2,
+    "stdout": "[1]",
+    "stderr": ""
+   },
+   "decision": {
+    "block": true,
+    "reason": "[1]"
+   }
+  }
+ ],
+ "labels": [
+  {
+   "rule": {
+    "command": "  lint  --fix"
+   },
+   "label": "lint"
+  },
+  {
+   "rule": {
+    "name": " Linter ",
+    "command": "x"
+   },
+   "label": "Linter"
+  },
+  {
+   "rule": {
+    "name": "  ",
+    "command": "\tnpm\ttest"
+   },
+   "label": "npm"
+  },
+  {
+   "rule": {
+    "command": "   "
+   },
+   "label": "hook"
+  },
+  {
+   "rule": {
+    "name": "",
+    "command": "a b c"
+   },
+   "label": "a"
+  }
+ ]
+}

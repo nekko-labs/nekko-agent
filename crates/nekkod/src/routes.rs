@@ -357,6 +357,9 @@ pub const OWNED: &[&str] = &[
     // Not a channel: a turn whose spec says `facts.spawn` drives its
     // `spawn_agent` children here, the host making them (`spawn:prepare`).
     "turn:spawn",
+    // Not a channel: a turn whose spec carries `facts.hookRules` runs its
+    // PreToolUse and PostToolUse hooks here (nekko-tools `hooks`).
+    "turn:hooks",
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",
