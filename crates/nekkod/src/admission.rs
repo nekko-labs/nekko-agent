@@ -174,7 +174,7 @@ fn is_local(kind: &str) -> bool {
 }
 
 /// `providerEndpoint`: a provider's URL when it is one a turn may call.
-fn provider_endpoint(provider: &Value) -> Option<url::Url> {
+pub(crate) fn provider_endpoint(provider: &Value) -> Option<url::Url> {
     let kind = s(provider, "kind");
     if !is_local(kind) && !["anthropic", "openai", "openrouter", "chatgpt", "openai-compat"].contains(&kind) {
         return None;
@@ -184,7 +184,7 @@ fn provider_endpoint(provider: &Value) -> Option<url::Url> {
 }
 
 /// `offlineProviderAllowed`: a local kind (or openai-compat) on a loopback address.
-fn offline_provider_allowed(provider: &Value) -> bool {
+pub(crate) fn offline_provider_allowed(provider: &Value) -> bool {
     let Some(url) = provider_endpoint(provider) else { return false };
     let kind = s(provider, "kind");
     let host = url.host_str().unwrap_or_default();
@@ -259,7 +259,7 @@ fn pick(v: &Value, keys: &[&str]) -> Value {
 }
 
 /// `hostProviderConfig`: `managedCachePrompt` only for the engine this app serves.
-fn host_provider_config(ctx: &Ctx, config: &Value) -> Value {
+pub(crate) fn host_provider_config(ctx: &Ctx, config: &Value) -> Value {
     let mut out = config.as_object().cloned().unwrap_or_default();
     out.shift_remove("managedCachePrompt");
     let managed = ctx.engine.router.serving().map(|c| format!("http://127.0.0.1:{}/v1", c.port));

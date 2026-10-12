@@ -2087,6 +2087,85 @@ async fn generates_a_design_on_the_default_provider() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn suggests_replies_and_fills_prompt_parts_on_the_chats_model() {
+    let data = std::env::temp_dir().join(format!("nekkod-side-{}", std::process::id()));
+    let sessions = data.join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let model = scripted_model(vec![
+        say_text("Sure: {\"options\":[\"Commit it\",\"commit IT\",\"Run the tests\"],\"next\":\"Commit it and push\"}"),
+        say_text("  \"You are a careful code reviewer.\"  "),
+    ])
+    .await;
+    let settings = json!({
+        "providers": [
+            { "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) },
+            { "id": "off", "kind": "openai", "label": "Off", "enabled": false, "baseUrl": "https://api.openai.com/v1" },
+        ],
+        "defaultProviderId": "p1",
+        "defaultModelId": "synthetic",
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let messages = json!([
+        { "id": "u1", "role": "user", "content": "Fix the bug", "createdAt": 1 },
+        { "id": "a1", "role": "assistant", "content": "Fixed. Want me to commit?", "createdAt": 2 },
+    ]);
+    let chats = [
+        ("s_side", json!({})),
+        ("s_task", json!({ "taskId": "t1" })),
+        ("s_offline", json!({ "offline": true, "providerId": "remote" })),
+        ("s_disabled", json!({ "providerId": "off" })),
+    ];
+    for (id, extra) in &chats {
+        let mut s = json!({ "id": id, "title": "Side", "messages": messages, "createdAt": 1, "updatedAt": 2 });
+        for (k, v) in extra.as_object().unwrap() {
+            s[k] = v.clone();
+        }
+        std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec_pretty(&s).unwrap()).unwrap();
+    }
+    let d = start_with(true, Some(&data));
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for channel in ["chat:suggest", "chat:fillPrompt"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
+    }
+
+    let (status, suggested) = post(d.port, "chat:suggest", json!(["s_side"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{suggested}");
+    assert_eq!(suggested, json!({ "options": ["Commit it", "Run the tests"], "next": "Commit it and push" }));
+    let (_, filled) = post(d.port, "chat:fillPrompt", json!(["s_side", "Role", "Review this PR"]), Some(TOKEN)).await;
+    assert_eq!(filled, json!("You are a careful code reviewer."));
+    // Both ran on the chat's provider and default model, with the ported prompts.
+    let sent = model.requests.lock().unwrap().clone();
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[0]["model"], "synthetic");
+    let content =
+        |i: usize| sent[i]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_string();
+    assert_eq!(content(0), nekko_turn::suggest_prompt(&json!({ "messages": messages })).unwrap());
+    assert_eq!(content(1), nekko_turn::fill_prompt("Role", "Review this PR"));
+    assert_eq!(sent[0]["max_tokens"].as_u64().or(sent[0]["max_completion_tokens"].as_u64()), Some(220), "{}", sent[0]);
+    // Usage written by the daemon, as the host's sideband wrote it.
+    let usage = std::fs::read_to_string(data.join("usage.jsonl")).unwrap();
+    let lines: Vec<Value> = usage.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(lines.len(), 2, "{usage}");
+    assert!(lines.iter().all(|l| l["sessionId"] == "s_side" && l["providerId"] == "p1" && l["modelId"] == "synthetic"));
+
+    // Nobody to suggest to, an offline chat without a local provider, a disabled
+    // provider, a chat that does not exist: null, and no model call.
+    for id in ["s_task", "s_offline", "s_disabled", "s_absent"] {
+        let (status, none) = post(d.port, "chat:suggest", json!([id]), Some(TOKEN)).await;
+        assert_eq!((status, none), (200, Value::Null), "{id}");
+    }
+    let (_, none) = post(d.port, "chat:fillPrompt", json!(["s_disabled", "Role", "x"]), Some(TOKEN)).await;
+    assert_eq!(none, Value::Null);
+    assert_eq!(model.requests.lock().unwrap().len(), 2);
+    // A failed call is null too: the model is gone.
+    drop(model);
+    let (status, none) = post(d.port, "chat:suggest", json!(["s_side"]), Some(TOKEN)).await;
+    assert_eq!((status, none), (200, Value::Null));
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn adds_and_revokes_folders_through_the_daemons_settings() {
     let data = std::env::temp_dir().join(format!("nekkod-folders-{}", std::process::id()));
     let project = data.join("My Project");

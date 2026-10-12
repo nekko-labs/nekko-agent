@@ -28,6 +28,7 @@ mod routes;
 mod runtimes;
 mod sandbox;
 mod settings;
+mod side;
 mod sideband;
 mod tooling;
 mod turns;
