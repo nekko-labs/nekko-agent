@@ -17,6 +17,16 @@ import { basename, dirname, extname, join, posix, relative, resolve } from 'node
 import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
 
+function stripHtmlTags(input) {
+  let prev;
+  let out = input;
+  do {
+    prev = out;
+    out = out.replace(/<[^>]+>/g, '');
+  } while (out !== prev);
+  return out;
+}
+
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const site = join(repo, 'apps', 'website');
 const outDir = join(site, 'docs');
@@ -107,11 +117,11 @@ function render(page, resolveHref) {
         const id = headingIds.shift();
         const inner = this.parser.parseInline(tokens);
         if (depth === 1) {
-          title = inner.replace(/<[^>]+>/g, '');
+          title = stripHtmlTags(inner);
           return '';
         }
         // Already escaped by marked: the layout inserts it as HTML.
-        if (depth <= 3) toc.push({ depth, id, html: inner.replace(/<[^>]+>/g, '') });
+        if (depth <= 3) toc.push({ depth, id, html: stripHtmlTags(inner) });
         return `<h${depth} id="${id}"><a class="anchor" href="#${id}" aria-hidden="true" tabindex="-1">#</a>${inner}</h${depth}>\n`;
       },
       code({ text, lang }) {
