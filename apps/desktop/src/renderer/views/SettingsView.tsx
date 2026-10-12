@@ -14,6 +14,8 @@ import { DelegationRouteSettings } from '../components/DelegationRouteSettings.j
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
 import { hasAppChrome } from '../chrome.js';
+import { ServiceLoadState } from '../components/ServiceLoadState.js';
+import { ErrorBoundary } from '../components/ErrorBoundary.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
   { value: 'workspace-jail', label: 'Workspace jail', desc: 'File access is confined to your added folders.' },
@@ -31,31 +33,29 @@ const CHAT_MODES: Array<{ value: ChatMode; label: string; desc: string }> = [
 ];
 
 export function SettingsView() {
-  const { applyTheme, onboardingOpen } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen })));
+  const { applyTheme, onboardingOpen, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
-  const [settings, setSettings] = useState<AppSettings | null>(null);
   const prevOnboardingOpen = useRef(onboardingOpen);
+  const reload = useCallback(() => refreshSettings(false), [refreshSettings]);
 
-  useEffect(() => { window.nekko.getSettings().then(setSettings); }, []);
+  useEffect(() => { void reload(); }, [reload]);
 
   // When the wizard overlay closes, re-read settings so the Settings view
   // behind it reflects any theme/onboarding changes made inside the wizard.
   useEffect(() => {
     if (prevOnboardingOpen.current && !onboardingOpen) {
-      void window.nekko.getSettings().then(setSettings);
+      void reload();
     }
     prevOnboardingOpen.current = onboardingOpen;
-  }, [onboardingOpen]);
+  }, [onboardingOpen, reload]);
 
   const update = async (patch: Partial<AppSettings>) => {
-    const next = await window.nekko.updateSettings(patch);
-    setSettings(next);
-    useStore.setState({ settings: next });
-    applyTheme();
+    try {
+      const next = await window.nekko.updateSettings(patch);
+      useStore.setState({ settings: next, settingsError: null });
+      applyTheme();
+    } catch (e) { useStore.getState().pushToast('error', (e as Error).message); }
   };
-
-  /** Re-read settings the host changed on its own (connecting Hypergate writes an MCP entry). */
-  const reload = useCallback(async () => setSettings(await window.nekko.getSettings()), []);
 
   /** Reopen the first-run wizard: clear the completion flag, then show it. */
   const replaySetup = async () => {
@@ -69,17 +69,18 @@ export function SettingsView() {
     update({ guardrails });
   };
 
-  if (!settings) return null;
+  if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={reload} />;
 
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl px-8 py-8">
+        {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
 
         {/* Appearance */}
         <section className="card mt-6 p-5">
           <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2></div>
-          <ThemePresetPicker settings={settings} update={update} />
+          <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
           <div className="mt-2 flex min-h-[40px] items-center justify-between">
             <span className="text-[13px]">{tr('settings.mascot')}</span>
             <Toggle on={settings.mascotEnabled} onChange={(v) => update({ mascotEnabled: v })} />
@@ -137,12 +138,12 @@ export function SettingsView() {
           </label>
           <p className="mt-1 text-[12px] text-ink-faint">Add newly created top-level agents to the wall automatically.</p>
         </section>
-        <CustomizationSection settings={settings} update={update} />
-        <GitManagementSection settings={settings} update={update} />
-        <VoiceSettings />
+        <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
+        <ErrorBoundary label="Git management"><GitManagementSection settings={settings} update={update} /></ErrorBoundary>
+        <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
 
         {/* Updates */}
-        <UpdatesSection settings={settings} update={update} />
+        <ErrorBoundary label="Updates"><UpdatesSection settings={settings} update={update} /></ErrorBoundary>
 
         {/* Sandbox */}
         <section className="card mt-5 p-5">
@@ -178,11 +179,11 @@ export function SettingsView() {
         </section>
 
         {/* Agent loop */}
-        <AgentLoopSection settings={settings} update={update} />
-        <HooksSection settings={settings} update={update} />
+        <ErrorBoundary label="Agent loop"><AgentLoopSection settings={settings} update={update} /></ErrorBoundary>
+        <ErrorBoundary label="Hooks"><HooksSection settings={settings} update={update} /></ErrorBoundary>
 
         {/* Terminal */}
-        <TerminalSection settings={settings} update={update} />
+        <ErrorBoundary label="Terminal"><TerminalSection settings={settings} update={update} /></ErrorBoundary>
 
         {/* Spec-driven development */}
         <section className="card mt-5 p-5">
@@ -253,16 +254,16 @@ export function SettingsView() {
           )}
         </section>
 
-        <section className="card mt-6 p-5"><DelegationRouteSettings settings={settings} update={update} /></section>
+        <section className="card mt-6 p-5"><ErrorBoundary label="Delegation routes"><DelegationRouteSettings settings={settings} update={update} /></ErrorBoundary></section>
 
         {/* MCP servers */}
-        <McpSection settings={settings} update={update} reload={reload} />
+        <ErrorBoundary label="MCP servers"><McpSection settings={settings} update={update} reload={reload} /></ErrorBoundary>
 
         {/* Remote access (relay) */}
-        <RemoteAccess />
+        <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
 
         {/* Guardrails */}
-        <GuardrailsSection settings={settings} update={update} updateGuardrail={updateGuardrail} />
+        <ErrorBoundary label="Guardrails"><GuardrailsSection settings={settings} update={update} updateGuardrail={updateGuardrail} /></ErrorBoundary>
 
         <section className="card mt-5 p-5">
           <h2 className="font-semibold">Developer</h2>
@@ -307,10 +308,10 @@ export function SettingsView() {
         </section>
 
         {/* Backup & restore */}
-        <BackupSection settings={settings} onSettings={(s) => { setSettings(s); useStore.setState({ settings: s }); applyTheme(); }} />
+        <ErrorBoundary label="Backup"><BackupSection settings={settings} onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
 
         {/* Data & privacy */}
-        <DataSection onSettings={(s) => { setSettings(s); useStore.setState({ settings: s }); applyTheme(); }} />
+        <ErrorBoundary label="Data and privacy"><DataSection onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
 
         <p className="mt-6 text-center text-[11px] text-ink-faint">Nekko Agent · open source · MIT</p>
       </div>

@@ -5,6 +5,10 @@ import { ensureNekko } from './web-client.js';
 import { CloudLogin, cloudAuthRequired } from './components/CloudLogin.js';
 import { UpdateProvider } from './components/UpdateBanner.js';
 import './styles.css';
+import { useStore } from './store.js';
+
+// Resolve the system preference before mounting even the loading or login UI.
+useStore.getState().applyTheme();
 
 function registerServiceWorker() {
   // Web/PWA editions only (not Electron's file://).

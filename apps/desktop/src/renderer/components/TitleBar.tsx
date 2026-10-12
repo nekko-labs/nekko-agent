@@ -1,7 +1,7 @@
 import { hasAppChrome, isMacChrome } from '../chrome.js';
 import { UpdateControl } from './UpdateBanner.js';
 import { DeveloperServerControls } from './DeveloperServerControls.js';
-import { BrandMark } from './BrandMark.js';
+import { NekkoAvatar } from './Mascot.js';
 import { useStore } from '../store.js';
 import { useT } from '../i18n.js';
 
@@ -25,7 +25,7 @@ export function TitleBar() {
   if (!hasAppChrome) return null;
   return (
     <div className={`titlebar ${isMacChrome ? 'titlebar-mac' : ''}`}>
-      <BrandMark size={28} className="titlebar-mark" title="Nekko Agent" />
+      <span className="titlebar-mark"><NekkoAvatar size={28} stationary title="Nekko Agent" /></span>
       <h1 className="titlebar-heading text-gradient">{t(`nav.${view}`)}</h1>
       <UpdateControl />
       {/* Layout controls follow the heading and version in the same row. */}

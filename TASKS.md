@@ -326,6 +326,10 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
+### Page recovery and startup appearance (2026-10-12)
+
+- [ ] FR1: Land shared-settings recovery, model-server loading/error/retry states, page/section/overlay render isolation, system appearance before first mount, and pixel Nekko in every desktop title bar. Implemented in PR #489; 900 desktop tests, typecheck, full production build and hidden fresh-default/failure/retry checks pass in both themes and widths. See SPEC.md, Page recovery and startup appearance. Hosted gates and landing pending. Friend-specific service failure and packaged-install reproduction remain unverified; these are diagnostic limitations, not a claimed engine repair.
+
 ### Docs hub (added 2026-10-12)
 
 - [ ] T189: Documentation hub at nekkoagent.com/docs, modelled on svelte.dev/docs, generated from repo Markdown by `scripts/build-docs.mjs` (`npm run docs`), with per-page Markdown, `llms-full.txt`, search, and the Docs site workflow that regenerates and commits the pages on any PR (or a regenerate PR on main) only when the output changed. Added: 2026-10-12. See SPEC.md, Documentation hub. Hub merged in #485; production verified 2026-10-12 (`/docs`, `/docs/cli.md`, `/llms-full.txt`, search index and images all 200). Remaining: confirm the first real run of the Docs site workflow pushes with the App token (its installation needs contents and pull-requests write, which runtime-updates.yml already uses).

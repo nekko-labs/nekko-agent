@@ -181,6 +181,7 @@ interface UiState {
   onboardingOpen: boolean;
   /** True after the first settings load has finished. */
   settingsLoaded: boolean;
+  settingsError: string | null;
   mascotMood: MascotMood;
   toasts: Toast[];
   paletteOpen: boolean;
@@ -264,7 +265,7 @@ interface UiState {
   setMascotMood: (m: MascotMood) => void;
   setView: (v: View) => void;
   setOnboardingOpen: (open: boolean) => void;
-  refreshSettings: () => Promise<void>;
+  refreshSettings: (autoOpenOnboarding?: boolean) => Promise<void>;
   refreshSessions: () => Promise<void>;
   setActiveSession: (id: string | null) => void;
   refreshProviders: () => Promise<void>;
@@ -537,6 +538,7 @@ export const useStore = create<UiState>((set, get) => ({
   planRailOpen: readPlanRailOpen(),
   onboardingOpen: false,
   settingsLoaded: false,
+  settingsError: null,
   mascotMood: 'waving',
   toasts: [],
   paletteOpen: false,
@@ -606,20 +608,25 @@ export const useStore = create<UiState>((set, get) => ({
   setView: (v) => set((s) => ({ view: viewEnabled(v, s.settings) ? v : 'command' })),
   setOnboardingOpen: (open) => set({ onboardingOpen: open }),
 
-  refreshSettings: async () => {
+  refreshSettings: async (autoOpenOnboarding = true) => {
+    set({ settingsError: null });
     try {
       const settings = await window.nekko.getSettings();
-      const onboardingOpen = shouldAutoOpenOnboarding(settings);
-      set({ settings, onboardingOpen, settingsLoaded: true });
+      if (!settings) throw new Error('Nekko service returned no settings.');
+      const onboardingOpen = autoOpenOnboarding ? shouldAutoOpenOnboarding(settings) : get().onboardingOpen;
+      set({ settings, onboardingOpen, settingsLoaded: true, settingsError: null });
       get().applyTheme();
       if (!get().activeProviderId && settings.defaultProviderId) {
         set({ activeProviderId: settings.defaultProviderId, activeModelId: settings.defaultModelId ?? null });
       }
       // Refreshing the folder list never chooses a folder for the user.
-    } catch {
+    } catch (e) {
       // Never leave the app on the loading gate: if settings can't be read,
       // unblock the UI and let surfaces fall back to their empty states.
-      set({ settingsLoaded: true });
+      const settingsError = e instanceof Error ? e.message : 'Nekko service is unavailable.';
+      set({ settingsLoaded: true, settingsError });
+      get().pushToast('error', `Could not load settings: ${settingsError}`);
+      get().applyTheme();
     }
   },
 
