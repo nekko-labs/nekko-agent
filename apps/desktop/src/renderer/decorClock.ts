@@ -84,10 +84,13 @@ export function startDecorClock(doc: DecorDocument = document as unknown as Deco
     const effect = a.effect;
     const timing = effect?.getTiming?.();
     const keys = effect?.getKeyframes?.();
-    const steps = timing?.easing?.match(/^steps\((\d+),\s*(?:end|jump-end)\)$/);
+    // CSS animation-timing-function is keyframe easing in Chromium; the
+    // effect's own easing stays linear.
+    const steps = keys?.[0]?.easing?.match(/^steps\((\d+)(?:,\s*(?:end|jump-end))?\)$/);
     const stepMs = a.animationName === 'composer-beam-spin' && steps && Number(steps[1]) > 0
       && typeof timing?.duration === 'number' && timing.duration > 0 && !timing.delay
       && (timing.direction ?? 'normal') === 'normal' && timing.iterations === Infinity
+      && timing.easing === 'linear'
       && keys?.length === 2 && keys[0].computedOffset === 0 && keys[1].computedOffset === 1
       ? timing.duration / Number(steps[1]) : 0;
     a.pause();
