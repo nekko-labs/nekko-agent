@@ -31,6 +31,8 @@ pub struct Ctx {
     pub settings: Option<Arc<crate::settings::Settings>>,
     /// Nekko Voice (`voice:*`), when the data directory is known.
     pub voice: Option<Arc<crate::voice::Voice>>,
+    /// The model catalog, when the daemon has the settings store (for the Hugging Face token).
+    pub catalog: Option<Arc<nekko_engine::catalog::Catalog>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -258,6 +260,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf)).unwrap_or_default();
             crate::decisions::route(ctx, &data_dir, c, &args).await
         }
+        c if crate::catalog::CHANNELS.contains(&c) && ctx.catalog.is_some() => match &ctx.catalog {
+            Some(catalog) => crate::catalog::route(catalog, c, &args).await,
+            None => ctx.backend.call(c, Value::Array(args)).await,
+        },
         c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
             crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
         }
@@ -308,6 +314,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     let mut all = OWNED.to_vec();
     if ctx.accounts.enabled() {
         all.extend_from_slice(crate::accounts::OWNED);
+    }
+    if ctx.catalog.is_some() {
+        all.extend_from_slice(crate::catalog::CHANNELS);
     }
     if ctx.settings.is_some() {
         all.extend_from_slice(crate::decisions::CHANNELS);
