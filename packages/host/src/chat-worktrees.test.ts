@@ -43,6 +43,25 @@ it('copies tracked edits only when configured', () => {
   expect(readFileSync(join(a.gitWorktrees!.repo.path, 'file.txt'), 'utf8')).toBe('local edits\n');
   expect(existsSync(join(a.gitWorktrees!.repo.path, 'secret.txt'))).toBe(false);
 });
+it('starts a dependent chat from the parent PR commit and sets its default PR base', () => {
+  git('checkout', '-b', 'parent-feature');
+  writeFileSync(join(root, 'file.txt'), 'parent PR code\n');
+  git('add', '.'); git('commit', '-m', 'Parent feature');
+  const sha = git('rev-parse', 'HEAD').trim();
+  git('checkout', '-');
+  writeFileSync(join(root, 'file.txt'), 'user edits\n');
+  settings.gitManagement = { baseline: 'local-changes' };
+  const s = session('stack');
+  s.gitStackParent = { workspaceId: 'repo', url: 'https://github.com/owner/repo/pull/12', branch: 'parent-feature', sha };
+  prepareChatWorktrees(s, settings);
+  const wt = s.gitWorktrees!.repo;
+  expect(readFileSync(join(wt.path, 'file.txt'), 'utf8')).toBe('parent PR code\n');
+  expect(readFileSync(join(root, 'file.txt'), 'utf8')).toBe('user edits\n');
+  expect(execFileSync('git', ['config', `branch.${wt.branch}.gh-merge-base`], { cwd: wt.path, encoding: 'utf8', windowsHide: true }).trim()).toBe('parent-feature');
+  expect(wt.notice).toContain(s.gitStackParent.url);
+  expect(wt.notice).toContain('Link stack');
+  expect(prepareChatWorktrees(s, settings)).toEqual([]);
+});
 it('does not move existing chats without per-session isolation, but ignores global shared mode', () => {
   const old = session('s_old'); delete old.gitIsolation;
   prepareChatWorktrees(old, settings);

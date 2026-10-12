@@ -66,6 +66,31 @@ function apiHeaders(): Record<string, string> {
   };
 }
 
+/** Native stack requests reuse gh authentication or the connected GitHub token. */
+export async function githubStackRequest(path: string, pullRequests?: number[]): Promise<any> {
+  const method = pullRequests ? 'POST' : 'GET';
+  if (!ghMissing) {
+    const args = ['api', path, '--method', method, '-H', 'X-GitHub-Api-Version: 2026-03-10'];
+    for (const number of pullRequests ?? []) args.push('-F', `pull_requests[]=${number}`);
+    const result = pullRequests ? await run('gh', args, 30_000) : await runGhRead(args, 15_000);
+    if (result.missing) ghMissing = true;
+    else if (result.ok) return JSON.parse(result.stdout);
+    // A failed mutation may already have succeeded remotely; never blindly repeat it.
+    else if (pullRequests || !githubToken()) throw new Error((result.stderr || 'GitHub request failed. Sign in to gh or connect GitHub.').trim().slice(0, 300));
+  }
+  const res = await fetch(`https://api.github.com/${path}`, {
+    method, headers: { ...apiHeaders(), 'X-GitHub-Api-Version': '2026-03-10', 'Content-Type': 'application/json' },
+    ...(pullRequests ? { body: JSON.stringify({ pull_requests: pullRequests }) } : {}),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`GitHub request failed (${res.status}). Check repository access and GitHub stack availability.`);
+  return res.json();
+}
+
+function stackInfo(value: any): PrInfo['stack'] {
+  return Number.isInteger(value?.number) && Number.isInteger(value?.size) ? { number: value.number, size: value.size } : undefined;
+}
+
 /** Roll up gh's statusCheckRollup array into a single status. */
 function rollupChecks(rollup: unknown): PrChecks {
   if (!Array.isArray(rollup) || rollup.length === 0) return 'none';
@@ -108,6 +133,7 @@ export async function fetchPrInfo(url: string): Promise<PrInfo | null> {
     } else if (res.ok) {
       try {
         const j = JSON.parse(res.stdout) as Record<string, unknown>;
+        const native = await githubStackRequest(`repos/${slug}/pulls/${number}`).catch(() => null);
         return {
           url,
           owner,
@@ -121,6 +147,7 @@ export async function fetchPrInfo(url: string): Promise<PrInfo | null> {
           changedFiles: Number(j.changedFiles ?? 0),
           headRefName: (j.headRefName as string) || undefined,
           baseRefName: (j.baseRefName as string) || undefined,
+          stack: stackInfo(native?.stack),
           reviewDecision: (j.reviewDecision as string) || null,
           checks: rollupChecks(j.statusCheckRollup),
           createdAt: (j.createdAt as string) || null,
@@ -169,6 +196,7 @@ async function fetchPrInfoApi(owner: string, repo: string, number: number, url: 
       changedFiles: Number(j.changed_files ?? 0),
       headRefName: j.head?.ref || undefined,
       baseRefName: j.base?.ref || undefined,
+      stack: stackInfo(j.stack),
       reviewDecision: null,
       checks,
       createdAt: j.created_at || null,
@@ -187,6 +215,11 @@ const cache = new PrReadCache<PrInfo | null>(60_000);
 
 async function cachedInfo(url: string, force = false): Promise<PrInfo | null> {
   return cache.get(url, () => fetchPrInfo(url), force);
+}
+
+/** A successful stack mutation must replace any card's older cached membership. */
+export function refreshPrInfo(url: string): Promise<PrInfo | null> {
+  return cachedInfo(url, true);
 }
 
 // A branch's PR changes rarely (opened once, merged once) and asking costs a gh
@@ -360,6 +393,15 @@ export async function prAction(url: string, action: PrAction): Promise<PrActionR
   if (!parsed) return { ok: false, message: 'Not a valid PR URL.' };
   const { owner, repo, number } = parsed;
   const slug = `${owner}/${repo}`;
+
+  if (action === 'merge') {
+    try {
+      const native = await githubStackRequest(`repos/${slug}/pulls/${number}`);
+      if (native?.stack) return { ok: false, message: 'Merge this stack on GitHub to review all included layers. Open the PR on GitHub.' };
+    } catch {
+      return { ok: false, message: 'Could not verify stack membership. Refresh GitHub access before merging.' };
+    }
+  }
 
   let result: { ok: boolean; message: string };
   if (!ghMissing) {

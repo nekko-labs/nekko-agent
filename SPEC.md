@@ -1,6 +1,6 @@
 ---
 status: active
-last-updated: 2026-10-08
+last-updated: 2026-10-12
 owner:
 ---
 
@@ -9,6 +9,14 @@ owner:
 > **This is the source of truth for the project.** It describes *what* we're building and *why*, vision, users, journeys, the feature set, and what success looks like. It is **not** about stack or technical design (that's `TASKS.md`). It is a **living artifact**: every prompt that adds or changes a feature updates this file so it always describes the system as it actually is and intends to be. The verbatim origin ask lives in [original-prompt.md](../../obsurdian/projects/nekko-agent/original-prompt.md).
 
 ## Command wall state migration (data layer)
+
+## Continue dependent work with GitHub PR stacks
+
+Implemented 2026-10-12. Ordinary new chats keep their existing worktree defaults. On an open PR's action panel, **Continue as stacked PR** starts a new chat in a separate worktree from that PR's committed head, retaining the selected model and tool/privacy preferences. It requires a selected local project with a matching GitHub remote and a PR whose head and base are in the same repository. An existing stack can be continued from its top PR. Closed/merged PRs, fork PRs, offline/incognito and sandbox sessions cannot start this flow. It never switches the user's branch or copies their uncommitted edits into the dependent branch.
+
+The checkout records its parent PR, parent branch and commit, and configures the parent as the default base for PR creation. After the agent publishes the dependent PR, **Link stack** creates a native GitHub stack or appends it to its parent's existing stack. The parent must still be open, the new PR must belong to this chat's branch and target the parent, and an existing parent must be the top layer. Failures leave both PRs and local work intact and explain the recovery. Stack merges open GitHub's stack review screen because merging an upper layer can include every layer below it. Rebasing active worktrees after parent edits or remote merges stays explicit; no automatic reset, force push or deletion is performed. GitHub stack support is a public preview, requires GitHub authentication with PR write permission for publication, and is optional for users of other Git providers. Desktop and shared web UI are in scope; native mobile entry points are not part of this first version.
+
+Verified locally: matching parent code appears in the new checkout; source edits survive; normal worktree creation is unchanged; PR base is inherited; native linking supports retries and rejects unrelated branches, forks and wrong dependency order; stack merges cannot accidentally use the ordinary synchronous merge path. Focused tests cover real Git isolation and mocked native API creation, appending, authentication fallback and merge guards. Hidden full-renderer interaction checks and inspected screenshots cover 1200px/390px in light/dark, including error recovery, continuation, linking and privacy restrictions. The native stack listing endpoint was also read successfully on the project repository. Automated tests do not execute live GitHub stack mutations or merges. Native mobile entry points and automatic local restacking are deliberately outside this scope.
 
 Implemented in the pure state/settings layer: persisted wall layout (`grid`, `focus`, or `fixed`, integer columns/rows clamped to 1–6), dock placement/visibility and six panel flags, independent panel minimization (`dock.minimized: Record<WallDockPanel, boolean>`), nullable hero session ID, and per-session companion-folded flags (`folded` never folds whole chats). Defaults are grid 3×2, right dock shown with every panel unminimized, all dock panels enabled except insights, no hero, and no folded companions. Minimization accepts only booleans for known panel keys; missing/invalid entries (including a global boolean) default to false without changing other panels. Fresh trees contain only chats and terminals. Legacy automations/insights leaves enable the corresponding dock flags and are removed while retaining surviving IDs, split directions, and relative sizes; legacy grid visibility is carried into those flags. Invalid persisted values fall back to safe defaults.
 

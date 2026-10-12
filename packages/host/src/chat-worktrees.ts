@@ -6,6 +6,10 @@ import { getSessionWorkspaceIds } from '@nekko-agent/shared';
 
 type Checkout = NonNullable<Session['gitWorktrees']>[string];
 
+function stackNotice(parent: NonNullable<Session['gitStackParent']>): string {
+  return `This chat builds on ${parent.url}, branch ${parent.branch}, committed snapshot ${parent.sha}. Create the dependent PR against ${parent.branch}; gh pr create uses this configured base. After publishing, use Link stack in the PR panel to register it with GitHub. Recheck the parent before publishing; if it changes or merges, explicitly rebase this branch when safe. Never automatically reset other worktrees or force push.`;
+}
+
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe', windowsHide: true, timeout: 30_000, maxBuffer: 16 * 1024 * 1024 }).trim();
 }
@@ -91,6 +95,8 @@ export function prepareChatWorktrees(session: Session, settings: AppSettings): A
       continue;
     }
     const dirty = !!git(root, ['status', '--porcelain']);
+    const parent = session.gitStackParent?.workspaceId === id ? session.gitStackParent : undefined;
+    if (parent && !/^[a-f0-9]{40,64}$/i.test(parent.sha)) throw new Error('Invalid parent PR commit. Start the stacked chat again.');
     const common = resolve(root, git(root, ['rev-parse', '--git-common-dir']));
     const home = join(common, 'nekko-worktrees');
     const name = worktreeName(session, (n) => existsSync(join(home, n)) || gitOk(root, ['rev-parse', '--verify', '--quiet', `refs/heads/nekko/${n}`]));
@@ -99,8 +105,9 @@ export function prepareChatWorktrees(session: Session, settings: AppSettings): A
     mkdirSync(home, { recursive: true });
     let copied: string[] = [];
     try {
-      git(root, ['worktree', 'add', '-b', branch, target, 'HEAD']);
-      if (dirty && settings.gitManagement?.baseline === 'local-changes') {
+      git(root, ['worktree', 'add', '-b', branch, target, parent?.sha ?? 'HEAD']);
+      if (parent) git(target, ['config', `branch.${branch}.gh-merge-base`, parent.branch]);
+      if (!parent && dirty && settings.gitManagement?.baseline === 'local-changes') {
         const patch = execFileSync('git', ['diff', '--binary', 'HEAD'], { cwd: root, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
         if (patch.length) {
           const patchPath = join(common, 'nekko-worktrees', `${session.id}.patch`);
@@ -113,7 +120,9 @@ export function prepareChatWorktrees(session: Session, settings: AppSettings): A
     } catch (error) {
       throw new Error(`Could not prepare isolated checkout for ${folder.name}. No shared-checkout fallback was used: ${String(error)}`);
     }
-    const base = dirty
+    const base = parent
+      ? stackNotice(parent)
+      : dirty
       ? settings.gitManagement?.baseline === 'local-changes'
         ? 'This chat uses an isolated worktree with tracked local edits copied in. Untracked files were not copied.'
         : 'This chat starts in an isolated worktree from committed HEAD. Existing local changes are not included.'
@@ -151,6 +160,7 @@ function restoreRemovedWorktrees(session: Session): Array<{ id: string; checkout
         git(sourceRoot, ['worktree', 'add', root, branch]);
         notice = `This chat's worktree had been removed; it was restored from its branch ${branch}.`;
       } else {
+        if (session.gitStackParent) throw new Error('The stacked chat branch was removed. Start a new continuation from the parent PR to avoid losing its dependency.');
         git(sourceRoot, ['worktree', 'add', '-b', branch, root, 'HEAD']);
         notice = `This chat's worktree and branch had been removed; it continues on ${branch}, freshly created from committed HEAD.`;
       }
@@ -158,6 +168,7 @@ function restoreRemovedWorktrees(session: Session): Array<{ id: string; checkout
       throw new Error(`Could not restore this chat's worktree at ${root}. No shared-checkout fallback was used: ${String(error)}`);
     }
     const copied = copyWorktreeIncludes(sourceRoot, root);
+    if (session.gitStackParent) notice += ` ${stackNotice(session.gitStackParent)}`;
     if (copied.length) notice += ` Copied from .worktreeinclude: ${copied.join(', ')}.`;
     for (const [, w] of entries) if (w.root === root) w.notice = notice;
     restored.push({ id: first[0], checkout: first[1] });

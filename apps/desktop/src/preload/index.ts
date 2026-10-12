@@ -232,6 +232,8 @@ const api: NekkoApi = {
   listSessionPrs: (sessionId) => inv(IpcChannels.prSessionList, sessionId),
   getPrDiff: (url) => inv(IpcChannels.prDiff, url),
   prAction: (url, action) => inv(IpcChannels.prAction, url, action),
+  continuePrStack: (sessionId, url) => inv(IpcChannels.prContinueStack, sessionId, url),
+  linkPrStack: (sessionId, url) => inv(IpcChannels.prLinkStack, sessionId, url),
 
   listComments: (path) => inv(IpcChannels.commentsList, path),
   addComment: (path, line, lineText, comment) => inv(IpcChannels.commentAdd, path, line, lineText, comment),

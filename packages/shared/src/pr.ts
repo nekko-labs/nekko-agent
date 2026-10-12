@@ -24,6 +24,8 @@ export interface PrInfo {
   changedFiles: number;
   headRefName?: string;
   baseRefName?: string;
+  /** Native GitHub stack membership, never inferred from branch names. */
+  stack?: { number: number; size: number };
   /** 'approved' | 'changes_requested' | 'review_required' | null (gh only). */
   reviewDecision?: string | null;
   checks: PrChecks;

@@ -117,6 +117,7 @@ import { readFile, writeFile, listDir } from './files.js';
 import { getGitStatus } from './git.js';
 import { listChanges, acceptChange, acceptAllChanges, notifyChanges, setChangeNotifier } from './changes.js';
 import { listSessionPrs, getPrDiff, prAction, fetchPrInfo } from './pr.js';
+import { continuePrStack, linkPrStack } from './pr-stacks.js';
 import { configureAgentWatches, nextAgentWatchAt } from './agent-watches.js';
 import { listComments, addComment, resolveComment } from './comments.js';
 import {
@@ -460,6 +461,8 @@ export interface Host {
   getPrDiff(url: string): Promise<PrDiff>;
   /** Approve / decline / merge / reopen a PR (user-initiated). */
   prAction(url: string, action: PrAction): Promise<PrActionResult>;
+  continuePrStack(sessionId: string, url: string): Promise<Session>;
+  linkPrStack(sessionId: string, url: string): Promise<PrActionResult>;
 
   /** Inline editor comments on a file. */
   listComments(path: string): LineComment[];
@@ -1123,6 +1126,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     listSessionPrs,
     getPrDiff,
     prAction,
+    continuePrStack,
+    linkPrStack,
     listComments,
     addComment,
     resolveComment,

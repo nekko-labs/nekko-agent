@@ -342,6 +342,7 @@ interface UiState {
   splitPane: (paneId: string, dir: Direction, kind: PaneKind, refId?: string) => void;
   /** Start a chat and put it beside an existing window, in the same workspace. */
   newChatInPane: (paneId: string, dir: Direction) => Promise<void>;
+  continuePrStack: (sessionId: string, url: string) => Promise<void>;
   /** Start a terminal and put it beside an existing window, in the same workspace. */
   newTerminalInPane: (paneId: string, dir: Direction) => Promise<void>;
   /** Point an open window at something else (an explorer at another folder). */
@@ -581,6 +582,13 @@ export const useStore = create<UiState>((set, get) => ({
     putCachedSession(s);
     set((state) => ({ sessions: [summarizeSession(s), ...state.sessions], activeSessionId: s.id, view: 'chat' }));
     get().openChatPane(s.id);
+  },
+  continuePrStack: async (sessionId, url) => {
+    const s = await window.nekko.continuePrStack(sessionId, url);
+    putCachedSession(s);
+    set((state) => ({ sessions: [summarizeSession(s), ...state.sessions], activeSessionId: s.id, view: 'chat' }));
+    get().openChatPane(s.id);
+    get().pushToast('success', 'New chat starts from this PR in its own worktree.');
   },
   newImageChat: async (modelId, defaults) => {
     const created = await window.nekko.createSession(defaultChatFolder(get()));

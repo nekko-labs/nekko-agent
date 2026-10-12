@@ -461,6 +461,8 @@ function makeWebClient(): NekkoApi {
     listSessionPrs: (sessionId) => call(IpcChannels.prSessionList, sessionId),
     getPrDiff: (url) => call(IpcChannels.prDiff, url),
     prAction: (url, action) => call(IpcChannels.prAction, url, action),
+    continuePrStack: (sessionId, url) => call(IpcChannels.prContinueStack, sessionId, url),
+    linkPrStack: (sessionId, url) => call(IpcChannels.prLinkStack, sessionId, url),
 
     listComments: (path) => call(IpcChannels.commentsList, path),
     addComment: (path, line, lineText, comment) => call(IpcChannels.commentAdd, path, line, lineText, comment),

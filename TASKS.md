@@ -326,6 +326,12 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
+### GitHub dependent chat worktrees (2026-10-12)
+
+- [x] **GS1**: Optional [Continue as stacked PR](SPEC.md#continue-dependent-work-with-github-pr-stacks). Pin the selected parent commit, provision an isolated checkout lazily, retain model/tool policy and configure the PR base. Preserve the source checkout's edits.
+- [x] **GS2**: Native GitHub stack create/append APIs, strict same-repository/branch/order checks, idempotent retries and desktop/web bridge actions. Stack merges route to GitHub; active local worktrees are never silently rebased or reset.
+- [x] **GS3**: Real Git isolation tests, mocked native API and privacy guards, hidden renderer interactions and matched inspected light/dark desktop/mobile-web screenshots. Publication/CI/landing tracked in the feature PR. API writes and stack merges are not executed against live user PRs by the automated tests.
+
 ### Folders and execution modes (implemented subset, draft; not shipped)
 
 - [ ] FM1: Land persisted primary-folder/No-folder defaults and saved-access revocation. Implemented with regression coverage; Added: 2026-10-09. See SPEC.md, Primary folder defaults and saved access revocation. Await parent visual inspection and release review.
