@@ -7,6 +7,7 @@
 mod accounts;
 mod admission;
 mod backend;
+mod catalog;
 mod config;
 mod decide;
 mod decisions;
@@ -14,13 +15,16 @@ mod engine;
 mod hub;
 mod hypergate;
 mod loops;
+mod machine;
 mod mcp;
 mod oauth;
 mod procgroup;
 mod providers;
+mod resource_queue;
 mod routes;
 mod settings;
 mod sideband;
+mod tooling;
 mod turns;
 mod voice;
 mod wire;
@@ -111,6 +115,16 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         || cfg.backend.as_ref().is_some_and(|b| b.env.get("NEKKO_AGENT_LOOP").is_some_and(|v| v == "ts"));
     let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
         .then(|| admission::Admission::new(&hub, cfg.allow_browser_control, ts_loop));
+    let catalog = settings.as_deref().map(catalog::new);
+    // The machine probes and the resource queue read the daemon's settings store.
+    let read_settings = |s: &Option<Arc<settings::Settings>>| {
+        let store = s.as_ref().map(|s| s.store.clone());
+        move || store.as_ref().map_or(serde_json::Value::Null, |s| s.get())
+    };
+    let engine_bin = {
+        let read = read_settings(&settings);
+        move || nekko_js::truthy_str(read().get("engineBinPath")).map(str::to_string)
+    };
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -127,7 +141,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                 mcp.clone(),
                 engine.decide.clone(),
             )
-            .with_settings(settings.as_ref().map(|s| s.store.clone())),
+            .with_settings(settings.as_ref().map(|s| s.store.clone()))
+            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
         ),
         mcp: mcp.clone(),
         accounts: accounts.clone(),
@@ -148,7 +163,18 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             }
             _ => None,
         },
+        machine: Arc::new(nekko_machine::Machine::new(
+            cfg.data_dir.clone().map(std::path::PathBuf::from),
+            Box::new(engine_bin),
+        )),
+        resource_queue: cfg.data_dir.clone().map(|d| {
+            Arc::new(resource_queue::ResourceQueue::new(
+                std::path::PathBuf::from(d),
+                Box::new(read_settings(&settings)),
+            ))
+        }),
         voice: voice.clone(),
+        catalog,
     };
     routes::forward_terminal_events(&ctx);
     let processes = ctx.turns.processes.clone();
