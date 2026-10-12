@@ -1,0 +1,142 @@
+name: Docs site
+
+# Keeps nekkoagent.com/docs in step with the Markdown it renders from. The site
+# has no build step on Vercel, so the pages are committed: this regenerates them
+# (`npm run docs`) and commits the result only when something actually changed.
+#
+# - On a pull request, the regenerated pages are pushed to the PR's own branch.
+# - On main (a push, the schedule, or a dispatch), they go up as a PR from
+#   docs-site/regenerate, which auto-merge.yml then lands. Two PRs that each
+#   pass on their own can still leave main stale (say, both add a page), and a
+#   merge made with GITHUB_TOKEN starts no `push` run, hence the schedule.
+#
+# Pushes use the repository-scoped App token (the one runtime-updates.yml
+# uses): a push made with GITHUB_TOKEN starts no workflow run, so CI would
+# never check the regenerated commit and auto-merge would wait on it forever.
+# A PR from a fork cannot be pushed to; there the job fails and says to run
+# `npm run docs`.
+#
+# Every Markdown source in docs/hub/nav.json must sit under one of the paths
+# below; scripts/build-docs.test.mjs checks that.
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'CONTRIBUTING.md'
+      - 'scripts/build-docs.mjs'
+      - 'apps/website/docs/**'
+      - 'apps/website/llms.txt'
+      - 'apps/website/llms-full.txt'
+      - 'apps/website/sitemap.xml'
+      - 'package-lock.json'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'CONTRIBUTING.md'
+      - 'scripts/build-docs.mjs'
+      - 'apps/website/docs/**'
+      - 'apps/website/llms.txt'
+      - 'apps/website/llms-full.txt'
+      - 'apps/website/sitemap.xml'
+      - 'package-lock.json'
+  schedule:
+    - cron: '41 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-site-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The branch tip, not the merge commit, so the result can be pushed back.
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.head_ref || 'main' }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      # Only `marked` is needed, but npm installs a workspace root as a whole.
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: node scripts/build-docs.mjs
+
+      - name: Did anything change?
+        id: diff
+        run: |
+          git add -A apps/website
+          if git diff --cached --quiet; then
+            echo "The docs site is up to date."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git diff --cached --stat
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: A fork cannot be pushed to
+        if: steps.diff.outputs.changed == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::The docs site is out of date with its Markdown. Run \`npm run docs\` and commit the result."
+          exit 1
+
+      - name: Create repository-scoped App token
+        id: app-token
+        if: steps.diff.outputs.changed == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.RUNTIME_UPDATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RUNTIME_UPDATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Commit the regenerated pages
+        if: steps.app-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          bot="${APP_SLUG}[bot]"
+          id=$(gh api "/users/${bot}" --jq .id)
+          git config user.name "$bot"
+          git config user.email "${id}+${bot}@users.noreply.github.com"
+          git commit -m "Regenerate the docs site from its Markdown"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - name: Push to the pull request
+        if: steps.app-token.outcome == 'success' && github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: git push origin "HEAD:refs/heads/${HEAD_REF}"
+
+      - name: Open or update the regenerate PR
+        if: steps.app-token.outcome == 'success' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          branch=docs-site/regenerate
+          git push --force origin "HEAD:refs/heads/${branch}"
+          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            cat > "$RUNNER_TEMP/body.md" <<'EOF'
+          Generated by the Docs site workflow: main's Markdown changed without the pages being rebuilt (`npm run docs`).
+
+          ## Unfinished work / release blockers
+
+          None. The diff is generated output only.
+          EOF
+            gh pr create --base main --head "$branch" \
+              --title "Regenerate the docs site from its Markdown" \
+              --body-file "$RUNNER_TEMP/body.md"
+          fi

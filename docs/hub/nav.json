@@ -1,0 +1,109 @@
+{
+  "$comment": "The docs hub at nekkoagent.com/docs. Each page renders from one Markdown file in this repo; `npm run docs` regenerates apps/website/docs. The first page is the hub's landing page (/docs).",
+  "sections": [
+    {
+      "title": "Introduction",
+      "pages": [
+        {
+          "slug": "",
+          "title": "Getting started",
+          "source": "docs/hub/getting-started.md",
+          "description": "What Nekko Agent is, who makes it, and how to install it or run it from source."
+        },
+        {
+          "slug": "walkthrough",
+          "title": "Walkthrough",
+          "source": "docs/WALKTHROUGH.md",
+          "description": "A picture-by-picture tour of the app."
+        }
+      ]
+    },
+    {
+      "title": "Using Nekko Agent",
+      "pages": [
+        {
+          "slug": "local-models",
+          "title": "Running models locally",
+          "source": "docs/local-models.md",
+          "description": "Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM)."
+        },
+        {
+          "slug": "subscriptions",
+          "title": "Subscription sign-in",
+          "source": "docs/SUBSCRIPTIONS.md",
+          "description": "Use your Claude or ChatGPT subscription instead of a metered API key."
+        },
+        {
+          "slug": "usage-limits",
+          "title": "Usage limits and prices",
+          "source": "docs/USAGE-LIMITS.md",
+          "description": "Where the usage numbers and price estimates come from, and what they mean."
+        },
+        {
+          "slug": "remote",
+          "title": "Phone remote control",
+          "source": "docs/REMOTE.md",
+          "description": "Drive the agent on your computer from your phone, end-to-end encrypted."
+        },
+        {
+          "slug": "cli",
+          "title": "CLI and MCP",
+          "source": "docs/CLI.md",
+          "description": "Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor."
+        },
+        {
+          "slug": "local-ci-runner",
+          "title": "Local CI runner",
+          "source": "docs/git-runner.md",
+          "description": "Run a GitHub or GitLab repo's builds and tests on your own machine."
+        },
+        {
+          "slug": "decision-models",
+          "title": "Decision models",
+          "source": "docs/decision-models.md",
+          "description": "Typed questions answered with calibrated probabilities, in one forward pass."
+        },
+        {
+          "slug": "benchmarks",
+          "title": "Local inference benchmarks",
+          "source": "docs/benchmarks.md",
+          "description": "How fast the engine runs a model compared with Ollama and LM Studio."
+        }
+      ]
+    },
+    {
+      "title": "Contributing",
+      "pages": [
+        {
+          "slug": "contributing",
+          "title": "Contributing",
+          "source": "CONTRIBUTING.md",
+          "description": "Set up a development checkout, the project layout, and what a pull request needs."
+        },
+        {
+          "slug": "architecture",
+          "title": "Architecture",
+          "source": "docs/hub/architecture.md",
+          "description": "How the desktop app, the TypeScript host and the Rust engine daemon fit together."
+        },
+        {
+          "slug": "release-signing",
+          "title": "Release signing",
+          "source": "docs/signing.md",
+          "description": "How the macOS and Windows builds are signed and notarized."
+        }
+      ]
+    },
+    {
+      "title": "For AI agents",
+      "pages": [
+        {
+          "slug": "for-agents",
+          "title": "Docs for AI agents",
+          "source": "docs/hub/for-agents.md",
+          "description": "Machine-readable docs (llms.txt, Markdown pages) and the files an agent should read before changing the code."
+        }
+      ]
+    }
+  ]
+}

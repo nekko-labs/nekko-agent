@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { PrInfo, PrAction, PrDiff, PrChecks } from '@nekko-agent/shared';
-import { parsePrUrl } from '@nekko-agent/shared';
+import { getExecutionMode, parsePrUrl } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { subscribePrPolling } from '../prPolling.js';
 import { BranchIcon, CheckIcon, CloseIcon } from '../icons.js';
@@ -67,10 +67,15 @@ export function PrCard({ url, info, event = 'created' }: { url: string; info?: P
 export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string; info?: PrInfo; sessionId: string; onDismiss: () => void }) {
   const parsed = parsePrUrl(url);
   const openPrPane = useStore((s) => s.openPrPane);
-  const [busy, setBusy] = useState<PrAction | null>(null);
+  const [busy, setBusy] = useState<PrAction | 'continue' | 'stack' | null>(null);
+  const session = useStore((s) => s.sessions.find((item) => item.id === sessionId));
+  const parent = session?.gitStackParent;
+  const canStack = !!session && !session.offline && !session.incognito && !session.archivedAt && getExecutionMode(session) !== 'sandbox' && session.chatType !== 'image';
+  const linkable = canStack && !!parent && parent.url !== url && !info?.stack;
   const [confirm, setConfirm] = useState<PrAction | null>(null);
   const label = parsed ? parsed.owner + '/' + parsed.repo + '#' + parsed.number : url;
   const act = async (action: PrAction) => {
+    if (action === 'merge' && info?.stack) { openExternally(url); return; }
     if (confirm !== action) { setConfirm(action); return; }
     setConfirm(null);
     setBusy(action);
@@ -86,6 +91,18 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
     } finally { setBusy(null); }
   };
   const check = info ? CHECK_META[info.checks] : CHECK_META.none;
+  const stackAction = async (action: 'continue' | 'stack') => {
+    setBusy(action); setConfirm(null);
+    try {
+      if (action === 'continue') await useStore.getState().continuePrStack(sessionId, url);
+      else {
+        const result = await window.nekko.linkPrStack(sessionId, url);
+        useStore.getState().pushToast(result.ok ? 'success' : 'error', result.message);
+        await useStore.getState().refreshSessionPrs(sessionId, result.ok);
+      }
+    } catch (error) { useStore.getState().pushToast('error', (error as Error).message); }
+    finally { setBusy(null); }
+  };
   const actionClass = 'rounded-md px-1.5 py-0.5 text-[11px] font-medium hover:bg-surface-2 disabled:opacity-50';
   return (
     <div className="pr-deck-card flex items-start gap-2 rounded-lg border border-line px-2.5 py-1.5" data-pr-actions={url}>
@@ -96,15 +113,19 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
           {check.dot && <span className="text-[10px]" style={{ color: check.color }}>{check.dot} {check.label}</span>}
         </div>
         {info?.title && <p className="truncate text-[12px]">{info.title}</p>}
+        {info?.stack && <span className="text-[10px] text-ink-soft">GitHub stack · {info.stack.size} PRs</span>}
+        {parent && <a className="block truncate text-[10px] text-ink-soft hover:underline" href={parent.url} onClick={(e) => { e.preventDefault(); openExternally(parent.url); }}>Builds on {parent.branch}</a>}
       </div>
       <div className="flex max-w-[55%] shrink-0 flex-wrap items-center justify-end gap-0" data-pr-action-controls>
         {(['approve', 'close', 'merge'] as const).map((action) => (
           <button key={action} className={actionClass} disabled={!!busy || !info} onClick={() => void act(action)}
-            title={action === 'close' ? 'Close this PR without merging' : action === 'approve' ? 'Approve this PR' : 'Merge this PR'}>
-            {busy === action ? 'Working…' : confirm === action ? 'Confirm?' : action === 'approve' ? 'Approve' : action === 'close' ? 'Decline' : 'Merge'}
+            title={action === 'close' ? 'Close this PR without merging' : action === 'approve' ? 'Approve this PR' : info?.stack ? 'Review all included layers and merge on GitHub' : 'Merge this PR'}>
+            {busy === action ? 'Working…' : confirm === action ? 'Confirm?' : action === 'approve' ? 'Approve' : action === 'close' ? 'Decline' : info?.stack ? 'Merge on GitHub' : 'Merge'}
           </button>
         ))}
         <button className={actionClass} onClick={() => openPrPane(url)}>Review</button>
+        {canStack && info?.state === 'open' && <button className={actionClass} disabled={!!busy} onClick={() => void stackAction('continue')} title="Start a separate chat worktree from this PR's committed code">{busy === 'continue' ? 'Preparing…' : 'Continue as stacked PR'}</button>}
+        {linkable && info?.state === 'open' && <button className={actionClass} disabled={!!busy} onClick={() => void stackAction('stack')} title="Link this dependent PR to its parent on GitHub">{busy === 'stack' ? 'Linking…' : 'Link stack'}</button>}
         <button className={actionClass} onClick={() => openExternally(url)} aria-label="Open on GitHub">↗</button>
         {confirm && <button className={actionClass} onClick={() => setConfirm(null)}>Cancel</button>}
       </div>

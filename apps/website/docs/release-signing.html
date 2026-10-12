@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Release signing · Nekko Agent docs</title>
+    <meta name="description" content="How the macOS and Windows builds are signed and notarized." />
+    <link rel="canonical" href="https://nekkoagent.com/docs/release-signing" />
+    <link rel="alternate" type="text/markdown" href="/docs/release-signing.md" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="theme-color" content="#101714" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/docs/release-signing" />
+    <meta property="og:title" content="Release signing · Nekko Agent docs" />
+    <meta property="og:description" content="How the macOS and Windows builds are signed and notarized." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/docs.css?v=docs-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Release signing","description":"How the macOS and Windows builds are signed and notarized.","url":"https://nekkoagent.com/docs/release-signing","inLanguage":"en","isPartOf":{"@id":"https://nekkoagent.com/#website"},"publisher":{"@id":"https://nekkolabs.com/#organization"},"about":{"@id":"https://nekkoagent.com/#app"}}</script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="docs-home" href="/docs">Docs</a>
+      <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Site">
+        <a href="https://github.com/nekko-labs/nekko-agent" rel="noopener">GitHub</a>
+        <a class="download" href="/#download">Download</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing" aria-current="page">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <main id="content">
+        <article class="prose" id="top">
+          <p class="kicker">Contributing</p>
+          <h1>Release signing</h1>
+          <p class="page-tools">
+            <a href="/docs/release-signing.md">View as Markdown</a>
+            <a href="/llms.txt">llms.txt</a>
+          </p>
+<p>How Nekko Agent&#39;s macOS builds get signed and notarized, what is wired, and what
+needs a human with an Apple account.</p>
+<p>Everything here is <strong>secret-gated</strong>. With no signing secrets configured the
+release still builds and publishes, just unsigned, so nothing below can block a
+release. A <em>partially</em> configured set fails the job before building, because a
+signed-but-unnotarized app is still blocked by Gatekeeper while looking like it
+worked.</p>
+<h2 id="status-at-a-glance"><a class="anchor" href="#status-at-a-glance" aria-hidden="true" tabindex="-1">#</a>Status at a glance</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Mechanism</th>
+<th>Wired</th>
+<th>Blocked on</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>macOS</td>
+<td>Developer ID codesign + notarization</td>
+<td>✅ live since v0.6.0</td>
+<td>nothing</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td>Authenticode</td>
+<td>✅ secret-gated</td>
+<td>the org secrets being set</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td>none (AppImage/deb are unsigned)</td>
+<td>n/a</td>
+<td>n/a</td>
+</tr>
+</tbody></table></div>
+<h2 id="macos"><a class="anchor" href="#macos" aria-hidden="true" tabindex="-1">#</a>macOS</h2>
+<p>Nekko Agent is packaged by electron-builder, which does the signing, hardened
+runtime, and notarization itself. There is no hand-rolled <code>codesign</code> pipeline
+here, and no <code>Developer ID Installer</code> certificate is needed, because the
+artifacts are <code>.dmg</code>/<code>.zip</code> rather than a <code>.pkg</code>.</p>
+<p>What is configured, in <code>apps/desktop/electron-builder.yml</code>:</p>
+<ul>
+<li><code>hardenedRuntime: true</code> — required for notarization</li>
+<li><code>entitlements</code> / <code>entitlementsInherit</code> → <code>build/entitlements.mac.plist</code></li>
+<li><code>notarize: false</code> by default, flipped on with <code>-c.mac.notarize=true</code> by the
+release workflow, so a local <code>npm run dist</code> does not need the Apple API key</li>
+</ul>
+<p><code>apps/desktop/scripts/after-pack.cjs</code> ad-hoc signs the app <strong>only when no real
+certificate is present</strong>, so unsigned local builds still launch on Apple
+Silicon. It steps aside when <code>CSC_LINK</code> is set.</p>
+<h3 id="the-entitlements-and-why-each-one-is-there"><a class="anchor" href="#the-entitlements-and-why-each-one-is-there" aria-hidden="true" tabindex="-1">#</a>The entitlements, and why each one is there</h3>
+<p>The hardened runtime disables things Electron and Nekko Agent need. See the
+comments in <a href="https://github.com/nekko-labs/nekko-agent/blob/main/apps/desktop/build/entitlements.mac.plist" rel="noopener"><code>build/entitlements.mac.plist</code></a>;
+the short version:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Entitlement</th>
+<th>Needed for</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>allow-jit</code>, <code>allow-unsigned-executable-memory</code></td>
+<td>V8</td>
+</tr>
+<tr>
+<td><code>disable-library-validation</code></td>
+<td>the <code>@lydell/node-pty</code> prebuilt <code>.node</code>, dlopen&#39;d from outside the asar</td>
+</tr>
+<tr>
+<td><code>allow-dyld-environment-variables</code></td>
+<td>spawning shells, agents, and MCP servers</td>
+</tr>
+<tr>
+<td><code>files.user-selected.read-write</code></td>
+<td>the user&#39;s project folders</td>
+</tr>
+<tr>
+<td><code>network.client</code> / <code>network.server</code></td>
+<td>model providers and the local phone-relay server</td>
+</tr>
+<tr>
+<td><code>device.camera</code></td>
+<td>the QR pairing scanner</td>
+</tr>
+</tbody></table></div>
+<p><code>NSCameraUsageDescription</code> is set via <code>mac.extendInfo</code>. Without it macOS kills
+the process instead of prompting when the QR scanner opens.</p>
+<h2 id="secrets"><a class="anchor" href="#secrets" aria-hidden="true" tabindex="-1">#</a>Secrets</h2>
+<p>These are <strong><code>nekko-labs</code> organization secrets</strong>, shared with <code>hypergate</code> and
+<code>lightwrite</code>, so the certificate is uploaded and rotated in exactly one place.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Secret</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>MACOS_SIGNING_CERTS_P12</code></td>
+<td>base64 of the Developer ID <code>.p12</code> (→ <code>CSC_LINK</code>)</td>
+</tr>
+<tr>
+<td><code>MACOS_CERT_PASSWORD</code></td>
+<td>password for that <code>.p12</code> (→ <code>CSC_KEY_PASSWORD</code>)</td>
+</tr>
+<tr>
+<td><code>APPLE_API_KEY_P8</code></td>
+<td>App Store Connect API key contents</td>
+</tr>
+<tr>
+<td><code>APPLE_API_KEY_ID</code></td>
+<td>ASC key id</td>
+</tr>
+<tr>
+<td><code>APPLE_API_ISSUER</code></td>
+<td>ASC issuer id (a UUID)</td>
+</tr>
+<tr>
+<td><code>WINDOWS_SIGNING_CERTS_P12</code></td>
+<td>base64 of the Authenticode <code>.p12</code> certificate</td>
+</tr>
+<tr>
+<td><code>WINDOWS_CERT_PASSWORD</code></td>
+<td>password for that <code>.p12</code></td>
+</tr>
+</tbody></table></div>
+<p>Certificate: <code>Developer ID Application: Nekko Labs LLC (3HM5598S99)</code>.</p>
+<h3 id="uploading-them"><a class="anchor" href="#uploading-them" aria-hidden="true" tabindex="-1">#</a>Uploading them</h3>
+<p>Run on a Mac that has the Developer ID certificate <strong>and its private key</strong> in
+the login keychain (<code>security find-identity -v -p codesigning</code> to confirm).
+Requires org-admin on <code>nekko-labs</code>.</p>
+<p>Export the <code>.p12</code> from <strong>Keychain Access</strong> (login → My Certificates → expand the
+<code>Developer ID Application: Nekko Labs LLC</code> row so the private key goes with it →
+Export), rather than with <code>security export -t identities</code>, which dumps <em>every</em>
+identity in the keychain into one bundle. Either way you choose an export
+password, which becomes <code>MACOS_CERT_PASSWORD</code>.</p>
+<p>Then, and read the warning below before pasting:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">gh secret set MACOS_SIGNING_CERTS_P12 --org nekko-labs --visibility all &lt; &lt;(base64 -i /tmp/nekko-signing.p12)
+gh secret set APPLE_API_KEY_P8 --org nekko-labs --visibility all &lt; AuthKey_XXXXXXXX.p8
+gh secret set APPLE_API_KEY_ID --org nekko-labs --visibility all --body AuthKeyIdHere</code></pre></div>
+<blockquote>
+<p><strong>Do not paste those as a block with the two interactive ones.</strong> <code>gh secret set</code> without <code>--body</code> reads its value from <strong>stdin</strong>, so a pasted command on
+the following line is consumed as the secret. That is how <code>MACOS_CERT_PASSWORD</code>
+once ended up holding the literal text <code>gh secret set MACOS_CERT_PASSWORD --org nekko-labs --visibility all</code>, which surfaced only as <code>MAC verification failed during PKCS12 import (wrong password?)</code> in a release job.</p>
+</blockquote>
+<p>Set the two interactive secrets one at a time. In zsh the prompt form is
+<code>&quot;VAR?prompt&quot;</code>, not bash&#39;s <code>-p</code>:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">read -rs &quot;P?p12 password: &quot; &amp;&amp; gh secret set MACOS_CERT_PASSWORD --org nekko-labs --visibility all --body &quot;$P&quot; &amp;&amp; unset P
+read -rs &quot;P?issuer UUID: &quot; &amp;&amp; gh secret set APPLE_API_ISSUER --org nekko-labs --visibility all --body &quot;$P&quot; &amp;&amp; unset P</code></pre></div>
+<p>Then delete the export: <code>rm -P /tmp/nekko-signing.p12</code>.</p>
+<p><strong>Verifying the <code>.p12</code> locally is a trap.</strong> Keychain encrypts the payload with
+<code>RC2-40-CBC</code>, which OpenSSL 3 moved to the legacy provider, so
+<code>openssl pkcs12 -info</code> fails with <code>unsupported ... RC2-40-CBC</code> and reads like a
+bad password. Pass <code>-legacy</code>. The password check that actually matters is the
+MAC: a genuinely wrong password says <code>Mac verify error: invalid password?</code>,
+while reaching the cipher error at all means the password was accepted.</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">openssl pkcs12 -in /tmp/nekko-signing.p12 -info -noout -legacy</code></pre></div>
+<p>Look for a <strong>Shrouded Keybag</strong> line, which confirms the private key is in the
+export. macOS <code>security import</code> reads the legacy encryption natively, so no
+re-export is needed for CI.</p>
+<h3 id="when-the-app-store-connect-key-rotates"><a class="anchor" href="#when-the-app-store-connect-key-rotates" aria-hidden="true" tabindex="-1">#</a>When the App Store Connect key rotates</h3>
+<p>The notary key is the one credential here that can die without any secret
+changing: an App Store Connect API key gets revoked or rotated in Apple&#39;s
+portal, and <code>APPLE_API_KEY_ID</code> / <code>APPLE_API_KEY_P8</code> quietly keep pointing at a
+key that no longer exists. That happened on 2026-09-06, when the team&#39;s key was
+replaced and the old one revoked. Every release from v0.7.1 on then signed
+fine and died in notarization, five minutes into the job, with:</p>
+<div class="code"><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code>Failed to notarize via notarytool. ... HTTP status code: 401. Unauthenticated.</code></pre></div>
+<p>The release workflow now checks the key <em>before</em> building (&quot;Validate the
+notary credentials&quot;), using the same read-only call you can run locally
+against a candidate <code>.p8</code>:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">xcrun notarytool history --key AuthKey_XXXXXXXX.p8 --key-id XXXXXXXX --issuer &lt;issuer UUID&gt;</code></pre></div>
+<p>A live key lists past submissions (Nekko Agent&#39;s and hypergate&#39;s, since they
+share the team). A revoked one returns the 401 above. The issuer id is per
+team and does not change when the key does.</p>
+<p>To rotate, with a key whose App Store Connect role is Developer or above, and
+after confirming the file really is a private key
+(<code>openssl pkey -in AuthKey_XXXXXXXX.p8 -noout</code> exits 0):</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">gh secret set APPLE_API_KEY_P8 --org nekko-labs --visibility all &lt; AuthKey_XXXXXXXX.p8
+gh secret set APPLE_API_KEY_ID --org nekko-labs --visibility all --body XXXXXXXX</code></pre></div>
+<p>Then re-run the Release workflow at the tag that failed:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">gh workflow run release.yml --repo nekko-labs/nekko-agent --ref vX.Y.Z</code></pre></div>
+<p>The secrets are organization-wide, so one rotation also repairs hypergate and
+lightwrite.</p>
+<h2 id="windows"><a class="anchor" href="#windows" aria-hidden="true" tabindex="-1">#</a>Windows</h2>
+<p>The release workflow passes <code>WINDOWS_SIGNING_CERTS_P12</code> and
+<code>WINDOWS_CERT_PASSWORD</code> to electron-builder as <code>WIN_CSC_LINK</code> and
+<code>WIN_CSC_KEY_PASSWORD</code>. electron-builder 26.16.1 still supports the legacy
+PKCS#12/signtool path through these Windows-specific environment variables;
+Azure Trusted Signing is an alternative, not a requirement for this setup.
+With both secrets present, the NSIS installer is Authenticode-signed. If no
+certificate is configured, the workflow deliberately builds an unsigned
+installer so releases remain available; SmartScreen will show an
+unknown-publisher warning. A certificate without its password is a
+configuration error and fails the Windows job before packaging.</p>
+<p>The certificate should contain the private key and be exported as a base64
+PKCS#12 file:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">base64 -w0 /path/to/windows-signing.p12 | \
+  gh secret set WINDOWS_SIGNING_CERTS_P12 --org nekko-labs --visibility all
+gh secret set WINDOWS_CERT_PASSWORD --org nekko-labs --visibility all</code></pre></div>
+<p>Certificates expire (Developer ID is 5 years). When it rolls, re-export and
+re-run the two <code>MACOS_*</code> commands; nothing in this repo changes.</p>
+<h2 id="npm-publishing"><a class="anchor" href="#npm-publishing" aria-hidden="true" tabindex="-1">#</a>npm publishing</h2>
+<p>The <code>publish-cli</code> job uses npm Trusted Publishing as its primary authentication
+path. npm&#39;s documented requirements are Node <code>22.14.0</code> or newer and npm
+<code>11.5.1</code> or newer; the workflow uses Node 24 and installs npm 11.5.1
+explicitly. It prints both versions before publishing and disables
+<code>setup-node</code> dependency caching because npm&#39;s release guidance says not to use
+package-manager caching in release builds.</p>
+<p>Trusted Publishing uses the GitHub Actions OIDC token from
+<code>id-token: write</code>. npm automatically generates provenance attestations for
+trusted publishes, so the OIDC path does not need <code>--provenance</code>. While
+bootstrapping, <code>NPM_TOKEN</code> remains an optional fallback; that path explicitly
+adds <code>--provenance</code>. If neither credential works, the workflow prints a
+message directing the maintainer to configure the trusted publisher or add
+<code>NPM_TOKEN</code>.</p>
+<h3 id="first-publish-bootstrap"><a class="anchor" href="#first-publish-bootstrap" aria-hidden="true" tabindex="-1">#</a>First publish bootstrap</h3>
+<p>npm&#39;s documented setup is under an existing package&#39;s settings, and npm does
+not currently provide a PyPI-style pending publisher for a package name that
+has never been published. Publish <code>nekko-agent</code> once manually with account
+authentication and 2FA:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm login
+npm publish --workspace=apps/cli --access public</code></pre></div>
+<p>Then open the <code>nekko-agent</code> package settings on npmjs.com and add a GitHub Actions
+trusted publisher with:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Organization or user</td>
+<td><code>nekko-labs</code></td>
+</tr>
+<tr>
+<td>Repository</td>
+<td><code>nekko-agent</code></td>
+</tr>
+<tr>
+<td>Workflow filename</td>
+<td><code>release.yml</code></td>
+</tr>
+<tr>
+<td>Allowed action</td>
+<td><code>npm publish</code></td>
+</tr>
+</tbody></table></div>
+<p>The workflow file is <code>.github/workflows/release.yml</code>; npm wants only the
+filename in this field. After confirming a tagged publish succeeds through
+OIDC, harden the package&#39;s Publishing access settings by requiring 2FA and
+disallowing token-based publishing, then revoke the temporary <code>NPM_TOKEN</code>
+secret. The release job will continue using OIDC after the token is removed.</p>
+<h2 id="verifying-a-release"><a class="anchor" href="#verifying-a-release" aria-hidden="true" tabindex="-1">#</a>Verifying a release</h2>
+<h2 id="installer-and-updater-targets"><a class="anchor" href="#installer-and-updater-targets" aria-hidden="true" tabindex="-1">#</a>Installer and updater targets</h2>
+<p>The release workflow intentionally publishes only targets with a clear
+installation story:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Artifact</th>
+<th><code>electron-updater</code> support</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Windows</td>
+<td>NSIS <code>.exe</code></td>
+<td>✅ automatic updates</td>
+</tr>
+<tr>
+<td>macOS</td>
+<td><code>.dmg</code> plus required <code>.zip</code> metadata artifact</td>
+<td>✅ automatic updates</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td>AppImage</td>
+<td>✅ automatic updates</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td><code>.deb</code></td>
+<td>✅ supported by current electron-builder updater docs</td>
+</tr>
+</tbody></table></div>
+<p>The Windows MSI and ZIP targets are not built: MSI is not an updater target and
+the ZIP would duplicate the NSIS installation path without adding an updater
+benefit. The current electron-builder documentation lists macOS DMG, Windows
+NSIS, and Linux AppImage/DEB as auto-updatable targets. Unsigned builds can
+still be installed, but signing warnings are independent of updater support.</p>
+<p>The release workflow already runs these on every signed macOS build and fails
+if any of them do. To check a downloaded <code>.dmg</code> by hand:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">codesign --verify --deep --strict --verbose=2 /Applications/Nekko Agent.app
+spctl --assess --type execute --verbose=4 /Applications/Nekko Agent.app
+xcrun stapler validate /Applications/Nekko Agent.app</code></pre></div>
+<p><code>spctl</code> should say <code>accepted</code> with <code>source=Notarized Developer ID</code>.</p>
+<h2 id="building-signed-locally"><a class="anchor" href="#building-signed-locally" aria-hidden="true" tabindex="-1">#</a>Building signed locally</h2>
+<p>Only needed when debugging the signing config itself.</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">CSC_NAME=&quot;Nekko Labs LLC (3HM5598S99)&quot; npm run dist -w @nekko-agent/desktop</code></pre></div>
+<p><code>CSC_NAME</code> takes the certificate&#39;s <strong>common name without the type prefix</strong>.
+Passing the full <code>Developer ID Application: ...</code> string fails with <em>&quot;Please
+remove prefix ... appropriate certificate will be chosen automatically&quot;</em>.</p>
+<p>That signs with the local keychain identity but does <strong>not</strong> notarize, so
+<code>stapler validate</code> will fail on the result. That is expected; Gatekeeper on the
+build machine still accepts it because the machine trusts the developer.</p>
+
+          <footer class="page-foot">
+            <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/docs/signing.md" rel="noopener">Edit this page on GitHub</a>
+            <div class="pager"><a class="prev" href="/docs/architecture"><span>Previous</span>Architecture</a><a class="next" href="/docs/for-agents"><span>Next</span>Docs for AI agents</a></div>
+          </footer>
+        </article>
+      </main>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Release signing</a></li><li class="d2"><a href="#status-at-a-glance">Status at a glance</a></li><li class="d2"><a href="#macos">macOS</a></li><li class="d3"><a href="#the-entitlements-and-why-each-one-is-there">The entitlements, and why each one is there</a></li><li class="d2"><a href="#secrets">Secrets</a></li><li class="d3"><a href="#uploading-them">Uploading them</a></li><li class="d3"><a href="#when-the-app-store-connect-key-rotates">When the App Store Connect key rotates</a></li><li class="d2"><a href="#windows">Windows</a></li><li class="d2"><a href="#npm-publishing">npm publishing</a></li><li class="d3"><a href="#first-publish-bootstrap">First publish bootstrap</a></li><li class="d2"><a href="#verifying-a-release">Verifying a release</a></li><li class="d2"><a href="#installer-and-updater-targets">Installer and updater targets</a></li><li class="d2"><a href="#building-signed-locally">Building signed locally</a></li></ul></nav></aside>
+    </div>
+    <dialog class="search-dialog" aria-label="Search the docs">
+      <form method="dialog" class="search-box">
+        <input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="esc" aria-label="Close search">Esc</button>
+      </form>
+      <ul class="results" role="listbox" aria-label="Results"></ul>
+    </dialog>
+    <script src="/docs.js?v=docs-1" defer></script>
+  </body>
+</html>
