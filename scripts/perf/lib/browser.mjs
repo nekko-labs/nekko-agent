@@ -14,7 +14,8 @@
  * 60 Hz vsync would add up to a whole 16.7 ms of waiting for the next tick to
  * every sample: noise from the virtual display, not work the app did. With the
  * limiter off a frame starts as soon as the main thread is free, which is how
- * a 120 Hz (or faster) display would see the same work.
+ * a 120 Hz (or faster) display would see the same work, but only while frames
+ * keep carrying damage; run.mjs keeps them flowing (FRAME_PUMP in probes.mjs).
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';

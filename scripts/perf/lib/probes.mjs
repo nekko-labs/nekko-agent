@@ -67,6 +67,23 @@ export const INSTALL = String.raw`(() => {
       }
     }).observe({ type: 'event', durationThreshold: 16 });
   } catch { /* Event Timing unavailable */ }
+  // Long animation frames (50 ms or more) with the scripts that ran in them,
+  // so a slow sample can say where its time went (the occasional 100 ms
+  // switch). Only the newest few hundred are kept.
+  P.loaf = [];
+  try {
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        P.loaf.push({
+          start: e.startTime, duration: e.duration, blocking: e.blockingDuration,
+          render: e.renderStart ? e.startTime + e.duration - e.renderStart : 0,
+          styleLayout: e.styleAndLayoutStart ? e.startTime + e.duration - e.styleAndLayoutStart : 0,
+          scripts: (e.scripts ?? []).map((x) => ({ invoker: x.invoker, source: (x.sourceURL || '').split('/').pop() + (x.sourceFunctionName ? ':' + x.sourceFunctionName : ''), duration: Math.round(x.duration), forcedLayout: Math.round(x.forcedStyleAndLayoutDuration || 0) })),
+        });
+        if (P.loaf.length > 300) P.loaf.splice(0, P.loaf.length - 300);
+      }
+    }).observe({ type: 'long-animation-frame', buffered: false });
+  } catch { /* Long Animation Frames unavailable */ }
 
   // --- Keypress to paint in a terminal ---
   // Timed to the frame after the echo is drawn: the key goes to the pty, the
@@ -113,7 +130,11 @@ export const INSTALL = String.raw`(() => {
     let sawFrame = false;
     let sawHistory = false;
     const res = {};
-    const finish = () => { P.switchResult = res; };
+    const finish = () => {
+      const end = start + Math.max(res.frame ?? 0, res.history ?? 0);
+      res.loaf = P.loaf.filter((e) => e.start + e.duration >= start && e.start <= end);
+      P.switchResult = res;
+    };
     const loop = () => requestAnimationFrame(() => {
       const panel = visiblePanel(title);
       const frameNow = !sawFrame && !!panel;
@@ -141,6 +162,59 @@ export const INSTALL = String.raw`(() => {
     .find((p) => p.firstElementChild && p.firstElementChild.querySelector('span.truncate')?.textContent === title) ?? null;
   return true;
 })()`;
+
+/**
+ * Keep the latency browser's frames flowing, whatever the app is doing.
+ *
+ * The latency browser runs with the frame-rate limiter off so a frame starts
+ * as soon as the main thread is free. Chromium honours that only while frames
+ * carry damage: after a frame that changes nothing on screen (a
+ * requestAnimationFrame callback that draws nothing, the harness's own
+ * settle-then-click, or a stepped decoration whose tick lands on the same
+ * step), the display scheduler holds the next frame to the end of a default
+ * 60 Hz interval. Input in that window waits up to 16.7 ms for a frame that
+ * is not coming any sooner, so the latency figures measured the frame clock's
+ * idle wake, not the app: they jumped by a whole frame the moment no looping
+ * CSS decoration happened to be animating on the page (the decoration clock
+ * of #438 moved warm switches from 13 to 19 ms and terminal keys from 6 to
+ * 36 ms on CI without the app doing more work).
+ *
+ * A 1 px compositor-only animation, outside the app's DOM, puts damage in
+ * every frame without adding main-thread work: the compositor keeps drawing
+ * back to back and the next main frame starts as soon as it is asked for, as
+ * it does on a fast real display. It only removes the hold; any work the app
+ * does still delays the frame that shows the change.
+ */
+export const FRAME_PUMP = String.raw`(() => {
+  if (document.getElementById('__perf-frame-pump')) return true;
+  const el = document.createElement('div');
+  el.id = '__perf-frame-pump';
+  el.setAttribute('aria-hidden', 'true');
+  el.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;pointer-events:none;z-index:2147483647;will-change:transform;background:rgba(0,0,0,0.01);contain:strict';
+  document.documentElement.appendChild(el);
+  el.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(1px)' }], { duration: 1000, iterations: Infinity, direction: 'alternate' });
+  return true;
+})()`;
+
+/**
+ * How long the page waits for a frame it asks for just after a frame that
+ * drew nothing: the frame clock's idle wake, the cost FRAME_PUMP removes.
+ * Samples in ms; a few tenths when frames are flowing, about 15 when the
+ * display holds the next frame to a 60 Hz tick. A page function.
+ */
+export async function frameWake(n) {
+  const raf = () => new Promise((r) => requestAnimationFrame(r));
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    await raf();
+    await raf();
+    await new Promise((r) => setTimeout(r, 2));
+    const t = performance.now();
+    await raf();
+    out.push(performance.now() - t);
+  }
+  return out;
+}
 
 /**
  * Center of the first visible element matching `selector` whose title (or
