@@ -1427,13 +1427,16 @@ dependencies = [
 name = "nekko-workspace"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "getrandom",
  "memchr",
  "nekko-context",
  "nekko-js",
  "nekko-tools",
  "regress",
+ "reqwest",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

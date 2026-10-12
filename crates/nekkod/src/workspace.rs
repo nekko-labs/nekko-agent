@@ -1,5 +1,6 @@
 //! The user's projects, served here (PF14): the file explorer, memory notes,
-//! line comments and the workspace index (`crates/nekko-workspace`).
+//! line comments, the workspace index, and the git and pull-request state
+//! (`crates/nekko-workspace`).
 //!
 //! A workspace's folder comes from the settings (`crate::settings::current`,
 //! the daemon's own store when it knows the data directory); everything runs
@@ -10,7 +11,7 @@
 use crate::backend::Backend;
 use crate::hub::Hub;
 use crate::routes::Ctx;
-use nekko_workspace::{comments, files, index::Index, memory};
+use nekko_workspace::{comments, files, git::Git, index::Index, memory, pr::Prs};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -26,6 +27,10 @@ pub const CHANNELS: &[&str] = &[
     "workspace:files",
     // The chat's index snippets at admission (chat.ts asks for them here).
     "workspace:snippets",
+    "workspace:gitStatus",
+    "pr:sessionList",
+    "pr:diff",
+    "pr:action",
 ];
 
 /// Channels that keep their files in the data directory, served only when
@@ -36,11 +41,14 @@ pub const DATA_CHANNELS: &[&str] =
 pub struct Workspace {
     data_dir: Option<PathBuf>,
     index: Arc<Index>,
+    prs: Arc<Prs>,
+    git: Git,
 }
 
 impl Workspace {
     pub fn new(data_dir: Option<PathBuf>) -> Self {
-        Self { data_dir, index: Arc::new(Index::new()) }
+        let prs = Arc::new(Prs::default());
+        Self { data_dir, index: Arc::new(Index::new()), git: Git::new(prs.clone()), prs }
     }
 
     /// Is this channel answered here (never handed back to the host)?
@@ -73,6 +81,84 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
 /// The saved folders, `settings.workspaces`.
 async fn folders(ctx: &Ctx) -> Vec<Value> {
     crate::settings::current(ctx).await.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default()
+}
+
+/// The user's settings.
+async fn settings(ctx: &Ctx) -> Value {
+    crate::settings::current(ctx).await
+}
+
+/// A chat, from the daemon's store or else the host.
+async fn session(ctx: &Ctx, id: &str) -> Value {
+    if let Some(store) = ctx.sessions.clone() {
+        let id = id.to_string();
+        return blocking(move || store.get(&id).unwrap_or(Value::Null)).await.unwrap_or(Value::Null);
+    }
+    match tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("session:get", json!([id]))).await {
+        Ok(Ok(s)) => s,
+        _ => Value::Null,
+    }
+}
+
+/// The GitHub token for the REST fallback: the GitHub connector's, else the
+/// environment's (`githubToken` in pr.ts).
+fn github_token(settings: &Value) -> Option<String> {
+    let connector = settings.get("connectors").and_then(Value::as_array).and_then(|list| {
+        list.iter().find(|c| {
+            c.get("kind") == Some(&json!("github"))
+                && nekko_js::truthy(c.get("connected"))
+                && nekko_js::truthy(c.get("token"))
+        })
+    });
+    connector
+        .and_then(|c| c.get("token"))
+        .map(nekko_js::display)
+        .or_else(|| ["GH_TOKEN", "GITHUB_TOKEN"].iter().find_map(|k| std::env::var(k).ok().filter(|v| !v.is_empty())))
+}
+
+/// `getSessionWorkspaceIds(session)`: the primary folder, then the supporting ones, once each.
+fn session_workspace_ids(session: &Value) -> Vec<String> {
+    let mut ids: Vec<String> = Vec::new();
+    let primary = session.get("workspaceId").filter(|v| nekko_js::truthy(Some(v)));
+    let supporting = session.get("supportingWorkspaceIds").and_then(Value::as_array).cloned().unwrap_or_default();
+    for v in primary.into_iter().chain(supporting.iter().filter(|v| nekko_js::truthy(Some(v)))) {
+        let id = nekko_js::display(v);
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
+}
+
+/// The folder `getGitStatus` reads for an id: a saved workspace, or for
+/// `session:<id>` the chat's first checkout (its worktree when isolated).
+/// None when there is nothing to read, including an isolated chat whose
+/// worktree is not made yet (the source checkout is not its branch).
+async fn git_folder(ctx: &Ctx, id: &str) -> Option<String> {
+    let settings = settings(ctx).await;
+    let saved = settings.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default();
+    let Some(sid) = id.strip_prefix("session:") else { return folder_path(&saved, id) };
+    let s = session(ctx, sid).await;
+    if s.is_null() {
+        return None;
+    }
+    let worktrees = s.get("gitWorktrees").and_then(Value::as_object);
+    if nekko_js::truthy(s.get("gitIsolation")) && worktrees.is_none_or(|w| w.is_empty()) {
+        return None;
+    }
+    let (wid, path) =
+        session_workspace_ids(&s).into_iter().find_map(|wid| folder_path(&saved, &wid).map(|p| (wid, p)))?;
+    if s.get("gitIsolation") == Some(&json!(false)) {
+        return Some(path);
+    }
+    Some(
+        worktrees
+            .and_then(|w| w.get(&wid))
+            .and_then(|w| w.get("path"))
+            .filter(|p| !p.is_null())
+            .map(nekko_js::display)
+            .unwrap_or(path),
+    )
 }
 
 fn folder_path(folders: &[Value], id: &str) -> Option<String> {
@@ -123,6 +209,29 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 .map(|a| a.iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect())
                 .unwrap_or_default();
             Ok(Value::Array(index_snippets(ctx, &ids, &text(&args, 1)).await))
+        }
+        "workspace:gitStatus" => {
+            let id = text(&args, 0);
+            let folder = git_folder(ctx, &id).await;
+            Ok(ws.git.status(&id, folder.as_deref(), nekko_js::truthy(arg(&args, 1))).await)
+        }
+        "pr:sessionList" => {
+            let s = session(ctx, &text(&args, 0)).await;
+            let Some(messages) = s.get("messages").and_then(Value::as_array) else { return Ok(json!([])) };
+            let token = github_token(&settings(ctx).await);
+            Ok(Value::Array(ws.prs.session_prs(messages, token.as_deref()).await))
+        }
+        "pr:diff" => {
+            let token = github_token(&settings(ctx).await);
+            Ok(ws.prs.diff(&text(&args, 0), token.as_deref()).await)
+        }
+        "pr:action" => {
+            let token = github_token(&settings(ctx).await);
+            let out = ws.prs.action(&text(&args, 0), &text(&args, 1), token.as_deref()).await;
+            match out.get("error").and_then(Value::as_str) {
+                Some(e) => Err(e.to_string()),
+                None => Ok(out),
+            }
         }
         _ => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };

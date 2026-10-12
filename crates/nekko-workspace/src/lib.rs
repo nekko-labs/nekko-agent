@@ -1,7 +1,8 @@
 //! The user's projects, for the engine daemon (PF14): the file explorer
 //! ([`files`]), memory notes ([`memory`]), line comments ([`comments`]) and
 //! the workspace index with its outline and search ([`index`],
-//! [`outline`]).
+//! [`outline`]), and the git and pull-request state the sidebar and the PR
+//! card show ([`git`], [`pr`]).
 //!
 //! Ported from the TS host's `files.ts`, `memory.ts`, `comments.ts`,
 //! `workspace.ts` and core's indexer, with JavaScript's rules where they
@@ -12,12 +13,29 @@
 
 pub mod comments;
 pub mod files;
+pub mod git;
 pub mod index;
 pub mod memory;
 pub mod outline;
+pub mod pr;
+pub mod proc;
 
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Bumped by every finished read a cache keeps, so a caller that waited
+/// behind a read can tell it finished after the caller asked.
+static READS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The current read count, taken when a call starts.
+pub(crate) fn read_seq() -> u64 {
+    READS.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// A new read finished: its number, greater than any count taken before.
+pub(crate) fn next_read() -> u64 {
+    READS.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
+}
 
 pub(crate) fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
