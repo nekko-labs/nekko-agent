@@ -755,8 +755,10 @@ function MarketplaceTab() {
                       <button className="btn btn-ghost px-2! py-0.5! text-[11px] text-red-400" disabled={busy} onClick={() => uninstall(t.id)}>
                         Remove
                       </button>
+                    ) : selected.blocked ? (
+                      <span className="text-[10px] text-ink-faint" title={selected.blocked}>link only</span>
                     ) : t.available ? (
-                      <button className="btn btn-outline px-2! py-0.5! text-[11px]" disabled={busy || !!selected.blocked} onClick={() => install(t.id)}>
+                      <button className="btn btn-outline px-2! py-0.5! text-[11px]" disabled={busy} onClick={() => install(t.id)}>
                         Install
                       </button>
                     ) : (
