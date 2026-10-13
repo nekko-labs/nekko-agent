@@ -21,3 +21,9 @@ describe('change plan action', () => {
     expect(appendPlanChangeRequest('')).toBe(PLAN_CHANGE_REQUEST);
   });
 });
+
+it('lists sub-agents above the agent plan', () => {
+  const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={session} streaming={false} />);
+  expect(markup.indexOf('>Sub-agents<')).toBeGreaterThan(-1);
+  expect(markup.indexOf('>Sub-agents<')).toBeLessThan(markup.indexOf('>Agent plan<'));
+});

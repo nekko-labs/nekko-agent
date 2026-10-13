@@ -49,6 +49,23 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
         <section>
           <div className="mb-1.5 flex items-center gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Sub-agents</span>
+            {activeChildren.length > 0 && <span className="text-[10px] tabular-nums text-ink-faint">{activeChildren.length}</span>}
+          </div>
+          {activeChildren.length === 0 ? <p className="px-0.5 text-[11px] leading-snug text-ink-faint">{spawnAllowed ? 'No sub-agents working right now.' : 'Delegation is off. Enable it in Settings → Orchestration.'}</p> : (
+            <div className="space-y-0.5">{activeChildren.map((c) => {
+              const a = activity[c.id];
+              return <button key={c.id} className="flex w-full items-start gap-1.5 rounded-lg px-1 py-1 text-left hover:bg-surface-2" onClick={() => openChatPane(c.id)} title={`Open ${c.title}`}>
+                <RobotIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
+                <span className="min-w-0 flex-1"><span className="block truncate text-[12px] text-ink-soft">{c.title}</span>
+                  <span className="block truncate text-[10px] text-ink-faint">{a?.tool ? a.detail ? `${a.tool} · ${a.detail}` : `Running ${a.tool}` : a?.running ? 'Working…' : a?.running === false || c.lastReplyText ? 'Finished · click to view' : 'Waiting to start'}</span>
+                </span>
+              </button>;
+            })}</div>
+          )}
+        </section>
+        <section>
+          <div className="mb-1.5 flex items-center gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Agent plan</span>
             {!!agentPlan?.length && <span className="text-[10px] tabular-nums text-ink-faint">{progress.done + progress.skipped}/{progress.total}</span>}
             {streaming && <span className="h-1.5 w-1.5 animate-pulse" style={{ background: 'var(--accent)' }} title="The agent is working" />}
@@ -70,23 +87,6 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
             </ol>
           ) : <p className="px-0.5 text-[11px] leading-snug text-ink-faint">{streaming ? 'Waiting for the agent to publish its plan.' : 'The agent’s plan will appear here when it starts work.'}</p>}
           {!!agentPlan?.length && <button type="button" className="mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-ink-soft hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={!onChangePlan} onClick={onChangePlan} title="Describe a plan adjustment in the composer before sending"><PencilIcon className="h-3 w-3" />Change plan</button>}
-        </section>
-        <section>
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Sub-agents</span>
-            {activeChildren.length > 0 && <span className="text-[10px] tabular-nums text-ink-faint">{activeChildren.length}</span>}
-          </div>
-          {activeChildren.length === 0 ? <p className="px-0.5 text-[11px] leading-snug text-ink-faint">{spawnAllowed ? 'No sub-agents working right now.' : 'Delegation is off. Enable it in Settings → Orchestration.'}</p> : (
-            <div className="space-y-0.5">{activeChildren.map((c) => {
-              const a = activity[c.id];
-              return <button key={c.id} className="flex w-full items-start gap-1.5 rounded-lg px-1 py-1 text-left hover:bg-surface-2" onClick={() => openChatPane(c.id)} title={`Open ${c.title}`}>
-                <RobotIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
-                <span className="min-w-0 flex-1"><span className="block truncate text-[12px] text-ink-soft">{c.title}</span>
-                  <span className="block truncate text-[10px] text-ink-faint">{a?.tool ? a.detail ? `${a.tool} · ${a.detail}` : `Running ${a.tool}` : a?.running ? 'Working…' : a?.running === false || c.lastReplyText ? 'Finished · click to view' : 'Waiting to start'}</span>
-                </span>
-              </button>;
-            })}</div>
-          )}
         </section>
         {queued.length > 0 && <section>
           <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">After this · {queued.length}</div>
