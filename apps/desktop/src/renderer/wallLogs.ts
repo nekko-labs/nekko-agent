@@ -1,16 +1,22 @@
 import { create } from 'zustand';
 
+/** What a wall drawer shows: the agent's command log, or one of its companions. */
+export type WallDrawerKind = 'logs' | 'diff' | 'files' | 'browser';
+
 /**
- * Which agent's command log is out on the Agents wall. One at a time: the log
- * slides out of its window's right edge as a drawer of its own, and the wall
- * makes room for it. `closing` keeps the drawer mounted while it is absorbed
- * back into the window, but the wall already lays out as if it were gone so
- * the neighbours slide back at the same time.
+ * Which agent's drawer is out on the Agents wall, and what it shows (Logs,
+ * Changes, Files or Browser). One at a time: the drawer slides out of its
+ * window's right edge and the wall makes room for it. `closing` keeps the
+ * drawer mounted while it is absorbed back into the window, but the wall
+ * already lays out as if it were gone so the neighbours slide back at the
+ * same time.
  */
 export interface WallLogsState {
   sessionId: string | null;
+  kind: WallDrawerKind;
   closing: boolean;
-  toggle: (sessionId: string) => void;
+  /** Open this agent's drawer on `kind`; the same one again closes it. */
+  toggle: (sessionId: string, kind?: WallDrawerKind) => void;
   close: () => void;
   /** The close animation finished: unmount the drawer. */
   closed: () => void;
@@ -18,11 +24,12 @@ export interface WallLogsState {
 
 export const useWallLogs = create<WallLogsState>((set, get) => ({
   sessionId: null,
+  kind: 'logs',
   closing: false,
-  toggle: (sessionId) => {
+  toggle: (sessionId, kind = 'logs') => {
     const s = get();
-    if (s.sessionId === sessionId && !s.closing) set({ closing: true });
-    else set({ sessionId, closing: false });
+    if (s.sessionId === sessionId && s.kind === kind && !s.closing) set({ closing: true });
+    else set({ sessionId, kind, closing: false });
   },
   close: () => { if (get().sessionId) set({ closing: true }); },
   closed: () => { if (get().closing) set({ sessionId: null, closing: false }); },
@@ -31,7 +38,7 @@ export const useWallLogs = create<WallLogsState>((set, get) => ({
 export interface Rect { x: number; y: number; width: number; height: number }
 
 /** The drawer's share of the target window's height. */
-export const LOGS_DRAWER_HEIGHT = 0.9;
+export const LOGS_DRAWER_HEIGHT = 0.96;
 const MIN_DRAWER = 280;
 const MIN_CHAT = 320;
 /** The narrowest a window beside the drawer is squeezed to. */
@@ -43,7 +50,7 @@ export function logsDrawerWidth(stageWidth: number): number {
 
 /**
  * Lay the wall out around an open log drawer. The drawer hangs off the target
- * window's right edge at 90% of its height, vertically centred. Windows to the
+ * window's right edge at 96% of its height, vertically centred. Windows to the
  * right that share its rows slide right by the drawer's width, squeezed into
  * what is left of the stage when they can stay usable; the target narrows
  * when it is the rightmost window and nothing else can give way. Pure: the

@@ -7,6 +7,12 @@ describe('development launcher safety', () => {
     expect(source).toContain('verbatimSymlinks: true');
     expect(source).toContain("'Nekko Agent.app'");
   });
+  it('runs a Windows dev build as a branded "Nekko Agent.exe", not electron.exe', () => {
+    expect(source).toContain("join(cache, 'Nekko Agent.exe')");
+    expect(source).toContain("FileDescription: 'Nekko Agent'");
+    expect(source).toContain("resolve('build/icon.ico')");
+    expect(source).toContain('env.ELECTRON_EXEC_PATH = await prepareWindowsRuntime()');
+  });
   it('uses LaunchServices and a distinct development bundle identity', () => {
     expect(readFileSync(new URL('../../scripts/dev-launch-wrapper.cjs', import.meta.url), 'utf8')).toContain("'/usr/bin/open'");
     expect(source).toContain('com.nekkoagent.desktop.dev');
