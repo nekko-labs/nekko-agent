@@ -100,6 +100,9 @@
     "workspaces": [],
     "connectors": [],
     "mascotEnabled": true,
+    "showTips": true,
+    "completionTipSeen": false,
+    "skipDeleteConfirmation": false,
     "prompts": [
       {
         "id": "explain",

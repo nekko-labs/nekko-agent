@@ -29,6 +29,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 
 ## The phone app
 
+> **Native apps.** The phone apps are moving to platform-native code: Kotlin / Jetpack Compose in
+> `apps/android` (pairing, chats, live replies, approvals and questions; no phone models yet) and
+> SwiftUI in `apps/ios`. The Expo app described below stays as the reference until they reach parity.
+
 The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
 small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
 computer's models and folders, live replies, **Allow this?** cards for risky commands, the agent's

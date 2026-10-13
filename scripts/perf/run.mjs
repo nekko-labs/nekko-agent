@@ -722,6 +722,7 @@ async function main() {
     cwd: APP_ROOT,
     env: { ...process.env, NEKKO_DATA_DIR: dataDir, NEKKO_PORT: String(CFG.appPort), NEKKO_HOST: '127.0.0.1' },
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
     // Its own process group on POSIX, so killTree reaches its ptys and tool children.
     detached: process.platform !== 'win32',
   });

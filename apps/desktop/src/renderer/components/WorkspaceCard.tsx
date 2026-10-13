@@ -331,7 +331,7 @@ function WorkspaceCardImpl({
 
       {/* Line 3: its git position, then the PRs it made. The project is the
           group heading the card sits under, so the card does not repeat it. */}
-      {(git || prs.length > 0 || folders.length === 0) && (
+      {(git || prs.length > 0) && (
         <div className="flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
           {git ? (
             <Fact
@@ -352,8 +352,6 @@ function WorkspaceCardImpl({
             >
               {git.branch ?? git.head ?? 'detached'}
             </Fact>
-          ) : folders.length === 0 ? (
-            <span className="min-w-0 shrink truncate">No project attached</span>
           ) : null}
           {(git?.ahead ?? 0) > 0 || (git?.behind ?? 0) > 0 ? (
             <Fact tone="var(--info)" title={`${git!.ahead} ahead of, ${git!.behind} behind, the upstream branch`}>
@@ -363,7 +361,7 @@ function WorkspaceCardImpl({
           ) : null}
           {prs.length > 0 && (
             <>
-              {(git || folders.length === 0) && <span aria-hidden className="mx-0.5 h-2.5 w-px shrink-0 bg-line" />}
+              {git && <span aria-hidden className="mx-0.5 h-2.5 w-px shrink-0 bg-line" />}
               <SessionPrLinks prs={prs} />
             </>
           )}

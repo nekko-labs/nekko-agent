@@ -372,7 +372,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
     // Historical milestones stay anchored to their original transcript positions.
     return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} />)}</>;
   }
-  const persisted = row.message.id !== 'tmp' && row.message.id !== 'live';
+  const persisted = !row.displayOnly && row.message.id !== 'tmp' && row.message.id !== 'live';
   const editable = !readOnly && !streaming && row.message.role === 'user' && persisted;
   return (
     <>
@@ -2951,7 +2951,6 @@ function ArchivedChatBar({ sessionId, contentWidth, archivedAt }: { sessionId: s
           className="btn btn-outline h-8 px-3 py-0 text-[12px] text-(--danger)"
           disabled={busy}
           onClick={async () => {
-            if (!window.confirm('Delete this chat forever? It cannot be recovered.')) return;
             setBusy(true);
             await deleteChatForever(sessionId);
             setBusy(false);

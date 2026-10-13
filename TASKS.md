@@ -6,11 +6,24 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Clarification reply visibility (2026-10-13)
+
+- [x] Project saved ask_user results into chronological user-facing Q/A rows without duplicating model history or exposing wrapper instructions. Preserve literal labels/notes and skip states; guard display-only rows from persisted-ID edit/reuse actions. See [SPEC](SPEC.md#clarification-answers-remain-visible-in-chat).
+- [x] Focused transcript/component regressions and isolated real-renderer assertions for 1200px/390px light/dark, including older history and failed/pending results.
+- [x] Parent inspected the original contact sheet and 390px light capture: chronological Q/A, skipped and unattended states are visible with no broad issue found.
+- [x] Integrate main 76c2db7 preserving compact delegation and composer containment; 957 desktop tests across 142 files, desktop typecheck, production app build, five docs tests and 52 real-renderer assertions passed. Fresh matched hidden renderer captures use this main revision as baseline.
+- [ ] Parent must inspect fresh integration evidence before landing. Native platforms/live-provider round trips remain unverified. PR #512 stays draft and unmerged for this integration handoff.
+
 > Converted from executionplan.md on 2026-06-29. ✅ = done per the prior plan; Part 1 below is the technical plan, Part 2 is the task checklist.
 >
 > **The plan + the build log, in one file.** Part 1 is the **technical plan**, how we build what [SPEC.md](SPEC.md) describes (stack, architecture, data model, conventions, design system, constraints). Part 2 is the **task list**, Now / Backlog / Shipped, recording *how every past feature was built and how future features will be built*, with the context around them. The full technical design for the web/Docker/Cloud editions lives in [spec-web-and-hosted.md](spec-web-and-hosted.md); credential/ops setup lives in [provisioning.md](../../obsurdian/projects/nekko-agent/provisioning.md), referenced here, not duplicated. (Merged from the former `plan.md` + `tasks.md`.)
 
 ---
+
+## Window lifecycle shortcuts and tips (added 2026-10-12)
+
+- [x] Implement [window lifecycle shortcuts and guidance](SPEC.md#window-lifecycle-shortcuts-and-guidance-2026-10-12): focused-pane keys, board-only minimization, confirmed deletion with independent skip/reset, successful-completion destination tip, and missing-project label removal. Prior head verification: 947 desktop tests, typecheck, build, settings parity, 48 isolated interactions; r4 matched light/dark wide/narrow captures and timing frames inspected and published. Hosted checks pass at 8163f0f9.
+- [ ] Verify and land the narrow drawer continuation: automatically reveal Show completed in the existing AgentSidebar overlay without focus, then highlight Open agent list if closed without consuming the tip on drawer open/close. Merged main 76c2db7b while retaining composer changes. Passed 974 desktop tests, typecheck, production build, docs generation, 8 baseline and 71 after hidden fixture assertions; TypeScript-host Windows cmd PTY executed before and after minimize. Fresh matched r5 owning-view screenshots and recordings await parent pixel inspection/publication and review, then updated hosted checks. Keep PR draft and unmerged for parent review. Native OS shortcut delivery and Rust daemon PTY survival remain untested; terminal archive history is outside scope.
 
 ## Phone: what ships now, what the native port owes (consolidated 2026-10-12)
 
@@ -90,8 +103,22 @@ port continues behind it and replaces it only once the parity gates below pass.*
 3. **Encrypted remote access (planned):** port PBKDF2/AES-GCM wire and relay v2 state machine from shared/mobile references; fixture parity tests; QR/paste pairing, one-time code consumption, Keychain identity, reconnect/revocation, multi-computer switching. No insecure direct-host fallback. The Tailscale private relay above is the first transport to support.
 4. **Chat operations (planned):** streaming events, transcript reconciliation after sleep, new chat/provider model/project choice, queue/stop, pending approvals/questions and exact risk payloads. Sending stays disabled until approvals and event lifecycle are proven.
 5. **On-device models (planned):** audited llama.cpp Swift bridge with Metal, memory-fit catalog, cancel/resume downloads with integrity validation, backup-excluded model storage, offline phone chat persistence, one loaded model and thermal/background handling. No remote fallback.
-6. **Distribution (planned):** signing/team and bundle ID confirmation (the Expo app already owns `dev.nekkolabs.nekkoagent`; the native app must take it over, not sit beside it), physical-device/security testing, privacy manifest review, notification permission after pairing, APNs credentials, TestFlight then App Store.
-7. **Android (planned after iOS gates):** standalone Kotlin/Compose app, Keystore, matching protocol fixtures, lifecycle/approval parity, then local inference and Play distribution; preserve Expo Android until verified.
+6. **Distribution (planned):** signing/team and bundle ID confirmation, physical-device/security testing, privacy manifest review, notification permission after pairing, APNs credentials, TestFlight then App Store. Requires owner Apple account and macOS/device access.
+7. **Android (started 2026-10-11, in parallel with iOS):** standalone Kotlin/Compose app in `apps/android`; see "Native Android app" below. Preserve Expo Android until verified.
+
+### Native Android app (2026-10-11)
+
+Layout: `apps/android` is a standalone Gradle build (wrapper 9.8.1, AGP 9.4.1 with built-in Kotlin 2.4.21, JDK 17, compileSdk 37.2, targetSdk 36, minSdk 28). `:protocol` is pure Kotlin/JVM (E2E crypto, pairing links, relay v2 client on coroutines + OkHttp, narrow wire decoders, transcript model ported from `apps/mobile/src/lib`), so it is tested on the JVM without Android. `:app` is Compose + Material 3 with manual DI (`NekkoApp` → `ComputersRepository`), `ChatController` (port of `useRemoteChat`, no Android types), Keystore-backed `AndroidSecureStore`, Navigation Compose. CI: `.github/workflows/android-native.yml`.
+
+- [x] **AN-1, Protocol parity.** PBKDF2/AES-GCM byte-identical to WebCrypto (fixture `protocol/src/test/resources/e2e-vector.json`); the agent's `packages/shared` opens Kotlin-sealed frames (`scripts/e2e-vector.mjs open`); channel names pinned against `packages/shared/src/ipc.ts`.
+- [x] **AN-2, Relay client.** Same state machine as the Expo client (connecting/online/offline/denied, backoff, offline polling, agent-online re-HELLO, kick 4001 and bad-key terminal, pair code never resent). 12 fake-agent tests.
+- [x] **AN-3, Live integration test.** `NEKKO_ITEST=1 ./gradlew :protocol:test` runs the Kotlin client against the real relay + headless agent + `scripts/fake-model.mjs`: enrollment, provider-key stripping, streamed turn, guarded `rm -rf` approval denied from the phone, same-device reconnect, stranger and spent-code refusal.
+- [x] **AN-4, App.** Pairing (code scanner, paste, deep link with confirmation), chats list with activity badges and pull-to-refresh, chat with streaming/queue/stop/approval/question cards, new chat (provider, model, folder), computers (rename, switch, forget). 30 JVM tests for controller/repository/ask form. Lint clean; debug and minified release APKs build.
+- [ ] **AN-5, Emulator and device verification.** Needs Android Studio (or an emulator system image) and/or a phone: run the debug APK against a local relay (`adb reverse tcp:4400 tcp:4400`, pair with `ws://localhost:4400`) and against the managed relay; capture light/dark screenshots of pairing, chats, a streaming reply, an approval and a question; check deep links, the scanner, keyboard/insets, TalkBack and large fonts. Then Compose UI tests (`androidTest`).
+- [ ] **AN-6, Push.** FCM token → relay `register-push` after pairing; needs a Firebase project (`google-services.json`) and the relay's FCM service account.
+- [ ] **AN-7, Phone models.** llama.cpp via JNI/NDK (or a maintained binding), memory-fit catalog, resumable downloads with integrity checks, no backup of model files, one loaded model, thermal handling. Parity with the Expo "On this phone" tab.
+- [ ] **AN-8, Markdown + attachments** in transcripts (no remote image fetches).
+- [ ] **AN-9, Distribution.** Upload key / Play App Signing, privacy policy and Data safety form, internal testing track, then production.
 
 ### Wall creation placement
 
@@ -113,7 +140,7 @@ port continues behind it and replaces it only once the parity gates below pass.*
 - **Cloud**: `apps/cloud`, Fastify, multi-account, file-backed store (Postgres-swappable).
 - **CLI**: `apps/cli` (`nekko-agent`), ESM, Node 22 globals (`fetch`/`WebSocket`), no deps.
 - **Relay**: `apps/relay`, Fastify WS dumb pipe.
-- **Mobile migration**: platform-native SwiftUI in apps/ios first; Kotlin/Compose in apps/android planned next. Existing `apps/mobile`, Expo (React Native, Expo Router, new architecture) with llama.rn for on-device models; standalone, not a root workspace (own `package-lock.json`). Types come from `@nekko-agent/shared` as type-only imports (tsconfig path, erased by Babel); runtime protocol code (E2E crypto via `@noble`, relay client) is reimplemented for Hermes and pinned to the shared implementation by tests. Native modules are allowed here (the "no native modules" rule is the desktop/engine's). Changed from Capacitor 2026-10-03, see Key Technical Decisions.
+- **Mobile migration**: platform-native SwiftUI in apps/ios; Kotlin/Compose in apps/android (standalone Gradle build, not an npm workspace; AGP 9.4 + built-in Kotlin, JDK 17). Existing `apps/mobile`, Expo (React Native, Expo Router, new architecture) with llama.rn for on-device models; standalone, not a root workspace (own `package-lock.json`). Types come from `@nekko-agent/shared` as type-only imports (tsconfig path, erased by Babel); runtime protocol code (E2E crypto via `@noble`, relay client) is reimplemented for Hermes and pinned to the shared implementation by tests. Native modules are allowed here (the "no native modules" rule is the desktop/engine's). Changed from Capacitor 2026-10-03, see Key Technical Decisions.
 - **Website**: `apps/website`, static hand-crafted HTML/CSS/JS (no framework, GitHub Pages), download buttons → GitHub Releases.
 - **Storage**: JSON files under the app data dir; usage analytics as JSONL. **No native modules**, spawn `ripgrep`/git via child_process when available, with JS fallbacks.
 - **Engine daemon** (revised 2026-09-30 by Philip): **Rust**, a Cargo workspace at the repo root with crates under `crates/`. `nekkod` (binary: tokio + axum, the `/api` wire, supervision, strangler proxy), `nekko-term` (portable-pty sessions), `nekko-infer` (inference router and runtime adapters), `nekko-bench` (benchmark harness). Shipped as a standalone per-platform binary in the app's resources, never loaded into Node. The UI stays Electron + React (web technology, for maintainability); GPUI or another native shell is deferred (see Backlog).
@@ -141,7 +168,9 @@ apps/server/       Fastify: POST /api/:channel + /api/events WS over createHost(
 apps/cloud/        multi-account hosted edition (accounts, entitlements, per-account Host)
 apps/relay/        dumb E2E pipe + push sender (APNs/FCM)
 apps/cli/          nekko-agent CLI + MCP server (local in-process or remote HTTP+WS)
-apps/mobile/       Expo iOS/Android app: relay client for the computer + llama.rn on the phone
+apps/ios/          SwiftUI iOS app (native target, in migration)
+apps/android/      Kotlin / Jetpack Compose Android app: :protocol (JVM) + :app (Compose)
+apps/mobile/       Expo iOS/Android app: migration reference (relay client + llama.rn on the phone)
 apps/website/      marketing site (index.html, styles, mascot sprite, downloads)
 ```
 
