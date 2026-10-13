@@ -1,6 +1,7 @@
 // First, so every module below sees the real packaging state in dev.
 import './devRuntime.js';
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from 'electron';
+import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, notificationWindowContext, trustedNotificationReporter } from '../notificationVisibility.js';
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
 import { existsSync } from 'fs';
@@ -19,10 +20,14 @@ import { startAgentBrowser } from './agentBrowser.js';
 import { registerArtifactPreview } from './artifactPreview.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
+import { startMainNotifications, createNativeNotificationPoster } from './notifications.js';
 const applicationWindows = new Set<number>();
 
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
 let quitting = false;
+let stopNotifications: (() => void) | undefined;
+let nativeNotifications: ReturnType<typeof createNativeNotificationPoster> | undefined;
+const notificationSessions = new Map<number, string | null>();
 
 function showWindow(): void {
   const win = BrowserWindow.getAllWindows()[0];
@@ -206,7 +211,9 @@ function createWindow(): void {
 
   applicationWindows.add(win.webContents.id);
   const windowId = win.webContents.id;
-  win.once('closed', () => applicationWindows.delete(windowId));
+  win.once('closed', () => { applicationWindows.delete(windowId); notificationSessions.delete(windowId); });
+  win.webContents.on('did-start-loading', () => notificationSessions.delete(windowId));
+  win.webContents.on('render-process-gone', () => notificationSessions.delete(windowId));
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
@@ -387,6 +394,19 @@ app.whenReady().then(async () => {
     mainDir: __dirname,
   });
   engine.start();
+  nativeNotifications = createNativeNotificationPoster({
+    isSupported: () => Notification.isSupported(),
+    create: options => new Notification(options),
+  }, url => { showWindow(); deliverLink(url); }, resolveWindowIcon());
+  stopNotifications = startMainNotifications(engine, nativeNotifications.post, undefined, () => {
+    const focused = BrowserWindow.getFocusedWindow();
+    const owned = focused && applicationWindows.has(focused.webContents.id) ? focused : null;
+    return notificationWindowContext(owned, owned ? notificationSessions.get(owned.webContents.id) ?? null : null);
+  });
+  ipcMain.on(NOTIFICATION_VISIBILITY_CHANNEL, (event, report: unknown) => {
+    if (!trustedNotificationReporter(applicationWindows.has(event.sender.id), event.senderFrame, event.sender.mainFrame)) return;
+    notificationSessions.set(event.sender.id, visibleNotificationSession(report));
+  });
   registerIpc(engine, dataDir);
   setWindowStateDir(dataDir);
   registerTitleBarOverlaySync();
@@ -434,6 +454,9 @@ app.on('window-all-closed', () => {
 // not serving and stops model servers it started), then quits for real.
 app.on('before-quit', (event) => {
   quitting = true;
+  stopNotifications?.();
+  stopNotifications = undefined;
+  nativeNotifications?.dispose();
   if (engineStopped || !engine) { desktopTray?.dispose(); desktopTray = null; return; }
   event.preventDefault();
   const stopping = engine;

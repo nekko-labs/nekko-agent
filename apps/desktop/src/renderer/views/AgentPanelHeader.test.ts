@@ -35,7 +35,8 @@ describe('Agents panel header', () => {
   it('keeps the composer row to the composer alone in either docking position; adding lives in the toolbar', () => {
     expect(toolbar).toContain("wall.composer.side === 'bottom' && composerRow");
     expect(toolbar).toContain('>{composer}</div>');
-    expect(toolbar).not.toContain('addButton');
+    expect(toolbar).not.toMatch(/const composerRow[\s\S]*?addButton[\s\S]*?<ErrorBoundary label="Shared composer"/);
+    expect(toolbar).toContain('anchorRef={addButtonRef}');
     expect(toolbar).toContain("wall.composer.side === 'top' && composerRow");
     expect(toolbar).not.toContain('wall-add-arrow');
     expect(css).not.toContain('.wall-add-arrow');

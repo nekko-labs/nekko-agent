@@ -75,6 +75,11 @@
 <li><strong>The engine is moving from TypeScript to Rust.</strong> <code>nekkod</code> answers what has been ported natively and passes the rest to the TypeScript host it supervises. Each ported piece has to match the TypeScript behaviour exactly before it takes over.</li>
 <li><strong>Every edition is the same app.</strong> Desktop, web and Docker run the same engine and the same UI. Only the transport differs: Electron IPC on the desktop, HTTP and WebSocket in the browser.</li>
 </ul>
+<h2 id="desktop-lifetime-and-notifications"><a class="anchor" href="#desktop-lifetime-and-notifications" aria-hidden="true" tabindex="-1">#</a>Desktop lifetime and notifications</h2>
+<p>Closing the UI already hides it to the tray without stopping the engine. Explicit Quit shuts down the service and managed processes; Stop Nekko service stops the engine without quitting the UI. Neither arrangement promises continued work during OS sleep, shutdown or logout.</p>
+<p>The 2026-10-13 implementation moves Electron native notifications into main (<code>apps/desktop/src/main/notifications.ts</code>), with a direct authenticated engine WebSocket subscription, fresh settings reads per eligible notice, reconnect/backoff and disposal on Quit. Main creates native notices; click delivery uses an encoded session deep link to restore the window and select the chat. Renderer notifications remain for browser editions only, avoiding duplicate Electron delivery. Settings exposes the default-on toggle in its standalone Notifications section.</p>
+<p>TS host and Rust usage summaries emit matching per-day session costs, local tokens, avoided costs and model ids. Budget aggregates those UTC buckets for every recorded detail instead of mixing a range with lifetime totals. Utilization&#39;s same-token Claude dedupe is display-only and prefers Anthropic, without changing provider routing or storage.</p>
+<p>Status: implemented, unit and isolated fixture interaction tested; image/motion inspection and native toast delivery/click/permissions testing pending. Main currently assumes events are unattended, so focused-visible-chat suppression is a known review issue. Parent owns resolution and landing.</p>
 <h2 id="repository-layout"><a class="anchor" href="#repository-layout" aria-hidden="true" tabindex="-1">#</a>Repository layout</h2>
 <div class="table-wrap"><table>
 <thead>
@@ -147,7 +152,7 @@
           </footer>
         </article>
       </main>
-      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Architecture</a></li><li class="d2"><a href="#the-big-picture">The big picture</a></li><li class="d2"><a href="#repository-layout">Repository layout</a></li><li class="d2"><a href="#build-order">Build order</a></li><li class="d2"><a href="#where-to-put-new-code">Where to put new code</a></li></ul></nav></aside>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Architecture</a></li><li class="d2"><a href="#the-big-picture">The big picture</a></li><li class="d2"><a href="#desktop-lifetime-and-notifications">Desktop lifetime and notifications</a></li><li class="d2"><a href="#repository-layout">Repository layout</a></li><li class="d2"><a href="#build-order">Build order</a></li><li class="d2"><a href="#where-to-put-new-code">Where to put new code</a></li></ul></nav></aside>
     </div>
     <dialog class="search-dialog" aria-label="Search the docs">
       <form method="dialog" class="search-box">
