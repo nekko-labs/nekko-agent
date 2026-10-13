@@ -1,16 +1,8 @@
 name: Disposable Windows native notification acceptance
 
+# Manual only: hosted Windows runners have no interactive notification
+# center, so this probe cannot prove delivery there and would fail every PR.
 on:
-  pull_request:
-    paths:
-      - 'apps/desktop/src/main/*notification*'
-      - 'apps/desktop/src/main/nativeNotifications*'
-      - 'apps/desktop/src/notification*'
-      - 'apps/desktop/src/main/engine-process.ts'
-      - 'crates/**'
-      - 'packages/host/**'
-      - 'apps/desktop/scripts/notification-*'
-      - '.github/workflows/notification-native.yml'
   workflow_dispatch:
 
 permissions:
