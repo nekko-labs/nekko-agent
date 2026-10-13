@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AgentWindowPicker } from './AgentWindowPicker.js';
+import { AgentWindowPicker, AgentWindowDropdown, windowDropdownPosition } from './AgentWindowPicker.js';
+vi.mock('react-dom', () => ({ createPortal: vi.fn((node) => node) }));
 import { ModelPicker } from './agent-console/ModelPicker.js';
 
 const state = vi.hoisted(() => ({
@@ -18,7 +20,7 @@ vi.mock('./agent-console/ModelPicker.js', () => ({ ModelPicker: () => null }));
 vi.mock('./ChatMetrics.js', () => ({ EffortSlider: () => null }));
 vi.mock('react', async (original) => {
   const actual = await original<typeof import('react')>();
-  return { ...actual, useState: vi.fn(actual.useState), useRef: vi.fn(actual.useRef), useEffect: vi.fn(), useMemo: (fn: () => unknown) => fn() };
+  return { ...actual, useState: vi.fn(actual.useState), useRef: vi.fn(actual.useRef), useEffect: vi.fn(), useLayoutEffect: vi.fn(), useMemo: (fn: () => unknown) => fn() };
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -39,6 +41,44 @@ function picker(category: 'chat' | 'media' | 'terminal' | null = null, choice: {
   const button = (label: string) => elements.find((e) => e.type === 'button' && text(e.props.children).includes(label))!;
   return { elements, setters, onAdd, onClose, button };
 }
+
+describe('anchored window dropdown', () => {
+  it('clamps to narrow and short viewports without reserving wall space', () => {
+    expect(windowDropdownPosition({ left: 1200, bottom: 40 }, 1400, 900)).toEqual({ left: 752, top: 48, width: 640, maxHeight: 844 });
+    expect(windowDropdownPosition({ left: 300, bottom: 450 }, 360, 500)).toEqual({ left: 8, top: 380, width: 344, maxHeight: 112 });
+  });
+  it('portals beside the anchor, ignores inside/trigger clicks, guards pending work and cleans up listeners', () => {
+    const listeners = new Map<string, (event: any) => void>();
+    const removeEventListener = vi.fn();
+    const target = {}; const inside = {}; const trigger = {};
+    let busy = false;
+    const popup = { contains: (node: unknown) => node === inside, querySelector: () => busy ? {} : null };
+    const anchor = { contains: (node: unknown) => node === trigger, getBoundingClientRect: () => ({ left: 100, bottom: 40 }) };
+    const setPosition = vi.fn(); const onClose = vi.fn();
+    vi.stubGlobal('window', { innerWidth: 1000, innerHeight: 800, addEventListener: (name: string, fn: (e: any) => void) => listeners.set(name, fn), removeEventListener });
+    vi.stubGlobal('document', { body: target });
+    vi.mocked(useRef).mockReturnValueOnce({ current: popup });
+    vi.mocked(useState).mockReturnValueOnce([null, setPosition] as never);
+    try {
+      AgentWindowDropdown({ anchorRef: { current: anchor } as any, onAdd: vi.fn(), onClose });
+      const cleanPlacement = vi.mocked(useLayoutEffect).mock.calls.at(-1)![0]()!;
+      const cleanDismissal = vi.mocked(useEffect).mock.calls.at(-1)![0]()!;
+      expect(setPosition).toHaveBeenCalledWith({ left: 100, top: 48, width: 640, maxHeight: 744 });
+      expect(vi.mocked(createPortal).mock.calls.at(-1)![1]).toBe(target);
+      listeners.get('pointerdown')!({ target: inside });
+      listeners.get('pointerdown')!({ target: trigger });
+      busy = true;
+      listeners.get('pointerdown')!({ target: {} });
+      expect(onClose).not.toHaveBeenCalled();
+      busy = false;
+      listeners.get('pointerdown')!({ target: {} });
+      listeners.get('keydown')!({ key: 'Escape', preventDefault: vi.fn(), defaultPrevented: false });
+      expect(onClose).toHaveBeenCalledTimes(2);
+      cleanPlacement(); cleanDismissal();
+      expect(removeEventListener).toHaveBeenCalledTimes(4);
+    } finally { vi.unstubAllGlobals(); }
+  });
+});
 
 describe('AgentWindowPicker', () => {
   it('starts with three accessible category buttons and closes only on request', () => {

@@ -18,6 +18,16 @@ Both providers are normalized into the same `SubscriptionLimits` shape in `packa
 
 The numbers in the chat header chip and the Models card are live reads from the provider. They update after each subscription response and on a throttled poll. Nekko Agent does not extrapolate or predict your usage locally; if a provider does not return a window, that window is simply not shown.
 
+## Utilization and Budget on the Agents wall
+
+Utilization deduplicates enabled Claude subscription entries with the same nonempty token key, preferring the Anthropic provider entry. This only changes the displayed account list, not saved providers, credentials or routing. Different accounts/token keys and API-key entries stay separate.
+
+Budget defaults to **1m**. Its ranges use inclusive **UTC** days: today, 1wk (7 days), 1m (30), 6m (180), 1y (365), and all-time through today. The active button has an accent tint and pressed state. All recorded details follow that selection: estimated API spend, input/output tokens, top agent by API cost, local tokens, local/subscription savings, fallback and unpriced-token counts, and which used models appear in the pricing comparison. Catalog unit prices and the selected fallback are reference/configuration values, not range totals. Older hosts without daily detail show unavailable details rather than substituting lifetime totals.
+
+Savings are estimated API equivalents before subscription fees, hardware and electricity, not actual net savings. Local and subscription usage has $0 incremental recorded API spend. Unknown local models use the explicitly chosen fallback or remain unpriced; unpriced tokens are excluded from savings.
+
+The 2026-10-13 batch is implemented, unit and fixture interaction tested with TS/Rust daily-summary golden parity coverage. Image and motion inspection are pending; parent-owned landing is still outstanding.
+
 ## Off-label caveat
 
 The Anthropic and ChatGPT usage endpoints used here are documented by or reverse-engineered from the providers' subscription flows. They can change, move, or stop returning data at any time. Nekko Agent is not affiliated with Anthropic or OpenAI, and the readouts are provided as a convenience for subscribers, not as an official feature of those services.

@@ -44,11 +44,21 @@ function age(ms: number): string {
 export function budgetRange(usage: import('@nekko-agent/shared').UsageSummary | null, range: InsightRange, now = new Date()) {
   if (!usage) return null;
   const daily = insightDays(usage.daily, range, now);
+  const bySessionCost: Record<string, number> = {};
+  const avoided = { local: 0, subscription: 0, benchmarkTokens: 0, unpricedTokens: 0 };
+  for (const d of daily) {
+    for (const [id, cost] of Object.entries(d.bySessionCost ?? {})) bySessionCost[id] = (bySessionCost[id] ?? 0) + cost;
+    for (const key of ['local', 'subscription', 'benchmarkTokens', 'unpricedTokens'] as const) avoided[key] += d.avoidedCosts?.[key] ?? 0;
+  }
   return {
     daily,
     spend: daily.reduce((sum, d) => sum + (d.cost ?? 0), 0),
     input: daily.reduce((sum, d) => sum + d.input, 0),
     output: daily.reduce((sum, d) => sum + d.output, 0),
+    bySessionCost: daily.every(d => d.bySessionCost != null) ? bySessionCost : null,
+    localTokens: daily.every(d => d.localTokens != null) ? daily.reduce((sum, d) => sum + d.localTokens!, 0) : null,
+    avoidedCosts: daily.every(d => d.avoidedCosts != null) ? avoided : null,
+    modelIds: [...new Set(daily.flatMap(d => d.modelIds ?? []))],
   };
 }
 
@@ -63,3 +73,15 @@ export function recordedBudgetMetrics(usage: import('@nekko-agent/shared').Usage
   return { topAgent: top ? (sessions.find(s => s.id === top[0])?.title ?? top[0]) + ' · ' + (top[1].input + top[1].output).toLocaleString() + ' tokens' : 'No recorded usage', localTokens: tokens.toLocaleString() };
 }
  
+
+/** Display-only dedupe; keep independently configured accounts and API entries. */
+export function utilizationProviders(providers: import('@nekko-agent/shared').ProviderConfig[]) {
+  const enabled = providers.filter(p => p.enabled && !isLocalProvider(p.kind));
+  const claude = (p: import('@nekko-agent/shared').ProviderConfig) => p.auth === 'subscription' && (p.kind === 'anthropic' || p.tokenKey === 'claude' || p.tokenKey?.startsWith('claude:'));
+  return enabled.filter((p, index) => {
+    if (!claude(p) || !p.tokenKey) return true;
+    const peers = enabled.filter(other => claude(other) && other.tokenKey === p.tokenKey);
+    const preferred = peers.find(other => other.kind === 'anthropic') ?? peers[0];
+    return enabled.indexOf(preferred) === index;
+  });
+}

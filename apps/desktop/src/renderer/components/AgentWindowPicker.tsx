@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { isArchived } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { AUTO_MODEL_ID } from '@nekko-agent/shared';
@@ -42,7 +43,50 @@ function CatIcon({ kind }: { kind: Category }) {
   );
 }
 
-/** Inline surface: the host owns placement, data loading, creation and dismissal. */
+export function windowDropdownPosition(anchor: Pick<DOMRect, 'left' | 'bottom'>, width: number, height: number) {
+  const margin = 8;
+  const dropdownWidth = Math.min(640, Math.max(0, width - margin * 2));
+  const top = Math.max(margin, Math.min(anchor.bottom + 8, height - 120));
+  return { left: Math.max(margin, Math.min(anchor.left, width - dropdownWidth - margin)), top, width: dropdownWidth, maxHeight: Math.max(0, height - top - margin) };
+}
+
+/** Portalled so titlebar and wall overflow cannot clip the detailed picker. */
+export function AgentWindowDropdown({ anchorRef, onAdd, onClose }: AgentWindowPickerProps & { anchorRef: React.RefObject<HTMLButtonElement | null> }) {
+  const popup = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<ReturnType<typeof windowDropdownPosition> | null>(null);
+  useLayoutEffect(() => {
+    const place = () => {
+      const anchor = anchorRef.current;
+      if (anchor) setPosition(windowDropdownPosition(anchor.getBoundingClientRect(), window.innerWidth, window.innerHeight));
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [anchorRef]);
+  useEffect(() => {
+    const dismiss = () => {
+      if (popup.current?.querySelector('[aria-busy="true"]')) return;
+      onClose();
+    };
+    const down = (event: PointerEvent) => {
+      if (!popup.current?.contains(event.target as Node) && !anchorRef.current?.contains(event.target as Node)) dismiss();
+    };
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); dismiss(); }
+    };
+    window.addEventListener('pointerdown', down);
+    window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('pointerdown', down); window.removeEventListener('keydown', key); };
+  }, [anchorRef, onClose]);
+  return createPortal(
+    <div ref={popup} id="wall-window-picker" className="agent-window-dropdown" role="dialog" aria-label="Add a window" style={position ?? { visibility: 'hidden' }}>
+      <AgentWindowPicker onAdd={onAdd} onClose={onClose} />
+    </div>, document.body,
+  );
+}
+
+/** Detailed surface: the host owns data loading and creation. */
 export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
   const sessions = useStore((s) => s.sessions);
   const terminals = useStore((s) => s.terminals);
@@ -133,7 +177,7 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
       </header>
       {category && <button type="button" className="agent-window-picker__back" disabled={pending} onClick={() => { setCategory(null); setError(null); }}>← All window types</button>}
       {!category && (
-        <div className="agent-window-picker__options">
+        <div className="agent-window-picker__options agent-window-picker__categories" role="group" aria-label="Window types">
           {(['chat', 'media', 'terminal'] as const).map((kind) => (
             <button type="button" className="agent-window-picker__option" key={kind} onClick={() => setCategory(kind)}>
               <CatIcon kind={kind} />

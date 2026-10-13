@@ -1,4 +1,4 @@
-import { AgentWindowPicker, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
+import { AgentWindowDropdown, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
 import { AgentSidebar } from './WorkspacesView.js';
 import { ChatPane } from '../components/ChatPane.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -399,7 +399,14 @@ export function CommandCenterView() {
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-3 px-4 pb-4 pt-1 xl:px-6">
       <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen}
-        onAdd={(kind) => { setCompletedId(null); void addFromToolbar(kind).catch(reportAddFailure); }} />
+        onAdd={(kind) => { setCompletedId(null); void addFromToolbar(kind).catch(reportAddFailure); }}
+        onPick={async (selection) => {
+          const ref = selection.refId ?? (selection.kind === 'chat' ? await newChat(selection) : await newTerminal());
+          await addFromToolbar(selection.kind, ref);
+          if (selection.kind === 'chat') selectAgent(ref);
+          setCompletedId(null);
+          setAddOpen(false);
+        }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <WallDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
         <div className="wall-agent-workspace" data-tabs={panel.show && panel.orientation === 'horizontal' ? 'top' : 'left'}>
@@ -446,12 +453,6 @@ export function CommandCenterView() {
         onNewChat={newChat}
         onNewTerminal={newTerminal}
         onAddWindow={() => setAddOpen((open) => !open)}
-        addContent={addOpen ? <AgentWindowPicker onClose={() => setAddOpen(false)} onAdd={async (selection) => {
-          const ref = selection.refId ?? (selection.kind === 'chat' ? await newChat(selection) : await newTerminal());
-          await addFromToolbar(selection.kind, ref);
-          if (selection.kind === 'chat') selectAgent(ref);
-          setAddOpen(false);
-        }} /> : undefined}
       />}
       {!completedId && wall.layout.mode !== 'focus' && wall.composer.side === 'bottom' && composerRow}
         </div>
@@ -476,6 +477,7 @@ export function WallToolbar({
   addOpen,
   setAddOpen,
   onAdd,
+  onPick,
 }: {
   wall: CommandWallState;
   setWall: (update: (s: CommandWallState) => CommandWallState) => void;
@@ -484,7 +486,9 @@ export function WallToolbar({
   setAddOpen: React.Dispatch<React.SetStateAction<boolean>>;
   /** A new agent or terminal window on the wall. */
   onAdd: (kind: 'chat' | 'terminal') => void;
+  onPick?: (selection: AgentWindowSelection) => Promise<void>;
 }) {
+  const addButtonRef = useRef<HTMLButtonElement>(null);
   const [fixedOpen, setFixedOpen] = useState(false);
   const [hoverSize, setHoverSize] = useState({ rows: wall.layout.rows, cols: wall.layout.cols });
   const fixedRef = useRef<HTMLDivElement>(null);
@@ -538,11 +542,13 @@ export function WallToolbar({
           <button
             type="button"
             className="wall-add-icon"
+            ref={addButtonRef}
             data-wall-add-button
             onClick={() => {
-              if (!addOpen) setWall((w) => w.layout.mode === 'focus' ? { ...w, layout: { ...w.layout, mode: 'grid' } } : w);
+              if (document.querySelector('#wall-window-picker [aria-busy="true"]')) return;
               setAddOpen((o) => !o);
             }}
+            aria-haspopup="dialog"
             aria-controls="wall-window-picker"
             aria-expanded={addOpen}
             aria-label="Add window"
@@ -551,6 +557,7 @@ export function WallToolbar({
             <MoreVerticalIcon className="h-4 w-4" />
           </button>
         </div>
+        {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
         <div className="wall-layout-control" ref={fixedRef}>
           <div className="wall-layout-segments" role="group" aria-label="Wall layout">
             {(['focus', 'grid', 'fixed'] as const).map((mode) => (

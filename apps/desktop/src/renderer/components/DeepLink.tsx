@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store.js';
+import { notificationSessionId } from '../notifications.js';
 import { hypergateConnectPort } from '../deepLinks.js';
 import { Modal } from './primitives/index.js';
 
@@ -34,6 +35,8 @@ export function DeepLinkListener() {
         void useStore.getState().newChat().catch(e => useStore.getState().pushToast('error', e.message));
         return;
       }
+      // Notification links are handled by the notification listener.
+      if (notificationSessionId(url)) return;
       const port = hypergateConnectPort(url);
       const { pushToast, refreshHypergate, settings } = useStore.getState();
       if (port === null) {
