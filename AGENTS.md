@@ -84,6 +84,16 @@ status and re-arm if necessary. If unavailable or registration fails, report tha
 limitation and the next manual step. Never use automatic continuation to bypass
 missing authorization, credentials, a user decision, or required human evidence.
 
+## Bound failed-check investigations
+
+- A watch waits for running or queued work, not completed failures. When checks finish red, diagnose the failed step before registering another watch.
+- Carry a cumulative investigation budget across wake-ups. After two wake-ups with no new evidence, or 30 minutes of active investigation without a narrowed cause, stop repeating the same approach. Report the exact blocker, what is proven, and the next distinct experiment or decision needed.
+- Permit one rerun only after a concrete transient cause is identified. A recurring failure requires evidence-driven diagnosis, not rerun-until-green.
+- Measure the failing metric on both unchanged base and head with matching workload, toolchain and runner conditions. A baseline failure is not permission to bypass a gate or silently weaken a budget.
+- Save traces and profiles for the failing metric, together with actual app revisions and commands. Confirm artifacts exist before calling diagnostics complete. CPU profiles alone cannot explain browser layout/paint work.
+- Keep unrelated baseline performance remediation separate when possible. Do not turn a verified small UI fix into speculative optimization work. Present a baseline-repair dependency or explicit policy decision if it blocks landing.
+- State waiting versus blocked accurately. Give a total elapsed scope and a concrete next action, not another unchanged progress message. Never register a watch when no background work can produce new evidence.
+
 ## UI changes need visual evidence
 
 Any PR that changes what the app looks like ships the proof in its description:
