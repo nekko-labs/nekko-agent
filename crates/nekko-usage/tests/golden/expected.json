@@ -1702,19 +1702,63 @@
       "date": "2026-09-30",
       "input": 1000,
       "output": 500,
-      "cost": 0
+      "cost": 0,
+      "bySessionCost": {
+       "s1": 0
+      },
+      "localTokens": 1500,
+      "avoidedCosts": {
+       "subscription": 0,
+       "local": 0.0035,
+       "unpricedTokens": 0,
+       "benchmarkTokens": 0
+      },
+      "modelIds": [
+       "claude-haiku"
+      ]
      },
      {
       "date": "2026-10-01",
       "input": 7300,
       "output": 2500,
-      "cost": 0.015
+      "cost": 0.015,
+      "bySessionCost": {
+       "s1": 0.015,
+       "s2": 0,
+       "s3": 0
+      },
+      "localTokens": 1500,
+      "avoidedCosts": {
+       "subscription": 0.061125,
+       "local": 0.010499999999999999,
+       "unpricedTokens": 1500,
+       "benchmarkTokens": 1500
+      },
+      "modelIds": [
+       "gpt-4o",
+       "claude-opus-4-1",
+       "llama3",
+       "unknown-subscription"
+      ]
      },
      {
       "date": "2026-10-02",
       "input": 1000,
       "output": 500,
-      "cost": 0
+      "cost": 0,
+      "bySessionCost": {
+       "s2": 0
+      },
+      "localTokens": 1500,
+      "avoidedCosts": {
+       "subscription": 0,
+       "local": 0.010499999999999999,
+       "unpricedTokens": 0,
+       "benchmarkTokens": 1500
+      },
+      "modelIds": [
+       "llama3"
+      ]
      }
     ],
     "avoidedCosts": {
@@ -1791,7 +1835,21 @@
       "date": "2026-10-01",
       "input": 2000,
       "output": 1000,
-      "cost": 0
+      "cost": 0,
+      "bySessionCost": {
+       "s1": 0
+      },
+      "localTokens": 3000,
+      "avoidedCosts": {
+       "subscription": 0,
+       "local": 0.00044000000000000007,
+       "unpricedTokens": 0,
+       "benchmarkTokens": 1500
+      },
+      "modelIds": [
+       "unlisted-local",
+       "qwen3:32b"
+      ]
      }
     ],
     "avoidedCosts": {
@@ -1856,7 +1914,21 @@
       "date": "2026-10-01",
       "input": 2000,
       "output": 1000,
-      "cost": 0
+      "cost": 0,
+      "bySessionCost": {
+       "s1": 0
+      },
+      "localTokens": 1500,
+      "avoidedCosts": {
+       "subscription": 0.0075,
+       "local": 0,
+       "unpricedTokens": 1500,
+       "benchmarkTokens": 0
+      },
+      "modelIds": [
+       "unlisted-local",
+       "gpt-4o"
+      ]
      }
     ],
     "avoidedCosts": {
@@ -1956,25 +2028,81 @@
       "date": "1969-12-30",
       "input": 5,
       "output": 5,
-      "cost": 0
+      "cost": 0,
+      "bySessionCost": {
+       "b": 0
+      },
+      "localTokens": 0,
+      "avoidedCosts": {
+       "subscription": 0,
+       "local": 0,
+       "unpricedTokens": 0,
+       "benchmarkTokens": 0
+      },
+      "modelIds": [
+       null
+      ]
      },
      {
       "date": "1970-01-01",
       "input": 3,
       "output": 7,
-      "cost": 0.00008749999999999999
+      "cost": 0.00008749999999999999,
+      "bySessionCost": {
+       "a": 0.000052499999999999995,
+       "c": 0.000012499999999999999
+      },
+      "localTokens": 0,
+      "avoidedCosts": {
+       "subscription": 0,
+       "local": 0,
+       "unpricedTokens": 0,
+       "benchmarkTokens": 0
+      },
+      "modelIds": [
+       "gpt-4o",
+       "claude-sonnet-4-5"
+      ]
      },
      {
       "date": "2026-10-03",
       "input": null,
       "output": 12,
-      "cost": null
+      "cost": null,
+      "bySessionCost": {
+       "7": 0,
+       "b": null
+      },
+      "localTokens": 0,
+      "avoidedCosts": {
+       "subscription": 0,
+       "local": 0,
+       "unpricedTokens": 0,
+       "benchmarkTokens": 0
+      },
+      "modelIds": [
+       "gpt-4o",
+       "0"
+      ]
      },
      {
       "date": "2026-10-04",
       "input": 1,
       "output": 1,
-      "cost": 0.000012499999999999999
+      "cost": 0.000012499999999999999,
+      "bySessionCost": {
+       "c": 0.000012499999999999999
+      },
+      "localTokens": 0,
+      "avoidedCosts": {
+       "subscription": 0,
+       "local": 0,
+       "unpricedTokens": 0,
+       "benchmarkTokens": 0
+      },
+      "modelIds": [
+       "gpt-4o"
+      ]
      }
     ],
     "avoidedCosts": {
@@ -2162,13 +2290,39 @@
       "date": "2025-01-01",
       "input": 2001000,
       "output": 500,
-      "cost": 0
+      "cost": 0,
+      "bySessionCost": {
+       "s1": 0
+      },
+      "localTokens": 0,
+      "avoidedCosts": {
+       "subscription": 0.207,
+       "local": 0,
+       "unpricedTokens": 0,
+       "benchmarkTokens": 0
+      },
+      "modelIds": [
+       "gpt-6.1-sol"
+      ]
      },
      {
       "date": "2026-10-01",
       "input": 1000,
       "output": 500,
-      "cost": 0.0075
+      "cost": 0.0075,
+      "bySessionCost": {
+       "s1": 0.0075
+      },
+      "localTokens": 0,
+      "avoidedCosts": {
+       "subscription": 0,
+       "local": 0,
+       "unpricedTokens": 0,
+       "benchmarkTokens": 0
+      },
+      "modelIds": [
+       "gpt-4o"
+      ]
      }
     ],
     "avoidedCosts": {

@@ -111,6 +111,30 @@ impl<T: Default> Ordered<T> {
     }
 }
 
+struct Daily {
+    input: f64,
+    output: f64,
+    cost: f64,
+    by_session_cost: Ordered<f64>,
+    local_tokens: f64,
+    avoided: Avoided,
+    model_ids: Vec<Value>,
+}
+
+impl Default for Daily {
+    fn default() -> Self {
+        Self {
+            input: 0.0,
+            output: 0.0,
+            cost: 0.0,
+            by_session_cost: Ordered::new(),
+            local_tokens: 0.0,
+            avoided: Avoided::default(),
+            model_ids: Vec::new(),
+        }
+    }
+}
+
 /// `usageSummary()` for the given files. `Err` where the TS throws: a record
 /// whose `ts` is not a valid date (`toISOString`), a `null` line, or a model
 /// id that is not a string.
@@ -130,7 +154,7 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
     let mut by_provider: Ordered<(f64, f64)> = Ordered::new();
     let mut by_session: Ordered<BySession> = Ordered::new();
     let mut by_session_cost: Ordered<f64> = Ordered::new();
-    let mut daily: Ordered<(f64, f64, f64)> = Ordered::new();
+    let mut daily: Ordered<Daily> = Ordered::new();
 
     let finish = |summary: &mut Map<String, Value>| {
         summary.insert("avoidedCosts".into(), Value::Null);
@@ -174,6 +198,8 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
             let exact = estimate_cost(model, tokens)?;
             let list_cost = exact.unwrap_or(0.0);
             let cost = if local || subscription { 0.0 } else { list_cost };
+            let day = crate::date::iso_date(crate::date::from_value(get(&r, "ts"))).ok_or("Invalid time value")?;
+            let d = daily.entry(day);
             if local || subscription {
                 let bench = if local && exact.is_none() { estimate_cost(Some(&benchmark), tokens)? } else { None };
                 let equivalent = exact.or(bench);
@@ -189,6 +215,7 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
                     }
                 };
                 apply(&mut avoided);
+                apply(&mut d.avoided);
                 if let Some(s) = session {
                     apply(by_session_avoided.entry(s));
                 }
@@ -221,11 +248,21 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
 
             has_subscription |= subscription;
 
-            let day = crate::date::iso_date(crate::date::from_value(get(&r, "ts"))).ok_or("Invalid time value")?;
-            let d = daily.entry(day);
-            d.0 += total_in;
-            d.1 += output;
-            d.2 += cost;
+            if let Some(s) = get(&r, "sessionId").filter(|s| nekko_js::truthy(Some(s))) {
+                *d.by_session_cost.entry(key_of(Some(s))) += cost;
+            }
+            if local {
+                d.local_tokens += total_in + output;
+            }
+            // Array.includes keeps first-seen model ids, including undefined
+            // (serialized as null in an array) in legacy records.
+            let model_id = model.cloned().unwrap_or(Value::Null);
+            if !d.model_ids.contains(&model_id) {
+                d.model_ids.push(model_id);
+            }
+            d.input += total_in;
+            d.output += output;
+            d.cost += cost;
         }
     }
 
@@ -250,13 +287,25 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
         }),
     );
     summary.insert("bySessionCost".into(), by_session_cost.to_value(|c| num(*c)));
-    let mut days: Vec<(String, (f64, f64, f64))> = daily.keys.iter().map(|k| (k.clone(), daily.map[k])).collect();
-    days.sort_by(|a, b| crate::locale_compare(&a.0, &b.0));
+    let mut days = daily.keys.clone();
+    days.sort_by(|a, b| crate::locale_compare(a, b));
     summary.insert(
         "daily".into(),
         Value::Array(
             days.into_iter()
-                .map(|(date, (i, o, c))| json!({ "date": date, "input": num(i), "output": num(o), "cost": num(c) }))
+                .map(|date| {
+                    let d = &daily.map[&date];
+                    json!({
+                        "date": date,
+                        "input": num(d.input),
+                        "output": num(d.output),
+                        "cost": num(d.cost),
+                        "bySessionCost": d.by_session_cost.to_value(|c| num(*c)),
+                        "localTokens": num(d.local_tokens),
+                        "avoidedCosts": d.avoided.value(),
+                        "modelIds": d.model_ids,
+                    })
+                })
                 .collect(),
         ),
     );

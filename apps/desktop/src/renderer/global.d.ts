@@ -9,6 +9,7 @@ declare global {
      * have chrome of their own.
      */
     nekkoChrome?: {
+      reportNotificationVisibility: (report: import('../notificationVisibility.js').NotificationVisibilityReport) => void;
       platform: string;
       titleBarHeight: number;
       setTitleBarOverlay: (theme: { color: string; symbolColor: string }) => void;
