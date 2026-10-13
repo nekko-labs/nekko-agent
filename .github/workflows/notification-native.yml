@@ -6,6 +6,9 @@ on:
       - 'apps/desktop/src/main/*notification*'
       - 'apps/desktop/src/main/nativeNotifications*'
       - 'apps/desktop/src/notification*'
+      - 'apps/desktop/src/main/engine-process.ts'
+      - 'crates/**'
+      - 'packages/host/**'
       - 'apps/desktop/scripts/notification-*'
       - '.github/workflows/notification-native.yml'
   workflow_dispatch:
@@ -18,8 +21,6 @@ jobs:
     # Never move OS interaction onto a self-hosted runner or local user desktop.
     runs-on: windows-latest
     timeout-minutes: 20
-    env:
-      NEKKO_NATIVE_NOTIFICATION_CI: disposable-desktop
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -27,9 +28,19 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Verify exact disposable-runner safety gates
-        run: node --test apps/desktop/scripts/notification-native-ci.test.cjs
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p nekkod --locked
+      - name: Verify exact disposable-runner safety gates (no OS interaction)
+        run: node --test apps/desktop/scripts/notification-native-ci.test.cjs apps/desktop/scripts/notification-integration-safety.test.cjs
+      - name: TS zero-renderer notifications (injected adapter only)
+        run: node apps/desktop/scripts/notification-engine-integration.cjs
+      - name: Daemon zero-renderer notifications (injected adapter only)
+        run: node apps/desktop/scripts/notification-engine-integration.cjs --daemon
       - name: Native toast delivery, OS click, and isolated fixture foreground
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted'
+        env:
+          NEKKO_NATIVE_NOTIFICATION_CI: disposable-desktop
         run: node apps/desktop/scripts/notification-native-ci.cjs
       - name: Record unsupported desktop as a blocker, never a skipped pass
         if: always()
@@ -40,13 +51,19 @@ jobs:
             "## Native toast acceptance: $($result.status)" >> $env:GITHUB_STEP_SUMMARY
             "OS delivery: $($result.osDelivery); Electron click: $($result.clicked); OS foreground: $($result.focused)" >> $env:GITHUB_STEP_SUMMARY
             if ($result.blocker) { $result.blocker >> $env:GITHUB_STEP_SUMMARY }
+            if ($result.status -ne 'passed' -or $result.osDelivery -ne $true -or $result.clicked -ne $true -or $result.focused -ne $true) {
+              throw 'Native acceptance is a release blocker: visible UIA delivery, OS click, and foreground proof must all pass.'
+            }
           } else {
             'Native acceptance not proven: probe did not produce results.json. Inspect execution/timeout logs.' >> $env:GITHUB_STEP_SUMMARY
+            throw 'Missing native acceptance results is a blocker, not a skipped pass.'
           }
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: disposable-windows-native-notification
-          path: notification-native-results/
+          path: |
+            notification-native-results/
+            .shots/notification-engine/
           if-no-files-found: error
           retention-days: 14

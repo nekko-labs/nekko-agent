@@ -8,9 +8,7 @@ const scratch = path.join(repo, '.shots/notification-engine');
 const inspect = () => JSON.parse(cp.execFileSync('powershell', ['-NoProfile', '-Command', 'ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine)'], { windowsHide: true, encoding: 'utf8' }));
 async function main() {
   const args = process.argv.slice(2);
-  assert.ok(args.every(arg => ['--daemon', '--native-ci', '--built-backend'].includes(arg)), 'Unknown integration argument');
-  const native = args.includes('--native-ci');
-  if (native) require('./notification-integration-safety.cjs').assertDisposableWindowsCI();
+  assert.ok(args.every(arg => ['--daemon', '--built-backend'].includes(arg)), 'Unknown integration argument');
   fs.mkdirSync(scratch, { recursive: true });
   const out = fs.mkdtempSync(path.join(scratch, 'run-'));
   const isolated = path.join(out, 'isolated');
@@ -34,7 +32,7 @@ async function main() {
   const daemonRequested = args.includes('--daemon') || process.env.NEKKO_NOTIFICATION_INTEGRATION_DAEMON === '1';
   const daemonPath = path.resolve(process.env.NEKKO_NOTIFICATION_INTEGRATION_DAEMON_PATH || path.join(repo, 'target/debug/nekkod.exe'));
   if (daemonRequested) assert.ok(fs.existsSync(daemonPath), 'Requested daemon missing: ' + daemonPath);
-  const env = { ...process.env, NEKKO_NOTIFICATION_INTEGRATION_NATIVE: native ? '1' : '0', NEKKO_NOTIFICATION_INTEGRATION_MODE: daemonRequested ? 'daemon' : 'backend', NEKKO_NOTIFICATION_INTEGRATION_OUT: out, NEKKOD_PATH: daemonRequested ? daemonPath : path.join(isolated, 'nonexistent-nekkod.exe'), NEKKO_AGENT_LOOP: 'ts', NEKKO_DATA_DIR: path.join(isolated, 'data'), USERPROFILE: path.join(isolated, 'home'), HOME: path.join(isolated, 'home'), APPDATA: path.join(isolated, 'appdata'), LOCALAPPDATA: path.join(isolated, 'localappdata'), TEMP: path.join(isolated, 'temp'), TMP: path.join(isolated, 'temp') };
+  const env = { ...process.env, NEKKO_NOTIFICATION_INTEGRATION_MODE: daemonRequested ? 'daemon' : 'backend', NEKKO_NOTIFICATION_INTEGRATION_OUT: out, NEKKOD_PATH: daemonRequested ? daemonPath : path.join(isolated, 'nonexistent-nekkod.exe'), NEKKO_AGENT_LOOP: 'ts', NEKKO_DATA_DIR: path.join(isolated, 'data'), USERPROFILE: path.join(isolated, 'home'), HOME: path.join(isolated, 'home'), APPDATA: path.join(isolated, 'appdata'), LOCALAPPDATA: path.join(isolated, 'localappdata'), TEMP: path.join(isolated, 'temp'), TMP: path.join(isolated, 'temp') };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.NEKKOD_URL; delete env.NEKKOD_TOKEN;
   let child;

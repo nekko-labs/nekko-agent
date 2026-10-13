@@ -3,9 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const cp = require('node:child_process');
 function assertDisposableDesktop(env = process.env, platform = process.platform) {
-  if (platform !== 'win32' || env.GITHUB_ACTIONS !== 'true' || env.RUNNER_OS !== 'Windows' || env.RUNNER_ENVIRONMENT !== 'github-hosted' || env.NEKKO_NATIVE_NOTIFICATION_CI !== 'disposable-desktop') {
-    throw Error('Native toast probe refused: requires Windows GitHub Actions hosted runner and NEKKO_NATIVE_NOTIFICATION_CI=disposable-desktop. Never run on a local user desktop.');
-  }
+  require('./notification-integration-safety.cjs').assertDisposableWindowsCI(env, platform);
 }
 module.exports = { assertDisposableDesktop };
 if (require.main === module) {

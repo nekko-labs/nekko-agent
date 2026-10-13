@@ -78,29 +78,6 @@ jobs:
       - run: npm ci
       - run: npm run build:core
       - run: npm run build -w @nekko-agent/host
-      - uses: dtolnay/rust-toolchain@stable
-        if: runner.os == 'Windows'
-      - uses: Swatinem/rust-cache@v2
-        if: runner.os == 'Windows'
-      - name: Build runnable notification verification daemon
-        if: runner.os == 'Windows'
-        run: cargo build -p nekkod --locked
-      - name: Native notification CI-only safety gates
-        if: runner.os == 'Windows'
-        run: node --test apps/desktop/scripts/notification-integration-safety.test.cjs
-      - name: TS zero-renderer notifications (injected adapter only)
-        if: runner.os == 'Windows'
-        run: node apps/desktop/scripts/notification-engine-integration.cjs
-      - name: Daemon zero-renderer notifications (injected adapter only)
-        if: runner.os == 'Windows'
-        run: node apps/desktop/scripts/notification-engine-integration.cjs --daemon
-      # Never enable on self-hosted runners. The launcher AND Electron child
-      # require github-hosted Windows plus this explicit side-effect opt-in.
-      - name: Disposable Windows native notification lifecycle and OS evidence
-        if: runner.os == 'Windows' && runner.environment == 'github-hosted'
-        env:
-          NEKKO_CI_NATIVE_NOTIFICATIONS: '1'
-        run: node apps/desktop/scripts/notification-engine-integration.cjs --daemon --native-ci
       - name: Grid model selection and mode-menu regressions
         run: npm run test:grid-bugs -w @nekko-agent/desktop
       - name: Grouped Agents sidebar regressions
@@ -113,21 +90,14 @@ jobs:
       - name: Hidden and actual native captures without foreground activation
         if: runner.os == 'Windows'
         run: node apps/desktop/scripts/capture-smoke.mjs capture-results --native
-      - name: Real native Windows notification (disposable hosted desktop only)
-        if: runner.os == 'Windows'
-        env:
-          NEKKO_CI_NATIVE_NOTIFICATIONS: '1'
-        run: node apps/desktop/scripts/native-notification-ci.cjs native-notification-results
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: capture-${{ runner.os }}
           path: |
             capture-results/
-            native-notification-results/
             .shots/wall-controls-integration/
             .shots/agent-sidebar-integration/
-            .shots/notification-engine/
           if-no-files-found: error
 
   # The speed contract (SPEC.md, "Speed & responsiveness"): headless Chrome over

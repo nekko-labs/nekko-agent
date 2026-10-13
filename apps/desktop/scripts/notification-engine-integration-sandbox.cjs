@@ -1,7 +1,5 @@
-// Never starts the normal app. Native OS notifications require disposable CI.
-const { app, BrowserWindow, Notification } = require('electron');
-const nativeCI = process.env.NEKKO_NOTIFICATION_INTEGRATION_NATIVE === '1';
-if (nativeCI) require('./notification-integration-safety.cjs').assertDisposableWindowsCI();
+// Runs under Electron with injected notifications only, never native OS toasts.
+const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -118,49 +116,6 @@ async function main() {
   await actualError('After subscription disposal');
   await sleep(500);
   check('Subscription disposal closes socket and prevents further posting', () => assert.equal(instances.length, count));
-  if (nativeCI) {
-    require('./notification-integration-safety.cjs').assertDisposableWindowsCI();
-    assert.equal(BrowserWindow.getAllWindows().length, 0);
-    app.setAppUserModelId('dev.nekkolabs.nekkoagent.notification-ci');
-    results.native = { supported: Notification.isSupported(), lifecycle: [], screenshot: 'native-desktop.png',
-      limitations: ['Desktop capture requires inspection; show does not prove visible OS toast pixels.', 'No OS click, focus, installed app identity, or activation verification.'] };
-    check('Disposable Windows CI supports Electron Notification', () => assert.equal(results.native.supported, true));
-    const nativeInstances = [];
-    poster = api.createNativeNotificationPoster({ isSupported: () => Notification.isSupported(), create: options => {
-      const notification = new Notification({ ...options, silent: true });
-      nativeInstances.push(notification);
-      for (const name of ['show', 'close', 'failed', 'click']) notification.on(name, (...args) => {
-        results.native.lifecycle.push({ name, at: Date.now(), detail: args.map(String) });
-      });
-      return notification;
-    } }, link => results.links.push(link));
-    stop = api.startMainNotifications(engine, poster.post, makeSocket, () => ({ windowHidden: true, visibleSessionId: null }));
-    await until(() => sockets.at(-1)?.readyState === WebSocket.OPEN, 'native main subscription');
-    await actualError('Disposable CI daemon native notification');
-    await until(() => results.native.lifecycle.some(event => ['show', 'failed'].includes(event.name)), 'native show or failed lifecycle', 15000);
-    check('Real zero-renderer engine event reaches native Notification show lifecycle', () => {
-      assert.equal(nativeInstances.length, 1);
-      assert.equal(BrowserWindow.getAllWindows().length, 0);
-      assert.ok(!results.native.lifecycle.some(event => event.name === 'failed'), JSON.stringify(results.native.lifecycle));
-      assert.ok(results.native.lifecycle.some(event => event.name === 'show'));
-    });
-    // OS pixels, not capturePage renderer pixels. CI-only; no OS input/focus.
-    require('./notification-integration-safety.cjs').assertDisposableWindowsCI();
-    require('node:child_process').execFileSync('powershell', ['-NoProfile', '-Command', `
-      Add-Type -AssemblyName System.Windows.Forms
-      Add-Type -AssemblyName System.Drawing
-      $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
-      $bitmap = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
-      $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-      try {
-        $graphics.CopyFromScreen($bounds.Left, $bounds.Top, 0, 0, $bitmap.Size)
-        $bitmap.Save($env:NEKKO_NATIVE_CAPTURE_PATH, [System.Drawing.Imaging.ImageFormat]::Png)
-      } finally { $graphics.Dispose(); $bitmap.Dispose() }
-    `], { windowsHide: true, env: { ...process.env, NEKKO_NATIVE_CAPTURE_PATH: path.join(out, 'native-desktop.png') }, timeout: 15000 });
-    check('Disposable CI OS desktop evidence captured (visibility unverified)', () => assert.ok(fs.statSync(path.join(out, 'native-desktop.png')).size > 0));
-    stop(); stop = undefined;
-    poster.dispose();
-  }
   results.status = 'passed';
 }
 main().catch(error => { results.status = 'failed'; results.error = error.stack; console.error(error); process.exitCode = 1; }).finally(async () => {

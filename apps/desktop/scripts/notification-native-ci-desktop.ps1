@@ -1,7 +1,7 @@
 param([ValidateSet('baseline','toast','focus')][string]$Action, [string]$Out, [string]$Marker, [string]$Handle)
 $ErrorActionPreference = 'Stop'
 # Independent gate before loading UI Automation, capturing pixels, or sending input.
-if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_OS -cne 'Windows' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or $env:NEKKO_NATIVE_NOTIFICATION_CI -cne 'disposable-desktop') {
+if ($env:CI -cne 'true' -or $env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_OS -cne 'Windows' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or $env:NEKKO_NATIVE_NOTIFICATION_CI -cne 'disposable-desktop' -or -not $env:GITHUB_RUN_ID -or -not $env:GITHUB_WORKSPACE) {
   throw 'Refusing desktop access outside explicitly opted-in disposable hosted Windows CI.'
 }
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes,System.Drawing,System.Windows.Forms
@@ -37,7 +37,7 @@ try {
     do {
       $items = Elements
       foreach ($item in $items) {
-        if ($item.Current.Name.Contains($Marker) -and -not $item.Current.IsOffscreen -and $item.Current.BoundingRectangle.Width -gt 0) { $match = $item; break }
+        if ($item.Current.Name -ceq $Marker -and -not $item.Current.IsOffscreen -and $item.Current.BoundingRectangle.Width -gt 0 -and $item.Current.BoundingRectangle.Height -gt 0) { $match = $item; break }
       }
       if (-not $match) { Start-Sleep -Milliseconds 250 }
     } while (-not $match -and (Get-Date) -lt $deadline)
