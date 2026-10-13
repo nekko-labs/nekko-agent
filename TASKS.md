@@ -1432,6 +1432,13 @@ User report: selecting Plan while typing deleted the entire prompt. T106/T108 do
 
 Desktop header follow-up: below 1100px the toolbar stays in the view header rather than the single-row native titlebar, keeping layout and panel controls reachable. At wider desktop widths it portals beside the Agents heading. This is renderer-only; native OS titlebar buttons and native mobile are unchanged and not reverified.
 
+### WL1: Grid placeholders and Dynamic board-edge drops (2026-10-13)
+
+- [x] `layout.ts`: `dockPane` (a whole-side column/row; joins a root split on the same axis as an equal sibling, otherwise wraps the root and takes one share of its extent) and `movePaneToEdge` (lift out, dock, respect the 8×8 ceiling). 5 unit tests.
+- [x] `commandWallGeometry` returns `empty` cell rects for Grid (`fixed`) at ≥720px; `CommandWall` draws them as `.command-wall-empty-cell` hatching under the windows.
+- [x] Dynamic: while a window drags (≥720px, ≥2 windows), four `.command-wall-edge` strips straddle the stage edges; `boardEdgePreview` draws the landing rect, and dropping calls `movePaneToEdge`. Unit tests for both.
+- [x] Verified with desktop typecheck, 932 desktop tests and matched before/after web-edition captures (scratch data dir, mock provider, Playwright Chromium; synthetic dragstart/dragover/drop) showing the hatch and the right/bottom previews plus the resulting column and row layouts. Not verified: a real OS pointer drag in Electron, light theme, macOS. See [Board-edge landing zones](SPEC.md#agents-wall-integration-polish-2026-10-08).
+
 ### Focus Add window and header order (2026-10-08)
 
 Explicitly opening Add window from the Focus toolbar or a focused window switches to Dynamic, so new windows can be placed alongside the current one. Hover previews do not change layout. Existing split ratios, hero, drafts and non-Focus layouts are retained; the real eight-across limit remains enforced. The desktop Agents heading precedes the version chip, with layout controls following both. No new permissions, host calls or external effects are introduced by switching layout.

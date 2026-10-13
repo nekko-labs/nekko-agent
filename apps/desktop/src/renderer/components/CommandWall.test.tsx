@@ -18,7 +18,7 @@ vi.mock('./PaneFrame.js', () => ({
   PaneFrame: ({ title, children }: { title: string; children: React.ReactNode }) => <section data-title={title}>{children}</section>,
   PaneActions: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-import { CommandWall, commandWallGeometry, companionTree, resizeCompanionSplit, sameDeps, WARM_COMPOSERS, warmFront, workspaceCompanions } from './CommandWall.js';
+import { CommandWall, boardEdgePreview, commandWallGeometry, companionTree, resizeCompanionSplit, sameDeps, WARM_COMPOSERS, warmFront, workspaceCompanions } from './CommandWall.js';
 import { leafRects } from '../commandWall.js';
 
 const a: WbPane = { id: 'a', kind: 'chat', refId: 'chat-a' };
@@ -158,6 +158,33 @@ describe('command wall geometry', () => {
     const opened = commandWallGeometry(state({ layout: layout('fixed') }), 1000, 700, new Set(), true);
     // Opening Add takes the next free cell, beside the last window.
     expect(opened.add).toEqual({ x: 504, y: 708, width: 496, height: 700 });
+  });
+
+  it('lists the unfilled Grid squares for placeholders, and none in Dynamic or on a phone', () => {
+    // Three windows in a 3×2 Grid leave the bottom row empty.
+    const g = commandWallGeometry(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } }), 1000, 700);
+    expect(g.empty).toHaveLength(3);
+    expect(g.empty.every((r) => r.y > 0 && r.width > 0 && r.height > 0)).toBe(true);
+    for (const cell of g.empty) for (const pane of g.panes.values()) {
+      const overlapW = Math.min(pane.x + pane.width, cell.x + cell.width) - Math.max(pane.x, cell.x);
+      const overlapH = Math.min(pane.y + pane.height, cell.y + cell.height) - Math.max(pane.y, cell.y);
+      expect(overlapW > 0 && overlapH > 0).toBe(false);
+    }
+    expect(commandWallGeometry(state(), 1000, 700).empty).toEqual([]);
+    expect(commandWallGeometry(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } }), 400, 700).empty).toEqual([]);
+    const html = renderToStaticMarkup(wall(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } })));
+    expect(html).not.toContain('data-wall-empty-cell'); // unmeasured: nothing drawn yet
+  });
+
+  it('previews a board-edge drop as a full column or a full-width row', () => {
+    const stacked: WbSplit = { id: 'col', dir: 'col', children: [a, b], sizes: [0.5, 0.5] };
+    const s = state({ root: stacked });
+    expect(boardEdgePreview(s, 'b', 'right', 1000, 600)).toEqual({ x: 500, y: 0, width: 500, height: 600 });
+    expect(boardEdgePreview(s, 'b', 'down', 1000, 600)).toBeNull(); // already the bottom row
+    const cols = state({ root: { id: 'row', dir: 'row', children: [a, b, t], sizes: [1 / 3, 1 / 3, 1 / 3] } });
+    const bottom = boardEdgePreview(cols, 't', 'down', 900, 600)!;
+    expect(bottom).toMatchObject({ x: 0, width: 900 });
+    expect(bottom.y).toBeCloseTo(300);
   });
 
   it('stacks narrow Grid and Fixed panes and handles unmeasured empty mounts', () => {
