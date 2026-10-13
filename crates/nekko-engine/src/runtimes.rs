@@ -60,6 +60,18 @@ pub trait RuntimeIo: Send + Sync {
     }
 }
 
+/// `overheadFloorFor(kind, version)` over a calibration record
+/// (`runtime-calibration.json`): the learned floor, else 256 MB.
+pub fn overhead_floor(calibration: &Value, kind: &str, version: Option<&Value>) -> f64 {
+    let key = format!("{kind}:{}", version.filter(|v| !v.is_null()).map_or("unknown".into(), nekko_js::display));
+    calibration
+        .get(&key)
+        .and_then(|r| r.get("overheadFloorBytes"))
+        .filter(|v| !v.is_null())
+        .and_then(Value::as_f64)
+        .unwrap_or(256.0 * MB)
+}
+
 /// The engine the host still runs (the `llamacpp` adapter's other end).
 pub trait HostEngine: Send + Sync {
     fn call(&self, method: &'static str, args: Vec<Value>) -> BoxFuture<Result<Value, String>>;
@@ -775,13 +787,7 @@ impl Runtimes {
     }
 
     fn overhead_floor_for(&self, kind: &str, version: Option<&Value>) -> f64 {
-        let key = format!("{kind}:{}", version.filter(|v| !v.is_null()).map_or("unknown".into(), nekko_js::display));
-        self.calibration()
-            .get(&key)
-            .and_then(|r| r.get("overheadFloorBytes"))
-            .filter(|v| !v.is_null())
-            .and_then(Value::as_f64)
-            .unwrap_or(256.0 * MB)
+        overhead_floor(&self.calibration(), kind, version)
     }
 
     fn record_measurement(

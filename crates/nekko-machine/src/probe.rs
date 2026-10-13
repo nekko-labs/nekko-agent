@@ -126,6 +126,11 @@ pub fn disk_free(dir: &Path) -> Option<f64> {
     }
 }
 
+/// `os.totalmem()` and `os.freemem()` now, in bytes.
+pub fn memory_now() -> (f64, f64) {
+    memory(&mut sysinfo::System::new())
+}
+
 /// System memory as Node reports it: `os.totalmem()` and `os.freemem()`
 /// (available memory on Windows and Linux, free pages on macOS, as libuv reads them).
 fn memory(sys: &mut sysinfo::System) -> (f64, f64) {

@@ -57,6 +57,8 @@ export interface LibraryDeps {
   modelsDir: () => string;
   /** Other folders to read, from the engine settings. */
   folders?: () => ModelFolder[];
+  /** Whether MLX rows can run here; defaults to this machine (`mlxSupported`). */
+  mlxRunnable?: () => boolean;
 }
 
 export function createLibrary(deps: LibraryDeps) {
@@ -214,7 +216,7 @@ export function createLibrary(deps: LibraryDeps) {
 
     // MLX model folders: rows of their own, served by mlx_lm.server on an
     // Apple Silicon Mac and explained as not runnable anywhere else.
-    const mlxRunnable = mlxSupported();
+    const mlxRunnable = deps.mlxRunnable ? deps.mlxRunnable() : mlxSupported();
     for (const root of roots()) {
       if (root.provider === 'ollama') continue;
       for (const { dir, info } of await scanMlxFolder(root)) {
@@ -471,6 +473,29 @@ export function createLibrary(deps: LibraryDeps) {
 }
 
 export type Library = ReturnType<typeof createLibrary>;
+
+/** What the rest of the engine needs from a library, wherever it lives. */
+export type LibraryApi = Pick<Library, 'list' | 'find' | 'importFile' | 'remove' | 'savePreset' | 'diskUsage'>;
+
+/**
+ * The library of a host running under the engine daemon, which is the single
+ * writer of `library.json` (`crates/nekko-engine` `library`, `NEKKOD_OWNS`
+ * `library`): every read and write is the daemon's, so the index is never
+ * written by two processes.
+ */
+export function daemonLibrary(call: <T>(channel: string, ...args: unknown[]) => Promise<T>): LibraryApi {
+  const list = () => call<LocalModel[]>('engine:library');
+  return {
+    list,
+    find: async (id: string) => (await list()).find((m) => m.id === id),
+    importFile: (path: string) => call('engine:importModel', path),
+    remove: (id: string) => call('engine:deleteModel', id),
+    savePreset: async (id: string, preset: EngineLoadPreset) => {
+      await call('engine:saveModelPreset', id, preset);
+    },
+    diskUsage: async () => (await list()).reduce((n, m) => n + m.sizeBytes, 0),
+  };
+}
 
 async function exists(path: string): Promise<boolean> {
   return stat(path)

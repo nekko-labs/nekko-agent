@@ -909,6 +909,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
         case 'isRunning': return engine.isRunning();
         case 'status': return engine.status();
         case 'models': return engine.models();
+        // The daemon's `engine:models` (it owns the library): load state from this host's server.
+        case 'loadState': return engine.loadState();
         case 'resident': return engine.resident();
         case 'start': return engine.start();
         case 'stop': return engine.stop();

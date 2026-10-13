@@ -911,6 +911,7 @@ export function createEngineServer(deps: EngineServerDeps) {
     status,
     resident,
     loadErrorFor: (id: string) => lastLoadErrors.get(id),
+    loadErrors: () => [...lastLoadErrors.entries()],
     isRunning: () => server !== null || serving,
     loadedIds: () => [...children.keys()],
     routerLoad,
