@@ -6,7 +6,7 @@ import { ChatIcon, ThoughtIcon, ToolStepIcon } from '../../icons.js';
 import { Markdown } from '../Markdown.js';
 import type { Activity } from './transcript.js';
 import { stepKey } from './transcript.js';
-import { SubagentCue, subagentSummary } from './SubagentCue.js';
+import { SubagentCue, subagentSummary, SubagentHeadline } from './SubagentCue.js';
 import { useRowState } from './rowState.js';
 
 /**
@@ -25,7 +25,7 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
   // Open while the turn runs (watching it work is the point), folded away
   // afterwards so a finished transcript reads as answers. Remembered per row,
   // so scrolling a transcript row out of the window and back keeps it as left.
-  const [open, setOpen] = useRowState('group-open', streaming);
+  const [open, setOpen] = useRowState('group-open', streaming && !items.some(it => it.kind === 'tool' && it.call.name === 'spawn_agent'));
   const tools = items.filter((it): it is Extract<Activity, { kind: 'tool' }> => it.kind === 'tool');
   const toolCount = tools.length;
   const agents = tools.filter((it) => it.call.name === 'spawn_agent');
@@ -43,7 +43,7 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
       >
         <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
         {agents.length ? <SubagentCue /> : <ToolStepIcon className="h-3 w-3 shrink-0 text-accent" />}
-        <span className="min-w-0 truncate font-medium text-ink-soft">{agents.length === 1 && items.length === 1 ? subagentSummary(agents[0].call) : summary}</span>
+        <span className="min-w-0 truncate font-medium text-ink-soft">{agents.length ? <SubagentHeadline call={agents[agents.length - 1].call} result={agents[agents.length - 1].result} /> : summary}</span>
         {!streaming && toolCount > 0 && agents.length === 0 && (
           <span className="min-w-0 truncate text-ink-faint">
             · {Array.from(new Set(tools.map((t) => t.call.name))).join(', ')}
@@ -115,7 +115,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
         <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
         <span className="self-center">{icon}</span>
         <span className={`shrink-0 font-medium ${live ? 'text-accent' : 'text-ink-soft'}`}>{label}</span>
-        {headline && <span className="min-w-0 truncate" title={headline}>{kind === 'agent' ? headline : `· ${headline}`}</span>}
+        {headline && <span className="min-w-0 truncate" title={headline}>{kind === 'agent' && item.kind === 'tool' ? <SubagentHeadline call={item.call} result={item.result} /> : `· ${headline}`}</span>}
         {live && <span className="dots" />}
         {quietSince !== undefined && <ToolProgressChip since={quietSince} />}
       </button>
@@ -124,8 +124,8 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
           <div className="ml-[34px] space-y-2 py-1">
             <div className="text-ink-soft">Task</div>
             <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
-            <div className="text-ink-soft">{item.result?.isError ? 'Subagent failed' : item.result ? 'Result' : live ? 'Subagent running' : 'No subagent result recorded'}</div>
-            {item.result && <div className="font-sans text-[13px] text-ink-soft"><Markdown text={item.result.output} /></div>}
+            <div className="text-ink-soft">{item.result?.isError ? 'Delegation tool error' : item.result ? 'Delegation tool result' : 'No delegation tool result recorded'}</div>
+            {item.result && <div className="max-h-60 overflow-auto font-sans text-[13px] text-ink-soft"><Markdown text={item.result.output} /></div>}
           </div>
         ) : item.kind === 'note' ? (
           <div className="ml-[34px] border-l border-line py-0.5 pl-2 font-sans text-[13px] text-ink-soft">

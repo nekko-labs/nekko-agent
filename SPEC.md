@@ -8,6 +8,18 @@ owner:
 
 > **This is the source of truth for the project.** It describes *what* we're building and *why*, vision, users, journeys, the feature set, and what success looks like. It is **not** about stack or technical design (that's `TASKS.md`). It is a **living artifact**: every prompt that adds or changes a feature updates this file so it always describes the system as it actually is and intends to be. The verbatim origin ask lives in [original-prompt.md](../../obsurdian/projects/nekko-agent/original-prompt.md).
 
+## Composer containment and compact subagent activity (2026-10-13)
+
+Implemented and renderer-verified in PR #515; landing pending final documentation checks. The wall composer grows with new and wrapped draft rows, including queued prompts, attachments, skills and footer controls. A bottom-docked composer expands upward in normal layout and reserves space by reducing the board area, rather than covering agent windows. Deleting text shrinks it. Saved manual height remains a preference, not a hard ceiling that clips content. At a viewport-aware height cap only the draft editor scrolls: the composer shell and body never own another scrollbar, and text stays inside the composer ring. Top docking retains normal layout behavior.
+
+Delegation activity is compact and collapsed by default while sending tasks or receiving large results. Its chat headline and subagent lists share a bounded plain-text, one-sentence activity summary and event-derived Working, Waiting, Completed, Failed or Stopped status. Questions/approvals override working status; terminal status is not inferred solely from a stored reply. Full task/result details remain available on explicit expansion with bounded scrolling. Summaries use existing local events and introduce no additional model calls or network disclosure. Ambiguous child associations must not display another child's status. This does not forcibly resize a user's entire agent pane.
+
+Acceptance includes multiline/wrapping/long-token drafts, queued messages and attachments, manual sizing, shrink/cap and board displacement, plus synchronized child status transitions and large collapsed results. Matched isolated light/dark wide/narrow renderer evidence and typing motion are required. User screenshots are reference evidence, not implementation verification. Verified: 952 desktop tests, desktop typecheck/build, and 96 isolated renderer assertions with inspected matched light/dark wide/narrow captures and typing frames. Published media URLs were verified. Native macOS/Linux interaction and live-provider integration remain untested. Child identity is best-effort parent/title/creation timing; historical or ambiguous matches remain unknown until the transport provides an authoritative child ID.
+
+## Automatic title requests during queued turns (2026-10-13)
+
+Implemented, native macOS CI verification pending: automatic chat naming has one in-flight title request per session. A queued follow-up continues without waiting for that title request, but cannot start duplicate title work while it is pending. Failure, empty output or cancellation releases the claim so a later turn can try again. Eligibility is checked again after claiming; a user rename is never replaced by a pending automatic title result. Session-specific claims do not block naming in another chat. A held-response regression verifies queue progress before the title lands, plus failure/empty retry, cancellation and rename protection. This fixes the duplicate-request race exposed by macOS CI; it does not alter composer pixels or provider routing.
+
 ## Command wall state migration (data layer)
 
 ## Continue dependent work with GitHub PR stacks
