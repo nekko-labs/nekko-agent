@@ -51,6 +51,82 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### #514 Background notifications and panels: failed gate investigation (2026-10-13)
+Area: renderer, perf harness. Result: mixed (diagnostic latency comparison; stream failure attribution unresolved)
+Conditions: same GitHub Actions `ubuntu-latest` perf job, AMD EPYC 7763
+64-Core Processor (4 threads), Linux, 16 GB RAM, headless Chrome/154.0.8037.97,
+web production build with release `nekkod` (confirmed in both diagnostic logs),
+1440 x 1000 viewport at device scale 1. Base and head diagnostics used identical
+`--quick --only latency --profile --timeline --no-gpu` options, one attempt each,
+a scripted 300 tokens/s reply of 7,000 tokens, a 1,000-message chat and twelve
+400-message chats, 40 composer keys at 45 ms spacing, 30 terminal keys, 10 warm
+switches and one cold cycle (11 samples). Head ran first, then base after its
+separate dependency install and production/release builds; these are sequential
+profiled diagnostics, not simultaneous or unprofiled full-gate measurements.
+
+Before is actual unchanged base `bf494d77a57655c51b4c32030c826e4acae837fc`.
+After is CI merge `8d339052ba01d220341fce4ee767cdcb3676e018`, merging PR head
+`7f19d0768b4353b272080b938af08ae80715f73d` into that base. Both diagnostic JSON
+reports incorrectly label `git` with the merge SHA: `run.mjs` records inherited
+`GITHUB_SHA`, not the worktree revision. The CI checkout/worktree logs establish
+the actual base; its release daemon build succeeded, with no engine fallback.
+
+| Metric (diagnostic latency) | Before (base) | After (head merge) |
+|---|---|---|
+| Composer keypress p50 / p95 / max, n=40 | 13.5 / 26.6 / 30.4 ms | 14.6 / 22.5 / 27.9 ms |
+| Terminal keypress p50 / p95 / max, n=30 | 5.1 / 5.9 / 6.1 ms | 4.8 / 6.7 / 6.8 ms |
+| Warm switch p50 / p95 / max, n=10 | 16.4 / 21.6 / 21.6 ms | 18.9 / 23.8 / 23.8 ms |
+| Cold frame/history p50 / p95 / max, n=11 | 25.3 / 28.9 / 28.9 ms | 26.6 / 29.5 / 29.5 ms |
+| Browser frame wake p50 / p95 | 0.2 / 0.5 ms | 0.3 / 0.6 ms |
+| Stream main-thread frame work | Not measured (`--only latency`) | Not measured (`--only latency`) |
+
+Why: #514 moves Electron native notification ownership into main and changes
+wall picker/usage panels. The diagnostics are mixed: base composer p95 misses
+25 ms; both warm-switch p95 values miss 20.8 ms and both cold-frame p95 values
+miss 25 ms. Cold-history p95 passes its separate 250 ms gate. These misses on
+unchanged base support pre-existing latency sensitivity, not a clean pass or
+proof that the changed renderer has no regression. Matching CPU profiles and
+timeline traces show common React/rendering work: typing `renderWithHooks` self
+time is 19.2 ms on each; warm-switch Paint totals are 956.3 / 953.4 ms and
+cold-switch Paint totals 1106.3 / 1110.6 ms (base/head). These are whole diagnostic
+trace totals with nested events overlapping, not per-frame gate measurements.
+No clear new changed-code hotspot was established. Electron main/preload paths
+are not exercised by the web gate; the new picker is conditional on opening it,
+while shared renderer/usage changes remain plausible indirect contributors.
+
+The original full gate in run **38359023328 remains failed**. Its only failed
+row is stream main-thread work at 300 tokens/s: p50 7.9 ms, p95 **11.0 ms**,
+max 38.0 ms, n=189 over 6s, against a **10 ms CI gate** (4 ms SPEC target).
+All three attempt p95 values miss: **11.5 / 11.2 / 11.0 ms**. Other full-gate
+p95 values pass: composer 20.1 ms, terminal 6.2 ms, warm switch 16.8 ms,
+cold frame/history 24.4 ms; all memory checks pass. The latency-only diagnostics
+skip this failing metric and contain no dedicated streaming profile/trace, so
+they cannot establish whether its overrun exists on unchanged base.
+
+Later run **38360444132**, PR head `0f35af4c9187ccc0dbca7c597fd488357d4cd38a`
+(CI merge `876c817` into the same base), has a **successful perf job**, not a
+successful overall CI run (build and macOS daemon jobs failed). Its logs report
+the same CPU/thread count, Linux, browser, daemon and full-gate command
+`--attempts 3 --no-gpu`; it stopped after two measurements and reports each row's
+best attempt. Stream p95 was **10.3 / 9.6 ms**, with selected p50 7.4 ms,
+p95 9.6 ms, max 46.4 ms, n=193. Selected p95 values: composer 19.1 ms,
+terminal 5.7 ms, warm switch 15.4 ms, cold frame/history 23.1 ms. The intervening
+commit changes only native-notification verification/setup scripts, not runtime
+renderer or perf code. This supports run variability as a plausible explanation,
+not a measured causal improvement or retroactive pass for the earlier run.
+
+Limitation / next action: attribution of the original stream overrun remains
+unverified. If investigating further, measure the unchanged base and failed head
+with matching full streaming conditions, including the vsync-paced browser,
+and retain dedicated streaming traces/profiles for both. Do not substitute the
+quick latency diagnostics, relax budgets, or rerun blindly to erase the failure.
+No new benchmarks were run for this investigation.
+Source: [#514](https://github.com/nekko-labs/nekko-agent/pull/514),
+[failed run 38359023328](https://github.com/nekko-labs/nekko-agent/actions/runs/38359023328),
+[latest perf job](https://github.com/nekko-labs/nekko-agent/actions/runs/38360444132/job/115173108735),
+and its preceding run's saved `.shots/perf-prev/perf-report.{md,json}`,
+`profile-base/` and `profile-head/` reports, CPU profiles and timeline traces.
+
 ### #503 npm install at the start of npm run dev (2026-10-13)
 Area: dev build. Result: regression (deliberate, small)
 Conditions: Windows, warm npm cache, nothing to install

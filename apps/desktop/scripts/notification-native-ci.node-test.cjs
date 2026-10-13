@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { assertDisposableDesktop } = require('./notification-native-ci.cjs');
-require('./notification-native-ci-setup.test.cjs');
+require('./notification-native-ci-setup.node-test.cjs');
 const valid = { CI: 'true', GITHUB_ACTIONS: 'true', RUNNER_OS: 'Windows', RUNNER_ENVIRONMENT: 'github-hosted', NEKKO_NATIVE_NOTIFICATION_CI: 'disposable-desktop', GITHUB_RUN_ID: '123', GITHUB_WORKSPACE: 'C:/ci/workspace' };
 test('Native acceptance requires every disposable CI gate exactly', () => {
   assert.doesNotThrow(() => assertDisposableDesktop(valid, 'win32'));

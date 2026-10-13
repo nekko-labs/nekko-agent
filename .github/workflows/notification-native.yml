@@ -32,7 +32,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build -p nekkod --locked
       - name: Verify exact disposable-runner safety gates (no OS interaction)
-        run: node --test apps/desktop/scripts/notification-native-ci.test.cjs apps/desktop/scripts/notification-integration-safety.test.cjs
+        run: node --test apps/desktop/scripts/notification-native-ci.node-test.cjs apps/desktop/scripts/notification-integration-safety.node-test.cjs
       - name: TS zero-renderer notifications (injected adapter only)
         run: node apps/desktop/scripts/notification-engine-integration.cjs
       - name: Daemon zero-renderer notifications (injected adapter only)
