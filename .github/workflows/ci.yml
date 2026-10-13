@@ -138,14 +138,14 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           # Diagnostic only: keep the failed speed-contract result and its budgets.
-          node scripts/perf/run.mjs --out perf-results/profile-head --quick --only frames --profile --timeline --no-gpu || echo "Head diagnostic missed a budget; original gate remains failed."
+          node scripts/perf/run.mjs --out perf-results/profile-head --quick --only frames --profile --timeline --dump-trace --no-gpu || echo "Head diagnostic missed a budget; original gate remains failed."
           git fetch --no-tags origin "$BASE_SHA"
           git worktree add --detach ../perf-base "$BASE_SHA"
           cd ../perf-base
           npm ci
           npm run build:web
           cargo build -p nekkod --release --locked
-          node scripts/perf/run.mjs --out "$GITHUB_WORKSPACE/perf-results/profile-base" --quick --only frames --profile --timeline --no-gpu || echo "Base diagnostic missed a budget; inspect uploaded report."
+          node scripts/perf/run.mjs --out "$GITHUB_WORKSPACE/perf-results/profile-base" --quick --only frames --profile --timeline --dump-trace --no-gpu || echo "Base diagnostic missed a budget; inspect uploaded report."
       - name: Report
         if: always()
         run: cat perf-results/perf-report.md >> "$GITHUB_STEP_SUMMARY" || true
