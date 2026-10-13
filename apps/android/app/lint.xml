@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- Pairing secrets must be on disk before the call returns. -->
+    <issue id="ApplySharedPref">
+        <ignore path="src/main/java/com/nekko/android/data/AndroidSecureStore.kt" />
+    </issue>
+    <!-- targetSdk 36 on purpose until the app is tested on API 37 devices; compileSdk is 37.2. -->
+    <issue id="OldTargetApi" severity="informational" />
+</lint>
