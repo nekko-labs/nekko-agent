@@ -30,6 +30,7 @@ import { ModelPicker } from '../components/agent-console/ModelPicker.js';
 import { selectWorkspaceRows } from './workspaceSelection.js';
 import { unopenedChats } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
+import { leftGroup, moveGroupBefore } from './groupDrag.js';
 
 /** Short label for a window's title strip. */
 function paneTitle(pane: WbPane, sessions: SessionSummary[], terminals: TerminalInfo[]): string {
@@ -522,10 +523,9 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
     const d = drag;
     if (!d) return endDrag();
     if (d.kind === 'project') {
-      const ids = (settings?.workspaces ?? []).map((w) => w.id).filter((id) => id !== d.id);
-      if (!b.ws) ids.push(d.id);
-      else { const i = ids.indexOf(b.key); ids.splice(i < 0 ? ids.length : i, 0, d.id); }
-      reorderWorkspaces(ids);
+      const ids = (settings?.workspaces ?? []).map((w) => w.id);
+      const ordered = moveGroupBefore(ids, d.id, b.ws ? b.key : null);
+      if (ordered !== ids) void reorderWorkspaces(ordered).catch((e: Error) => useStore.getState().pushToast('error', e.message));
     } else {
       const moved = findEntry(d.id);
       const ordered = [...bucketEntries(b.key).filter((e) => e.key !== d.id), ...(moved ? [moved] : [])];
@@ -658,14 +658,18 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
           const isCollapsed = collapsed.has(b.key);
           const completedOpen = showCompleted.has(b.key);
           const bucketActive = dropTarget === 'bucket:' + b.key;
+          const groupGap = bucketActive && drag?.kind === 'project' && drag.id !== b.key;
           return (
             <div
               key={b.key}
-              className={`mb-1 rounded-lg ${bucketActive ? 'bg-accent-soft ring-1 ring-accent/40' : ''}`}
+              className={`agent-panel-group mb-1 rounded-lg ${bucketActive && drag?.kind === 'workspace' ? 'bg-accent-soft ring-1 ring-accent/40' : ''}`}
+              data-agent-group={b.key}
+              data-group-gap={groupGap || undefined}
               onDragOver={(e) => overTarget(e, 'bucket:' + b.key, () => true)}
-              onDragLeave={() => { if (dropTarget === 'bucket:' + b.key) setDropTarget(null); }}
-              onDrop={(e) => { e.preventDefault(); dropOnBucket(b); }}
+              onDragLeave={(e) => { if (leftGroup(e.currentTarget, e.relatedTarget) && dropTarget === 'bucket:' + b.key) setDropTarget(null); }}
+              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); dropOnBucket(b); }}
             >
+              <div className="agent-panel-group-gap" aria-hidden="true" />
               <div
                 className="group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
                 draggable={!!b.ws}
@@ -713,7 +717,11 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                         onDragStart={(e) => startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id })}
                         onDragEnd={endDrag}
                         onDragOver={(e) => overTarget(e, 'card:' + entry.key, (d) => d.kind === 'workspace')}
-                        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); dropBeforeCard(b, entry.key); }}
+                        onDrop={(e) => {
+                           // Project drops belong to the containing group, even over a card.
+                           if (drag?.kind !== 'workspace') return;
+                           e.preventDefault(); e.stopPropagation(); dropBeforeCard(b, entry.key);
+                         }}
                         className={dropTarget === 'card:' + entry.key ? 'rounded-lg ring-1 ring-accent/60' : ''}
                       >
                         <WorkspaceCard

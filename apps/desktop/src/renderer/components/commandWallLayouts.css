@@ -265,3 +265,13 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
   .command-wall-create .agent-window-picker__options, .command-wall-create .agent-window-picker__columns { grid-template-columns: minmax(0, 1fr); }
 }
 
+
+/* Keep the drop surface stationary while its contents make room. */
+.agent-panel-group-gap { height: 0; pointer-events: none; transition: height 140ms cubic-bezier(.2,.8,.2,1); }
+.agent-panel-group[data-group-gap] > .agent-panel-group-gap { height: 36px; }
+.agent-panel-row > .agent-panel-group { position: relative; padding-left: 0; transition: padding-left 140ms cubic-bezier(.2,.8,.2,1); }
+.agent-panel-row > .agent-panel-group[data-group-gap] { padding-left: 48px; }
+.agent-panel-row .agent-panel-group-gap { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .agent-panel-group-gap, .agent-panel-row > .agent-panel-group { transition: none; }
+}
