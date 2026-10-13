@@ -144,6 +144,8 @@ export function toTranscriptRows(
   prs: PrInfo[] = [],
 ): TranscriptRow[] {
   const rows: TranscriptRow[] = [];
+  // Identity membership is shared by every row, not a full history scan per row.
+  const persisted = new Set(messages);
   const known = new Set(collectUrls(messages));
   const shown = new Set<string>();
   const anchors = new Map<number, Array<{ url: string; event: 'created' | PrState }>>();
@@ -198,7 +200,7 @@ export function toTranscriptRows(
         continue;
       }
       if (m.role === 'assistant' && !m.content && !m.reasoning && !m.toolCalls?.length && !m.images?.length) continue;
-      rows.push({ key: unique('m_' + m.id), kind: 'msg', message: m, prUrls: [], ...(messages.includes(m) ? {} : m.role === 'user' ? { displayOnly: true } : {}) });
+      rows.push({ key: unique('m_' + m.id), kind: 'msg', message: m, prUrls: [], ...(persisted.has(m) ? {} : m.role === 'user' ? { displayOnly: true } : {}) });
     }
   };
   let start = 0;

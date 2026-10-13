@@ -113,6 +113,16 @@ describe('persisted ask_user replies', () => {
     expect(visible([msg('other', 'assistant', '', { toolCalls: [{ ...call, name: 'bash' }] }), reply()])).toEqual([]);
   });
 
+  it('classifies a long history by identity without scanning it for every row', () => {
+    const real = msg('result_ask_reply', 'user', 'A persisted message with a colliding projection id');
+    const messages = [asking, reply(), ...Array.from({ length: 1000 }, (_, i) => msg(`u${i}`, 'user', `Turn ${i}`)), real];
+    messages.includes = () => { throw new Error('per-row history scan'); };
+    const result = rows(messages).filter((r) => r.kind === 'msg');
+    expect(result[0].displayOnly).toBe(true);
+    expect(result.slice(1).every((r) => !r.displayOnly)).toBe(true);
+    expect(result.at(-1)?.message).toBe(real);
+  });
+
   it('shows skipped and unattended states without exposing instructions', () => {
     for (const [text, state] of [[ASK_CANCELLED, '(skipped / not answered)'], [ASK_UNATTENDED, '(not answered: unattended time limit)']]) {
       expect(visible([asking, reply(text)])[0].content).toBe(`Q: Which scope?\nA: ${state}\n\nQ: Which tests?\nA: ${state}`);

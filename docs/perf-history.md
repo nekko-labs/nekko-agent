@@ -51,6 +51,24 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### #512 Transcript identity lookup and failed stream diagnostics (2026-10-13)
+Area: renderer, perf harness. Result: improvement (projection), hosted failure unresolved
+Conditions: Windows, Ryzen 9 9950X3D, Node 24.1.0; projection benchmark uses 1,000 alternating messages, 100 warm-up batches then 1,000 samples of ten folds each. Streaming uses HeadlessChrome/151.0.7922.34, mandatory release nekkod built from this branch (same daemon for all three renderer variants), 1440x1000, no GPU, 300 tokens/s, six seconds, one run per variant.
+
+| Metric | Main base 76c2db7 | Original head a4e4fd1 | Set lookup |
+|---|---|---|---|
+| Projection p50 | 0.08179 ms | 0.18688 ms | 0.10798 ms |
+| Projection p95 | 0.09720 ms | 0.21491 ms | 0.15754 ms |
+| Streaming frame work p50 | 2.93 ms | 3.54 ms | 2.95 ms |
+| Streaming frame work p95 | 4.68 ms | 5.36 ms | 5.19 ms |
+| Streaming frames | 359 | 348 | 354 |
+
+Why: the Q/A display-only classification scanned the entire history with `includes` for each row. One identity Set removes that quadratic work without changing rows or persisted/model history. Local streaming passes do not establish a hosted fix or statistical significance. No visual change; no spec update needed for this behavior-preserving optimization.
+
+Hosted run 38376729418 on Linux EPYC 7763 / Chrome 154 recorded streaming p95 **10.98 ms**, attempts **10.98 / 11.17 / 11.14 ms**, against the unchanged **10 ms** gate (194 frames, p50 8.19 ms, p99 11.92 ms, max 11.99 ms). Its uploaded base/head diagnostics skipped streaming (`--only latency`), so no comparable hosted baseline exists. Those profiler-on latency figures are not the failing metric. Reuse #514's diagnostic approach: profile `--only frames` on head and unchanged base, require release nekkod on both, and preserve the original gate result. Do not attribute the whole failure to projection overhead without those profiles.
+
+Sources: [#512](https://github.com/nekko-labs/nekko-agent/pull/512), [failed hosted job](https://github.com/nekko-labs/nekko-agent/actions/runs/38376729418/job/115226874290); local `.shots/bench-{base,before,after}.json` and `.shots/stream-{base,before,after}/perf-report.json` (untracked). Normal Playwright Chromium failed CDP startup locally; dedicated headless shell supplied the matched measurements. Owned failed-launch process trees and scratch profiles were cleaned up.
+
 ### #503 npm install at the start of npm run dev (2026-10-13)
 Area: dev build. Result: regression (deliberate, small)
 Conditions: Windows, warm npm cache, nothing to install
