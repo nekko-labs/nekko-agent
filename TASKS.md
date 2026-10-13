@@ -6,6 +6,14 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Clarification reply visibility (2026-10-13)
+
+- [x] Project saved ask_user results into chronological user-facing Q/A rows without duplicating model history or exposing wrapper instructions. Preserve literal labels/notes and skip states; guard display-only rows from persisted-ID edit/reuse actions. See [SPEC](SPEC.md#clarification-answers-remain-visible-in-chat).
+- [x] Focused transcript/component regressions and isolated real-renderer assertions for 1200px/390px light/dark, including older history and failed/pending results.
+- [x] Parent inspected the original contact sheet and 390px light capture: chronological Q/A, skipped and unattended states are visible with no broad issue found.
+- [x] Integrate main 76c2db7 preserving compact delegation and composer containment; 957 desktop tests across 142 files, desktop typecheck, production app build, five docs tests and 52 real-renderer assertions passed. Fresh matched hidden renderer captures use this main revision as baseline.
+- [ ] Parent must inspect fresh integration evidence before landing. Native platforms/live-provider round trips remain unverified. PR #512 stays draft and unmerged for this integration handoff.
+
 > Converted from executionplan.md on 2026-06-29. ✅ = done per the prior plan; Part 1 below is the technical plan, Part 2 is the task checklist.
 >
 > **The plan + the build log, in one file.** Part 1 is the **technical plan**, how we build what [SPEC.md](SPEC.md) describes (stack, architecture, data model, conventions, design system, constraints). Part 2 is the **task list**, Now / Backlog / Shipped, recording *how every past feature was built and how future features will be built*, with the context around them. The full technical design for the web/Docker/Cloud editions lives in [spec-web-and-hosted.md](spec-web-and-hosted.md); credential/ops setup lives in [provisioning.md](../../obsurdian/projects/nekko-agent/provisioning.md), referenced here, not duplicated. (Merged from the former `plan.md` + `tasks.md`.)
