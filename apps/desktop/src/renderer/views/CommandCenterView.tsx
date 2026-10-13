@@ -1,15 +1,15 @@
-import { AgentWindowPicker, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
+import { AgentWindowPicker, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
 import { AgentSidebar } from './WorkspacesView.js';
 import { ChatPane } from '../components/ChatPane.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, AutomationTask, PendingInput, SessionSummary, UsageSummary } from '@nekko-agent/shared';
 import type { AgentType } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD, summarizeSession } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
-import { useStore } from '../store.js';
+import { addCreatedSession, useStore } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { DiffIcon, FolderIcon, GlobeIcon, GridIcon, MoreVerticalIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
+import { GridIcon, MoreVerticalIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -109,19 +109,33 @@ export function CommandCenterView() {
   const [wall, setWallState] = useState<CommandWallState>(() => loadWallState(storage, useStore.getState().settings?.commandWall));
   const setWall = useCallback((update: (s: CommandWallState) => CommandWallState) => setWallState((s) => update(s)), []);
   const firstSave = useRef(true);
+  // The wall waiting to reach the host. Leaving the page or closing the app
+  // inside the settle delay used to drop it, and the next load preferred the
+  // host's older copy: a composer resized just before switching tabs came
+  // back at its old size.
+  const unsaved = useRef<CommandWallState | null>(null);
+  const flushWall = useCallback(() => {
+    const pending = unsaved.current;
+    if (!pending) return;
+    unsaved.current = null;
+    const setting = toWallSetting(pending);
+    useStore.setState((s) => (s.settings ? { settings: { ...s.settings, commandWall: setting } } : {}));
+    window.nekko.updateSettings({ commandWall: setting }).catch(() => {});
+  }, []);
   useEffect(() => {
     saveWallState(storage, wall);
     // The first run is the load itself; after that, every change goes to the
     // host a moment after it settles (a divider drag is many changes a second).
     if (firstSave.current) { firstSave.current = false; return; }
-    const t = setTimeout(() => {
-      const setting = toWallSetting(wall);
-      useStore.setState((s) => (s.settings ? { settings: { ...s.settings, commandWall: setting } } : {}));
-      window.nekko.updateSettings({ commandWall: setting }).catch(() => {});
-    }, 600);
+    unsaved.current = wall;
+    const t = setTimeout(flushWall, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wall]);
+  useEffect(() => {
+    window.addEventListener('beforeunload', flushWall);
+    return () => { window.removeEventListener('beforeunload', flushWall); flushWall(); };
+  }, [flushWall]);
   // The stage's shape, as the wall measures it, for placing windows nobody
   // pointed at a side for: beside the biggest window, along its longer side.
   const aspectRef = useRef(DEFAULT_ASPECT);
@@ -230,6 +244,13 @@ export function CommandCenterView() {
   // not create a second orphan. Clear it only after configuration or deletion.
   const unfinishedChat = useRef<Awaited<ReturnType<typeof window.nekko.createSession>> | null>(null);
   const newChat = async (selection?: AgentWindowSelection, projectId = activeProjectId ?? undefined): Promise<string> => {
+    // A chat started with no picker (the toolbar, a window's split) gets the
+    // saved default folders, when there are any.
+    if (!selection) {
+      const saved = useStore.getState().settings;
+      const defaults = defaultFolderIds(saved?.defaultWorkspaceIds, saved?.workspaces ?? []);
+      if (defaults.length) selection = { kind: 'chat', chatType: 'multimodal', workspaceIds: defaults };
+    }
     // Folders picked in Add window override the project default: the first is
     // the chat's working folder, any others are supporting folders.
     const [primaryFolder, ...supportingFolders] = selection?.workspaceIds ?? [];
@@ -262,7 +283,7 @@ export function CommandCenterView() {
       }
     }
     unfinishedChat.current = null;
-    useStore.setState((state) => ({ sessions: [summarizeSession(s), ...state.sessions.filter((existing) => existing.id !== s.id)] }));
+    addCreatedSession(s);
     return s.id;
   };
   const newTerminal = async (workspaceId = activeProjectId ?? undefined, shell?: string): Promise<string> => {
@@ -276,6 +297,8 @@ export function CommandCenterView() {
     setWall((w) => ({ ...w, root: hasPane(w.root, kind, ref) ? w.root : addPane(w.root, wallPane(kind, ref), aspectRef.current), ...(kind === 'chat' ? { hero: ref } : {}) }));
     if (kind === 'chat') setSelected(ref);
   };
+  /** A one-click add that failed says so, instead of silently opening nothing. */
+  const reportAddFailure = (e: unknown) => useStore.getState().pushToast('error', `Could not add the window: ${e instanceof Error ? e.message : String(e)}`);
   const autoArrange = () => setWall((w) => w.layout.mode === 'grid' ? { ...w, root: tileTree(allPanes(w.root), aspectRef.current) } : w);
 
   // The agent the composer speaks for: the window clicked last, or the first
@@ -329,7 +352,21 @@ export function CommandCenterView() {
     return [{ session, n: i + 1, status, glyph: agentStatusOfLane(lane, blocked) }];
   }), [agentsOnWall, sessions, pending, isRunningSession]);
   const selectedAgent = agentList.find((a) => a.session.id === selected) ?? null;
-  const [composerHeight, setComposerHeight] = useState<number | null>(null);
+  // The dragged height is saved with the wall (like the dock and width), so
+  // it is still there after visiting another page or restarting the app.
+  const composerHeight = wall.composer.height ?? null;
+  const setComposerHeight = useCallback((height: number | null) => setWall((w) => {
+    const next = height === null ? undefined : Math.round(height);
+    if (w.composer.height === next) return w;
+    const { height: _old, ...rest } = w.composer;
+    return { ...w, composer: next === undefined ? rest : { ...rest, height: next } };
+  }), [setWall]);
+  const setComposerWidth = useCallback((width: number | null) => setWall((w) => {
+    const next = width === null ? undefined : Math.round(width);
+    if (w.composer.width === next) return w;
+    const { width: _old, ...rest } = w.composer;
+    return { ...w, composer: next === undefined ? rest : { ...rest, width: next } };
+  }), [setWall]);
   const composerDrag = useRef<{ y: number; height: number } | null>(null);
   const composerSplit = <div className="wall-composer-split" role="separator" tabIndex={0} aria-label="Resize composer versus wall" aria-orientation="horizontal" title="Drag to resize composer versus wall; double-click to reset"
     onPointerDown={(e) => { composerDrag.current = { y: e.clientY, height: composerRef.current?.offsetHeight ?? 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
@@ -344,31 +381,25 @@ export function CommandCenterView() {
       agent={selectedAgent}
       agents={agentList}
       dock={wall.composer}
-      onDock={(composer) => setWall((w) => ({ ...w, composer }))}
+      onDock={(dock) => setWall((w) => ({ ...w, composer: { ...w.composer, side: dock.side, align: dock.align } }))}
+      onWidth={setComposerWidth}
       onSelect={selectAgent}
       onOpen={openChat}
       onFocus={(id) => {
         selectAgent(id);
         setWall((w) => ({ ...w, hero: id, layout: { ...w.layout, mode: 'focus' } }));
       }}
-      onNewAgent={() => { void addFromToolbar('chat'); }}
+      onNewAgent={() => { void addFromToolbar('chat').catch(reportAddFailure); }}
       panelRef={composerRef}
     />
   );
   // Adding windows lives in the toolbar's icon bar, so the composer row is the composer alone.
   const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
-  // Changes, Browser and Files open in the selected agent's workspace, which
-  // the wall shows as companions under its window: unfold them so they show.
-  const openCompanion = (kind: 'diff' | 'browser' | 'files') => {
-    if (!selected) return;
-    if (useStore.getState().openCompanion(selected, kind)) setWall((w) => ({ ...w, folded: { ...w.folded, [selected]: false } }));
-  };
 
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-3 px-4 pb-4 pt-1 xl:px-6">
       <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen}
-        onAdd={(kind) => { setCompletedId(null); void addFromToolbar(kind); }}
-        onCompanion={openCompanion} companionFor={completedId ? null : selectedAgent?.session.title ?? null} />
+        onAdd={(kind) => { setCompletedId(null); void addFromToolbar(kind).catch(reportAddFailure); }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <WallDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
         <div className="wall-agent-workspace" data-tabs={panel.show && panel.orientation === 'horizontal' ? 'top' : 'left'}>
@@ -438,13 +469,6 @@ const FILTERS: Array<{ key: WallFilter; label: string }> = [
   { key: 'terminal', label: 'Terminals' },
 ];
 
-type CompanionKind = 'diff' | 'browser' | 'files';
-const COMPANIONS: Array<{ kind: CompanionKind; label: string; Icon: (p: { className?: string }) => React.JSX.Element }> = [
-  { kind: 'diff', label: 'Changes', Icon: DiffIcon },
-  { kind: 'browser', label: 'Browser', Icon: GlobeIcon },
-  { kind: 'files', label: 'Files', Icon: FolderIcon },
-];
-
 export function WallToolbar({
   wall,
   setWall,
@@ -452,8 +476,6 @@ export function WallToolbar({
   addOpen,
   setAddOpen,
   onAdd,
-  onCompanion,
-  companionFor,
 }: {
   wall: CommandWallState;
   setWall: (update: (s: CommandWallState) => CommandWallState) => void;
@@ -462,10 +484,6 @@ export function WallToolbar({
   setAddOpen: React.Dispatch<React.SetStateAction<boolean>>;
   /** A new agent or terminal window on the wall. */
   onAdd: (kind: 'chat' | 'terminal') => void;
-  /** A companion window for the selected agent. */
-  onCompanion: (kind: CompanionKind) => void;
-  /** The selected agent's title; companions are off without one. */
-  companionFor: string | null;
 }) {
   const [fixedOpen, setFixedOpen] = useState(false);
   const [hoverSize, setHoverSize] = useState({ rows: wall.layout.rows, cols: wall.layout.cols });
@@ -508,20 +526,15 @@ export function WallToolbar({
 
   const controls = (
     <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${slot ? 'wall-toolbar-titlebar' : ''}`} data-wall-toolbar>
-      {!hasAppChrome && <h1 className="text-gradient text-2xl font-semibold">Agents</h1>}
+      {!hasAppChrome && <h1 className="view-title text-gradient">Agents</h1>}
       <div className={`ml-auto flex flex-wrap items-center ${slot ? 'gap-2' : 'gap-3'}`}>
 
-        {/* Adding to the wall, first in the row: an agent or a terminal of its own, or a
-            companion (Changes, Browser, Files) under the selected agent. More
-            opens the full picker: chats already running, image sessions. */}
+        {/* Adding to the wall, first in the row: an agent or a terminal of its
+            own. An agent's Changes, Files and Browser live in that agent's own
+            header beside Logs. More opens the full picker. */}
         <div className="wall-add-bar" role="group" aria-label="Add to the wall">
           <button type="button" className="wall-add-icon" title="New agent" aria-label="New agent" onClick={() => onAdd('chat')}><NekkoAvatar size={16} stationary eyes={false} /></button>
           <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
-          {COMPANIONS.map(({ kind, label, Icon }) => (
-            <button key={kind} type="button" className="wall-add-icon" disabled={!companionFor}
-              title={companionFor ? `${label} for ${companionFor}` : `${label}: select an agent first`}
-              aria-label={label} onClick={() => onCompanion(kind)}><Icon className="h-4 w-4" /></button>
-          ))}
           <button
             type="button"
             className="wall-add-icon"

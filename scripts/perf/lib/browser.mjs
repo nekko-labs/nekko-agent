@@ -14,7 +14,8 @@
  * 60 Hz vsync would add up to a whole 16.7 ms of waiting for the next tick to
  * every sample: noise from the virtual display, not work the app did. With the
  * limiter off a frame starts as soon as the main thread is free, which is how
- * a 120 Hz (or faster) display would see the same work.
+ * a 120 Hz (or faster) display would see the same work, but only while frames
+ * keep carrying damage; run.mjs keeps them flowing (FRAME_PUMP in probes.mjs).
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
@@ -26,7 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function onPath(cmd) {
   try {
-    const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [cmd], { stdio: ['ignore', 'pipe', 'ignore'] })
+    const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [cmd], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true })
       .toString()
       .split(/\r?\n/)
       .find(Boolean);
@@ -84,7 +85,7 @@ function playwrightChromium() {
 export function killTree(proc) {
   if (!proc?.pid || proc.exitCode !== null) return;
   if (process.platform === 'win32') {
-    try { execFileSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* already gone */ }
+    try { execFileSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch { /* already gone */ }
   } else {
     // Spawned detached, so the pid leads its own process group.
     try { process.kill(-proc.pid, 'SIGKILL'); } catch { try { proc.kill('SIGKILL'); } catch { /* already gone */ } }
@@ -138,7 +139,7 @@ async function launchOnce(bin, { port, width, height, vsync, gpu }) {
   // CI containers run as root without the user namespaces the sandbox needs.
   // /dev/shm on a container runner is small enough to crash Chrome's renderer.
   if (process.platform === 'linux') args.unshift('--no-sandbox', '--disable-dev-shm-usage');
-  const proc = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'], detached: process.platform !== 'win32' });
+  const proc = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
   const close = async () => {
     killTree(proc);
     // The profile stays locked until every child has exited.

@@ -1,5 +1,6 @@
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
+import { chatPaneSettings } from './ChatPane.settings.js';
 import { CopyIcon } from '../icons.js';
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
@@ -32,6 +33,7 @@ import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/Liv
 import { liveTokenRate } from './agent-console/liveTokenRate.js';
 import { ImageModeControls } from './agent-console/ImageModeControls.js';
 import { ImageLiveTurn } from './agent-console/ImageLiveTurn.js';
+import { SubagentParentContext } from './agent-console/SubagentCue.js';
 import { VirtualTranscript, type VirtualTranscriptHandle } from './agent-console/VirtualTranscript.js';
 import { MarkdownEditor, type MarkdownEditorElement } from './agent-console/MarkdownEditor.js';
 import { MarkdownSandbox } from './Markdown.js';
@@ -45,7 +47,7 @@ import { PlanRail, appendPlanChangeRequest } from './PlanRail.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
 import { ComposerQuestion } from './ComposerQuestion.js';
 import { QuestionCard } from './QuestionCard.js';
-import { AgentLogsBubble } from './AgentLogsBubble.js';
+import { useWallLogs } from '../wallLogs.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
 import { UsageLimitsChip } from './UsageLimitsChip.js';
 import { PaneActions, PaneMetadata, useInPaneFrame } from './PaneFrame.js';
@@ -59,6 +61,7 @@ import { NekkoAvatar } from './Mascot.js';
 import { Modal } from './primitives/index.js';
 import { WorktreeChip } from './WorktreeChip.js';
 import { FolderPicker } from './FolderPicker.js';
+import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
 import { PanelIcon, DownloadIcon, PlusIcon, CloseIcon, BoltIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon, QuestionIcon } from '../icons.js';
 
@@ -547,14 +550,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    */
   readOnly?: boolean;
 }) {
-  const { providers, settings, setMascotMood, refreshSessions } = useStore(
+  const subagentSessions = useStore(s => s.sessions);
+  const subagentChildren = useMemo(() => subagentSessions.filter(s => s.parentSessionId === sessionId), [subagentSessions, sessionId]);
+  const { providers, setMascotMood, refreshSessions } = useStore(
     useShallow((s) => ({
       providers: s.providers,
-      settings: s.settings,
       setMascotMood: s.setMascotMood,
       refreshSessions: s.refreshSessions,
     })),
   );
+  const settings = useStore(useShallow((s) => chatPaneSettings(s.settings)));
 
   // Painted straight from the session cache when this chat was open recently;
   // the host copy is fetched regardless and replaces it (stale-while-revalidate).
@@ -617,7 +622,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // so a viewport breakpoint would keep the rail open in a pane squeezed to a
   // third of a wide screen and drop it from a narrow window that has nothing
   // else on it.
-  const planRailWanted = useStore((s) => s.planRailOpen);
+  const planRailWanted = useStore((s) => s.planRailOpenBySession[sessionId] ?? s.planRailOpen);
   const paneRef = useRef<HTMLDivElement>(null);
   const paneWidth = useElementWidth(paneRef, sessionId);
   const planRailOpen = planRailWanted && paneWidth >= PLAN_RAIL_MIN_PANE;
@@ -640,9 +645,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // caches it), so the header and the card never disagree.
   const git = useGitStatus(session ? `session:${session.id}` : undefined, session?.gitIsolation);
   const [lightbox, setLightbox] = useState<string | null>(null);
-  // The agent's command log, bubbled out of this window (Agents wall).
-  const [logsOpen, setLogsOpen] = useState(false);
-  const chatViewOn = useStore((s) => s.settings?.developer?.chat === true);
+  // Whether this agent's command log drawer is out on the Agents wall.
+  const logsOpen = useWallLogs((s) => s.sessionId === sessionId && !s.closing);
   // Right-click menu for a chat image (copy / save), placed at the pointer.
   const [imageMenu, setImageMenu] = useState<{ x: number; y: number; src: string } | null>(null);
   const [changeCount, setChangeCount] = useState(0);
@@ -1116,36 +1120,48 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     transcriptRef.current?.scrollToBottom('smooth');
   };
 
-  // Grow the composer with its content: reset to the two-line minimum, then match
-  // the scroll height (CSS max-height caps it and lets it scroll past that).
-  // A composer the user has sized keeps that size and scrolls instead.
+  // Grow the composer with its content. The editor is as tall as its text by
+  // itself; this only sets its ceiling (half the pane, less the composer's own
+  // controls, past which it scrolls) and, for a composer the user has sized,
+  // its floor. Nothing here runs per keystroke: measuring and rewriting the
+  // height on every key forced three layouts of the whole page per key, the
+  // streaming transcript included. The ceiling follows the pane and the
+  // composer's controls through a ResizeObserver, which reads after layout.
+  const hasDraft = !!draft;
   useLayoutEffect(() => {
     const el = composerRef.current;
     const pane = paneRef.current;
     const section = composerSectionRef.current;
     if (!el || !pane || !section || surface === 'composer') return;
+    el.style.height = '';
     // Empty drafts already have their minimum height in CSS. Warm switching
     // should not force layout merely to rediscover that same empty-editor size.
     if (!draft && composerH === null) {
-      el.style.height = '';
       el.style.maxHeight = '';
+      el.style.minHeight = '';
       return;
     }
     // The shared wall composer uses flex sizing in CSS, including its editor.
     // Measuring and rewriting that height forces layout without affecting it.
-    const resize = () => {
+    let fitted = '';
+    const fit = () => {
       const chrome = section.getBoundingClientRect().height - el.getBoundingClientRect().height;
       const limit = Math.max(0, Math.min(window.innerHeight, pane.getBoundingClientRect().height) * 0.5 - chrome);
-      el.style.maxHeight = limit + 'px';
-      el.style.height = 'auto';
-      el.style.height = Math.min(limit, Math.max(el.scrollHeight, composerH ?? 0)) + 'px';
+      const max = `${limit}px`;
+      const min = composerH === null ? '' : `${Math.min(limit, composerH)}px`;
+      if (fitted === max + min) return;
+      fitted = max + min;
+      el.style.maxHeight = max;
+      el.style.minHeight = min;
       if (document.activeElement === el) revealEditorCaret(el);
     };
-    resize();
-    const observer = new ResizeObserver(resize);
+    fit();
+    const observer = new ResizeObserver(fit);
     observer.observe(pane);
+    observer.observe(section);
     return () => observer.disconnect();
-  }, [draft, composerH, surface]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDraft, composerH, surface]);
 
   /**
    * Drag the line between the conversation and the composer to trade one for
@@ -2096,25 +2112,23 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {session && <WorktreeChip session={session} git={git} disabled={hasLive} onChange={setSession} />}
               </span>
             )}>
-            {changeCount > 0 && (
-              <button
-                className="btn btn-ghost px-2 py-1 text-[12px] font-medium text-accent"
-                onClick={() => useStore.getState().openDiffPane(sessionId)}
-                title="Review the agent's file changes"
-              >
-                {changeCount} change{changeCount === 1 ? '' : 's'}
-              </button>
-            )}
+            {/* This agent's companions sit with its other tools (Logs) rather
+                than in the wall's title bar, where they needed an agent to be
+                selected first. On the wall they open beside the window; in
+                the Chat view, as windows of the workspace. */}
+            <AgentCompanionButtons sessionId={sessionId} changeCount={changeCount} commandCenter={commandCenter} compact={compact} />
             <button
               className="btn btn-ghost shrink-0 px-2 py-1 text-[11px]"
               aria-label="Open agent logs"
               aria-expanded={commandCenter ? logsOpen : undefined}
               disabled={session?.executionMode === 'sandbox'}
-              // On the Agents wall the log bubbles out of this window; the Chat
-              // view's workbench keeps opening it as a window beside the chat.
+              // On the Agents wall the log slides out of this window's right
+              // edge as its own drawer (CommandWall lays it out and moves the
+              // windows beside it); the Chat view's workbench keeps opening it
+              // as a window beside the chat.
               onClick={() => {
                 if (session?.executionMode === 'sandbox') return;
-                commandCenter ? setLogsOpen((o) => !o) : useStore.getState().openTerminalPane(`agent_${sessionId}`);
+                commandCenter ? useWallLogs.getState().toggle(sessionId) : useStore.getState().openTerminalPane(`agent_${sessionId}`);
               }}
               title="Open the agent's command log"
             >
@@ -2146,7 +2160,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         )}
         {surface !== 'composer' && (
         <div className="relative flex min-h-0 w-full flex-1">
-          <VirtualTranscript
+          <SubagentParentContext.Provider value={subagentChildren}><VirtualTranscript
             ref={transcriptRef}
             rows={rows}
             renderRow={renderRow}
@@ -2251,7 +2265,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
               </>
             }
-          />
+          /></SubagentParentContext.Provider>
           {/* The plan panel's toggle floats in the chat area's top-right corner,
               in its own place whether the panel is open or not. */}
           {wideEnoughForRail && (
@@ -2259,7 +2273,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               type="button"
               className={`plan-rail-toggle ${planRailOpen ? 'is-open' : ''}`}
               data-plan-toggle
-              onClick={() => useStore.getState().togglePlanRail()}
+              onClick={() => useStore.getState().togglePlanRail(sessionId)}
               title={planRailOpen ? 'Hide the plan panel' : 'Show the plan, sub-agents and queue panel'}
               aria-label={planRailOpen ? 'Hide the plan panel' : 'Show the plan panel'}
               aria-pressed={planRailOpen}
@@ -2616,7 +2630,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                   <MarkdownEditor
                     ref={composerRef}
-                    className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[52px] py-3'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-3.5 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
+                    className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[64px] py-3'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-3.5 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
                     placeholder={imageMode ? 'Describe the image you want…' : streaming ? 'Queue a follow-up… (Ctrl/⌘+Enter steers the running reply)' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Model Providers first')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
@@ -2856,15 +2870,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       {/* The work rail, in the quarter the transcript gives back. Kept inside
           the chat pane (not the workbench's right panel) because everything in
           it belongs to this one conversation. */}
-      {logsOpen && surface !== 'composer' && (
-        <AgentLogsBubble
-          sessionId={sessionId}
-          title={session?.title || 'this chat'}
-          onClose={() => setLogsOpen(false)}
-          onPopOut={chatViewOn ? () => { setLogsOpen(false); useStore.getState().openTerminalPane(`agent_${sessionId}`); } : undefined}
-        />
-      )}
-
       {surface !== 'composer' && planRailOpen && (
         <div className="shrink-0" style={{ width: PLAN_RAIL_WIDTH }}>
           <PlanRail

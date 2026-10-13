@@ -22,10 +22,21 @@ const TILE = '#101714';
  * The head: two ears, a forehead that dips between them in a soft curve
  * rather than a flat bridge, a round jaw. Nothing inside the face. Drawn on a
  * 24-unit grid; the renderer's `BrandMark.tsx` carries the same path.
+ *
+ * The outline is a filled shape (outer edge, then the inner edge cut out by the
+ * even-odd rule), one grid unit thick, exported from the design file rather than
+ * stroked from a centre line, so the corners are exactly as drawn.
  */
-const HEAD = 'M5 10l-1-6 5 3q3-1.1 6 0l5-3-1 6a7.4 7.4 0 0 1-14 0z';
-/** The art's own bounds on that grid, for centring: x 4..20, y 4..17.4. */
-const ART = { x: 4, y: 4, w: 16, h: 13.4 };
+const HEAD = 'M4.059,10.357C4.034,10.285 4.015,10.212 4.003,10.138L3.007,4.165L2.649,2.016L9.117,5.897C11.039,5.29 12.961,5.29 14.883,5.897L21.351,2.016L20.005,10.088C19.987,10.199 19.959,10.308 19.921,10.415L19.921,10.416C18.733,13.756 15.551,16.006 12,16.006C8.428,16.006 5.23,13.729 4.059,10.357L4.059,10.357ZM5.009,10.027C6.04,12.996 8.856,15 12,15C15.126,15 17.927,13.019 18.973,10.079C18.991,10.028 19.004,9.976 19.013,9.923L20,4L15,7C13,6.267 11,6.267 9,7L4,4L4.995,9.972C4.999,9.991 5.003,10.009 5.009,10.027Z';
+/**
+ * The visible bounds of that shape on the grid: ear tips to jaw, x 2.649..21.351,
+ * y 2.016..16.006. Centring uses these, the ink you actually see. The old mark
+ * centred a box that left out its stroke and stopped short of the ear tips, so
+ * it sat about 5% high on the tile.
+ */
+const ART = { x: 2.649, y: 2.016, w: 18.702, h: 13.99 };
+/** How much of a 512 tile the mark spans, ear tip to ear tip (the old mark's width). */
+const SPAN = 378;
 
 /**
  * The mark alone, drawn to fill `span` units of a square `box`, centred.
@@ -37,8 +48,13 @@ function markGroup(size, box, span, color = INK) {
   const scale = span / Math.max(ART.w, ART.h);
   const tx = (box - ART.w * scale) / 2 - ART.x * scale;
   const ty = (box - ART.h * scale) / 2 - ART.y * scale;
-  const stroke = size < 32 ? 2.0 : size < 64 ? 1.5 : 1.2;
-  return `<g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="8">
+  // The shape is one unit thick. Small sizes thicken it with a stroke the colour
+  // of the fill, so the line is 2 units at 16-24 px and 1.5 below 64, as before.
+  const extra = size < 32 ? 1.0 : size < 64 ? 0.5 : 0;
+  const thicken = extra
+    ? ` stroke="${color}" stroke-width="${extra}" stroke-linejoin="miter" stroke-miterlimit="8"`
+    : '';
+  return `<g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})" fill="${color}" fill-rule="evenodd"${thicken}>
       <path d="${HEAD}"/>
     </g>`;
 }
@@ -60,7 +76,7 @@ function iconSvg(size, px = size) {
 
   <g clip-path="url(#squircle)">
     <rect width="512" height="512" fill="${TILE}"/>
-    ${markGroup(size, VIEWBOX, 352)}
+    ${markGroup(size, VIEWBOX, SPAN)}
   </g>
 
   <!-- Rim light. A dark tile on a dark taskbar loses its own edge; a hairline of
@@ -76,10 +92,16 @@ function iconSvg(size, px = size) {
  * splash, and the monochrome variant. `inset` is the share of the box the art
  * may fill.
  */
+/**
+ * `inset` used to size the old mark's centre line, and its visible ink came out
+ * 7.5% wider (17.2 vs 16 grid units). The phone layers keep that size.
+ */
+const BARE_SIZE = 17.2 / 16;
+
 function bareMarkSvg(px, { color = INK, inset = 0.72, background = 'none' } = {}) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${VIEWBOX} ${VIEWBOX}">
   ${background === 'none' ? '' : `<rect width="512" height="512" fill="${background}"/>`}
-  ${markGroup(px, VIEWBOX, Math.round(VIEWBOX * inset), color)}
+  ${markGroup(px, VIEWBOX, Math.round(VIEWBOX * inset * BARE_SIZE), color)}
 </svg>`;
 }
 
@@ -111,4 +133,4 @@ function bannerSvg(w, h, opts, pw = w, ph = h) {
 </svg>`;
 }
 
-module.exports = { iconSvg, bareMarkSvg, bannerSvg, TILE, INK, HEAD };
+module.exports = { iconSvg, bareMarkSvg, bannerSvg, TILE, INK, HEAD, ART };

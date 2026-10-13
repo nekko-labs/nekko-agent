@@ -47,7 +47,8 @@ export interface EngineDaemon {
   kill(modelId: string): Promise<boolean>;
   list(): Promise<DaemonChild[]>;
   /** Load a Laya model dir into the daemon's decision runtime (`crates/nekko-decide`). */
-  decideLoad(req: { dir: string; precision?: string; name?: string }): Promise<Record<string, unknown>>;
+  /** `directml`: a DirectML.dll the host downloaded, for a Windows whose own copy is too old. */
+  decideLoad(req: { dir: string; precision?: string; name?: string; directml?: string }): Promise<Record<string, unknown>>;
   decideUnload(): Promise<void>;
   decideStatus(): Promise<Record<string, unknown>>;
   decideRun(request: import('@nekko-agent/shared').DecisionRequest): Promise<Omit<import('@nekko-agent/shared').DecisionResponse, 'provider' | 'latencyMs'>>;
@@ -80,6 +81,15 @@ export function daemonCall(): (<T>(channel: string, ...args: unknown[]) => Promi
     });
     return readDaemonResponse<T>(res, channel);
   };
+}
+
+/**
+ * Whether the daemon this host runs under owns `what` (a file it is the
+ * single writer of, such as `settings`), from `NEKKOD_OWNS`, which nekkod sets
+ * when it knows the data directory.
+ */
+export function daemonOwns(what: string): boolean {
+  return Boolean(currentLink) && (process.env.NEKKOD_OWNS ?? '').split(',').includes(what);
 }
 
 export function engineDaemon(): EngineDaemon | undefined {

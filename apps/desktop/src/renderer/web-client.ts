@@ -1,6 +1,7 @@
 import { IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL } from '@nekko-agent/shared';
 import type { AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
+import { openTerminalSocket } from './terminal-socket.js';
 
 /**
  * Browser transport for the web/Docker editions: implements the same NekkoApi
@@ -104,6 +105,9 @@ function makeWebClient(): NekkoApi {
   let call: (channel: string, ...args: unknown[]) => Promise<any>;
   // Send the phone's push token to the relay (relay transport only).
   let registerPush: (token: string, platform: string) => Promise<void> = async () => {};
+  // A terminal's own binary socket, when the server runs behind nekkod; null
+  // sends the pane down the event-bus path (the relay, the in-process host).
+  let openTerminalStream: NonNullable<NekkoApi['openTerminalStream']> = async () => null;
 
   if (relayUrl && room && key) {
     // Stable device identity for the agent's paired-device registry.
@@ -259,6 +263,16 @@ function makeWebClient(): NekkoApi {
       ws.onclose = () => setTimeout(connect, 1000); // auto-reconnect
     };
     connect();
+    // Asked once: an older server (or one running the engine in-process) has no such channel.
+    let streams: Promise<boolean> | null = null;
+    const daemonTerminals = () =>
+      (streams ??= call('web:capabilities').then((c: { terminalStream?: boolean } | null) => c?.terminalStream === true, () => false));
+    openTerminalStream = async (id, handlers) => {
+      if (!(await daemonTerminals())) return null;
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const q = token() ? `?token=${encodeURIComponent(token())}` : '';
+      return openTerminalSocket(`${proto}://${location.host}/api/term/${encodeURIComponent(id)}${q}`, handlers);
+    };
   }
 
   return {
@@ -369,6 +383,7 @@ function makeWebClient(): NekkoApi {
     runningSessions: () => call(IpcChannels.chatRunning),
 
     listTerminals: () => call(IpcChannels.terminalsList),
+    openTerminalStream: (id, handlers) => openTerminalStream(id, handlers),
     listShells: () => call(IpcChannels.terminalShells),
     createTerminal: (opts) => call(IpcChannels.terminalCreate, opts),
     terminalSnapshot: (id) => call(IpcChannels.terminalSnapshot, id),
@@ -443,9 +458,11 @@ function makeWebClient(): NekkoApi {
     acceptChange: (sessionId, path) => call(IpcChannels.changeAccept, sessionId, path),
     acceptAllChanges: (sessionId) => call(IpcChannels.changeAcceptAll, sessionId),
 
-    listSessionPrs: (sessionId) => call(IpcChannels.prSessionList, sessionId),
+    listSessionPrs: (sessionId, force) => call(IpcChannels.prSessionList, sessionId, force),
     getPrDiff: (url) => call(IpcChannels.prDiff, url),
     prAction: (url, action) => call(IpcChannels.prAction, url, action),
+    continuePrStack: (sessionId, url) => call(IpcChannels.prContinueStack, sessionId, url),
+    linkPrStack: (sessionId, url) => call(IpcChannels.prLinkStack, sessionId, url),
 
     listComments: (path) => call(IpcChannels.commentsList, path),
     addComment: (path, line, lineText, comment) => call(IpcChannels.commentAdd, path, line, lineText, comment),

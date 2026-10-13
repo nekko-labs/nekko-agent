@@ -19,10 +19,46 @@ pub struct Ctx {
     pub engine: Arc<crate::engine::Engine>,
     /// Session reads (`nekko-store`), when the data directory is known.
     pub sessions: Option<Arc<nekko_store::SessionStore>>,
-    /// Agent runs the TS host hands the daemon (`loop:run`).
-    pub loops: Arc<crate::loops::Loops>,
+    /// Pending changes the agent's file tools recorded (`changes:*`).
+    pub changes: Arc<nekko_tools::ChangeTracker>,
     /// MCP servers the TS host syncs and calls (`mcp:sync`, `mcp:call`).
     pub mcp: Arc<crate::mcp::Mcp>,
+    /// Whole chat turns (`chat:turn`) and the input they wait on.
+    pub turns: Arc<crate::turns::Turns>,
+    /// Usage, reply and limit accounting (`usage:summary`, `limits:*`).
+    pub accounts: Arc<crate::accounts::Accounts>,
+    /// settings.json, when the data directory is known (`settings:*`).
+    pub settings: Option<Arc<crate::settings::Settings>>,
+    /// Nekko Voice (`voice:*`), when the data directory is known.
+    pub voice: Option<Arc<crate::voice::Voice>>,
+    /// Sign-in and tokens.json, when the data directory is known (`oauth:*`).
+    pub oauth: Option<Arc<crate::oauth::OAuth>>,
+    /// `chat:send` admitted here, when the daemon owns settings, tokens and sessions.
+    pub admission: Option<Arc<crate::admission::Admission>>,
+    /// The model catalog, when the daemon has the settings store (for the Hugging Face token).
+    pub catalog: Option<Arc<nekko_engine::catalog::Catalog>>,
+    /// Files, memory, comments and the workspace index (`workspace:*`, `file:*`).
+    pub workspace: Arc<crate::workspace::Workspace>,
+    /// Automation tasks and their scheduler (`tasks:*`, `task:*`).
+    pub automation: Arc<crate::automation::Automation>,
+    /// Phone remote access (`remote:*`) and the relay agent.
+    pub remote: Arc<crate::remote::Remote>,
+    /// GPU and system stats and the readiness advisor (`gpu:stats`, `system:stats`, `machine:readiness`).
+    pub machine: Arc<nekko_machine::Machine>,
+    /// The experimental resource-queue client, when the data directory is known.
+    pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
+    /// Sandbox chats' containers (sandbox.rs), with a data directory.
+    pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
+    /// The runtime control plane, with the settings store.
+    pub runtimes: Option<Arc<nekko_engine::runtimes::Runtimes>>,
+    /// The model library and its folders (`engine:models`...), with the settings store.
+    pub library: Option<Arc<crate::library::Library>>,
+    /// Model downloads (`engine:downloadModel`...), with the library and the catalog.
+    pub downloads: Option<Arc<crate::downloads::ModelDownloads>>,
+    /// The runtime installers (`engine:install`...), with the downloads.
+    pub installs: Option<Arc<crate::installs::Installs>>,
+    /// The model server's policy (`engine:status`...), with the installers.
+    pub server: Option<Arc<crate::model_server::Server>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -31,7 +67,7 @@ const AGENT_PREFIX: &str = "agent_";
 
 /// How long a daemon-served call waits on the backend for supporting data
 /// (settings, the agent logs) before carrying on without it.
-const AUX_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+pub const AUX_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 fn arg(args: &[Value], i: usize) -> &Value {
     args.get(i).unwrap_or(&Value::Null)
@@ -53,7 +89,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
     {
         return ctx.backend.call(channel, Value::Array(args)).await;
     }
-    if matches!(channel, "loop:run" | "terminal:create" | "mcp:call") {
+    if matches!(channel, "terminal:create" | "mcp:call") {
         if arg(&args, 0).get("executionMode").and_then(Value::as_str) == Some("sandbox") {
             return Err(format!("{channel} cannot execute sandbox work natively; use the host container router"));
         }
@@ -89,7 +125,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 crate::backend::State::Ready { .. } => "ready",
                 crate::backend::State::Down { .. } => "down",
             },
-            "owned": OWNED,
+            "owned": owned(ctx),
         })),
         "terminals:list" => {
             let mut all = serde_json::to_value(ctx.terminals.list()).unwrap_or(json!([]));
@@ -114,29 +150,96 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             }
             terminal_op(ctx, channel, &id, &args)
         }
-        "loop:run" => ctx.loops.start(ctx.backend.clone(), ctx.hub.clone(), arg(&args, 0).clone()),
-        "loop:abort" => Ok(json!(ctx.loops.abort(str_arg(&args, 0).unwrap_or_default()))),
-        "loop:alive" => Ok(json!(ctx.loops.is_running(str_arg(&args, 0).unwrap_or_default()))),
-        "loop:steer" => Ok(json!(ctx.loops.steer(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1).clone()))),
+        "chat:turn" => ctx.turns.start(ctx.backend.clone(), ctx.hub.clone(), arg(&args, 0).clone()),
+        "turn:abort" => Ok(json!(ctx.turns.abort(str_arg(&args, 0).unwrap_or_default()))),
+        "turn:alive" => Ok(json!(ctx.turns.is_running(str_arg(&args, 0).unwrap_or_default()))),
+        // The chats whose turn runs here, for a host that restarted mid-turn.
+        "turn:running" => Ok(json!(ctx.turns.running_sessions())),
+        "turn:steer" => Ok(json!(ctx.turns.steer(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1).clone()))),
+        "turn:approval" => ctx.turns.host_approval(
+            ctx.backend.clone(),
+            str_arg(&args, 0).unwrap_or_default(),
+            args.get(1..).unwrap_or(&[]),
+        ),
+        // Only the daemon's own input: the host merges these with its turns' (daemon-turn.ts).
+        "turn:pending" => Ok(ctx.turns.pending.snapshot()),
+        "turn:approve" => Ok(json!(ctx.turns.pending.approve(
+            str_arg(&args, 0).unwrap_or_default(),
+            str_arg(&args, 1).unwrap_or_default(),
+            arg(&args, 2) == &json!(true)
+        ))),
+        "turn:answer" => Ok(json!(ctx.turns.pending.answer(
+            str_arg(&args, 0).unwrap_or_default(),
+            str_arg(&args, 1).unwrap_or_default(),
+            arg(&args, 2).clone()
+        ))),
+        // The UI's side of pending input: answered here when a daemon turn
+        // waits on it, otherwise by the host (an in-process turn's).
+        "tool:approve" => {
+            let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+            if ctx.turns.pending.approve(sid, cid, arg(&args, 2) == &json!(true)) {
+                return Ok(Value::Null);
+            }
+            ctx.backend.call(channel, Value::Array(args)).await
+        }
+        "chat:answer" => {
+            let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+            if ctx.turns.pending.answer(sid, cid, arg(&args, 2).clone()) {
+                return Ok(Value::Null);
+            }
+            ctx.backend.call(channel, Value::Array(args)).await
+        }
+        "chat:pending" => {
+            let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:pending:host", json!([]))).await;
+            let host = match host {
+                Ok(Ok(v)) if v.is_object() => v,
+                _ => json!({}),
+            };
+            Ok(merge_pending(host, ctx.turns.pending.snapshot()))
+        }
+        "chat:running" => Ok(json!(running_chats(ctx).await)),
+        "chat:steer" => {
+            let sid = str_arg(&args, 0).unwrap_or_default().to_string();
+            let content = nekko_js::trim(str_arg(&args, 1).unwrap_or_default()).to_string();
+            if !content.is_empty()
+                && ctx.turns.steer(&sid, crate::turns::Turns::steering_message(&content))
+                && let Some(store) = &ctx.sessions
+            {
+                let store = store.clone();
+                return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
+                    .await
+                    .map_err(|e| e.to_string());
+            }
+            ctx.backend.call(channel, Value::Array(args)).await
+        }
+        // Stop the daemon's turn at once, then the host's part of stopping
+        // (its own turns, image turns, the chat's dev servers).
+        "chat:abort" => {
+            if let Some(admission) = &ctx.admission {
+                admission.abort(str_arg(&args, 0).unwrap_or_default());
+            }
+            ctx.turns.abort_session(str_arg(&args, 0).unwrap_or_default());
+            // A dev server the agent started belongs to the work it was doing.
+            ctx.turns.processes.kill_session(str_arg(&args, 0).unwrap_or_default());
+            ctx.backend.call(channel, Value::Array(args)).await
+        }
         "changes:list" => {
-            let (changes, id) = (ctx.loops.changes.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
+            let (changes, id) = (ctx.changes.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
             let list =
                 tokio::task::spawn_blocking(move || changes.list_changes(&id)).await.map_err(|e| e.to_string())?;
             Ok(serde_json::to_value(list).unwrap_or(json!([])))
         }
         "changes:accept" => {
-            ctx.loops
-                .changes
-                .accept_change(str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+            ctx.changes.accept_change(str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
             Ok(Value::Null)
         }
         "changes:acceptAll" => {
-            ctx.loops.changes.accept_all(str_arg(&args, 0).unwrap_or_default());
+            ctx.changes.accept_all(str_arg(&args, 0).unwrap_or_default());
             Ok(Value::Null)
         }
         // The host snapshots a file here before its own tool executor writes it.
         "changes:record" => {
-            let changes = ctx.loops.changes.clone();
+            let changes = ctx.changes.clone();
             let (id, path) =
                 (str_arg(&args, 0).unwrap_or_default().to_string(), str_arg(&args, 1).unwrap_or_default().to_string());
             tokio::task::spawn_blocking(move || changes.record_original(&id, &path))
@@ -145,8 +248,111 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Ok(Value::Null)
         }
         "mcp:sync" => Ok(ctx.mcp.sync(arg(&args, 0)).await),
+        "mcp:hypergate" => {
+            let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+            Ok(crate::hypergate::detect(&base).await.map_or(Value::Null, Value::Object))
+        }
+        // Probe and claim a token here; the host saves the entry (it owns the
+        // settings) and hands back the server list, which this daemon runs.
+        "mcp:hypergate:connect" => {
+            let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+            let Some(info) = crate::hypergate::resolve(&base).await else { return Ok(Value::Null) };
+            let info = Value::Object(info);
+            let servers = ctx.backend.call("mcp:hypergate:save", json!([info])).await?;
+            ctx.mcp.sync(&servers).await;
+            Ok(info)
+        }
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
+        // `mcpStatus`: sync the configured servers here, then report them.
+        "mcp:status" if ctx.settings.is_some() => {
+            let settings = crate::settings::current(ctx).await;
+            let configs = settings.get("mcpServers").filter(|v| v.is_array()).cloned().unwrap_or(json!([]));
+            let snapshot = ctx.mcp.sync(&configs).await;
+            Ok(crate::mcp::status(&configs, &snapshot))
+        }
         "provider:complete" => crate::sideband::complete(arg(&args, 0)).await,
+        c if crate::accounts::CHANNELS.contains(&c) && ctx.accounts.enabled() => ctx.accounts.route(c, &args).await,
+        // The daemon's settings store says where the data directory is.
+        c if crate::decisions::CHANNELS.contains(&c) && ctx.settings.is_some() => {
+            let data_dir =
+                ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf)).unwrap_or_default();
+            crate::decisions::route(ctx, &data_dir, c, &args).await
+        }
+        c if crate::context::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
+            crate::context::route(ctx, c, args).await
+        }
+        c if crate::side::CHANNELS.contains(&c) && crate::side::owned(ctx) => crate::side::route(ctx, c, &args).await,
+        "chat:send" if ctx.admission.is_some() => {
+            crate::admission::send(ctx, ctx.admission.as_ref().expect("checked"), args).await
+        }
+        c if crate::worktrees::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
+            crate::worktrees::route(ctx, c, &args).await
+        }
+        c if crate::providers::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
+            crate::providers::route(ctx, c, &args).await
+        }
+        c if crate::oauth::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
+            ctx.oauth.as_ref().expect("checked").route(c, &args).await
+        }
+        c if crate::model_server::CHANNELS.contains(&c) && ctx.server.is_some() => {
+            ctx.server.clone().expect("checked").route(c, &args).await
+        }
+        c if crate::installs::CHANNELS.contains(&c) && ctx.installs.is_some() => {
+            ctx.installs.clone().expect("checked").route(c, &args).await
+        }
+        c if crate::downloads::CHANNELS.contains(&c) && ctx.downloads.is_some() => {
+            ctx.downloads.clone().expect("checked").route(c, &args).await
+        }
+        c if crate::library::CHANNELS.contains(&c) && ctx.library.is_some() => {
+            ctx.library.clone().expect("checked").route(c, &args).await
+        }
+        c if crate::catalog::CHANNELS.contains(&c) && ctx.catalog.is_some() => match &ctx.catalog {
+            Some(catalog) => crate::catalog::route(catalog, c, &args).await,
+            None => ctx.backend.call(c, Value::Array(args)).await,
+        },
+        c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
+        // A host running a turn itself (NEKKO_AGENT_LOOP=ts) sends its agent_watch calls here.
+        "watch:tool" if ctx.turns.watches.is_some() => {
+            let w = ctx.turns.watches.clone().expect("checked");
+            w.tool(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1))
+                .await
+                .map(Value::String)
+                .or_else(|e| Ok(json!({ "error": e })))
+        }
+        "session:nextWatch" if ctx.turns.watches.is_some() => {
+            Ok(ctx.turns.watches.as_ref().expect("checked").next_wake_at(str_arg(&args, 0).unwrap_or_default()))
+        }
+        c if crate::sandbox::CHANNELS.contains(&c) && ctx.sandboxes.is_some() => {
+            ctx.sandboxes.clone().expect("checked").route(ctx, c, &args).await
+        }
+        c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
+            crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
+        }
+        c if crate::voice::CHANNELS.contains(&c) && ctx.voice.is_some() => match &ctx.voice {
+            Some(voice) => voice.route(c, &args).await,
+            None => Err("voice needs the data directory".into()),
+        },
+        c if ctx.workspace.serves(c) => crate::workspace::route(ctx, c, &args).await,
+        c if crate::automation::TASK_CHANNELS.contains(&c) && ctx.automation.owns_tasks() => {
+            ctx.automation.route(c, &args).await
+        }
+        c if crate::automation::WORKFLOW_CHANNELS.contains(&c) && ctx.automation.owns_workflows() => {
+            ctx.automation.route(c, &args).await
+        }
+        c if crate::connectors::CHANNELS.contains(&c) && crate::connectors::owned(ctx) => {
+            crate::connectors::route(ctx, c, &args).await
+        }
+        c if crate::remote::CHANNELS.contains(&c) && ctx.remote.enabled() => ctx.remote.route(c, &args).await,
+        c if crate::runtimes::CHANNELS.contains(&c) && ctx.runtimes.is_some() => match &ctx.runtimes {
+            Some(rt) => crate::runtimes::route(ctx, rt, c, &args).await,
+            None => ctx.backend.call(c, Value::Array(args)).await,
+        },
+        c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
+        // Without a data directory the host keeps the coordinator file.
+        "resource:queue" => match &ctx.resource_queue {
+            Some(queue) => queue.route(&args).await,
+            None => ctx.backend.call(channel, Value::Array(args)).await,
+        },
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
             session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
         }
@@ -159,19 +365,143 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
     }
 }
 
+/// Merge the host's pending input with the daemon's, the daemon's winning
+/// field by field (`mergePending` in daemon-turn.ts).
+/// The chats with a turn running, the host's and the daemon's.
+pub async fn running_chats(ctx: &Ctx) -> Vec<String> {
+    let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:running", json!([]))).await;
+    let mut ids: Vec<String> = match host {
+        Ok(Ok(Value::Array(a))) => a.into_iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
+        _ => Vec::new(),
+    };
+    for id in ctx.turns.running_sessions() {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
+}
+
+fn merge_pending(host: Value, daemon: Value) -> Value {
+    let mut out = host.as_object().cloned().unwrap_or_default();
+    for (id, p) in daemon.as_object().cloned().unwrap_or_default() {
+        let mut entry = match out.get(&id) {
+            Some(Value::Object(m)) => m.clone(),
+            _ => {
+                let mut m = serde_json::Map::new();
+                m.insert("sessionId".into(), json!(id));
+                m
+            }
+        };
+        for (k, v) in p.as_object().cloned().unwrap_or_default() {
+            if !v.is_null() {
+                entry.insert(k, v);
+            }
+        }
+        out.insert(id, Value::Object(entry));
+    }
+    Value::Object(out)
+}
+
+/// What `daemon:info` reports: the fixed table, and accounting when this
+/// daemon knows the data directory. A host that delegates limits to a daemon
+/// that would forward them straight back would loop, so they are only listed
+/// when they are really served here.
+fn owned(ctx: &Ctx) -> Vec<&'static str> {
+    let mut all = OWNED.to_vec();
+    all.extend_from_slice(crate::tooling::CHANNELS);
+    if ctx.sandboxes.is_some() {
+        all.extend_from_slice(crate::sandbox::CHANNELS);
+    }
+    if ctx.accounts.enabled() {
+        all.extend_from_slice(crate::accounts::OWNED);
+    }
+    if ctx.catalog.is_some() {
+        all.extend_from_slice(crate::catalog::CHANNELS);
+    }
+    if ctx.library.is_some() {
+        all.extend_from_slice(crate::library::CHANNELS);
+    }
+    if ctx.downloads.is_some() {
+        all.extend_from_slice(crate::downloads::CHANNELS);
+    }
+    if ctx.installs.is_some() {
+        all.extend_from_slice(crate::installs::CHANNELS);
+    }
+    if ctx.server.is_some() {
+        all.extend_from_slice(crate::model_server::CHANNELS);
+    }
+    if crate::connectors::owned(ctx) {
+        all.extend_from_slice(crate::connectors::CHANNELS);
+    }
+    if ctx.settings.is_some() {
+        all.extend_from_slice(crate::decisions::CHANNELS);
+    }
+    if ctx.settings.is_some() {
+        all.extend_from_slice(crate::settings::CHANNELS);
+        all.push("mcp:status");
+    }
+    if ctx.voice.is_some() {
+        all.extend_from_slice(crate::voice::CHANNELS);
+    }
+    if ctx.oauth.is_some() {
+        all.extend_from_slice(crate::oauth::CHANNELS);
+        all.extend_from_slice(crate::providers::CHANNELS);
+    }
+    if ctx.settings.is_some() && ctx.sessions.is_some() {
+        all.extend_from_slice(crate::worktrees::CHANNELS);
+    }
+    if ctx.admission.is_some() {
+        all.extend_from_slice(crate::admission::CHANNELS);
+    }
+    if crate::side::owned(ctx) {
+        all.extend_from_slice(crate::side::CHANNELS);
+    }
+    if ctx.settings.is_some() && ctx.sessions.is_some() {
+        all.extend_from_slice(crate::context::CHANNELS);
+    }
+    all.extend(ctx.workspace.owned());
+    if ctx.automation.owns_tasks() {
+        all.extend_from_slice(crate::automation::TASK_CHANNELS);
+    }
+    if ctx.remote.enabled() {
+        all.extend_from_slice(crate::remote::CHANNELS);
+    }
+    all.extend_from_slice(crate::machine::CHANNELS);
+    if ctx.resource_queue.is_some() {
+        all.extend_from_slice(crate::resource_queue::CHANNELS);
+    }
+    if ctx.automation.owns_workflows() {
+        all.extend_from_slice(crate::automation::WORKFLOW_CHANNELS);
+    }
+    if ctx.turns.watches.is_some() {
+        all.extend_from_slice(crate::watches::CHANNELS);
+    }
+    if ctx.runtimes.is_some() {
+        all.extend_from_slice(crate::runtimes::CHANNELS);
+    }
+    all
+}
+
 /// Channels the daemon serves itself (reported by `daemon:info`).
 pub const OWNED: &[&str] = &[
     "daemon:info",
-    "loop:run",
-    // Not a channel: a capability. `loop:run` has no tool-step limit. The host
-    // hands runs only to a daemon that says so, because daemons built before
-    // the limit was removed read the host's budget as a real cap.
-    "loop:unbounded",
-    // Caching policy and usage counters survive every loop/provider boundary.
-    "loop:prompt-caching",
-    "loop:abort",
-    "loop:alive",
-    "loop:steer",
+    // Whole chat turns and the input they wait on (turns.rs).
+    "chat:turn",
+    "turn:abort",
+    "turn:alive",
+    "turn:running",
+    "turn:steer",
+    "turn:approval",
+    "turn:pending",
+    "turn:approve",
+    "turn:answer",
+    "tool:approve",
+    "chat:answer",
+    "chat:pending",
+    "chat:running",
+    "chat:steer",
+    "chat:abort",
     "provider:complete",
     "provider:prompt-caching",
     "changes:list",
@@ -180,9 +510,21 @@ pub const OWNED: &[&str] = &[
     "changes:record",
     "mcp:sync",
     "mcp:call",
+    "mcp:hypergate",
+    "mcp:hypergate:connect",
+    // Not a channel: a turn whose spec carries `facts.mcpServers` syncs and
+    // calls its MCP servers here (turns.rs), approvals included.
+    "turn:mcp",
+    // Not a channel: a turn whose spec says `facts.spawn` drives its
+    // `spawn_agent` children here, the host making them (`spawn:prepare`).
+    "turn:spawn",
+    // Not a channel: a turn whose spec carries `facts.hookRules` runs its
+    // PreToolUse and PostToolUse hooks here (nekko-tools `hooks`).
+    "turn:hooks",
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",
+    "sessions:purgeArchived",
     "session:get",
     "session:images",
     "session:create",
@@ -192,6 +534,7 @@ pub const OWNED: &[&str] = &[
     "session:setSupportingWorkspaces",
     "session:setAttachments",
     "session:truncate",
+    "session:fork",
     "spec:setLinked",
     "chat:queue",
     "chat:dequeue",
@@ -302,10 +645,7 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 async fn create_terminal(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
-    let settings = match tokio::time::timeout(AUX_WAIT, ctx.backend.call("settings:get", json!([]))).await {
-        Ok(Ok(v)) => v,
-        _ => Value::Null,
-    };
+    let settings = crate::settings::current(ctx).await;
     let s = |k: &str| opts.get(k).and_then(Value::as_str);
     let dim = |k: &str, d: u16| opts.get(k).and_then(Value::as_u64).map(|n| n.clamp(1, 1000) as u16).unwrap_or(d);
     let shell = resolve_shell(s("shell"), settings.get("defaultShellPath").and_then(Value::as_str));
@@ -347,6 +687,7 @@ const SESSION_CHANNELS: &[&str] = &[
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",
+    "sessions:purgeArchived",
     "session:get",
     "session:images",
     "session:create",
@@ -356,6 +697,7 @@ const SESSION_CHANNELS: &[&str] = &[
     "session:setSupportingWorkspaces",
     "session:setAttachments",
     "session:truncate",
+    "session:fork",
     "spec:setLinked",
     "chat:queue",
     "chat:dequeue",
@@ -379,6 +721,7 @@ async fn session_op(
             "sessions:summaries" => Ok(Value::Array(store.summaries())),
             "sessions:list" => Ok(Value::Array(store.list())),
             "sessions:clear" => store.clear_with(id, delete_log).map(|n| json!(n)),
+            "sessions:purgeArchived" => store.purge_archived(delete_log).map(|n| json!(n)),
             "session:get" => Ok(store.get(id).unwrap_or(Value::Null)),
             "session:images" => Ok(Value::Array(store.images(id, arg(&args, 1).as_f64().unwrap_or(1.0)))),
             "session:create" => store.create(str_arg(&args, 0)),
@@ -396,6 +739,7 @@ async fn session_op(
             "session:setSupportingWorkspaces" => or_null(store.set_supporting(id, arg(&args, 1))),
             "session:setAttachments" => or_null(store.set_attachments(id, arg(&args, 1))),
             "session:truncate" => or_null(store.truncate(id, arg(&args, 1))),
+            "session:fork" => or_null(store.fork(id, arg(&args, 1))),
             "spec:setLinked" => or_null(store.set_spec_linked(id, arg(&args, 1))),
             "chat:queue" => or_null(store.queue(id, arg(&args, 1))),
             "chat:dequeue" => or_null(store.dequeue(id, arg(&args, 1))),
@@ -421,13 +765,19 @@ mod tests {
     }
 
     #[test]
-    fn info_says_the_loop_has_no_step_limit() {
-        // packages/host/src/daemon-loop.ts daemonRunsLoops needs both, or the
-        // host keeps every run in process.
-        assert!(OWNED.contains(&"loop:run"));
-        assert!(OWNED.contains(&"loop:unbounded"));
-        assert!(OWNED.contains(&"loop:prompt-caching"));
+    fn info_lists_prompt_caching() {
+        // sideband.ts hands side calls to the daemon only when it says so.
         assert!(OWNED.contains(&"provider:prompt-caching"));
+    }
+
+    #[test]
+    fn pending_input_merges_with_the_daemons_winning() {
+        let host = json!({ "s1": { "sessionId": "s1", "question": { "callId": "q" } }, "s2": { "sessionId": "s2", "approval": { "x": 1 } } });
+        let daemon = json!({ "s1": { "sessionId": "s1", "approval": { "y": 2 } }, "s3": { "sessionId": "s3", "question": { "callId": "z" } } });
+        let merged = merge_pending(host, daemon);
+        assert_eq!(merged["s1"], json!({ "sessionId": "s1", "question": { "callId": "q" }, "approval": { "y": 2 } }));
+        assert_eq!(merged["s2"]["approval"], json!({ "x": 1 }));
+        assert_eq!(merged["s3"]["question"]["callId"], "z");
     }
 
     #[test]

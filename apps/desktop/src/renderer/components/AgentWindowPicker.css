@@ -75,6 +75,13 @@
 .agent-window-picker__folder-text strong { font-size: 13px; }
 .agent-window-picker__folder-text span { overflow: hidden; color: var(--ink-faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .agent-window-picker__badge { flex-shrink: 0; color: var(--accent); font-size: 10px; font-weight: 600; }
+.agent-window-picker__badge--default { padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); }
+/* Save or clear the checked folders as what every new agent starts with. */
+.agent-window-picker__default-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-height: 20px; font-size: 12px; }
+.agent-window-picker .agent-window-picker__link { border: 0; padding: 0; background: none; color: var(--accent); font-size: 12px; font-weight: 600; }
+.agent-window-picker .agent-window-picker__link:hover:not(:disabled) { background: none; text-decoration: underline; }
+.agent-window-picker .agent-window-picker__link--quiet { color: var(--ink-faint); font-weight: 500; }
+.agent-window-picker__default-note { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-soft); }
 .agent-window-picker__existing summary { cursor: pointer; list-style: none; }
 .agent-window-picker__existing summary::-webkit-details-marker { display: none; }
 .agent-window-picker__existing summary::after { content: ''; width: 7px; height: 7px; margin-left: 2px; border-right: 1.5px solid var(--ink-faint); border-bottom: 1.5px solid var(--ink-faint); transform: rotate(-45deg); transition: transform 120ms ease; }

@@ -3,19 +3,13 @@ import type { ContextBundle, ContextItem, EffortLevel } from '@nekko-agent/share
 import { effectiveEffort, modelDefaultEffort, modelEffortLevels, usesNativeEffort } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { sourceMeta } from '../contextSources.js';
+import { fillTone } from './contextTone.js';
 
 const FREE_COLOR = 'var(--surface-2)';
 
 export const formatContextTokens = (n: number) => n >= 1_000_000
   ? `${Number((n / 1_000_000).toFixed(1))}m`
   : n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`;
-
-/** The context bar's fill: accent while there is room, then warning, then danger. */
-function fillColor(pct: number): string {
-  if (pct >= 90) return 'var(--danger)';
-  if (pct >= 70) return 'var(--warning)';
-  return 'var(--accent)';
-}
 
 /**
  * `n.toLocaleString()`, with the formatter built once. The gauge repaints as a
@@ -89,14 +83,16 @@ export function ContextGauge({
           `~` marks a window guessed from the model family rather than reported. */}
       <span
         className="context-bar relative flex h-6 min-w-[92px] cursor-default items-center justify-center overflow-hidden rounded-md border border-line px-2 tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
-        style={{ background: 'var(--surface-2)' }}
+        style={{ background: windowTokens > 0 ? `color-mix(in srgb, ${fillTone(pct)} 12%, var(--surface-2))` : 'var(--surface-2)' }}
         tabIndex={0}
         aria-label={`Context window: ${num(used)}${windowTokens ? ` of ${num(windowTokens)}` : ''} tokens in use`}
       >
+        {/* Filled by scaling, not by width: the count moves with every streamed
+            token, and a width transition re-laid-out the page on every frame. */}
         <span
           aria-hidden
-          className="absolute inset-y-0 left-0 transition-[width] duration-300"
-          style={{ width: `${pct}%`, background: `color-mix(in srgb, ${fillColor(pct)} 28%, transparent)` }}
+          className="absolute inset-0 origin-left transition-transform duration-300"
+          style={{ transform: `scaleX(${pct / 100})`, background: `color-mix(in srgb, ${fillTone(windowTokens > 0 ? pct : NaN)} 28%, transparent)` }}
         />
         <span className="relative text-ink-soft">
           {formatContextTokens(used)}{windowTokens ? ` / ${!windowReported ? '~' : ''}${formatContextTokens(windowTokens)}` : ''}
@@ -161,8 +157,7 @@ const EFFORT_LABEL: Record<EffortLevel, string> = {
 
 /** Model-specific effort rungs on a compact slider beside the model picker. */
 export function EffortSlider({ modelId, onChanged }: { modelId?: string; onChanged?: () => void }) {
-  const settings = useStore((s) => s.settings);
-  const saved = settings?.effort ?? 'normal';
+  const saved = useStore((s) => s.settings?.effort) ?? 'normal';
   const levels = modelEffortLevels(modelId);
   const native = usesNativeEffort(modelId);
   const fallback = modelDefaultEffort(modelId);

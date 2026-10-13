@@ -153,6 +153,8 @@ const requests = {
     ],
   },
   purpose: { model: 'm', purpose: 'title', maxOutputTokens: 32, messages: [user('Name this chat')] },
+  // Haiku 5 takes effort natively and has a 128k output ceiling (#413).
+  'haiku-5-5-xhigh': { model: 'claude-haiku-5-5', effort: 'xhigh', temperature: 1, messages: [user('hi')] },
 };
 
 requests['cache-default'] = { model: 'm', system: 'reusable system', tools, messages: roundTrip };

@@ -137,9 +137,18 @@
   child instead, so the ring traces the whole panel.
 
   `--panel-ring-color` is the hook: set it per panel to show focus.
+
+  The two hooks do not inherit: only the ring reads them. Inherited, selecting
+  a wall window restyled every element in its transcript and composer (a few
+  hundred, twice per switch: the window losing the ring and the one gaining
+  it), which was most of a warm switch's style work.
 */
+@property --panel-ring-color { syntax: '*'; inherits: false; }
+@property --panel-ring-width { syntax: '*'; inherits: false; }
 @utility panel-ring {
   &::after {
+    --panel-ring-color: inherit;
+    --panel-ring-width: inherit;
     content: '';
     position: absolute;
     inset: 0;
@@ -736,9 +745,20 @@
   padding-left: 78px;
 }
 
-@utility titlebar-word {
-  @apply text-[13px] font-semibold tracking-tight;
-  color: var(--ink-soft);
+@utility titlebar-heading {
+  /* The current view's name beside the brand mark, the same size as every
+     other view's title (`view-title`) and well above the 10.5px version pill
+     that follows it, so the heading leads the row. */
+  @apply ml-3 shrink-0 truncate text-[24px] font-semibold tracking-tight;
+  line-height: 1.3;
+}
+
+@utility view-title {
+  /* Every view's page title (Agents off the desktop shell, Settings, Skills,
+     Workflows...), one size so moving between tabs doesn't jump. Matches
+     `titlebar-heading`. */
+  @apply text-[24px] font-semibold tracking-tight;
+  line-height: 1.3;
 }
 
 .developer-server-controls {
@@ -769,7 +789,7 @@
   min-height: 28px;
   margin-left: 10px;
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: 10.5px;
   white-space: nowrap;
   -webkit-app-region: no-drag;
 }
@@ -783,11 +803,11 @@
 
 .update-pill {
   display: inline-flex;
-  min-height: 24px;
+  min-height: 18px;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 0 9px;
+  padding: 0 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface-2);
@@ -796,7 +816,7 @@
 }
 
 .update-version {
-  min-width: 112px;
+  min-width: 104px;
   cursor: pointer;
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
@@ -1703,8 +1723,14 @@
 
 /* ---------- Command Center wall ---------- */
 
-/* The brand mark beside the wordmark in the desktop title bar. */
-.titlebar-mark { display: inline-block; vertical-align: -3px; margin-right: 6px; }
+/* The brand mark at the leading edge of the desktop title bar. BrandMark centres
+   the cat on its own ink, so centred in the bar it lines up with the heading's
+   capitals (top of the "A" to the baseline) with no nudge. It used to sit 4px
+   lower to make up for the old drawing riding high in its box. */
+.titlebar-mark { flex: none; display: block; color: var(--ink-soft); }
+/* Off macOS it sits straight above the rail's first icon: the 28px mark is
+   centred on the 64px rail's midline (14px strip padding + 4px = 18px = 32 - 14). */
+.titlebar:not(.titlebar-mac) .titlebar-mark { margin-left: 4px; }
 
 /* Everything waiting on a person, in one line above the wall, with a jump to each. */
 .wall-ribbon {
@@ -1756,7 +1782,7 @@
 .pr-deck-reveal { display: grid; grid-template-rows: 1fr; opacity: 1; transform: translateY(0); transition: grid-template-rows 240ms ease, opacity 180ms ease, transform 240ms ease; }
 .pr-action-deck[data-expanded=false] .pr-deck-reveal { grid-template-rows: 0fr; opacity: 0; transform: translateY(10px) scale(.98); }
 .pr-deck-clip { min-height: 0; overflow: hidden; }
-.pr-deck-list { max-height: 180px; overflow-y: auto; padding: 1px 0 2px; display: grid; gap: 4px; }
+.pr-deck-list { max-height: 180px; overflow-y: auto; padding: 1px 0 2px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .pr-deck-card { background: var(--paper); }
 .pr-deck-slot { transform-origin: bottom center; animation: pr-deck-pop 240ms ease-out both; }
 .pr-deck-slot[data-closing=true] { pointer-events: none; animation: pr-deck-retract 220ms ease-in both; }
@@ -1773,10 +1799,9 @@
 }
 .wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 12px; }
 .wall-workspace[data-dock-side='top'], .wall-workspace[data-dock-side='bottom'] { flex-direction: column; }
-.wall-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 0; overflow-y: auto; }
-/* A tall composer must not collapse the transcript wall out of view. Short
-   viewports scroll the column rather than allowing composer content to cover it. */
-.wall-column > .command-wall-layout { flex: 1 0 280px; }
+.wall-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 0; overflow: hidden; }
+/* The board viewport yields to the composer; its tall stage scrolls internally. */
+.wall-column > .command-wall-layout { flex: 1 1 0; min-height: 0; }
 /* The composer card paints the same --win surface as the chat windows; the
    panel around it stays transparent so no band shows below or behind it. */
 .wall-composer { position: relative; width: 75%; max-width: 100%; flex-shrink: 0; background: transparent; box-shadow: none; }
@@ -1786,25 +1811,43 @@
   --panel-ring-color: color-mix(in srgb, var(--accent) 60%, var(--line)) !important;
   box-shadow: 0 0 10px 0 color-mix(in srgb, var(--accent) 24%, transparent);
 }
-/* An agent's command log, bubbling out of the middle of its window's right
-   edge: anchored at the edge's midpoint and grown from there. */
-.agent-logs-bubble {
-  position: absolute; right: 12px; top: 50%; z-index: 30;
-  display: flex; flex-direction: column;
-  width: min(560px, calc(100% - 24px)); height: min(380px, calc(100% - 24px));
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: 14px;
-  background: var(--win, var(--surface)); overflow: hidden;
-  box-shadow: 0 18px 48px -18px rgb(0 0 0 / .55), 0 0 0 1px rgb(0 0 0 / .04);
-  transform: translateY(-50%); transform-origin: 100% 50%;
-  animation: agent-logs-bubble-in 200ms cubic-bezier(.22, 1.2, .36, 1);
+/* An agent's command log as a drawer of its own, out of its window's right
+   edge (CommandWall places it and moves the windows to its right over). It is
+   90% of the window's height and centred on it; its left side has no border
+   and sits one pixel over the window's edge, so the two read as one shape.
+   It slides out from behind the edge and is absorbed back into it on close. */
+.agent-logs-drawer {
+  --logs-ring: color-mix(in srgb, var(--accent) 35%, var(--line));
+  position: absolute; z-index: 25;
+  transition: left 260ms ease, top 260ms ease, width 260ms ease, height 260ms ease;
+  animation: agent-logs-drawer-out 300ms cubic-bezier(.22, 1, .36, 1) both;
 }
-.agent-logs-bubble-head { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 6px 8px 6px 10px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 500; }
-.agent-logs-bubble-body { position: relative; flex: 1; min-height: 0; }
-@keyframes agent-logs-bubble-in {
-  from { opacity: 0; transform: translateY(-50%) scale(.2, .35); }
-  to { opacity: 1; transform: translateY(-50%) scale(1); }
+.agent-logs-drawer[data-selected] { --logs-ring: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+.agent-logs-drawer[data-closing] { animation: agent-logs-drawer-in 220ms cubic-bezier(.55, 0, .75, .2) both; pointer-events: none; }
+.agent-logs-drawer-inner {
+  display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden;
+  background: var(--win, var(--surface));
+  border: 1px solid var(--logs-ring); border-left: 0;
+  border-radius: 0 var(--pane-radius, 12px) var(--pane-radius, 12px) 0;
+  box-shadow: 14px 0 32px -22px rgb(0 0 0 / .6);
 }
-@media (prefers-reduced-motion: reduce) { .agent-logs-bubble { animation: none; } }
+/* On a one-column wall it floats over the window's right side: a full card. */
+.agent-logs-drawer[data-overlay] { z-index: 30; }
+.agent-logs-drawer[data-overlay] .agent-logs-drawer-inner { border-left: 1px solid var(--logs-ring); border-radius: var(--pane-radius, 12px); box-shadow: 0 18px 48px -18px rgb(0 0 0 / .55); }
+.agent-logs-drawer-head { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 500; }
+.agent-logs-drawer-body { position: relative; flex: 1; min-height: 0; }
+/* The window gives up its right-hand rounding where the drawer joins it. */
+.command-wall-window[data-wall-logs-open] > .panel { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.command-wall-window[data-wall-logs-open] > .panel::after { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+@keyframes agent-logs-drawer-out {
+  from { clip-path: inset(0 100% 0 0); opacity: .4; }
+  to { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+@keyframes agent-logs-drawer-in {
+  from { clip-path: inset(0 0 0 0); opacity: 1; }
+  to { clip-path: inset(0 100% 0 0); opacity: .4; }
+}
+@media (prefers-reduced-motion: reduce) { .agent-logs-drawer, .agent-logs-drawer[data-closing] { animation: none; transition: none; } }
 /* The plan panel's toggle: a plan icon floating in the chat area's top-right
    corner, over the transcript (or beside the open panel's heading). */
 .plan-rail-toggle {
@@ -1862,6 +1905,9 @@
    beam, rocket and glow, just still, so a wall of busy agents left on screen
    behind another app stops costing the GPU. See appActivity.ts. */
 html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inactive] *::after { animation-play-state: paused !important; }
+/* One-shot motion is not a decoration: a wall drawer paused on its first
+   frame is fully clipped, and one paused while closing never unmounts. */
+html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !important; }
 .command-wall-window[data-wall-selected] .wall-num, .wall-composer[data-has-agent] .wall-num { background: var(--accent); color: var(--win); }
 .wall-layout-control { position: relative; display: inline-flex; align-items: center; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was
@@ -1886,9 +1932,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .wall-fixed-cells button.is-preview { border-color: var(--accent); background: var(--accent-soft); }
 .wall-layout-segments button:focus-visible, .wall-fixed-cells button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 767px) {
-  .wall-workspace { flex-direction: column; overflow-y: auto; }
-  .wall-workspace > .wall-agent-workspace { flex: 0 0 auto; min-height: 640px; }
-  .wall-column > .command-wall-layout { min-height: 280px; }
+  .wall-workspace { flex-direction: column; overflow: hidden; }
+  .wall-workspace > .wall-agent-workspace { flex: 1 1 0; min-height: 0; }
   .wall-workspace > .wall-dock { flex: 0 0 auto; width: 100%; max-height: 240px; }
 }
 /* The composer surface of a chat is as tall as its content; the message box keeps its own ceiling. */
@@ -1929,17 +1974,18 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .wall-composer-split::after { content: ""; width: 40px; height: 3px; border-radius: 3px; background: var(--line); transition: background var(--dur-fast) ease, width var(--dur-fast) ease; }
 .wall-composer-split:hover::after, .wall-composer-split:focus-visible::after { background: var(--accent); width: 56px; }
 .wall-composer-side:focus-visible, .wall-composer-split:focus-visible { outline: none; }
-.wall-composer > .wall-composer-body { display: flex; flex: 1; min-height: 0; overflow-y: auto; }
+.wall-composer > .wall-composer-body { display: flex; flex: 0 0 auto; min-height: 0; overflow: visible; }
 
-/* Bound every flex step. If controls exceed the panel, scroll the surface
-   instead of clipping the editor or letting it paint beneath the frame. */
-.wall-composer [data-chat-surface="composer"] { flex: 1; overflow: visible; }
-.wall-composer [data-chat-surface="composer"] > section { min-height: 0; overflow: visible; }
-.wall-composer [data-chat-surface="composer"] .composer-section { display: flex; flex: 1; min-height: 0; padding: 0; }
-.wall-composer .composer-column, .wall-composer .composer { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.wall-composer .composer-editor-wrap > [contenteditable] { flex: 1; min-height: 52px; height: 0 !important; max-height: none !important; overflow-y: auto; }
-.wall-composer .composer-editing-body { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.wall-composer .composer-editor-wrap { display: flex; flex-direction: column; flex: 1; min-height: 52px; }
+/* The shell never scrolls or constrains its rows. Only the measured textbox
+   owns vertical scrolling; its cap leaves space for the board above/below. */
+.wall-composer [data-chat-surface="composer"] { flex: 0 0 auto; width: 100%; height: auto; overflow: visible; }
+.wall-composer [data-chat-surface="composer"] > section { flex: 0 0 auto; min-height: 0; overflow: visible; }
+.wall-composer [data-chat-surface="composer"] .composer-section { display: flex; flex: 0 0 auto; min-height: 0; padding: 0; }
+.wall-composer .composer-column, .wall-composer .composer { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; }
+/* COMPOSER_TWO_LINES: two 20px lines of text-sm plus py-3. */
+.wall-composer .composer-editor-wrap > [contenteditable] { flex: 0 0 auto; min-height: 64px; max-height: none; overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; }
+.wall-composer .composer-editing-body { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; }
+.wall-composer .composer-editor-wrap { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 64px; }
 .wall-composer .composer > :not(.composer-editing-body), .wall-composer .composer-editing-body > :not(.composer-editor-wrap) { flex-shrink: 0; }
 .wall-layout-segments button { display: inline-flex; align-items: center; gap: 6px; }
 
@@ -1963,8 +2009,12 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-suggestions-chip:hover, .composer-suggestions-chip.is-open { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); color: var(--ink); }
 .composer-suggestions-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* The composer row: the composer at its docked alignment. */
-.wall-composer-row { position: relative; display: flex; align-items: stretch; gap: 20px; flex-shrink: 0; min-width: 0; padding-inline: 16px; }
+/* The composer row: the composer at its docked alignment. Its inset matches
+   the wall's own (14px padding, plus the scrollbar gutter the wall always
+   reserves on the right: --wall-gutter, the 10px of ::-webkit-scrollbar), so a
+   composer stretched to the limit lines up with the windows edge to edge, and
+   a centred one is centred under them. */
+.wall-composer-row { --wall-gutter: 10px; position: relative; display: flex; align-items: stretch; gap: 20px; flex-shrink: 0; min-width: 0; padding-inline: 14px calc(14px + var(--wall-gutter)); }
 .wall-composer-row[data-dock$='-left'] { justify-content: flex-start; }
 .wall-composer-row[data-dock$='-center'] { justify-content: center; }
 .wall-composer-row[data-dock$='-right'] { justify-content: flex-end; }

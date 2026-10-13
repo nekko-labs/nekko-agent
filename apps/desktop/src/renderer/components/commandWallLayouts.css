@@ -19,10 +19,28 @@
   transition: left 260ms ease, top 260ms ease, width 260ms ease, height 260ms ease;
 }
 .command-wall-window > .panel { min-width: 0; min-height: 0; overflow: hidden; }
+/* A Focus window that is not the hero: kept laid out under it, never drawn. */
+.command-wall-window[data-wall-parked] { content-visibility: hidden; pointer-events: none; transition: none; }
+/* pointer-events inherits: without this, parking a window restyles its whole subtree. */
+:where(.command-wall-window) > :where(*) { pointer-events: auto; }
+/* Leaving Focus, a parked window jumps to its place (CommandWall says why). */
+.command-wall-window[data-wall-snap] { transition: none; }
 .command-wall-content { position: absolute; inset: 0; display: flex; }
 .command-wall-primary { position: relative; flex: 1; min-width: 0; min-height: 0; }
 /* Only companions fold; primary chat/terminal bodies never hide with folded. */
-.command-wall-companions { display: none; width: 38%; min-width: 0; overflow: auto; gap: 8px; }
+.command-wall-companions { display: none; width: var(--companion-share, 38%); flex-shrink: 0; min-width: 0; overflow: auto; gap: 8px; }
+/* The drag handle between an agent and its companions: a thin hit area that
+   shows a line on hover, focus and drag. */
+.command-wall-companion-resizer { position: relative; flex: 0 0 6px; margin: 0 -3px; z-index: 2; cursor: col-resize; touch-action: none; }
+.command-wall-companion-resizer::after { content: ''; position: absolute; top: 8px; bottom: 8px; left: 2px; width: 2px; border-radius: 2px; background: transparent; transition: background 120ms ease; }
+.command-wall-companion-resizer:hover::after, .command-wall-companion-resizer:focus-visible::after, body.wall-resizing .command-wall-companion-resizer::after { background: var(--accent); }
+.command-wall-companion-resizer:focus-visible { outline: none; }
+body.wall-resizing, body.wall-resizing * { cursor: col-resize !important; user-select: none !important; }
+/* A webview swallows pointer events mid-drag; let the drag see them. */
+body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
+.command-wall-companion-close { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: 7px; color: var(--ink-faint); }
+.command-wall-companion-close:hover { background: var(--surface-2); color: var(--ink); }
+.command-wall-companion-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .command-wall-content[data-companions-visible] .command-wall-companions { display: flex; flex-direction: column; }
 .command-wall-companion { display: flex; flex-direction: column; flex: 1 0 240px; min-height: 240px; min-width: 0; border-left: 1px solid var(--line); }
 .command-wall-companion > header { padding: 6px 8px; font-size: 11px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -67,6 +85,36 @@
 .wall-empty-bat { transform-box: fill-box; transform-origin: center; animation: wall-empty-bat 3.2s ease-in-out infinite; }
 @keyframes wall-empty-bat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 @media (prefers-reduced-motion: reduce) { .wall-empty-bat { animation: none; } }
+/* Grid's unfilled squares: a faint hatch so the grid's shape reads without
+   competing with the windows. Under the windows, never a target. */
+.command-wall-empty-cell {
+  position: absolute;
+  pointer-events: none;
+  border-radius: var(--pane-radius);
+  border: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink) 4%, transparent) 0 1px, transparent 1px 9px);
+}
+/* Dynamic: thin strips along each side of the board accept a dragged window,
+   with a preview of the column or row it would become. */
+.command-wall-edge { position: absolute; z-index: 25; }
+.command-wall-edge[data-edge="up"] { top: -14px; left: 0; right: 0; height: 30px; }
+.command-wall-edge[data-edge="down"] { bottom: -14px; left: 0; right: 0; height: 30px; }
+.command-wall-edge[data-edge="left"] { left: -14px; top: 0; bottom: 0; width: 30px; }
+.command-wall-edge[data-edge="right"] { right: -14px; top: 0; bottom: 0; width: 30px; }
+.command-wall-edge::after { content: ''; position: absolute; border-radius: 3px; background: color-mix(in srgb, var(--accent) 35%, transparent); opacity: .45; transition: opacity 120ms ease, background 120ms ease; }
+.command-wall-edge[data-edge="up"]::after, .command-wall-edge[data-edge="down"]::after { left: 15%; right: 15%; top: 13px; height: 4px; }
+.command-wall-edge[data-edge="left"]::after, .command-wall-edge[data-edge="right"]::after { top: 15%; bottom: 15%; left: 13px; width: 4px; }
+.command-wall-edge[data-over]::after { opacity: 1; background: var(--accent); }
+.command-wall-edge-preview {
+  position: absolute; z-index: 24; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--pane-radius);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--accent); font-size: 12px; font-weight: 500;
+  transition: left 160ms ease, top 160ms ease, width 160ms ease, height 160ms ease;
+}
+@media (prefers-reduced-motion: reduce) { .command-wall-edge::after, .command-wall-edge-preview { transition: none; } }
 .command-wall-divider-box { position: absolute; pointer-events: none; }
 .command-wall-divider-box > [role="separator"] {
   position: absolute;
@@ -96,7 +144,7 @@
 @keyframes wall-liquid-border { 0%, 100% { border-radius: 22px 34px 24px 30px; } 50% { border-radius: 34px 20px 32px 22px; } }
 @media (prefers-reduced-motion: reduce) { .command-wall-add { animation: none; } }
 .command-wall-add-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:14px; background:var(--accent-soft); color:var(--accent); font-size:24px; }
-.command-wall-companion > header { display:flex; gap:8px; justify-content:space-between; background:var(--surface); }
+.command-wall-companion > header { display:flex; gap:8px; align-items:center; justify-content:space-between; padding:3px 4px 3px 10px; background:var(--surface); }
 .command-wall-companion > header span { overflow:hidden; text-overflow:ellipsis; }
 .command-wall-deck-window .command-wall-content { visibility:hidden; } .command-wall-card { position:absolute; inset:0; display:flex; flex-direction:column; gap:8px; padding:12px; text-align:left; color:var(--ink-soft); font-size:12px; } .command-wall-card span { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; } .command-wall-card small { margin-top:auto; color:var(--ink-faint); }
 
@@ -119,8 +167,10 @@
 .wall-focus-agent[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .command-wall-content[data-focus-chat] .command-wall-primary { flex: 1 1 100%; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1); }
 .command-wall-content[data-focus-chat] .command-wall-companions { display: flex; flex: 0 0 0%; width: 0; opacity: 0; overflow: hidden; transform: translateX(-18px) scale(.94); transform-origin: left center; border-radius: 28px; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1), opacity 240ms ease, transform 360ms cubic-bezier(.22, 1, .36, 1), border-radius 360ms ease; }
-.command-wall-content[data-focus-chat][data-companions-visible] .command-wall-primary { flex-basis: 62%; }
-.command-wall-content[data-focus-chat][data-companions-visible] .command-wall-companions { flex-basis: 38%; opacity: 1; transform: translateX(0) scale(1); border-radius: 20px 0 0 20px; }
+.command-wall-content[data-focus-chat][data-companions-visible] .command-wall-primary { flex-basis: auto; }
+/* No transition while dragging the column: it would lag the pointer. */
+body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary, body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-companions { transition: none; }
+.command-wall-content[data-focus-chat][data-companions-visible] .command-wall-companions { flex-basis: var(--companion-share, 38%); opacity: 1; transform: translateX(0) scale(1); border-radius: 20px 0 0 20px; }
 .command-wall-content[data-focus-chat] .command-wall-companion { background: var(--surface); border-radius: 20px 0 0 20px; }
 @media (max-width: 639px) {
   .command-wall-content[data-focus-chat][data-companions-visible] .command-wall-primary { flex-basis: 65%; }

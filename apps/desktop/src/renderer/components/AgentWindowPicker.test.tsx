@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
   activeProjectId: 'f2' as string | null,
   settings: { workspaces: [{ id: 'f1', name: 'one', path: '/one' }, { id: 'f2', name: 'two', path: '/two' }] } as Record<string, unknown> | null,
 }));
-vi.mock('../store.js', () => ({ useStore: (select: (s: typeof state) => unknown) => select(state) }));
+vi.mock('../store.js', () => ({ useStore: Object.assign((select: (s: typeof state) => unknown) => select(state), { getState: () => ({ refreshSettings: vi.fn(async () => {}), pushToast: vi.fn() }) }) }));
 vi.mock('./agent-console/ModelPicker.js', () => ({ ModelPicker: () => null }));
 vi.mock('./ChatMetrics.js', () => ({ EffortSlider: () => null }));
 vi.mock('react', async (original) => {
@@ -135,6 +135,29 @@ describe('AgentWindowPicker', () => {
     const view = picker('chat', null, false, null, vi.fn(async () => {}), false, []);
     await view.button('Start').props.onClick();
     expect(view.onAdd).toHaveBeenCalledWith(expect.objectContaining({ workspaceIds: [] }));
+  });
+
+  it('starts with the saved default folders, in order, ignoring folders that are gone', async () => {
+    const saved = state.settings;
+    state.settings = { ...saved, defaultWorkspaceIds: ['gone', 'f1', 'f2'] };
+    try {
+      const view = picker('chat');
+      await view.button('Start').props.onClick();
+      expect(view.onAdd).toHaveBeenCalledWith(expect.objectContaining({ workspaceIds: ['f1', 'f2'] }));
+      expect(view.elements.some((e) => e.type === 'span' && e.props.className === 'agent-window-picker__default-note')).toBe(true);
+      expect(view.button('Clear default')).toBeDefined();
+    } finally { state.settings = saved; }
+  });
+
+  it('saves the checked folders as the default', async () => {
+    const updateSettings = vi.fn(async () => ({}));
+    vi.stubGlobal('window', { nekko: { updateSettings } });
+    try {
+      const view = picker('chat', null, false, null, vi.fn(async () => {}), false, ['f2', 'f1']);
+      view.button('Set these 2 folders as default').props.onClick();
+      expect(updateSettings).toHaveBeenCalledWith({ defaultWorkspaceIds: ['f2', 'f1'] });
+      expect(picker('chat', null, false, null, vi.fn(async () => {}), false, ['f1']).button('Set this folder as default')).toBeDefined();
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('cannot start without any model available', () => {

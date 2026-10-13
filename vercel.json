@@ -28,6 +28,11 @@
   ],
   "redirects": [
     {
+      "source": "/docs/getting-started",
+      "destination": "/docs",
+      "permanent": true
+    },
+    {
       "source": "/:path*",
       "has": [
         {

@@ -39,7 +39,6 @@ export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal'];
 export type { WallLayout, WallLayoutMode, WallDock, WallDockSide, WallDockPanel } from '@nekko-agent/shared';
 export { DEFAULT_WALL_LAYOUT, DEFAULT_WALL_DOCK };
 export const DOCK_PANELS: Array<{ key: WallDockPanel; label: string; blurb: string }> = [
-  { key: 'vitals', label: 'Vitals', blurb: 'Agents working and waiting on you' },
   { key: 'hardware', label: 'Hardware', blurb: 'Local resource monitors' },
   { key: 'utilization', label: 'Utilization', blurb: 'Tokens and model usage' },
   { key: 'budget', label: 'Budget', blurb: 'Monthly spend against your advisory budget' },
@@ -65,12 +64,38 @@ export interface InsightsPrefs {
 
 export type ComposerSide = 'top' | 'bottom';
 export type ComposerAlign = 'left' | 'center' | 'right';
-/** Where the wall's one composer sits: above or below the windows, to the left, centred, or to the right. */
+/**
+ * Where the wall's one composer sits (above or below the windows, to the left,
+ * centred, or to the right) and the size it was dragged to. Width and height
+ * are kept with the rest of the wall so a resize survives leaving the page and
+ * restarting the app; absent means the default size.
+ */
 export interface ComposerDock {
   side: ComposerSide;
   align: ComposerAlign;
+  /** Dragged width in CSS pixels, clamped to the wall's width when drawn. */
+  width?: number;
+  /** Dragged height in CSS pixels, clamped to the space available when drawn. */
+  height?: number;
 }
 export const DEFAULT_COMPOSER_DOCK: ComposerDock = { side: 'bottom', align: 'center' };
+
+/**
+ * The widest the composer can be: as wide as the wall's windows, edge to edge.
+ * The composer row and the wall pad their content by different amounts (the
+ * wall's padding includes a reserved scrollbar gutter), so the row's own width
+ * is too wide by a few pixels; measure the windows' stage instead when it is
+ * there. Falls back to the row's content box, then a guess.
+ */
+export function composerMaxWidth(panel: HTMLElement | null): number {
+  const row = panel?.parentElement;
+  const stage = panel?.closest('.wall-column')?.querySelector<HTMLElement>('.command-wall-stage');
+  const stageWidth = stage?.getBoundingClientRect().width ?? 0;
+  if (stageWidth > 0) return Math.floor(stageWidth);
+  if (!row) return 1000;
+  const style = getComputedStyle(row);
+  return Math.floor(row.clientWidth - parseFloat(style.paddingLeft || '0') - parseFloat(style.paddingRight || '0'));
+}
 
 export interface CommandWallState {
   layout: WallLayout;
@@ -160,11 +185,20 @@ export function nextAgent(root: WbNode | null, current: string | null, step: 1 |
   return ids[(i + step + ids.length) % ids.length];
 }
 
-function readDock(raw: unknown): ComposerDock {
+/** A saved size: a finite pixel count in a sane range, or nothing. */
+function readSize(raw: unknown, min: number, max: number): number | undefined {
+  return typeof raw === 'number' && Number.isFinite(raw) && raw >= min && raw <= max ? Math.round(raw) : undefined;
+}
+
+export function readDock(raw: unknown): ComposerDock {
   const d = raw && typeof raw === 'object' ? (raw as Partial<ComposerDock>) : {};
+  const width = readSize(d.width, 120, 20000);
+  const height = readSize(d.height, 60, 20000);
   return {
     side: d.side === 'top' ? 'top' : 'bottom',
     align: d.align === 'left' || d.align === 'right' ? d.align : 'center',
+    ...(width === undefined ? {} : { width }),
+    ...(height === undefined ? {} : { height }),
   };
 }
 

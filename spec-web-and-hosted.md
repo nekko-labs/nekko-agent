@@ -109,6 +109,8 @@ The web server grants file + shell access to whoever can reach it. Therefore:
 
 ## 4. Nekko Agent Cloud (paid, hosted)
 
+> **Engine shape, decided 2026-10-13 (Philip):** when the TS engine is retired (PF14), Cloud runs on **one shared, multi-tenant `nekkod`**, not a daemon per account; per-account daemons stay an option if isolation or load ever demands them. Today Cloud still runs one in-process TS host per account. See PF14 step 4 in [TASKS.md](TASKS.md).
+
 The managed edition. Everything the OSS app does, plus convenience that only a hosted service can provide, without giving up local execution or privacy.
 
 ### 4.1 What it adds over self-hosting

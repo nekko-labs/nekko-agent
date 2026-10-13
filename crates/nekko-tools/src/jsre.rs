@@ -114,10 +114,54 @@ impl JsRegex {
         self.re.find_from_ucs2(text, 0).next().map(|m| m.range())
     }
 
+    /// `re.exec(text)` with its groups: index 0 is the whole match, a group
+    /// that took no part is `None`.
+    pub fn exec(&self, text: &[u16]) -> Option<Vec<Option<Range<usize>>>> {
+        let m = if self.isolated && text.iter().any(|&c| isolate(c) != c) {
+            let swapped: Vec<u16> = text.iter().map(|&c| isolate(c)).collect();
+            self.re.find_from_ucs2(&swapped, 0).next()
+        } else {
+            self.re.find_from_ucs2(text, 0).next()
+        }?;
+        Some(std::iter::once(Some(m.range())).chain(m.captures.iter().cloned()).collect())
+    }
+
     /// `re.test(text)`.
     pub fn test(&self, text: &str) -> bool {
         let units: Vec<u16> = text.encode_utf16().collect();
         self.find(&units).is_some()
+    }
+
+    /// `text.replace(/re/g, fn)` over UTF-16 code units: every match, left to
+    /// right, replaced by what `f` returns for its groups (index 0 is the
+    /// whole match; a group that took no part is `None`, as `undefined`).
+    pub fn replace_all(&self, text: &[u16], mut f: impl FnMut(&[Option<&[u16]>]) -> Vec<u16>) -> Vec<u16> {
+        let swapped: Option<Vec<u16>> = (self.isolated && text.iter().any(|&c| isolate(c) != c))
+            .then(|| text.iter().map(|&c| isolate(c)).collect());
+        let haystack = swapped.as_deref().unwrap_or(text);
+        let mut out = Vec::with_capacity(text.len());
+        let mut last = 0;
+        for m in self.re.find_from_ucs2(haystack, 0) {
+            let range = m.range();
+            if range.start < last {
+                continue;
+            }
+            let groups: Vec<Option<&[u16]>> = std::iter::once(Some(range.clone()))
+                .chain(m.captures.iter().cloned())
+                .map(|g| g.map(|r| &text[r]))
+                .collect();
+            out.extend_from_slice(&text[last..range.start]);
+            out.extend(f(&groups));
+            last = range.end;
+        }
+        out.extend_from_slice(&text[last..]);
+        out
+    }
+
+    /// [`JsRegex::replace_all`] with a fixed replacement (no `$` patterns).
+    pub fn replace_all_with(&self, text: &[u16], replacement: &str) -> Vec<u16> {
+        let rep: Vec<u16> = replacement.encode_utf16().collect();
+        self.replace_all(text, |_| rep.clone())
     }
 }
 

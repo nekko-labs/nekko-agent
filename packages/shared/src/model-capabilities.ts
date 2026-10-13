@@ -40,13 +40,13 @@ function atLeast(c: ClaudeId, major: number, minor: number): boolean {
  * A Claude model's context window, or undefined when the id is not Claude.
  *
  * Haiku 4.5 and everything before the 4.6 generation hold 200k; Opus and Sonnet
- * 4.6 onwards, and Fable and Mythos, hold 1M.
+ * 4.6 onwards, Haiku 5 onwards, and Fable and Mythos, hold 1M.
  */
 export function claudeContextWindow(modelId: string | undefined): number | undefined {
   const c = parseClaudeModel(modelId);
   if (!c) return undefined;
   if (c.family === 'fable' || c.family === 'mythos') return 1_000_000;
-  if (c.family === 'haiku') return 200_000;
+  if (c.family === 'haiku') return c.major >= 5 ? 1_000_000 : 200_000;
   return atLeast(c, 4, 6) ? 1_000_000 : 200_000;
 }
 
@@ -59,7 +59,6 @@ export function usesNativeEffort(modelId: string | undefined): boolean {
   const c = parseClaudeModel(modelId);
   if (!c) return false;
   if (c.family === 'fable' || c.family === 'mythos') return true;
-  if (c.family === 'haiku') return false;
   return atLeast(c, 4, 7);
 }
 
@@ -148,6 +147,7 @@ export function claudeMaxOutputTokens(modelId: string | undefined): number {
   const c = parseClaudeModel(modelId);
   if (!c) return 32_000;
   if (c.family === 'fable' || c.family === 'mythos') return 64_000;
+  if (c.family === 'haiku' && c.major >= 5) return 128_000;
   if (c.major >= 5) return 64_000;
   if (c.family === 'haiku') return c.major >= 4 ? 64_000 : c.minor >= 5 ? 8_192 : 4_096;
   if (c.family === 'sonnet') return c.major >= 4 || atLeast(c, 3, 7) ? 64_000 : 8_192;

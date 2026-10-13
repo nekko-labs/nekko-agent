@@ -24,6 +24,9 @@ permissions:
   pull-requests: write
   # Needed to dispatch version-release.yml once the PR lands.
   actions: write
+  # Needed to close the PR's linked issues: GitHub skips closing keywords on
+  # merges made with GITHUB_TOKEN.
+  issues: write
 
 jobs:
   auto-merge:
@@ -49,6 +52,19 @@ jobs:
             state=$(gh pr view "$PR_URL" --json state -q .state 2>/dev/null || echo UNKNOWN)
             case "$state" in
               MERGED)
+                # Closing keywords do nothing on a GITHUB_TOKEN merge, so close
+                # linked issues here. Failures warn; the release still dispatches.
+                issues=$(gh pr view "$PR_URL" --json closingIssuesReferences \
+                  -q ".closingIssuesReferences[] | select(\"\(.repository.owner.login)/\(.repository.name)\" == \"$GH_REPO\") | .number") \
+                  || echo "::warning::Could not read linked issues for $PR_URL."
+
+                for n in $issues; do
+                  issue_state=$(gh issue view "$n" --repo "$GH_REPO" --json state -q .state || echo UNKNOWN)
+                  [ "$issue_state" = OPEN ] || continue
+                  gh issue close "$n" --repo "$GH_REPO" --reason completed --comment "Fixed in #$PR_NUMBER." \
+                    || echo "::warning::Could not close #$n."
+                done
+
                 gh workflow run version-release.yml --repo "$GH_REPO" --ref main
                 echo "Merged. Dispatched version-release for $PR_URL"
                 exit 0
@@ -64,6 +80,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           # This job never checks out the repo, so gh has no git remote to infer
           # from. `gh pr view` survives that because it is given a full URL;
           # `gh workflow run` does not, and died with "not a git repository".

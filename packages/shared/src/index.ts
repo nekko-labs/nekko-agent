@@ -4,6 +4,7 @@
  */
 
 export * from './brand-env.js';
+export * from './platform-support.js';
 export * from './voice.js';
 export * from './models.js';
 export * from './model-availability.js';

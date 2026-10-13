@@ -1,10 +1,14 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
-import { basename, join, resolve, relative, sep } from 'node:path';
+import { cpSync, existsSync, mkdirSync, realpathSync, writeFileSync, unlinkSync } from 'node:fs';
+import { basename, join, resolve, relative, sep, isAbsolute } from 'node:path';
 import type { AppSettings, ChatWorktreeInfo, Session, WorkspaceFolder } from '@nekko-agent/shared';
 import { getSessionWorkspaceIds } from '@nekko-agent/shared';
 
 type Checkout = NonNullable<Session['gitWorktrees']>[string];
+
+function stackNotice(parent: NonNullable<Session['gitStackParent']>): string {
+  return `This chat builds on ${parent.url}, branch ${parent.branch}, committed snapshot ${parent.sha}. Create the dependent PR against ${parent.branch}; gh pr create uses this configured base. After publishing, use Link stack in the PR panel to register it with GitHub. Recheck the parent before publishing; if it changes or merges, explicitly rebase this branch when safe. Never automatically reset other worktrees or force push.`;
+}
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe', windowsHide: true, timeout: 30_000, maxBuffer: 16 * 1024 * 1024 }).trim();
@@ -15,7 +19,10 @@ function gitOk(cwd: string, args: string[]): boolean {
 }
 
 // Windows paths compare case-insensitively; Git reports them with forward slashes.
-const norm = (p: string) => process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p);
+function diskPath(p: string): string {
+  try { return realpathSync.native(p); } catch { return resolve(p); }
+}
+const norm = (p: string) => process.platform === 'win32' ? diskPath(p).toLowerCase() : diskPath(p);
 
 /**
  * The words a checkout's folder and branch are made of when the chat has no
@@ -74,9 +81,15 @@ export function prepareChatWorktrees(session: Session, settings: AppSettings): A
   session.gitWorktrees ??= {};
   const created = restoreRemovedWorktrees(session);
   for (const id of getSessionWorkspaceIds(session)) {
-    if (session.gitWorktrees[id]) continue;
     const folder = settings.workspaces.find((w) => w.id === id);
     if (!folder) continue;
+    const saved = session.gitWorktrees[id];
+    if (saved) {
+      const sub = relative(diskPath(saved.sourceRoot), diskPath(folder.path));
+      if (sub === '..' || sub.startsWith('..' + sep) || isAbsolute(sub)) throw new Error('The configured folder no longer belongs to this chat worktree.');
+      saved.path = join(saved.root, sub);
+      continue;
+    }
     // Distinguish ordinary folders from Git failures; a broken Git checkout must not silently run shared.
     let root: string;
     try { root = git(folder.path, ['rev-parse', '--show-toplevel']); }
@@ -85,12 +98,14 @@ export function prepareChatWorktrees(session: Session, settings: AppSettings): A
       if (/not a git repository/i.test(message)) continue;
       throw new Error(`Could not inspect Git project ${folder.name}: ${message}`);
     }
-    const existing = Object.values(session.gitWorktrees).find((w) => resolve(w.sourceRoot) === resolve(root));
+    const existing = Object.values(session.gitWorktrees).find((w) => norm(w.sourceRoot) === norm(root));
     if (existing) {
-      session.gitWorktrees[id] = { ...existing, path: join(existing.root, relative(root, folder.path)) };
+      session.gitWorktrees[id] = { ...existing, path: join(existing.root, relative(diskPath(root), diskPath(folder.path))) };
       continue;
     }
     const dirty = !!git(root, ['status', '--porcelain']);
+    const parent = session.gitStackParent?.workspaceId === id ? session.gitStackParent : undefined;
+    if (parent && !/^[a-f0-9]{40,64}$/i.test(parent.sha)) throw new Error('Invalid parent PR commit. Start the stacked chat again.');
     const common = resolve(root, git(root, ['rev-parse', '--git-common-dir']));
     const home = join(common, 'nekko-worktrees');
     const name = worktreeName(session, (n) => existsSync(join(home, n)) || gitOk(root, ['rev-parse', '--verify', '--quiet', `refs/heads/nekko/${n}`]));
@@ -99,8 +114,9 @@ export function prepareChatWorktrees(session: Session, settings: AppSettings): A
     mkdirSync(home, { recursive: true });
     let copied: string[] = [];
     try {
-      git(root, ['worktree', 'add', '-b', branch, target, 'HEAD']);
-      if (dirty && settings.gitManagement?.baseline === 'local-changes') {
+      git(root, ['worktree', 'add', '-b', branch, target, parent?.sha ?? 'HEAD']);
+      if (parent) git(target, ['config', `branch.${branch}.gh-merge-base`, parent.branch]);
+      if (!parent && dirty && settings.gitManagement?.baseline === 'local-changes') {
         const patch = execFileSync('git', ['diff', '--binary', 'HEAD'], { cwd: root, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
         if (patch.length) {
           const patchPath = join(common, 'nekko-worktrees', `${session.id}.patch`);
@@ -113,13 +129,15 @@ export function prepareChatWorktrees(session: Session, settings: AppSettings): A
     } catch (error) {
       throw new Error(`Could not prepare isolated checkout for ${folder.name}. No shared-checkout fallback was used: ${String(error)}`);
     }
-    const base = dirty
+    const base = parent
+      ? stackNotice(parent)
+      : dirty
       ? settings.gitManagement?.baseline === 'local-changes'
         ? 'This chat uses an isolated worktree with tracked local edits copied in. Untracked files were not copied.'
         : 'This chat starts in an isolated worktree from committed HEAD. Existing local changes are not included.'
       : 'This chat uses an isolated Git worktree from committed HEAD.';
     const checkout: Checkout = {
-      sourceRoot: root, root: target, path: join(target, relative(root, folder.path)), branch,
+      sourceRoot: root, root: target, path: join(target, relative(diskPath(root), diskPath(folder.path))), branch,
       notice: copied.length ? `${base} Copied from .worktreeinclude: ${copied.join(', ')}.` : base,
     };
     session.gitWorktrees[id] = checkout;
@@ -151,6 +169,7 @@ function restoreRemovedWorktrees(session: Session): Array<{ id: string; checkout
         git(sourceRoot, ['worktree', 'add', root, branch]);
         notice = `This chat's worktree had been removed; it was restored from its branch ${branch}.`;
       } else {
+        if (session.gitStackParent) throw new Error('The stacked chat branch was removed. Start a new continuation from the parent PR to avoid losing its dependency.');
         git(sourceRoot, ['worktree', 'add', '-b', branch, root, 'HEAD']);
         notice = `This chat's worktree and branch had been removed; it continues on ${branch}, freshly created from committed HEAD.`;
       }
@@ -158,6 +177,7 @@ function restoreRemovedWorktrees(session: Session): Array<{ id: string; checkout
       throw new Error(`Could not restore this chat's worktree at ${root}. No shared-checkout fallback was used: ${String(error)}`);
     }
     const copied = copyWorktreeIncludes(sourceRoot, root);
+    if (session.gitStackParent) notice += ` ${stackNotice(session.gitStackParent)}`;
     if (copied.length) notice += ` Copied from .worktreeinclude: ${copied.join(', ')}.`;
     for (const [, w] of entries) if (w.root === root) w.notice = notice;
     restored.push({ id: first[0], checkout: first[1] });

@@ -7,6 +7,9 @@ import { parseSSE } from './sse.js';
 import { httpError } from './errors.js';
 import { DecodeClock } from './decode-clock.js';
 
+/** A model list that has not answered in this long is from a server that is not there. */
+export const LIST_TIMEOUT_MS = 5000;
+
 /**
  * Client for any OpenAI-compatible /chat/completions endpoint. Covers OpenAI,
  * OpenRouter, LM Studio, vLLM, and generic openai-compat servers, they only
@@ -43,6 +46,9 @@ export class OpenAICompatProvider implements Provider {
   }
 
   async listModels(): Promise<ModelInfo[]> {
+    // A model list is metadata: a machine that is off (a LAN box, a VPN peer)
+    // should read as unreachable in seconds, not hold the picker for the OS
+    // connect timeout.
     // LM Studio's native REST API (/api/v0/models) reports per-model load state,
     // which the OpenAI-compatible /v1/models route does not. Prefer it for LM
     // Studio so the Models page can show what's loaded; fall back to /v1/models.
@@ -50,7 +56,7 @@ export class OpenAICompatProvider implements Provider {
       const lm = await this.lmStudioModels().catch(() => null);
       if (lm) return lm;
     }
-    const res = await fetch(`${this.base()}/models`, { headers: this.headers() });
+    const res = await fetch(`${this.base()}/models`, { headers: this.headers(), signal: AbortSignal.timeout(LIST_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`listModels ${res.status}: ${extractApiError(await res.text().catch(() => ''))}`);
     const json = (await res.json()) as {
       data?: Array<{
@@ -104,7 +110,7 @@ export class OpenAICompatProvider implements Provider {
   /** LM Studio native model list with load state (`/api/v0/models`). */
   private async lmStudioModels(): Promise<ModelInfo[]> {
     const root = this.base().replace(/\/v1$/, '');
-    const res = await fetch(`${root}/api/v0/models`, { headers: this.headers() });
+    const res = await fetch(`${root}/api/v0/models`, { headers: this.headers(), signal: AbortSignal.timeout(LIST_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`lmstudio models ${res.status}`);
     const json = (await res.json()) as {
       data?: Array<{ id: string; state?: string; loaded_context_length?: number; max_context_length?: number }>;
@@ -121,12 +127,12 @@ export class OpenAICompatProvider implements Provider {
   async test(): Promise<{ ok: boolean; message: string }> {
     try {
       // OpenRouter's /key endpoint answers with the key's label and remaining
-      // credits — a real auth check, unlike /models which is public there.
+      // credits: a real auth check, unlike /models which is public there.
       if (this.config.kind === 'openrouter') {
         if (!this.config.apiKey) return { ok: false, message: 'Paste an API key or sign in with OpenRouter first.' };
         const res = await fetch(`${this.base()}/key`, { headers: this.headers() });
         if (res.status === 401 || res.status === 403) {
-          return { ok: false, message: 'OpenRouter rejected this key — check it or regenerate it.' };
+          return { ok: false, message: 'OpenRouter rejected this key. Check it or regenerate it.' };
         }
         if (!res.ok) return { ok: false, message: `OpenRouter answered HTTP ${res.status}.` };
         const json = (await res.json().catch(() => null)) as {
@@ -136,7 +142,7 @@ export class OpenAICompatProvider implements Provider {
         const remaining = d?.limit_remaining ?? (d?.limit != null && d?.usage != null ? d.limit - d.usage : null);
         return {
           ok: true,
-          message: `Connected${remaining != null ? ` — $${Math.max(0, remaining).toFixed(2)} left` : ' — unlimited'}`,
+          message: `Connected${remaining != null ? `, $${Math.max(0, remaining).toFixed(2)} left` : ', unlimited'}`,
         };
       }
       const res = await fetch(`${this.base()}/models`, { headers: this.headers() });

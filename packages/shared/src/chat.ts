@@ -150,6 +150,8 @@ export interface Session {
   executionMode?: ExecutionMode;
   sandbox?: SandboxIdentity;
   gitIsolation?: boolean;
+  /** Explicit dependent work, pinned when Continue as stacked PR is selected. */
+  gitStackParent?: { workspaceId: string; url: string; branch: string; sha: string };
   gitWorktrees?: Record<string, { sourceRoot: string; root: string; path: string; branch: string; notice: string }>;
   /** Additional context folders for this chat; workspaceId remains primary. */
   supportingWorkspaceIds?: string[];

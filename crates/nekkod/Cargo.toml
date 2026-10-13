@@ -12,25 +12,43 @@ publish.workspace = true
 cuda = ["nekko-decide/cuda"]
 
 [dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 anyhow.workspace = true
 axum.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
+icu_normalizer = "2"
 nekko-agent = { path = "../nekko-agent" }
+nekko-automation = { path = "../nekko-automation" }
 nekko-chat = { path = "../nekko-chat" }
+nekko-connectors = { path = "../nekko-connectors" }
+nekko-context = { path = "../nekko-context" }
 nekko-decide = { path = "../nekko-decide" }
+nekko-engine = { path = "../nekko-engine" }
 nekko-infer = { path = "../nekko-infer" }
 nekko-js = { path = "../nekko-js" }
 nekko-loop = { path = "../nekko-loop" }
+nekko-oauth = { path = "../nekko-oauth" }
+nekko-settings = { path = "../nekko-settings" }
+nekko-remote = { path = "../nekko-remote" }
+nekko-machine = { path = "../nekko-machine" }
+nekko-sandbox = { path = "../nekko-sandbox" }
 nekko-store = { path = "../nekko-store" }
 nekko-term = { path = "../nekko-term" }
 nekko-tools = { path = "../nekko-tools" }
+nekko-turn = { path = "../nekko-turn" }
+nekko-usage = { path = "../nekko-usage" }
+nekko-web = { path = "../nekko-web" }
+regress.workspace = true
+nekko-workspace = { path = "../nekko-workspace" }
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10"
 tokio.workspace = true
 tokio-tungstenite.workspace = true
+url = "2.5"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true

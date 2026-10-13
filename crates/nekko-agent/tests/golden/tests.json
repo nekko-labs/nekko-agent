@@ -1,0 +1,491 @@
+{
+  "openai-ok": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://api.openai.com/v1/models",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-test-openai"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Connected"
+    }
+  },
+  "openai-401": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://api.openai.com/v1/models",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-test-openai"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "HTTP 401, check your API key: Incorrect API key provided"
+    }
+  },
+  "openai-500-empty": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://api.openai.com/v1/models",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-test-openai"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "HTTP 500"
+    }
+  },
+  "openai-unreachable": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://api.openai.com/v1/models",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-test-openai"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "Can't reach the model server at https://api.openai.com/v1. Is it running and reachable on the network?"
+    }
+  },
+  "openai-aborted": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://api.openai.com/v1/models",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-test-openai"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "Request cancelled."
+    }
+  },
+  "openai-odd-error": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://api.openai.com/v1/models",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-test-openai"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "weird socket thing"
+    }
+  },
+  "compat-bare-url": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "http://10.5.0.2:1338/v1/models",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Connected"
+    }
+  },
+  "llamacpp-bare-url": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:11500/v1/models",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer engine-token"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "HTTP 404: not here"
+    }
+  },
+  "lmstudio-unreachable": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "http://localhost:1234/v1/models",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "Can't reach the model server at http://localhost:1234/v1. Is it running and reachable on the network?"
+    }
+  },
+  "openrouter-credits": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-or-test",
+          "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+          "X-Title": "Nekko Agent"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Connected, $12.35 left"
+    }
+  },
+  "openrouter-limit-minus-usage": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-or-test",
+          "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+          "X-Title": "Nekko Agent"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Connected, $0.00 left"
+    }
+  },
+  "openrouter-tie-rounds-up": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-or-test",
+          "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+          "X-Title": "Nekko Agent"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Connected, $0.13 left"
+    }
+  },
+  "openrouter-unlimited": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-or-test",
+          "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+          "X-Title": "Nekko Agent"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Connected, unlimited"
+    }
+  },
+  "openrouter-string-remaining": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-or-test",
+          "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+          "X-Title": "Nekko Agent"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Connected, $4.50 left"
+    }
+  },
+  "openrouter-bad-json": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-or-test",
+          "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+          "X-Title": "Nekko Agent"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Connected, unlimited"
+    }
+  },
+  "openrouter-null-json": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-or-test",
+          "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+          "X-Title": "Nekko Agent"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Connected, unlimited"
+    }
+  },
+  "openrouter-403": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-or-test",
+          "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+          "X-Title": "Nekko Agent"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "OpenRouter rejected this key. Check it or regenerate it."
+    }
+  },
+  "openrouter-502": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-or-test",
+          "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+          "X-Title": "Nekko Agent"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "OpenRouter answered HTTP 502."
+    }
+  },
+  "openrouter-unreachable": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/key",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-or-test",
+          "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+          "X-Title": "Nekko Agent"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "Can't reach the model server at https://openrouter.ai/api/v1. Is it running and reachable on the network?"
+    }
+  },
+  "openrouter-no-key": {
+    "requests": [],
+    "result": {
+      "ok": false,
+      "message": "Paste an API key or sign in with OpenRouter first."
+    }
+  },
+  "ollama-ok": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "http://localhost:11434/api/tags",
+        "headers": {},
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Connected"
+    }
+  },
+  "ollama-500": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "http://localhost:11434/api/tags",
+        "headers": {},
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "HTTP 500"
+    }
+  },
+  "ollama-unreachable": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "http://localhost:11434/api/tags",
+        "headers": {},
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "fetch failed"
+    }
+  },
+  "anthropic-key": {
+    "requests": [],
+    "result": {
+      "ok": true,
+      "message": "API key set"
+    }
+  },
+  "anthropic-no-key": {
+    "requests": [],
+    "result": {
+      "ok": false,
+      "message": "Missing API key"
+    }
+  },
+  "anthropic-sub": {
+    "requests": [],
+    "result": {
+      "ok": true,
+      "message": "Signed in with a Claude subscription"
+    }
+  },
+  "anthropic-sub-signed-out": {
+    "requests": [],
+    "result": {
+      "ok": false,
+      "message": "Not signed in. Sign in with Claude in the provider settings."
+    }
+  },
+  "chatgpt-ok": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
+        "headers": {
+          "Accept": "application/json",
+          "Authorization": "Bearer oauth-chatgpt-token",
+          "chatgpt-account-id": "acct-1",
+          "originator": "codex_cli_rs"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": true,
+      "message": "Signed in with a ChatGPT subscription"
+    }
+  },
+  "chatgpt-401": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
+        "headers": {
+          "Accept": "application/json",
+          "Authorization": "Bearer oauth-chatgpt-token",
+          "chatgpt-account-id": "acct-1",
+          "originator": "codex_cli_rs"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "chatgpt 401: {\"detail\":\"Unauthorized\"}"
+    }
+  },
+  "chatgpt-unreachable": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://chatgpt.com/backend-api/codex/models?client_version=0.160.0",
+        "headers": {
+          "Accept": "application/json",
+          "Authorization": "Bearer oauth-chatgpt-token",
+          "chatgpt-account-id": "acct-1",
+          "originator": "codex_cli_rs"
+        },
+        "body": null
+      }
+    ],
+    "result": {
+      "ok": false,
+      "message": "Can't reach ChatGPT at https://chatgpt.com/backend-api. Check the network connection."
+    }
+  },
+  "chatgpt-no-account": {
+    "requests": [],
+    "result": {
+      "ok": false,
+      "message": "This ChatGPT sign-in is missing an account id. Sign out and sign in again so it can be captured (sessions signed in before this version may lack one)."
+    }
+  },
+  "chatgpt-signed-out": {
+    "requests": [],
+    "result": {
+      "ok": false,
+      "message": "Not signed in. Sign in with ChatGPT in the provider settings."
+    }
+  }
+}

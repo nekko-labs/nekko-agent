@@ -99,9 +99,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorElement, {
     redo.current = [];
   };
   const paint = (el: MarkdownEditorElement, text: string) => {
+    const html = text ? renderToStaticMarkup(<>{composerMarkdownNodes(text)}</>) + (text.endsWith('\n') ? '<br>' : '') : '<br>';
+    // Most keys leave the highlighting as it was: the browser's own edit
+    // already reads the same, caret included. Rewriting it anyway and putting
+    // the caret back forced a layout of the whole page on every key.
+    if (!pending.current && el.innerHTML === html) return;
     const selection = pending.current ?? offsets(el);
     pending.current = null;
-    el.innerHTML = text ? renderToStaticMarkup(<>{composerMarkdownNodes(text)}</>) + (text.endsWith('\n') ? '<br>' : '') : '<br>';
+    el.innerHTML = html;
     if (document.activeElement === el) select(el, ...selection);
   };
   useLayoutEffect(() => {

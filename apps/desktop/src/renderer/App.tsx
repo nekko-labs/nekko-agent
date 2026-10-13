@@ -9,9 +9,11 @@ import { useT } from './i18n.js';
 import { SHORTCUTS } from './shortcuts.js';
 import { hasAppChrome } from './chrome.js';
 import { TitleBar } from './components/TitleBar.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { BrandMark } from './components/BrandMark.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { syncAppActivity } from './appActivity.js';
+import { startDecorClock } from './decorClock.js';
 import { Mascot, NekkoAvatar } from './components/Mascot.js';
 import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
@@ -112,6 +114,8 @@ export function App() {
   useEffect(() => startDesktopNotifications(), []);
   // Hold looping decorations still while the window is unfocused or hidden.
   useEffect(() => syncAppActivity(), []);
+  // Step the looping decorations on a clock of their own, not every frame.
+  useEffect(() => startDecorClock(), []);
 
   // Archived chats past the retention window are deleted at launch and every
   // few hours after, whichever view the app opens on, so a long-running window
@@ -224,7 +228,7 @@ export function App() {
   return (
     <div className="flex h-full w-full flex-col" style={{ background: 'var(--paper)' }}>
       {/* The window's own title bar, in the desktop shell only. */}
-      <TitleBar />
+      <ErrorBoundary label="Title bar"><TitleBar /></ErrorBoundary>
 
       {!settingsLoaded ? (
         <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
@@ -284,6 +288,7 @@ export function App() {
               <span className="font-medium">Get started:</span> connect your first model in Model Providers →
             </button>
           )}
+          <ErrorBoundary key={view} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
           {view === 'chat' && <WorkspacesView />}
           {view === 'skills' && <SkillsView />}
@@ -295,11 +300,12 @@ export function App() {
           {view === 'connectors' && <ConnectorsView />}
           {view === 'memory' && <MemoryView />}
           {view === 'settings' && <SettingsView />}
+          </ErrorBoundary>
         </main>
 
         {/* First-run setup wizard: covers nav + main but leaves the window's
             title bar (and its OS buttons) reachable above it. */}
-        {onboardingOpen && <OnboardingView />}
+        {onboardingOpen && <ErrorBoundary label="Setup"><OnboardingView /></ErrorBoundary>}
       </div>
 
       {/* Phone bottom tab bar: the remote-control surface. The long tail of
@@ -331,13 +337,13 @@ export function App() {
       {/* Global overlays stay mounted even while settings load, so deep links,
           toasts, and update banners keep working on any settings failure. */}
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
-      <UpdateBanner />
-      <RelayPairing />
-      {view !== 'command' && <ResourceHud />}
-      <Mascot mood={mascotMood} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} />
-      <CommandPalette />
-      <DeepLinkListener />
-      <Toasts />
+      <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
+      <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>
+      {view !== 'command' && <ErrorBoundary label="Resource monitor"><ResourceHud /></ErrorBoundary>}
+      <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>
+      <ErrorBoundary label="Command palette"><CommandPalette /></ErrorBoundary>
+      <ErrorBoundary label="Links"><DeepLinkListener /></ErrorBoundary>
+      <ErrorBoundary label="Notifications"><Toasts /></ErrorBoundary>
     </div>
   );
 }

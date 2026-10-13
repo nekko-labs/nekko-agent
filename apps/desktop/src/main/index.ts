@@ -5,16 +5,18 @@ import { existsSync } from 'fs';
 // Only the data-root helpers: the host itself runs in the engine process, and
 // importing the package root would load all of it (node-pty included) here.
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/host/user-data';
-import { brandEnv, IpcEvents, type AppSettings } from '@nekko-agent/shared';
+import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { registerIpc } from './ipc.js';
 import { checkForUpdates } from './update.js';
 import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
-import { registerDevLaunch } from './devLaunchProcess.js';
+import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
 import { EngineProcess } from './engine-process.js';
 import { createDesktopTray } from './tray.js';
 import { startAgentBrowser } from './agentBrowser.js';
 import { registerArtifactPreview } from './artifactPreview.js';
+import { offerLegacyCleanup } from './legacyPrompt.js';
+import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
 const applicationWindows = new Set<number>();
 
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
@@ -144,9 +146,19 @@ function createWindow(): void {
   });
 
   win.on('ready-to-show', () => win.show());
+  const closeIntent = createCloseIntent();
+  if (process.platform === 'win32') {
+    win.hookWindowMessage(WM_SYSCOMMAND, (wParam) => closeIntent.sysCommand(readWParam(wParam)));
+    win.hookWindowMessage(WM_CLOSE, () => closeIntent.closeMessage());
+  }
   win.on('close', event => {
+    const external = closeIntent.takeExternal();
     if (quitting || !desktopTray) return;
     event.preventDefault();
+    // Another program asked the app to exit (`taskkill` without /F, as
+    // `nekko-agent migrate` and installers do): quit for real, through the
+    // clean engine shutdown, rather than hide into the tray.
+    if (external) { app.quit(); return; }
     saveWindowBounds(win.getBounds());
     win.hide();
   });
@@ -341,6 +353,17 @@ app.whenReady().then(async () => {
     }
     catch (failure) { dialog.showErrorBox('Data migration stopped', (failure as Error).message); app.quit(); return; }
   }
+  // Earlier names of the app leave their own folders behind. Offer to fold them
+  // in on every launch while any remain; the engine is not running yet, so the
+  // data folder is quiet.
+  offerLegacyCleanup({
+    dataDirOverridden: Boolean(brandEnv('DATA_DIR')),
+    ask: (message, detail) => {
+      const pick = dialog.showMessageBoxSync({ type: 'question', title: 'Nekko Agent', message, detail, buttons: ['Merge and clean up', 'Merge, keep old copies', 'Not now'], defaultId: 0, cancelId: 2, noLink: true });
+      return pick === 0 ? 'merge-clean' : pick === 1 ? 'merge-keep' : 'later';
+    },
+    tell: (title, detail, error) => { dialog.showMessageBoxSync({ type: error ? 'warning' : 'info', title: 'Nekko Agent', message: title, detail, buttons: ['OK'] }); },
+  });
   // The engine runs in its own processes (see engine-process.ts); the window
   // only needs to know where it listens.
   const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -381,6 +404,11 @@ app.whenReady().then(async () => {
       onError: message => dialog.showErrorBox('Nekko Agent', message),
     });
   }
+
+  // Under `npm run dev`, hand the launcher what it needs for its banner.
+  void engine.call<ApiServerStatus>(IpcChannels.apiServerStatus)
+    .then((s) => reportDevReady({ version: app.getVersion(), api: s ? { url: s.clientUrl, enabled: s.settings.enabled } : null, dataDir }))
+    .catch(() => reportDevReady({ version: app.getVersion(), api: null, dataDir }));
 
   // Auto-check for updates a few seconds after launch, if the user opted in.
   void engine.call<AppSettings>('settings:get').then((settings) => {

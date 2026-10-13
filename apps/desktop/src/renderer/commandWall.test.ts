@@ -240,8 +240,8 @@ describe('wall preferences and panel migration', () => {
     expect(DOCK_PANELS.map(p => p.key)).toEqual(Object.keys(DEFAULT_WALL_DOCK.panels));
     expect(DEFAULT_WALL_DOCK).toEqual({ side: 'right', show: true,
       panelOrder: DOCK_PANELS.map(p => p.key),
-      minimized: { vitals: false, automations: false, utilization: false, budget: false, insights: false, hardware: false },
-      panels: { vitals: true, automations: true, utilization: true, budget: true, insights: false, hardware: true } });
+      minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false },
+      panels: { automations: true, utilization: true, budget: true, insights: false, hardware: true } });
     expect(seedWall(DEFAULT_WALL_STATE, [], [], 9).root).toBeNull();
     expect(DEFAULT_WALL_STATE.hero).toBeNull();
     expect(DEFAULT_WALL_STATE.folded).toEqual({});
@@ -250,8 +250,8 @@ describe('wall preferences and panel migration', () => {
     expect(sanitizeWallLayout({ mode: 'fixed', cols: 99, rows: -2 })).toEqual({ mode: 'fixed', cols: 6, rows: 1 });
     expect(sanitizeWallLayout({ mode: 'focus', cols: 2.6, rows: 1.2 })).toEqual({ mode: 'focus', cols: 3, rows: 1 });
     expect(sanitizeWallLayout({ mode: 'other', cols: Infinity, rows: '4' })).toEqual(DEFAULT_WALL_LAYOUT);
-    expect(sanitizeWallDock({ side: 'other', show: 0, minimized: 'yes', panels: { insights: true, vitals: false, hardware: 0, alien: true } }))
-      .toEqual({ ...DEFAULT_WALL_DOCK, panels: { ...DEFAULT_WALL_DOCK.panels, insights: true, vitals: false } });
+    expect(sanitizeWallDock({ side: 'other', show: 0, minimized: 'yes', panels: { insights: true, budget: false, vitals: true, hardware: 0, alien: true } }))
+      .toEqual({ ...DEFAULT_WALL_DOCK, panels: { ...DEFAULT_WALL_DOCK.panels, insights: true, budget: false } });
     for (const side of ['right', 'left', 'top', 'bottom']) expect(sanitizeWallDock({ side }).side).toBe(side);
     for (const watermark of [-1, '10', null]) expect(restore({ watermark }).watermark).toBe(0);
     const state = restore({ autoAdd: 'false', hero: 42, folded: { a: true, b: false, c: 1, '': true } });
@@ -262,15 +262,15 @@ describe('wall preferences and panel migration', () => {
     expect(sanitizeWallDock([])).toEqual(DEFAULT_WALL_DOCK);
   });
   it('sanitizes minimization independently for known dock panels without mutating defaults', () => {
-    const minimized = { vitals: true, budget: false, insights: true, hardware: 1, alien: true };
-    const dock = sanitizeWallDock({ panels: { vitals: false }, minimized });
-    expect(dock.minimized).toEqual({ ...DEFAULT_WALL_DOCK.minimized, vitals: true, insights: true });
-    expect(dock.panels.vitals).toBe(false);
+    const minimized = { utilization: true, budget: false, insights: true, hardware: 1, alien: true };
+    const dock = sanitizeWallDock({ panels: { utilization: false }, minimized });
+    expect(dock.minimized).toEqual({ ...DEFAULT_WALL_DOCK.minimized, utilization: true, insights: true });
+    expect(dock.panels.utilization).toBe(false);
     expect(dock.minimized).not.toBe(DEFAULT_WALL_DOCK.minimized);
     dock.minimized.automations = true;
     expect(DEFAULT_WALL_DOCK.minimized.automations).toBe(false);
-    expect(minimized).toEqual({ vitals: true, budget: false, insights: true, hardware: 1, alien: true });
-    for (const invalid of [true, false, null, 'yes', [], { vitals: 'yes' }]) {
+    expect(minimized).toEqual({ utilization: true, budget: false, insights: true, hardware: 1, alien: true });
+    for (const invalid of [true, false, null, 'yes', [], { utilization: 'yes' }]) {
       expect(sanitizeWallDock({ minimized: invalid }).minimized).toEqual(DEFAULT_WALL_DOCK.minimized);
     }
   });
@@ -309,7 +309,7 @@ describe('wall preferences and panel migration', () => {
   it('round-trips every new preference through local and shared persistence', () => {
     const state = { ...DEFAULT_WALL_STATE, layout: { mode: 'focus' as const, cols: 6, rows: 1 },
       dock: { ...DEFAULT_WALL_DOCK, side: 'bottom' as const, show: false,
-        minimized: { ...DEFAULT_WALL_DOCK.minimized, vitals: true, budget: true } },
+        minimized: { ...DEFAULT_WALL_DOCK.minimized, utilization: true, budget: true } },
       hero: 'session-a', folded: { 'session-a': true, 'session-b': false } };
     let raw = '';
     saveWallState({ setItem: (_, value) => { raw = value; } }, state);

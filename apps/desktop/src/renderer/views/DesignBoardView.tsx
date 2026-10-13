@@ -5,6 +5,7 @@ import { useStore } from '../store.js';
 import { PlusIcon, CloseIcon, ExternalIcon, TrashIcon } from '../icons.js';
 import { Modal } from '../components/primitives/index.js';
 import { ArtifactPreview, isolatedDocument } from '../components/ArtifactPreview.js';
+import { hasAppChrome } from '../chrome.js';
 
 /**
  * Design board: create designs two ways, both first-class.
@@ -131,7 +132,7 @@ export function DesignBoardView() {
   return (
     <div className="flex h-full min-w-0 flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
-        <h1 className="text-[15px] font-semibold">Design</h1>
+        {!hasAppChrome && <h1 className="view-title">Design</h1>}
         {workspaces.length > 1 && (
           <select className="input py-1 text-[12px]" value={wsId} onChange={(e) => setActiveProject(e.target.value)}>
             {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}

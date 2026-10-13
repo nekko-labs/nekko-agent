@@ -265,6 +265,15 @@ describe('the shipped Claude catalog', () => {
       contextLength: 1_000_000,
     });
   });
+
+  it('lists Haiku 5.5 at 1M, above Haiku 4.5 at 200k', async () => {
+    const models = await new AnthropicProvider(apiKeyCfg).listModels();
+    const ids = models.map((m) => m.id);
+    expect(ids.indexOf('claude-haiku-5-5')).toBeGreaterThan(-1);
+    expect(ids.indexOf('claude-haiku-5-5')).toBeLessThan(ids.indexOf('claude-haiku-4-5-20251001'));
+    expect(models.find((m) => m.id === 'claude-haiku-5-5')).toMatchObject({ name: 'Claude Haiku 5.5', contextLength: 1_000_000 });
+    expect(models.find((m) => m.id === 'claude-haiku-4-5-20251001')?.contextLength).toBe(200_000);
+  });
 });
 
 describe('rejectsSampling', () => {

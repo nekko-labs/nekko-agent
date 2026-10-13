@@ -1,0 +1,406 @@
+//! Remote access (`packages/host/src/remote.ts`): the persisted relay config
+//! and paired-device registry in `remote.json`, the single-use pairing code,
+//! and the live relay agent. The registry is the auth layer: a device must
+//! complete the HELLO handshake against it before the agent serves a single
+//! request; new devices enroll only with a short-lived code; revoking a
+//! device kicks it live. This process is the file's only writer.
+
+use crate::hello::{self, Grant, PAIRING_TTL_MS, Random, Verdict};
+use crate::jsobj::JsObj;
+use serde_json::{Value, json};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, Weak};
+
+/// Validates a device's HELLO, answering with the sealed reply.
+pub type Verifier = Arc<dyn Fn(&Value) -> Value + Send + Sync>;
+
+/// `Date.now()`; tests pass a fixed clock.
+pub type Clock = Arc<dyn Fn() -> f64 + Send + Sync>;
+
+pub fn system_clock() -> Clock {
+    Arc::new(|| {
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
+    })
+}
+
+/// What connects the agent to a relay (`connectRelayAgent`).
+pub trait Link: Send + Sync {
+    fn connect(&self, relay_url: &str, room: &str, key: &str, verify: Verifier) -> Arc<dyn LinkHandle>;
+}
+
+/// A running relay agent (`RelayAgentHandle`).
+pub trait LinkHandle: Send + Sync {
+    fn stop(&self);
+    /// Kick a device's live connections and drop its push token.
+    fn kick_device(&self, device_id: &str);
+    /// Device ids with a welcomed live connection.
+    fn connected_devices(&self) -> Vec<String>;
+    fn is_online(&self) -> bool;
+    fn last_error(&self) -> Option<String>;
+}
+
+#[derive(Default)]
+struct State {
+    handle: Option<Arc<dyn LinkHandle>>,
+    grant: Option<Grant>,
+}
+
+pub struct RemoteService {
+    file: PathBuf,
+    random: Random,
+    clock: Clock,
+    link: Box<dyn Link>,
+    state: Mutex<State>,
+    /// Read-modify-write of the file, one at a time.
+    io: Mutex<()>,
+    me: Weak<RemoteService>,
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn s(v: Option<&Value>) -> Option<&str> {
+    v.and_then(Value::as_str)
+}
+
+impl RemoteService {
+    pub fn new(data_dir: &Path, random: Random, clock: Clock, link: Box<dyn Link>) -> Arc<Self> {
+        Arc::new_cyclic(|me| Self {
+            file: data_dir.join("remote.json"),
+            random,
+            clock,
+            link,
+            state: Mutex::default(),
+            io: Mutex::new(()),
+            me: me.clone(),
+        })
+    }
+
+    /// `load()`: every key in its declared place, `undefined` included.
+    fn load(&self) -> JsObj {
+        ensure_private(&self.file);
+        let parsed = std::fs::read(&self.file).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+        match parsed {
+            // `JSON.parse` gave `null`: reading `.enabled` throws, so the default.
+            Some(Value::Null) | None => {
+                JsObj::new().with("enabled", Some(json!(false))).with("devices", Some(json!([])))
+            }
+            Some(cfg) => {
+                let get = |k: &str| cfg.get(k).cloned();
+                let or = |v: Option<Value>, d: Value| Some(v.filter(|v| !v.is_null()).unwrap_or(d));
+                JsObj::new()
+                    .with("enabled", or(get("enabled"), json!(false)))
+                    .with("relayUrl", get("relayUrl"))
+                    .with("room", get("room"))
+                    .with("secret", get("secret"))
+                    .with("devices", or(get("devices"), json!([])))
+            }
+        }
+    }
+
+    fn save(&self, cfg: &JsObj) -> Result<(), String> {
+        write_json_atomic(&self.file, &cfg.to_value()).map_err(|e| e.to_string())
+    }
+
+    fn devices_of(cfg: &JsObj) -> Vec<Value> {
+        cfg.get("devices").and_then(Value::as_array).cloned().unwrap_or_default()
+    }
+
+    fn live_grant(&self, st: &State) -> Option<Grant> {
+        st.grant.clone().filter(|g| g.expires_at > (self.clock)())
+    }
+
+    /// The HELLO check the agent runs for every connection.
+    pub fn verify(&self, hello_frame: &Value) -> Value {
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        let mut st = lock(&self.state);
+        let verdict =
+            hello::verify_hello(&Self::devices_of(&cfg), hello_frame, self.live_grant(&st).as_ref(), (self.clock)());
+        if let Verdict::Welcome { device, enrolled } = &verdict {
+            let id = device.get("id").cloned();
+            let mut devices: Vec<Value> =
+                Self::devices_of(&cfg).into_iter().filter(|d| d.get("id") != id.as_ref()).collect();
+            devices.push(device.clone());
+            // A registry that cannot be written turns the device away (the TS
+            // host threw here and left the phone with no reply at all).
+            if self.save(&cfg.clone().with("devices", Some(Value::Array(devices)))).is_err() {
+                return json!({ "type": "denied", "reason": "invalid" });
+            }
+            if *enrolled {
+                st.grant = None; // single use
+            }
+        }
+        verdict.reply()
+    }
+
+    fn verifier(&self) -> Verifier {
+        let me = self.me.clone();
+        Arc::new(move |h: &Value| match me.upgrade() {
+            Some(svc) => svc.verify(h),
+            None => json!({ "type": "denied", "reason": "invalid" }),
+        })
+    }
+
+    fn connect(&self, st: &mut State, cfg: &JsObj) {
+        if let Some(h) = st.handle.take() {
+            h.stop();
+        }
+        let (Some(url), Some(room), Some(key)) = (s(cfg.get("relayUrl")), s(cfg.get("room")), s(cfg.get("secret")))
+        else {
+            return;
+        };
+        st.handle = Some(self.link.connect(url, room, key, self.verifier()));
+    }
+
+    /// The running agent, out of the lock: its own lock is taken while the
+    /// agent calls `verify`, which takes ours, so never hold both.
+    fn handle(&self) -> Option<Arc<dyn LinkHandle>> {
+        lock(&self.state).handle.clone()
+    }
+
+    fn status_of(&self, handle: Option<Arc<dyn LinkHandle>>, cfg: &JsObj) -> Value {
+        if nekko_js::truthy(cfg.get("enabled")) {
+            let h = handle.as_deref();
+            JsObj::new()
+                .with("enabled", Some(json!(true)))
+                .with("relayUrl", cfg.get("relayUrl").cloned())
+                .with("room", cfg.get("room").cloned())
+                .with("hasKey", Some(json!(nekko_js::truthy(cfg.get("secret")))))
+                .with("devices", cfg.get("devices").cloned())
+                .with("connected", Some(json!(h.map(|h| h.connected_devices()).unwrap_or_default())))
+                .with("online", Some(json!(h.is_some_and(|h| h.is_online()))))
+                .with("error", h.and_then(|h| h.last_error()).map(Value::from))
+                .to_value()
+        } else {
+            JsObj::new().with("enabled", Some(json!(false))).with("devices", cfg.get("devices").cloned()).to_value()
+        }
+    }
+
+    pub fn enable(&self, relay_url: &Value) -> Result<Value, String> {
+        let _io = lock(&self.io);
+        let prev = self.load();
+        let room = match prev.get("room").filter(|v| !v.is_null()) {
+            Some(r) => r.clone(),
+            None => json!(hello::new_room_code(&self.random)),
+        };
+        let secret = match prev.get("secret").filter(|v| !v.is_null()) {
+            Some(s) => s.clone(),
+            None => json!(hello::new_room_secret(&self.random)),
+        };
+        let cfg = prev
+            .with("enabled", Some(json!(true)))
+            .with("relayUrl", Some(relay_url.clone()))
+            .with("room", Some(room))
+            .with("secret", Some(secret));
+        self.save(&cfg)?;
+        self.connect(&mut lock(&self.state), &cfg);
+        drop(_io);
+        Ok(self.status_of(self.handle(), &cfg))
+    }
+
+    pub fn disable(&self) -> Result<Value, String> {
+        let _io = lock(&self.io);
+        let mut st = lock(&self.state);
+        if let Some(h) = st.handle.take() {
+            h.stop();
+        }
+        st.grant = None;
+        drop(st);
+        let cfg = self.load().with("enabled", Some(json!(false)));
+        self.save(&cfg)?;
+        Ok(self.status_of(None, &cfg))
+    }
+
+    pub fn status(&self) -> Value {
+        let cfg = {
+            let _io = lock(&self.io);
+            self.load()
+        };
+        self.status_of(self.handle(), &cfg)
+    }
+
+    pub fn pairing(&self) -> Value {
+        let cfg = {
+            let _io = lock(&self.io);
+            self.load()
+        };
+        let t = |k: &str| nekko_js::truthy(cfg.get(k));
+        if !t("enabled") || !t("relayUrl") || !t("room") || !t("secret") {
+            return Value::Null;
+        }
+        json!({ "relayUrl": cfg.get("relayUrl"), "room": cfg.get("room"), "key": cfg.get("secret") })
+    }
+
+    pub fn pair(&self) -> Value {
+        let grant =
+            Grant { code: hello::new_pairing_code(&self.random, 8), expires_at: (self.clock)() + PAIRING_TTL_MS };
+        let v = grant.value();
+        lock(&self.state).grant = Some(grant);
+        v
+    }
+
+    pub fn devices(&self) -> Value {
+        let _io = lock(&self.io);
+        self.load().get("devices").cloned().unwrap_or(json!([]))
+    }
+
+    pub fn revoke(&self, device_id: &Value) -> Result<Value, String> {
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        let devices: Vec<Value> = Self::devices_of(&cfg)
+            .into_iter()
+            .map(|d| match d {
+                Value::Object(mut m) if m.get("id") == Some(device_id) => {
+                    m.insert("revoked".into(), json!(true));
+                    Value::Object(m)
+                }
+                d => d,
+            })
+            .collect();
+        self.save(&cfg.with("devices", Some(Value::Array(devices.clone()))))?;
+        drop(_io);
+        if let (Some(h), Some(id)) = (self.handle(), device_id.as_str()) {
+            h.kick_device(id);
+        }
+        Ok(Value::Array(devices))
+    }
+
+    pub fn rename(&self, device_id: &Value, name: &Value) -> Result<Value, String> {
+        let name = name.as_str().ok_or("name.trim is not a function")?;
+        let clean = hello::cut16(nekko_js::trim(name), 60).to_string();
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        let devices: Vec<Value> = Self::devices_of(&cfg)
+            .into_iter()
+            .map(|d| match d {
+                Value::Object(mut m) if m.get("id") == Some(device_id) && !clean.is_empty() => {
+                    m.insert("name".into(), json!(clean));
+                    Value::Object(m)
+                }
+                d => d,
+            })
+            .collect();
+        let cfg = cfg.with("devices", Some(Value::Array(devices.clone())));
+        self.save(&cfg)?;
+        Ok(Value::Array(devices))
+    }
+
+    pub fn rotate(&self) -> Result<Value, String> {
+        let _io = lock(&self.io);
+        let prev = self.load();
+        let room = hello::new_room_code(&self.random);
+        let secret = hello::new_room_secret(&self.random);
+        let cfg =
+            prev.with("room", Some(json!(room))).with("secret", Some(json!(secret))).with("devices", Some(json!([])));
+        self.save(&cfg)?;
+        {
+            let mut st = lock(&self.state);
+            st.grant = None;
+            if nekko_js::truthy(cfg.get("enabled")) && nekko_js::truthy(cfg.get("relayUrl")) {
+                self.connect(&mut st, &cfg);
+            }
+        }
+        drop(_io);
+        Ok(self.status_of(self.handle(), &cfg))
+    }
+
+    /// Reconnect at startup when remote access was left enabled.
+    pub fn start_if_enabled(&self) {
+        let cfg = {
+            let _io = lock(&self.io);
+            self.load()
+        };
+        let t = |k: &str| nekko_js::truthy(cfg.get(k));
+        if t("enabled") && t("relayUrl") && t("room") && t("secret") {
+            self.connect(&mut lock(&self.state), &cfg);
+        }
+    }
+
+    pub fn stop(&self) {
+        if let Some(h) = lock(&self.state).handle.take() {
+            h.stop();
+        }
+    }
+
+    /// One IPC channel (`remote:*`).
+    pub fn route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {
+        let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
+        match channel {
+            "remote:enable" => self.enable(arg(0)),
+            "remote:disable" => self.disable(),
+            "remote:status" => Ok(self.status()),
+            "remote:pairing" => Ok(self.pairing()),
+            "remote:pair" => Ok(self.pair()),
+            "remote:devices" => Ok(self.devices()),
+            "remote:revoke" => self.revoke(arg(0)),
+            "remote:rename" => self.rename(arg(0), arg(1)),
+            "remote:rotate" => self.rotate(),
+            other => Err(format!("Unknown channel: {other}")),
+        }
+    }
+}
+
+/// The channels `route` serves.
+pub const CHANNELS: &[&str] = &[
+    "remote:enable",
+    "remote:disable",
+    "remote:status",
+    "remote:pairing",
+    "remote:pair",
+    "remote:devices",
+    "remote:revoke",
+    "remote:rename",
+    "remote:rotate",
+];
+
+/// `ensurePrivateFile`: owner-only, best effort.
+fn ensure_private(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+}
+
+/// `writeJsonAtomic`: `JSON.stringify(value, null, 2)` to an owner-only temp
+/// file beside the target, flushed to disk, then renamed over it, so a crash
+/// never leaves half a config. The temp file is removed if anything fails.
+pub fn write_json_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
+    use std::io::Write;
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+    // Not the service's random source: the TS host names its temp files with
+    // `randomUUID`, which never draws on the source codes and keys come from.
+    let mut tag = [0u8; 16];
+    let _ = getrandom::fill(&mut tag);
+    let tag: String = tag.iter().map(|b| format!("{b:02x}")).collect();
+    let temp = dir.join(format!(".{name}.{tag}.tmp"));
+    let result = (|| {
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let mut f = opts.open(&temp)?;
+        f.write_all(nekko_js::stringify_pretty(value, "  ").as_bytes())?;
+        f.sync_all()?;
+        drop(f);
+        ensure_private(&temp);
+        std::fs::rename(&temp, path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    result?;
+    if let Ok(d) = std::fs::File::open(dir) {
+        let _ = d.sync_all();
+    }
+    ensure_private(path);
+    Ok(())
+}

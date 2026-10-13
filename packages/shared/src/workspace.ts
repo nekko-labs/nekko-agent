@@ -15,10 +15,42 @@ export interface WorkspaceFolder {
   worktreeSetup?: string;
 }
 
-/** Whether two folder paths name the same folder, ignoring a trailing separator. */
+/**
+ * The comparable form of a folder path: no trailing separator, one kind of
+ * separator, and case-folded where the filesystem ignores case (a Windows
+ * drive path or a UNC share). `C:\code`, `c:\code\` and `C:/code` are one
+ * folder; `/home/a` and `/home/A` stay two.
+ */
+export function folderPathKey(p: string): string {
+  const raw = p.trim();
+  const windows = /^[a-zA-Z]:([\\/]|$)/.test(raw) || /^\\\\/.test(raw);
+  // A drive root keeps its separator: `C:` alone means "the current folder on C".
+  const trimmed = windows && /^[a-zA-Z]:[\\/]*$/.test(raw) ? `${raw.slice(0, 2)}\\` : raw.replace(/(?<=.)[\\/]+$/, '');
+  return windows ? trimmed.replace(/\//g, '\\').toLowerCase() : trimmed;
+}
+
+/** Whether two folder paths name the same folder. */
 export function sameFolderPath(a: string, b: string): boolean {
-  const key = (p: string) => p.replace(/(?<=.)[\\/]+$/, '');
-  return key(a) === key(b);
+  return folderPathKey(a) === folderPathKey(b);
+}
+
+/**
+ * One entry per folder: later entries naming a folder already listed are
+ * dropped, and `aliases` maps each dropped id to the one kept so references can
+ * follow. Order is otherwise preserved.
+ */
+export function uniqueFolders<T extends { id: string; path: string }>(folders: T[]): { folders: T[]; aliases: Record<string, string> } {
+  const seen = new Map<string, string>();
+  const aliases: Record<string, string> = {};
+  const out: T[] = [];
+  for (const f of folders) {
+    const key = folderPathKey(f.path);
+    const kept = seen.get(key);
+    if (kept) { if (kept !== f.id) aliases[f.id] = kept; continue; }
+    seen.set(key, f.id);
+    out.push(f);
+  }
+  return { folders: out, aliases };
 }
 
 /** One chat's isolated checkout, as Settings > Git management lists it. */

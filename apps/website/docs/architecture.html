@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Architecture · Nekko Agent docs</title>
+    <meta name="description" content="How the desktop app, the TypeScript host and the Rust engine daemon fit together." />
+    <link rel="canonical" href="https://nekkoagent.com/docs/architecture" />
+    <link rel="alternate" type="text/markdown" href="/docs/architecture.md" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="theme-color" content="#101714" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/docs/architecture" />
+    <meta property="og:title" content="Architecture · Nekko Agent docs" />
+    <meta property="og:description" content="How the desktop app, the TypeScript host and the Rust engine daemon fit together." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/docs.css?v=docs-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Architecture","description":"How the desktop app, the TypeScript host and the Rust engine daemon fit together.","url":"https://nekkoagent.com/docs/architecture","inLanguage":"en","isPartOf":{"@id":"https://nekkoagent.com/#website"},"publisher":{"@id":"https://nekkolabs.com/#organization"},"about":{"@id":"https://nekkoagent.com/#app"}}</script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="docs-home" href="/docs">Docs</a>
+      <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Site">
+        <a href="https://github.com/nekko-labs/nekko-agent" rel="noopener">GitHub</a>
+        <a class="download" href="/#download">Download</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture" aria-current="page">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <main id="content">
+        <article class="prose" id="top">
+          <p class="kicker">Contributing</p>
+          <h1>Architecture</h1>
+          <p class="page-tools">
+            <a href="/docs/architecture.md">View as Markdown</a>
+            <a href="/llms.txt">llms.txt</a>
+          </p>
+<p>Nekko Agent is one engine and one React UI that run in several places: the desktop app, the self-hosted web edition, Docker and the phone. This page is a map of the code for contributors. The full technical plan, with every decision and task, is in <a href="https://github.com/nekko-labs/nekko-agent/blob/main/TASKS.md" rel="noopener"><code>TASKS.md</code></a>; what the product does and why is in <a href="https://github.com/nekko-labs/nekko-agent/blob/main/SPEC.md" rel="noopener"><code>SPEC.md</code></a>.</p>
+<h2 id="the-big-picture"><a class="anchor" href="#the-big-picture" aria-hidden="true" tabindex="-1">#</a>The big picture</h2>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-text"> desktop window (Electron + React)        browser (web edition, Docker)
+            |                                        |
+            |  IPC                          HTTP + WebSocket
+            v                                        v
+       apps/desktop main                      apps/server
+            \                                        /
+             \----------- nekkod (Rust) ------------/
+                     engine daemon on loopback
+                    /            |              \
+          native services   model servers   TS host (packages/host)
+          (chat, tools,     (llama-server,   for everything not
+           terminals, ...)   routed)          ported to Rust yet</code></pre></div>
+<ul>
+<li><strong>The UI never shares a process with the agent.</strong> The window talks to <code>nekkod</code>, the engine daemon, over a loopback connection with a per-launch token. The agent loop, terminals and model servers run there, so a busy agent cannot freeze the interface.</li>
+<li><strong>The engine is moving from TypeScript to Rust.</strong> <code>nekkod</code> answers what has been ported natively and passes the rest to the TypeScript host it supervises. Each ported piece has to match the TypeScript behaviour exactly before it takes over.</li>
+<li><strong>Every edition is the same app.</strong> Desktop, web and Docker run the same engine and the same UI. Only the transport differs: Electron IPC on the desktop, HTTP and WebSocket in the browser.</li>
+</ul>
+<h2 id="repository-layout"><a class="anchor" href="#repository-layout" aria-hidden="true" tabindex="-1">#</a>Repository layout</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>What lives there</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>packages/shared</code></td>
+<td>Types and IPC contracts. Pure, no runtime dependencies.</td>
+</tr>
+<tr>
+<td><code>packages/core</code></td>
+<td>The TypeScript engine: providers, agent loop, guardrails, context, indexer, memory, connectors. No Electron imports, unit tested with Vitest.</td>
+</tr>
+<tr>
+<td><code>packages/host</code></td>
+<td>Wires the engine to the file system, shell and settings. Shared by every edition.</td>
+</tr>
+<tr>
+<td><code>apps/desktop</code></td>
+<td>The Electron app: <code>src/main</code> (Node), <code>src/preload</code> (the bridge) and <code>src/renderer</code> (React).</td>
+</tr>
+<tr>
+<td><code>apps/server</code></td>
+<td>The self-hosted web edition, also the <code>npx nekko-agent-web</code> package.</td>
+</tr>
+<tr>
+<td><code>apps/cli</code></td>
+<td>The <code>nekko-agent</code> CLI and MCP server.</td>
+</tr>
+<tr>
+<td><code>apps/mobile</code></td>
+<td>The iOS and Android app (Expo).</td>
+</tr>
+<tr>
+<td><code>apps/relay</code></td>
+<td>The relay that pairs a phone with a computer. It only ever sees encrypted frames.</td>
+</tr>
+<tr>
+<td><code>apps/cloud</code></td>
+<td>Nekko Agent Cloud, the planned hosted edition.</td>
+</tr>
+<tr>
+<td><code>apps/website</code></td>
+<td>nekkoagent.com, including these docs.</td>
+</tr>
+<tr>
+<td><code>crates/nekkod</code></td>
+<td>The engine daemon.</td>
+</tr>
+<tr>
+<td><code>crates/nekko-*</code></td>
+<td>The daemon&#39;s services: chat turns, tools, terminals, inference, remote access, storage, usage and more.</td>
+</tr>
+</tbody></table></div>
+<h2 id="build-order"><a class="anchor" href="#build-order" aria-hidden="true" tabindex="-1">#</a>Build order</h2>
+<p><code>npm run build</code> builds the Rust daemon, then the TypeScript workspaces in dependency order: <code>shared</code>, <code>core</code>, <code>host</code>, <code>cli</code>, <code>desktop</code>. <code>npm run dev</code> runs a faster variant (the daemon in the incremental <code>dev-daemon</code> profile, no production desktop bundle, since electron-vite dev builds its own) and launches the desktop app.</p>
+<h2 id="where-to-put-new-code"><a class="anchor" href="#where-to-put-new-code" aria-hidden="true" tabindex="-1">#</a>Where to put new code</h2>
+<ul>
+<li>Engine behaviour goes in <code>packages/core</code> or a Rust crate, so it can be tested without Electron.</li>
+<li>The desktop app only wires the engine to the window, the file system and the shell.</li>
+<li>A change to what the product does also updates <code>SPEC.md</code>; a change to how it is built updates <code>TASKS.md</code>.</li>
+</ul>
+
+          <footer class="page-foot">
+            <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/docs/hub/architecture.md" rel="noopener">Edit this page on GitHub</a>
+            <div class="pager"><a class="prev" href="/docs/contributing"><span>Previous</span>Contributing</a><a class="next" href="/docs/release-signing"><span>Next</span>Release signing</a></div>
+          </footer>
+        </article>
+      </main>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Architecture</a></li><li class="d2"><a href="#the-big-picture">The big picture</a></li><li class="d2"><a href="#repository-layout">Repository layout</a></li><li class="d2"><a href="#build-order">Build order</a></li><li class="d2"><a href="#where-to-put-new-code">Where to put new code</a></li></ul></nav></aside>
+    </div>
+    <dialog class="search-dialog" aria-label="Search the docs">
+      <form method="dialog" class="search-box">
+        <input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="esc" aria-label="Close search">Esc</button>
+      </form>
+      <ul class="results" role="listbox" aria-label="Results"></ul>
+    </dialog>
+    <script src="/docs.js?v=docs-1" defer></script>
+  </body>
+</html>

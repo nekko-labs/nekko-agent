@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Running models locally · Nekko Agent docs</title>
+    <meta name="description" content="Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM)." />
+    <link rel="canonical" href="https://nekkoagent.com/docs/local-models" />
+    <link rel="alternate" type="text/markdown" href="/docs/local-models.md" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="theme-color" content="#101714" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/docs/local-models" />
+    <meta property="og:title" content="Running models locally · Nekko Agent docs" />
+    <meta property="og:description" content="Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM)." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/docs.css?v=docs-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Running models locally","description":"Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM).","url":"https://nekkoagent.com/docs/local-models","inLanguage":"en","isPartOf":{"@id":"https://nekkoagent.com/#website"},"publisher":{"@id":"https://nekkolabs.com/#organization"},"about":{"@id":"https://nekkoagent.com/#app"}}</script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="docs-home" href="/docs">Docs</a>
+      <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Site">
+        <a href="https://github.com/nekko-labs/nekko-agent" rel="noopener">GitHub</a>
+        <a class="download" href="/#download">Download</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models" aria-current="page">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <main id="content">
+        <article class="prose" id="top">
+          <p class="kicker">Using Nekko Agent</p>
+          <h1>Running models locally</h1>
+          <p class="page-tools">
+            <a href="/docs/local-models.md">View as Markdown</a>
+            <a href="/llms.txt">llms.txt</a>
+          </p>
+<p>Nekko Agent runs models two ways: with its <strong>own engine</strong>, which needs nothing else
+installed, or by driving a server you already run (Ollama, LM Studio, vLLM). Either way
+it loads a model with the settings you choose and tells you honestly whether it will fit
+before you wait through the load. This is what the Models page shows you and why.</p>
+<h2 id="the-nekko-engine"><a class="anchor" href="#the-nekko-engine" aria-hidden="true" tabindex="-1">#</a>The Nekko engine</h2>
+<p>The engine is llama.cpp, managed by Nekko Agent. You press one button, a build comes down
+from llama.cpp&#39;s own releases (about 30 MB for Vulkan or CPU, several hundred MB for
+CUDA), and the app can serve models. Nothing
+is downloaded before that press.</p>
+<p><strong>Which build.</strong> Picked from what the GPU probe actually found, not from the platform:
+CUDA where <code>nvidia-smi</code> answers and the card can run it, Vulkan for any other GPU, Metal
+on Apple Silicon, CPU where there is no evidence of anything else. A slow engine that runs
+beats a fast one that fails to start. llama.cpp&#39;s CUDA build is CUDA 13, which needs a
+GTX 16 / RTX 20 series card or newer (compute capability 7.5) and driver 580 or newer, so
+an older card or driver is recommended Vulkan and told why. The picker says CUDA is
+roughly 15-20% faster than Vulkan on NVIDIA (a rough public figure, not yet measured on
+our hardware); it is also the bigger download, about 550 MB on Windows with NVIDIA&#39;s CUDA
+runtime against Vulkan&#39;s 30 MB. A supported NVIDIA machine on a Vulkan or CPU build is
+offered <strong>Switch to CUDA</strong> on the Model server card. Every other build
+for your machine stays in the list if you disagree. If you already have a <code>llama-server</code>,
+point at it instead: Nekko Agent will run it and never update or remove it.</p>
+<p><strong>No Visual Studio, ever.</strong> The Windows builds of llama.cpp and stable-diffusion.cpp, and
+Nekko&#39;s own engine daemon, need the Microsoft Visual C++ Runtime (<code>MSVCP140.dll</code>,
+<code>VCRUNTIME140.dll</code>), not Visual Studio. The installer carries those DLLs beside the daemon
+(about 1 MB), and on a PC without the Visual C++ Redistributable they are copied in beside
+the engine before it starts. If an engine still dies for a missing DLL, the error says so
+and links Microsoft&#39;s 25 MB redistributable.</p>
+<p><strong>Where models come from.</strong> A short curated list answers &quot;what should I run&quot;; search
+covers everything else, straight against Hugging Face with no account. Each model expands
+into its real builds with their real download sizes. Downloads resume after an
+interruption and only land once the file parses as a GGUF, so a half-finished model never
+shows up looking complete. A GGUF you already have is adopted without being copied, and
+pointing the models folder at an existing library adopts everything in it.</p>
+<p><strong>One address, several models.</strong> The engine serves on <code>http://127.0.0.1:11500/v1</code> by
+default, with a <code>llama-server</code> process per loaded model behind it. Several models stay
+resident; a request for one that is not loaded loads it; an idle one is evicted on a
+timer; and the address survives every load and unload. It is OpenAI-compatible, so point
+Claude Code, Cursor, Continue or anything else at it and name a model from <code>/v1/models</code>.</p>
+<p><strong>Two ways to configure a load.</strong> <em>Simple</em> asks one question, how much of this machine
+the model may use, and solves it into a real context length, GPU offload and KV cache
+type, then says what it chose and what it costs. <em>Advanced</em> is every llama.cpp flag:
+context, GPU layers, KV cache type, parallel slots, flash attention, batch and physical
+batch, threads, mmap and mlock, RoPE base and scale, seed, idle TTL. They are the same
+state, so moving one moves the other, and either can be saved as that model&#39;s default.</p>
+<p><strong>The Server tab</strong> carries port, whether it is reachable from your network or only this
+computer, an API key, allowed browser origins, how many models may be resident, the idle
+timeout, load-on-demand, start-with-the-app, and the models folder. The defaults are
+loopback-only with no key, which is safe; binding to the network is a deliberate act and
+the app says what it means next to the setting.</p>
+<p>Because the engine holds the file, it reads the GGUF header directly, so the projection
+below is <strong>exact</strong> for its own models where it has to report parts of itself as unknown
+for somebody else&#39;s.</p>
+<h2 id="servers-you-already-run"><a class="anchor" href="#servers-you-already-run" aria-hidden="true" tabindex="-1">#</a>Servers you already run</h2>
+<h3 id="what-each-one-can-do"><a class="anchor" href="#what-each-one-can-do" aria-hidden="true" tabindex="-1">#</a>What each one can do</h3>
+<p>They are not the same shape, and the app does not pretend they are.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Nekko engine</th>
+<th>Ollama</th>
+<th>LM Studio</th>
+<th>vLLM</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Start / stop from here</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td><strong>no</strong>, connect only</td>
+</tr>
+<tr>
+<td>Load a model on demand</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>no, one model per process</td>
+</tr>
+<tr>
+<td>Set context per load</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>at launch only</td>
+</tr>
+<tr>
+<td>Set GPU offload</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+<td>at launch only</td>
+</tr>
+<tr>
+<td>Parallel slots</td>
+<td><strong>per load</strong></td>
+<td>restart required</td>
+<td>no</td>
+<td>at launch only</td>
+</tr>
+<tr>
+<td>KV cache type</td>
+<td><strong>per load</strong></td>
+<td>restart required</td>
+<td>no</td>
+<td>at launch only</td>
+</tr>
+<tr>
+<td>Reports per-model VRAM</td>
+<td><strong>measured</strong></td>
+<td><strong>yes</strong></td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Layer geometry for the planner</td>
+<td><strong>from the file</strong></td>
+<td><strong>yes</strong></td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Batch, threads, flash attention, rope</td>
+<td><strong>yes</strong></td>
+<td>no</td>
+<td>no</td>
+<td>at launch only</td>
+</tr>
+<tr>
+<td>Installs the engine for you</td>
+<td><strong>yes</strong></td>
+<td>no</td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Downloads models for you</td>
+<td><strong>yes</strong></td>
+<td>yes</td>
+<td>no</td>
+<td>no</td>
+</tr>
+</tbody></table></div>
+<p>Of the servers you bring yourself, <strong>Ollama</strong> is the most controllable and the only one
+that reports its own CPU spill.
+<code>/api/ps</code> gives both the model&#39;s total size and how much of it is in VRAM, and the gap
+between those two numbers is exactly what did not fit. <code>/api/show</code> publishes the layer
+count, KV head count, and embedding length, which is what lets the planner compute an
+exact KV cache rather than an estimate.</p>
+<p><strong>LM Studio</strong> keeps most of its control surface in the <code>lms</code> CLI, so Nekko Agent drives
+that: <code>lms server start</code> and <code>lms server stop</code> are a real lifecycle, and <code>lms load</code>
+carries the context length and GPU share. It publishes no layer geometry anywhere, so
+its projections are partial (see below). Driving it needs the CLI on the same machine as
+the server, so a remote LM Studio can be read but not controlled.</p>
+<p><strong>vLLM</strong> is deliberately connect-existing only. It serves one model per process with
+everything fixed by the launch command, and it is Linux plus NVIDIA plus Python in
+practice. Nekko Agent detects it, shows its live <code>/metrics</code>, and can stop it, but never
+starts it: instead the fit drawer renders the exact <code>vllm serve</code> command for you to run.
+Nothing that could not be verified against real hardware ships as a working button.</p>
+<h2 id="reading-the-fit-bar"><a class="anchor" href="#reading-the-fit-bar" aria-hidden="true" tabindex="-1">#</a>Reading the fit bar</h2>
+<p>The bar stacks what the model needs against what the device has free:</p>
+<ul>
+<li><strong>Weights</strong>, the model&#39;s actual size. Taken from what the server reports or the file on
+disk, never computed from a parameter count times a quantization width, which is wrong
+for mixed-precision builds like <code>Q4_K_M</code>.</li>
+<li><strong>KV cache</strong>, the conversation&#39;s memory: <code>2 x layers x kvHeads x headDim x context x bytesPerElement x parallelSlots</code>.</li>
+<li><strong>Runtime overhead</strong>, compute buffers and the server&#39;s own reserve.</li>
+</ul>
+<p>The marker line is where the device&#39;s free memory runs out. Anything drawn past it has to
+live in system RAM instead.</p>
+<h2 id="the-verdicts"><a class="anchor" href="#the-verdicts" aria-hidden="true" tabindex="-1">#</a>The verdicts</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Verdict</th>
+<th>What it means</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Fits</strong></td>
+<td>Everything runs on the GPU with room to spare.</td>
+</tr>
+<tr>
+<td><strong>Tight</strong></td>
+<td>It fits, but a long conversation may start spilling.</td>
+</tr>
+<tr>
+<td><strong>Spills to CPU</strong></td>
+<td>Part of the model runs on the CPU. It works, several times slower.</td>
+</tr>
+<tr>
+<td><strong>Will not load</strong></td>
+<td>It does not fit even using system memory, or the context exceeds the model&#39;s own maximum.</td>
+</tr>
+<tr>
+<td><strong>Unknown</strong></td>
+<td>The server did not report enough to project it.</td>
+</tr>
+</tbody></table></div>
+<p><strong>Unknown is a real answer, not a bug.</strong> Nekko Agent will not infer a model&#39;s memory use
+from its name. If the layer count is missing, it says so and names what is missing. A
+confident wrong number costs you a long load and every number after it.</p>
+<p>Where the weights are known but the geometry is not, which is the usual LM Studio case,
+the answer is partial rather than absent: the real weights figure is shown, and if the
+weights alone overflow the machine the will-not-load verdict is still certain.</p>
+<p>The planner never blocks a load. A will-not-load verdict warns clearly and still lets you
+proceed. The estimate can be wrong, and it is your machine.</p>
+<h2 id="why-a-model-spills-to-the-cpu"><a class="anchor" href="#why-a-model-spills-to-the-cpu" aria-hidden="true" tabindex="-1">#</a>Why a model spills to the CPU</h2>
+<p>Three things push a model off the GPU, in roughly this order of surprise:</p>
+<ol>
+<li><strong>Context length.</strong> The KV cache grows linearly with context. Going from 8k to 64k
+multiplies it eightfold, and past a point the cache is larger than the model.</li>
+<li><strong>Parallel slots.</strong> Every concurrent slot gets its own full KV cache. Raising
+<code>OLLAMA_NUM_PARALLEL</code> from 1 to 4 quadruples the cache at the same context, which is
+why a model that fit yesterday can stop fitting today with nothing else changed.</li>
+<li><strong>Something else already resident.</strong> The planner measures against <em>free</em> memory, not
+total, so another loaded model counts against you.</li>
+</ol>
+<p>The suggestion chips fix these in that order, and each one is re-planned before being
+offered, so clicking a suggestion always improves the verdict.</p>
+<h2 id="apple-silicon"><a class="anchor" href="#apple-silicon" aria-hidden="true" tabindex="-1">#</a>Apple Silicon</h2>
+<p>A Mac shares one memory pool between the CPU and GPU. The budget is therefore system
+memory, and Nekko Agent never adds a &quot;VRAM&quot; figure on top of RAM, which would make a
+64 GB Mac look like it has 128 GB. The fit drawer says so explicitly when it applies.</p>
+<h2 id="multiple-gpus"><a class="anchor" href="#multiple-gpus" aria-hidden="true" tabindex="-1">#</a>Multiple GPUs</h2>
+<p>Two 12 GB cards are not one 24 GB card. Without tensor parallelism a model has to fit on
+a single device, so the planner measures against the roomiest one and says that it is not
+pooling them. Only vLLM can split a model across cards, through <code>--tensor-parallel-size</code>.</p>
+<h2 id="settings-that-need-a-restart"><a class="anchor" href="#settings-that-need-a-restart" aria-hidden="true" tabindex="-1">#</a>Settings that need a restart</h2>
+<p>Some settings are read only when the server starts. Ollama&#39;s parallelism
+(<code>OLLAMA_NUM_PARALLEL</code>) and KV cache type (<code>OLLAMA_KV_CACHE_TYPE</code>) are both like this.
+The Advanced section shows them with the exact environment line to set and marks them
+restart-required, rather than offering a control that would quietly not apply.</p>
+<p><code>OLLAMA_KV_CACHE_TYPE=q8_0</code> roughly halves KV cache memory, which is often the cheapest
+way to fit a longer context.</p>
+<h2 id="stopping-a-server"><a class="anchor" href="#stopping-a-server" aria-hidden="true" tabindex="-1">#</a>Stopping a server</h2>
+<p>A server Nekko Agent started is stopped with its own handle, cleanly, and it will not
+outlive the app. A server that was already running when Nekko Agent found it is somebody
+else&#39;s process: stopping that one asks first and names what it would end, because the
+thing holding port 11434 might be a service you depend on.</p>
+<p>LM Studio is the exception that needs no such warning, since it has a real shutdown
+command rather than a process to kill.</p>
+<h2 id="what-is-not-here-yet"><a class="anchor" href="#what-is-not-here-yet" aria-hidden="true" tabindex="-1">#</a>What is not here yet</h2>
+<p>Browsing and downloading models from inside the app, and a bundled inference engine so a
+fresh install can run a model with nothing else present, are both planned as separate
+pieces of work. Today Nekko Agent manages the runtimes you already have.</p>
+
+          <footer class="page-foot">
+            <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/docs/local-models.md" rel="noopener">Edit this page on GitHub</a>
+            <div class="pager"><a class="prev" href="/docs/walkthrough"><span>Previous</span>Walkthrough</a><a class="next" href="/docs/subscriptions"><span>Next</span>Subscription sign-in</a></div>
+          </footer>
+        </article>
+      </main>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Running models locally</a></li><li class="d2"><a href="#the-nekko-engine">The Nekko engine</a></li><li class="d2"><a href="#servers-you-already-run">Servers you already run</a></li><li class="d3"><a href="#what-each-one-can-do">What each one can do</a></li><li class="d2"><a href="#reading-the-fit-bar">Reading the fit bar</a></li><li class="d2"><a href="#the-verdicts">The verdicts</a></li><li class="d2"><a href="#why-a-model-spills-to-the-cpu">Why a model spills to the CPU</a></li><li class="d2"><a href="#apple-silicon">Apple Silicon</a></li><li class="d2"><a href="#multiple-gpus">Multiple GPUs</a></li><li class="d2"><a href="#settings-that-need-a-restart">Settings that need a restart</a></li><li class="d2"><a href="#stopping-a-server">Stopping a server</a></li><li class="d2"><a href="#what-is-not-here-yet">What is not here yet</a></li></ul></nav></aside>
+    </div>
+    <dialog class="search-dialog" aria-label="Search the docs">
+      <form method="dialog" class="search-box">
+        <input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="esc" aria-label="Close search">Esc</button>
+      </form>
+      <ul class="results" role="listbox" aria-label="Results"></ul>
+    </dialog>
+    <script src="/docs.js?v=docs-1" defer></script>
+  </body>
+</html>

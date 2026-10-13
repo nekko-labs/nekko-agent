@@ -90,7 +90,7 @@ export const ONBOARDING_VERSION = 1;
 export type WallLayoutMode = 'grid' | 'focus' | 'fixed';
 export interface WallLayout { mode: WallLayoutMode; cols: number; rows: number }
 export type WallDockSide = 'right' | 'left' | 'top' | 'bottom';
-export type WallDockPanel = 'vitals' | 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware';
+export type WallDockPanel = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware';
 export interface WallDock {
   side: WallDockSide;
   show: boolean;
@@ -103,9 +103,11 @@ export interface WallDock {
 export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2 };
 export const DEFAULT_WALL_DOCK: WallDock = {
   side: 'right', show: true,
-  panelOrder: ['vitals', 'hardware', 'utilization', 'budget', 'automations', 'insights'],
-  minimized: { vitals: false, hardware: false, utilization: false, budget: false, automations: false, insights: false },
-  panels: { vitals: true, hardware: true, utilization: true, budget: true, automations: true, insights: false },
+  // The hardware monitor leads; a Vitals panel was here until 2026-10-13
+  // (sanitizeWallDock drops it from saved docks).
+  panelOrder: ['hardware', 'utilization', 'budget', 'automations', 'insights'],
+  minimized: { hardware: false, utilization: false, budget: false, automations: false, insights: false },
+  panels: { hardware: true, utilization: true, budget: true, automations: true, insights: false },
 };
 
 /** Advisory USD budget only, not an enforced spending limit. Invalid/unset means no budget. */
@@ -129,8 +131,8 @@ export interface CommandWallSetting {
   filter: 'all' | 'chat' | 'terminal';
   insights: { panels: Record<string, boolean> };
   watermark: number;
-  /** Where the wall's one composer sits. */
-  composer?: { side: 'top' | 'bottom'; align: 'left' | 'center' | 'right' };
+  /** Where the wall's one composer sits, and the size it was dragged to (CSS pixels; absent means default). */
+  composer?: { side: 'top' | 'bottom'; align: 'left' | 'center' | 'right'; width?: number; height?: number };
 }
 
 /**
@@ -213,6 +215,8 @@ export interface AppSettings {
   providers: ProviderConfig[];
   guardrails: GuardrailRule[];
   workspaces: WorkspaceFolder[];
+  /** Folders a new agent starts with, in order: the first is its primary. Ids no longer in `workspaces` are ignored. */
+  defaultWorkspaceIds?: string[];
   connectors: ConnectorConfig[];
   defaultProviderId?: string;
   defaultModelId?: string;

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contributing to Nekko Agent · Nekko Agent docs</title>
+    <meta name="description" content="Set up a development checkout, the project layout, and what a pull request needs." />
+    <link rel="canonical" href="https://nekkoagent.com/docs/contributing" />
+    <link rel="alternate" type="text/markdown" href="/docs/contributing.md" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="theme-color" content="#101714" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/docs/contributing" />
+    <meta property="og:title" content="Contributing to Nekko Agent · Nekko Agent docs" />
+    <meta property="og:description" content="Set up a development checkout, the project layout, and what a pull request needs." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/docs.css?v=docs-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Contributing to Nekko Agent","description":"Set up a development checkout, the project layout, and what a pull request needs.","url":"https://nekkoagent.com/docs/contributing","inLanguage":"en","isPartOf":{"@id":"https://nekkoagent.com/#website"},"publisher":{"@id":"https://nekkolabs.com/#organization"},"about":{"@id":"https://nekkoagent.com/#app"}}</script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="docs-home" href="/docs">Docs</a>
+      <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Site">
+        <a href="https://github.com/nekko-labs/nekko-agent" rel="noopener">GitHub</a>
+        <a class="download" href="/#download">Download</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing" aria-current="page">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <main id="content">
+        <article class="prose" id="top">
+          <p class="kicker">Contributing</p>
+          <h1>Contributing to Nekko Agent</h1>
+          <p class="page-tools">
+            <a href="/docs/contributing.md">View as Markdown</a>
+            <a href="/llms.txt">llms.txt</a>
+          </p>
+<p>Thanks for your interest! Nekko Agent is an open-source, local-first AI coding &amp; cowork desktop app. Contributions of all sizes are welcome.</p>
+<h2 id="development-setup"><a class="anchor" href="#development-setup" aria-hidden="true" tabindex="-1">#</a>Development setup</h2>
+<p>Requires Node 22.12+ and a Rust toolchain (<a href="https://rustup.rs" rel="noopener">rustup.rs</a>): <code>npm run dev</code> and <code>npm run build</code> compile the engine daemon (<code>nekkod</code>). The project uses <strong>npm workspaces</strong> (not pnpm/yarn).</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">git clone https://github.com/nekko-labs/nekko-agent
+cd nekko-agent
+npm install
+npm run dev          # build the Rust daemon and the app, then launch the desktop app</code></pre></div>
+<p>To stop a dev run, press <strong>Enter</strong> or <strong>q</strong> (or Ctrl+C) in its terminal. The app quits the normal way, stopping the engine and any model servers it started; press again to force it, which ends the whole process tree. A run that hasn&#39;t exited after 10 seconds is forced too.</p>
+<h2 id="project-layout"><a class="anchor" href="#project-layout" aria-hidden="true" tabindex="-1">#</a>Project layout</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>packages/shared</code></td>
+<td>Types + IPC contracts (pure, no runtime deps)</td>
+</tr>
+<tr>
+<td><code>packages/core</code></td>
+<td>Engine: providers, agent loop, guardrails, context, indexer, memory, connectors. <strong>No Electron imports</strong>, unit-tested with Vitest.</td>
+</tr>
+<tr>
+<td><code>apps/desktop</code></td>
+<td>Electron app: <code>src/main</code> (Node), <code>src/preload</code> (bridge), <code>src/renderer</code> (React)</td>
+</tr>
+<tr>
+<td><code>apps/website</code></td>
+<td>Static marketing site</td>
+</tr>
+<tr>
+<td><code>scripts/itest-local.mjs</code></td>
+<td>Manual end-to-end test against a real model server</td>
+</tr>
+</tbody></table></div>
+<p><strong>Rule of thumb:</strong> business logic goes in <code>packages/core</code> (so it&#39;s testable without Electron); the desktop app wires it to the filesystem, shell, and UI.</p>
+<h2 id="publishing-the-npx-nekko-agent-package"><a class="anchor" href="#publishing-the-npx-nekko-agent-package" aria-hidden="true" tabindex="-1">#</a>Publishing the <code>npx nekko-agent</code> package</h2>
+<p><code>npm run bundle:web</code> produces a self-contained package in <code>apps/server/cli-dist/</code>
+(server + engine bundled by esbuild, plus the built <code>web/</code> UI). To release it:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run bundle:web
+cd apps/server/cli-dist &amp;&amp; npm publish</code></pre></div>
+<p>After that, anyone can run the web edition with <code>npx nekko-agent</code>.</p>
+<h2 id="before-you-open-a-pr"><a class="anchor" href="#before-you-open-a-pr" aria-hidden="true" tabindex="-1">#</a>Before you open a PR</h2>
+<p>Keep the build green and the suite passing:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run build       # Rust daemon (nekkod), then shared → core → host → cli → desktop
+npm test            # tests in every workspace
+npm run typecheck   # every TypeScript workspace</code></pre></div>
+<ul>
+<li>Add tests in <code>packages/core</code> for new engine behavior (providers, guardrails, agent loop, context).</li>
+<li>Match the surrounding code style; keep changes focused.</li>
+<li>For provider changes, you can verify against a real local server:
+<code>node scripts/itest-local.mjs http://your-host:port your-model-id</code></li>
+</ul>
+<h2 id="documentation"><a class="anchor" href="#documentation" aria-hidden="true" tabindex="-1">#</a>Documentation</h2>
+<p>The docs at <a href="https://nekkoagent.com/docs">nekkoagent.com/docs</a> are rendered from Markdown in this repo. <code>docs/hub/nav.json</code> lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change. When a pull request changes what users see or do, update the page that describes it in the same PR.</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run docs</code></pre></div>
+<p>If you forget, the <strong>Docs site</strong> workflow regenerates the pages on your pull request and pushes them to its branch. It only commits when something actually changed.</p>
+<h2 id="commit-messages"><a class="anchor" href="#commit-messages" aria-hidden="true" tabindex="-1">#</a>Commit messages</h2>
+<p>Conventional commits (<code>feat:</code>, <code>fix:</code>, <code>docs:</code>, <code>refactor:</code>, <code>test:</code>, <code>chore:</code>).</p>
+<h2 id="reporting-bugs--requesting-features"><a class="anchor" href="#reporting-bugs--requesting-features" aria-hidden="true" tabindex="-1">#</a>Reporting bugs / requesting features</h2>
+<p>Use the issue templates. For local-model issues, please include your provider
+kind (Ollama / LM Studio / vLLM / cloud), the base URL shape, and the model id.</p>
+<h2 id="license"><a class="anchor" href="#license" aria-hidden="true" tabindex="-1">#</a>License</h2>
+<p>By contributing, you agree your contributions are licensed under the <a href="https://github.com/nekko-labs/nekko-agent/blob/main/LICENSE" rel="noopener">MIT License</a>.</p>
+
+          <footer class="page-foot">
+            <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/CONTRIBUTING.md" rel="noopener">Edit this page on GitHub</a>
+            <div class="pager"><a class="prev" href="/docs/benchmarks"><span>Previous</span>Local inference benchmarks</a><a class="next" href="/docs/architecture"><span>Next</span>Architecture</a></div>
+          </footer>
+        </article>
+      </main>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Contributing to Nekko Agent</a></li><li class="d2"><a href="#development-setup">Development setup</a></li><li class="d2"><a href="#project-layout">Project layout</a></li><li class="d2"><a href="#publishing-the-npx-nekko-agent-package">Publishing the npx nekko-agent package</a></li><li class="d2"><a href="#before-you-open-a-pr">Before you open a PR</a></li><li class="d2"><a href="#documentation">Documentation</a></li><li class="d2"><a href="#commit-messages">Commit messages</a></li><li class="d2"><a href="#reporting-bugs--requesting-features">Reporting bugs / requesting features</a></li><li class="d2"><a href="#license">License</a></li></ul></nav></aside>
+    </div>
+    <dialog class="search-dialog" aria-label="Search the docs">
+      <form method="dialog" class="search-box">
+        <input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="esc" aria-label="Close search">Esc</button>
+      </form>
+      <ul class="results" role="listbox" aria-label="Results"></ul>
+    </dialog>
+    <script src="/docs.js?v=docs-1" defer></script>
+  </body>
+</html>

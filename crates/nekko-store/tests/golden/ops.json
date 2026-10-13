@@ -14,12 +14,16 @@
     ["setWorkspace", "w2"],
     ["setAttachments", ["C:/src/a.ts", "/tmp/b.md"]],
     ["setSpecLinked", true],
-    ["setWorkspace", null]
+    ["setWorkspace", null],
+    ["autoTitle", "Not the app's to name"]
   ] },
   { "fixture": "s_plain", "ops": [
     ["dequeue", 0],
     ["truncate", "no-such-message"],
     ["setSupporting", ["w1"]],
     ["truncate", "a1"]
+  ] },
+  { "fixture": "s_sandbox", "ops": [
+    ["configureSandbox", "example/sandbox@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "11111111-2222-4333-8444-555555555555", 1760000000000]
   ] }
 ]

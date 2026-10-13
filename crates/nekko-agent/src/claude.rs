@@ -89,6 +89,7 @@ pub fn claude_context_window(model: &str) -> Option<u64> {
     let c = parse_claude_model(model)?;
     Some(match c.family {
         Family::Fable | Family::Mythos => 1_000_000,
+        Family::Haiku if c.major >= 5.0 => 1_000_000,
         Family::Haiku => 200_000,
         _ if at_least(&c, 4.0, 6.0) => 1_000_000,
         _ => 200_000,
@@ -102,6 +103,9 @@ pub fn claude_context_window(model: &str) -> Option<u64> {
 /// less says so in a 400 (see `output_limit_error`).
 pub fn claude_max_output_tokens(model: &str) -> u64 {
     let Some(c) = parse_claude_model(model) else { return 32_000 };
+    if c.family == Family::Haiku && c.major >= 5.0 {
+        return 128_000;
+    }
     if matches!(c.family, Family::Fable | Family::Mythos) || c.major >= 5.0 {
         return 64_000;
     }
@@ -166,7 +170,6 @@ pub fn uses_native_effort(model: &str) -> bool {
         None => false,
         Some(c) => match c.family {
             Family::Fable | Family::Mythos => true,
-            Family::Haiku => false,
             _ => at_least(&c, 4.0, 7.0),
         },
     }
@@ -193,11 +196,51 @@ pub fn model_default_effort(model: &str) -> EffortLevel {
     }
 }
 
-/// The saved effort setting, as this model can actually honour it.
+/// `isOpenAIReasoning` (model-capabilities.ts): OpenAI's reasoning ids,
+/// `/(?:^|[-_/ .])(?:o[134](?:-|$)|gpt-?(?:[5-9]|\d{2,})(?:[.\-]|$)|gpt-oss|codex)/i`.
+pub fn is_openai_reasoning(model: &str) -> bool {
+    let m = model.to_ascii_lowercase();
+    let b = m.as_bytes();
+    let ends_ok = |i: usize, extra: &[u8]| i == b.len() || extra.contains(&b[i]);
+    (0..b.len()).any(|i| {
+        if i > 0 && !b"-_/ .".contains(&b[i - 1]) {
+            return false;
+        }
+        let r = &b[i..];
+        if r.len() >= 2 && r[0] == b'o' && b"134".contains(&r[1]) && ends_ok(i + 2, b"-") {
+            return true;
+        }
+        if r.starts_with(b"gpt-oss") || r.starts_with(b"codex") {
+            return true;
+        }
+        if r.starts_with(b"gpt") {
+            let at = if r.get(3) == Some(&b'-') { 4 } else { 3 };
+            let digits = r[at.min(r.len())..].iter().take_while(|c| c.is_ascii_digit()).count();
+            let first = r.get(at).copied().unwrap_or(0);
+            if (digits >= 2 || (digits == 1 && (b'5'..=b'9').contains(&first))) && ends_ok(i + at + digits, b".-") {
+                return true;
+            }
+            // `gpt-?` may also skip the dash: `gpt` then the digits right after it.
+            if at == 4 {
+                return false;
+            }
+        }
+        false
+    })
+}
+
+/// The saved effort setting, as this model can actually honour it
+/// (`effectiveEffort`, model-capabilities.ts).
 pub fn effective_effort(setting: Option<EffortLevel>, model: &str) -> EffortLevel {
     let level = setting.unwrap_or(EffortLevel::Normal);
     if uses_native_effort(model) {
         return if level == EffortLevel::Normal { model_default_effort(model) } else { level };
+    }
+    if is_openai_reasoning(model) {
+        return match level {
+            EffortLevel::Xhigh | EffortLevel::Max => EffortLevel::High,
+            l => l,
+        };
     }
     match level {
         EffortLevel::Medium => EffortLevel::Normal,
@@ -373,6 +416,38 @@ pub fn sampling_param_error(status: u16, body: &str) -> Option<SamplingShape> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn openai_reasoning_ids_match_the_ts_pattern() {
+        // V8's answers for `/(?:^|[-_/ .])(?:o[134](?:-|$)|gpt-?(?:[5-9]|\d{2,})(?:[.\-]|$)|gpt-oss|codex)/i`.
+        let cases = [
+            ("gpt-5", true),
+            ("gpt5.1", true),
+            ("gpt-4.1", false),
+            ("gpt-4o", false),
+            ("o3", true),
+            ("o3-mini", true),
+            ("o1x", false),
+            ("openai/gpt-5-codex", true),
+            ("gpt-oss-120b", true),
+            ("my-codex", true),
+            ("GPT-10", true),
+            ("gpt-55x", false),
+            ("gpt-6.1-sol", true),
+            ("claude-opus", false),
+            ("o4-mini", true),
+            ("xo3", false),
+            ("gpt-", false),
+            ("gpt-12", true),
+        ];
+        for (m, want) in cases {
+            assert_eq!(is_openai_reasoning(m), want, "{m}");
+        }
+        // An OpenAI reasoning model keeps `medium`, as effectiveEffort does.
+        assert_eq!(effective_effort(Some(EffortLevel::Medium), "gpt-5"), EffortLevel::Medium);
+        assert_eq!(effective_effort(Some(EffortLevel::Max), "gpt-5"), EffortLevel::High);
+        assert_eq!(effective_effort(Some(EffortLevel::Medium), "gemma"), EffortLevel::Normal);
+    }
     use EffortLevel::*;
 
     // Mirrors of anthropic.test.ts and model-capabilities.test.ts.
@@ -447,9 +522,13 @@ mod tests {
     #[test]
     fn reads_effort_and_context_off_the_id() {
         assert_eq!(claude_context_window("claude-opus-5-5"), Some(1_000_000));
+        assert_eq!(claude_context_window("claude-haiku-5-5"), Some(1_000_000));
         assert_eq!(claude_context_window("claude-haiku-4-5-20251001"), Some(200_000));
         assert_eq!(claude_context_window("claude-sonnet-4-5"), Some(200_000));
         assert_eq!(claude_context_window("gpt-5"), None);
+        assert!(uses_native_effort("claude-haiku-5-5"));
+        assert!(!uses_native_effort("claude-haiku-4-5-20251001"));
+        assert_eq!(anthropic_effort("claude-haiku-5-5", Some(Xhigh)), Xhigh);
         assert_eq!(anthropic_effort("claude-opus-5", Some(Normal)), High);
         assert_eq!(anthropic_effort("claude-opus-5-5", Some(Normal)), Medium);
         assert_eq!(anthropic_effort("claude-opus-5", Some(Xhigh)), Xhigh);
@@ -467,6 +546,7 @@ mod tests {
         assert_eq!(claude_max_output_tokens("claude-sonnet-4-6"), 64_000);
         assert_eq!(claude_max_output_tokens("claude-sonnet-3-5"), 8_192);
         assert_eq!(claude_max_output_tokens("claude-haiku-4-5-20251001"), 64_000);
+        assert_eq!(claude_max_output_tokens("claude-haiku-5-5"), 128_000);
         assert_eq!(claude_max_output_tokens("claude-fable-5-1"), 64_000);
         assert_eq!(claude_max_output_tokens("my-proxy-model"), 32_000);
     }

@@ -1,7 +1,8 @@
 import React, { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ContextBundle, SessionMeta, WorkspaceFolder } from '@nekko-agent/shared';
 import { getSessionWorkspaceIds, estimateTokens } from '@nekko-agent/shared';
-import { FolderIcon, FileIcon, PlusIcon, TrashIcon, ExternalIcon, ChevronIcon } from '../icons.js';
+import { FolderIcon, FileIcon, PlusIcon, TrashIcon, ExternalIcon, ChevronIcon, StarIcon } from '../icons.js';
+import { toggleDefaultFolder } from '../defaultFolders.js';
 import { useStore } from '../store.js';
 import { afterPaint } from '../afterPaint.js';
 import { SpecPanel } from './SpecPanel.js';
@@ -92,6 +93,7 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
   const splitRef = useRef<HTMLDivElement>(null);
 
   const session = sessions.find((s) => s.id === sessionId) ?? null;
+  const defaultFolderIds = settings?.defaultWorkspaceIds ?? [];
   const workspaces = (settings?.workspaces ?? []).map((w) => ({ ...w, path: session?.gitIsolation === false ? w.path : session?.gitWorktrees?.[w.id]?.path ?? w.path }));
   const attached = session?.attachedPaths ?? [];
   // The skill armed in this chat's composer (renderer-only until sent), so we can
@@ -306,6 +308,8 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
                 onExclude={() => excludeFolder(w.id)}
                 onRemove={() => removeFolder(w.id)}
                 onOpenFile={openInPane}
+                isDefault={defaultFolderIds.includes(w.id)}
+                onToggleDefault={() => toggleDefaultFolder(w.id)}
               />
             ))}
           </div>
@@ -467,8 +471,10 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
  * tree so you can open a file without leaving the panel.
  */
 function FolderAccordion({
-  workspace, session, expanded, onToggleExpanded, onMakePrimary, onInclude, onExclude, onRemove, onOpenFile,
+  workspace, session, expanded, onToggleExpanded, onMakePrimary, onInclude, onExclude, onRemove, onOpenFile, isDefault, onToggleDefault,
 }: {
+  isDefault: boolean;
+  onToggleDefault: () => void;
   workspace: WorkspaceFolder;
   session: SessionMeta | null;
   expanded: boolean;
@@ -512,6 +518,16 @@ function FolderAccordion({
               </button>
             )
         )}
+        <button
+          type="button"
+          className={`shrink-0 rounded-sm p-0.5 transition-opacity focus-visible:opacity-100 ${isDefault ? 'text-accent' : 'text-ink-faint opacity-0 hover:text-ink group-hover:opacity-100'}`}
+          aria-pressed={isDefault}
+          aria-label={isDefault ? `Stop starting new chats in ${name}` : `Start new chats in ${name}`}
+          title={isDefault ? 'Default for new chats (click to unset)' : 'Set as default for new chats'}
+          onClick={onToggleDefault}
+        >
+          <StarIcon className="h-3.5 w-3.5" filled={isDefault} />
+        </button>
         <button
           className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 transition-opacity hover:text-(--danger) focus-visible:opacity-100 group-hover:opacity-100"
           title="Remove this folder"

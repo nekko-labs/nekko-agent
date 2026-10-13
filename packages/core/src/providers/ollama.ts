@@ -20,8 +20,8 @@ export class OllamaProvider implements Provider {
 
   async listModels(): Promise<ModelInfo[]> {
     const [tags, ps] = await Promise.all([
-      fetch(`${this.base()}/api/tags`).then((r) => r.json() as Promise<any>).catch(() => ({ models: [] as any[] })),
-      fetch(`${this.base()}/api/ps`).then((r) => r.json() as Promise<any>).catch(() => ({ models: [] as any[] })),
+      fetch(`${this.base()}/api/tags`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json() as Promise<any>).catch(() => ({ models: [] as any[] })),
+      fetch(`${this.base()}/api/ps`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json() as Promise<any>).catch(() => ({ models: [] as any[] })),
     ]);
     const vramByName = new Map<string, number>((ps.models ?? []).map((m: any) => [m.name, m.size_vram ?? 0]));
     return (tags.models ?? []).map((m: any) => ({

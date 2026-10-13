@@ -221,7 +221,7 @@ function NewRunForm({
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
-        <h1 className="text-lg font-bold tracking-tight">New training run</h1>
+        <h1 className="view-title">New training run</h1>
         <p className="mt-1 text-[12.5px] text-(--ink-soft)">
           Say what the model is for; the agent handles the rest. Every attempt shows up live in the idea maze, and you can steer it mid-run.
         </p>

@@ -1,9 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { expect, it } from 'vitest';
+import { beforeEach, expect, it } from 'vitest';
+import { layoutWithLogsDrawer, logsDrawerWidth, overlayLogsDrawer, useWallLogs, type Rect } from '../wallLogs.js';
 
 const source = readFileSync(new URL('../components/ChatPane.tsx', import.meta.url), 'utf8');
+const wall = readFileSync(new URL('../components/CommandWall.tsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
-const bubble = readFileSync(new URL('../components/AgentLogsBubble.tsx', import.meta.url), 'utf8');
+const drawer = readFileSync(new URL('../components/AgentLogsDrawer.tsx', import.meta.url), 'utf8');
+
+beforeEach(() => useWallLogs.setState({ sessionId: null, kind: 'logs', closing: false }));
 
 it('keeps owning-session logs available without the compact-pane visibility gate', () => {
   const start = source.indexOf('aria-label="Open agent logs"');
@@ -14,20 +18,116 @@ it('keeps owning-session logs available without the compact-pane visibility gate
   expect(source.slice(source.lastIndexOf('</button>', start) + 9, start)).not.toContain('!compact');
 });
 
-it('opens the log in a bubble on the Agents wall instead of the hidden Chat view', () => {
+it('opens the log as a wall drawer, not an overlay inside the chat', () => {
   const start = source.indexOf('aria-label="Open agent logs"');
   const control = source.slice(source.lastIndexOf('<button', start), source.indexOf('</button>', start));
-  // The wall toggles the in-window bubble; only the Chat view's workbench opens a pane.
-  expect(control).toContain('commandCenter ? setLogsOpen((o) => !o) : useStore.getState().openTerminalPane(`agent_${sessionId}`)');
-  expect(source).toContain('<AgentLogsBubble');
-  expect(bubble).toContain('<TerminalPane terminalId={`agent_${sessionId}`} />');
-  // Popping out to a pane is offered only when the Chat view exists.
-  expect(source).toContain('onPopOut={chatViewOn ?');
+  expect(control).toContain('commandCenter ? useWallLogs.getState().toggle(sessionId) : useStore.getState().openTerminalPane(`agent_${sessionId}`)');
+  // The chat no longer draws the log over its own transcript.
+  expect(source).not.toContain('AgentLogs');
+  expect(wall).toContain('<AgentLogsDrawer');
+  expect(wall).toContain('layoutWithLogsDrawer(geometry.panes');
+  expect(drawer).toContain('<TerminalPane terminalId={`agent_${sessionId}`} />');
 });
 
-it('bubbles out from the middle of the window\u2019s right edge', () => {
-  expect(css).toMatch(/\.agent-logs-bubble \{\s*position: absolute; right: 12px; top: 50%;/);
-  expect(css).toContain('transform: translateY(-50%); transform-origin: 100% 50%;');
-  expect(css).toContain('@keyframes agent-logs-bubble-in');
-  expect(css).toContain('@media (prefers-reduced-motion: reduce) { .agent-logs-bubble { animation: none; } }');
+it('looks joined to its window and animates out and back in', () => {
+  expect(css).toMatch(/\.agent-logs-drawer-inner \{[^}]*border-left: 0;/);
+  expect(css).toContain('@keyframes agent-logs-drawer-out');
+  expect(css).toContain('@keyframes agent-logs-drawer-in');
+  expect(css).toContain('.agent-logs-drawer[data-closing]');
+  expect(css).toContain('.command-wall-window[data-wall-logs-open] > .panel');
+});
+
+it('toggles one drawer at a time and keeps it mounted while it closes', () => {
+  const s = useWallLogs.getState;
+  s().toggle('a');
+  expect(s()).toMatchObject({ sessionId: 'a', closing: false });
+  s().toggle('b');
+  expect(s()).toMatchObject({ sessionId: 'b', closing: false });
+  s().toggle('b');
+  expect(s()).toMatchObject({ sessionId: 'b', closing: true });
+  s().closed();
+  expect(s()).toMatchObject({ sessionId: null, closing: false });
+});
+
+const two = (): Map<string, Rect> => new Map([
+  ['left', { x: 0, y: 0, width: 996, height: 1000 }],
+  ['right', { x: 1004, y: 0, width: 996, height: 1000 }],
+]);
+
+it('hangs the drawer off the right edge at 96% height and pushes the window beside it', () => {
+  const { panes, drawer } = layoutWithLogsDrawer(two(), 'left', 2000);
+  const w = logsDrawerWidth(2000);
+  expect(drawer).toEqual({ x: 996, y: 20, width: w, height: 960 });
+  expect(panes.get('left')).toEqual(two().get('left'));
+  const right = panes.get('right')!;
+  // The 8px gap between them stays, scaled with the squeeze.
+  expect(right.x).toBeGreaterThanOrEqual(996 + w);
+  expect(right.x).toBeLessThan(996 + w + 8);
+  // Squeezed into what is left of the stage rather than pushed off it.
+  expect(right.x + right.width).toBeCloseTo(2000, 5);
+});
+
+it('narrows the rightmost window instead of pushing anything off the wall', () => {
+  const { panes, drawer } = layoutWithLogsDrawer(two(), 'right', 2000);
+  expect(panes.get('left')).toEqual(two().get('left'));
+  const right = panes.get('right')!;
+  expect(right.width).toBeLessThan(996);
+  expect(drawer!.x).toBe(right.x + right.width);
+  expect(drawer!.x + drawer!.width).toBeLessThanOrEqual(2000);
+});
+
+it('keeps three windows in a row on the wall, narrowing the drawer before pushing any off', () => {
+  const row = new Map<string, Rect>([
+    ['a', { x: 0, y: 0, width: 518, height: 700 }],
+    ['b', { x: 526, y: 0, width: 518, height: 700 }],
+    ['c', { x: 1052, y: 0, width: 518, height: 700 }],
+  ]);
+  const { panes, drawer } = layoutWithLogsDrawer(row, 'a', 1570);
+  const c = panes.get('c')!;
+  expect(c.x + c.width).toBeLessThanOrEqual(1570 + 1e-6);
+  expect(panes.get('b')!.width).toBeGreaterThanOrEqual(240 - 1e-6);
+  expect(drawer!.width).toBeGreaterThanOrEqual(280);
+  expect(drawer!.height).toBe(672);
+});
+
+it('still opens on a one-column wall, over the window instead of beside it', () => {
+  const col = new Map<string, Rect>([['a', { x: 0, y: 0, width: 600, height: 400 }]]);
+  const { panes, drawer, overlay } = overlayLogsDrawer(col, 'a');
+  expect(overlay).toBe(true);
+  expect(panes.get('a')).toEqual(col.get('a'));
+  expect(drawer).toEqual({ x: 28, y: 8, width: 560, height: 384 });
+  // The wall picks the overlay below NARROW_WIDTH rather than closing the drawer.
+  expect(wall).toContain('overlayLogsDrawer(geometry.panes, logsPane.id)');
+});
+
+it('leaves windows in other rows where they are', () => {
+  const grid = new Map<string, Rect>([
+    ['a', { x: 0, y: 0, width: 996, height: 496 }],
+    ['b', { x: 1004, y: 0, width: 996, height: 496 }],
+    ['c', { x: 1004, y: 504, width: 996, height: 496 }],
+  ]);
+  const { panes } = layoutWithLogsDrawer(grid, 'a', 2000);
+  expect(panes.get('c')).toEqual(grid.get('c'));
+  expect(panes.get('b')!.x).toBeGreaterThan(1004);
+});
+
+it('opens Changes, Files and Browser in the same drawer, switching kind without closing', () => {
+  const s = useWallLogs.getState;
+  s().toggle('a', 'diff');
+  expect(s()).toMatchObject({ sessionId: 'a', kind: 'diff', closing: false });
+  s().toggle('a', 'browser');
+  expect(s()).toMatchObject({ sessionId: 'a', kind: 'browser', closing: false });
+  s().toggle('a', 'browser');
+  expect(s()).toMatchObject({ sessionId: 'a', kind: 'browser', closing: true });
+  s().closed();
+  s().toggle('a');
+  expect(s()).toMatchObject({ sessionId: 'a', kind: 'logs', closing: false });
+});
+
+it('renders each companion kind in the drawer, and the wall buttons toggle it', () => {
+  expect(drawer).toContain('<DiffPane sessionId={sessionId} />');
+  expect(drawer).toContain('<BrowserPane url="about:blank" />');
+  expect(drawer).toContain('<ExplorerPane');
+  const buttons = readFileSync(new URL('../components/AgentCompanionButtons.tsx', import.meta.url), 'utf8');
+  expect(buttons).toContain('useWallLogs.getState().toggle(sessionId, kind)');
 });

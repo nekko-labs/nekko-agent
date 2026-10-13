@@ -27,6 +27,23 @@ describe('composer folder picker', () => {
     } finally { useStore.setState({ settings: prev.settings, sessions: prev.sessions }); }
   });
 
+  it('lists a folder saved twice (any case or trailing slash) once', () => {
+    const prev = useStore.getState();
+    const dupes = [...folders, { id: 'c', name: 'code', path: 'C:\\Users\\p\\code', addedAt: 0 }, { id: 'd', name: 'code', path: 'c:\\users\\p\\code\\', addedAt: 0 }];
+    useStore.setState({ settings: { ...prev.settings, workspaces: dupes } as any, sessions: [{ id: 's', workspaceId: 'c' } as any] });
+    try {
+      const out = renderToStaticMarkup(<FolderPicker sessionId="s" session={null} onChange={() => {}} />);
+      expect(out).toContain('>code<');
+    } finally { useStore.setState({ settings: prev.settings, sessions: prev.sessions }); }
+  });
+
+  it('keeps the menu open when a folder is revoked', async () => {
+    const source = (await import('node:fs')).readFileSync(new URL('./FolderPicker.tsx', import.meta.url), 'utf8');
+    const remove = source.slice(source.indexOf('const remove = '), source.indexOf('return (', source.indexOf('const remove = ')));
+    expect(remove).not.toContain('setOpen(false)');
+    expect(remove).not.toContain('run(');
+  });
+
   it('checks the primary and marks supporting folders', () => {
     const out = renderToStaticMarkup(<FolderPickerMenu folders={folders} chat={{ workspaceId: 'a', supportingWorkspaceIds: ['b'] }} onPick={() => {}} onClear={() => {}} onAdd={() => {}} onRemove={() => {}} />);
     expect(out.match(/aria-checked="true"/g)).toHaveLength(1);
@@ -35,5 +52,24 @@ describe('composer folder picker', () => {
     expect(out).toContain('Add folder…');
     expect(out).toContain('aria-label="Revoke access to nekko-agent"');
     expect(out).toContain('Revoke saved folder access, not delete files');
+    // No star toggle unless the host wires one.
+    expect(out).not.toContain('aria-pressed');
+  });
+
+  it('stars the default folders new chats start with', () => {
+    const out = renderToStaticMarkup(<FolderPickerMenu folders={folders} chat={null} defaults={['b']} onPick={() => {}} onClear={() => {}} onAdd={() => {}} onRemove={() => {}} onToggleDefault={() => {}} />);
+    expect(out.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(out).toContain('aria-label="Stop starting new chats in hypergate"');
+    expect(out).toContain('aria-label="Start new chats in nekko-agent"');
+  });
+});
+
+describe('nextDefaultFolders', () => {
+  it('stars by appending, unstars by removing, and drops folders that are gone', async () => {
+    const { nextDefaultFolders } = await import('../defaultFolders.js');
+    expect(nextDefaultFolders(undefined, 'a', folders)).toEqual(['a']);
+    expect(nextDefaultFolders(['a'], 'b', folders)).toEqual(['a', 'b']);
+    expect(nextDefaultFolders(['a', 'b'], 'a', folders)).toEqual(['b']);
+    expect(nextDefaultFolders(['gone', 'a', 'a'], 'b', folders)).toEqual(['a', 'b']);
   });
 });

@@ -1,4 +1,4 @@
-# Nekko Agent, Walkthrough
+# Nekko Agent walkthrough
 
 A guided tour of Nekko Agent, from install to your first agentic edit. Screenshots
 are from the running app.
@@ -100,6 +100,47 @@ list dirs, run shell commands).
 
 ---
 
+### A composer that follows your draft
+
+In the Command Center, one docked composer targets the selected agent window.
+Click another agent window to write in that chat's context, or use the dock picker
+to move the composer above or below the wall.
+
+The reply editor grows with new lines and wrapped text, then shrinks when you
+delete them. In the bottom dock it grows upward, leaving the agent board above
+it in its own scroll area. Once the draft reaches the height cap, only the editor
+scrolls; the header, send controls, queued prompts, images and skill rows stay
+inside the composer ring. A saved manual height remains a preferred minimum,
+not a ceiling that prevents a longer draft from growing.
+
+### Follow delegated work without opening every detail
+
+Delegation cards start collapsed, including while a child is working or returning
+a large result. Their compact, plain-text activity sentence shares its status
+with the plan's sub-agent list and the working-subagent indicator:
+
+- **Working**: the child is thinking, writing or using a tool.
+- **Waiting**: it needs an answer or approval, or is waiting to retry.
+- **Completed**, **Failed** or **Stopped**: recorded terminal events, not guesses
+  based on the presence of a stored reply.
+
+Expand a card to read the full task and result in bounded scroll areas. This does
+not resize the entire agent window. Summaries use existing local events, without
+an extra model request or additional transmission.
+
+Live card-to-child matching is best effort, using the parent, title and creation
+time. There is no authoritative spawn-call child ID yet. Ambiguous matches and
+historical calls without observed events do not borrow another child's status;
+they retain a task summary or report that no current run status is recorded.
+
+### Plan and capacity at a glance
+
+The plan icon in an agent window opens or closes only that chat's plan, sub-agents and queue panel. Each chat remembers its own choice locally. Narrow windows fold the panel automatically without changing that choice.
+
+The context-window gauge has a subtle green background below 60% full, yellow from 60% to below 85%, and red at 85% or higher. Counts remain estimated; an unknown window limit stays neutral.
+
+In Agents, the Hardware panel names each detected GPU and shows its own utilization. Missing readings say Unavailable rather than zero; switching monitoring off says Monitor off. VRAM remains the aggregate memory reading across devices.
+
 ## 4. The Context Inspector
 
 The right-hand panel (toggle it with the panel icon) is Nekko Agent's signature
@@ -181,6 +222,25 @@ to confirm it works, and the results become available to the assistant.
 **Nekko Agent** is the 8-bit cat that lives at the edge of the window. It waves to say
 hello, peeks in from the side, and **"makes cat biscuits"** (kneads its paws) while
 the model is thinking. Don't want it? Toggle it off in Settings → Appearance.
+
+---
+
+## 10. Appearance and page recovery
+
+Nekko Agent starts in your system's light or dark mode. Leave the theme on
+**System** in **Settings → Appearance** to follow system changes, or choose a
+light or dark preset to keep that look. The pixel Nekko in the desktop's top
+bar stays the same as you move between pages; the heading names the page.
+
+If Settings or Nekko Server cannot load, the page shows the problem and a
+**Try again** button. On desktop, start a stopped service from the tray menu,
+then retry. In the web edition, check that the Nekko service is running.
+Existing content stays visible when a refresh fails.
+
+If a page or section cannot be displayed, use its **Try again** button to
+reopen it. Navigation stays available so you can move to another page. If the
+problem persists, include the displayed error and your app version and OS in
+a GitHub issue.
 
 ---
 

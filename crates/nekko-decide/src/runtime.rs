@@ -205,7 +205,7 @@ impl Runtime {
     /// missing driver, an op it does not implement) is a fallback, not an error: every session
     /// runs a small probe batch before it is accepted, so that surfaces here and not on a
     /// user's first request. The probe also pays the provider's one-off compile cost up front.
-    pub fn open(model: &Path, prefer: Ep, pad: i64, max_len: usize) -> Result<Self, String> {
+    pub fn open(model: &Path, prefer: Ep, pad: i64, max_len: usize, directml: Option<&Path>) -> Result<Self, String> {
         let order: Vec<Ep> = match prefer {
             Ep::Auto => Ep::accelerators().iter().copied().chain([Ep::Cpu]).collect(),
             Ep::Cpu => vec![Ep::Cpu],
@@ -213,6 +213,14 @@ impl Runtime {
         };
         let mut fallbacks = Vec::new();
         for ep in order {
+            // nekkod delay-loads DirectML.dll: load a new enough copy before ONNX Runtime binds
+            // the name, or skip the provider rather than let it bind Windows 10's old one.
+            if ep == Ep::DirectMl
+                && let Err(e) = crate::directml::prepare(directml)
+            {
+                fallbacks.push(format!("{}: {e}", ep.name()));
+                continue;
+            }
             let plan = if ep.wants_static_shapes() {
                 Plan::Static { seq: max_len, markers: STATIC_MARKERS }
             } else {

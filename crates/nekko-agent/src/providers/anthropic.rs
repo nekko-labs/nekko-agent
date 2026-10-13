@@ -29,6 +29,7 @@ const CLAUDE_MODELS: &[(&str, &str)] = &[
     ("claude-sonnet-5", "Claude Sonnet 5"),
     ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
     ("claude-fable-5-1", "Claude Fable 5.1"),
+    ("claude-haiku-5-5", "Claude Haiku 5.5"),
     ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
 ];
 
@@ -252,6 +253,22 @@ impl AnthropicProvider {
             .collect();
         models.sort_by_key(|m| family_rank(&m.id));
         (!models.is_empty()).then_some(models)
+    }
+
+    /// `test()`: no request, only whether there is a credential to send.
+    pub async fn test(&self) -> TestResult {
+        let has_key = self.config.api_key.as_deref().is_some_and(|k| !k.is_empty());
+        if self.config.subscription() {
+            return if has_key {
+                TestResult::ok("Signed in with a Claude subscription")
+            } else {
+                TestResult::fail("Not signed in. Sign in with Claude in the provider settings.")
+            };
+        }
+        if !has_key {
+            return TestResult::fail("Missing API key");
+        }
+        TestResult::ok("API key set")
     }
 
     pub async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {

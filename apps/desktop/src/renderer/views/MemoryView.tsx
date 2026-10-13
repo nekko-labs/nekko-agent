@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { MemoryEntry, MemoryScope } from '@nekko-agent/shared';
 import { PlusIcon, TrashIcon } from '../icons.js';
+import { hasAppChrome } from '../chrome.js';
 
 export function MemoryView() {
   const [scope, setScope] = useState<MemoryScope>('global');
@@ -31,8 +32,8 @@ export function MemoryView() {
     <div className="flex h-full">
       <aside className="flex w-72 flex-col border-r border-line">
         <div className="flex items-center justify-between p-4">
-          <h1 className="text-lg font-semibold">Memory</h1>
-          <button className="btn btn-primary px-2.5 py-1.5" onClick={() => setEditing(blank())}><PlusIcon /></button>
+          {!hasAppChrome && <h1 className="view-title">Memory</h1>}
+          <button className="btn btn-primary ml-auto px-2.5 py-1.5" onClick={() => setEditing(blank())}><PlusIcon /></button>
         </div>
         <div className="px-3">
           <div className="flex rounded-xl p-1" style={{ background: 'var(--surface-2)' }}>

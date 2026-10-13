@@ -304,3 +304,75 @@ jobs:
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  nekkod-npm:
+    name: Build nekkod for npm
+    uses: ./.github/workflows/nekkod-npm.yml
+
+  # The self-hosted web edition (`npx nekko-agent-web`) and the per-platform
+  # engine daemons it installs as optional dependencies. Gated exactly like
+  # publish-cli: an NPM_TOKEN secret, or npm Trusted Publishing over OIDC. The
+  # owner must own the @nekko-agent scope on npm and register this workflow as
+  # a trusted publisher for nekko-agent-web and each @nekko-agent/nekkod-* package.
+  publish-web:
+    name: Publish web edition package
+    needs: [release, nekkod-npm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+      - name: Install trusted-publishing-compatible npm
+        run: npm install --global npm@11.5.1
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: nekkod-*
+          path: nekkod-bins
+          merge-multiple: true
+      - name: Publish the nekkod packages, then nekko-agent-web
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Tag $GITHUB_REF_NAME does not contain a valid npm version." >&2
+            exit 1
+          fi
+          provenance=()
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            provenance=(--provenance)
+            echo 'NPM_TOKEN is present; using token fallback for these publishes.'
+          else
+            echo 'NPM_TOKEN is absent; attempting npm Trusted Publishing over OIDC.'
+          fi
+          publish() { # <dir> <name>
+            if [ "$(npm view "$2@$version" version 2>/dev/null || true)" = "$version" ]; then
+              echo "$2@$version is already published; skipping."
+              return 0
+            fi
+            (cd "$1" && npm publish --access public "${provenance[@]}") || {
+              echo "npm publish of $2 failed. Configure the npm Trusted Publisher for nekko-labs/nekko-agent/release.yml, or provide NPM_TOKEN." >&2
+              return 1
+            }
+          }
+          # The platform packages first: the bundle pins them at this version.
+          node apps/server/scripts/nekkod-packages.mjs --bins nekkod-bins --out npm-nekkod --version "$version" --require-all
+          for dir in npm-nekkod/*/; do
+            publish "$dir" "$(node -p "require('./${dir}package.json').name")"
+          done
+          npm pkg set "version=$version" --workspace=apps/server
+          npm install --package-lock-only --ignore-scripts
+          npm ci
+          npm run build:web
+          npm run bundle -w @nekko-agent/server
+          publish apps/server/cli-dist nekko-agent-web
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'

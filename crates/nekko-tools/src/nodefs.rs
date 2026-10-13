@@ -131,6 +131,8 @@ pub struct DirEntry {
     pub name: String,
     /// `Dirent.isDirectory()`: the entry itself, so a link to a directory is not one.
     pub is_dir: bool,
+    /// `Dirent.isFile()`: a regular file, not a link to one.
+    pub is_file: bool,
 }
 
 /// `readdirSync(dir, { withFileTypes: true })`, in libuv's order.
@@ -145,16 +147,16 @@ pub fn read_dir(dir: &str) -> Result<Vec<DirEntry>, String> {
         // libuv on Windows calls any reparse point a link, cloud placeholders
         // included, where Rust would call some of them directories.
         #[cfg(windows)]
-        let is_dir = entry.metadata().is_ok_and(|m| {
+        let (is_dir, is_file) = entry.metadata().map_or((false, false), |m| {
             use std::os::windows::fs::MetadataExt;
             const DIRECTORY: u32 = 0x10;
             const REPARSE_POINT: u32 = 0x400;
             let a = m.file_attributes();
-            a & DIRECTORY != 0 && a & REPARSE_POINT == 0
+            (a & DIRECTORY != 0 && a & REPARSE_POINT == 0, a & (DIRECTORY | REPARSE_POINT) == 0)
         });
         #[cfg(not(windows))]
-        let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
-        out.push(DirEntry { name: entry.file_name().to_string_lossy().into_owned(), is_dir });
+        let (is_dir, is_file) = entry.file_type().map_or((false, false), |t| (t.is_dir(), t.is_file()));
+        out.push(DirEntry { name: entry.file_name().to_string_lossy().into_owned(), is_dir, is_file });
     }
     // libuv's scandir sorts with strcmp on Unix; on Windows it returns the
     // directory's own order, which is also what read_dir yields there.

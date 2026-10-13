@@ -229,9 +229,11 @@ const api: NekkoApi = {
   acceptChange: (sessionId, path) => inv(IpcChannels.changeAccept, sessionId, path),
   acceptAllChanges: (sessionId) => inv(IpcChannels.changeAcceptAll, sessionId),
 
-  listSessionPrs: (sessionId) => inv(IpcChannels.prSessionList, sessionId),
+  listSessionPrs: (sessionId, force) => inv(IpcChannels.prSessionList, sessionId, force),
   getPrDiff: (url) => inv(IpcChannels.prDiff, url),
   prAction: (url, action) => inv(IpcChannels.prAction, url, action),
+  continuePrStack: (sessionId, url) => inv(IpcChannels.prContinueStack, sessionId, url),
+  linkPrStack: (sessionId, url) => inv(IpcChannels.prLinkStack, sessionId, url),
 
   listComments: (path) => inv(IpcChannels.commentsList, path),
   addComment: (path, line, lineText, comment) => inv(IpcChannels.commentAdd, path, line, lineText, comment),

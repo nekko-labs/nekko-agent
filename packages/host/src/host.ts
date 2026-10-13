@@ -89,10 +89,12 @@ import type {
   ModelFolderReport,
   SkillDef,
 } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, isLocalProvider, isRuntimeKind, queueItemPayload, SKILLS, sameFolderPath } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, queueItemPayload, SKILLS, sameFolderPath } from '@nekko-agent/shared';
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
+import { daemonCall, daemonOwns } from './engine/daemon.js';
+import { unlessDaemonOwns, viaDaemon } from './daemon-services.js';
 import { registerManagedCacheEndpoint } from './prompt-caching.js';
 import {
   createProvider,
@@ -107,7 +109,7 @@ import {
 import { setDataDir, dataDir } from './paths.js';
 import { createVoiceService } from './engine/voice.js';
 import { join } from 'node:path';
-import { getSettings, saveSettings, resetSettings } from './store.js';
+import { getSettings, saveSettings, resetSettings, settingsChanged, useSettingsDaemon } from './store.js';
 import * as sessions from './sessions.js';
 import * as memory from './memory.js';
 import { usageSummary, clearUsage } from './usage.js';
@@ -116,6 +118,7 @@ import { readFile, writeFile, listDir } from './files.js';
 import { getGitStatus } from './git.js';
 import { listChanges, acceptChange, acceptAllChanges, notifyChanges, setChangeNotifier } from './changes.js';
 import { listSessionPrs, getPrDiff, prAction, fetchPrInfo } from './pr.js';
+import { continuePrStack, linkPrStack } from './pr-stacks.js';
 import { configureAgentWatches, nextAgentWatchAt } from './agent-watches.js';
 import { listComments, addComment, resolveComment } from './comments.js';
 import {
@@ -127,7 +130,7 @@ import {
   resolveDesignNote,
   generateDesign,
 } from './design.js';
-import { listInstalledSkills, skillTargets, installSkill, uninstallSkill, listInstalledSkillDefs } from './skills.js';
+import { listInstalledSkills, readInstalledSkills, skillTargets, installSkill, uninstallSkill, listInstalledSkillDefs } from './skills.js';
 import { discoverExternalSkills } from './external-skills.js';
 import { getVaizerCatalog, getVaizerSkillMd } from './vaizer.js';
 import {
@@ -168,16 +171,19 @@ import {
   setWorkflowsNotifier,
   startWorkflowScheduler,
   reconcileWorkflowRuns,
+  WebhookUnauthorizedError,
 } from './workflows.js';
 import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
-import { isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getRunningSessionIds, resolveApproval, resolveQuestion, previewContext, setContextPrefs } from './chat.js';
+import { adoptAdmittedTurn, connectorSnippetsFor, indexSnippetsForAdmission, isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
-import { loopApprove, loopEnd, loopEvent, loopLog, loopTool } from './daemon-loop.js';
+import { daemonOwns as daemonServes, loopLog } from './daemon-caps.js';
+import { setTurnNotifier, turnCallback } from './daemon-turn.js';
 import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
-import { initLimits, getLimits, clearLimits, getLimitsProblem } from './limits.js';
+import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemon as notifyLimits } from './limits.js';
 import { startWorkflowListeners } from './listeners.js';
 import {
   initOAuth,
+  useOAuthDaemon,
   beginOAuth,
   finishOAuth,
   cancelOAuth,
@@ -185,9 +191,10 @@ import {
   signOut as signOutOAuth,
   importCliAuth,
   resolveSubscriptionProvider,
+  ensureFreshToken,
 } from './oauth.js';
 import { buildSpec, buildSpecDoc, readSpecDocs, setSpecMethodology, toggleSpecTask, specPathForSession } from './spec.js';
-import { createRemoteService } from './remote.js';
+import { createRemoteService, DAEMON_REMOTE } from './remote.js';
 import { createMessagingService } from './messaging/service.js';
 import { detectAgentTools, installSubagent, refreshSubagent, subagentSnippet } from './integrations.js';
 import { getGpuStats, getGpuStatsFresh } from './gpu.js';
@@ -266,13 +273,37 @@ export interface Host {
   engineStatus(): Promise<EngineStatus>;
   /** For the engine daemon's router: load a model it was asked for, or say why not. */
   engineRouterLoad(modelId: string, image: boolean): Promise<{ ok: boolean; status?: number; message?: string }>;
-  /** A daemon-driven run's callbacks (daemon-loop.ts): a tool call, its events, its end. */
-  loopTool(runId: string, call: import('@nekko-agent/shared').ToolCall): Promise<import('@nekko-agent/shared').ToolResult>;
-  loopEvent(runId: string, payload: { events?: import('@nekko-agent/shared').AgentEvent[]; history?: import('@nekko-agent/shared').ChatMessage[] }): Promise<void>;
-  loopEnd(runId: string, payload: { history?: import('@nekko-agent/shared').ChatMessage[] }): void;
-  loopApprove(runId: string, call: import('@nekko-agent/shared').ToolCall, reason: string, severity: 'low' | 'medium' | 'high'): Promise<boolean>;
+  /** The daemon's runtime control plane calling the engine it does not run yet (its `llamacpp` adapter). */
+  engineRuntime(method: string, args: unknown[]): Promise<unknown>;
+  /** A daemon-driven turn's command output (`loop:log`, daemon-caps.ts). */
   loopLog(sessionId: string, workspaceId: string | undefined, data: string): void;
+  /** Register a turn the daemon admitted itself and drives (`turn:adopt`). */
+  adoptTurn(payload: Parameters<typeof adoptAdmittedTurn>[0]): Promise<void>;
+  /** The connector or workspace-index snippets for a turn the daemon admits. */
+  admissionSnippets(kind: 'connector' | 'index', args: unknown[]): Promise<unknown>;
+  /** A daemon-driven chat turn's callbacks (daemon-turn.ts `turn:*`). */
+  turnCallback(channel: string, args: unknown[]): Promise<unknown>;
   changesNotify(sessionId: string): void;
+  /** The daemon saved a settings change made elsewhere (the UI's update or reset): follow it. */
+  settingsChanged(next: AppSettings, patch: Partial<AppSettings> | null): void;
+  /** The daemon indexed a workspace (`index:progress`) and told the UI; this host's listeners (the phone relay) hear it. */
+  indexProgressRelay(status: IndexStatus): void;
+  /** Chats being admitted or running here, for the daemon revoking a folder (`chats:busy`). */
+  busySessions(): string[];
+  /** The daemon changed a limits snapshot (`limits:notify`): the phone relay hears it. */
+  limitsNotify(payload: { tokenKey: string; limits: SubscriptionLimits }): void;
+  /**
+   * Renew a sign-in when it is due (`oauth:refresh`), for the daemon's quota
+   * polls. The daemon asks rather than refreshing itself, since a refresh
+   * rotates the refresh token and so must have exactly one writer, and it reads
+   * the renewed token from `tokens.json` itself: no token crosses the wire.
+   */
+  oauthRefresh(tokenKey: string): Promise<void>;
+  /**
+   * Save a gateway the daemon resolved as the Hypergate MCP entry
+   * (`mcp:hypergate:save`) and hand back the server list for it to run.
+   */
+  hypergateSave(info: import('@nekko-agent/shared').HypergateInfo): import('@nekko-agent/shared').McpServerConfig[];
   /** For the engine daemon's router: `GET /v1/models`. */
   engineRouterModels(): Promise<unknown>;
   engineRouterModel(modelId: string): Promise<unknown>;
@@ -362,11 +393,13 @@ export interface Host {
    * Sideband, unpersisted; null falls back to the deterministic snippet.
    */
   fillPromptPart(sessionId: string, part: string, draft: string): Promise<string | null>;
-  approveTool(sessionId: string, toolCallId: string, approved: boolean): void;
+  approveTool(sessionId: string, toolCallId: string, approved: boolean): void | Promise<void>;
   /** Answer an `ask_user` call; an empty list means "not answering". */
-  answerQuestion(sessionId: string, callId: string, answers: AskAnswer[]): void;
-  /** Every session waiting on a person right now, keyed by session id. */
-  pendingInput(): Record<string, PendingInput>;
+  answerQuestion(sessionId: string, callId: string, answers: AskAnswer[]): void | Promise<void>;
+  /** Every session waiting on a person right now, keyed by session id (this process's turns and the engine daemon's). */
+  pendingInput(): Promise<Record<string, PendingInput>>;
+  /** Only this process's turns (`chat:pending:host`, for the daemon, which merges its own). */
+  hostPendingInput(): Record<string, PendingInput>;
   runningSessions(): string[];
 
   listTerminals(): Promise<TerminalInfo[]>;
@@ -432,11 +465,13 @@ export interface Host {
   acceptAllChanges(sessionId: string): Promise<void>;
 
   /** Live PR state for every PR URL referenced in a chat's transcript. */
-  listSessionPrs(sessionId: string): Promise<PrInfo[]>;
+  listSessionPrs(sessionId: string, force?: boolean): Promise<PrInfo[]>;
   /** A PR's changed files + patches (diff pane). */
   getPrDiff(url: string): Promise<PrDiff>;
   /** Approve / decline / merge / reopen a PR (user-initiated). */
   prAction(url: string, action: PrAction): Promise<PrActionResult>;
+  continuePrStack(sessionId: string, url: string): Promise<Session>;
+  linkPrStack(sessionId: string, url: string): Promise<PrActionResult>;
 
   /** Inline editor comments on a file. */
   listComments(path: string): LineComment[];
@@ -467,11 +502,11 @@ export interface Host {
   vaizerSkillMd(slug: string): Promise<string | null>;
 
   /** Automation tasks: scheduled, recurring, and long-running background agents. */
-  listTasks(): AutomationTask[];
-  createTask(task: NewTask): AutomationTask[];
-  updateTask(id: string, patch: Partial<AutomationTask>): AutomationTask[];
-  deleteTask(id: string): AutomationTask[];
-  runTaskNow(id: string): void;
+  listTasks(): Promise<AutomationTask[]>;
+  createTask(task: NewTask): Promise<AutomationTask[]>;
+  updateTask(id: string, patch: Partial<AutomationTask>): Promise<AutomationTask[]>;
+  deleteTask(id: string): Promise<AutomationTask[]>;
+  runTaskNow(id: string): Promise<void>;
 
   /** Training/goal runs: the data-scientist agent + experiment-tree engine. */
   listTrainingRuns(): TrainingRun[];
@@ -483,14 +518,14 @@ export interface Host {
   stopTrainingRun(id: string): TrainingRun[];
   addTrainingHint(id: string, text: string): TrainingRun[];
 
-  listWorkflows(): WorkflowsSnapshot;
-  createWorkflow(input: NewWorkflow): Workflow;
-  updateWorkflow(id: string, patch: Partial<Workflow>): Workflow | undefined;
-  deleteWorkflow(id: string): WorkflowsSnapshot;
-  duplicateWorkflow(id: string): Workflow | undefined;
+  listWorkflows(): Promise<WorkflowsSnapshot>;
+  createWorkflow(input: NewWorkflow): Promise<Workflow>;
+  updateWorkflow(id: string, patch: Partial<Workflow>): Promise<Workflow | undefined>;
+  deleteWorkflow(id: string): Promise<WorkflowsSnapshot>;
+  duplicateWorkflow(id: string): Promise<Workflow | undefined>;
   runWorkflow(id: string): Promise<WorkflowRun | undefined>;
-  cancelWorkflowRun(runId: string): void;
-  listWorkflowRuns(workflowId?: string): WorkflowRun[];
+  cancelWorkflowRun(runId: string): Promise<void>;
+  listWorkflowRuns(workflowId?: string): Promise<WorkflowRun[]>;
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
   dispatchWebhook(slug: string, secret: string, payload: Record<string, unknown>): Promise<WorkflowRun[]>;
 
@@ -569,13 +604,33 @@ function chatOwner(worktreeRoot: string): { id: string; title: string; running: 
 
 export function createHost(opts: { dataDir: string; allowBrowserControl?: boolean }): Host {
   setDataDir(opts.dataDir);
+  // Under nekkod, settings.json is the daemon's to write (crates/nekkod/src/settings.rs).
+  const call = daemonOwns('settings') ? daemonCall() : undefined;
+  useSettingsDaemon(call ? (channel, args) => call<AppSettings>(channel, ...args) : null);
+  // And tokens.json (crates/nekkod/src/oauth.rs): this host asks it for a usable token.
+  useOAuthDaemon(daemonOwns('tokens') ? (daemonCall() ?? null) : null);
   const voice = createVoiceService(join(opts.dataDir, 'voice'), getSettings);
+  /** Stop the speech server, wherever it runs: the daemon serves `voice:*` when it knows the data dir. */
+  const stopVoice = () => {
+    voice.stop();
+    const call = daemonCall();
+    if (call && daemonOwns('voice')) void call('voice:stop').catch(() => undefined);
+  };
   const events = new EventEmitter();
   const activeChats = new Map<string, Promise<void>>();
   const interrupting = new Set<string>();
   initOAuth(events);
   initLimits(events);
   const onIndexProgress = (s: IndexStatus) => events.emit('indexProgress', s);
+  // The engine daemon holds the index when it serves `workspace:index`.
+  const indexNewFolder = async (folder: WorkspaceFolder) => {
+    const daemon = daemonCall();
+    if (daemon && (await daemonServes(daemon, IpcChannels.workspaceIndex))) {
+      await daemon(IpcChannels.workspaceIndex, folder.id).catch(() => {});
+    } else {
+      indexWorkspace(folder, onIndexProgress);
+    }
+  };
   // Fan terminal output out to renderers over the same event bus.
   setTerminalSender((e) => events.emit('terminalEvent', e));
   // Notify renderers when a session's tracked file changes shift.
@@ -583,6 +638,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // Automation tasks: fired-task agent events ride the same bus as live chats;
   // task-list changes get their own event. Start the periodic scheduler.
   setTaskSender((e) => events.emit('agentEvent', e));
+  // What the daemon says after a turn it drove has ended (its generated title).
+  setTurnNotifier((e) => events.emit('agentEvent', e));
   setCompactionSender((e) => events.emit('agentEvent', e));
   setDecisionRunner({
     available: async () => {
@@ -592,7 +649,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     run: (provider, request) => engine.decisions.run(provider, request),
   });
   setTasksNotifier((tasks) => events.emit('tasksUpdated', tasks));
-  startTaskScheduler();
+  unlessDaemonOwns('tasks', startTaskScheduler);
   configureAgentWatches({
     busy: isChatRunning,
     exists: (id) => { const s = sessions.getSession(id); return !!s && !s.archivedAt; },
@@ -623,12 +680,30 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // written off before the scheduler starts, so it can't look stuck forever.
   setWorkflowSender((e) => events.emit('agentEvent', e));
   setWorkflowsNotifier((snapshot) => events.emit('workflowsUpdated', snapshot));
-  reconcileWorkflowRuns();
-  reconcileInterruptedChats();
-  startWorkflowScheduler();
-  startWorkflowListeners();
+  // A daemon that owns workflows (crates/nekko-automation) reconciles, runs
+  // the schedule and polls the connectors itself.
+  unlessDaemonOwns('workflows', reconcileWorkflowRuns);
+  {
+    // A daemon-driven turn survives this host restarting: ask which chats it
+    // still drives before writing the rest off.
+    const daemon = daemonCall();
+    const since = Date.now();
+    if (daemon) {
+      void daemon<string[]>('turn:running')
+        .catch(() => [] as string[])
+        .then((ids) => reconcileInterruptedChats(new Set(Array.isArray(ids) ? ids : []), since));
+    } else {
+      reconcileInterruptedChats();
+    }
+  }
+  unlessDaemonOwns('workflows', () => {
+    startWorkflowScheduler();
+    startWorkflowListeners();
+  });
 
   const findProvider = (id: string) => getSettings().providers.find((p) => p.id === id);
+  /** A provider switched off on the Models page is never contacted or launched. */
+  const DISABLED_PROVIDER = 'This provider is disabled. Turn it on in Model Providers to use it.';
 
   /**
    * Keep one provider entry pointing at the engine.
@@ -666,7 +741,13 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       saveSettings({ engine: next });
       return next;
     },
-    onDownloadsChanged: (jobs) => events.emit('downloadsUpdated', jobs),
+    // Under the engine daemon the model downloads are its own: it merges this
+    // host's (the runtime installs) with them and tells the UI.
+    onDownloadsChanged: (jobs) => {
+      const call = daemonOwns('downloads') ? daemonCall() : undefined;
+      if (call) void call('engine:hostDownloads', jobs).catch(() => {});
+      else events.emit('downloadsUpdated', jobs);
+    },
     // A running engine nobody can select is a running engine for nothing, so its
     // provider entry is kept in step with the address it is actually serving on.
     onServing: (baseUrl) => ensureEngineProvider(baseUrl),
@@ -716,7 +797,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     getSettings,
     updateSettings: (patch) => {
       const next = saveSettings(patch);
-      if (patch.voice !== undefined) voice.stop();
+      if (patch.voice !== undefined) stopVoice();
       if (patch.messaging !== undefined) messaging.update(next.messaging);
       return next;
     },
@@ -743,6 +824,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     testProvider: async (id) => {
       const p = findProvider(id);
       if (!p) return { ok: false, message: 'Not found' };
+      if (p.enabled === false) return { ok: false, message: DISABLED_PROVIDER };
       try {
         const resolved = await resolveSubscriptionProvider(p);
         return await createProvider(resolved).test();
@@ -761,7 +843,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
 
     listModels: async (providerId) => {
       const p = findProvider(providerId);
-      if (!p) return [];
+      if (!p || p.enabled === false) return [];
       try {
         const resolved = await resolveSubscriptionProvider(p);
         return await createProvider(resolved).listModels();
@@ -800,6 +882,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     lmsAvailable: async (providerId) => {
       const p = findProvider(providerId);
       if (p?.kind !== 'lmstudio') return { available: false };
+      if (p.enabled === false) return { available: false, reason: DISABLED_PROVIDER };
       return lmsProbe(p.baseUrl);
     },
     stopServer: async (providerId) => {
@@ -808,14 +891,16 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       if (!isLocalProvider(p.kind)) return { ok: false, message: 'Only local model servers can be stopped from here.' };
       return stopLocalServer(p.baseUrl);
     },
-    runtimeStatus: (providerId) => runtimes.status(providerId),
+    // Status and facts are what the Models page polls; a disabled provider
+    // answers null/[] so polling never spawns `lms` or hits its server.
+    runtimeStatus: async (providerId) => (findProvider(providerId)?.enabled === false ? null : runtimes.status(providerId)),
     runtimeStart: (providerId) => runtimes.start(providerId),
-    runtimeStop: (providerId, force) => { if (providerId === 'nekko-engine') voice.stop(); return runtimes.stop(providerId, force); },
+    runtimeStop: (providerId, force) => { if (providerId === 'nekko-engine') stopVoice(); return runtimes.stop(providerId, force); },
     runtimeLoad: (providerId, modelId, params) => runtimes.load(providerId, modelId, params),
-    runtimeFacts: (providerId) => runtimes.facts(providerId),
-    runtimePlan: (providerId, modelId, req) => runtimes.plan(providerId, modelId, req),
-    runtimeAutoFit: (providerId, modelId, budgetFraction, parallelSlots) =>
-      runtimes.autoPlan(providerId, modelId, budgetFraction, parallelSlots),
+    runtimeFacts: async (providerId) => (findProvider(providerId)?.enabled === false ? [] : runtimes.facts(providerId)),
+    runtimePlan: async (providerId, modelId, req) => (findProvider(providerId)?.enabled === false ? null : runtimes.plan(providerId, modelId, req)),
+    runtimeAutoFit: async (providerId, modelId, budgetFraction, parallelSlots) =>
+      (findProvider(providerId)?.enabled === false ? null : runtimes.autoPlan(providerId, modelId, budgetFraction, parallelSlots)),
 
     voiceStatus: () => voice.status(),
     voiceInstall: () => voice.install(),
@@ -824,12 +909,45 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     voiceTranscribe: (wav) => voice.transcribe(wav),
     engineStatus: () => engine.status(),
     engineRouterLoad: (modelId, image) => engine.routerLoad(modelId, image),
-    loopTool,
-    loopEvent,
-    loopEnd,
-    loopApprove,
+    engineRuntime: async (method, args) => {
+      switch (method) {
+        case 'detectEngine': return engine.detectEngine();
+        case 'isRunning': return engine.isRunning();
+        case 'status': return engine.status();
+        case 'models': return engine.models();
+        // The daemon's `engine:models` (it owns the library): load state from this host's server.
+        case 'loadState': return engine.loadState();
+        // The daemon's download list and controls, for this host's own jobs.
+        case 'downloads': return engine.hostDownloads();
+        case 'cancelDownload': return engine.cancelHostDownload(String(args[0]));
+        case 'dismissDownload': return engine.dismissHostDownload(String(args[0]));
+        case 'resident': return engine.resident();
+        case 'start': return engine.start();
+        case 'stop': return engine.stop();
+        case 'load': return engine.load(String(args[0]), (args[1] ?? {}) as LoadParams);
+        case 'unload': return engine.unload(String(args[0]));
+        default: throw new Error(`Unknown engine call: ${method}`);
+      }
+    },
     loopLog,
+    turnCallback,
     changesNotify: notifyChanges,
+    adoptTurn: (payload) => adoptAdmittedTurn(payload, (e) => events.emit('agentEvent', e)),
+    admissionSnippets: async (kind, args) =>
+      kind === 'connector' ? connectorSnippetsFor(args[0] as string | undefined) : indexSnippetsForAdmission(args[0] as string[], String(args[1] ?? '')),
+    settingsChanged: (next, patch) => {
+      settingsChanged(next, patch);
+      // What updateSettings does after a save, for a save the daemon made.
+      if (patch && typeof patch === 'object') {
+        if (patch.voice !== undefined) stopVoice();
+        if (patch.messaging !== undefined) messaging.update(getSettings().messaging);
+      }
+    },
+    indexProgressRelay: (status) => events.emit('indexProgress', { ...status, relayOnly: true }),
+    busySessions: () => [...new Set([...activeChats.keys(), ...getRunningSessionIds()])],
+    limitsNotify: notifyLimits,
+    oauthRefresh: async (tokenKey) => { await ensureFreshToken(tokenKey); },
+    hypergateSave: (info) => saveSettings({ mcpServers: withHypergate(getSettings().mcpServers ?? [], info) }).mcpServers ?? [],
     engineRouterModels: () => engine.routerModels(),
     engineRouterModel: (modelId) => engine.routerModel(modelId),
     engineInstall: (buildId, runtime) => engine.installEngine(buildId, runtime),
@@ -981,8 +1099,9 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     resourceQueue,
     fillPromptPart,
     approveTool: (sessionId, toolCallId, approved) => resolveApproval(sessionId, toolCallId, approved),
-    answerQuestion: (sessionId, callId, answers) => resolveQuestion(sessionId, callId, answers),
+    answerQuestion: (sessionId, callId, answers) => answerQuestion(sessionId, callId, answers),
     pendingInput: getPendingInput,
+    hostPendingInput: getHostPendingInput,
     runningSessions: getRunningSessionIds,
 
     listTerminals,
@@ -1012,15 +1131,19 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       const current = getSettings().workspaces;
       if (current.some((w) => sameFolderPath(w.path, path))) return current;
 
+      // Two folders added in the same millisecond must not share an id.
+      const stamp = `ws_${Date.now().toString(36)}`;
+      let id = stamp;
+      for (let n = 1; current.some((w) => w.id === id); n++) id = `${stamp}_${n}`;
       const folder: WorkspaceFolder = {
-        id: `ws_${Date.now().toString(36)}`,
+        id,
         name: basename(path),
         path,
         addedAt: Date.now(),
       };
       const workspaces = [...current, folder];
       saveSettings({ workspaces });
-      setTimeout(() => indexWorkspace(folder, onIndexProgress), 50);
+      setTimeout(() => void indexNewFolder(folder), 50);
       return workspaces;
     },
     removeWorkspace: (id) => {
@@ -1060,6 +1183,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     listSessionPrs,
     getPrDiff,
     prAction,
+    continuePrStack,
+    linkPrStack,
     listComments,
     addComment,
     resolveComment,
@@ -1074,7 +1199,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     listExternalSkills: () =>
       discoverExternalSkills({
         projectRoots: getSettings().workspaces.map((w) => w.path),
-        exclude: listInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
+        exclude: readInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
         reserved: [...SKILLS, ...listInstalledSkillDefs()].map((s) => s.name),
       }),
     skillTargets,
@@ -1083,11 +1208,12 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     vaizerCatalog: (refresh?: boolean) => getVaizerCatalog(refresh),
     vaizerSkillMd: (slug: string) => getVaizerSkillMd(slug),
 
-    listTasks,
-    createTask,
-    updateTask,
-    deleteTask,
-    runTaskNow,
+    // The daemon runs tasks when it owns them (crates/nekko-automation).
+    listTasks: () => viaDaemon('tasks', 'tasks:list', [], listTasks),
+    createTask: (task) => viaDaemon('tasks', 'task:create', [task], () => createTask(task)),
+    updateTask: (id, patch) => viaDaemon('tasks', 'task:update', [id, patch], () => updateTask(id, patch)),
+    deleteTask: (id) => viaDaemon('tasks', 'task:delete', [id], () => deleteTask(id)),
+    runTaskNow: (id) => viaDaemon('tasks', 'task:runNow', [id], () => runTaskNow(id)),
 
     listTrainingRuns,
     createTrainingRun,
@@ -1098,19 +1224,29 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     stopTrainingRun,
     addTrainingHint,
 
-    listWorkflows: workflowsSnapshot,
-    createWorkflow,
-    updateWorkflow,
-    deleteWorkflow: (id: string) => {
-      deleteWorkflow(id);
-      return workflowsSnapshot();
-    },
-    duplicateWorkflow,
-    runWorkflow: (id: string) => runWorkflow(id),
-    cancelWorkflowRun,
-    listWorkflowRuns,
-    dispatchWorkflowEvent,
-    dispatchWebhook,
+    // The daemon runs workflows when it owns them (crates/nekko-automation).
+    listWorkflows: () => viaDaemon('workflows', 'workflows:list', [], workflowsSnapshot),
+    createWorkflow: (input) => viaDaemon('workflows', 'workflow:create', [input], () => createWorkflow(input)),
+    updateWorkflow: async (id, patch) =>
+      (await viaDaemon('workflows', 'workflow:update', [id, patch], () => updateWorkflow(id, patch))) ?? undefined,
+    deleteWorkflow: (id: string) =>
+      viaDaemon('workflows', 'workflow:delete', [id], () => {
+        deleteWorkflow(id);
+        return workflowsSnapshot();
+      }),
+    duplicateWorkflow: async (id) =>
+      (await viaDaemon('workflows', 'workflow:duplicate', [id], () => duplicateWorkflow(id))) ?? undefined,
+    runWorkflow: async (id: string) => (await viaDaemon('workflows', 'workflow:run', [id], () => runWorkflow(id))) ?? undefined,
+    cancelWorkflowRun: (runId) => viaDaemon('workflows', 'workflow:cancel', [runId], () => cancelWorkflowRun(runId)),
+    listWorkflowRuns: (workflowId) => viaDaemon('workflows', 'workflow:runs', [workflowId], () => listWorkflowRuns(workflowId)),
+    dispatchWorkflowEvent: (event) => viaDaemon('workflows', 'workflow:event', [event], () => dispatchWorkflowEvent(event)),
+    dispatchWebhook: (slug, secret, payload) =>
+      viaDaemon('workflows', 'workflow:webhook', [slug, secret, payload], () => dispatchWebhook(slug, secret, payload)).catch(
+        (e: Error) => {
+          // The daemon's refusal crosses the wire as a message; the webhook routes look for the code.
+          throw e.message === 'unauthorized' || e.message.endsWith(': unauthorized') ? new WebhookUnauthorizedError() : e;
+        },
+      ),
 
     listConnectors: () => getSettings().connectors,
     connectConnector: (kind, token, settings) => {
@@ -1138,8 +1274,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
 
     classifyCommand: (command) => classifyCommand(command, getSettings().guardrails),
     usageSummary,
-    getLimits: (tokenKey, refresh) => getLimits(tokenKey, refresh),
-    getLimitsProblem: async (tokenKey) => getLimitsProblem(tokenKey),
+    getLimits: (tokenKey, refresh) => readLimits(tokenKey, refresh),
+    getLimitsProblem: (tokenKey) => readLimitsProblem(tokenKey),
 
     enableRemote: (relayUrl) => host.remote.enable(relayUrl),
     disableRemote: () => host.remote.disable(),
@@ -1199,7 +1335,12 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // Remote access needs the finished host (it dispatches into it); reconnect if
   // remote access was left enabled when the host last shut down.
   host.remote = createRemoteService(host);
-  host.remote.startIfEnabled();
+  {
+    // A daemon that owns remote access (crates/nekko-remote) runs the relay
+    // agent and writes remote.json itself; this one stays off so the file has
+    // one writer and the room one agent.
+    if (!daemonOwns(DAEMON_REMOTE)) host.remote.startIfEnabled();
+  }
   // Messaging channels likewise drive the host; configured adapters come up
   // with the process and reconfigure through updateSettings above.
   const messaging = createMessagingService(host);

@@ -561,6 +561,19 @@
         }
       ]
     },
+    "haiku-5-5-xhigh": {
+      "model": "claude-haiku-5-5",
+      "effort": "xhigh",
+      "temperature": 1,
+      "messages": [
+        {
+          "id": "m1790000000040",
+          "role": "user",
+          "content": "hi",
+          "createdAt": 1790000000040
+        }
+      ]
+    },
     "cache-default": {
       "model": "m",
       "system": "reusable system",

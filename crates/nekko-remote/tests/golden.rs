@@ -1,0 +1,257 @@
+//! The Rust remote access against the TS code it replaces.
+//!
+//! `golden/*.json` is written by `packages/host/src/remote.golden.test.ts`
+//! (UPDATE_GOLDEN=1). Everything must come out exactly as the TS wrote it:
+//! keys, sealed blobs, verdicts, `remote.json` and the relay agent's frames.
+
+use base64::Engine;
+use nekko_remote::agent::AgentCore;
+use nekko_remote::e2e;
+use nekko_remote::hello::{self, Grant, Random};
+use nekko_remote::service::{Link, LinkHandle, RemoteService, Verifier};
+use nekko_remote::{Out, RELAYED_EVENTS};
+use serde_json::{Value, json};
+use std::collections::VecDeque;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+
+fn golden(name: &str) -> Value {
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden").join(name);
+    serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
+}
+
+fn s(v: &Value) -> &str {
+    v.as_str().unwrap()
+}
+
+fn same(got: &Value, want: &Value, what: &str) {
+    assert_eq!(nekko_js::stringify(got), nekko_js::stringify(want), "{what}");
+}
+
+/// The fixtures' random source: call `n` fills byte `i` with `(n*31 + i*7 + 3) & 0xff`.
+fn counter_random() -> Random {
+    let n = Arc::new(Mutex::new(0u32));
+    Arc::new(move |buf: &mut [u8]| {
+        let mut n = n.lock().unwrap();
+        for (i, b) in buf.iter_mut().enumerate() {
+            *b = ((*n * 31 + i as u32 * 7 + 3) & 0xff) as u8;
+        }
+        *n += 1;
+    })
+}
+
+fn iv_of(blob: &str) -> [u8; 12] {
+    let bytes = base64::engine::general_purpose::STANDARD.decode(blob).unwrap();
+    bytes[..12].try_into().unwrap()
+}
+
+#[test]
+fn keys_and_sealed_frames_match_webcrypto() {
+    let g = golden("crypto.json");
+    let key = e2e::derive_key(s(&g["secret"]), s(&g["room"]));
+    let hex: String = key.raw().iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(hex, s(&g["key"]));
+    let frames = g["frames"].as_array().unwrap();
+    assert!(frames.len() >= 10);
+    for f in frames {
+        let blob = s(&f["blob"]);
+        assert_eq!(nekko_js::stringify(&f["value"]), s(&f["text"]), "the plaintext is JSON.stringify's");
+        assert_eq!(e2e::seal_with_iv(&key, &f["value"], iv_of(blob)), blob, "seal {}", f["text"]);
+        same(&e2e::open(&key, blob).expect("opens"), &f["opened"], "open");
+    }
+    // A frame sealed for another room never opens here, and opens there.
+    let other = &g["other"];
+    assert!(e2e::open(&key, s(&other["blob"])).is_none());
+    let other_key = e2e::derive_key(s(&other["secret"]), s(&other["room"]));
+    same(&e2e::open(&other_key, s(&other["blob"])).unwrap(), &json!({ "type": "hello", "deviceId": "x" }), "other");
+}
+
+#[test]
+fn random_material_matches() {
+    let g = golden("crypto.json");
+    let r = counter_random();
+    let m = &g["material"];
+    assert_eq!(hello::new_pairing_code(&r, 8), s(&m["pairingCode"]));
+    assert_eq!(hello::new_pairing_code(&r, 4), s(&m["pairingCode4"]));
+    assert_eq!(hello::new_room_code(&r), s(&m["room"]));
+    assert_eq!(hello::new_room_secret(&r), s(&m["secret"]));
+}
+
+#[test]
+fn hello_verdicts_match() {
+    let g = golden("crypto.json");
+    let devices = g["devices"].as_array().unwrap().clone();
+    let cases = g["verdicts"].as_array().unwrap();
+    assert!(cases.len() > 60);
+    for c in cases {
+        let pairing = c["pairing"].as_object().map(|p| Grant {
+            code: p["code"].as_str().unwrap().to_string(),
+            expires_at: p["expiresAt"].as_f64().unwrap(),
+        });
+        let got = hello::verify_hello(&devices, &c["hello"], pairing.as_ref(), c["now"].as_f64().unwrap());
+        same(&got.value(), &c["verdict"], &format!("hello {} with {}", c["hello"], c["pairing"]));
+    }
+    for p in g["platforms"].as_array().unwrap() {
+        let platform = p["platform"].as_str();
+        assert_eq!(hello::normalize_platform(platform), s(&p["normalized"]), "{platform:?}");
+        assert_eq!(hello::default_device_name(platform), s(&p["name"]), "{platform:?}");
+    }
+}
+
+#[test]
+fn the_relay_agent_sends_the_same_frames() {
+    let g = golden("agent.json");
+    assert_eq!(
+        nekko_remote::agent_url("ws://127.0.0.1:4400/", s(&g["room"]), s(&g["secret"]), Some("tok en/1")),
+        s(&g["url"])
+    );
+    let relayed: Vec<&str> = g["relayedEvents"].as_array().unwrap().iter().map(s).collect();
+    assert_eq!(relayed, RELAYED_EVENTS);
+
+    let key = e2e::derive_key(s(&g["secret"]), s(&g["room"]));
+    // Each sealed frame the TS sent carries its IV in its first 12 bytes: feed
+    // those to the port in order, and its output must match byte for byte.
+    let ivs: Arc<Mutex<VecDeque<[u8; 12]>>> = Arc::default();
+    let feed = ivs.clone();
+    let mut core = AgentCore::new(key.clone(), Box::new(move || feed.lock().unwrap().pop_front().expect("an IV")));
+    let verify = |hello: &Value| -> Value {
+        let id = hello.get("deviceId").and_then(Value::as_str).unwrap_or("");
+        if id == "phone-1" || id == "phone-2" {
+            json!({ "type": "welcome", "device": { "id": id, "name": "Phone", "platform": "android", "createdAt": 1, "lastSeenAt": 2 } })
+        } else {
+            json!({ "type": "denied", "reason": "unknown-device" })
+        }
+    };
+    let responses = g["responses"].as_object().unwrap();
+    let mut calls = Vec::new();
+    let steps = g["steps"].as_array().unwrap();
+    assert!(steps.len() > 25);
+    for (i, step) in steps.iter().enumerate() {
+        let want: Vec<&str> = step["sent"].as_array().unwrap().iter().map(s).collect();
+        {
+            let mut q = ivs.lock().unwrap();
+            q.clear();
+            let mut last = None;
+            for w in &want {
+                let f: Value = serde_json::from_str(w).unwrap();
+                if f["type"] == "d" {
+                    let data: Value = serde_json::from_str(s(&f["data"])).unwrap();
+                    let iv = iv_of(s(&data["enc"]));
+                    // One seal per broadcast event: the same blob to every connection.
+                    if last != Some(iv) {
+                        q.push_back(iv);
+                        last = Some(iv);
+                    }
+                }
+            }
+        }
+        let input = &step["input"];
+        let mut sent = Vec::new();
+        if let Some(text) = input.get("relay").and_then(Value::as_str) {
+            for out in core.on_relay(text, &verify) {
+                match out {
+                    Out::Send(f) => sent.push(f),
+                    Out::Dispatch { cid, id, channel, args } => {
+                        if responses.contains_key(&channel) {
+                            calls.push(json!({ "channel": channel, "args": args }));
+                        }
+                        let result = match responses.get(&channel) {
+                            Some(r) if r.get("error").is_some() => Err(s(&r["error"]).to_string()),
+                            Some(r) => Ok(r.get("result").cloned().unwrap_or(Value::Null)),
+                            None => Err(format!("Unknown channel: {channel}")),
+                        };
+                        sent.push(core.reply(&cid, id, result));
+                    }
+                }
+            }
+        } else if let Some(ev) = input.get("event") {
+            sent.extend(core.on_event(s(&ev["channel"]), &ev["payload"]));
+        } else if let Some(id) = input.get("kick").and_then(Value::as_str) {
+            sent.extend(core.kick_device(id));
+        }
+        assert_eq!(sent, want, "step {i}: {input}");
+        let connected: Vec<&str> = step["connected"].as_array().unwrap().iter().map(s).collect();
+        assert_eq!(core.connected_devices(), connected, "step {i} connected");
+        assert!(ivs.lock().unwrap().is_empty(), "step {i} sealed fewer frames than the TS");
+    }
+    // The host saw the same calls. The TS row holds the arguments the host
+    // method took after the dispatcher picked them out; the agent forwards
+    // the whole list to the same dispatcher, so those lead it.
+    let want_calls: Vec<Value> = g["calls"].as_array().unwrap().clone();
+    assert_eq!(calls.len(), want_calls.len());
+    for (got, want) in calls.iter().zip(&want_calls) {
+        assert_eq!(got["channel"], want["channel"]);
+        let (got, want) = (got["args"].as_array().unwrap(), want["args"].as_array().unwrap());
+        same(&json!(got[..want.len()]), &json!(want), "args");
+    }
+}
+
+/// A relay link that never connects: the golden ran against a stub agent.
+struct FakeLink {
+    kicked: Arc<Mutex<Vec<String>>>,
+}
+
+struct FakeHandle {
+    kicked: Arc<Mutex<Vec<String>>>,
+}
+
+impl Link for FakeLink {
+    fn connect(&self, _url: &str, _room: &str, _key: &str, _verify: Verifier) -> Arc<dyn LinkHandle> {
+        Arc::new(FakeHandle { kicked: self.kicked.clone() })
+    }
+}
+
+impl LinkHandle for FakeHandle {
+    fn stop(&self) {}
+    fn kick_device(&self, id: &str) {
+        self.kicked.lock().unwrap().push(id.to_string());
+    }
+    fn connected_devices(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn is_online(&self) -> bool {
+        false
+    }
+    fn last_error(&self) -> Option<String> {
+        None
+    }
+}
+
+#[test]
+fn remote_json_and_replies_match_across_operations() {
+    let g = golden("service.json");
+    let dir = tempfile::tempdir().unwrap();
+    let now = Arc::new(Mutex::new(g["start"].as_f64().unwrap()));
+    let clock_now = now.clone();
+    let kicked: Arc<Mutex<Vec<String>>> = Arc::default();
+    let svc = RemoteService::new(
+        dir.path(),
+        counter_random(),
+        Arc::new(move || *clock_now.lock().unwrap()),
+        Box::new(FakeLink { kicked: kicked.clone() }),
+    );
+    let file = dir.path().join("remote.json");
+    let ops = g["ops"].as_array().unwrap();
+    assert!(ops.len() > 30);
+    for (i, op) in ops.iter().enumerate() {
+        *now.lock().unwrap() = op["now"].as_f64().unwrap();
+        let args = op["args"].as_array().unwrap();
+        let name = s(&op["op"]);
+        let result = match name {
+            "file" => {
+                std::fs::write(&file, s(&ops[i]["file"])).unwrap();
+                Value::Null
+            }
+            "hello" => svc.verify(&args[0]),
+            "pair" => svc.pair(),
+            other => svc.route(&format!("remote:{other}"), args).unwrap(),
+        };
+        same(&result, &op["result"], &format!("op {i} {name} result"));
+        if name != "file" {
+            let text = std::fs::read_to_string(&file).ok();
+            assert_eq!(text.as_deref(), op["file"].as_str(), "op {i} {name} remote.json");
+        }
+        let want_kicked: Vec<&str> = op["kicked"].as_array().unwrap().iter().map(s).collect();
+        assert_eq!(*kicked.lock().unwrap(), want_kicked, "op {i} kicked");
+    }
+}

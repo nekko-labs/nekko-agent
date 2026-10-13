@@ -1,0 +1,646 @@
+[
+ {
+  "input": {
+   "state": "A user asks for a refund after 40 days.",
+   "questions": [
+    {
+     "id": "refund",
+     "type": "choice",
+     "instructions": "Grant it?",
+     "options": [
+      "yes",
+      "no"
+     ]
+    }
+   ]
+  },
+  "request": "{\"state\":\"A user asks for a refund after 40 days.\",\"questions\":{\"refund\":{\"type\":\"choice\",\"instructions\":\"Grant it?\",\"criteria\":[\"yes\",\"no\"]}}}",
+  "problem": null
+ },
+ {
+  "input": {
+   "state": {
+    "cart": [
+     1,
+     2
+    ],
+    "user": {
+     "tier": "gold"
+    }
+   },
+   "questions": [
+    {
+     "id": " tier ",
+     "type": "score",
+     "instructions": "Loyalty",
+     "options": [
+      "low",
+      "mid",
+      "high"
+     ]
+    },
+    {
+     "type": "noul",
+     "instructions": "The user is angry",
+     "options": [
+      "x"
+     ]
+    }
+   ]
+  },
+  "request": "{\"state\":\"{\\\"cart\\\":[1,2],\\\"user\\\":{\\\"tier\\\":\\\"gold\\\"}}\",\"questions\":{\"tier\":{\"type\":\"score\",\"instructions\":\"Loyalty\",\"criteria\":[\"low\",\"mid\",\"high\"]},\"q2\":{\"type\":\"noul\",\"instructions\":\"The user is angry\"}}}",
+  "problem": null
+ },
+ {
+  "input": {
+   "state": "pick",
+   "questions": [
+    {
+     "id": "team",
+     "type": "choice",
+     "question": "Which team?",
+     "options": [
+      {
+       "label": "Core",
+       "description": "Engine work"
+      },
+      {
+       "name": "Web"
+      },
+      {
+       "value": "Ops",
+       "description": 5
+      },
+      "Data",
+      null,
+      ""
+     ]
+    }
+   ]
+  },
+  "request": "{\"state\":\"pick\",\"questions\":{\"team\":{\"type\":\"choice\",\"instructions\":\"Which team?\",\"criteria\":{\"Core\":\"Engine work\",\"Web\":\"Web\",\"Ops\":\"Ops\",\"Data\":\"Data\"}}}}",
+  "problem": null
+ },
+ {
+  "input": {
+   "state": "numbers",
+   "questions": [
+    {
+     "id": "2",
+     "type": "choice",
+     "instructions": "b",
+     "options": [
+      {
+       "label": "10",
+       "description": "ten"
+      },
+      {
+       "label": "2",
+       "description": "two"
+      },
+      {
+       "label": "x"
+      }
+     ]
+    },
+    {
+     "id": "1",
+     "type": "choice",
+     "instructions": "a",
+     "criteria": [
+      "p",
+      "q"
+     ]
+    }
+   ]
+  },
+  "request": "{\"state\":\"numbers\",\"questions\":{\"1\":{\"type\":\"choice\",\"instructions\":\"a\",\"criteria\":[\"p\",\"q\"]},\"2\":{\"type\":\"choice\",\"instructions\":\"b\",\"criteria\":{\"2\":\"two\",\"10\":\"ten\",\"x\":\"x\"}}}}",
+  "problem": null
+ },
+ {
+  "input": {
+   "state": "dup",
+   "questions": [
+    {
+     "id": "a",
+     "type": "choice",
+     "instructions": "first",
+     "options": [
+      "x"
+     ]
+    },
+    {
+     "id": "a",
+     "type": "score",
+     "instructions": "second",
+     "options": [
+      "y"
+     ]
+    },
+    {
+     "id": "",
+     "type": "weird",
+     "instructions": 7
+    }
+   ]
+  },
+  "request": "{\"state\":\"dup\",\"questions\":{\"a\":{\"type\":\"score\",\"instructions\":\"second\",\"criteria\":[\"y\"]},\"q3\":{\"type\":\"noul\",\"instructions\":\"\"}}}",
+  "problem": null
+ },
+ {
+  "input": {
+   "state": "obj options",
+   "questions": [
+    {
+     "id": "o",
+     "type": "choice",
+     "instructions": "i",
+     "options": [
+      {
+       "label": "A",
+       "description": "d"
+      },
+      {
+       "label": "A",
+       "description": "e"
+      },
+      {
+       "label": "",
+       "description": "f"
+      }
+     ]
+    }
+   ]
+  },
+  "request": "{\"state\":\"obj options\",\"questions\":{\"o\":{\"type\":\"choice\",\"instructions\":\"i\",\"criteria\":{\"A\":\"e\"}}}}",
+  "problem": null
+ },
+ {
+  "input": {
+   "state": "   ",
+   "questions": [
+    {
+     "id": "q",
+     "type": "noul",
+     "instructions": "x"
+    }
+   ]
+  },
+  "request": "{\"state\":\"   \",\"questions\":{\"q\":{\"type\":\"noul\",\"instructions\":\"x\"}}}",
+  "problem": "The state is empty."
+ },
+ {
+  "input": {
+   "state": "ok",
+   "questions": []
+  },
+  "request": "{\"state\":\"ok\",\"questions\":{}}",
+  "problem": "Ask at least one question."
+ },
+ {
+  "input": {
+   "state": "ok",
+   "questions": "nope"
+  },
+  "request": "{\"state\":\"ok\",\"questions\":{}}",
+  "problem": "Ask at least one question."
+ },
+ {
+  "input": {
+   "questions": [
+    {
+     "id": "q",
+     "type": "noul",
+     "instructions": "no state"
+    }
+   ]
+  },
+  "request": "{\"state\":\"\\\"\\\"\",\"questions\":{\"q\":{\"type\":\"noul\",\"instructions\":\"no state\"}}}",
+  "problem": null
+ },
+ {
+  "input": {
+   "state": null,
+   "questions": [
+    {
+     "id": "q",
+     "type": "noul",
+     "instructions": "null state"
+    }
+   ]
+  },
+  "request": "{\"state\":\"\\\"\\\"\",\"questions\":{\"q\":{\"type\":\"noul\",\"instructions\":\"null state\"}}}",
+  "problem": null
+ },
+ {
+  "input": {
+   "state": {
+    "long": 50001,
+    "head": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "questions": [
+    {
+     "id": "q",
+     "type": "noul",
+     "instructions": "long"
+    }
+   ]
+  },
+  "request": "{\"state\":{\"long\":50001,\"head\":\"xxxxxxxxxxxxxxxxxxxx\"},\"questions\":{\"q\":{\"type\":\"noul\",\"instructions\":\"long\"}}}",
+  "problem": "The state is over 50,000 characters."
+ },
+ {
+  "input": {
+   "state": {
+    "long": 50000,
+    "head": "😀😀😀😀😀😀😀😀😀😀"
+   },
+   "questions": [
+    {
+     "id": "q",
+     "type": "noul",
+     "instructions": "exactly at the limit in UTF-16"
+    }
+   ]
+  },
+  "request": "{\"state\":{\"long\":50000,\"head\":\"😀😀😀😀😀😀😀😀😀😀\"},\"questions\":{\"q\":{\"type\":\"noul\",\"instructions\":\"exactly at the limit in UTF-16\"}}}",
+  "problem": null
+ },
+ {
+  "input": {
+   "state": "many",
+   "questions": [
+    {
+     "id": "q0",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q1",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q2",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q3",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q4",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q5",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q6",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q7",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q8",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q9",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q10",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q11",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q12",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q13",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q14",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q15",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q16",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q17",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q18",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q19",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q20",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q21",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q22",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q23",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q24",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q25",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q26",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q27",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q28",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q29",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q30",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q31",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q32",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q33",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q34",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q35",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q36",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q37",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q38",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q39",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q40",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q41",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q42",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q43",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q44",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q45",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q46",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q47",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q48",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q49",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q50",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q51",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q52",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q53",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q54",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q55",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q56",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q57",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q58",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q59",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q60",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q61",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q62",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q63",
+     "type": "noul",
+     "instructions": "x"
+    },
+    {
+     "id": "q64",
+     "type": "noul",
+     "instructions": "x"
+    }
+   ]
+  },
+  "request": "{\"state\":\"many\",\"questions\":{\"q0\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q1\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q2\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q3\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q4\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q5\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q6\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q7\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q8\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q9\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q10\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q11\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q12\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q13\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q14\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q15\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q16\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q17\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q18\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q19\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q20\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q21\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q22\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q23\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q24\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q25\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q26\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q27\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q28\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q29\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q30\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q31\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q32\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q33\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q34\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q35\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q36\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q37\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q38\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q39\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q40\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q41\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q42\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q43\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q44\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q45\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q46\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q47\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q48\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q49\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q50\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q51\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q52\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q53\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q54\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q55\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q56\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q57\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q58\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q59\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q60\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q61\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q62\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q63\":{\"type\":\"noul\",\"instructions\":\"x\"},\"q64\":{\"type\":\"noul\",\"instructions\":\"x\"}}}",
+  "problem": "Ask at most 64 questions at once."
+ },
+ {
+  "input": {
+   "state": "items",
+   "questions": [
+    null,
+    "text",
+    5,
+    [
+     1,
+     2
+    ],
+    {
+     "id": "z",
+     "type": "choice",
+     "instructions": "i",
+     "options": [
+      [
+       1
+      ],
+      true,
+      3
+     ]
+    }
+   ]
+  },
+  "request": "{\"state\":\"items\",\"questions\":{\"q1\":{\"type\":\"noul\",\"instructions\":\"\"},\"q2\":{\"type\":\"noul\",\"instructions\":\"\"},\"q3\":{\"type\":\"noul\",\"instructions\":\"\"},\"q4\":{\"type\":\"noul\",\"instructions\":\"\"},\"z\":{\"type\":\"choice\",\"instructions\":\"i\",\"criteria\":[\"true\",\"3\"]}}}",
+  "problem": null
+ },
+ {
+  "input": null,
+  "request": "{\"state\":\"\\\"\\\"\",\"questions\":{}}",
+  "problem": "Ask at least one question."
+ },
+ {
+  "input": "just a string",
+  "request": "{\"state\":\"\\\"\\\"\",\"questions\":{}}",
+  "problem": "Ask at least one question."
+ },
+ {
+  "input": {},
+  "request": "{\"state\":\"\\\"\\\"\",\"questions\":{}}",
+  "problem": "Ask at least one question."
+ }
+]

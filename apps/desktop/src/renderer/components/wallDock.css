@@ -175,13 +175,6 @@
 .wall-dock__budget summary { cursor: pointer; color: var(--ink-soft); font-size: 12px; }
 .wall-dock__budget a { text-decoration: underline; text-underline-offset: 3px; }
 .wall-dock button.wall-dock__text-button { border: 0; background: transparent; padding: 0; justify-self: start; color: var(--ink-soft); font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
-.wall-dock__vitals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.wall-dock__vitals > div { min-width: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 18px; padding: 18px 20px; min-height: 108px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.wall-dock__vitals > div:nth-child(3n) { border-right: 0; }
-.wall-dock__vitals > div:nth-last-child(-n+3) { border-bottom: 0; }
-.wall-dock__vitals strong { font-size: 21px; line-height: 1.25; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.wall-dock__vitals > div:last-child strong { font-size: 15px; }
-.wall-dock__vitals span { color: var(--ink-faint); font-size: 12px; }
 .wall-dock__panel-resize { height: 8px; cursor: row-resize; touch-action: none; position: relative; }
 .wall-dock__panel-resize::after { content: ''; display: block; position: absolute; width: 28px; height: 2px; border-radius: 2px; background: var(--line); left: calc(50% - 14px); top: 3px; }
 .wall-dock__panel-resize:hover, .wall-dock__panel-resize:focus-visible { background: var(--accent-soft); outline: none; }

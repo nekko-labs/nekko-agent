@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Decision models · Nekko Agent docs</title>
+    <meta name="description" content="Typed questions answered with calibrated probabilities, in one forward pass." />
+    <link rel="canonical" href="https://nekkoagent.com/docs/decision-models" />
+    <link rel="alternate" type="text/markdown" href="/docs/decision-models.md" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="theme-color" content="#101714" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/docs/decision-models" />
+    <meta property="og:title" content="Decision models · Nekko Agent docs" />
+    <meta property="og:description" content="Typed questions answered with calibrated probabilities, in one forward pass." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/docs.css?v=docs-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Decision models","description":"Typed questions answered with calibrated probabilities, in one forward pass.","url":"https://nekkoagent.com/docs/decision-models","inLanguage":"en","isPartOf":{"@id":"https://nekkoagent.com/#website"},"publisher":{"@id":"https://nekkolabs.com/#organization"},"about":{"@id":"https://nekkoagent.com/#app"}}</script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="docs-home" href="/docs">Docs</a>
+      <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Site">
+        <a href="https://github.com/nekko-labs/nekko-agent" rel="noopener">GitHub</a>
+        <a class="download" href="/#download">Download</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models" aria-current="page">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <main id="content">
+        <article class="prose" id="top">
+          <p class="kicker">Using Nekko Agent</p>
+          <h1>Decision models</h1>
+          <p class="page-tools">
+            <a href="/docs/decision-models.md">View as Markdown</a>
+            <a href="/llms.txt">llms.txt</a>
+          </p>
+<p>A decision model answers typed questions about a piece of text with calibrated probabilities, in one forward pass, without generating any text. Nekko Agent runs one natively in its engine daemon: <strong>Laya</strong>, an open-weight model from Convai Innovations (Apache 2.0).</p>
+<h2 id="what-laya-and-jev-are"><a class="anchor" href="#what-laya-and-jev-are" aria-hidden="true" tabindex="-1">#</a>What Laya and Jev are</h2>
+<p>TypeSafe Jev is a closed, hosted &quot;System One&quot; decision API: you send a <code>state</code> (text or JSON) and named questions, and get back typed answers. <a href="https://huggingface.co/convaiinnovations/laya" rel="noopener">Laya</a> is an open-weight model trained for the same job, and its own server (<code>laya-serve</code>) speaks Jev&#39;s request and response shape. Nekko Agent speaks it too, so a Jev client works against the local engine by changing its base URL.</p>
+<p>Three question types:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>type</th>
+<th><code>criteria</code></th>
+<th>answer</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>choice</code></td>
+<td>an object of label -&gt; description, or a list of labels</td>
+<td><code>{ &quot;type&quot;: &quot;choice&quot;, &quot;choice&quot;: &quot;billing&quot;, &quot;confidence&quot;: 0.86, &quot;probabilities&quot;: { &quot;billing&quot;: 0.97, ... } }</code></td>
+</tr>
+<tr>
+<td><code>score</code></td>
+<td>the ordered list of levels, index 0 first</td>
+<td><code>{ &quot;type&quot;: &quot;score&quot;, &quot;score&quot;: 1.44, &quot;confidence&quot;: 0.14, &quot;legend&quot;: { &quot;0&quot;: &quot;not urgent&quot;, ... }, &quot;probabilities&quot;: { &quot;0&quot;: 0.12, ... } }</code></td>
+</tr>
+<tr>
+<td><code>noul</code></td>
+<td>optional <code>{ &quot;true&quot;: ..., &quot;false&quot;: ... }</code> descriptions</td>
+<td><code>{ &quot;type&quot;: &quot;noul&quot;, &quot;noul&quot;: 0.82 }</code> (the probability it is true)</td>
+</tr>
+</tbody></table></div>
+<p>Every answer also carries Laya&#39;s two extras, <code>answer_confidence</code> (the top probability, which is what the temperatures are fitted on) and <code>action.act_probability</code> (the act/escalate head, which Laya&#39;s own README says carries no usable signal yet). The response has <code>model</code>, <code>answers</code>, <code>usage</code> (<code>input_tokens</code>, <code>output_tokens: 0</code>, and how much of the state was cut to fit), and <code>latency_ms</code>.</p>
+<h2 id="the-local-runtime"><a class="anchor" href="#the-local-runtime" aria-hidden="true" tabindex="-1">#</a>The local runtime</h2>
+<p><code>crates/nekko-decide</code>, inside <code>nekkod</code>. No Python at run time: the checkpoint is an ONNX export run by ONNX Runtime (the <code>ort</code> crate with prebuilt binaries), and the tokenizer is the checkpoint&#39;s <code>tokenizer.json</code> (the <code>tokenizers</code> crate).</p>
+<ul>
+<li><strong>Same input as the reference, token for token.</strong> Prompt construction, option markers, the 48-token per-option cap and the head budget, state truncation (from the back for a conversation list, so the newest turn survives), the Python <code>json.dumps</code> rendering of JSON states and structured criteria, and temperature clamping all follow the <code>laya</code> package (0.3.22). The golden test checks every question&#39;s token sequence against the package&#39;s own.</li>
+<li><strong>One call, all questions.</strong> A bad question becomes that question&#39;s <code>error</code> entry; the others are still answered. Request caps are <code>laya-serve</code>&#39;s: 64 questions, 50,000 state characters, 100 options per choice, 32 score levels, 512 options in all.</li>
+<li><strong>Execution providers.</strong> DirectML on Windows, CoreML on macOS, CUDA on Linux when built with <code>--features cuda</code> (that ONNX Runtime build is several hundred MB and needs the CUDA 13 runtime, so it is not the default), and CPU everywhere. Each accelerator gets a probe batch at load; one that cannot build or run the graph falls back to CPU at load time, and <code>decide:status</code> reports the provider actually in use and why any were skipped.</li>
+<li><strong>Fixed shapes on DirectML and CoreML.</strong> DirectML only runs fast on a shape it compiled when the session was created: a dynamic session answered its first-seen shape in 15 ms and every other shape in about 85 ms. Accelerated sessions therefore pin one row of <code>max_len</code> tokens and 128 option slots, and run a call&#39;s questions one after another. CPU and CUDA batch every question of a call in one run.</li>
+<li><strong>Surfaces.</strong> Daemon channels <code>decide:load</code> (<code>[dir, precision?]</code> or <code>[{ dir, precision?, ep?, name? }]</code>), <code>decide:unload</code>, <code>decide:status</code> and <code>decide:run</code> (<code>[{ model?, state, questions }]</code>); on the engine&#39;s OpenAI-compatible port, <code>POST /v1/decisions</code> (Jev&#39;s path) and <code>POST /v1/systemone</code> (<code>laya-serve</code>&#39;s), behind the same API key and CORS as every other route, answering 409 when no decision model is loaded.</li>
+<li><strong>Model directory.</strong> <code>model_fp16.onnx</code> (default), <code>model.onnx</code> (fp32, may have a <code>.data</code> file beside it) or <code>model_int8.onnx</code>, plus <code>tokenizer.json</code> (at the root or under <code>tokenizer/</code>) and <code>rl_agent_config.json</code>.</li>
+</ul>
+<h2 id="measured"><a class="anchor" href="#measured" aria-hidden="true" tabindex="-1">#</a>Measured</h2>
+<p>RTX 5090, Ryzen 9 9950X3D, Windows 11, release build, the English checkpoint, the README&#39;s support-ticket email as the state (<code>cargo run --release -p nekko-decide --example latency -- &lt;dir&gt; &lt;ep&gt; &lt;precision&gt;</code>). p50 of 100 (DirectML) or 10 (CPU) calls after warm-up:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>1 question</th>
+<th>10 questions</th>
+<th>load</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DirectML, fp16</td>
+<td><strong>8.6 ms</strong></td>
+<td>81 ms</td>
+<td>1.5-2.7 s</td>
+</tr>
+<tr>
+<td>DirectML, fp32</td>
+<td>15 ms</td>
+<td>154 ms</td>
+<td>2.5 s</td>
+</tr>
+<tr>
+<td>DirectML, fp16, dynamic shapes (not used)</td>
+<td>86 ms</td>
+<td>102 ms</td>
+<td></td>
+</tr>
+<tr>
+<td>CPU, fp32</td>
+<td>94 ms</td>
+<td>733 ms</td>
+<td>3.7 s</td>
+</tr>
+<tr>
+<td>CPU, fp16</td>
+<td>106 ms</td>
+<td>707 ms</td>
+<td>2.5 s</td>
+</tr>
+<tr>
+<td>CPU, int8</td>
+<td>68 ms</td>
+<td>731 ms</td>
+<td>1.0 s</td>
+</tr>
+</tbody></table></div>
+<p>Laya&#39;s README reports 39.5 ms and 158.6 ms on a T4 with torch. Batching ten questions into one DirectML run would be faster than ten runs of one, but only with a second fixed-shape session, which doubles GPU memory; not done.</p>
+<h2 id="accuracy-against-the-reference"><a class="anchor" href="#accuracy-against-the-reference" aria-hidden="true" tabindex="-1">#</a>Accuracy against the reference</h2>
+<p><code>crates/nekko-decide/tests/golden/</code> holds 60 requests (86 questions: all three types, 1 to 30 options, states from empty to far past the 512-token window, JSON and conversation states, unicode, structured criteria, <code>option_order</code>) and what the official <code>laya</code> 0.3.22 package answered on CPU in fp32. The test runs when <code>LAYA_MODEL_DIR</code> points at a model directory and is skipped otherwise, so CI never downloads the model.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>token sequences identical</th>
+<th>same answer</th>
+<th>max abs probability error</th>
+<th>mean</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>fp32, CPU and DirectML</td>
+<td>86/86</td>
+<td>86/86</td>
+<td>0.0001</td>
+<td>0.00002</td>
+</tr>
+<tr>
+<td>fp16, DirectML</td>
+<td>86/86</td>
+<td>86/86</td>
+<td>0.018</td>
+<td>0.001</td>
+</tr>
+<tr>
+<td>fp16, CPU</td>
+<td>86/86</td>
+<td>86/86</td>
+<td>0.014</td>
+<td>0.0005</td>
+</tr>
+<tr>
+<td>int8, CPU</td>
+<td>86/86</td>
+<td>86/86</td>
+<td>0.048</td>
+<td>0.004</td>
+</tr>
+</tbody></table></div>
+<p>The test fails fp32 over 1e-3, fp16 over 0.02 and int8 over 0.06, and fp32 or fp16 on any changed answer.</p>
+<h2 id="the-export"><a class="anchor" href="#the-export" aria-hidden="true" tabindex="-1">#</a>The export</h2>
+<p>There is no usable hosted ONNX export of Laya today. <code>tozp/laya-onnx</code> was traced with TorchScript at opset 14 from a batch-1, 512-token dummy input: its decision head only runs at exactly 512 tokens, and at 512 its logits are off by up to 4 against the reference (36 of 86 golden answers match). Its fp16 file also fails to load on ONNX Runtime&#39;s CPU provider (a type error in a converter-inserted Cast, and an access violation with full optimizations). The runtime refuses exports below opset 17 with a message saying why, since that CPU failure would otherwise take the daemon down.</p>
+<p>The files measured above were made from the official checkpoint (<code>convaiinnovations/laya</code>, root) with offline Python tooling that is not part of the app:</p>
+<ol>
+<li>fp32: laya&#39;s own <code>scripts/export_onnx.py</code> (dynamo exporter, opset 18, dynamic batch, sequence and option counts).</li>
+<li>Clear <code>allowzero</code> on every <code>Reshape</code> (DirectML refuses <code>allowzero=1</code>; no shape tensor in this graph holds a literal 0, so the result is identical).</li>
+<li>fp16: <code>onnxruntime.transformers.float16.convert_float_to_float16(model, keep_io_types=True)</code> after deleting the graph&#39;s <code>value_info</code> (stale intermediate types are what broke the tozp file).</li>
+<li>int8: weight-only, <code>MatMulNBitsQuantizer</code> with 8 bits, block size 128, symmetric, <code>accuracy_level=4</code>. Laya&#39;s own recipe (<code>quantize_dynamic</code>, per-channel) quantizes activations per tensor and moves logits by up to 3.7 on this checkpoint, flipping 20 of 86 answers.</li>
+</ol>
+<h2 id="limitations-and-open-items"><a class="anchor" href="#limitations-and-open-items" aria-hidden="true" tabindex="-1">#</a>Limitations and open items</h2>
+<ul>
+<li><strong>Only the English checkpoint.</strong> <code>laya-multilingual</code> (mmBERT-base, 1,024 tokens) and <code>laya-typed-decisions</code> need exports of their own that someone hosts; the runtime reads their <code>rl_agent_config.json</code> budgets, but neither has been exported or measured. Hosting a correct English export (the recipe above) is open too.</li>
+<li><strong>The model&#39;s own limits.</strong> The English checkpoint is near chance on the typed-decisions benchmark zero-shot, ships over-confident (the <code>choice:11+</code> temperature is clamped from 0.10 to 0.5, as laya does, and those confidences are uncalibrated), and many options share a 192-token head budget, so questions with dozens of options lose accuracy. See Laya&#39;s README, &quot;Honest Limits&quot;.</li>
+<li><strong>Not verified here:</strong> CoreML on a Mac and CUDA on Linux (both fall back to CPU if they fail), and a DirectML machine older than this one.</li>
+<li><strong>Windows runtime libraries.</strong> ONNX Runtime is statically linked, and on Windows it makes <code>nekkod</code> import the Visual C++ runtime&#39;s <code>MSVCP140.dll</code> (Rust already needed <code>VCRUNTIME140.dll</code> from the same package). pyke&#39;s prebuilt ONNX Runtime is compiled against the DLL runtime (<code>/MD</code>), so <code>nekkod</code> cannot link the runtime statically; instead the installer and the npm package ship the runtime DLLs app-local beside <code>nekkod</code> (<code>scripts/vc-runtime.mjs</code>), and a PC without the Visual C++ Redistributable still starts it.</li>
+<li><strong>DirectML is not shipped.</strong> <code>nekkod</code> delay-loads <code>DirectML.dll</code> (<code>crates/nekkod/build.rs</code>), and before the DirectML provider starts <code>crates/nekko-decide/src/directml.rs</code> loads a copy at least 1.15: Windows&#39; own <code>System32\DirectML.dll</code> (Windows 11 has carried one since 2024), or one the host fetched. On a Windows whose copy is older (Windows 10), loading a model fetches Microsoft&#39;s <code>DirectML.dll</code> 1.15.4 once, reading only that entry out of the <code>Microsoft.AI.DirectML</code> NuGet package with HTTP range requests (about 9 MB of a 200 MB package) and checking it against a pinned SHA-256 (<code>packages/host/src/engine/directml.ts</code>). If that fails the model loads on the CPU and the load message says why. This took 18 MB off every install.</li>
+</ul>
+
+          <footer class="page-foot">
+            <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/docs/decision-models.md" rel="noopener">Edit this page on GitHub</a>
+            <div class="pager"><a class="prev" href="/docs/local-ci-runner"><span>Previous</span>Local CI runner</a><a class="next" href="/docs/benchmarks"><span>Next</span>Local inference benchmarks</a></div>
+          </footer>
+        </article>
+      </main>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Decision models</a></li><li class="d2"><a href="#what-laya-and-jev-are">What Laya and Jev are</a></li><li class="d2"><a href="#the-local-runtime">The local runtime</a></li><li class="d2"><a href="#measured">Measured</a></li><li class="d2"><a href="#accuracy-against-the-reference">Accuracy against the reference</a></li><li class="d2"><a href="#the-export">The export</a></li><li class="d2"><a href="#limitations-and-open-items">Limitations and open items</a></li></ul></nav></aside>
+    </div>
+    <dialog class="search-dialog" aria-label="Search the docs">
+      <form method="dialog" class="search-box">
+        <input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="esc" aria-label="Close search">Esc</button>
+      </form>
+      <ul class="results" role="listbox" aria-label="Results"></ul>
+    </dialog>
+    <script src="/docs.js?v=docs-1" defer></script>
+  </body>
+</html>

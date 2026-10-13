@@ -1,0 +1,1849 @@
+# Nekko Agent documentation
+
+> Every page of https://nekkoagent.com/docs in one file. Generated from the Markdown in https://github.com/nekko-labs/nekko-agent.
+
+<!-- https://nekkoagent.com/docs -->
+
+# Getting started
+
+Nekko Agent is AI help on your computer, for coding and everyday work. It reads, edits, searches and runs things in your projects, using AI that runs on your own machine, an online service you already pay for, or both. It is free, open source and MIT licensed.
+
+## Who we are
+
+Nekko Agent is made by [Nekko Labs](https://nekkolabs.com). We develop it in the open on [GitHub](https://github.com/nekko-labs/nekko-agent): the code, the plan and the task list are all public.
+
+We care about three things:
+
+- **Your computer, your choice.** You pick which AI runs, what it can touch and when it needs your approval. Work that uses only local models stays on your machine.
+- **Honest software.** The app tells you what a model will cost, whether it will fit in memory and what it is about to do. These docs mark what is planned as planned.
+- **Fast and calm.** The interface never waits on the agent, and responsiveness is measured on every change.
+
+## What Nekko Agent does
+
+- **Use AI on your computer or online.** Run models with the built-in engine, connect Ollama, LM Studio or vLLM, or sign in with a Claude or ChatGPT subscription. Mix them in one workspace.
+- **Pick the right AI for each job.** Use a capable model for hard work and a small local one for simple tasks. Local models have no per-token bill.
+- **Work in your real projects.** The agent reads, edits and runs code in the folders you add, with diffs to review, guardrails and an optional sandbox.
+- **Automate repeat work.** Schedule tasks and save workflows, with retry limits and a visible history.
+- **Take it with you.** Pair your phone to drive the agent on your computer from anywhere, end-to-end encrypted.
+- **Plug it into your tools.** Use it from the terminal, or as an MCP server inside Claude Code, Codex, Cursor and other agents.
+
+## Install the app
+
+The quickest way to start is the installer.
+
+1. Download the installer for your computer from [nekkoagent.com](https://nekkoagent.com/#download) or the [latest GitHub release](https://github.com/nekko-labs/nekko-agent/releases/latest):
+   - **Windows:** the `.exe` installer
+   - **macOS (Apple silicon):** the `.dmg`
+   - **Linux:** the `.AppImage`, or the `.deb` for Debian and Ubuntu
+2. Run it. On macOS, drag Nekko Agent into Applications.
+3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab.
+
+macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
+
+## Run it from source
+
+Running from source gives you the newest code and is how you work on Nekko Agent itself. It takes four steps: install the prerequisites, clone the repo, install the dependencies, and run `npm run dev`.
+
+### 1. Install the prerequisites
+
+You need three tools. Check what you already have:
+
+```bash
+git --version
+node --version
+cargo --version
+```
+
+**Git.** Any recent version. Get it from [git-scm.com](https://git-scm.com/downloads), or on macOS run `xcode-select --install`.
+
+**Node.js 22.12 or newer**, which includes npm. Install the LTS release from [nodejs.org](https://nodejs.org), or use a version manager such as [nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm). The project uses npm workspaces, not pnpm or yarn.
+
+**Rust**, through [rustup](https://rustup.rs). The engine daemon (`nekkod`) is written in Rust and `npm run dev` compiles it. You do not need to choose a version: the repo pins one in `rust-toolchain.toml` and rustup installs it on the first build.
+
+```bash
+# macOS and Linux
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+On Windows, download and run `rustup-init.exe` from [rustup.rs](https://rustup.rs).
+
+Rust also needs a C and C++ toolchain on each platform:
+
+| Platform | Install |
+| --- | --- |
+| Windows | Visual Studio Build Tools with the **Desktop development with C++** workload (rustup offers to install it) |
+| macOS | Xcode Command Line Tools: `xcode-select --install` |
+| Debian, Ubuntu | `sudo apt install build-essential pkg-config libssl-dev` |
+| Fedora | `sudo dnf install gcc gcc-c++ make pkgconf-pkg-config openssl-devel` |
+
+On Linux, the engine's model runtime needs the GCC 13 C++ runtime or newer (Ubuntu 24.04, Debian 13 or later).
+
+### 2. Clone the repo
+
+```bash
+git clone https://github.com/nekko-labs/nekko-agent
+cd nekko-agent
+```
+
+### 3. Install the dependencies
+
+```bash
+npm install
+```
+
+### 4. Start the app
+
+```bash
+npm run dev
+```
+
+This builds the Rust engine daemon and the app, then opens the desktop app. The first run compiles the daemon in release mode and takes several minutes; later runs only rebuild what changed.
+
+To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits normally and stops the engine and any model servers it started.
+
+### Other ways to run it
+
+| Command | What it does |
+| --- | --- |
+| `npm run web` | The same app in your browser at `http://localhost:1440` |
+| `docker compose up` | The web edition inside Docker, with your workspaces mounted as volumes |
+| `npm run build` | Build everything without launching |
+| `npm test` | Run the tests in every workspace |
+
+## Next steps
+
+- Take the [walkthrough](https://nekkoagent.com/docs/walkthrough) for a tour of the app.
+- Set up [local models](https://nekkoagent.com/docs/local-models) or [sign in with a subscription](https://nekkoagent.com/docs/subscriptions).
+- [Pair your phone](https://nekkoagent.com/docs/remote) to use the agent away from your desk.
+- Want to help build it? Read [Contributing](https://nekkoagent.com/docs/contributing) and the [architecture](https://nekkoagent.com/docs/architecture).
+
+### Create an agent, media session or terminal
+
+Hover over the sidebar **+** to choose **Agent**, **Media gen** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Media gen opens an image session; video generation is not available.
+
+---
+
+<!-- https://nekkoagent.com/docs/walkthrough -->
+
+# Nekko Agent walkthrough
+
+A guided tour of Nekko Agent, from install to your first agentic edit. Screenshots
+are from the running app.
+
+- [1. Install](#1-install)
+- [2. Connect a model](#2-connect-a-model)
+- [3. The unified chat](#3-the-unified-chat)
+- [4. The Context Inspector](#4-the-context-inspector)
+- [5. Guardrails & sandbox](#5-guardrails--sandbox)
+- [6. Projects & the codebase index](#6-projects--the-codebase-index)
+- [7. Memory](#7-memory)
+- [8. Connectors](#8-connectors)
+- [9. The mascot](#9-the-mascot)
+
+---
+
+## 1. Install
+
+**Download a build** for your platform from the
+[Releases page](https://github.com/nekko-labs/nekko-agent/releases/latest):
+
+| Platform | Artifact |
+| --- | --- |
+| Windows | `NekkoAgent-<version>-x64.exe` (NSIS installer) |
+| macOS | `NekkoAgent-<version>-arm64.dmg` (Apple Silicon) |
+| Linux | `.AppImage` or `.deb` |
+
+**Or run from source:**
+
+```bash
+git clone https://github.com/nekko-labs/nekko-agent
+cd nekko-agent
+npm install
+npm run dev          # launches the desktop app
+```
+
+Nekko Agent stores everything locally (under your OS app-data dir): settings,
+sessions, memory, and a usage log. No account, no telemetry.
+
+---
+
+## 2. Connect a model
+
+Open the **Models** tab. This is where Nekko Agent differs from most tools, local
+model servers are first-class, not an afterthought.
+
+![Models tab](https://nekkoagent.com/docs/media/models.png)
+
+- **Auto-discover local** probes `localhost:11434` (Ollama), `:1234` (LM Studio),
+  and `:8000` (vLLM). Anything running is added with one click.
+- **Add provider** lets you configure a server manually, or add a cloud provider -
+  Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint (just paste the
+  base URL + key).
+- For **Ollama**, you can **pull** new models and **load / unload** them into memory
+  right from the card.
+- The **Token usage** panel charts input/output tokens over time and breaks them
+  down per model and per provider.
+
+> Tip: set a default provider + model in Settings so new chats start ready to go.
+
+### Example: connect an LM Studio server
+
+1. In LM Studio, load a model and start its server (Developer → Start Server).
+2. In Nekko Agent: **Add provider → LM Studio**, set the **Base URL** to your server,
+   e.g. `http://10.5.0.2:1338` (you can paste just `host:port`, Nekko Agent appends
+   `/v1` automatically). No API key needed.
+3. **Test connection** → the model dropdown fills with whatever LM Studio is serving.
+4. Pick the model in the chat header and go.
+
+**Reasoning models** (Gemma, DeepSeek-R1, Qwen-thinking, etc.) are first-class:
+their chain-of-thought streams into a collapsible **Thinking** block above the
+answer, so you see progress during long reasoning and the answer stays clean.
+
+---
+
+## 3. The unified chat
+
+The **Chat** tab is the heart of the app. There are no separate "chat", "cowork",
+and "code" modes, it's one thread. Ask a question, or hand off a task and let
+Nekko Agent act on your machine through tools (read / write / edit files, glob, grep,
+list dirs, run shell commands).
+
+![Unified chat](https://nekkoagent.com/docs/media/chat.png)
+
+- Pick the **provider and model** from the header dropdowns at any time.
+- Assistant messages render **markdown and code**; every **tool call** the model
+  makes shows up as a card so you can see exactly what it did.
+- Streaming is live; hit **Stop** to abort a turn.
+
+**Keyboard shortcuts**: Nekko Agent has a command palette (think Cmd-K everywhere):
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl/Cmd + K` | Open the command palette |
+| `Ctrl/Cmd + N` | New chat |
+| `Ctrl/Cmd + \` | Toggle the context panel |
+
+![Command palette](https://nekkoagent.com/docs/media/command-palette.png)
+
+---
+
+### A composer that follows your draft
+
+In the Command Center, one docked composer targets the selected agent window.
+Click another agent window to write in that chat's context, or use the dock picker
+to move the composer above or below the wall.
+
+The reply editor grows with new lines and wrapped text, then shrinks when you
+delete them. In the bottom dock it grows upward, leaving the agent board above
+it in its own scroll area. Once the draft reaches the height cap, only the editor
+scrolls; the header, send controls, queued prompts, images and skill rows stay
+inside the composer ring. A saved manual height remains a preferred minimum,
+not a ceiling that prevents a longer draft from growing.
+
+### Follow delegated work without opening every detail
+
+Delegation cards start collapsed, including while a child is working or returning
+a large result. Their compact, plain-text activity sentence shares its status
+with the plan's sub-agent list and the working-subagent indicator:
+
+- **Working**: the child is thinking, writing or using a tool.
+- **Waiting**: it needs an answer or approval, or is waiting to retry.
+- **Completed**, **Failed** or **Stopped**: recorded terminal events, not guesses
+  based on the presence of a stored reply.
+
+Expand a card to read the full task and result in bounded scroll areas. This does
+not resize the entire agent window. Summaries use existing local events, without
+an extra model request or additional transmission.
+
+Live card-to-child matching is best effort, using the parent, title and creation
+time. There is no authoritative spawn-call child ID yet. Ambiguous matches and
+historical calls without observed events do not borrow another child's status;
+they retain a task summary or report that no current run status is recorded.
+
+### Plan and capacity at a glance
+
+The plan icon in an agent window opens or closes only that chat's plan, sub-agents and queue panel. Each chat remembers its own choice locally. Narrow windows fold the panel automatically without changing that choice.
+
+The context-window gauge has a subtle green background below 60% full, yellow from 60% to below 85%, and red at 85% or higher. Counts remain estimated; an unknown window limit stays neutral.
+
+In Agents, the Hardware panel names each detected GPU and shows its own utilization. Missing readings say Unavailable rather than zero; switching monitoring off says Monitor off. VRAM remains the aggregate memory reading across devices.
+
+## 4. The Context Inspector
+
+The right-hand panel (toggle it with the panel icon) is Nekko Agent's signature
+feature. It shows **exactly what is entering the prompt this turn**, grouped by
+where it came from:
+
+- **Guidelines**: `AGENTS.md` / `CLAUDE.md` / `.cursorrules` detected in your
+  workspace folders
+- **Files**: anything you've attached
+- **Memory**: relevant global / per-project notes
+- **Connectors**: issues, messages, or docs pulled in from Linear/Slack/etc.
+
+Each item shows a **token estimate**, can be **toggled off** to exclude it, or
+**pinned** to always include it. The bar at the top shows how much of the model's
+context window you're using. No more guessing what the model "saw", you can see
+and shape it.
+
+---
+
+## 5. Guardrails & sandbox
+
+Open **Settings**. Two layers keep Nekko Agent from doing something you didn't intend.
+
+![Guardrails & sandbox](https://nekkoagent.com/docs/media/guardrails.png)
+
+**Sandbox mode** controls how the agent may touch your machine:
+
+| Mode | Behavior |
+| --- | --- |
+| Workspace jail *(default)* | File access confined to your added folders |
+| Ask everything | Every write or command requires approval |
+| Docker | Run shell commands inside a container if Docker is present |
+| Off | No restrictions (power users) |
+
+**Guardrails** classify risky shell commands and decide whether to **allow**, **ask**,
+or **deny**, per rule, each toggleable. Ships with sensible defaults: recursive
+force-delete, raw disk writes, `git push --force`, `curl | sh`, privilege
+escalation, secret/`.env` access, and more. When a command matches an "ask" rule,
+the chat shows an **approval bar** with the exact command and its severity before
+anything runs.
+
+---
+
+## 6. Projects & the codebase index
+
+The **Projects** tab manages your workspace folders, and yes, **multiple roots**
+are supported. Each folder is indexed for files and code symbols (functions,
+classes, interfaces, types) so the agent and search have a fast map of your code.
+
+![Projects & index](https://nekkoagent.com/docs/media/projects.png)
+
+- **Add** a folder and it indexes in the background.
+- See **file + symbol counts** and index status per project.
+- **Search** across the indexed files instantly, or browse the file list with
+  per-file symbol counts.
+
+---
+
+## 7. Memory
+
+The **Memory** tab is a simple, durable knowledge base stored as plain markdown.
+Keep **global** memories (preferences, conventions) and **per-project** memories.
+Relevant entries are surfaced in the Context Inspector and injected automatically,
+so Nekko Agent remembers how you like to work across sessions.
+
+---
+
+## 8. Connectors
+
+The **Connectors** tab links external sources so their content can be pulled into
+context: **Linear**, **Slack**, **Discord** (token-based), and **Gmail** /
+**Google Drive** (OAuth). Tokens are stored locally. Connect one, fetch a sample
+to confirm it works, and the results become available to the assistant.
+
+---
+
+## 9. The mascot
+
+**Nekko Agent** is the 8-bit cat that lives at the edge of the window. It waves to say
+hello, peeks in from the side, and **"makes cat biscuits"** (kneads its paws) while
+the model is thinking. Don't want it? Toggle it off in Settings → Appearance.
+
+---
+
+## 10. Appearance and page recovery
+
+Nekko Agent starts in your system's light or dark mode. Leave the theme on
+**System** in **Settings → Appearance** to follow system changes, or choose a
+light or dark preset to keep that look. The pixel Nekko in the desktop's top
+bar stays the same as you move between pages; the heading names the page.
+
+If Settings or Nekko Server cannot load, the page shows the problem and a
+**Try again** button. On desktop, start a stopped service from the tray menu,
+then retry. In the web edition, check that the Nekko service is running.
+Existing content stays visible when a refresh fails.
+
+If a page or section cannot be displayed, use its **Try again** button to
+reopen it. Navigation stays available so you can move to another page. If the
+problem persists, include the displayed error and your app version and OS in
+a GitHub issue.
+
+---
+
+Questions or ideas? Open an issue on
+[GitHub](https://github.com/nekko-labs/nekko-agent/issues).
+
+---
+
+<!-- https://nekkoagent.com/docs/local-models -->
+
+# Running models locally
+
+Nekko Agent runs models two ways: with its **own engine**, which needs nothing else
+installed, or by driving a server you already run (Ollama, LM Studio, vLLM). Either way
+it loads a model with the settings you choose and tells you honestly whether it will fit
+before you wait through the load. This is what the Models page shows you and why.
+
+## The Nekko engine
+
+The engine is llama.cpp, managed by Nekko Agent. You press one button, a build comes down
+from llama.cpp's own releases (about 30 MB for Vulkan or CPU, several hundred MB for
+CUDA), and the app can serve models. Nothing
+is downloaded before that press.
+
+**Which build.** Picked from what the GPU probe actually found, not from the platform:
+CUDA where `nvidia-smi` answers and the card can run it, Vulkan for any other GPU, Metal
+on Apple Silicon, CPU where there is no evidence of anything else. A slow engine that runs
+beats a fast one that fails to start. llama.cpp's CUDA build is CUDA 13, which needs a
+GTX 16 / RTX 20 series card or newer (compute capability 7.5) and driver 580 or newer, so
+an older card or driver is recommended Vulkan and told why. The picker says CUDA is
+roughly 15-20% faster than Vulkan on NVIDIA (a rough public figure, not yet measured on
+our hardware); it is also the bigger download, about 550 MB on Windows with NVIDIA's CUDA
+runtime against Vulkan's 30 MB. A supported NVIDIA machine on a Vulkan or CPU build is
+offered **Switch to CUDA** on the Model server card. Every other build
+for your machine stays in the list if you disagree. If you already have a `llama-server`,
+point at it instead: Nekko Agent will run it and never update or remove it.
+
+**No Visual Studio, ever.** The Windows builds of llama.cpp and stable-diffusion.cpp, and
+Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`,
+`VCRUNTIME140.dll`), not Visual Studio. The installer carries those DLLs beside the daemon
+(about 1 MB), and on a PC without the Visual C++ Redistributable they are copied in beside
+the engine before it starts. If an engine still dies for a missing DLL, the error says so
+and links Microsoft's 25 MB redistributable.
+
+**Where models come from.** A short curated list answers "what should I run"; search
+covers everything else, straight against Hugging Face with no account. Each model expands
+into its real builds with their real download sizes. Downloads resume after an
+interruption and only land once the file parses as a GGUF, so a half-finished model never
+shows up looking complete. A GGUF you already have is adopted without being copied, and
+pointing the models folder at an existing library adopts everything in it.
+
+**One address, several models.** The engine serves on `http://127.0.0.1:11500/v1` by
+default, with a `llama-server` process per loaded model behind it. Several models stay
+resident; a request for one that is not loaded loads it; an idle one is evicted on a
+timer; and the address survives every load and unload. It is OpenAI-compatible, so point
+Claude Code, Cursor, Continue or anything else at it and name a model from `/v1/models`.
+
+**Two ways to configure a load.** *Simple* asks one question, how much of this machine
+the model may use, and solves it into a real context length, GPU offload and KV cache
+type, then says what it chose and what it costs. *Advanced* is every llama.cpp flag:
+context, GPU layers, KV cache type, parallel slots, flash attention, batch and physical
+batch, threads, mmap and mlock, RoPE base and scale, seed, idle TTL. They are the same
+state, so moving one moves the other, and either can be saved as that model's default.
+
+**The Server tab** carries port, whether it is reachable from your network or only this
+computer, an API key, allowed browser origins, how many models may be resident, the idle
+timeout, load-on-demand, start-with-the-app, and the models folder. The defaults are
+loopback-only with no key, which is safe; binding to the network is a deliberate act and
+the app says what it means next to the setting.
+
+Because the engine holds the file, it reads the GGUF header directly, so the projection
+below is **exact** for its own models where it has to report parts of itself as unknown
+for somebody else's.
+
+## Servers you already run
+
+### What each one can do
+
+They are not the same shape, and the app does not pretend they are.
+
+| | Nekko engine | Ollama | LM Studio | vLLM |
+|---|---|---|---|---|
+| Start / stop from here | yes | yes | yes | **no**, connect only |
+| Load a model on demand | yes | yes | yes | no, one model per process |
+| Set context per load | yes | yes | yes | at launch only |
+| Set GPU offload | yes | yes | yes | at launch only |
+| Parallel slots | **per load** | restart required | no | at launch only |
+| KV cache type | **per load** | restart required | no | at launch only |
+| Reports per-model VRAM | **measured** | **yes** | no | no |
+| Layer geometry for the planner | **from the file** | **yes** | no | no |
+| Batch, threads, flash attention, rope | **yes** | no | no | at launch only |
+| Installs the engine for you | **yes** | no | no | no |
+| Downloads models for you | **yes** | yes | no | no |
+
+Of the servers you bring yourself, **Ollama** is the most controllable and the only one
+that reports its own CPU spill.
+`/api/ps` gives both the model's total size and how much of it is in VRAM, and the gap
+between those two numbers is exactly what did not fit. `/api/show` publishes the layer
+count, KV head count, and embedding length, which is what lets the planner compute an
+exact KV cache rather than an estimate.
+
+**LM Studio** keeps most of its control surface in the `lms` CLI, so Nekko Agent drives
+that: `lms server start` and `lms server stop` are a real lifecycle, and `lms load`
+carries the context length and GPU share. It publishes no layer geometry anywhere, so
+its projections are partial (see below). Driving it needs the CLI on the same machine as
+the server, so a remote LM Studio can be read but not controlled.
+
+**vLLM** is deliberately connect-existing only. It serves one model per process with
+everything fixed by the launch command, and it is Linux plus NVIDIA plus Python in
+practice. Nekko Agent detects it, shows its live `/metrics`, and can stop it, but never
+starts it: instead the fit drawer renders the exact `vllm serve` command for you to run.
+Nothing that could not be verified against real hardware ships as a working button.
+
+## Reading the fit bar
+
+The bar stacks what the model needs against what the device has free:
+
+- **Weights**, the model's actual size. Taken from what the server reports or the file on
+  disk, never computed from a parameter count times a quantization width, which is wrong
+  for mixed-precision builds like `Q4_K_M`.
+- **KV cache**, the conversation's memory: `2 x layers x kvHeads x headDim x context x
+  bytesPerElement x parallelSlots`.
+- **Runtime overhead**, compute buffers and the server's own reserve.
+
+The marker line is where the device's free memory runs out. Anything drawn past it has to
+live in system RAM instead.
+
+## The verdicts
+
+| Verdict | What it means |
+|---|---|
+| **Fits** | Everything runs on the GPU with room to spare. |
+| **Tight** | It fits, but a long conversation may start spilling. |
+| **Spills to CPU** | Part of the model runs on the CPU. It works, several times slower. |
+| **Will not load** | It does not fit even using system memory, or the context exceeds the model's own maximum. |
+| **Unknown** | The server did not report enough to project it. |
+
+**Unknown is a real answer, not a bug.** Nekko Agent will not infer a model's memory use
+from its name. If the layer count is missing, it says so and names what is missing. A
+confident wrong number costs you a long load and every number after it.
+
+Where the weights are known but the geometry is not, which is the usual LM Studio case,
+the answer is partial rather than absent: the real weights figure is shown, and if the
+weights alone overflow the machine the will-not-load verdict is still certain.
+
+The planner never blocks a load. A will-not-load verdict warns clearly and still lets you
+proceed. The estimate can be wrong, and it is your machine.
+
+## Why a model spills to the CPU
+
+Three things push a model off the GPU, in roughly this order of surprise:
+
+1. **Context length.** The KV cache grows linearly with context. Going from 8k to 64k
+   multiplies it eightfold, and past a point the cache is larger than the model.
+2. **Parallel slots.** Every concurrent slot gets its own full KV cache. Raising
+   `OLLAMA_NUM_PARALLEL` from 1 to 4 quadruples the cache at the same context, which is
+   why a model that fit yesterday can stop fitting today with nothing else changed.
+3. **Something else already resident.** The planner measures against *free* memory, not
+   total, so another loaded model counts against you.
+
+The suggestion chips fix these in that order, and each one is re-planned before being
+offered, so clicking a suggestion always improves the verdict.
+
+## Apple Silicon
+
+A Mac shares one memory pool between the CPU and GPU. The budget is therefore system
+memory, and Nekko Agent never adds a "VRAM" figure on top of RAM, which would make a
+64 GB Mac look like it has 128 GB. The fit drawer says so explicitly when it applies.
+
+## Multiple GPUs
+
+Two 12 GB cards are not one 24 GB card. Without tensor parallelism a model has to fit on
+a single device, so the planner measures against the roomiest one and says that it is not
+pooling them. Only vLLM can split a model across cards, through `--tensor-parallel-size`.
+
+## Settings that need a restart
+
+Some settings are read only when the server starts. Ollama's parallelism
+(`OLLAMA_NUM_PARALLEL`) and KV cache type (`OLLAMA_KV_CACHE_TYPE`) are both like this.
+The Advanced section shows them with the exact environment line to set and marks them
+restart-required, rather than offering a control that would quietly not apply.
+
+`OLLAMA_KV_CACHE_TYPE=q8_0` roughly halves KV cache memory, which is often the cheapest
+way to fit a longer context.
+
+## Stopping a server
+
+A server Nekko Agent started is stopped with its own handle, cleanly, and it will not
+outlive the app. A server that was already running when Nekko Agent found it is somebody
+else's process: stopping that one asks first and names what it would end, because the
+thing holding port 11434 might be a service you depend on.
+
+LM Studio is the exception that needs no such warning, since it has a real shutdown
+command rather than a process to kill.
+
+## What is not here yet
+
+Browsing and downloading models from inside the app, and a bundled inference engine so a
+fresh install can run a model with nothing else present, are both planned as separate
+pieces of work. Today Nekko Agent manages the runtimes you already have.
+
+---
+
+<!-- https://nekkoagent.com/docs/subscriptions -->
+
+# Subscription sign-in
+
+Nekko Agent can run chat turns on your existing Claude (Pro/Max) or ChatGPT (Plus/Pro/Business) subscription instead of a metered API key. The subscription path is optional: API keys remain available for Anthropic and OpenAI, and local model servers (Ollama, LM Studio, vLLM) still cost $0.
+
+## How it works
+
+The host-side OAuth service runs the sign-in flow:
+
+1. **Claude** - We use the same public OAuth client that Claude Code uses. After you click "Sign in with Claude", the app opens a browser to `https://claude.com/cai/oauth/authorize` and starts a loopback listener on a local port. After you authorize, Anthropic redirects to the listener with an authorization code. The host exchanges that code for an access token and stores it.
+
+2. **ChatGPT / Codex** - We use the public OAuth client that the Codex CLI uses. The app opens `https://auth.openai.com/oauth/authorize` and tries to listen on `http://localhost:1455/auth/callback` (the registered redirect for that client). After authorization, OpenAI returns an access token, a refresh token, and an `id_token`. The host decodes the `id_token` to extract your ChatGPT account id, which the backend requires.
+
+The host keeps the actual access and refresh tokens in `tokens.json` inside the data directory. At chat time, the host resolves a fresh access token and injects it into the request. The renderer only ever sees a sanitized status object: connected, account id, token key, and expiry. It never sees or stores the token itself.
+
+## Caveats
+
+Both OAuth clients are the same first-party clients used by the vendors' own CLI tools. Anthropic and OpenAI consumer terms are written around their own apps, so using a subscription token with a third-party app like Nekko Agent is off-label. The flows may stop working at any time if the vendor rotates a client id, changes a scope, or blocks the client.
+
+Because of this, the subscription paths are offered as-is alongside the API key options, which are unaffected. The features are live-validated on the current versions of the vendor flows. If a flow breaks, the fallback paths below still work.
+
+## Fallbacks
+
+If the browser loopback fails, for example because another process is already using the port, the app falls back to the manual paste path:
+
+- **Claude** - Copy the `code#state` string the authorization page shows and paste it into the manual code input.
+- **ChatGPT** - If port 1455 is busy, the app switches to manual mode and you copy the code from the page.
+
+You can also import a sign-in you already did with an official CLI:
+
+- **Claude** - `claude setup-token` mints a long-lived token. Paste that token as the manual code.
+- **Codex CLI** - `codex login` writes `~/.codex/auth.json`. The app can read it and import the same token shape.
+
+If a subscription session expires, the provider card shows the expiry and a "Re-authenticate" button to sign in again.
+
+## Security
+
+- Tokens are stored in `tokens.json` under the Nekko Agent data directory. The file is created with mode `0600` and the host re-applies that permission on startup.
+- `tokens.json` is never included in a settings export. The export contains only provider configuration (base URL, label, and the opaque `tokenKey`), not the access or refresh tokens.
+- The host never sends token values to the renderer. The renderer can only request status, sign out, or re-auth through the host.
+- Removing a subscription provider also deletes its stored token from the host.
+
+---
+
+<!-- https://nekkoagent.com/docs/usage-limits -->
+
+# Usage limits and price estimates
+
+This page explains where Nekko Agent's usage numbers come from and what they mean.
+
+## Where the limit numbers come from
+
+The app does not guess your usage. It asks the provider:
+
+- **Claude (Anthropic subscription)** - Every subscription-mode response carries `anthropic-ratelimit-unified-*` headers that report the 5-hour, 7-day, and per-model 7-day windows. The host also polls `GET https://api.anthropic.com/api/oauth/usage` for the first paint and manual refreshes.
+
+- **ChatGPT (Codex subscription)** - The host polls `GET https://chatgpt.com/backend-api/wham/usage` with the current Bearer token and `ChatGPT-Account-Id`. The endpoint returns optional `primary_window` and `secondary_window` usage, plus plan type and credits. These are slots, not fixed periods: a primary window can be weekly, and either slot can be absent or null. Each window's `limit_window_seconds` determines its identity and label. Reported durations of 18,000 and 604,800 seconds become `5-hour` and `7-day`, respectively, regardless of slot; other positive integer durations get explicit duration labels. Missing or invalid durations retain the usage/reset data under neutral `Primary usage` or `Secondary usage` labels; neither the slot nor time until reset is used to guess a period.
+
+  Source: OpenAI's public Codex source at commit `b741e480e203f037ca726bc2a76d99a8e8668e66`: [nullable window slots](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/codex-backend-openapi-models/src/models/rate_limit_status_details.rs#L21-L34), [window duration field](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/codex-backend-openapi-models/src/models/rate_limit_window_snapshot.rs#L14-L22), [duration conversion](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/backend-client/src/client.rs#L741-L753), and [duration-driven labels with neutral fallbacks](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/tui/src/chatwidget/rate_limits.rs#L103-L145). Nekko uses exact reported durations rather than Codex's approximate label matching.
+
+Both providers are normalized into the same `SubscriptionLimits` shape in `packages/shared/src/limits.ts`. That shape has no unknown/general-duration scope: ChatGPT durations of at least seven days use `weekly`, shorter durations use `session`, and unknown durations use `session` only as a compatibility fallback. The displayed label, not that fallback scope, describes the reported period.
+
+## Live reads, not estimates
+
+The numbers in the chat header chip and the Models card are live reads from the provider. They update after each subscription response and on a throttled poll. Nekko Agent does not extrapolate or predict your usage locally; if a provider does not return a window, that window is simply not shown.
+
+## Off-label caveat
+
+The Anthropic and ChatGPT usage endpoints used here are documented by or reverse-engineered from the providers' subscription flows. They can change, move, or stop returning data at any time. Nekko Agent is not affiliated with Anthropic or OpenAI, and the readouts are provided as a convenience for subscribers, not as an official feature of those services.
+
+## Prices are list estimates, not a bill
+
+`MODEL_PRICING` in `packages/shared/src/limits.ts` is a table of published list prices, matched by model id substring. The per-model labels (`$X/$Y per MTok`) and the session total in the chat header are estimates only.
+
+Your actual provider bill may differ because of taxes, discounts, cached-token pricing, batch pricing, enterprise agreements, image or tool-token costs, or mid-rate changes. Local models (Ollama, LM Studio, vLLM) and subscription providers are shown as `Free` or `Included in plan` because they are not metered through an API key in Nekko Agent.
+
+## Limits are provider-side
+
+Nekko Agent can only read and surface the limits that Anthropic and OpenAI return. It cannot raise, reset, or bypass them. If a window is reported as rate limited, that state comes from the provider; Nekko Agent does not create or remove the limit.
+
+---
+
+<!-- https://nekkoagent.com/docs/remote -->
+
+# Phone remote control
+
+Drive the Nekko Agent running on your computer from your phone: start and manage chats, watch and steer
+training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
+and tools always execute on **your** machine, under its guardrails; the phone is a thin client.
+
+## How it works
+
+```
+[ Phone ]  --TLS-->  [ relay ]  <--outbound WSS--  [ your computer (agent) ]
+```
+
+- Your computer **dials out** to a relay and claims a room. No inbound ports, no port-forwarding.
+- Your phone connects to the same relay with the pairing credentials.
+- Every payload is **end-to-end encrypted** (AES-GCM, key derived from the pairing secret). The
+  relay routes ciphertext; it cannot read prompts, replies, files, or model output.
+- On top of the encrypted transport, every device must pass a **handshake against your computer's
+  device registry**: new devices enroll only through a **single-use pairing code that expires in
+  10 minutes**, and your computer answers each device individually (never broadcast).
+
+## Pairing a phone
+
+1. On your computer: **Settings → Remote access → Enable** (the managed relay is prefilled; or
+   paste your self-hosted relay URL), then **Pair a device**.
+2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
+   phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
+   app, open the pairing link in a browser to get the full app over the relay.
+3. The phone shows up under **Paired devices**, with a live connection dot.
+
+## The phone app
+
+The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
+small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
+computer's models and folders, live replies, **Allow this?** cards for risky commands, the agent's
+questions as tap-to-answer choices, follow-ups that queue while a run is going, and Stop. It can
+pair several computers and talks to one at a time.
+
+It also runs **models on the phone itself** (llama.cpp, curated small GGUF models from Hugging Face
+sized to the phone's memory), so you can keep chatting when the computer is off. Those chats never
+leave the phone and don't use the relay.
+
+On the phone, the pairing key and the derived encryption key live in the iOS Keychain / Android
+Keystore. The app drops any provider API keys your computer sends with its settings and never
+stores them.
+
+Manage devices from the same card: **rename** them, **revoke** one instantly (it's kicked live and
+denied from then on), or **Rotate secret** to cryptographically reset the room, which unpairs
+everything at once.
+
+Remote access survives restarts: if it was enabled, the agent reconnects when Nekko Agent starts.
+
+## Security model, honestly stated
+
+| Threat | Defense |
+|---|---|
+| Relay operator reads your traffic | Impossible by construction: E2E encryption, relay sees ciphertext only |
+| Stranger connects to your room | Needs the pairing secret (128-bit) for transport auth, then a registered device or a live pairing code |
+| Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
+| Lost/stolen phone | Revoke it in Settings: kicked immediately, denied afterward, push token dropped |
+| Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; rotate the secret for a full cryptographic reset |
+| Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
+| Phone asks for something dangerous | Tool calls run on your machine under your guardrails/sandbox and chat mode (Ask/Guardrails/YOLO) |
+
+What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
+enable push, device push tokens plus the content-free fact "a run finished". That's the whole list,
+and it's why relayed local-model use is inherently zero-data-retention for content.
+
+## Choosing a relay
+
+### Managed relay (default): `wss://nekko-agent-relay.fly.dev`
+
+Zero setup; free during beta with per-connection rate limits. When Nekko Agent Cloud launches, the
+managed relay becomes part of the paid plans (it already supports gating via
+`NEKKO_RELAY_AUTHZ_URL`), while self-hosting stays free forever.
+
+### Private relay over Tailscale (free, no account, nothing hosted)
+
+If your phone and computer are both on a [Tailscale](https://tailscale.com) network, you do not
+need a hosted relay at all: run the relay **on the computer** and bind it to the computer's
+Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts the hop
+(WireGuard), and the app's end-to-end layer still sits on top. This is how free remote-desktop
+tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
+network you already own.
+
+```bash
+npm run relay:tailscale        # Windows (PowerShell); or scripts/private-relay.sh on macOS/Linux
+```
+
+The script prints the URL to paste into **Settings → Remote access** (for example
+`ws://gomi.tailfd6474.ts.net:4400`; the MagicDNS name resolves on any device in the tailnet, the
+`100.x.y.z` address works too). Enable, **Pair a device**, scan the QR from the phone with
+Tailscale switched on. The relay only listens on the Tailscale interface, so
+`NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` is safe here; never use that flag on a public bind.
+
+Plain `ws://` is fine on a tailnet: the transport is already encrypted end to end by WireGuard and
+the iOS app ships with Expo's default App Transport Security (arbitrary loads allowed). If you
+prefer `wss://`, enable **HTTPS certificates** in the tailnet's DNS settings and either put
+`tailscale serve --bg 4400` in front (needs Serve enabled once per tailnet) or terminate TLS with
+`tailscale cert` on your own proxy.
+
+Trade-offs: the computer must be awake and Tailscale running; push notifications need APNs/FCM
+keys on this relay like any other; Tailscale's free plan covers up to 100 devices and 3 users.
+
+### Self-host (free forever, one command)
+
+The relay is a tiny stateless Node service; anything that runs a container can host it.
+
+**Docker**
+
+```bash
+docker run -d --name nekko-agent-relay -p 4400:4400 --restart unless-stopped \
+  -e NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 \
+  ghcr.io/nekko-labs/nekko-agent-relay:latest
+```
+
+**Docker Compose**
+
+```yaml
+services:
+  nekko-agent-relay:
+    image: ghcr.io/nekko-labs/nekko-agent-relay:latest
+    ports: ["4400:4400"]
+    environment:
+      NEKKO_RELAY_ALLOW_UNAUTHENTICATED: "1"
+    restart: unless-stopped
+```
+
+**Coolify** (recommended if you already run one): add a new service → Docker image
+`ghcr.io/nekko-labs/nekko-agent-relay:latest`, expose port 4400, attach a domain, and let Coolify's
+proxy terminate TLS. Point Nekko Agent at `wss://relay.your-domain.com`.
+
+**Fly.io**: `fly deploy -c apps/relay/fly.toml` from a repo checkout. Keep it at **one machine**
+(`fly scale count 1`): rooms live in a machine's memory, so agent and phone must land on the same
+instance.
+
+Put any self-hosted relay behind TLS (`wss://`) for internet use; the E2E layer protects content
+regardless, but TLS also protects the transport-auth query string. Then paste the URL into
+**Settings → Remote access** before enabling.
+
+Environment knobs:
+
+| Env | Meaning |
+|---|---|
+| `NEKKO_RELAY_PORT` / `NEKKO_RELAY_HOST` | Bind (default `0.0.0.0:4400`) |
+| `APNS_KEY_P8` / `APNS_KEY_ID` / `APNS_TEAM_ID` | Enable iOS push |
+| `FCM_SERVICE_ACCOUNT` | Enable Android push (service-account JSON) |
+| `NEKKO_RELAY_AUTHZ_URL` | Gate agent enrollment on a Nekko Agent Cloud account (managed hosting) |
+| `NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` | Explicitly allow unauthenticated agent enrollment for trusted/private deployments; otherwise agent enrollment is disabled when no authz URL is configured |
+
+The relay validates device IDs as UUIDs and push tokens as non-empty platform
+tokens. A connected device cannot replace another connection's push token for
+the same device ID. Keep the relay behind TLS (`wss://`) and do not enable the
+unauthenticated mode on a public endpoint.
+
+## Headless agents
+
+A machine without a screen (server, homelab box) can expose itself with the relay-agent mode:
+
+```bash
+NEKKO_RELAY_URL=wss://your-relay NEKKO_ROOM=myroom NEKKO_PAIR_KEY=<secret> npx nekko-agent
+```
+
+It prints a one-time pairing code (10 minutes) at boot and keeps the same persistent device
+registry as the desktop app.
+
+---
+
+<!-- https://nekkoagent.com/docs/cli -->
+
+# Nekko Agent CLI and MCP
+
+The CLI makes the Nekko Agent host a subagent for Devin, Claude Code, Codex,
+Cursor, and other harnesses. It uses the same host engine as the desktop and
+web editions.
+
+## Install and target
+
+Published package:
+
+```bash
+npm install --global nekko-agent   # publishing with the next release
+npx nekko-agent status
+```
+
+From a checkout:
+
+```bash
+npm install
+npm run build --workspace=apps/cli
+node apps/cli/dist/index.js status
+```
+
+Use `nekko-agent` after a global install or linking the built package, or invoke
+the bundled binary from `apps/cli/dist/index.js`. Without `--url`, the CLI runs
+an in-process host
+against `~/.nekko` (override with `NEKKO_DATA_DIR`). To drive a web edition,
+use:
+
+```bash
+nekko-agent --url http://127.0.0.1:1440 --token "$NEKKO_TOKEN" status --json
+```
+
+`--url` can also be supplied as `NEKKO_URL`; `--token` can be supplied as
+`NEKKO_TOKEN`.
+
+## Safety and approval
+
+Chat defaults to `--approve guardrails` (or `NEKKO_APPROVE=guardrails`).
+Guardrails mode sets the session to `guardrails`: ordinary tools run, ask-rule
+approvals are refused and reported as structured `blocked` entries, and the
+turn continues. The result tells the harness to use `--approve yolo` when an
+override is intentional.
+
+`--approve yolo` explicitly opts into the previous unattended behavior. Deny
+rules remain a hard floor in every mode. `--approve ask` prompts on the TTY;
+it is an error when stdin is not a TTY.
+
+These policies govern the agent tool loop, not every process the host can
+launch. In particular, `bash` is not confined by `workspace-jail`; use the
+host's deployment and workspace controls when granting an external harness
+access.
+
+## Commands
+
+```text
+status [--json]
+sessions [--json]
+chat "<prompt>" [--session ID] [--new] [--workspace ID] [--provider ID] [--model ID]
+  [--approve guardrails|yolo|ask] [--json|--stream ndjson] [--timeout SECONDS] [--quiet]
+workspace list|add PATH|remove ID|index ID|search ID QUERY [--json]
+prompts [--json]
+tasks list|add|run ID|delete ID [--json]
+skills [--json]
+skills install ID [--target nekko-agent|claude|codex] [--json]
+tools [--json]
+models [PROVIDER_ID] [--json]
+train start NAME GOAL [--provider ID] [--model ID] [--workspace ID] [--json]
+train status|hint ID TEXT|stop ID [--json]
+watch [--session ID] [--json]
+mcp
+```
+
+Prompts may be positional, piped through stdin (`nekko-agent chat -`), or loaded
+from a file (`nekko-agent chat --file prompt.md`). `--quiet` suppresses human
+progress on stderr.
+
+## Machine output
+
+`--json` emits exactly one JSON object on stdout. Chat objects have this shape:
+
+```json
+{
+  "sessionId": "…",
+  "provider": "…",
+  "model": "…",
+  "text": "…",
+  "toolCalls": [{ "name": "read_file", "input": { "path": "README.md" } }],
+  "blocked": [{ "ruleLabels": ["…"], "command": "…", "severity": "high", "reason": "…" }],
+  "durationMs": 1234,
+  "usage": { "inputTokens": 100, "outputTokens": 40 }
+}
+```
+
+`--stream ndjson` emits one typed event per line:
+
+```json
+{"type":"text","delta":"Hello"}
+{"type":"tool_call","call":{"name":"read_file","input":{"path":"README.md"}}}
+{"type":"tool_result","toolCallId":"…","ok":true,"output":"…"}
+{"type":"blocked","ruleLabels":["ask"],"command":"…","severity":"high","reason":"…"}
+{"type":"done"}
+```
+
+Progress and diagnostics go to stderr. Other commands accept `--json`;
+`watch --json` emits the same typed event objects as NDJSON and exits cleanly
+when it receives Ctrl-C. Watch events are `text`, `tool_call`, `tool_result`,
+`blocked`, `done`, and `error`; reasoning and usage-only events are omitted.
+
+## Exit codes
+
+| Code | Meaning |
+| ---: | --- |
+| 0 | Success |
+| 2 | Usage or invalid flags |
+| 3 | Nothing configured (provider/model missing) |
+| 4 | Guardrail-blocked tool call |
+| 5 | Provider/model failure |
+| 6 | Chat timeout |
+| 7 | Cannot reach or unauthorized against `--url` |
+
+## MCP
+
+Start the JSON-RPC stdio server:
+
+```bash
+node apps/cli/dist/index.js mcp
+```
+
+Claude Code:
+
+```bash
+claude mcp add nekko-agent -- node /abs/path/nekko-agent/apps/cli/dist/index.js mcp
+```
+
+Codex:
+
+```bash
+codex mcp add nekko-agent -- node /abs/path/nekko-agent/apps/cli/dist/index.js mcp
+```
+
+Cursor and generic `mcpServers` configuration:
+
+```json
+{
+  "mcpServers": {
+    "nekko-agent": {
+      "command": "node",
+      "args": ["/abs/path/nekko-agent/apps/cli/dist/index.js", "mcp"]
+    }
+  }
+}
+```
+
+`nekko-agent_chat` accepts the same `approve` policy as the CLI and defaults to
+`guardrails`. `nekko-agent_train_start` also accepts an explicit `approve` argument;
+unattended training that intentionally permits ask-rules must pass
+`"approve": "yolo"`. The server negotiates MCP protocol versions, echoing a
+supported client version and otherwise selecting its newest supported version.
+`nekko-agent_task_create` exposes `title`, `prompt`, `kind`, `runAt`, `intervalMs`,
+`workspaceId`, `providerId`, `modelId`, `condition`, and `keepAlive` directly;
+`title`, `prompt`, and `kind` are required. A `nekko-agent_chat` result presents
+the assistant reply first, followed by a metadata block containing session,
+tool-call, blocked-entry, duration, and usage details.
+
+The MCP tool list mirrors the CLI coverage: `nekko-agent_chat`,
+`nekko-agent_list_sessions`, `nekko-agent_new_session`, `nekko-agent_get_session`,
+`nekko-agent_workspace_list`, `nekko-agent_workspace_add`, `nekko-agent_workspace_remove`,
+`nekko-agent_workspace_index`, `nekko-agent_workspace_search`,
+`nekko-agent_prompts_list`, `nekko-agent_tasks_list`, `nekko-agent_task_create`,
+`nekko-agent_task_run`, `nekko-agent_task_delete`, `nekko-agent_skills_list`,
+`nekko-agent_skill_install`, `nekko-agent_tools_list`, `nekko-agent_models_list`,
+`nekko-agent_train_start`, `nekko-agent_train_status`, `nekko-agent_train_hint`,
+`nekko-agent_train_stop`, and `nekko-agent_status`.
+
+## Recipes
+
+### Drive a repeated workflow
+
+```bash
+nekko-agent tasks add --title "daily review" --kind recurring \
+  --interval-ms 86400000 --prompt "Review the current workspace diff and summarize risks" \
+  --workspace "$WORKSPACE_ID" --provider "$PROVIDER" --model "$MODEL" --json
+nekko-agent tasks list --json
+nekko-agent tasks run TASK_ID --json
+```
+
+### Fan out several sessions
+
+```bash
+nekko-agent chat "Review security" --new --workspace "$W" --json > security.json &
+nekko-agent chat "Review tests" --new --workspace "$W" --json > tests.json &
+nekko-agent chat "Review API design" --new --workspace "$W" --json > api.json &
+wait
+```
+
+### Hand off training and poll it
+
+```bash
+nekko-agent train start "ranking-v1" "Improve ranking accuracy" \
+  --workspace "$W" --provider "$PROVIDER" --model "$MODEL" --json
+nekko-agent train status --json
+nekko-agent train hint RUN_ID "Try a larger validation split" --json
+nekko-agent train stop RUN_ID --json
+```
+
+---
+
+<!-- https://nekkoagent.com/docs/local-ci-runner -->
+
+# Local CI runner
+
+Use a machine running Nekko Agent as a CI runner for a GitHub or GitLab repo: when a commit is
+pushed or a pull request opens, a workflow checks the code out, runs your build and tests **on
+that machine**, and reports the result back to the provider as a commit status - with a comment
+on the PR when it fails. It saves hosted-runner minutes by burning your own hardware instead.
+
+## What it is - and what it is not
+
+A "Local CI runner" is a **workflow template**, not a new subsystem. Create it from
+**Workflows → New workflow → Local CI runner** (it's also one of the cards on the empty state).
+Behind the scenes it is ordinary workflow pieces you already have:
+
+- a **trigger** that fires on repo events (see [Getting events in](#getting-events-in)),
+- **shell steps** that check out the commit and run your build/test commands,
+- **action steps** (`github.setCommitStatus`, `gitlab.setCommitStatus`, `github.commentPR`,
+  `gitlab.commentMR`) that report the outcome back through the saved connector credentials.
+
+**This is not a GitHub Actions self-hosted runner.** Nekko Agent does not speak the
+`actions/runner` broker protocol, will not pick up `runs-on: self-hosted` jobs, and does not use
+the Checks API (no annotations, no check-suite lifecycle). It produces a plain **commit status**
+(`nekko-agent/<workflow>` context) and PR comments - enough for "did this commit pass on my
+machine", not a replacement for the Actions job queue. If you need real self-hosted runners, use
+GitHub's or GitLab's official runner.
+
+## The template
+
+The workflow looks like this:
+
+```
+checkout (shell)  ──fail──▶  report failure (action)  ──▶  comment on PR (action) ──▶ fail
+    │
+  success
+    ▼
+build + test (shell) ──success──▶ report success (action) ──▶ end
+```
+
+- **Check out the commit** - `git fetch origin {{trigger.branch}} && git checkout {{trigger.sha}}`
+- **Build and test** - `npm ci && npm run build && npm test`
+- **Report success / failure** - `github.setCommitStatus` with context
+  `nekko-agent/<your-workflow-name>` (the default when the `context` param is empty)
+- **Comment on the PR** - `github.commentPR` with the tail of the test step's output.
+  On plain `push` events there is no PR number, so this step fails and the run still ends red.
+
+**The two shell steps are placeholders.** Edit them for your project - your package manager,
+your test command, your merge strategy. The action steps are ready as-is: they take repo, sha,
+and PR number from the event when the `{{trigger.*}}` params render empty.
+
+For GitLab, swap the action steps for `gitlab.setCommitStatus` (state `failed`/`success`,
+status name `nekko-agent/<workflow>`) and `gitlab.commentMR`.
+
+## Getting events in
+
+A run only happens when an event reaches the workflow. Pick **one** delivery mode per workflow ,
+arming two means double runs.
+
+### Poll mode - works anywhere, including the desktop app
+
+The desktop app can't receive real webhooks (it's behind NAT), so the honest default is polling:
+Nekko Agent asks the provider's API what's new, on an interval, with a per-trigger cursor stored
+in `workflow-cursors.json` next to `workflows.json`.
+
+The template ships a disarmed **Connector** trigger as the starter:
+
+1. Connect GitHub (or GitLab) under **Connectors** - the poller uses that token.
+2. On the workflow's Connector trigger: set **Repo** to `owner/name`, set the event name, arm it.
+   - GitHub event names are the API's `type` strings: `PushEvent`, `PullRequestEvent`,
+     `PullRequestReviewEvent`, … One trigger matches one name, so add a second trigger for PRs.
+   - GitLab polls the project events feed; filter with the **Filter** substring field.
+3. **Poll every N minutes** defaults to 1. Each new matching event starts a run; a late or
+   duplicated page can't refire (events are deduped by id, and the cursor survives restarts).
+
+Polling is eventually-consistent by design: expect up to a poll interval of latency, and note
+that repo events APIs are shallow (recent events only).
+
+### Webhook mode - server / Docker edition
+
+When Nekko Agent runs somewhere a provider can reach (the server edition, Docker, a VM with a
+public URL), inbound webhooks give instant triggers:
+
+```
+POST https://<your-host>/api/hooks/<workflow-slug>?key=<trigger secret>
+```
+
+The template ships a disarmed **Webhook** trigger with a generated secret. Arm it, copy the URL
+shown in the editor, and add it as a webhook on the repo (GitHub: repo → Settings → Webhooks,
+content type `application/json`; GitLab: project → Settings → Webhooks).
+
+- The secret is **per trigger** and travels in `?key=` (or you can relay it). It's compared in
+  constant time and never logged. Regenerate it in the editor if it leaks.
+- The route enforces a 10 MB body cap and a 60-requests/minute limit per slug+IP.
+- The raw provider JSON body becomes the event payload - the action steps understand the common
+  shapes (`repository.full_name`, `pull_request.head.sha`, `object_attributes.iid`, …), so the
+  template's status/comment steps work without a normalizing layer.
+- A `webhook` trigger fires on *any* authenticated POST. Use the trigger's **Filter** field, or
+  the git trigger below, if you want to restrict which deliveries start a run.
+
+**Desktop opt-in:** the desktop app can expose the same route on loopback ,
+Settings → Experimental → workflow loopback listener binds `127.0.0.1:1441` only. Useful for
+local relays and tunnels, off by default.
+
+### Dispatching git events directly - `workflow:event`
+
+The `git` trigger (the one the template ships armed) matches **normalized** events - provider,
+event name, repo, branch - dispatched through the generic event door. On the server edition:
+
+```
+POST https://<your-host>/api/workflow:event
+Authorization: Bearer <NEKKO_TOKEN>
+{ "args": [{
+    "kind": "git", "provider": "github", "event": "pr_opened",
+    "repo": "owner/name", "branch": "feature-x",
+    "payload": { "sha": "abc123…", "number": 12 }
+}] }
+```
+
+This is the door a relay script uses when it sits between a provider webhook and a machine that
+can't be reached directly: accept the webhook, map it onto the normalized shape, POST it on.
+Inside the desktop app the same call goes over the internal API (`workflow:event`).
+
+## The payload contract
+
+Steps read the event through `{{trigger.*}}` templates (`repo`, `branch`, plus every payload
+key) and the action steps fall back to the event when a param renders empty. These keys are
+understood - normalized names first, then the raw provider body:
+
+| Need | Normalized | Raw GitHub body | Raw GitLab body |
+|---|---|---|---|
+| Repo / project | `repo` | `repository.full_name` | `project.path_with_namespace`, `project_id` |
+| Commit SHA | `sha` | `after`, `head_commit.id`, `pull_request.head.sha`, `head` | `checkout_sha`, `object_attributes.last_commit.id` |
+| PR / MR number | `number`, `pull_number` | `number`, `pull_request.number`, `issue.number` | `iid`, `object_attributes.iid` |
+| Branch | `branch` | `ref` (`refs/heads/…`) | `ref` |
+
+Reported statuses use context `nekko-agent/<workflow-slug>` on GitHub (states
+`success`/`failure`/`error`/`pending`) and the same name on GitLab (`success`/`failed`/
+`running`/`pending`/`canceled`) - each op accepts the other's spelling for `state`.
+
+## Security model, honestly stated
+
+| Threat | Defense |
+|---|---|
+| A stranger's PR runs code on your machine | **None by default - this is the big one.** Shell steps run unattended, as you, in the workflow's workspace. Only point this at repos you control, or gate it (see below). |
+| Webhook spoofing | Per-trigger secret in `?key=`, constant-time compare, 60 req/min rate limit, 10 MB body cap |
+| Exposed endpoint | Server edition binds `127.0.0.1` by default; the desktop listener is loopback-only and off unless enabled |
+| Credential theft via the workflow | Connector tokens live in settings, never on the step; a workflow file carries no secrets except its webhook keys |
+| Event injects a shell command | The command line comes from your workflow, not the event - but `{{trigger.*}}` values are interpolated *before* exec, so only interpolate fields you trust (git SHAs and ref names can't contain shell metacharacters; a free-text payload field can) |
+
+**Untrusted pull requests need review.** Anyone who can open a PR against your repo could get
+their code executed on this machine. Guardrails that actually help:
+
+- Restrict the trigger's **Repo** and **Branches** (e.g. `main`, `release/*`) so random forks
+  and branches don't fire it.
+- Prefer the git trigger with an explicit event list over a wide-open webhook trigger.
+- For public repos, keep the runner on a dedicated workspace you don't mind being compromised,
+  or add a `prompt` step that reviews the diff before the shell steps run.
+- One run per workflow at a time: events that arrive while a run is in flight are skipped, not
+  queued - so a push flood can't stack runs, but it can also drop builds.
+
+## Limits
+
+- Local execution only: runs happen on the machine hosting Nekko Agent, with its CPU, its
+  toolchain, and its uptime. A closed laptop is a runner that's down.
+- Shell steps time out after 600s by default (`timeoutSec` per step); step output kept in the
+  run log is trimmed to ~4 KB.
+- No parallelism beyond one run per workflow, no job matrix, no artifacts - it's a
+  workflow engine, not a CI fleet.
+
+---
+
+<!-- https://nekkoagent.com/docs/decision-models -->
+
+# Decision models
+
+A decision model answers typed questions about a piece of text with calibrated probabilities, in one forward pass, without generating any text. Nekko Agent runs one natively in its engine daemon: **Laya**, an open-weight model from Convai Innovations (Apache 2.0).
+
+## What Laya and Jev are
+
+TypeSafe Jev is a closed, hosted "System One" decision API: you send a `state` (text or JSON) and named questions, and get back typed answers. [Laya](https://huggingface.co/convaiinnovations/laya) is an open-weight model trained for the same job, and its own server (`laya-serve`) speaks Jev's request and response shape. Nekko Agent speaks it too, so a Jev client works against the local engine by changing its base URL.
+
+Three question types:
+
+| type | `criteria` | answer |
+| --- | --- | --- |
+| `choice` | an object of label -> description, or a list of labels | `{ "type": "choice", "choice": "billing", "confidence": 0.86, "probabilities": { "billing": 0.97, ... } }` |
+| `score` | the ordered list of levels, index 0 first | `{ "type": "score", "score": 1.44, "confidence": 0.14, "legend": { "0": "not urgent", ... }, "probabilities": { "0": 0.12, ... } }` |
+| `noul` | optional `{ "true": ..., "false": ... }` descriptions | `{ "type": "noul", "noul": 0.82 }` (the probability it is true) |
+
+Every answer also carries Laya's two extras, `answer_confidence` (the top probability, which is what the temperatures are fitted on) and `action.act_probability` (the act/escalate head, which Laya's own README says carries no usable signal yet). The response has `model`, `answers`, `usage` (`input_tokens`, `output_tokens: 0`, and how much of the state was cut to fit), and `latency_ms`.
+
+## The local runtime
+
+`crates/nekko-decide`, inside `nekkod`. No Python at run time: the checkpoint is an ONNX export run by ONNX Runtime (the `ort` crate with prebuilt binaries), and the tokenizer is the checkpoint's `tokenizer.json` (the `tokenizers` crate).
+
+- **Same input as the reference, token for token.** Prompt construction, option markers, the 48-token per-option cap and the head budget, state truncation (from the back for a conversation list, so the newest turn survives), the Python `json.dumps` rendering of JSON states and structured criteria, and temperature clamping all follow the `laya` package (0.3.22). The golden test checks every question's token sequence against the package's own.
+- **One call, all questions.** A bad question becomes that question's `error` entry; the others are still answered. Request caps are `laya-serve`'s: 64 questions, 50,000 state characters, 100 options per choice, 32 score levels, 512 options in all.
+- **Execution providers.** DirectML on Windows, CoreML on macOS, CUDA on Linux when built with `--features cuda` (that ONNX Runtime build is several hundred MB and needs the CUDA 13 runtime, so it is not the default), and CPU everywhere. Each accelerator gets a probe batch at load; one that cannot build or run the graph falls back to CPU at load time, and `decide:status` reports the provider actually in use and why any were skipped.
+- **Fixed shapes on DirectML and CoreML.** DirectML only runs fast on a shape it compiled when the session was created: a dynamic session answered its first-seen shape in 15 ms and every other shape in about 85 ms. Accelerated sessions therefore pin one row of `max_len` tokens and 128 option slots, and run a call's questions one after another. CPU and CUDA batch every question of a call in one run.
+- **Surfaces.** Daemon channels `decide:load` (`[dir, precision?]` or `[{ dir, precision?, ep?, name? }]`), `decide:unload`, `decide:status` and `decide:run` (`[{ model?, state, questions }]`); on the engine's OpenAI-compatible port, `POST /v1/decisions` (Jev's path) and `POST /v1/systemone` (`laya-serve`'s), behind the same API key and CORS as every other route, answering 409 when no decision model is loaded.
+- **Model directory.** `model_fp16.onnx` (default), `model.onnx` (fp32, may have a `.data` file beside it) or `model_int8.onnx`, plus `tokenizer.json` (at the root or under `tokenizer/`) and `rl_agent_config.json`.
+
+## Measured
+
+RTX 5090, Ryzen 9 9950X3D, Windows 11, release build, the English checkpoint, the README's support-ticket email as the state (`cargo run --release -p nekko-decide --example latency -- <dir> <ep> <precision>`). p50 of 100 (DirectML) or 10 (CPU) calls after warm-up:
+
+| | 1 question | 10 questions | load |
+| --- | --- | --- | --- |
+| DirectML, fp16 | **8.6 ms** | 81 ms | 1.5-2.7 s |
+| DirectML, fp32 | 15 ms | 154 ms | 2.5 s |
+| DirectML, fp16, dynamic shapes (not used) | 86 ms | 102 ms | |
+| CPU, fp32 | 94 ms | 733 ms | 3.7 s |
+| CPU, fp16 | 106 ms | 707 ms | 2.5 s |
+| CPU, int8 | 68 ms | 731 ms | 1.0 s |
+
+Laya's README reports 39.5 ms and 158.6 ms on a T4 with torch. Batching ten questions into one DirectML run would be faster than ten runs of one, but only with a second fixed-shape session, which doubles GPU memory; not done.
+
+## Accuracy against the reference
+
+`crates/nekko-decide/tests/golden/` holds 60 requests (86 questions: all three types, 1 to 30 options, states from empty to far past the 512-token window, JSON and conversation states, unicode, structured criteria, `option_order`) and what the official `laya` 0.3.22 package answered on CPU in fp32. The test runs when `LAYA_MODEL_DIR` points at a model directory and is skipped otherwise, so CI never downloads the model.
+
+| | token sequences identical | same answer | max abs probability error | mean |
+| --- | --- | --- | --- | --- |
+| fp32, CPU and DirectML | 86/86 | 86/86 | 0.0001 | 0.00002 |
+| fp16, DirectML | 86/86 | 86/86 | 0.018 | 0.001 |
+| fp16, CPU | 86/86 | 86/86 | 0.014 | 0.0005 |
+| int8, CPU | 86/86 | 86/86 | 0.048 | 0.004 |
+
+The test fails fp32 over 1e-3, fp16 over 0.02 and int8 over 0.06, and fp32 or fp16 on any changed answer.
+
+## The export
+
+There is no usable hosted ONNX export of Laya today. `tozp/laya-onnx` was traced with TorchScript at opset 14 from a batch-1, 512-token dummy input: its decision head only runs at exactly 512 tokens, and at 512 its logits are off by up to 4 against the reference (36 of 86 golden answers match). Its fp16 file also fails to load on ONNX Runtime's CPU provider (a type error in a converter-inserted Cast, and an access violation with full optimizations). The runtime refuses exports below opset 17 with a message saying why, since that CPU failure would otherwise take the daemon down.
+
+The files measured above were made from the official checkpoint (`convaiinnovations/laya`, root) with offline Python tooling that is not part of the app:
+
+1. fp32: laya's own `scripts/export_onnx.py` (dynamo exporter, opset 18, dynamic batch, sequence and option counts).
+2. Clear `allowzero` on every `Reshape` (DirectML refuses `allowzero=1`; no shape tensor in this graph holds a literal 0, so the result is identical).
+3. fp16: `onnxruntime.transformers.float16.convert_float_to_float16(model, keep_io_types=True)` after deleting the graph's `value_info` (stale intermediate types are what broke the tozp file).
+4. int8: weight-only, `MatMulNBitsQuantizer` with 8 bits, block size 128, symmetric, `accuracy_level=4`. Laya's own recipe (`quantize_dynamic`, per-channel) quantizes activations per tensor and moves logits by up to 3.7 on this checkpoint, flipping 20 of 86 answers.
+
+## Limitations and open items
+
+- **Only the English checkpoint.** `laya-multilingual` (mmBERT-base, 1,024 tokens) and `laya-typed-decisions` need exports of their own that someone hosts; the runtime reads their `rl_agent_config.json` budgets, but neither has been exported or measured. Hosting a correct English export (the recipe above) is open too.
+- **The model's own limits.** The English checkpoint is near chance on the typed-decisions benchmark zero-shot, ships over-confident (the `choice:11+` temperature is clamped from 0.10 to 0.5, as laya does, and those confidences are uncalibrated), and many options share a 192-token head budget, so questions with dozens of options lose accuracy. See Laya's README, "Honest Limits".
+- **Not verified here:** CoreML on a Mac and CUDA on Linux (both fall back to CPU if they fail), and a DirectML machine older than this one.
+- **Windows runtime libraries.** ONNX Runtime is statically linked, and on Windows it makes `nekkod` import the Visual C++ runtime's `MSVCP140.dll` (Rust already needed `VCRUNTIME140.dll` from the same package). pyke's prebuilt ONNX Runtime is compiled against the DLL runtime (`/MD`), so `nekkod` cannot link the runtime statically; instead the installer and the npm package ship the runtime DLLs app-local beside `nekkod` (`scripts/vc-runtime.mjs`), and a PC without the Visual C++ Redistributable still starts it.
+- **DirectML is not shipped.** `nekkod` delay-loads `DirectML.dll` (`crates/nekkod/build.rs`), and before the DirectML provider starts `crates/nekko-decide/src/directml.rs` loads a copy at least 1.15: Windows' own `System32\DirectML.dll` (Windows 11 has carried one since 2024), or one the host fetched. On a Windows whose copy is older (Windows 10), loading a model fetches Microsoft's `DirectML.dll` 1.15.4 once, reading only that entry out of the `Microsoft.AI.DirectML` NuGet package with HTTP range requests (about 9 MB of a 200 MB package) and checking it against a pinned SHA-256 (`packages/host/src/engine/directml.ts`). If that fails the model loads on the CPU and the load message says why. This took 18 MB off every install.
+
+---
+
+<!-- https://nekkoagent.com/docs/benchmarks -->
+
+# Local inference benchmarks
+
+How fast Nekko Agent's engine runs a model compared with Ollama and LM Studio, on the same machine and the same model file, measured the same way. vLLM is supported by the harness but not measured here (it has no native Windows build).
+
+The numbers are from one machine. They are not a promise about yours; run the harness (below) to get your own.
+
+## Results, 2026-09-30
+
+**Model:** `gemma-4-12B-it-Q4_K_M.gguf` (lmstudio-community), the same file for every server. **Machine:** NVIDIA RTX 5090 32 GB, AMD Ryzen 9 9950X3D, Windows 11. Median of 3 runs; 32k context; everything on the GPU.
+
+| Measure | Nekko Agent engine | llama.cpp as the engine ran it before | Ollama 0.23.0 | LM Studio (llama.cpp CUDA 12, 2.46.0) |
+| --- | --- | --- | --- | --- |
+| Decode, tokens/s | **154** | 127 | 115 | 116 |
+| Code edit that repeats its input, tokens/s | **534** | 117 | 106 | 108 |
+| Four requests at once, total tokens/s | **256** | 283 | 113 | 210 |
+| Time to first token, short prompt | **99 ms** | 98 ms | 153 ms | 114 ms |
+| Prefill of an 8k-token prompt, tokens/s | 5,832 | 5,968 | **6,170** | 5,886 |
+| New agent session (8k-token context), first turn to first token | 1,719 ms | 2,280 ms | **1,280 ms** | 2,565 ms |
+| Agent session, later turns to first token | 253 ms | 219 ms | **211 ms** | 288 ms |
+| Agent session, six turns end to end | 7.9 s | 8.4 s | **7.6 s** | 9.3 s |
+
+Six chats visited in turn, three rounds each, more chats than the server has slots (what a person with several agent chats open does):
+
+| | Nekko Agent engine | llama.cpp default prompt cache | llama.cpp, no RAM prompt cache | Ollama | LM Studio |
+| --- | --- | --- | --- | --- | --- |
+| Revisit of a chat, to first token | **790 ms** | 1,729 ms | 1,894 ms | 1,290 ms | 1,600 ms |
+| All three rounds, end to end | **27.1 s** | 32.0 s | 38.4 s | 31.7 s | 33.3 s |
+
+### Reading the results honestly
+
+- **Where Nekko Agent is clearly ahead:** edits that repeat their input (about 4.5x the other servers, from n-gram speculative decoding), plain decode (about a third faster), coming back to a chat that lost its slot (about 40% faster than Ollama), and parallel requests (Ollama serves one at a time by default).
+- **Where it is not:** the first turn of a brand-new long conversation is slower than Ollama's (1.7 s against 1.3 s), and prefill is level with everyone. The first-turn gap was 2.3 s before this work; the remaining difference is under investigation.
+- **Noise:** run-to-run variation was about 10% on prefill and larger on the four-request number (the same configuration measured 256, 283 and 343 tokens/s across runs). Differences smaller than that are not claims.
+- "Nekko Agent engine" here is `llama-server` from the pinned llama.cpp build started with exactly the flags the engine now passes, measured without the engine's router in front of it. The router (Rust, in the engine daemon) adds about 0.1 ms per request: 27.39 ms against 27.29 ms straight to the model server, median of 30 one-token requests.
+
+### What changed to get there
+
+Measured flag by flag on the same model and build (b11011):
+
+- **`--spec-default`** (n-gram speculative decoding from the conversation, no draft model): code edit 117 to 506-534 tokens/s, decode 127 to 154-155.
+- **`--no-cache-idle-slots`**: llama.cpp's default copies every idle slot to its RAM prompt cache when a new request arrives. Keeping them in place cut the first turn of a new chat from 2.3 s to 1.7 s and a revisit of an evicted chat from 1.7 s to 0.8 s. The RAM cache still catches what a slot really loses (turning it off entirely was worse on both).
+- **`--cache-reuse 256`**: reuse cached chunks around an edit in the middle of a prompt.
+- **Vision models keep it.** With Gemma's projector loaded as well, the code edit ran at 633 tokens/s and decode at 152; llama.cpp only drops `--cache-reuse` for multimodal models.
+- **A draft model is opt-in, not automatic.** Gemma 4 E4B as the draft for the 12B raised the code edit to 624 tokens/s but halved ordinary decode (155 to 74) because only 55% of its guesses were accepted. A draft helps only when it is much smaller than its target.
+- Parallel slots and a shared KV pool were already llama.cpp's default (`-np` auto with a unified cache), so nothing changed there.
+
+Each flag is passed only when the installed engine build supports it (the engine reads the binary's `--help` once), so an older engine keeps working without them.
+
+## Reproducing
+
+The harness is `crates/nekko-bench`. It measures; it does not start servers.
+
+```bash
+cargo build --release -p nekko-bench
+```
+
+Start each server with the same GGUF, then list them in a config file:
+
+```json
+{
+  "machine": "RTX 5090 32 GB, Windows 11",
+  "model": "gemma-4-12B-it Q4_K_M",
+  "repeats": 3,
+  "targets": [
+    { "name": "Nekko Agent engine", "baseUrl": "http://127.0.0.1:18095/v1", "model": "gemma" },
+    { "name": "Ollama", "baseUrl": "http://127.0.0.1:11434/v1", "model": "bench-gemma" },
+    { "name": "LM Studio", "baseUrl": "http://127.0.0.1:1234/v1", "model": "bench-gemma" }
+  ]
+}
+```
+
+```bash
+target/release/nekko-bench bench.json --out results.json --markdown results.md
+```
+
+`--only decode,agent` runs a subset. The workloads: `decode`, `prefill`, `agent` (six turns over an 8k-token context), `rotate` (six chats, three rounds), `code-edit`, `concurrent` (four at once).
+
+How each server was started for the results above:
+
+- **Nekko Agent engine:** `llama-server --model <gguf> --alias gemma --port 18095 --ctx-size 32768 --n-gpu-layers 999 --cache-reuse 256 --spec-default --no-cache-idle-slots`
+- **llama.cpp as before:** the same without the last three flags.
+- **Ollama:** a Modelfile with `FROM <gguf>`, `PARAMETER num_ctx 32768`, `PARAMETER num_gpu 999`, then `ollama create bench-gemma -f Modelfile`.
+- **LM Studio:** `lms server start` and `lms load google/gemma-4-12b --context-length 32768 --gpu max --identifier bench-gemma`.
+
+The harness counts tokens from each server's usage report when it sends one, and times the first streamed piece of text or reasoning as the first token.
+
+---
+
+<!-- https://nekkoagent.com/docs/contributing -->
+
+# Contributing to Nekko Agent
+
+Thanks for your interest! Nekko Agent is an open-source, local-first AI coding & cowork desktop app. Contributions of all sizes are welcome.
+
+## Development setup
+
+Requires Node 22.12+ and a Rust toolchain ([rustup.rs](https://rustup.rs)): `npm run dev` and `npm run build` compile the engine daemon (`nekkod`). The project uses **npm workspaces** (not pnpm/yarn).
+
+```bash
+git clone https://github.com/nekko-labs/nekko-agent
+cd nekko-agent
+npm install
+npm run dev          # build the Rust daemon and the app, then launch the desktop app
+```
+
+To stop a dev run, press **Enter** or **q** (or Ctrl+C) in its terminal. The app quits the normal way, stopping the engine and any model servers it started; press again to force it, which ends the whole process tree. A run that hasn't exited after 10 seconds is forced too.
+
+## Project layout
+
+| Path | What |
+| --- | --- |
+| `packages/shared` | Types + IPC contracts (pure, no runtime deps) |
+| `packages/core` | Engine: providers, agent loop, guardrails, context, indexer, memory, connectors. **No Electron imports**, unit-tested with Vitest. |
+| `apps/desktop` | Electron app: `src/main` (Node), `src/preload` (bridge), `src/renderer` (React) |
+| `apps/website` | Static marketing site |
+| `scripts/itest-local.mjs` | Manual end-to-end test against a real model server |
+
+**Rule of thumb:** business logic goes in `packages/core` (so it's testable without Electron); the desktop app wires it to the filesystem, shell, and UI.
+
+## Publishing the `npx nekko-agent` package
+
+`npm run bundle:web` produces a self-contained package in `apps/server/cli-dist/`
+(server + engine bundled by esbuild, plus the built `web/` UI). To release it:
+
+```bash
+npm run bundle:web
+cd apps/server/cli-dist && npm publish
+```
+
+After that, anyone can run the web edition with `npx nekko-agent`.
+
+## Before you open a PR
+
+Keep the build green and the suite passing:
+
+```bash
+npm run build       # Rust daemon (nekkod), then shared → core → host → cli → desktop
+npm test            # tests in every workspace
+npm run typecheck   # every TypeScript workspace
+```
+
+- Add tests in `packages/core` for new engine behavior (providers, guardrails, agent loop, context).
+- Match the surrounding code style; keep changes focused.
+- For provider changes, you can verify against a real local server:
+  `node scripts/itest-local.mjs http://your-host:port your-model-id`
+
+## Documentation
+
+The docs at [nekkoagent.com/docs](https://nekkoagent.com/docs) are rendered from Markdown in this repo. `docs/hub/nav.json` lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change. When a pull request changes what users see or do, update the page that describes it in the same PR.
+
+```bash
+npm run docs
+```
+
+If you forget, the **Docs site** workflow regenerates the pages on your pull request and pushes them to its branch. It only commits when something actually changed.
+
+## Commit messages
+
+Conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
+
+## Reporting bugs / requesting features
+
+Use the issue templates. For local-model issues, please include your provider
+kind (Ollama / LM Studio / vLLM / cloud), the base URL shape, and the model id.
+
+## License
+
+By contributing, you agree your contributions are licensed under the [MIT License](https://github.com/nekko-labs/nekko-agent/blob/main/LICENSE).
+
+---
+
+<!-- https://nekkoagent.com/docs/architecture -->
+
+# Architecture
+
+Nekko Agent is one engine and one React UI that run in several places: the desktop app, the self-hosted web edition, Docker and the phone. This page is a map of the code for contributors. The full technical plan, with every decision and task, is in [`TASKS.md`](https://github.com/nekko-labs/nekko-agent/blob/main/TASKS.md); what the product does and why is in [`SPEC.md`](https://github.com/nekko-labs/nekko-agent/blob/main/SPEC.md).
+
+## The big picture
+
+```text
+ desktop window (Electron + React)        browser (web edition, Docker)
+            |                                        |
+            |  IPC                          HTTP + WebSocket
+            v                                        v
+       apps/desktop main                      apps/server
+            \                                        /
+             \----------- nekkod (Rust) ------------/
+                     engine daemon on loopback
+                    /            |              \
+          native services   model servers   TS host (packages/host)
+          (chat, tools,     (llama-server,   for everything not
+           terminals, ...)   routed)          ported to Rust yet
+```
+
+- **The UI never shares a process with the agent.** The window talks to `nekkod`, the engine daemon, over a loopback connection with a per-launch token. The agent loop, terminals and model servers run there, so a busy agent cannot freeze the interface.
+- **The engine is moving from TypeScript to Rust.** `nekkod` answers what has been ported natively and passes the rest to the TypeScript host it supervises. Each ported piece has to match the TypeScript behaviour exactly before it takes over.
+- **Every edition is the same app.** Desktop, web and Docker run the same engine and the same UI. Only the transport differs: Electron IPC on the desktop, HTTP and WebSocket in the browser.
+
+## Repository layout
+
+| Path | What lives there |
+| --- | --- |
+| `packages/shared` | Types and IPC contracts. Pure, no runtime dependencies. |
+| `packages/core` | The TypeScript engine: providers, agent loop, guardrails, context, indexer, memory, connectors. No Electron imports, unit tested with Vitest. |
+| `packages/host` | Wires the engine to the file system, shell and settings. Shared by every edition. |
+| `apps/desktop` | The Electron app: `src/main` (Node), `src/preload` (the bridge) and `src/renderer` (React). |
+| `apps/server` | The self-hosted web edition, also the `npx nekko-agent-web` package. |
+| `apps/cli` | The `nekko-agent` CLI and MCP server. |
+| `apps/mobile` | The iOS and Android app (Expo). |
+| `apps/relay` | The relay that pairs a phone with a computer. It only ever sees encrypted frames. |
+| `apps/cloud` | Nekko Agent Cloud, the planned hosted edition. |
+| `apps/website` | nekkoagent.com, including these docs. |
+| `crates/nekkod` | The engine daemon. |
+| `crates/nekko-*` | The daemon's services: chat turns, tools, terminals, inference, remote access, storage, usage and more. |
+
+## Build order
+
+`npm run build` builds the Rust daemon, then the TypeScript workspaces in dependency order: `shared`, `core`, `host`, `cli`, `desktop`. `npm run dev` runs a faster variant (the daemon in the incremental `dev-daemon` profile, no production desktop bundle, since electron-vite dev builds its own) and launches the desktop app.
+
+## Where to put new code
+
+- Engine behaviour goes in `packages/core` or a Rust crate, so it can be tested without Electron.
+- The desktop app only wires the engine to the window, the file system and the shell.
+- A change to what the product does also updates `SPEC.md`; a change to how it is built updates `TASKS.md`.
+
+---
+
+<!-- https://nekkoagent.com/docs/release-signing -->
+
+# Release signing
+
+How Nekko Agent's macOS builds get signed and notarized, what is wired, and what
+needs a human with an Apple account.
+
+Everything here is **secret-gated**. With no signing secrets configured the
+release still builds and publishes, just unsigned, so nothing below can block a
+release. A *partially* configured set fails the job before building, because a
+signed-but-unnotarized app is still blocked by Gatekeeper while looking like it
+worked.
+
+## Status at a glance
+
+| Platform | Mechanism | Wired | Blocked on |
+| --- | --- | --- | --- |
+| macOS | Developer ID codesign + notarization | ✅ live since v0.6.0 | nothing |
+| Windows | Authenticode | ✅ secret-gated | the org secrets being set |
+| Linux | none (AppImage/deb are unsigned) | n/a | n/a |
+
+## macOS
+
+Nekko Agent is packaged by electron-builder, which does the signing, hardened
+runtime, and notarization itself. There is no hand-rolled `codesign` pipeline
+here, and no `Developer ID Installer` certificate is needed, because the
+artifacts are `.dmg`/`.zip` rather than a `.pkg`.
+
+What is configured, in `apps/desktop/electron-builder.yml`:
+
+- `hardenedRuntime: true` — required for notarization
+- `entitlements` / `entitlementsInherit` → `build/entitlements.mac.plist`
+- `notarize: false` by default, flipped on with `-c.mac.notarize=true` by the
+  release workflow, so a local `npm run dist` does not need the Apple API key
+
+`apps/desktop/scripts/after-pack.cjs` ad-hoc signs the app **only when no real
+certificate is present**, so unsigned local builds still launch on Apple
+Silicon. It steps aside when `CSC_LINK` is set.
+
+### The entitlements, and why each one is there
+
+The hardened runtime disables things Electron and Nekko Agent need. See the
+comments in [`build/entitlements.mac.plist`](https://github.com/nekko-labs/nekko-agent/blob/main/apps/desktop/build/entitlements.mac.plist);
+the short version:
+
+| Entitlement | Needed for |
+| --- | --- |
+| `allow-jit`, `allow-unsigned-executable-memory` | V8 |
+| `disable-library-validation` | the `@lydell/node-pty` prebuilt `.node`, dlopen'd from outside the asar |
+| `allow-dyld-environment-variables` | spawning shells, agents, and MCP servers |
+| `files.user-selected.read-write` | the user's project folders |
+| `network.client` / `network.server` | model providers and the local phone-relay server |
+| `device.camera` | the QR pairing scanner |
+
+`NSCameraUsageDescription` is set via `mac.extendInfo`. Without it macOS kills
+the process instead of prompting when the QR scanner opens.
+
+## Secrets
+
+These are **`nekko-labs` organization secrets**, shared with `hypergate` and
+`lightwrite`, so the certificate is uploaded and rotated in exactly one place.
+
+| Secret | What it is |
+| --- | --- |
+| `MACOS_SIGNING_CERTS_P12` | base64 of the Developer ID `.p12` (→ `CSC_LINK`) |
+| `MACOS_CERT_PASSWORD` | password for that `.p12` (→ `CSC_KEY_PASSWORD`) |
+| `APPLE_API_KEY_P8` | App Store Connect API key contents |
+| `APPLE_API_KEY_ID` | ASC key id |
+| `APPLE_API_ISSUER` | ASC issuer id (a UUID) |
+| `WINDOWS_SIGNING_CERTS_P12` | base64 of the Authenticode `.p12` certificate |
+| `WINDOWS_CERT_PASSWORD` | password for that `.p12` |
+
+Certificate: `Developer ID Application: Nekko Labs LLC (3HM5598S99)`.
+
+### Uploading them
+
+Run on a Mac that has the Developer ID certificate **and its private key** in
+the login keychain (`security find-identity -v -p codesigning` to confirm).
+Requires org-admin on `nekko-labs`.
+
+Export the `.p12` from **Keychain Access** (login → My Certificates → expand the
+`Developer ID Application: Nekko Labs LLC` row so the private key goes with it →
+Export), rather than with `security export -t identities`, which dumps *every*
+identity in the keychain into one bundle. Either way you choose an export
+password, which becomes `MACOS_CERT_PASSWORD`.
+
+Then, and read the warning below before pasting:
+
+```bash
+gh secret set MACOS_SIGNING_CERTS_P12 --org nekko-labs --visibility all < <(base64 -i /tmp/nekko-signing.p12)
+gh secret set APPLE_API_KEY_P8 --org nekko-labs --visibility all < AuthKey_XXXXXXXX.p8
+gh secret set APPLE_API_KEY_ID --org nekko-labs --visibility all --body AuthKeyIdHere
+```
+
+> **Do not paste those as a block with the two interactive ones.** `gh secret
+> set` without `--body` reads its value from **stdin**, so a pasted command on
+> the following line is consumed as the secret. That is how `MACOS_CERT_PASSWORD`
+> once ended up holding the literal text `gh secret set MACOS_CERT_PASSWORD
+> --org nekko-labs --visibility all`, which surfaced only as `MAC verification
+> failed during PKCS12 import (wrong password?)` in a release job.
+
+Set the two interactive secrets one at a time. In zsh the prompt form is
+`"VAR?prompt"`, not bash's `-p`:
+
+```bash
+read -rs "P?p12 password: " && gh secret set MACOS_CERT_PASSWORD --org nekko-labs --visibility all --body "$P" && unset P
+read -rs "P?issuer UUID: " && gh secret set APPLE_API_ISSUER --org nekko-labs --visibility all --body "$P" && unset P
+```
+
+Then delete the export: `rm -P /tmp/nekko-signing.p12`.
+
+**Verifying the `.p12` locally is a trap.** Keychain encrypts the payload with
+`RC2-40-CBC`, which OpenSSL 3 moved to the legacy provider, so
+`openssl pkcs12 -info` fails with `unsupported ... RC2-40-CBC` and reads like a
+bad password. Pass `-legacy`. The password check that actually matters is the
+MAC: a genuinely wrong password says `Mac verify error: invalid password?`,
+while reaching the cipher error at all means the password was accepted.
+
+```bash
+openssl pkcs12 -in /tmp/nekko-signing.p12 -info -noout -legacy
+```
+
+Look for a **Shrouded Keybag** line, which confirms the private key is in the
+export. macOS `security import` reads the legacy encryption natively, so no
+re-export is needed for CI.
+
+### When the App Store Connect key rotates
+
+The notary key is the one credential here that can die without any secret
+changing: an App Store Connect API key gets revoked or rotated in Apple's
+portal, and `APPLE_API_KEY_ID` / `APPLE_API_KEY_P8` quietly keep pointing at a
+key that no longer exists. That happened on 2026-09-06, when the team's key was
+replaced and the old one revoked. Every release from v0.7.1 on then signed
+fine and died in notarization, five minutes into the job, with:
+
+```
+Failed to notarize via notarytool. ... HTTP status code: 401. Unauthenticated.
+```
+
+The release workflow now checks the key *before* building ("Validate the
+notary credentials"), using the same read-only call you can run locally
+against a candidate `.p8`:
+
+```bash
+xcrun notarytool history --key AuthKey_XXXXXXXX.p8 --key-id XXXXXXXX --issuer <issuer UUID>
+```
+
+A live key lists past submissions (Nekko Agent's and hypergate's, since they
+share the team). A revoked one returns the 401 above. The issuer id is per
+team and does not change when the key does.
+
+To rotate, with a key whose App Store Connect role is Developer or above, and
+after confirming the file really is a private key
+(`openssl pkey -in AuthKey_XXXXXXXX.p8 -noout` exits 0):
+
+```bash
+gh secret set APPLE_API_KEY_P8 --org nekko-labs --visibility all < AuthKey_XXXXXXXX.p8
+gh secret set APPLE_API_KEY_ID --org nekko-labs --visibility all --body XXXXXXXX
+```
+
+Then re-run the Release workflow at the tag that failed:
+
+```bash
+gh workflow run release.yml --repo nekko-labs/nekko-agent --ref vX.Y.Z
+```
+
+The secrets are organization-wide, so one rotation also repairs hypergate and
+lightwrite.
+
+## Windows
+
+The release workflow passes `WINDOWS_SIGNING_CERTS_P12` and
+`WINDOWS_CERT_PASSWORD` to electron-builder as `WIN_CSC_LINK` and
+`WIN_CSC_KEY_PASSWORD`. electron-builder 26.16.1 still supports the legacy
+PKCS#12/signtool path through these Windows-specific environment variables;
+Azure Trusted Signing is an alternative, not a requirement for this setup.
+With both secrets present, the NSIS installer is Authenticode-signed. If no
+certificate is configured, the workflow deliberately builds an unsigned
+installer so releases remain available; SmartScreen will show an
+unknown-publisher warning. A certificate without its password is a
+configuration error and fails the Windows job before packaging.
+
+The certificate should contain the private key and be exported as a base64
+PKCS#12 file:
+
+```bash
+base64 -w0 /path/to/windows-signing.p12 | \
+  gh secret set WINDOWS_SIGNING_CERTS_P12 --org nekko-labs --visibility all
+gh secret set WINDOWS_CERT_PASSWORD --org nekko-labs --visibility all
+```
+
+Certificates expire (Developer ID is 5 years). When it rolls, re-export and
+re-run the two `MACOS_*` commands; nothing in this repo changes.
+
+## npm publishing
+
+The `publish-cli` job uses npm Trusted Publishing as its primary authentication
+path. npm's documented requirements are Node `22.14.0` or newer and npm
+`11.5.1` or newer; the workflow uses Node 24 and installs npm 11.5.1
+explicitly. It prints both versions before publishing and disables
+`setup-node` dependency caching because npm's release guidance says not to use
+package-manager caching in release builds.
+
+Trusted Publishing uses the GitHub Actions OIDC token from
+`id-token: write`. npm automatically generates provenance attestations for
+trusted publishes, so the OIDC path does not need `--provenance`. While
+bootstrapping, `NPM_TOKEN` remains an optional fallback; that path explicitly
+adds `--provenance`. If neither credential works, the workflow prints a
+message directing the maintainer to configure the trusted publisher or add
+`NPM_TOKEN`.
+
+### First publish bootstrap
+
+npm's documented setup is under an existing package's settings, and npm does
+not currently provide a PyPI-style pending publisher for a package name that
+has never been published. Publish `nekko-agent` once manually with account
+authentication and 2FA:
+
+```bash
+npm login
+npm publish --workspace=apps/cli --access public
+```
+
+Then open the `nekko-agent` package settings on npmjs.com and add a GitHub Actions
+trusted publisher with:
+
+| Field | Value |
+| --- | --- |
+| Organization or user | `nekko-labs` |
+| Repository | `nekko-agent` |
+| Workflow filename | `release.yml` |
+| Allowed action | `npm publish` |
+
+The workflow file is `.github/workflows/release.yml`; npm wants only the
+filename in this field. After confirming a tagged publish succeeds through
+OIDC, harden the package's Publishing access settings by requiring 2FA and
+disallowing token-based publishing, then revoke the temporary `NPM_TOKEN`
+secret. The release job will continue using OIDC after the token is removed.
+
+## Verifying a release
+
+## Installer and updater targets
+
+The release workflow intentionally publishes only targets with a clear
+installation story:
+
+| Platform | Artifact | `electron-updater` support |
+| --- | --- | --- |
+| Windows | NSIS `.exe` | ✅ automatic updates |
+| macOS | `.dmg` plus required `.zip` metadata artifact | ✅ automatic updates |
+| Linux | AppImage | ✅ automatic updates |
+| Linux | `.deb` | ✅ supported by current electron-builder updater docs |
+
+The Windows MSI and ZIP targets are not built: MSI is not an updater target and
+the ZIP would duplicate the NSIS installation path without adding an updater
+benefit. The current electron-builder documentation lists macOS DMG, Windows
+NSIS, and Linux AppImage/DEB as auto-updatable targets. Unsigned builds can
+still be installed, but signing warnings are independent of updater support.
+
+The release workflow already runs these on every signed macOS build and fails
+if any of them do. To check a downloaded `.dmg` by hand:
+
+```bash
+codesign --verify --deep --strict --verbose=2 /Applications/Nekko Agent.app
+spctl --assess --type execute --verbose=4 /Applications/Nekko Agent.app
+xcrun stapler validate /Applications/Nekko Agent.app
+```
+
+`spctl` should say `accepted` with `source=Notarized Developer ID`.
+
+## Building signed locally
+
+Only needed when debugging the signing config itself.
+
+```bash
+CSC_NAME="Nekko Labs LLC (3HM5598S99)" npm run dist -w @nekko-agent/desktop
+```
+
+`CSC_NAME` takes the certificate's **common name without the type prefix**.
+Passing the full `Developer ID Application: ...` string fails with *"Please
+remove prefix ... appropriate certificate will be chosen automatically"*.
+
+That signs with the local keychain identity but does **not** notarize, so
+`stapler validate` will fail on the result. That is expected; Gatekeeper on the
+build machine still accepts it because the machine trusts the developer.
+
+---
+
+<!-- https://nekkoagent.com/docs/for-agents -->
+
+# Docs for AI agents
+
+These docs are written for people and for AI agents. Every page is also published as plain Markdown, and the whole set is available as one file, so an agent can read it without parsing HTML.
+
+## Machine-readable docs
+
+| URL | What it is |
+| --- | --- |
+| [`/llms.txt`](https://nekkoagent.com/llms.txt) | An index of the site and every docs page, in the [llms.txt](https://llmstxt.org) format |
+| [`/llms-full.txt`](https://nekkoagent.com/llms-full.txt) | Every docs page in one Markdown file |
+| `/docs/<page>.md` | Any single page as Markdown, for example [`/docs/cli.md`](https://nekkoagent.com/docs/cli.md) |
+
+Each page also links its Markdown version at the top, next to the title.
+
+## Use Nekko Agent from your agent
+
+Nekko Agent can be a subagent for Claude Code, Codex, Cursor and other tools: they hand it work, and it runs that work on your local models. Register its MCP server once, for example in Claude Code:
+
+```bash
+claude mcp add nekko-agent -- node /abs/path/nekko-agent/apps/cli/dist/index.js mcp
+```
+
+The tools, the other harnesses and the CLI commands are in [CLI and MCP](https://nekkoagent.com/docs/cli).
+
+## Working on the code
+
+An agent changing Nekko Agent should read these files in the repo first:
+
+1. [`AGENTS.md`](https://github.com/nekko-labs/nekko-agent/blob/main/AGENTS.md): how work lands (a worktree per task, a PR for every change, visual evidence for UI changes).
+2. [`SPEC.md`](https://github.com/nekko-labs/nekko-agent/blob/main/SPEC.md): what the product does and why. Update it whenever a feature changes.
+3. [`TASKS.md`](https://github.com/nekko-labs/nekko-agent/blob/main/TASKS.md): the technical plan and the task list, with stable task IDs.
+4. [Contributing](https://nekkoagent.com/docs/contributing) and [Architecture](https://nekkoagent.com/docs/architecture) on this site.
+
+## Editing these docs
+
+Each page is rendered from one Markdown file in the repo, listed in `docs/hub/nav.json`. Edit the Markdown, then regenerate the site:
+
+```bash
+npm run docs
+```
+
+If you skip that step, the **Docs site** workflow rebuilds the pages on the pull request and commits them to its branch, but only when the output actually changed. A pull request that changes user-facing behaviour should also update the page that describes it.
+
+---

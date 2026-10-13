@@ -24,6 +24,7 @@ const CLAUDE_MODELS: Array<{ id: string; name: string; availability?: ModelAvail
   { id: 'claude-sonnet-5', name: 'Claude Sonnet 5' },
   { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' },
   { id: 'claude-fable-5-1', name: 'Claude Fable 5.1' },
+  { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5' },
   { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
 ];
 
@@ -290,7 +291,7 @@ export class AnthropicProvider implements Provider {
         id: m.id,
         providerId: this.config.id,
         name: m.name,
-        // 1M on everything current, 200k on Haiku: see model-capabilities.ts.
+        // 1M on everything current, 200k on Haiku 4.5: see model-capabilities.ts.
         contextLength: claudeContextWindow(m.id) ?? 200_000,
         ...(m.availability ? { availability: m.availability } : {}),
       }))

@@ -25,6 +25,11 @@ export interface AgentWindowPickerProps {
 
 type Category = 'chat' | 'media' | 'terminal';
 
+/** The saved default folders that still exist, in their saved order (the first is primary). */
+export function defaultFolderIds(saved: string[] | undefined, folders: { id: string }[]): string[] {
+  return (saved ?? []).filter((id, i, all) => all.indexOf(id) === i && folders.some((f) => f.id === id));
+}
+
 function CatIcon({ kind }: { kind: Category }) {
   return (
     <svg className="agent-window-picker__cat" viewBox="0 0 80 80" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -79,9 +84,17 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
   const model = choice ?? defaultModel;
   const modelName = model?.modelId === AUTO_MODEL_ID ? 'Auto' : models.find((m) => m.id === model?.modelId && m.providerId === model?.providerId)?.name ?? model?.modelId;
   const providerLabel = providers.find((p) => p.id === model?.providerId)?.label;
-  const defaultFolder = folders.find((f) => f.id === activeProjectId) ?? folders[0];
-  const chosenFolders = (pickedFolders ?? (defaultFolder ? [defaultFolder.id] : [])).filter((id) => folders.some((f) => f.id === id));
+  const savedDefaults = defaultFolderIds(settings?.defaultWorkspaceIds, folders);
+  const fallbackFolder = folders.find((f) => f.id === activeProjectId) ?? folders[0];
+  const initialFolders = savedDefaults.length ? savedDefaults : fallbackFolder ? [fallbackFolder.id] : [];
+  const chosenFolders = (pickedFolders ?? initialFolders).filter((id) => folders.some((f) => f.id === id));
   const toggleFolder = (id: string) => setPickedFolders(chosenFolders.includes(id) ? chosenFolders.filter((x) => x !== id) : [...chosenFolders, id]);
+  const isDefaultSelection = savedDefaults.length > 0 && savedDefaults.join('\n') === chosenFolders.join('\n');
+  const saveDefaultFolders = (ids: string[]) => {
+    void window.nekko.updateSettings({ defaultWorkspaceIds: ids })
+      .then(() => useStore.getState().refreshSettings())
+      .catch((e) => useStore.getState().pushToast('error', String(e)));
+  };
   const start = () => {
     if (!model) return;
     void add({ kind: 'chat', chatType: 'multimodal', ...(model.providerId ? { providerId: model.providerId } : {}), modelId: model.modelId, workspaceIds: chosenFolders });
@@ -160,9 +173,20 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
                       <span className="agent-window-picker__check" data-on={on || undefined}>{on && <CheckIcon className="h-3 w-3" />}</span>
                       <span className="agent-window-picker__folder-text"><strong>{folder.name}</strong><span>{folder.path}</span></span>
                       {chosenFolders[0] === folder.id && <span className="agent-window-picker__badge">Primary</span>}
+                      {savedDefaults.includes(folder.id) && <span className="agent-window-picker__badge agent-window-picker__badge--default">Default</span>}
                     </button>
                   );
                 })}
+              </div>
+            )}
+            {folders.length > 0 && (
+              <div className="agent-window-picker__default-row">
+                {isDefaultSelection
+                  ? <span className="agent-window-picker__default-note"><CheckIcon className="h-3 w-3" />{savedDefaults.length === 1 ? 'Your default folder' : 'Your default folders'}</span>
+                  : chosenFolders.length > 0 && <button type="button" className="agent-window-picker__link" disabled={pending} onClick={() => saveDefaultFolders(chosenFolders)} title="New agents start with these folders checked">
+                      {chosenFolders.length === 1 ? 'Set this folder as default' : `Set these ${chosenFolders.length} folders as default`}
+                    </button>}
+                {savedDefaults.length > 0 && <button type="button" className="agent-window-picker__link agent-window-picker__link--quiet" disabled={pending} onClick={() => saveDefaultFolders([])} title="Go back to starting with the current project's folder">Clear default</button>}
               </div>
             )}
           </section>

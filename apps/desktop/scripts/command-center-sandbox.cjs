@@ -93,7 +93,7 @@ app.whenReady().then(async () => {
       }
     }
     if (!process.env.NEKKO_TEST_REVISION) {
-      await run("[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='New image session').click()");
+      await run("[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Media gen').click()");
       await check('workspace image entry uses real store creation and options', "integration.calls.some(c=>c.method==='options'&&c.options.chatType==='image') && integration.state().activeSessionId==='new-1' && integration.state().workspaces.some(w=>w.anchor.refId==='new-1')");
     }
     win.setContentSize(1200,900); await reset(); await run('integration.dashboard()'); await sleep(900);
@@ -104,7 +104,7 @@ app.whenReady().then(async () => {
       await check('explicit refresh requests provider poll', "integration.calls.some(c=>c.method==='limits'&&c.key==='fixture'&&c.refresh===true)");
       await run("document.querySelector('.wall-dock__panel-header').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',altKey:true,bubbles:true}))");
       await sleep(900);
-      await check('keyboard reorder persists', "integration.calls.some(c=>c.method==='settings'&&c.patch.commandWall?.dock.panelOrder[0]!=='vitals')");
+      await check('keyboard reorder persists', "integration.calls.some(c=>c.method==='settings'&&c.patch.commandWall?.dock.panelOrder[0]!=='hardware')");
       win.webContents.debugger.attach('1.3');
       let interceptedDrag=null; const dragListener=(_event,method,params)=>{if(method==='Input.dragIntercepted')interceptedDrag=params.data;}; win.webContents.debugger.on('message',dragListener); await win.webContents.debugger.sendCommand('Input.setInterceptDrags',{enabled:true});
       const points=await run("[...document.querySelectorAll('.wall-dock__panel-header')].slice(0,2).map(h=>{const r=h.getBoundingClientRect();return {x:r.x+90,y:r.y+r.height/2}})");

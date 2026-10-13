@@ -4,13 +4,19 @@
 // `--optional` is for local runs (`npm run local`): without cargo it warns and
 // exits 0, and the app runs the TS backend directly. Packaging never passes
 // it, so an installer can never ship without its daemon by accident.
+//
+// `--dev` is for `npm run dev`: it builds the `dev-daemon` profile (no LTO,
+// incremental) and stages nothing, because a development app runs the newest
+// build straight out of target/ (findDaemon in engine-process.ts).
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { copyVcRuntime } from '../../../scripts/vc-runtime.mjs';
 
 const optional = process.argv.includes('--optional');
+const dev = process.argv.includes('--dev');
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../../..');
 const exe = process.platform === 'win32' ? 'nekkod.exe' : 'nekkod';
@@ -29,6 +35,11 @@ if (!cargo) {
   process.exit(1);
 }
 
+if (dev) {
+  execFileSync(cargo, ['build', '--profile', 'dev-daemon', '--locked', '-p', 'nekkod'], { cwd: repo, stdio: 'inherit' });
+  process.exit(0);
+}
+
 execFileSync(cargo, ['build', '--release', '--locked', '-p', 'nekkod'], { cwd: repo, stdio: 'inherit' });
 
 const built = join(repo, 'target', 'release', exe);
@@ -41,14 +52,32 @@ mkdirSync(dest, { recursive: true });
 copyFileSync(built, join(dest, exe));
 console.log(`staged ${exe} -> ${join(dest, exe)}`);
 
-// The decision-model runtime (ONNX Runtime, statically linked into nekkod) loads a few shared
-// libraries from next to the executable: DirectML.dll on Windows (a newer one than the copy in
-// System32), and the CUDA provider libraries on a Linux build with `--features cuda`. The
+// The decision-model runtime (ONNX Runtime, statically linked into nekkod) loads the CUDA
+// provider libraries from next to the executable on a Linux build with `--features cuda`. The
 // ort-sys build script copies them into target/release; ship whichever are there.
-const sidecar = /^(DirectML\.dll|(lib)?onnxruntime[^/\\]*\.(dll|so(\.\d+)*|dylib))$/;
+//
+// Not DirectML.dll: nekkod delay-loads it (crates/nekkod/build.rs) and only on a machine that
+// runs a decision model, from Windows itself when it is new enough or from a copy the host
+// downloads then. An older staging run may have left one here; it would be packed, so clear it.
+rmSync(join(dest, 'DirectML.dll'), { force: true });
+const sidecar = /^(lib)?onnxruntime[^/\\]*\.(dll|so(\.\d+)*|dylib)$/;
 for (const name of readdirSync(dirname(built))) {
   if (sidecar.test(name)) {
     copyFileSync(join(dirname(built), name), join(dest, name));
     console.log(`staged ${name}`);
+  }
+}
+
+// The Visual C++ runtime nekkod imports, app-local, so a PC without the redistributable still
+// starts it (scripts/vc-runtime.mjs). The host also copies these into llama.cpp builds.
+if (process.platform === 'win32') {
+  try {
+    copyVcRuntime(dest);
+  } catch (e) {
+    if (!optional) {
+      console.error(e.message);
+      process.exit(1);
+    }
+    console.warn(`${e.message}; this local build relies on the Visual C++ runtime Windows already has.`);
   }
 }

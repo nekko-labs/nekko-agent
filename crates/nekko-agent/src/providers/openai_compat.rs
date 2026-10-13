@@ -223,6 +223,57 @@ impl OpenAiCompatProvider {
         format!("Can't reach the model server at {}. Is it running and reachable on the network?", self.base())
     }
 
+    /// `test()`: OpenRouter's `/key` (a real auth check, with the credit
+    /// left), else `/models`.
+    pub async fn test(&self) -> TestResult {
+        let reach =
+            |e: &crate::http::TransportError| TestResult::fail(friendly_error(&e.message, || self.unreachable()));
+        if self.config.kind == ProviderKind::Openrouter {
+            if self.config.api_key.as_deref().is_none_or(str::is_empty) {
+                return TestResult::fail("Paste an API key or sign in with OpenRouter first.");
+            }
+            let req = HttpRequest::get(format!("{}/key", self.base()), self.headers());
+            let mut res = match self.io.transport.send(&req).await {
+                Ok(res) => res,
+                Err(e) => return reach(&e),
+            };
+            if res.status == 401 || res.status == 403 {
+                return TestResult::fail("OpenRouter rejected this key. Check it or regenerate it.");
+            }
+            if !res.ok() {
+                return TestResult::fail(format!("OpenRouter answered HTTP {}.", res.status));
+            }
+            let json: Value = serde_json::from_str(&res.text().await).unwrap_or(Value::Null);
+            let d = json.get("data");
+            let field = |k: &str| d.and_then(|d| d.get(k)).filter(|v| !v.is_null());
+            // `d?.limit_remaining ?? (d?.limit != null && d?.usage != null ? d.limit - d.usage : null)`
+            let remaining = match field("limit_remaining") {
+                Some(v) => Some(js::to_number(Some(v))),
+                None => match (field("limit"), field("usage")) {
+                    (Some(l), Some(u)) => Some(js::to_number(Some(l)) - js::to_number(Some(u))),
+                    _ => None,
+                },
+            };
+            return TestResult::ok(match remaining {
+                // `Math.max(0, NaN)` is NaN.
+                Some(r) => format!("Connected, ${} left", js::to_fixed(if r.is_nan() { r } else { r.max(0.0) }, 2)),
+                None => "Connected, unlimited".to_string(),
+            });
+        }
+        let req = HttpRequest::get(format!("{}/models", self.base()), self.headers());
+        let mut res = match self.io.transport.send(&req).await {
+            Ok(res) => res,
+            Err(e) => return reach(&e),
+        };
+        if res.ok() {
+            return TestResult::ok("Connected");
+        }
+        let detail = extract_api_error(&res.text().await);
+        let hint = if res.status == 401 { ", check your API key" } else { "" };
+        let detail = if detail.is_empty() { String::new() } else { format!(": {detail}") };
+        TestResult::fail(format!("HTTP {}{hint}{detail}", res.status))
+    }
+
     pub async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
         // LM Studio's native REST API reports per-model load state, which
         // /v1/models does not. Prefer it there, falling back on any failure.

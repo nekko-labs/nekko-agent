@@ -797,6 +797,28 @@
         ]
       }
     },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "https://api.openai.com/v1/chat/completions",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer sk-test-openai"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        },
+        "temperature": 1,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ]
+      }
+    },
     "cache-default": {
       "method": "POST",
       "url": "https://api.openai.com/v1/chat/completions",
@@ -3628,6 +3650,30 @@
           {
             "role": "user",
             "content": "Name this chat"
+          }
+        ]
+      }
+    },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "https://openrouter.ai/api/v1/chat/completions",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer sk-or-test",
+        "HTTP-Referer": "https://github.com/nekko-labs/nekko-agent",
+        "X-Title": "Nekko Agent"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        },
+        "temperature": 1,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
           }
         ]
       }
@@ -6501,6 +6547,27 @@
         ]
       }
     },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "http://localhost:1234/v1/chat/completions",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        },
+        "temperature": 1,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ]
+      }
+    },
     "cache-default": {
       "method": "POST",
       "url": "http://localhost:1234/v1/chat/completions",
@@ -9245,6 +9312,27 @@
           {
             "role": "user",
             "content": "Name this chat"
+          }
+        ]
+      }
+    },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "http://localhost:8000/v1/chat/completions",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        },
+        "temperature": 1,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
           }
         ]
       }
@@ -12019,6 +12107,28 @@
           {
             "role": "user",
             "content": "Name this chat"
+          }
+        ]
+      }
+    },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "http://127.0.0.1:11500/v1/chat/completions",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer engine-token"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        },
+        "temperature": 1,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
           }
         ]
       }
@@ -14812,6 +14922,28 @@
         ]
       }
     },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "http://127.0.0.1:11500/v1/chat/completions",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        },
+        "cache_prompt": true,
+        "temperature": 1,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ]
+      }
+    },
     "cache-default": {
       "method": "POST",
       "url": "http://127.0.0.1:11500/v1/chat/completions",
@@ -17575,6 +17707,27 @@
         ]
       }
     },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "http://10.5.0.2:1338/v1/chat/completions",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        },
+        "temperature": 1,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ]
+      }
+    },
     "cache-default": {
       "method": "POST",
       "url": "http://10.5.0.2:1338/v1/chat/completions",
@@ -20215,6 +20368,24 @@
           {
             "role": "user",
             "content": "Name this chat"
+          }
+        ]
+      }
+    },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "http://localhost:11434/api/chat",
+      "headers": {},
+      "body": {
+        "model": "claude-haiku-5-5",
+        "stream": true,
+        "options": {
+          "temperature": 1
+        },
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
           }
         ]
       }
@@ -23032,6 +23203,29 @@
           {
             "role": "user",
             "content": "Name this chat"
+          }
+        ]
+      }
+    },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "https://api.anthropic.com/v1/messages",
+      "headers": {
+        "Content-Type": "application/json",
+        "x-api-key": "sk-ant-test",
+        "anthropic-version": "2023-06-01"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 128000,
+        "stream": true,
+        "output_config": {
+          "effort": "xhigh"
+        },
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
           }
         ]
       }
@@ -26293,6 +26487,39 @@
           {
             "role": "user",
             "content": "Name this chat"
+          }
+        ]
+      }
+    },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "https://api.anthropic.com/v1/messages",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer oauth-access-token",
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "oauth-2025-04-20"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 128000,
+        "stream": true,
+        "output_config": {
+          "effort": "xhigh"
+        },
+        "system": [
+          {
+            "type": "text",
+            "text": "You are Claude Code, Anthropic's official CLI for Claude.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
           }
         ]
       }
@@ -29566,6 +29793,38 @@
         ],
         "stream": true,
         "store": false
+      }
+    },
+    "haiku-5-5-xhigh": {
+      "method": "POST",
+      "url": "https://chatgpt.com/backend-api/codex/responses",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer oauth-chatgpt-token",
+        "chatgpt-account-id": "acct-1",
+        "OpenAI-Beta": "responses=experimental",
+        "originator": "codex_cli_rs",
+        "session_id": "<session>"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "input": [
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "store": false,
+        "reasoning": {
+          "effort": "high"
+        }
       }
     },
     "cache-default": {

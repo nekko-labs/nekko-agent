@@ -22,6 +22,13 @@ import type { EngineBackend, EngineBuild, EnginePlatform, GpuStats } from '@nekk
  * which keeps the decision testable without a network.
  */
 
+/**
+ * How much faster CUDA is than Vulkan on NVIDIA, as the build picker says it.
+ * A rough figure from public llama.cpp results (prompt reading gains more,
+ * reply writing less); the benchmark on our own hardware is a TODO in TASKS.md.
+ */
+export const CUDA_FASTER = 'Roughly 15-20% faster';
+
 const BUILDS: EngineBuild[] = [
   // Windows
   {
@@ -30,7 +37,7 @@ const BUILDS: EngineBuild[] = [
     arch: 'x64',
     backend: 'cuda',
     assetPattern: 'bin-win-cuda',
-    requires: 'An NVIDIA GPU with a current driver.',
+    requires: `An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. ${CUDA_FASTER} than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.`,
     // The CUDA archive ships without the runtime libraries; they are a separate
     // asset on the same release, and the build will not start without them.
     companionPattern: 'cudart-llama',
@@ -41,7 +48,7 @@ const BUILDS: EngineBuild[] = [
     arch: 'x64',
     backend: 'vulkan',
     assetPattern: 'bin-win-vulkan',
-    requires: 'Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA).',
+    requires: `Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is ${CUDA_FASTER.toLowerCase()}.`,
   },
   {
     id: 'win-x64-rocm',
@@ -85,14 +92,8 @@ const BUILDS: EngineBuild[] = [
     assetPattern: 'bin-macos',
     requires: 'Apple Silicon. Uses the GPU through Metal.',
   },
-  {
-    id: 'macos-x64-cpu',
-    platform: 'darwin',
-    arch: 'x64',
-    backend: 'cpu',
-    assetPattern: 'bin-macos',
-    requires: 'An Intel Mac.',
-  },
+  // No Intel Mac build: the platform was dropped on 2026-10-13 (see
+  // unsupportedPlatformReason in @nekko-agent/shared).
   // Linux
   {
     id: 'linux-x64-cuda',
@@ -100,7 +101,7 @@ const BUILDS: EngineBuild[] = [
     arch: 'x64',
     backend: 'cuda',
     assetPattern: 'bin-ubuntu-cuda',
-    requires: 'An NVIDIA GPU with a current driver.',
+    requires: `An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. ${CUDA_FASTER} than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.`,
     companionPattern: 'cudart-llama',
   },
   {
@@ -117,7 +118,7 @@ const BUILDS: EngineBuild[] = [
     arch: 'x64',
     backend: 'vulkan',
     assetPattern: 'bin-ubuntu-vulkan',
-    requires: 'A GPU with Vulkan drivers.',
+    requires: `A GPU with Vulkan drivers. On a recent NVIDIA GPU, CUDA is ${CUDA_FASTER.toLowerCase()}.`,
   },
   {
     id: 'linux-x64-cpu',
@@ -160,25 +161,65 @@ const ARCHIVE_RE = /\.(zip|tar\.gz|tgz)$/i;
  * The builds that could run here, best first.
  *
  * "Best" is the accelerator we have evidence for. An NVIDIA reading from
- * `nvidia-smi` is evidence for CUDA; Apple Silicon is evidence for Metal; a GPU
- * we cannot identify is evidence for Vulkan but not for CUDA. With no evidence at
- * all we lead with CPU, because a slow engine that runs beats a fast one that
- * fails to start.
+ * `nvidia-smi` is evidence for CUDA, the fastest backend there, as long as the
+ * card and driver can run the CUDA build we download (`CudaSupport`); a card
+ * that cannot gets Vulkan first, which runs on it. Apple Silicon is evidence
+ * for Metal; a GPU we cannot identify is evidence for Vulkan but not for CUDA.
+ * With no evidence at all we lead with CPU, because a slow engine that runs
+ * beats a fast one that fails to start.
  */
 export function buildsFor(
   platform: EnginePlatform,
   arch: string,
   gpu: GpuStats | null,
   adapters: GpuAdapter[] = [],
+  cuda?: CudaSupport,
 ): EngineBuild[] {
   const candidates = BUILDS.filter((b) => b.platform === platform && b.arch === arch);
-  const rank = preferenceOrder(platform, gpu, adapters);
-  return [...candidates].sort((a, b) => rank.indexOf(a.backend) - rank.indexOf(b.backend));
+  const rank = preferenceOrder(platform, gpu, adapters, cuda);
+  return [...candidates]
+    .sort((a, b) => rank.indexOf(a.backend) - rank.indexOf(b.backend))
+    .map((b) => (b.backend === 'cuda' && cuda?.supported === false && cuda.reason ? { ...b, requires: `${b.requires} ${cuda.reason}` } : b));
 }
 
-function preferenceOrder(platform: EnginePlatform, gpu: GpuStats | null, adapters: GpuAdapter[]): EngineBackend[] {
+/**
+ * Whether this machine's NVIDIA cards can run llama.cpp's CUDA build. The
+ * Windows and Linux x64 builds are CUDA 13, which dropped cards before
+ * compute capability 7.5 (Maxwell, Pascal, Volta) and needs driver 580 or
+ * newer. Unknown (no reading) is treated as supported, as before this check.
+ */
+export interface CudaSupport {
+  supported: boolean;
+  /** Why not, as a sentence for the build picker. */
+  reason?: string;
+}
+
+export const CUDA_QUERY = ['--query-gpu=compute_cap,driver_version', '--format=csv,noheader'];
+
+/** Read `nvidia-smi --query-gpu=compute_cap,driver_version --format=csv,noheader`. */
+export function cudaSupportFrom(stdout: string | null | undefined): CudaSupport | undefined {
+  const rows = (stdout ?? '')
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => line.split(',').map((c) => c.trim()))
+    .filter((cols) => cols.length >= 2)
+    .map(([cap, driver]) => ({ cap: Number(cap), driver: Number(driver.split('.')[0]) }))
+    .filter((r) => Number.isFinite(r.cap) && Number.isFinite(r.driver) && r.cap > 0 && r.driver > 0);
+  if (!rows.length) return undefined;
+  if (rows.some((r) => r.cap < 7.5)) {
+    return { supported: false, reason: 'This GPU is older than the GTX 16 / RTX 20 series, so the CUDA build cannot run on it; Vulkan can.' };
+  }
+  if (rows.some((r) => r.driver < 580)) {
+    return { supported: false, reason: 'The NVIDIA driver here is older than 580; update it to run the CUDA build.' };
+  }
+  return { supported: true };
+}
+
+function preferenceOrder(platform: EnginePlatform, gpu: GpuStats | null, adapters: GpuAdapter[], cuda?: CudaSupport): EngineBackend[] {
   if (platform === 'darwin') return ['metal', 'cpu', 'vulkan', 'cuda', 'hip'];
-  if (gpu?.source === 'nvidia-smi' && gpu.devices.length > 0) return ['cuda', 'vulkan', 'cpu', 'hip', 'metal'];
+  if (gpu?.source === 'nvidia-smi' && gpu.devices.length > 0) {
+    return cuda?.supported === false ? ['vulkan', 'cuda', 'cpu', 'hip', 'metal'] : ['cuda', 'vulkan', 'cpu', 'hip', 'metal'];
+  }
   // A GPU we know nothing about: Vulkan is the portable accelerated path, and
   // claiming CUDA without an NVIDIA reading would be a guess.
   if (gpu && gpu.devices.length > 0) return ['vulkan', 'cpu', 'cuda', 'hip', 'metal'];
@@ -188,14 +229,33 @@ function preferenceOrder(platform: EnginePlatform, gpu: GpuStats | null, adapter
   return ['cpu', 'vulkan', 'cuda', 'hip', 'metal'];
 }
 
+/**
+ * The CUDA build, when this machine has an NVIDIA GPU (by `nvidia-smi`) that
+ * can run it and is on a managed build of something else: a Vulkan or CPU
+ * install chosen by hand, or made before CUDA was preferred.
+ */
+export function cudaUpgrade(
+  platform: EnginePlatform,
+  arch: string,
+  gpu: GpuStats | null,
+  installed: EngineBackend | undefined,
+  cuda?: CudaSupport,
+): EngineBuild | undefined {
+  if (!installed || installed === 'cuda' || installed === 'metal') return undefined;
+  if (gpu?.source !== 'nvidia-smi' || gpu.devices.length === 0) return undefined;
+  if (cuda?.supported === false) return undefined;
+  return BUILDS.find((b) => b.platform === platform && b.arch === arch && b.backend === 'cuda');
+}
+
 /** The build we would install if the user just says yes. */
 export function recommendedBuild(
   platform: EnginePlatform,
   arch: string,
   gpu: GpuStats | null,
   adapters: GpuAdapter[] = [],
+  cuda?: CudaSupport,
 ): EngineBuild | undefined {
-  return buildsFor(platform, arch, gpu, adapters)[0];
+  return buildsFor(platform, arch, gpu, adapters, cuda)[0];
 }
 
 /**
@@ -227,11 +287,19 @@ export function matchCompanion(
   assetNames: string[],
 ): string | undefined {
   if (!build.companionPattern) return undefined;
-  // `llama-b10996-bin-win-cuda-13.4-x64.zip` -> `cuda-13.4-x64`
-  const variant = assetName.replace(ARCHIVE_RE, '').match(/(cuda-[\d.]+-\w+)$/)?.[1];
+  // The platform is part of the key, not just the toolkit and arch: every
+  // release carries an Ubuntu runtime beside the Windows one with the same
+  // `cuda-13.4-x64` tail (`cudart-llama-bNNNN-bin-ubuntu-cuda-13.4-x64.tar.gz`).
+  // Matching on that tail alone gave Windows the Linux `.so` files; the CUDA
+  // backend then found no GPU and every model ran on the CPU, silently.
+  // `llama-b10996-bin-win-cuda-13.4-x64` -> `bin-win-cuda-13.4-x64`.
+  const variant = assetName.replace(ARCHIVE_RE, '').match(/(bin-[a-z]+-cuda-[\d.]+-\w+)$/)?.[1];
   if (!variant) return undefined;
   return assetNames.find(
-    (n) => n.includes(build.companionPattern as string) && n.includes(variant) && ARCHIVE_RE.test(n),
+    (n) =>
+      n.startsWith(build.companionPattern as string) &&
+      ARCHIVE_RE.test(n) &&
+      n.replace(ARCHIVE_RE, '').endsWith(`-${variant}`),
   );
 }
 

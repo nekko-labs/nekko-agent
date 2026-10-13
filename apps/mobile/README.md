@@ -52,8 +52,22 @@ npm run test:relay     # phone ↔ relay ↔ computer, against a local relay and
 
 `test:relay` needs the root packages built (`npm run build:core`, then host, cli, server and relay).
 
-## Release (not set up yet)
+## Release
 
-Store builds need an EAS project, signing (Apple developer account, Play console), and for push an
-APNs key and FCM service account on the relay. `appId` is `dev.nekkolabs.nekkoagent` on both
-platforms, matching the desktop bundle id.
+EAS project `@nekkodev/nekko-agent` (id in `app.json` → `extra.eas.projectId`; the Expo account is
+`nekkodev`, devadmin@nekkolabs.com). Profiles in `eas.json`: `development` (dev client, internal),
+`preview` (internal distribution, auto-incremented build number) and `production` (store / TestFlight).
+`appId` is `dev.nekkolabs.nekkoagent` on both platforms, matching the desktop bundle id.
+
+```bash
+# from apps/mobile, after npm install
+npx eas-cli build -p ios --profile production          # signs with the Nekko Labs team (3HM5598S99)
+npx eas-cli submit -p ios --latest                     # TestFlight; internal testers need no review
+npx eas-cli build -p android --profile preview         # installable APK, EAS-managed keystore
+```
+
+The iOS build needs Apple credentials once: either sign in with the Apple ID when the CLI asks, or
+point the CLI at the team's App Store Connect API key (`EXPO_ASC_API_KEY_PATH`, `EXPO_ASC_KEY_ID`,
+`EXPO_ASC_ISSUER_ID`, `EXPO_APPLE_TEAM_ID`, `EXPO_APPLE_TEAM_TYPE=COMPANY_OR_ORGANIZATION`) so it
+runs non-interactively. Push needs an APNs key and FCM service account on the relay (see
+`apps/relay/README.md`); the app works without push.

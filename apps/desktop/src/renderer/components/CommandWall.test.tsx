@@ -18,7 +18,7 @@ vi.mock('./PaneFrame.js', () => ({
   PaneFrame: ({ title, children }: { title: string; children: React.ReactNode }) => <section data-title={title}>{children}</section>,
   PaneActions: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-import { CommandWall, commandWallGeometry, companionTree, resizeCompanionSplit, workspaceCompanions } from './CommandWall.js';
+import { CommandWall, boardEdgePreview, commandWallGeometry, companionTree, resizeCompanionSplit, sameDeps, WARM_COMPOSERS, warmFront, workspaceCompanions } from './CommandWall.js';
 import { leafRects } from '../commandWall.js';
 
 const a: WbPane = { id: 'a', kind: 'chat', refId: 'chat-a' };
@@ -160,6 +160,33 @@ describe('command wall geometry', () => {
     expect(opened.add).toEqual({ x: 504, y: 708, width: 496, height: 700 });
   });
 
+  it('lists the unfilled Grid squares for placeholders, and none in Dynamic or on a phone', () => {
+    // Three windows in a 3×2 Grid leave the bottom row empty.
+    const g = commandWallGeometry(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } }), 1000, 700);
+    expect(g.empty).toHaveLength(3);
+    expect(g.empty.every((r) => r.y > 0 && r.width > 0 && r.height > 0)).toBe(true);
+    for (const cell of g.empty) for (const pane of g.panes.values()) {
+      const overlapW = Math.min(pane.x + pane.width, cell.x + cell.width) - Math.max(pane.x, cell.x);
+      const overlapH = Math.min(pane.y + pane.height, cell.y + cell.height) - Math.max(pane.y, cell.y);
+      expect(overlapW > 0 && overlapH > 0).toBe(false);
+    }
+    expect(commandWallGeometry(state(), 1000, 700).empty).toEqual([]);
+    expect(commandWallGeometry(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } }), 400, 700).empty).toEqual([]);
+    const html = renderToStaticMarkup(wall(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } })));
+    expect(html).not.toContain('data-wall-empty-cell'); // unmeasured: nothing drawn yet
+  });
+
+  it('previews a board-edge drop as a full column or a full-width row', () => {
+    const stacked: WbSplit = { id: 'col', dir: 'col', children: [a, b], sizes: [0.5, 0.5] };
+    const s = state({ root: stacked });
+    expect(boardEdgePreview(s, 'b', 'right', 1000, 600)).toEqual({ x: 500, y: 0, width: 500, height: 600 });
+    expect(boardEdgePreview(s, 'b', 'down', 1000, 600)).toBeNull(); // already the bottom row
+    const cols = state({ root: { id: 'row', dir: 'row', children: [a, b, t], sizes: [1 / 3, 1 / 3, 1 / 3] } });
+    const bottom = boardEdgePreview(cols, 't', 'down', 900, 600)!;
+    expect(bottom).toMatchObject({ x: 0, width: 900 });
+    expect(bottom.y).toBeCloseTo(300);
+  });
+
   it('stacks narrow Grid and Fixed panes and handles unmeasured empty mounts', () => {
     for (const mode of ['grid', 'fixed'] as const) {
       const g = commandWallGeometry(state({ layout: layout(mode) }), 400, 700);
@@ -218,7 +245,7 @@ describe('workspace companions and stable bodies', () => {
     expect(source).toContain('{allPanes(state.root).map(renderLeaf)}');
     expect(source).toContain('key={pane.id}');
     expect(source).toContain('key={companion.id}');
-    expect(source).toContain("surface={focusedChat ? 'full' : 'transcript'}");
+    expect(source).toContain("surface={fullSurface ? 'full' : 'transcript'}");
     expect(source).toContain('useStore.getState().closePane(companion.id)');
     expect(source).not.toContain('inert={folded');
     expect(css).toContain('transition: left 260ms ease');
@@ -286,6 +313,42 @@ describe('focus full-height chat', () => {
     const html = renderToStaticMarkup(wall(state({ layout: layout('focus'), hero: 'chat-a' })));
     expect(html).toContain('data-surface="full"');
     expect(html).toContain('data-focus-chat="true"');
+  });
+  it('parks the other Focus windows under the hero instead of display: none', () => {
+    const html = renderToStaticMarkup(wall(state({ layout: layout('focus'), hero: 'chat-a' })));
+    const windows = html.match(/<div class="command-wall-window[^>]*>/g) ?? [];
+    const hero = windows.find((w) => w.includes('data-wall-pane="a"'))!;
+    const parked = windows.find((w) => w.includes('data-wall-pane="b"'))!;
+    expect(hero).not.toContain('data-wall-parked');
+    expect(parked).toContain('data-wall-parked="true"');
+    // At the hero's box, so a switch changes no geometry; and without the deck
+    // styling, so it restyles nothing inside the window.
+    expect(parked.match(/style="[^"]*"/)?.[0]).toBe(hero.match(/style="[^"]*"/)?.[0]);
+    expect(parked).not.toContain('display:none');
+    expect(parked).not.toContain('command-wall-deck-window');
+    // Never drawn and never hit, and pointer-events stops at the window: it
+    // inherits, so letting it reach the transcript restyles every element.
+    const css = readFileSync(new URL('./commandWallLayouts.css', import.meta.url), 'utf8');
+    expect(css).toContain('.command-wall-window[data-wall-parked] { content-visibility: hidden; pointer-events: none; transition: none; }');
+    expect(css).toContain(':where(.command-wall-window) > :where(*) { pointer-events: auto; }');
+    // Leaving Focus they jump to their places: sliding a dozen full-size
+    // windows down at once rastered them all whole.
+    expect(css).toContain('.command-wall-window[data-wall-snap] { transition: none; }');
+  });
+  it('keeps the composer of a recent hero while parked, for a bounded few', () => {
+    expect(warmFront([], 'a')).toEqual(['a']);
+    const ids = ['a', 'b'];
+    expect(warmFront(ids, 'a')).toBe(ids);
+    expect(warmFront(ids, 'b')).toEqual(['b', 'a']);
+    expect(warmFront(['a', 'b', 'c', 'd'], 'e')).toEqual(['e', 'a', 'b', 'c']);
+    expect(WARM_COMPOSERS).toBe(4);
+  });
+  it('skips re-rendering a window whose inputs are the same values', () => {
+    const pane = { id: 'p' };
+    expect(sameDeps([pane, 1, 'x', undefined], [pane, 1, 'x', undefined])).toBe(true);
+    expect(sameDeps([pane, 1], [{ id: 'p' }, 1])).toBe(false);
+    expect(sameDeps([1], [1, 2])).toBe(false);
+    expect(sameDeps([NaN], [NaN])).toBe(true);
   });
   it('suppresses approvals on composer-only surfaces', () => {
     const source = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');

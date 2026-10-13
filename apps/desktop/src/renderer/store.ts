@@ -38,6 +38,30 @@ export const EXPERIMENTAL_VIEWS = ['training', 'design', 'memory'] as const;
 export type ExperimentalView = (typeof EXPERIMENTAL_VIEWS)[number];
 
 /**
+ * The folder a chat works in, as the Files companion should open it: the
+ * chat's own checkout of its primary folder when it has one (that is where the
+ * agent is editing), else the primary folder, else its first supporting
+ * folder. Empty when the chat has no folder, which the explorer turns into a
+ * folder chooser.
+ */
+export function chatFolderPath(s: { sessions: SessionSummary[]; settings: AppSettings | null }, sessionId: string, full?: Pick<Session, 'workspaceId' | 'supportingWorkspaceIds' | 'gitWorktrees'> | null): string {
+  const chat = full ?? s.sessions.find((x) => x.id === sessionId);
+  const folders = s.settings?.workspaces ?? [];
+  const primary = chat?.workspaceId;
+  if (primary) {
+    const checkout = chat?.gitWorktrees?.[primary]?.path;
+    if (checkout) return checkout;
+    const path = folders.find((w) => w.id === primary)?.path;
+    if (path) return path;
+  }
+  for (const id of chat?.supportingWorkspaceIds ?? []) {
+    const path = folders.find((w) => w.id === id)?.path;
+    if (path) return path;
+  }
+  return '';
+}
+
+/**
  * Whether a nav destination is reachable. Chat needs its Developer flag and
  * experimental views need their flag on; everything else is always available.
  * Settings that haven't loaded yet
@@ -102,6 +126,17 @@ export interface Workspace {
 }
 
 const PLAN_RAIL_KEY = 'nekko.planRail';
+const PLAN_RAIL_SESSIONS_KEY = 'nekko.planRail.sessions';
+
+function readPlanRailSessions(): Record<string, boolean> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(PLAN_RAIL_SESSIONS_KEY) ?? '{}');
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      return Object.fromEntries(Object.entries(saved).filter(([, value]) => typeof value === 'boolean'));
+    }
+  } catch { /* private mode or malformed preferences */ }
+  return {};
+}
 
 /**
  * The rail's remembered state. On by default; the chat pane hides it anyway when
@@ -147,16 +182,15 @@ interface UiState {
   activeProviderId: string | null;
   activeModelId: string | null;
   contextPanelOpen: boolean;
-  /**
-   * Whether the chat pane shows its plan / sub-agent rail. App-wide rather than
-   * per-chat, like the context panel: it's a way of working, not a property of
-   * one conversation.
-   */
+  /** Legacy saved default for chats without an individual plan-panel choice. */
   planRailOpen: boolean;
+  /** Individual visibility choices, preserved across wall/focus layout changes. */
+  planRailOpenBySession: Record<string, boolean>;
   /** Whether the first-run setup wizard is showing over the app. */
   onboardingOpen: boolean;
   /** True after the first settings load has finished. */
   settingsLoaded: boolean;
+  settingsError: string | null;
   mascotMood: MascotMood;
   toasts: Toast[];
   paletteOpen: boolean;
@@ -206,7 +240,7 @@ interface UiState {
   /** Live PR state per chat (PRs referenced in its transcript), for cards + badges. */
   prsBySession: Record<string, PrInfo[]>;
   /** Fetch a chat's PRs (gh/API, host-cached) and stash them for cards + badges. */
-  refreshSessionPrs: (sessionId: string) => Promise<void>;
+  refreshSessionPrs: (sessionId: string, force?: boolean) => Promise<void>;
   /** Open a PR's diff as a window in the active workspace. */
   openPrPane: (url: string) => void;
 
@@ -240,7 +274,7 @@ interface UiState {
   setMascotMood: (m: MascotMood) => void;
   setView: (v: View) => void;
   setOnboardingOpen: (open: boolean) => void;
-  refreshSettings: () => Promise<void>;
+  refreshSettings: (autoOpenOnboarding?: boolean) => Promise<void>;
   refreshSessions: () => Promise<void>;
   setActiveSession: (id: string | null) => void;
   refreshProviders: () => Promise<void>;
@@ -249,7 +283,7 @@ interface UiState {
   reloadModels: (providerId: string) => Promise<void>;
   selectModel: (id: string) => void;
   toggleContextPanel: () => void;
-  togglePlanRail: () => void;
+  togglePlanRail: (sessionId: string) => void;
   applyTheme: () => void;
 
   refreshTerminals: () => Promise<void>;
@@ -318,6 +352,7 @@ interface UiState {
   splitPane: (paneId: string, dir: Direction, kind: PaneKind, refId?: string) => void;
   /** Start a chat and put it beside an existing window, in the same workspace. */
   newChatInPane: (paneId: string, dir: Direction) => Promise<void>;
+  continuePrStack: (sessionId: string, url: string) => Promise<void>;
   /** Start a terminal and put it beside an existing window, in the same workspace. */
   newTerminalInPane: (paneId: string, dir: Direction) => Promise<void>;
   /** Point an open window at something else (an explorer at another folder). */
@@ -444,9 +479,17 @@ function addWorkspace(s: UiState, pane: WbPane): Partial<UiState> {
 
 /** Rewrite one workspace's tree, dropping it entirely once it holds nothing. */
 function updateWorkspace(s: UiState, id: string, fn: (w: Workspace) => Workspace): Partial<UiState> {
-  const workspaces = s.workspaces
-    .map((w) => (w.id === id ? fn(w) : w))
-    .filter((w) => w.root !== null);
+  let changed = false;
+  const mapped = s.workspaces.map((w) => {
+    if (w.id !== id) return w;
+    const next = fn(w);
+    if (next !== w) changed = true;
+    return next;
+  });
+  // Nothing moved: keep the same array so every wall window subscribed to
+  // `workspaces` does not re-render (and re-measure) for a no-op.
+  if (!changed) return {};
+  const workspaces = mapped.filter((w) => w.root !== null);
   return {
     workspaces,
     activeWorkspaceId: workspaces.some((w) => w.id === s.activeWorkspaceId)
@@ -456,6 +499,10 @@ function updateWorkspace(s: UiState, id: string, fn: (w: Workspace) => Workspace
 }
 
 function defaultChatFolder(state: UiState): string | undefined {
+  // A saved default folder wins; supporting defaults are applied where a new
+  // agent is configured (the wall), this path takes only the primary.
+  const saved = state.settings?.defaultWorkspaceIds?.find((d) => state.settings?.workspaces.some((w) => w.id === d));
+  if (saved) return saved;
   const id = state.activeProjectId;
   return id && (!state.settingsLoaded || state.settings?.workspaces.some((w) => w.id === id)) ? id : undefined;
 }
@@ -472,6 +519,20 @@ async function openUsableChat(get: () => UiState, set: (p: Partial<UiState>) => 
   set({ view: 'chat' });
   get().openChatPane(sid);
   return sid;
+}
+
+/**
+ * Chats this window created, by the session-list request count at the time.
+ * A list request issued before (or as) the chat was created can answer
+ * without it; `refreshSessions` keeps such a chat until a list includes it.
+ */
+let sessionListSeq = 0;
+const createdAtSeq = new Map<string, number>();
+
+/** Put a chat the host just created at the top of the list, safe from a stale in-flight refresh. */
+export function addCreatedSession(s: Session): void {
+  createdAtSeq.set(s.id, sessionListSeq);
+  useStore.setState((state) => ({ sessions: [summarizeSession(s), ...state.sessions.filter((x) => x.id !== s.id)] }));
 }
 
 export const useStore = create<UiState>((set, get) => ({
@@ -498,8 +559,10 @@ export const useStore = create<UiState>((set, get) => ({
   // Default the context panel closed on small screens (phones).
   contextPanelOpen: typeof window !== 'undefined' ? window.innerWidth >= 1024 : true,
   planRailOpen: readPlanRailOpen(),
+  planRailOpenBySession: readPlanRailSessions(),
   onboardingOpen: false,
   settingsLoaded: false,
+  settingsError: null,
   mascotMood: 'waving',
   toasts: [],
   paletteOpen: false,
@@ -543,8 +606,17 @@ export const useStore = create<UiState>((set, get) => ({
     // The host already returned the full record: seed before opening the pane
     // so its first frame has the session and brain, without a round-trip.
     putCachedSession(s);
-    set((state) => ({ sessions: [summarizeSession(s), ...state.sessions], activeSessionId: s.id, view: 'chat' }));
+    addCreatedSession(s);
+    set({ activeSessionId: s.id, view: 'chat' });
     get().openChatPane(s.id);
+  },
+  continuePrStack: async (sessionId, url) => {
+    const s = await window.nekko.continuePrStack(sessionId, url);
+    putCachedSession(s);
+    addCreatedSession(s);
+    set({ activeSessionId: s.id, view: 'chat' });
+    get().openChatPane(s.id);
+    get().pushToast('success', 'New chat starts from this PR in its own worktree.');
   },
   newImageChat: async (modelId, defaults) => {
     const created = await window.nekko.createSession(defaultChatFolder(get()));
@@ -553,7 +625,8 @@ export const useStore = create<UiState>((set, get) => ({
       imageParams: { ...DEFAULT_IMAGE_CHAT_PARAMS, modelId, ...(defaults ?? {}) },
     })) ?? created;
     putCachedSession(s);
-    set((state) => ({ sessions: [summarizeSession(s), ...state.sessions], activeSessionId: s.id, view: 'chat' }));
+    addCreatedSession(s);
+    set({ activeSessionId: s.id, view: 'chat' });
     get().openChatPane(s.id);
   },
   setMascotMood: (m) => set({ mascotMood: m }),
@@ -562,25 +635,38 @@ export const useStore = create<UiState>((set, get) => ({
   setView: (v) => set((s) => ({ view: viewEnabled(v, s.settings) ? v : 'command' })),
   setOnboardingOpen: (open) => set({ onboardingOpen: open }),
 
-  refreshSettings: async () => {
+  refreshSettings: async (autoOpenOnboarding = true) => {
+    set({ settingsError: null });
     try {
       const settings = await window.nekko.getSettings();
-      const onboardingOpen = shouldAutoOpenOnboarding(settings);
-      set({ settings, onboardingOpen, settingsLoaded: true });
+      if (!settings) throw new Error('Nekko service returned no settings.');
+      const onboardingOpen = autoOpenOnboarding ? shouldAutoOpenOnboarding(settings) : get().onboardingOpen;
+      set({ settings, onboardingOpen, settingsLoaded: true, settingsError: null });
       get().applyTheme();
       if (!get().activeProviderId && settings.defaultProviderId) {
         set({ activeProviderId: settings.defaultProviderId, activeModelId: settings.defaultModelId ?? null });
       }
       // Refreshing the folder list never chooses a folder for the user.
-    } catch {
+    } catch (e) {
       // Never leave the app on the loading gate: if settings can't be read,
       // unblock the UI and let surfaces fall back to their empty states.
-      set({ settingsLoaded: true });
+      const settingsError = e instanceof Error ? e.message : 'Nekko service is unavailable.';
+      set({ settingsLoaded: true, settingsError });
+      get().pushToast('error', `Could not load settings: ${settingsError}`);
+      get().applyTheme();
     }
   },
 
   refreshSessions: async () => {
-    const sessions = await window.nekko.listSessionSummaries();
+    const asked = ++sessionListSeq;
+    const listed = await window.nekko.listSessionSummaries();
+    // A chat created while this list was in flight may be missing from it (it
+    // was read before the chat was written). Keep those, or the new window
+    // vanishes until the next refresh brings it back.
+    const ids = new Set(listed.map((x) => x.id));
+    const kept = get().sessions.filter((x) => !ids.has(x.id) && (createdAtSeq.get(x.id) ?? -1) >= asked);
+    for (const [id, seq] of createdAtSeq) if (ids.has(id) || seq < asked) createdAtSeq.delete(id);
+    const sessions = kept.length ? [...kept, ...listed] : listed;
     set({ sessions });
     // A restored layout can point at chats that were archived or deleted since
     // (another client, the retention purge). Drop those windows now that the
@@ -683,11 +769,11 @@ export const useStore = create<UiState>((set, get) => ({
 
   toggleContextPanel: () => set((s) => ({ contextPanelOpen: !s.contextPanelOpen })),
 
-  togglePlanRail: () =>
+  togglePlanRail: (sessionId) =>
     set((s) => {
-      const planRailOpen = !s.planRailOpen;
-      try { localStorage.setItem(PLAN_RAIL_KEY, planRailOpen ? '1' : '0'); } catch { /* private mode */ }
-      return { planRailOpen };
+      const planRailOpenBySession = { ...s.planRailOpenBySession, [sessionId]: !(s.planRailOpenBySession[sessionId] ?? s.planRailOpen) };
+      try { localStorage.setItem(PLAN_RAIL_SESSIONS_KEY, JSON.stringify(planRailOpenBySession)); } catch { /* private mode */ }
+      return { planRailOpenBySession };
     }),
 
   applyTheme: () => {
@@ -875,9 +961,9 @@ export const useStore = create<UiState>((set, get) => ({
     get().setActiveSkill(sid, skill);
   },
 
-  refreshSessionPrs: async (sessionId) => {
+  refreshSessionPrs: async (sessionId, force = false) => {
     try {
-      const prs = await window.nekko.listSessionPrs(sessionId);
+      const prs = await window.nekko.listSessionPrs(sessionId, force);
       set((s) => ({ prsBySession: { ...s.prsBySession, [sessionId]: prs } }));
     } catch {
       /* older host without PR channels, or gh/API unavailable */
@@ -901,6 +987,16 @@ export const useStore = create<UiState>((set, get) => ({
   },
 
   openCompanion: (sessionId, kind) => {
+    // A chat's own folder companion follows the chat's folder: opening Files
+    // for a chat whose folder has since changed points the existing one there.
+    if (kind === 'files') {
+      const s = get();
+      const hit = locatePane(s.workspaces, 'chat', sessionId);
+      const ws = hit && s.workspaces.find((w) => w.id === hit.workspaceId);
+      const existing = ws && allPanes(ws.root).find((p) => p.kind === 'files');
+      const path = chatFolderPath(s, sessionId);
+      if (existing && path && existing.refId !== path) get().retargetPane(existing.id, path);
+    }
     let opened = false;
     set((s) => {
       // The chat's own workspace, made if the chat has none yet. Never the
@@ -914,7 +1010,7 @@ export const useStore = create<UiState>((set, get) => ({
       }
       const ws = hit && workspaces.find((w) => w.id === hit!.workspaceId);
       if (!hit || !ws?.root) return {};
-      const refId = kind === 'diff' ? sessionId : kind === 'browser' ? 'about:blank' : '';
+      const refId = kind === 'diff' ? sessionId : kind === 'browser' ? 'about:blank' : chatFolderPath(s, sessionId);
       // One of each per chat: asking again just keeps the one already there.
       if (allPanes(ws.root).some((p) => p.kind === kind && (kind !== 'diff' || p.refId === sessionId))) {
         opened = true;

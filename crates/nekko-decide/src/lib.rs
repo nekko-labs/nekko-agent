@@ -19,6 +19,7 @@
 
 mod answer;
 mod config;
+pub mod directml;
 mod encode;
 mod onnx_meta;
 mod pyjson;
@@ -85,11 +86,14 @@ pub struct LoadOptions {
     pub ep: Ep,
     /// The id responses report as `model`; defaults to the directory's name.
     pub name: Option<String>,
+    /// A DirectML.dll the host downloaded, for a Windows whose own copy is too old
+    /// (see [`directml`]).
+    pub directml: Option<PathBuf>,
 }
 
 impl Default for LoadOptions {
     fn default() -> Self {
-        Self { precision: None, ep: Ep::Auto, name: None }
+        Self { precision: None, ep: Ep::Auto, name: None, directml: None }
     }
 }
 
@@ -130,7 +134,7 @@ impl DecisionModel {
             ));
         }
         let encoder = Encoder::load(dir)?;
-        let runtime = Runtime::open(&file, opts.ep, encoder.pad, encoder.config.max_len)?;
+        let runtime = Runtime::open(&file, opts.ep, encoder.pad, encoder.config.max_len, opts.directml.as_deref())?;
         let name = opts.name.clone().filter(|n| !n.trim().is_empty()).unwrap_or_else(|| {
             dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "laya".into())
         });

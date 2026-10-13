@@ -38,6 +38,58 @@ const OPTION_KEYS: &[&str] = &[
     "archivedAt",
 ];
 
+/// What a running turn's save takes from disk rather than from memory
+/// (`USER_FIELDS` in sessions.ts): the user may change them mid-turn.
+const USER_FIELDS: &[&str] = &[
+    "pinned",
+    "tags",
+    "order",
+    "mode",
+    "disabledTools",
+    "offline",
+    "incognito",
+    "executionMode",
+    "gitIsolation",
+    "sandbox",
+    "autoModel",
+    "autoQuality",
+    "autoProviderSwitch",
+    "thinking",
+    "chatType",
+    "imageParams",
+    "workspaceId",
+    "supportingWorkspaceIds",
+    "attachedPaths",
+    "specLinked",
+    "queue",
+    "archivedAt",
+];
+
+/// `queueItemPayload`: a queued prompt as `{ text, images?, skill? }`.
+fn queue_payload(item: &Value) -> Value {
+    match item {
+        Value::String(s) => json!({ "text": s }),
+        other => other.clone(),
+    }
+}
+
+/// `queueItemsEqual`: the same payload, as `JSON.stringify` prints it.
+fn queue_items_equal(a: &Value, b: &Value) -> bool {
+    js::stringify(&queue_payload(a)) == js::stringify(&queue_payload(b))
+}
+
+/// `ARCHIVE_RETENTION_DAYS` in shared/archive.ts, in milliseconds.
+const ARCHIVE_RETENTION_MS: f64 = 60.0 * 24.0 * 60.0 * 60.0 * 1000.0;
+
+/// `archiveExpired(s, now)`: archived (`typeof archivedAt === 'number'` and
+/// above 0) and at or past the end of the retention window.
+fn archive_expired(s: &Value, now: f64) -> bool {
+    match s.get("archivedAt").and_then(Value::as_f64) {
+        Some(at) if at > 0.0 => now >= at + ARCHIVE_RETENTION_MS,
+        _ => false,
+    }
+}
+
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
@@ -155,6 +207,49 @@ impl SessionStore {
         Ok(Some(Value::Object(s)))
     }
 
+    /// `saveTurnSession(s, queued)`: save a chat a running turn holds in
+    /// memory, keeping whatever the user changed on disk since: the fields in
+    /// [`USER_FIELDS`] as they are on disk, and the title when the user named
+    /// the chat (`titleAuto === false`). With `queued`, the queue entry the
+    /// turn runs is claimed in the same write, or the save fails if the queue
+    /// changed meanwhile. `s` is updated to what was written.
+    pub fn save_turn(&self, s: &mut Value, queued: Option<(usize, &Value)>) -> Result<(), String> {
+        let Value::Object(target) = s else { return Err("a session that is not an object".into()) };
+        let id = target.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        match self.get(&id) {
+            Some(Value::Object(disk)) => {
+                for key in USER_FIELDS {
+                    match disk.get(*key) {
+                        Some(v) => {
+                            target.insert((*key).into(), v.clone());
+                        }
+                        None => {
+                            target.shift_remove(*key);
+                        }
+                    }
+                }
+                if disk.get("titleAuto") == Some(&Value::Bool(false)) {
+                    target.insert("title".into(), disk.get("title").cloned().unwrap_or(Value::Null));
+                    target.insert("titleAuto".into(), json!(false));
+                }
+                if let Some((index, item)) = queued {
+                    let queue = disk.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
+                    match queue.get(index) {
+                        Some(on_disk) if queue_items_equal(on_disk, item) => {}
+                        _ => return Err("Queued prompt changed before it could start.".into()),
+                    }
+                    let rest: Vec<Value> =
+                        queue.into_iter().enumerate().filter(|(i, _)| *i != index).map(|(_, v)| v).collect();
+                    target.insert("queue".into(), Value::Array(rest));
+                }
+            }
+            _ if queued.is_some() => return Err("Session not found.".into()),
+            _ => {}
+        }
+        self.save(target)
+    }
+
     /// `createSession(workspaceId)`.
     pub fn create(&self, workspace_id: Option<&str>) -> Result<Value, String> {
         let now = now_ms();
@@ -175,6 +270,18 @@ impl SessionStore {
         let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
         self.save(&mut s)?;
         Ok(Value::Object(s))
+    }
+
+    /// `Object.assign(session, fields); saveSession(session)`, for a service
+    /// that makes a chat of its own (a task's title, `taskId`, model). `None`
+    /// when there is no such chat.
+    pub fn assign(&self, id: &str, fields: &[(&str, Value)]) -> Result<Option<Value>, String> {
+        self.patch(id, |s| {
+            for (k, v) in fields {
+                s.insert((*k).to_string(), v.clone());
+            }
+            true
+        })
     }
 
     /// `deleteSession`.
@@ -241,6 +348,143 @@ impl SessionStore {
         Ok(count)
     }
 
+    /// `purgeExpiredArchives(now)`: delete every archived chat that has
+    /// outlived the retention window (`archiveExpired` in shared/archive.ts).
+    /// `before_delete` runs first for each, as `clear_with`'s does, so the
+    /// host can drop the chat's command log before its JSON goes; a failure
+    /// there keeps the chat. A chat whose id would not name a file in the
+    /// sessions folder is skipped (the TS version would build a path from it).
+    pub fn purge_archived_with(
+        &self,
+        now: f64,
+        before_delete: impl Fn(&str) -> Result<(), String>,
+    ) -> Result<usize, String> {
+        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        let mut count = 0;
+        for session in self.list() {
+            if !archive_expired(&session, now) {
+                continue;
+            }
+            let Some(id) = session.get("id").and_then(Value::as_str).filter(|id| valid_id(id)) else { continue };
+            before_delete(id)?;
+            let file = self.path(id);
+            match std::fs::remove_file(&file) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+                _ => {}
+            }
+            self.cache.lock().unwrap_or_else(|e| e.into_inner()).remove(&file);
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    /// `purgeExpiredArchives()` at the current time.
+    pub fn purge_archived(&self, before_delete: impl Fn(&str) -> Result<(), String>) -> Result<usize, String> {
+        self.purge_archived_with(now_ms() as f64, before_delete)
+    }
+
+    /// `forkSession(id, beforeMessageId)`: a new chat holding `id`'s
+    /// conversation before `before_message_id` (all of it when that is absent
+    /// or not found), with the same folders, brain and options. The source is
+    /// not touched. `None` when there is no such chat.
+    ///
+    /// Keys land where `createSession`'s object literal and the assignments
+    /// after it put them, since the file must match the TS byte for byte.
+    /// The settings defaults `createSession` reads (`executionMode`,
+    /// `gitIsolation`) are always overwritten from the source, so the fork
+    /// needs no settings.
+    pub fn fork(&self, id: &str, before_message_id: &Value) -> Result<Option<Value>, String> {
+        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(src) = self.get(id) else { return Ok(None) };
+        let Some(src) = src.as_object() else { return Ok(None) };
+        let messages = src.get("messages");
+        // `beforeMessageId ? findIndex(m => m.id === beforeMessageId) : -1`.
+        let cut =
+            if js::truthy(Some(before_message_id)) && !before_message_id.is_object() && !before_message_id.is_array() {
+                messages
+                    .and_then(Value::as_array)
+                    .and_then(|list| list.iter().position(|m| m.get("id") == Some(before_message_id)))
+            } else {
+                None
+            };
+        let now = now_ms();
+        let mut rand = [0u8; 6];
+        getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
+        let mut s = Map::new();
+        s.insert("id".into(), json!(format!("s_{}_{}", base36(now), base64url(&rand))));
+        s.insert("title".into(), json!("New chat"));
+        if let Some(w) = src.get("workspaceId") {
+            s.insert("workspaceId".into(), w.clone());
+        }
+        // getExecutionMode(src): `executionMode ?? (gitIsolation === false ? 'unified' : 'worktree')`.
+        let mode = match src.get("executionMode") {
+            Some(m) if !m.is_null() => m.clone(),
+            _ if src.get("gitIsolation") == Some(&json!(false)) => json!("unified"),
+            _ => json!("worktree"),
+        };
+        let sandbox = mode == json!("sandbox");
+        let isolated = mode == json!("worktree");
+        s.insert("executionMode".into(), mode);
+        s.insert("gitIsolation".into(), json!(isolated));
+        // `supportingWorkspaceIds?.length ? ids : undefined`.
+        if let Some(ids) = src.get("supportingWorkspaceIds") {
+            let has_length = match ids {
+                Value::Array(a) => !a.is_empty(),
+                Value::String(t) => !t.is_empty(),
+                _ => false,
+            };
+            if has_length {
+                s.insert("supportingWorkspaceIds".into(), ids.clone());
+            }
+        }
+        let kept = match (messages, cut) {
+            (Some(Value::Array(list)), Some(i)) => Some(Value::Array(list[..i].to_vec())),
+            (Some(m), _) => Some(m.clone()),
+            (None, _) => None,
+        };
+        // Present in the literal; `structuredClone(undefined)` leaves it out.
+        s.insert("messages".into(), Value::Null);
+        s.insert("createdAt".into(), json!(now));
+        s.insert("updatedAt".into(), json!(now));
+        if sandbox {
+            s.insert("mode".into(), json!("ask"));
+        }
+        s.insert(
+            "title".into(),
+            json!(format!("{} (split)", src.get("title").map_or("undefined".into(), js::display))),
+        );
+        s.insert("titleAuto".into(), json!(false));
+        match kept {
+            Some(m) => {
+                s.insert("messages".into(), m);
+            }
+            None => {
+                s.shift_remove("messages");
+            }
+        }
+        for key in [
+            "providerId",
+            "modelId",
+            "autoModel",
+            "autoQuality",
+            "mode",
+            "thinking",
+            "chatType",
+            "imageParams",
+            "attachedPaths",
+            "disabledTools",
+        ] {
+            if let Some(v) = src.get(key) {
+                s.insert(key.into(), v.clone());
+            }
+        }
+        if sandbox {
+            s.insert("mode".into(), json!("ask"));
+        }
+        self.save(&mut s)?;
+        Ok(Some(Value::Object(s)))
+    }
+
     /// `setSessionOptions`.
     pub fn set_options(&self, id: &str, patch: &Value) -> Result<Option<Value>, String> {
         if patch.get("executionMode").is_some() || patch.get("sandbox").is_some() {
@@ -261,6 +505,74 @@ impl SessionStore {
         })
     }
 
+    /// What chat admission saves after it provisions a worktree chat's
+    /// checkouts (`saveSession` of the chat with its new `gitWorktrees`),
+    /// written over the chat as it is on disk now.
+    pub fn set_git_worktrees(&self, id: &str, worktrees: &Value) -> Result<Option<Value>, String> {
+        self.patch(id, |s| {
+            s.insert("gitWorktrees".into(), worktrees.clone());
+            true
+        })
+    }
+
+    /// `setContextPrefs`: the chat's include and pin choices, as given.
+    pub fn set_context_prefs(&self, id: &str, prefs: &Value) -> Result<Option<Value>, String> {
+        self.patch(id, |s| {
+            s.insert("contextPrefs".into(), prefs.clone());
+            true
+        })
+    }
+
+    /// `configureSandbox`'s change to the chat (execution-router.ts): only an
+    /// empty, idle, unconfigured chat becomes a sandbox chat, pinned to a
+    /// digest image and to the folders it has now, in ask mode and without
+    /// worktrees. The image check is the router's (`^\S+@sha256:[a-f0-9]{64}$`).
+    pub fn configure_sandbox(&self, id: &str, image: &str, identity: &str, now: f64) -> Result<Value, String> {
+        let mut failure: Option<&str> = None;
+        let pinned = image.rsplit_once("@sha256:").is_some_and(|(name, digest)| {
+            !name.is_empty()
+                && !name.chars().any(char::is_whitespace)
+                && digest.len() == 64
+                && digest.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        });
+        let out = self.patch(id, |s| {
+            let has_messages = s.get("messages").and_then(Value::as_array).is_some_and(|m| !m.is_empty());
+            if js::truthy(s.get("activeRun")) || js::truthy(s.get("sandbox")) || has_messages {
+                failure = Some("Sandbox setup is immutable and requires an empty, idle, unconfigured session");
+                return false;
+            }
+            if !pinned {
+                failure = Some("A digest-pinned, already installed Linux image is required");
+                return false;
+            }
+            let mut ids: Vec<Value> = Vec::new();
+            if let Some(w) = s.get("workspaceId").filter(|w| js::truthy(Some(w))) {
+                ids.push(w.clone());
+            }
+            for w in s.get("supportingWorkspaceIds").and_then(Value::as_array).cloned().unwrap_or_default() {
+                if js::truthy(Some(&w)) && !ids.contains(&w) {
+                    ids.push(w);
+                }
+            }
+            s.insert("executionMode".into(), json!("sandbox"));
+            s.insert("gitIsolation".into(), json!(false));
+            // A whole millisecond count is written as an integer, as JSON.stringify does.
+            let at =
+                if now.fract() == 0.0 && now.abs() < 9_007_199_254_740_992.0 { json!(now as i64) } else { json!(now) };
+            s.insert(
+                "sandbox".into(),
+                json!({ "image": image, "identity": identity, "configuredAt": at, "sourceWorkspaceIds": ids }),
+            );
+            s.insert("mode".into(), json!("ask"));
+            s.shift_remove("gitWorktrees");
+            true
+        })?;
+        if let Some(e) = failure {
+            return Err(e.into());
+        }
+        out.ok_or_else(|| "Session not found".to_string())
+    }
+
     /// `setSessionWorkspace`.
     pub fn set_workspace(&self, id: &str, workspace_id: Option<&str>) -> Result<Option<Value>, String> {
         self.patch(id, |s| {
@@ -277,6 +589,33 @@ impl SessionStore {
                 } else {
                     s.insert("supportingWorkspaceIds".into(), Value::Array(kept));
                 }
+            }
+            true
+        })
+    }
+
+    /// `setSpecMethodology(sessionId, id)`: `id` already resolved to a known
+    /// methodology. `None` when there is no such chat.
+    pub fn set_spec_methodology(&self, id: &str, methodology: &Value) -> Result<Option<Value>, String> {
+        let methodology = methodology.clone();
+        self.patch(id, |s| {
+            s.insert("specMethodology".into(), methodology);
+            true
+        })
+    }
+
+    /// What `removeWorkspace` in host.ts does to a chat using a folder whose
+    /// access is revoked: the primary cleared when it is that folder, the
+    /// folder dropped from the supporting list (an emptied list stays `[]`).
+    /// `None` when there is no such chat.
+    pub fn revoke_workspace(&self, id: &str, workspace_id: &str) -> Result<Option<Value>, String> {
+        self.patch(id, |s| {
+            if s.get("workspaceId").and_then(Value::as_str) == Some(workspace_id) {
+                s.shift_remove("workspaceId");
+            }
+            if let Some(Value::Array(sup)) = s.get("supportingWorkspaceIds").cloned() {
+                let kept: Vec<Value> = sup.into_iter().filter(|w| w.as_str() != Some(workspace_id)).collect();
+                s.insert("supportingWorkspaceIds".into(), Value::Array(kept));
             }
             true
         })
@@ -387,11 +726,49 @@ impl SessionStore {
             true
         })
     }
+
+    /// `applyAutoTitle(id, title)`: land a generated title, unless the user
+    /// named the chat meanwhile (`titleAuto` no longer `true`). Landing it also
+    /// ends generation. `Ok(true)` when it was written.
+    pub fn set_auto_title(&self, id: &str, title: &str) -> Result<bool, String> {
+        let mut landed = false;
+        self.patch(id, |s| {
+            if s.get("titleAuto") != Some(&Value::Bool(true)) {
+                return false;
+            }
+            s.insert("title".into(), json!(title));
+            s.insert("titleAuto".into(), json!(false));
+            landed = true;
+            true
+        })?;
+        Ok(landed)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_generated_title_lands_only_while_the_app_may_name_the_chat() {
+        let dir = std::env::temp_dir().join(format!("nekko-autotitle-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sessions")).unwrap();
+        let store = SessionStore::new(&dir);
+        let id = store.create(None).unwrap()["id"].as_str().unwrap().to_string();
+        assert!(!store.set_auto_title(&id, "Too soon").unwrap(), "no titleAuto yet: the placeholder is not the app's");
+        let mut s = store.get(&id).unwrap();
+        s["title"] = json!("Fix the bug");
+        s["titleAuto"] = json!(true);
+        store.save_turn(&mut s, None).unwrap();
+        assert!(store.set_auto_title(&id, "Login form fix").unwrap());
+        let saved = store.get(&id).unwrap();
+        assert_eq!((saved["title"].as_str(), saved["titleAuto"].as_bool()), (Some("Login form fix"), Some(false)));
+        let keys: Vec<&String> = saved.as_object().unwrap().keys().collect();
+        assert!(keys.iter().position(|k| *k == "title") < keys.iter().position(|k| *k == "titleAuto"));
+        assert!(!store.set_auto_title(&id, "Again").unwrap(), "landing a title ends generation");
+        assert!(!store.set_auto_title("s_missing", "x").unwrap());
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn ids_look_like_the_ts_ones() {

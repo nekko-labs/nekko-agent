@@ -1,0 +1,58 @@
+{
+  "files": {
+    "mock.html": "<!doctype html><title>Mock</title><p>imported</p>\n",
+    "notes.htm": "<html><body>htm</body></html>",
+    "image.html": { "bytes": [137, 80, 0, 0, 1] },
+    "plain.txt": "not html"
+  },
+  "ops": [
+    ["get", "w1"],
+    ["add", "w1", "Home", "http://localhost:3000/"],
+    ["add", "w1", "   ", "  http://localhost:3000/about  "],
+    ["add", "w1", 5, "http://x"],
+    ["addImport", "w1", "  Mock  ", "mock.html"],
+    ["addImport", "w1", "", "notes.htm"],
+    ["addImport", "w1", "Bad", "image.html"],
+    ["addImport", "w1", "Missing", "missing.html"],
+    ["addImport", "nope", "No project", "mock.html"],
+    ["add", "w1", "Text", "plain.txt"],
+    ["file", 3],
+    ["update", "w1", 3, { "html": "<p>v2</p>" }],
+    ["file", 3],
+    ["update", "w1", 3, { "html": "<p>v2</p>", "label": "Same html" }],
+    ["update", "w1", 0, { "html": "<p>first</p>" }],
+    ["update", "w1", 0, { "html": "<p>second</p>", "url": "http://y" }],
+    ["update", "w1", 0, { "html": 7 }],
+    ["update", "w1", 1, { "label": "Renamed", "extra": true }],
+    ["note", "w1", 1, "  look here  "],
+    ["note", "w1", 1, "second"],
+    ["resolve", "w1", 1, 0],
+    ["note", "w1", 1, 42],
+    ["remove", "w1", 2],
+    ["get", "w2"],
+    ["generate", "w1", { "prompt": "  A pricing page  " }, "```html\n<!DOCTYPE html><html><body>Pricing</body></html>\n```"],
+    ["generate", "w1", { "prompt": "", "sketchDataUrl": "data:image/png;base64,AAA", "label": "  Sketched!  " }, "Here you go: <html><p>sketch</p></html>"],
+    ["generate", "w1", { "prompt": "make it blue", "pageIndex": 0 }, "<html><p>blue</p></html>"],
+    ["generate", "w1", { "prompt": "  " }, "<p>x</p>"],
+    ["generate", "w1", { "prompt": "nothing" }, "plain words"],
+    ["generate", "w2", { "prompt": "Elsewhere concept, a long prompt that runs past forty two characters" }, "<html>w2</html>"],
+    ["generate", "w1", { "prompt": "refine an import", "pageIndex": 2 }, "<!doctype html><p>refined</p>"],
+    ["file", 2],
+    ["get", "w1"]
+  ],
+  "asks": [
+    [null, { "prompt": "x" }, "x"],
+    [{ "html": "<p>old</p>" }, { "prompt": "y", "sketchDataUrl": "data:z" }, "y"],
+    [null, { "sketchDataUrl": "data:z" }, ""],
+    [null, { "sketchDataUrl": "data:z" }, "with notes"],
+    [{ "label": "L" }, { "prompt": "z" }, "z"]
+  ],
+  "cleans": ["```HTML  <html></html>```", "  <body>only</body>  ", "text before <!DOCTYPE html> and <html>", "```\n```", "<HTML lang=en>"],
+  "labels": [
+    [{ "label": "  Mine " }, null, "p"],
+    [{}, { "label": "Existing" }, "p"],
+    [{ "label": "" }, null, "  a prompt that is definitely longer than forty-two characters  "],
+    [{}, null, ""]
+  ],
+  "slugs": ["Hello World", "--a--b--", "ÄÖÜ", "", "A very long label that keeps going and going past forty characters"]
+}

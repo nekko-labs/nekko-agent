@@ -83,7 +83,8 @@ fn answers_match_the_reference() {
     let Some(dir) = model_dir() else { return };
     let precision = std::env::var("LAYA_PRECISION").ok().and_then(|p| Precision::parse(&p)).unwrap_or(Precision::Fp16);
     let ep = std::env::var("LAYA_EP").ok().and_then(|e| Ep::parse(&e)).unwrap_or(Ep::Auto);
-    let model = DecisionModel::load(&dir, &LoadOptions { precision: Some(precision), ep, name: None }).unwrap();
+    let model =
+        DecisionModel::load(&dir, &LoadOptions { precision: Some(precision), ep, ..LoadOptions::default() }).unwrap();
     let (tol, strict_argmax) = match precision {
         Precision::Fp32 => (1e-3, true),
         Precision::Fp16 => (2e-2, true),

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nekko Agent CLI and MCP · Nekko Agent docs</title>
+    <meta name="description" content="Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor." />
+    <link rel="canonical" href="https://nekkoagent.com/docs/cli" />
+    <link rel="alternate" type="text/markdown" href="/docs/cli.md" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="theme-color" content="#101714" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/docs/cli" />
+    <meta property="og:title" content="Nekko Agent CLI and MCP · Nekko Agent docs" />
+    <meta property="og:description" content="Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/docs.css?v=docs-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Nekko Agent CLI and MCP","description":"Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor.","url":"https://nekkoagent.com/docs/cli","inLanguage":"en","isPartOf":{"@id":"https://nekkoagent.com/#website"},"publisher":{"@id":"https://nekkolabs.com/#organization"},"about":{"@id":"https://nekkoagent.com/#app"}}</script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="docs-home" href="/docs">Docs</a>
+      <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Site">
+        <a href="https://github.com/nekko-labs/nekko-agent" rel="noopener">GitHub</a>
+        <a class="download" href="/#download">Download</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli" aria-current="page">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <main id="content">
+        <article class="prose" id="top">
+          <p class="kicker">Using Nekko Agent</p>
+          <h1>Nekko Agent CLI and MCP</h1>
+          <p class="page-tools">
+            <a href="/docs/cli.md">View as Markdown</a>
+            <a href="/llms.txt">llms.txt</a>
+          </p>
+<p>The CLI makes the Nekko Agent host a subagent for Devin, Claude Code, Codex,
+Cursor, and other harnesses. It uses the same host engine as the desktop and
+web editions.</p>
+<h2 id="install-and-target"><a class="anchor" href="#install-and-target" aria-hidden="true" tabindex="-1">#</a>Install and target</h2>
+<p>Published package:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm install --global nekko-agent   # publishing with the next release
+npx nekko-agent status</code></pre></div>
+<p>From a checkout:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm install
+npm run build --workspace=apps/cli
+node apps/cli/dist/index.js status</code></pre></div>
+<p>Use <code>nekko-agent</code> after a global install or linking the built package, or invoke
+the bundled binary from <code>apps/cli/dist/index.js</code>. Without <code>--url</code>, the CLI runs
+an in-process host
+against <code>~/.nekko</code> (override with <code>NEKKO_DATA_DIR</code>). To drive a web edition,
+use:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">nekko-agent --url http://127.0.0.1:1440 --token &quot;$NEKKO_TOKEN&quot; status --json</code></pre></div>
+<p><code>--url</code> can also be supplied as <code>NEKKO_URL</code>; <code>--token</code> can be supplied as
+<code>NEKKO_TOKEN</code>.</p>
+<h2 id="safety-and-approval"><a class="anchor" href="#safety-and-approval" aria-hidden="true" tabindex="-1">#</a>Safety and approval</h2>
+<p>Chat defaults to <code>--approve guardrails</code> (or <code>NEKKO_APPROVE=guardrails</code>).
+Guardrails mode sets the session to <code>guardrails</code>: ordinary tools run, ask-rule
+approvals are refused and reported as structured <code>blocked</code> entries, and the
+turn continues. The result tells the harness to use <code>--approve yolo</code> when an
+override is intentional.</p>
+<p><code>--approve yolo</code> explicitly opts into the previous unattended behavior. Deny
+rules remain a hard floor in every mode. <code>--approve ask</code> prompts on the TTY;
+it is an error when stdin is not a TTY.</p>
+<p>These policies govern the agent tool loop, not every process the host can
+launch. In particular, <code>bash</code> is not confined by <code>workspace-jail</code>; use the
+host&#39;s deployment and workspace controls when granting an external harness
+access.</p>
+<h2 id="commands"><a class="anchor" href="#commands" aria-hidden="true" tabindex="-1">#</a>Commands</h2>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-text">status [--json]
+sessions [--json]
+chat &quot;&lt;prompt&gt;&quot; [--session ID] [--new] [--workspace ID] [--provider ID] [--model ID]
+  [--approve guardrails|yolo|ask] [--json|--stream ndjson] [--timeout SECONDS] [--quiet]
+workspace list|add PATH|remove ID|index ID|search ID QUERY [--json]
+prompts [--json]
+tasks list|add|run ID|delete ID [--json]
+skills [--json]
+skills install ID [--target nekko-agent|claude|codex] [--json]
+tools [--json]
+models [PROVIDER_ID] [--json]
+train start NAME GOAL [--provider ID] [--model ID] [--workspace ID] [--json]
+train status|hint ID TEXT|stop ID [--json]
+watch [--session ID] [--json]
+mcp</code></pre></div>
+<p>Prompts may be positional, piped through stdin (<code>nekko-agent chat -</code>), or loaded
+from a file (<code>nekko-agent chat --file prompt.md</code>). <code>--quiet</code> suppresses human
+progress on stderr.</p>
+<h2 id="machine-output"><a class="anchor" href="#machine-output" aria-hidden="true" tabindex="-1">#</a>Machine output</h2>
+<p><code>--json</code> emits exactly one JSON object on stdout. Chat objects have this shape:</p>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-json">{
+  &quot;sessionId&quot;: &quot;…&quot;,
+  &quot;provider&quot;: &quot;…&quot;,
+  &quot;model&quot;: &quot;…&quot;,
+  &quot;text&quot;: &quot;…&quot;,
+  &quot;toolCalls&quot;: [{ &quot;name&quot;: &quot;read_file&quot;, &quot;input&quot;: { &quot;path&quot;: &quot;README.md&quot; } }],
+  &quot;blocked&quot;: [{ &quot;ruleLabels&quot;: [&quot;…&quot;], &quot;command&quot;: &quot;…&quot;, &quot;severity&quot;: &quot;high&quot;, &quot;reason&quot;: &quot;…&quot; }],
+  &quot;durationMs&quot;: 1234,
+  &quot;usage&quot;: { &quot;inputTokens&quot;: 100, &quot;outputTokens&quot;: 40 }
+}</code></pre></div>
+<p><code>--stream ndjson</code> emits one typed event per line:</p>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-json">{&quot;type&quot;:&quot;text&quot;,&quot;delta&quot;:&quot;Hello&quot;}
+{&quot;type&quot;:&quot;tool_call&quot;,&quot;call&quot;:{&quot;name&quot;:&quot;read_file&quot;,&quot;input&quot;:{&quot;path&quot;:&quot;README.md&quot;}}}
+{&quot;type&quot;:&quot;tool_result&quot;,&quot;toolCallId&quot;:&quot;…&quot;,&quot;ok&quot;:true,&quot;output&quot;:&quot;…&quot;}
+{&quot;type&quot;:&quot;blocked&quot;,&quot;ruleLabels&quot;:[&quot;ask&quot;],&quot;command&quot;:&quot;…&quot;,&quot;severity&quot;:&quot;high&quot;,&quot;reason&quot;:&quot;…&quot;}
+{&quot;type&quot;:&quot;done&quot;}</code></pre></div>
+<p>Progress and diagnostics go to stderr. Other commands accept <code>--json</code>;
+<code>watch --json</code> emits the same typed event objects as NDJSON and exits cleanly
+when it receives Ctrl-C. Watch events are <code>text</code>, <code>tool_call</code>, <code>tool_result</code>,
+<code>blocked</code>, <code>done</code>, and <code>error</code>; reasoning and usage-only events are omitted.</p>
+<h2 id="exit-codes"><a class="anchor" href="#exit-codes" aria-hidden="true" tabindex="-1">#</a>Exit codes</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th align="right">Code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="right">0</td>
+<td>Success</td>
+</tr>
+<tr>
+<td align="right">2</td>
+<td>Usage or invalid flags</td>
+</tr>
+<tr>
+<td align="right">3</td>
+<td>Nothing configured (provider/model missing)</td>
+</tr>
+<tr>
+<td align="right">4</td>
+<td>Guardrail-blocked tool call</td>
+</tr>
+<tr>
+<td align="right">5</td>
+<td>Provider/model failure</td>
+</tr>
+<tr>
+<td align="right">6</td>
+<td>Chat timeout</td>
+</tr>
+<tr>
+<td align="right">7</td>
+<td>Cannot reach or unauthorized against <code>--url</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="mcp"><a class="anchor" href="#mcp" aria-hidden="true" tabindex="-1">#</a>MCP</h2>
+<p>Start the JSON-RPC stdio server:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">node apps/cli/dist/index.js mcp</code></pre></div>
+<p>Claude Code:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">claude mcp add nekko-agent -- node /abs/path/nekko-agent/apps/cli/dist/index.js mcp</code></pre></div>
+<p>Codex:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">codex mcp add nekko-agent -- node /abs/path/nekko-agent/apps/cli/dist/index.js mcp</code></pre></div>
+<p>Cursor and generic <code>mcpServers</code> configuration:</p>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;nekko-agent&quot;: {
+      &quot;command&quot;: &quot;node&quot;,
+      &quot;args&quot;: [&quot;/abs/path/nekko-agent/apps/cli/dist/index.js&quot;, &quot;mcp&quot;]
+    }
+  }
+}</code></pre></div>
+<p><code>nekko-agent_chat</code> accepts the same <code>approve</code> policy as the CLI and defaults to
+<code>guardrails</code>. <code>nekko-agent_train_start</code> also accepts an explicit <code>approve</code> argument;
+unattended training that intentionally permits ask-rules must pass
+<code>&quot;approve&quot;: &quot;yolo&quot;</code>. The server negotiates MCP protocol versions, echoing a
+supported client version and otherwise selecting its newest supported version.
+<code>nekko-agent_task_create</code> exposes <code>title</code>, <code>prompt</code>, <code>kind</code>, <code>runAt</code>, <code>intervalMs</code>,
+<code>workspaceId</code>, <code>providerId</code>, <code>modelId</code>, <code>condition</code>, and <code>keepAlive</code> directly;
+<code>title</code>, <code>prompt</code>, and <code>kind</code> are required. A <code>nekko-agent_chat</code> result presents
+the assistant reply first, followed by a metadata block containing session,
+tool-call, blocked-entry, duration, and usage details.</p>
+<p>The MCP tool list mirrors the CLI coverage: <code>nekko-agent_chat</code>,
+<code>nekko-agent_list_sessions</code>, <code>nekko-agent_new_session</code>, <code>nekko-agent_get_session</code>,
+<code>nekko-agent_workspace_list</code>, <code>nekko-agent_workspace_add</code>, <code>nekko-agent_workspace_remove</code>,
+<code>nekko-agent_workspace_index</code>, <code>nekko-agent_workspace_search</code>,
+<code>nekko-agent_prompts_list</code>, <code>nekko-agent_tasks_list</code>, <code>nekko-agent_task_create</code>,
+<code>nekko-agent_task_run</code>, <code>nekko-agent_task_delete</code>, <code>nekko-agent_skills_list</code>,
+<code>nekko-agent_skill_install</code>, <code>nekko-agent_tools_list</code>, <code>nekko-agent_models_list</code>,
+<code>nekko-agent_train_start</code>, <code>nekko-agent_train_status</code>, <code>nekko-agent_train_hint</code>,
+<code>nekko-agent_train_stop</code>, and <code>nekko-agent_status</code>.</p>
+<h2 id="recipes"><a class="anchor" href="#recipes" aria-hidden="true" tabindex="-1">#</a>Recipes</h2>
+<h3 id="drive-a-repeated-workflow"><a class="anchor" href="#drive-a-repeated-workflow" aria-hidden="true" tabindex="-1">#</a>Drive a repeated workflow</h3>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">nekko-agent tasks add --title &quot;daily review&quot; --kind recurring \
+  --interval-ms 86400000 --prompt &quot;Review the current workspace diff and summarize risks&quot; \
+  --workspace &quot;$WORKSPACE_ID&quot; --provider &quot;$PROVIDER&quot; --model &quot;$MODEL&quot; --json
+nekko-agent tasks list --json
+nekko-agent tasks run TASK_ID --json</code></pre></div>
+<h3 id="fan-out-several-sessions"><a class="anchor" href="#fan-out-several-sessions" aria-hidden="true" tabindex="-1">#</a>Fan out several sessions</h3>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">nekko-agent chat &quot;Review security&quot; --new --workspace &quot;$W&quot; --json &gt; security.json &amp;
+nekko-agent chat &quot;Review tests&quot; --new --workspace &quot;$W&quot; --json &gt; tests.json &amp;
+nekko-agent chat &quot;Review API design&quot; --new --workspace &quot;$W&quot; --json &gt; api.json &amp;
+wait</code></pre></div>
+<h3 id="hand-off-training-and-poll-it"><a class="anchor" href="#hand-off-training-and-poll-it" aria-hidden="true" tabindex="-1">#</a>Hand off training and poll it</h3>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">nekko-agent train start &quot;ranking-v1&quot; &quot;Improve ranking accuracy&quot; \
+  --workspace &quot;$W&quot; --provider &quot;$PROVIDER&quot; --model &quot;$MODEL&quot; --json
+nekko-agent train status --json
+nekko-agent train hint RUN_ID &quot;Try a larger validation split&quot; --json
+nekko-agent train stop RUN_ID --json</code></pre></div>
+
+          <footer class="page-foot">
+            <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/docs/CLI.md" rel="noopener">Edit this page on GitHub</a>
+            <div class="pager"><a class="prev" href="/docs/remote"><span>Previous</span>Phone remote control</a><a class="next" href="/docs/local-ci-runner"><span>Next</span>Local CI runner</a></div>
+          </footer>
+        </article>
+      </main>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Nekko Agent CLI and MCP</a></li><li class="d2"><a href="#install-and-target">Install and target</a></li><li class="d2"><a href="#safety-and-approval">Safety and approval</a></li><li class="d2"><a href="#commands">Commands</a></li><li class="d2"><a href="#machine-output">Machine output</a></li><li class="d2"><a href="#exit-codes">Exit codes</a></li><li class="d2"><a href="#mcp">MCP</a></li><li class="d2"><a href="#recipes">Recipes</a></li><li class="d3"><a href="#drive-a-repeated-workflow">Drive a repeated workflow</a></li><li class="d3"><a href="#fan-out-several-sessions">Fan out several sessions</a></li><li class="d3"><a href="#hand-off-training-and-poll-it">Hand off training and poll it</a></li></ul></nav></aside>
+    </div>
+    <dialog class="search-dialog" aria-label="Search the docs">
+      <form method="dialog" class="search-box">
+        <input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="esc" aria-label="Close search">Esc</button>
+      </form>
+      <ul class="results" role="listbox" aria-label="Results"></ul>
+    </dialog>
+    <script src="/docs.js?v=docs-1" defer></script>
+  </body>
+</html>

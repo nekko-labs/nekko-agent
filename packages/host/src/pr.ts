@@ -60,14 +60,39 @@ function apiHeaders(): Record<string, string> {
   const token = githubToken();
   return {
     Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
+    'X-GitHub-Api-Version': '2026-03-10',
     'User-Agent': 'nekko-agent',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
 
+/** Native stack requests reuse gh authentication or the connected GitHub token. */
+export async function githubStackRequest(path: string, pullRequests?: number[]): Promise<any> {
+  const method = pullRequests ? 'POST' : 'GET';
+  if (!ghMissing) {
+    const args = ['api', path, '--method', method, '-H', 'X-GitHub-Api-Version: 2026-03-10'];
+    for (const number of pullRequests ?? []) args.push('-F', `pull_requests[]=${number}`);
+    const result = pullRequests ? await run('gh', args, 30_000) : await runGhRead(args, 15_000);
+    if (result.missing) ghMissing = true;
+    else if (result.ok) return JSON.parse(result.stdout);
+    // A failed mutation may already have succeeded remotely; never blindly repeat it.
+    else if (pullRequests || !githubToken()) throw new Error((result.stderr || 'GitHub request failed. Sign in to gh or connect GitHub.').trim().slice(0, 300));
+  }
+  const res = await fetch(`https://api.github.com/${path}`, {
+    method, headers: { ...apiHeaders(), 'X-GitHub-Api-Version': '2026-03-10', 'Content-Type': 'application/json' },
+    ...(pullRequests ? { body: JSON.stringify({ pull_requests: pullRequests }) } : {}),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`GitHub request failed (${res.status}). Check repository access and GitHub stack availability.`);
+  return res.json();
+}
+
+function stackInfo(value: any): PrInfo['stack'] {
+  return Number.isInteger(value?.number) && Number.isInteger(value?.size) ? { number: value.number, size: value.size } : undefined;
+}
+
 /** Roll up gh's statusCheckRollup array into a single status. */
-function rollupChecks(rollup: unknown): PrChecks {
+export function rollupChecks(rollup: unknown): PrChecks {
   if (!Array.isArray(rollup) || rollup.length === 0) return 'none';
   let pending = false;
   for (const c of rollup as Array<Record<string, string>>) {
@@ -82,7 +107,7 @@ function rollupChecks(rollup: unknown): PrChecks {
   return pending ? 'pending' : 'passing';
 }
 
-function ghState(state: string, mergedAt?: string | null): PrState {
+export function ghState(state: string, mergedAt?: string | null): PrState {
   const s = (state || '').toUpperCase();
   if (s === 'MERGED' || mergedAt) return 'merged';
   if (s === 'CLOSED') return 'closed';
@@ -91,6 +116,79 @@ function ghState(state: string, mergedAt?: string | null): PrState {
 
 const GH_FIELDS =
   'number,title,state,url,isDraft,createdAt,closedAt,mergedAt,additions,deletions,changedFiles,headRefName,baseRefName,reviewDecision,statusCheckRollup,updatedAt';
+
+/**
+ * A PR as `gh pr view --json` describes it. `lifecycle` adds `createdAt` and
+ * `closedAt`, which the by-URL read reports and the branch read does not.
+ * Pure, so the engine daemon's port (crates/nekko-workspace pr.rs) is held to it.
+ */
+export function prInfoFromGh(url: string, parsed: { owner: string; repo: string; number: number }, j: Record<string, unknown>, lifecycle: boolean): PrInfo {
+  const { owner, repo, number } = parsed;
+  return {
+    url,
+    owner,
+    repo,
+    number,
+    title: String(j.title ?? (lifecycle ? `${owner}/${repo}#${number}` : `#${number}`)),
+    state: ghState(String(j.state ?? 'OPEN'), j.mergedAt as string | null),
+    isDraft: !!j.isDraft,
+    additions: Number(j.additions ?? 0),
+    deletions: Number(j.deletions ?? 0),
+    changedFiles: Number(j.changedFiles ?? 0),
+    headRefName: (j.headRefName as string) || undefined,
+    baseRefName: (j.baseRefName as string) || undefined,
+    reviewDecision: (j.reviewDecision as string) || null,
+    checks: rollupChecks(j.statusCheckRollup),
+    ...(lifecycle ? { createdAt: (j.createdAt as string) || null, closedAt: (j.closedAt as string) || null } : {}),
+    mergedAt: (j.mergedAt as string) || null,
+    updatedAt: (j.updatedAt as string) || null,
+    source: 'gh',
+  };
+}
+
+/** The combined commit status as one rollup (the REST fallback's checks). */
+export function checksFromStatus(cj: { state?: string; total_count?: number }): PrChecks {
+  const st = (cj.state || '').toLowerCase();
+  return st === 'success' ? 'passing' : st === 'failure' || st === 'error' ? 'failing' : (cj.total_count ?? 0) > 0 ? 'pending' : 'none';
+}
+
+/** A PR as the REST API's pull endpoint describes it. */
+export function prInfoFromApi(url: string, parsed: { owner: string; repo: string; number: number }, j: Record<string, any>, checks: PrChecks): PrInfo {
+  const { owner, repo, number } = parsed;
+  return {
+    url,
+    owner,
+    repo,
+    number,
+    title: String(j.title ?? `${owner}/${repo}#${number}`),
+    state: j.merged ? 'merged' : j.state === 'open' ? 'open' : 'closed',
+    isDraft: !!j.draft,
+    additions: Number(j.additions ?? 0),
+    deletions: Number(j.deletions ?? 0),
+    changedFiles: Number(j.changed_files ?? 0),
+    headRefName: j.head?.ref || undefined,
+    baseRefName: j.base?.ref || undefined,
+    reviewDecision: null,
+    checks,
+    createdAt: j.created_at || null,
+    closedAt: j.closed_at || null,
+    mergedAt: j.merged_at || null,
+    updatedAt: j.updated_at || null,
+    source: 'api',
+  };
+}
+
+/** One file of the REST API's PR files listing, as the diff pane shows it. */
+export function diffFileFromApi(f: Record<string, any>): PrDiffFile {
+  return {
+    path: String(f.filename),
+    oldPath: f.previous_filename || undefined,
+    status: f.status === 'added' ? 'added' : f.status === 'removed' ? 'removed' : f.status === 'renamed' ? 'renamed' : 'modified',
+    additions: Number(f.additions ?? 0),
+    deletions: Number(f.deletions ?? 0),
+    patch: typeof f.patch === 'string' ? f.patch : '',
+  };
+}
 
 /** Fetch one PR's live state via gh, falling back to the REST API. */
 export async function fetchPrInfo(url: string): Promise<PrInfo | null> {
@@ -107,28 +205,9 @@ export async function fetchPrInfo(url: string): Promise<PrInfo | null> {
       ghMissing = true;
     } else if (res.ok) {
       try {
-        const j = JSON.parse(res.stdout) as Record<string, unknown>;
-        return {
-          url,
-          owner,
-          repo,
-          number,
-          title: String(j.title ?? `${slug}#${number}`),
-          state: ghState(String(j.state ?? 'OPEN'), j.mergedAt as string | null),
-          isDraft: !!j.isDraft,
-          additions: Number(j.additions ?? 0),
-          deletions: Number(j.deletions ?? 0),
-          changedFiles: Number(j.changedFiles ?? 0),
-          headRefName: (j.headRefName as string) || undefined,
-          baseRefName: (j.baseRefName as string) || undefined,
-          reviewDecision: (j.reviewDecision as string) || null,
-          checks: rollupChecks(j.statusCheckRollup),
-          createdAt: (j.createdAt as string) || null,
-          closedAt: (j.closedAt as string) || null,
-          mergedAt: (j.mergedAt as string) || null,
-          updatedAt: (j.updatedAt as string) || null,
-          source: 'gh',
-        };
+        const native = await githubStackRequest(`repos/${slug}/pulls/${number}`).catch(() => null);
+        return { ...prInfoFromGh(url, { owner, repo, number }, JSON.parse(res.stdout) as Record<string, unknown>, true), stack: stackInfo(native?.stack) };
+
       } catch {
         /* fall through to API */
       }
@@ -149,34 +228,11 @@ async function fetchPrInfoApi(owner: string, repo: string, number: number, url: 
     if (sha) {
       try {
         const cs = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/${sha}/status`, { headers: apiHeaders() });
-        if (cs.ok) {
-          const cj = (await cs.json()) as { state?: string; total_count?: number };
-          const st = (cj.state || '').toLowerCase();
-          checks = st === 'success' ? 'passing' : st === 'failure' || st === 'error' ? 'failing' : (cj.total_count ?? 0) > 0 ? 'pending' : 'none';
-        }
+        if (cs.ok) checks = checksFromStatus((await cs.json()) as { state?: string; total_count?: number });
       } catch { /* checks are best-effort */ }
     }
-    return {
-      url,
-      owner,
-      repo,
-      number,
-      title: String(j.title ?? `${owner}/${repo}#${number}`),
-      state: j.merged ? 'merged' : j.state === 'open' ? 'open' : 'closed',
-      isDraft: !!j.draft,
-      additions: Number(j.additions ?? 0),
-      deletions: Number(j.deletions ?? 0),
-      changedFiles: Number(j.changed_files ?? 0),
-      headRefName: j.head?.ref || undefined,
-      baseRefName: j.base?.ref || undefined,
-      reviewDecision: null,
-      checks,
-      createdAt: j.created_at || null,
-      closedAt: j.closed_at || null,
-      mergedAt: j.merged_at || null,
-      updatedAt: j.updated_at || null,
-      source: 'api',
-    };
+    return { ...prInfoFromApi(url, { owner, repo, number }, j, checks), stack: stackInfo(j.stack) };
+
   } catch {
     return null;
   }
@@ -187,6 +243,11 @@ const cache = new PrReadCache<PrInfo | null>(60_000);
 
 async function cachedInfo(url: string, force = false): Promise<PrInfo | null> {
   return cache.get(url, () => fetchPrInfo(url), force);
+}
+
+/** A successful stack mutation must replace any card's older cached membership. */
+export function refreshPrInfo(url: string): Promise<PrInfo | null> {
+  return cachedInfo(url, true);
 }
 
 // A branch's PR changes rarely (opened once, merged once) and asking costs a gh
@@ -222,27 +283,7 @@ export async function branchPr(cwd: string, branch: string): Promise<PrInfo | nu
         const j = JSON.parse(res.stdout) as Record<string, unknown>;
         const url = String(j.url ?? '');
         const parsed = parsePrUrl(url);
-        if (parsed) {
-          info = {
-            url,
-            owner: parsed.owner,
-            repo: parsed.repo,
-            number: parsed.number,
-            title: String(j.title ?? `#${parsed.number}`),
-            state: ghState(String(j.state ?? 'OPEN'), j.mergedAt as string | null),
-            isDraft: !!j.isDraft,
-            additions: Number(j.additions ?? 0),
-            deletions: Number(j.deletions ?? 0),
-            changedFiles: Number(j.changedFiles ?? 0),
-            headRefName: (j.headRefName as string) || undefined,
-            baseRefName: (j.baseRefName as string) || undefined,
-            reviewDecision: (j.reviewDecision as string) || null,
-            checks: rollupChecks(j.statusCheckRollup),
-            mergedAt: (j.mergedAt as string) || null,
-            updatedAt: (j.updatedAt as string) || null,
-            source: 'gh',
-          };
-        }
+        if (parsed) info = prInfoFromGh(url, parsed, j, false);
       } catch {
         /* unparseable output: treat as no PR */
       }
@@ -255,19 +296,19 @@ export async function branchPr(cwd: string, branch: string): Promise<PrInfo | nu
 }
 
 /** Live PR state for every PR URL referenced in a session's transcript. */
-export async function listSessionPrs(sessionId: string): Promise<PrInfo[]> {
+export async function listSessionPrs(sessionId: string, force = false): Promise<PrInfo[]> {
   const session = getSession(sessionId);
   if (!session) return [];
   const urls = collectSessionPrUrls(session.messages);
   if (urls.length === 0) return [];
-  const infos = await Promise.all(urls.map((u) => cachedInfo(u)));
+  const infos = await Promise.all(urls.map((u) => cachedInfo(u, force)));
   return infos.filter((i): i is PrInfo => !!i);
 }
 
 // --- Diff ---
 
 /** Split a unified diff into per-file entries (for the gh path). */
-function parseUnifiedDiff(text: string): PrDiffFile[] {
+export function parseUnifiedDiff(text: string): PrDiffFile[] {
   const files: PrDiffFile[] = [];
   const blocks = text.split(/^diff --git .*$/m).slice(1);
   const headers = [...text.matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)];
@@ -318,14 +359,7 @@ export async function getPrDiff(url: string): Promise<PrDiff> {
     const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${number}/files?per_page=100`, { headers: apiHeaders() });
     if (!res.ok) return { url, files: [] };
     const arr = (await res.json()) as Array<Record<string, any>>;
-    const files: PrDiffFile[] = arr.slice(0, MAX_DIFF_FILES).map((f) => ({
-      path: String(f.filename),
-      oldPath: f.previous_filename || undefined,
-      status: f.status === 'added' ? 'added' : f.status === 'removed' ? 'removed' : f.status === 'renamed' ? 'renamed' : 'modified',
-      additions: Number(f.additions ?? 0),
-      deletions: Number(f.deletions ?? 0),
-      patch: typeof f.patch === 'string' ? f.patch : '',
-    }));
+    const files: PrDiffFile[] = arr.slice(0, MAX_DIFF_FILES).map(diffFileFromApi);
     return { url, files, truncated: arr.length > MAX_DIFF_FILES };
   } catch {
     return { url, files: [] };
@@ -360,6 +394,15 @@ export async function prAction(url: string, action: PrAction): Promise<PrActionR
   if (!parsed) return { ok: false, message: 'Not a valid PR URL.' };
   const { owner, repo, number } = parsed;
   const slug = `${owner}/${repo}`;
+
+  if (action === 'merge') {
+    try {
+      const native = await githubStackRequest(`repos/${slug}/pulls/${number}`);
+      if (native?.stack) return { ok: false, message: 'Merge this stack on GitHub to review all included layers. Open the PR on GitHub.' };
+    } catch {
+      return { ok: false, message: 'Could not verify stack membership. Refresh GitHub access before merging.' };
+    }
+  }
 
   let result: { ok: boolean; message: string };
   if (!ghMissing) {

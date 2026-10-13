@@ -3,11 +3,12 @@ import { execFile } from 'child_process';
 import { createHash } from 'crypto';
 import { createReadStream } from 'fs';
 import { chmod, mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises';
-import { join, relative, isAbsolute } from 'path';
+import { dirname, join, relative, isAbsolute } from 'path';
 import type { EngineBuild, EngineInstall, EnginePlatform, GpuStats } from '@nekko-agent/shared';
-import { buildsFor, hasBinaries, matchAsset, matchCompanion, recommendedBuild } from './builds.js';
+import { buildsFor, CUDA_FASTER, CUDA_QUERY, cudaSupportFrom, cudaUpgrade, hasBinaries, matchAsset, matchCompanion, recommendedBuild, type CudaSupport } from './builds.js';
 import { diffusionBuilds, matchDiffusionAsset, matchDiffusionCompanion } from './diffusion.js';
 import { RUNTIME_RELEASES } from './runtime-releases.js';
+import { ensureVcRuntime } from './vc-runtime.js';
 import type { EngineInstallPreview } from '@nekko-agent/shared';
 import type { Downloads } from './download.js';
 
@@ -56,6 +57,13 @@ export interface EngineInstallerDeps {
   run?: (cmd: string, args: string[], timeoutMs?: number) => Promise<string | null>;
   /** A path the user chose by hand, checked before anything is downloaded. */
   externalPath?: () => string | undefined;
+  /**
+   * Called once a new build has downloaded, just before the old one's files are
+   * replaced. Windows will not delete a running `llama-server.exe` or the DLLs
+   * it has loaded, so the host stops its server here, and not earlier: the old
+   * engine keeps serving for the whole download.
+   */
+  beforeReplace?: () => Promise<void>;
 }
 
 export function createEngineInstaller(deps: EngineInstallerDeps) {
@@ -70,8 +78,22 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
   const releasePin = RUNTIME_RELEASES[runtime];
   const runtimeName = runtime === 'diffusion' ? 'stable-diffusion.cpp' : 'llama.cpp';
   const serverNames = runtime === 'diffusion' ? ['sd-server', 'sd-server.exe'] : SERVER_NAMES;
-  const candidates = (gpu: GpuStats | null, adapters: GpuAdapter[]) =>
-    runtime === 'diffusion' ? diffusionBuilds(platform, arch, gpu) : buildsFor(platform, arch, gpu, adapters);
+  const candidates = (gpu: GpuStats | null, adapters: GpuAdapter[], cuda?: CudaSupport) =>
+    runtime === 'diffusion' ? diffusionBuilds(platform, arch, gpu) : buildsFor(platform, arch, gpu, adapters, cuda);
+
+  // Whether the NVIDIA cards can run the CUDA build (compute capability and
+  // driver). Asked once: the card and driver do not change under a running app,
+  // and `detect` runs on every status poll. A failed query is not cached.
+  let cudaReading: Promise<CudaSupport | undefined> | undefined;
+  const cudaSupport = (gpu: GpuStats | null): Promise<CudaSupport | undefined> => {
+    if (runtime !== 'llama' || gpu?.source !== 'nvidia-smi') return Promise.resolve(undefined);
+    cudaReading ??= run('nvidia-smi', CUDA_QUERY, 5000).then((out) => {
+      const reading = cudaSupportFrom(out);
+      if (!reading) cudaReading = undefined;
+      return reading;
+    });
+    return cudaReading;
+  };
   const selectAsset = runtime === 'diffusion' ? matchDiffusionAsset : matchAsset;
   const selectCompanion = runtime === 'diffusion' ? matchDiffusionCompanion : matchCompanion;
 
@@ -79,7 +101,8 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
   async function detect(): Promise<EngineInstall> {
     const gpu = await deps.getGpuStats().catch(() => null);
     const adapters = (await deps.getGpuAdapters?.().catch(() => [])) ?? [];
-    const available = candidates(gpu, adapters);
+    const cuda = await cudaSupport(gpu);
+    const available = candidates(gpu, adapters, cuda);
     const recommended = available[0];
 
     const external = deps.externalPath?.();
@@ -95,12 +118,23 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
 
     const record = await readRecord();
     if (record && (await isExecutable(record.binPath))) {
+      const problem = await missingGpuRuntime(record);
+      const upgrade = runtime === 'llama' && !problem ? cudaUpgrade(platform, arch, gpu, record.backend, cuda) : undefined;
       return {
         binPath: record.binPath,
         source: 'managed',
         backend: record.backend,
         version: record.version,
         installedAt: record.installedAt,
+        ...(problem ? { problem } : {}),
+        ...(upgrade
+          ? {
+              upgrade: {
+                buildId: upgrade.id,
+                message: `Your NVIDIA graphics card can run the CUDA engine, which is ${CUDA_FASTER.toLowerCase()} than Vulkan. It is a download of several hundred MB.`,
+              },
+            }
+          : {}),
         available,
         recommended,
       };
@@ -134,8 +168,8 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
     const gpu = await deps.getGpuStats().catch(() => null);
     const adapters = (await deps.getGpuAdapters?.().catch(() => [])) ?? [];
     const build = buildId
-      ? candidates(gpu, adapters).find((b) => b.id === buildId)
-      : candidates(gpu, adapters)[0];
+      ? candidates(gpu, adapters, await cudaSupport(gpu)).find((b) => b.id === buildId)
+      : candidates(gpu, adapters, await cudaSupport(gpu))[0];
     if (!build) return { ok: false, message: 'No engine build matches this machine.' };
 
     const release = await fetchRelease();
@@ -174,6 +208,14 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
         // file consumed before the transfer has renamed it fails the rename.
         try {
           signal.throwIfAborted();
+          // A reinstall unpacks into a clean folder, cleared only now that the
+          // new archive is safely here, so a failed download still leaves the
+          // old engine usable. Unpacking over the old files kept whatever the
+          // last install left, such as the Linux runtime a broken CUDA install
+          // got by mistake. A file Windows still has locked is left to be
+          // overwritten rather than failing the install.
+          await deps.beforeReplace?.();
+          await clearExcept(dir, path);
           await extract(path, dir, run);
           if (companion) {
             // CUDA's runtime libraries ship separately and the server will not
@@ -187,6 +229,9 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
           const bin = await findServerBinary(dir, 0, serverNames);
           if (!bin) return `The archive did not contain ${serverNames[0]}.`;
           if (platform !== 'win32') await chmod(bin, 0o755).catch(() => {});
+          // The Windows builds import the Visual C++ runtime; a PC without it
+          // gets the app's own copy beside the binary (vc-runtime.ts).
+          await ensureVcRuntime(dirname(bin), { platform }).catch(() => []);
           signal.throwIfAborted();
           await writeRecord({
             binPath: bin,
@@ -215,6 +260,27 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
     await rm(join(deps.engineDir(), record.buildId), { recursive: true, force: true });
     await rm(join(deps.engineDir(), RECORD_FILE), { force: true });
     return { ok: true, message: 'Removed the engine.' };
+  }
+
+  /**
+   * A managed Windows CUDA build without the CUDA runtime beside it.
+   *
+   * `ggml-cuda.dll` needs `cublas64_NN.dll`, and without it llama.cpp quietly
+   * drops the CUDA backend: the server starts, `/health` is fine, and every
+   * model runs on the CPU at a small fraction of the speed. Older installs got
+   * the Linux runtime instead of the Windows one, so this is checked on the
+   * files rather than trusted from the record. A file check, not a process
+   * launch, because `detect` runs on every status poll.
+   */
+  async function missingGpuRuntime(record: EngineRecord): Promise<EngineInstall['problem']> {
+    if (runtime !== 'llama' || platform !== 'win32' || record.backend !== 'cuda') return undefined;
+    const names = await readdir(dirname(record.binPath)).catch(() => null);
+    if (!names || names.some((n) => /^cublas64_\d+\.dll$/i.test(n))) return undefined;
+    return {
+      message:
+        'The NVIDIA engine is missing its GPU libraries, so models are running on the processor and replies will be very slow or never arrive. Repair it to use your graphics card.',
+      repairBuildId: record.buildId,
+    };
   }
 
   async function readRecord(): Promise<EngineRecord | null> {
@@ -248,7 +314,7 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
 
   async function preview(buildId?: string): Promise<EngineInstallPreview | null> {
     const gpu = await deps.getGpuStats().catch(() => null);
-    const available = candidates(gpu, (await deps.getGpuAdapters?.().catch(() => [])) ?? []);
+    const available = candidates(gpu, (await deps.getGpuAdapters?.().catch(() => [])) ?? [], await cudaSupport(gpu));
     const build = buildId ? available.find(b => b.id === buildId) : available[0];
     const release = await fetchRelease();
     if (!build || !release) return null;
@@ -294,6 +360,21 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
 }
 
 export type EngineInstaller = ReturnType<typeof createEngineInstaller>;
+
+/**
+ * One runtime's installer as a host under the engine daemon sees it: the
+ * daemon installs and removes runtimes and writes `<data>/engine`
+ * (`NEKKOD_OWNS` `runtimes`), so every call is the daemon's.
+ */
+export function daemonInstaller(call: <T>(channel: string, ...args: unknown[]) => Promise<T>, runtime: 'llama' | 'diffusion'): EngineInstaller {
+  return {
+    detect: () => call('engine:detect', runtime),
+    install: (buildId?: string) => call('engine:install', buildId ?? null, runtime),
+    uninstall: () => call('engine:uninstall', runtime),
+    preview: (buildId?: string) => call('engine:installPreview', runtime, buildId ?? null),
+    installedBin: async () => (await call<string | null>('engine:installedBin')) ?? undefined,
+  };
+}
 
 async function isExecutable(path: string): Promise<boolean> {
   try {
@@ -358,6 +439,17 @@ async function extract(
     }
   }
   throw new Error('no archive tool available (tried tar, unzip, PowerShell)');
+}
+
+/** Empty a build folder of everything but the archive about to be unpacked into it. */
+async function clearExcept(dir: string, keep: string): Promise<void> {
+  const entries = await readdir(dir).catch(() => [] as string[]);
+  await Promise.all(
+    entries
+      .map((name) => join(dir, name))
+      .filter((path) => path !== keep)
+      .map((path) => rm(path, { recursive: true, force: true }).catch(() => {})),
+  );
 }
 
 /** A plain fetch-to-file, for the companion archive that has no job of its own. */

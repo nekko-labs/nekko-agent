@@ -70,6 +70,19 @@ export interface EngineInstall {
   installedAt?: number;
   /** Why no engine is usable, when `binPath` is absent. */
   reason?: string;
+  /**
+   * The engine is installed and starts, but not the way it should: a managed
+   * GPU build missing the libraries its backend needs, so every model runs on
+   * the CPU without any error. `repairBuildId` reinstalls that build cleanly.
+   */
+  problem?: { message: string; repairBuildId: string };
+  /**
+   * A faster build this machine can run than the managed one installed: CUDA
+   * on an NVIDIA GPU that is running the Vulkan build. Vulkan is the default
+   * there because it is a 30 MB download against CUDA's 550 MB; this is the
+   * opt-in step up, never taken without the user asking.
+   */
+  upgrade?: { buildId: string; message: string };
   /** Builds offered for this machine, best first. */
   available: EngineBuild[];
   /** The build we would install if asked, from the hardware probe. */

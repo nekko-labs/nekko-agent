@@ -31,8 +31,8 @@ describe('parseClaudeModel', () => {
 });
 
 describe('claudeContextWindow', () => {
-  it('gives every current model 1M and Haiku 200k', () => {
-    for (const id of ['claude-opus-5-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-fable-5-1']) {
+  it('gives every current model 1M and Haiku 4.5 200k', () => {
+    for (const id of ['claude-opus-5-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-fable-5-1', 'claude-haiku-5-5']) {
       expect(claudeContextWindow(id)).toBe(1_000_000);
     }
     expect(claudeContextWindow('claude-haiku-4-5-20251001')).toBe(200_000);
@@ -57,7 +57,9 @@ describe('effort capability', () => {
   it('offers the five Anthropic rungs only where the model takes an effort level', () => {
     expect(modelEffortLevels('claude-opus-5-5')).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     expect(modelEffortLevels('claude-fable-5-1')).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
-    // 4.6 and Haiku still sample, so they get the temperature scale.
+    expect(modelEffortLevels('claude-haiku-5-5')).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    expect(modelDefaultEffort('claude-haiku-5-5')).toBe('high');
+    // 4.6 and Haiku 4.5 still sample, so they get the temperature scale.
     expect(usesNativeEffort('claude-sonnet-4-6')).toBe(false);
     expect(modelEffortLevels('claude-haiku-4-5')).toEqual(['low', 'normal', 'high']);
     expect(modelEffortLevels('gpt-5')).toEqual(['low', 'medium', 'normal', 'high']);
@@ -88,6 +90,7 @@ describe('claudeMaxOutputTokens', () => {
     expect(claudeMaxOutputTokens('claude-3-5-sonnet')).toBe(32_000); // not the family-first id shape: unknown
     expect(claudeMaxOutputTokens('claude-sonnet-3-5')).toBe(8_192);
     expect(claudeMaxOutputTokens('claude-haiku-4-5-20251001')).toBe(64_000);
+    expect(claudeMaxOutputTokens('claude-haiku-5-5')).toBe(128_000);
     expect(claudeMaxOutputTokens('claude-fable-5-1')).toBe(64_000);
   });
   it('gives an unrecognised id a generous middle value', () => {

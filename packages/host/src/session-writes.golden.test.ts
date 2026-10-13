@@ -4,6 +4,7 @@ import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import { setDataDir } from './paths.js';
 import * as sessions from './sessions.js';
+import { applySandboxSetup } from './execution-router.js';
 
 /**
  * The files the TS session writes produce, which the engine daemon's port
@@ -24,6 +25,12 @@ function apply(id: string, [name, ...args]: Op): unknown {
     case 'truncate': return sessions.truncateSession(id, args[0] as string);
     case 'queue': return sessions.queuePrompt(id, args[0] as string);
     case 'dequeue': return sessions.dequeuePrompt(id, args[0] as number);
+    case 'autoTitle': return sessions.applyAutoTitle(id, args[0] as string);
+    case 'configureSandbox': {
+      const s = sessions.getSession(id)!;
+      applySandboxSetup(s, args[0] as string, args[1] as string, args[2] as number);
+      return sessions.saveSession(s);
+    }
     default: throw new Error(`unknown op ${name}`);
   }
 }

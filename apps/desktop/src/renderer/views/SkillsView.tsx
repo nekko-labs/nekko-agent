@@ -26,6 +26,7 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
 import { StarIcon, SendIcon } from '../icons.js';
+import { hasAppChrome } from '../chrome.js';
 
 /** Per-node-kind visual identity for the workflow canvas. */
 const KIND: Record<SkillNodeKind, { color: string; glyph: string; label: string }> = {
@@ -138,7 +139,7 @@ function LibraryTab() {
       {/* Skill list */}
       <aside className="flex w-72 flex-col border-r border-line">
         <div className="p-4">
-          <h1 className="text-lg font-semibold text-gradient">Skills</h1>
+          {!hasAppChrome && <h1 className="view-title text-gradient">Skills</h1>}
           <p className="mt-0.5 text-[12px] text-ink-faint">
             Ready-made agent workflows. Pick one to see how it runs, then use it in a chat.
           </p>
@@ -388,7 +389,7 @@ function MarketplaceTab() {
       {/* Shelves */}
       <aside className="flex w-80 flex-col border-r border-line">
         <div className="p-4">
-          <h1 className="text-lg font-semibold text-gradient">Marketplace</h1>
+          <h1 className="view-title text-gradient">Marketplace</h1>
           <p className="mt-0.5 text-[12px] text-ink-faint">
             Install skills into Nekko Agent, or export them to Claude Code / Codex.
           </p>

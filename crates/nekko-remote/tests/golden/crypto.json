@@ -1,0 +1,1359 @@
+{
+ "secret": "00112233445566778899aabbccddeeff",
+ "room": "a1b2c3d4e5f60718",
+ "key": "6f7e2fcd85f000ed6c1922588d70f6d907096c025145a7143427f05a4660bc5a",
+ "frames": [
+  {
+   "value": {
+    "type": "hello",
+    "deviceId": "phone-1",
+    "name": "Pixel",
+    "platform": "android",
+    "pair": "ABCD2345"
+   },
+   "text": "{\"type\":\"hello\",\"deviceId\":\"phone-1\",\"name\":\"Pixel\",\"platform\":\"android\",\"pair\":\"ABCD2345\"}",
+   "blob": "AwoRGB8mLTQ7QklQEIGNeJSJ6i8fCs0zH6vkEVIMguec2SN3SYwwKYsdXy14D1xDtiJ4j3/U0rkL3/1BRAp8sylhRehvBpQASUjcQA/M2raS5uFvv812G045gUCJj/aB/6xfq4DkFH4g5X6FfYm5/YxXvcW42PE=",
+   "opened": {
+    "type": "hello",
+    "deviceId": "phone-1",
+    "name": "Pixel",
+    "platform": "android",
+    "pair": "ABCD2345"
+   }
+  },
+  {
+   "value": {
+    "type": "req",
+    "id": 7,
+    "channel": "tasks:list",
+    "args": []
+   },
+   "text": "{\"type\":\"req\",\"id\":7,\"channel\":\"tasks:list\",\"args\":[]}",
+   "blob": "IikwNz5FTFNaYWhvvi4bbRuKsQUvvEtRaq7Fp4pWu/o/D4TRdB0gEwqSZw0rSuJtEtaCsWClp0EVGaJ4yjGw+ZiNWvzf3XY+WOTXCzq/BH4T4A==",
+   "opened": {
+    "type": "req",
+    "id": 7,
+    "channel": "tasks:list",
+    "args": []
+   }
+  },
+  {
+   "value": {
+    "type": "res",
+    "id": 7,
+    "result": null
+   },
+   "text": "{\"type\":\"res\",\"id\":7,\"result\":null}",
+   "blob": "QUhPVl1ka3J5gIeOXprGcqwtp0TX/hoZbBeY5sBonxHAr3T6/+tdEl32MICdsHvIq5ij7c12+UnsBgagajxm",
+   "opened": {
+    "type": "res",
+    "id": 7,
+    "result": null
+   }
+  },
+  {
+   "value": {
+    "type": "event",
+    "channel": "agent:event",
+    "payload": {
+     "type": "text",
+     "sessionId": "s1",
+     "delta": "héllo 🐱 \"quoted\"\n\tline "
+    }
+   },
+   "text": "{\"type\":\"event\",\"channel\":\"agent:event\",\"payload\":{\"type\":\"text\",\"sessionId\":\"s1\",\"delta\":\"héllo 🐱 \\\"quoted\\\"\\n\\tline \"}}",
+   "blob": "YGdudXyDipGYn6atADH8lPla7La0pzUZSM2+iWBA1ROfRJ/U2Oknvc8j5COgRDff7wZWo/bboyRXIBhyN2og7GKj+LgVeQj968PXV4JXEDuvNN8O+ok/xfjTRVnvWh6nC/5IJlOkbIulmsjOXqjHAwxeYEzSVzwL/dRjbfJNWGKzaI+oykkb6RPsN0RyCF19b7WFwUoFRoS5RP4=",
+   "opened": {
+    "type": "event",
+    "channel": "agent:event",
+    "payload": {
+     "type": "text",
+     "sessionId": "s1",
+     "delta": "héllo 🐱 \"quoted\"\n\tline "
+    }
+   }
+  },
+  {
+   "value": {
+    "n": [
+     0,
+     0,
+     0.1,
+     1e+21,
+     1e-7,
+     123456789012345680000,
+     -1.5,
+     9007199254740992
+    ]
+   },
+   "text": "{\"n\":[0,0,0.1,1e+21,1e-7,123456789012345680000,-1.5,9007199254740992]}",
+   "blob": "f4aNlJuiqbC3vsXMuJy1uZXcSf5p+5mbZsaOhIw+Hm6tALLkptwlGL3RyekbdDelP9Gn++tYQKwNihgHiJA0y+8DuUu/dZbZNXOr7+/tP9iisQYbgnOHxClqKpwGBMChL9Q=",
+   "opened": {
+    "n": [
+     0,
+     0,
+     0.1,
+     1e+21,
+     1e-7,
+     123456789012345680000,
+     -1.5,
+     9007199254740992
+    ]
+   }
+  },
+  {
+   "value": {
+    "nested": {
+     "a": [
+      true,
+      false,
+      null,
+      {
+       "b": ""
+      }
+     ]
+    },
+    "z": 1,
+    "a": 2
+   },
+   "text": "{\"nested\":{\"a\":[true,false,null,{\"b\":\"\"}]},\"z\":1,\"a\":2}",
+   "blob": "nqWss7rByM/W3eTrmOpIRsN4PLk2+vMkZ/Ow9Nt0o/4Gjsc8xBjUgBiZT/ugOXaovfNq3TpqR6guF6fstvQxw8f+KdQgU66peMT5wb/AadwGl1g=",
+   "opened": {
+    "nested": {
+     "a": [
+      true,
+      false,
+      null,
+      {
+       "b": ""
+      }
+     ]
+    },
+    "z": 1,
+    "a": 2
+   }
+  },
+  {
+   "value": "just a string",
+   "text": "\"just a string\"",
+   "blob": "vcTL0tng5+71/AMKS1U5m6QCNg+rJZIvAQj0oQygPrKQzBymMFnpMWCT6g==",
+   "opened": "just a string"
+  },
+  {
+   "value": 42,
+   "text": "42",
+   "blob": "3OPq8fj/Bg0UGyIpE2Np7RNJP93ZEUYSGnlDEKvY",
+   "opened": 42
+  },
+  {
+   "value": null,
+   "text": "null",
+   "blob": "+wIJEBceJSwzOkFI4G7P4q3nkxT99LxI8YDNd352SC0=",
+   "opened": null
+  },
+  {
+   "value": [],
+   "text": "[]",
+   "blob": "GiEoLzY9REtSWWBn1EyuE6C8LIN1jPBS2NWLkJUC",
+   "opened": []
+  }
+ ],
+ "other": {
+  "secret": "ffeeddccbbaa99887766554433221100",
+  "room": "room-2",
+  "blob": "AwoRGB8mLTQ7QklQ2VerxhAjYyMdrFkogYNw2xEambsS69CpatFHKw/jyKdq0Kucz3lOnxB2nkxu8gA="
+ },
+ "material": {
+  "pairingCode": "DMU3AHRY",
+  "pairingCode4": "DMU3",
+  "room": "41484f565d646b72",
+  "secret": "60676e757c838a91989fa6adb4bbc2c9"
+ },
+ "devices": [
+  {
+   "id": "dev-1",
+   "name": "iPhone",
+   "platform": "ios",
+   "createdAt": 1759999999000,
+   "lastSeenAt": 1759999999000
+  },
+  {
+   "id": "dev-2",
+   "name": "Old",
+   "platform": "android",
+   "createdAt": 1759999995000,
+   "lastSeenAt": 1759999995000,
+   "revoked": true
+  },
+  {
+   "name": "Reordered",
+   "id": "dev-3",
+   "lastSeenAt": 1,
+   "platform": "web",
+   "createdAt": 1,
+   "extra": {
+    "kept": true
+   }
+  }
+ ],
+ "verdicts": [
+  {
+   "hello": null,
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": null,
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": null,
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": "hello",
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": "hello",
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": "hello",
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": 42,
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": 42,
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": 42,
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {},
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {},
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {},
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hi",
+    "deviceId": "dev-1"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hi",
+    "deviceId": "dev-1"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hi",
+    "deviceId": "dev-1"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": ""
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": ""
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": ""
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "   "
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "   "
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "   "
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": 7
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": 7
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": 7
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "invalid"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-1"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "dev-1",
+     "name": "iPhone",
+     "platform": "ios",
+     "createdAt": 1759999999000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": false
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-1"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "dev-1",
+     "name": "iPhone",
+     "platform": "ios",
+     "createdAt": 1759999999000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": false
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-1"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "dev-1",
+     "name": "iPhone",
+     "platform": "ios",
+     "createdAt": 1759999999000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": false
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-1",
+    "pair": "WRONG"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "dev-1",
+     "name": "iPhone",
+     "platform": "ios",
+     "createdAt": 1759999999000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": false
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-1",
+    "pair": "WRONG"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "dev-1",
+     "name": "iPhone",
+     "platform": "ios",
+     "createdAt": 1759999999000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": false
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-1",
+    "pair": "WRONG"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "dev-1",
+     "name": "iPhone",
+     "platform": "ios",
+     "createdAt": 1759999999000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": false
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "revoked"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "revoked"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "revoked"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-3"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "name": "Reordered",
+     "id": "dev-3",
+     "lastSeenAt": 1760000000000,
+     "platform": "web",
+     "createdAt": 1,
+     "extra": {
+      "kept": true
+     }
+    },
+    "enrolled": false
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-3"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "name": "Reordered",
+     "id": "dev-3",
+     "lastSeenAt": 1760000000000,
+     "platform": "web",
+     "createdAt": 1,
+     "extra": {
+      "kept": true
+     }
+    },
+    "enrolled": false
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-3"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "name": "Reordered",
+     "id": "dev-3",
+     "lastSeenAt": 1760000000000,
+     "platform": "web",
+     "createdAt": 1,
+     "extra": {
+      "kept": true
+     }
+    },
+    "enrolled": false
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "unknown-device"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "unknown-device"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "unknown-device"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "WRONG"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "WRONG"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "WRONG"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "new",
+     "name": "Device",
+     "platform": "unknown",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": true
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "  My Phone  ",
+    "platform": "IOS"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "new",
+     "name": "My Phone",
+     "platform": "ios",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": true
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "  My Phone  ",
+    "platform": "IOS"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "  My Phone  ",
+    "platform": "IOS"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "   ",
+    "platform": "Android"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "new",
+     "name": "Android phone",
+     "platform": "android",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": true
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "   ",
+    "platform": "Android"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "   ",
+    "platform": "Android"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🐱",
+    "platform": "web"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "new",
+     "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "platform": "web",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": true
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🐱",
+    "platform": "web"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🐱",
+    "platform": "web"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱",
+    "platform": "windows"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "new",
+     "name": "🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱",
+     "platform": "unknown",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": true
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱",
+    "platform": "windows"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": "🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱",
+    "platform": "windows"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": 12,
+    "platform": 3
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "new",
+     "name": "Device",
+     "platform": "unknown",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": true
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": 12,
+    "platform": 3
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "name": 12,
+    "platform": 3
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": ""
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "unknown-device"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": ""
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "unknown-device"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": ""
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "unknown-device"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "platform": null
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "new",
+     "name": "Device",
+     "platform": "unknown",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": true
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "platform": null
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "new",
+    "pair": "ABCD2345",
+    "platform": null
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  }
+ ],
+ "platforms": [
+  {
+   "platform": null,
+   "normalized": "unknown",
+   "name": "Device"
+  },
+  {
+   "platform": "",
+   "normalized": "unknown",
+   "name": "Device"
+  },
+  {
+   "platform": "ios",
+   "normalized": "ios",
+   "name": "iPhone"
+  },
+  {
+   "platform": "IOS",
+   "normalized": "ios",
+   "name": "iPhone"
+  },
+  {
+   "platform": "Android",
+   "normalized": "android",
+   "name": "Android phone"
+  },
+  {
+   "platform": "web",
+   "normalized": "web",
+   "name": "Browser"
+  },
+  {
+   "platform": "WEB",
+   "normalized": "web",
+   "name": "Browser"
+  },
+  {
+   "platform": "linux",
+   "normalized": "unknown",
+   "name": "Device"
+  },
+  {
+   "platform": "ïos",
+   "normalized": "unknown",
+   "name": "Device"
+  }
+ ]
+}

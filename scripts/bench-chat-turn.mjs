@@ -1,0 +1,442 @@
+// Chat-turn timings through the engine daemon, on either turn route (PF14).
+//
+// Starts nekkod with the desktop TS backend (Electron as Node, so no window)
+// on an isolated temporary data dir, points a provider at a local
+// OpenAI-compatible model server you started, and measures from the UI's
+// side of the wire:
+//   - first text: `chat:send` to the first streamed text event;
+//   - gaps between text events (p50/p95/max);
+//   - approval round trip: `tool:approve` sent to that call's `tool_result`
+//     event, and `tool_approval_required` seen to `tool:approve` answered.
+// `--load N` keeps N loops of host work going meanwhile (context previews and
+// model-library scans), the load earlier PF14 entries measured under.
+//
+//   npm run build:app && cargo build -p nekkod --release
+//   node scripts/bench-chat-turn.mjs --model-url http://127.0.0.1:18431/v1 --model gemma \
+//     --route daemon|ts [--runs 3] [--load 8] [--json out.json]
+//
+// `--stats N` times N calls each of `gpu:stats`, `system:stats` and
+// `machine:readiness` under the same load, 1.1 s apart (past the GPU cache).
+//
+// `--usage N` then checks the turns' usage and reply lines landed in the data
+// dir, seeds the usage log to 20,000 records and times N `usage:summary` calls
+// under the same load (the daemon serves it when it owns accounting; pass
+// `--daemon` an older nekkod to time the TS host's).
+//
+// `--mcp` adds a loopback MCP server (one tool, `mcp__bench__lookup`) and a
+// third turn per run that calls it with an approval, timed like write_file:
+// `tool:approve` to its `tool_result` (in the daemon when it runs the turn's
+// MCP servers, through the TS host otherwise).
+//
+// `--spawn` adds a turn per run that delegates to a sub-agent (`spawn_agent`,
+// approved), timed from `tool:approve` to the parent's `tool_result`, which
+// spans the whole child turn.
+//
+// `--tools` adds two turns per run on tools that used to call back into the
+// TS host: `fetch_url` of a loopback page and `start_process` (both asked
+// for, since the chat is in ask mode), timed from `tool:approve` to their
+// `tool_result`.
+//
+// `--hooks` adds a PreToolUse and a PostToolUse hook on write_file (each
+// `echo`), so the write_file approval's timing includes running them (in the
+// daemon when it runs hooks, through the TS host otherwise).
+//
+// `--workspace N` times N rounds of the file explorer and workspace index
+// calls (`workspace:index`, `workspace:search`, `workspace:files`, `dir:list`,
+// `file:read`, `workspace:gitStatus` forced, `design:get`) on the 400-file project and the 2,500-file load project, under
+// the same load. The daemon serves them when it owns them; the load then runs
+// the same search in the host through `bench:hostLoad`, so it still keeps the
+// host's event loop busy.
+//
+// `--route ts` sets NEKKO_AGENT_LOOP=ts on the backend: every turn runs in
+// the TS host, the escape hatch. Nothing touches the user's data directory or
+// a running app; every spawned process is ended on exit.
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import { appendFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { createRequire } from 'node:module';
+import { randomBytes } from 'node:crypto';
+
+const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]?.startsWith('--') || all[i + 1] === undefined ? 'true' : all[i + 1]]] : acc), []));
+const root = resolve(import.meta.dirname, '..');
+const require = createRequire(join(root, 'apps', 'desktop', 'package.json'));
+const electron = args.electron ?? require('electron');
+const daemonExe = args.daemon ?? join(root, 'target', 'release', process.platform === 'win32' ? 'nekkod.exe' : 'nekkod');
+const backendJs = args.backend ?? join(root, 'apps', 'desktop', 'out', 'main', 'backend.js');
+const route = args.route ?? 'daemon';
+const runs = Number(args.runs ?? 3);
+const load = Number(args.load ?? 0);
+let modelUrl = args['model-url'] ?? 'http://127.0.0.1:18431/v1';
+const model = args.model ?? 'gemma';
+
+// `--tools`: a loopback page for `fetch_url`.
+let pageUrl;
+if (args.tools) {
+  const page = createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(`<html><head><title>Bench page</title></head><body>${'<p>Cats sleep a lot. <a href="/more">More</a></p>'.repeat(200)}</body></html>`);
+  });
+  await new Promise((ok) => page.listen(0, '127.0.0.1', ok));
+  pageUrl = `http://127.0.0.1:${page.address().port}/cats`;
+  process.on('exit', () => page.close());
+}
+
+// `--fake`: a deterministic model on a loopback port instead of a real one,
+// so the numbers are the engine's and not the model's: 40 text tokens 15 ms
+// apart, and a write_file call when asked for one.
+if (args.fake) {
+  const server = createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => { body += d; });
+    req.on('end', async () => {
+      if (!req.url?.endsWith('/chat/completions')) { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data: [{ id: model }] })); return; }
+      const request = JSON.parse(body);
+      // `--dump-requests <file>`: what the model was sent, to compare the routes' requests.
+      if (args['dump-requests']) appendFileSync(args['dump-requests'], `${JSON.stringify(request)}\n`);
+      const messages = request.messages ?? [];
+      const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+      const afterTool = messages.at(-1)?.role === 'tool';
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      const send = (chunk) => res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      const text = typeof lastUser?.content === 'string' ? lastUser.content : JSON.stringify(lastUser?.content ?? '');
+      if (!afterTool && text.includes('fetch_url')) {
+        send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'fetch_url', arguments: JSON.stringify({ url: pageUrl }) } }] }, finish_reason: 'tool_calls' }] });
+      } else if (!afterTool && text.includes('start_process')) {
+        send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'start_process', arguments: JSON.stringify({ command: 'echo bench', name: 'bench' }) } }] }, finish_reason: 'tool_calls' }] });
+      } else if (!afterTool && text.includes('spawn_agent')) {
+        send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'spawn_agent', arguments: JSON.stringify({ task: 'Write four short sentences about dogs.', title: 'Dogs' }) } }] }, finish_reason: 'tool_calls' }] });
+      } else if (!afterTool && text.includes('mcp__bench__lookup')) {
+        send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'mcp__bench__lookup', arguments: JSON.stringify({ key: 'cats' }) } }] }, finish_reason: 'tool_calls' }] });
+      } else if (!afterTool && text.includes('write_file')) {
+        const file = text.match(/create (\S+) /)?.[1] ?? 'note.txt';
+        send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'write_file', arguments: JSON.stringify({ path: file, content: 'hello' }) } }] }, finish_reason: 'tool_calls' }] });
+      } else {
+        const n = afterTool ? 3 : 40;
+        for (let i = 0; i < n; i++) {
+          send({ choices: [{ delta: { content: `tok${i} ` }, finish_reason: null }] });
+          await new Promise((r) => setTimeout(r, 15));
+        }
+        send({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 100, completion_tokens: n } });
+      }
+      res.end('data: [DONE]\n\n');
+    });
+  });
+  await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+  modelUrl = `http://127.0.0.1:${server.address().port}/v1`;
+  process.on('exit', () => server.close());
+}
+
+// `--mcp`: a streamable-HTTP MCP server with one tool, on a loopback port.
+let mcpUrl;
+if (args.mcp) {
+  const mcp = createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => { body += d; });
+    req.on('end', () => {
+      const msg = JSON.parse(body || '{}');
+      if (msg.id === undefined) { res.writeHead(202); res.end(); return; }
+      const result = msg.method === 'initialize' ? { protocolVersion: '2024-11-05' }
+        : msg.method === 'tools/list' ? { tools: [{ name: 'lookup', description: 'Look a key up in the bench table', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } }] }
+        : { content: [{ type: 'text', text: `value for ${msg.params?.arguments?.key}: 42` }] };
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }));
+    });
+  });
+  await new Promise((ok) => mcp.listen(0, '127.0.0.1', ok));
+  mcpUrl = `http://127.0.0.1:${mcp.address().port}/mcp`;
+  process.on('exit', () => mcp.close());
+}
+
+const data = mkdtempSync(join(tmpdir(), 'nekko-bench-turn-'));
+const workspace = join(data, 'project');
+mkdirSync(workspace, { recursive: true });
+writeFileSync(join(workspace, 'AGENTS.md'), 'Keep answers short.\n');
+for (let i = 0; i < 400; i++) writeFileSync(join(workspace, `file${i}.ts`), `export const value${i} = ${i};\n`);
+// The load's own project: an index search over it reads every file on the
+// host's event loop (workspace.ts searchWorkspace), a realistic way to keep it busy.
+const loadProject = join(data, 'load-project');
+mkdirSync(loadProject, { recursive: true });
+const filler = 'const nothing = "here";\n'.repeat(80);
+for (let i = 0; i < 2500; i++) writeFileSync(join(loadProject, `f${i}.ts`), filler);
+const token = randomBytes(24).toString('hex');
+const children = [];
+
+function cleanup() {
+  for (const c of children) {
+    try {
+      if (process.platform === 'win32') spawn('taskkill', ['/pid', String(c.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+      else c.kill('SIGKILL');
+    } catch { /* gone */ }
+  }
+}
+process.on('exit', cleanup);
+process.on('SIGINT', () => process.exit(130));
+
+function startDaemon() {
+  const env = { ELECTRON_RUN_AS_NODE: '1', NEKKO_BACKEND_DATA_DIR: data, NEKKO_BACKEND_APP: '{}', NEKKO_BACKEND_ORIGINS: '["null"]', NEKKO_BENCH_LOAD: '1' };
+  if (route === 'ts') env.NEKKO_AGENT_LOOP = 'ts';
+  // As the desktop app starts it (engine-process.ts): its host lets the agent drive a browser.
+  const config = { token, allowedOrigins: ['null'], dataDir: data, allowBrowserControl: true, backend: { exe: electron, args: [backendJs], env } };
+  const child = spawn(daemonExe, [], { env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  children.push(child);
+  child.stderr.on('data', (d) => { if (args.verbose) process.stderr.write(d); });
+  return new Promise((ok, fail) => {
+    let buf = '';
+    child.stdout.on('data', (d) => {
+      buf += d;
+      const m = buf.match(/NEKKOD_READY (\{.*\})/);
+      if (m) ok(JSON.parse(m[1]).port);
+    });
+    child.on('exit', (code) => fail(new Error(`nekkod exited (${code})`)));
+  });
+}
+
+const port = await startDaemon();
+const base = `http://127.0.0.1:${port}`;
+async function call(channel, ...a) {
+  const res = await fetch(`${base}/api/${channel}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ args: a }) });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error(`${channel}: ${body?.error ?? res.status}`);
+  return body;
+}
+
+// Events, timestamped on arrival.
+const listeners = new Set();
+const ws = new WebSocket(`ws://127.0.0.1:${port}/api/events?token=${token}`);
+await new Promise((ok, fail) => { ws.onopen = ok; ws.onerror = fail; });
+ws.onmessage = (m) => {
+  const at = performance.now();
+  const frame = JSON.parse(m.data);
+  if (args.trace) console.log(at.toFixed(0), frame.channel, JSON.stringify(frame.payload).slice(0, 200));
+  if (frame.channel !== 'agent:event') return;
+  for (const l of listeners) l(frame.payload, at);
+};
+
+// Wait for the backend: the daemon answers settings itself, so ask it whether
+// its TS backend is up (the host adjusts the engine's provider entry as it starts).
+for (let i = 0; ; i++) {
+  try {
+    if ((await call('daemon:info')).backend === 'ready') { await call('settings:get'); break; }
+  } catch (e) { if (i > 120) throw e; }
+  if (i > 120) throw new Error('the backend never became ready');
+  await new Promise((r) => setTimeout(r, 500));
+}
+// Let the host's startup writes (the engine provider entry) land before ours.
+await new Promise((r) => setTimeout(r, 1000));
+await call('settings:update', {
+  workspaces: [{ id: 'w1', name: 'project', path: workspace, addedAt: Date.now() }, { id: 'w2', name: 'load', path: loadProject, addedAt: Date.now() }],
+  providers: [{ id: 'local', kind: 'llamacpp', label: 'Local', baseUrl: modelUrl, enabled: true }],
+  defaultChatMode: 'ask',
+  ...(args.hooks ? { hooks: [
+    { id: 'bench-pre', event: 'PreToolUse', name: 'pre', matcher: 'write_file', command: 'echo ok' },
+    { id: 'bench-post', event: 'PostToolUse', name: 'post', matcher: 'write_file', command: 'echo checked' },
+  ] } : {}),
+  ...(mcpUrl ? { mcpServers: [{ id: 'bench', name: 'bench', enabled: true, command: '', args: [], url: mcpUrl }] } : {}),
+});
+if (load > 0) {
+  await call('workspace:index', 'w2');
+  for (let i = 0; i < 240; i++) {
+    const st = await call('workspace:indexStatus', 'w2').catch(() => null);
+    if (st?.state === 'ready' && st.fileCount > 0) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+const info = await call('daemon:info');
+console.log(`route=${route} daemon owns chat:turn=${info.owned.includes('chat:turn')} load=${load}`);
+
+// The host-side search keeps the host busy whoever serves `workspace:search`.
+const loadSearch = info.owned.includes('workspace:search') ? 'bench:hostLoad' : 'workspace:search';
+let busy = load > 0;
+let loadCalls = 0;
+const loadMs = [];
+async function loadLoop(sessionId) {
+  while (busy) {
+    const t0 = performance.now();
+    const kind = args['load-kind'] ?? 'search';
+    if (kind === 'search') await call(loadSearch, 'w2', 'zzz-no-match').catch(() => {});
+    else await Promise.all([kind !== 'folders' ? call('context:preview', sessionId, []).catch(() => {}) : null, kind !== 'preview' ? call('engine:folders').catch(() => {}) : null]);
+    loadMs.push(performance.now() - t0);
+    loadCalls++;
+  }
+}
+
+function pct(list, p) {
+  if (!list.length) return null;
+  const s = [...list].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(p * (s.length - 1)))];
+}
+
+async function newSession() {
+  const s = await call('session:create', 'w1');
+  await call('session:setOptions', s.id, { gitIsolation: false });
+  await call('session:setOptions', s.id, { title: 'bench', mode: 'ask' });
+  return s.id;
+}
+
+/** One turn; resolves with its timings once `done` (or an error) arrives. */
+function turn(sessionId, text, { approve } = {}) {
+  return new Promise((ok, fail) => {
+    const t = { texts: [], approvals: [] };
+    let start;
+    const timer = setTimeout(() => { listeners.delete(on); fail(new Error('turn timed out')); }, Number(args.timeout ?? 180_000));
+    const on = (e, at) => {
+      if (e.sessionId !== sessionId || e.relayOnly) return;
+      if (e.type === 'text') t.texts.push(at);
+      if (e.type === 'tool_approval_required' && approve) {
+        const rec = { id: e.call.id, sent: performance.now(), seenAt: at };
+        t.approvals.push(rec);
+        call('tool:approve', sessionId, e.call.id, true).then(() => { rec.seenToAnswered = performance.now() - rec.seenAt; });
+      }
+      if (e.type === 'tool_result') {
+        const rec = t.approvals.find((x) => x.id === e.result.toolCallId);
+        if (rec) rec.toResult = at - rec.sent;
+      }
+      if (e.type === 'done' || e.type === 'error') {
+        clearTimeout(timer);
+        listeners.delete(on);
+        setTimeout(() => ok({
+          error: e.type === 'error' ? e.message : undefined,
+          firstText: t.texts.length ? t.texts[0] - start : null,
+          gaps: t.texts.slice(1).map((x, i) => x - t.texts[i]),
+          approvals: t.approvals,
+        }), 50);
+      }
+    };
+    listeners.add(on);
+    start = performance.now();
+    call('chat:send', { sessionId, providerId: 'local', modelId: model, text }).catch(fail);
+  });
+}
+
+/**
+ * A follow-up queued while a reply streams: from that reply's `done` to the
+ * follow-up's first text, i.e. how long the queue drain takes.
+ */
+function queuedFollowUp(sessionId) {
+  return new Promise((ok, fail) => {
+    let doneAt;
+    let queued = false;
+    const timer = setTimeout(() => { listeners.delete(on); fail(new Error('queued turn timed out')); }, Number(args.timeout ?? 180_000));
+    const on = (e, at) => {
+      if (e.sessionId !== sessionId || e.relayOnly) return;
+      if (e.type === 'text' && !queued) {
+        queued = true;
+        call('chat:queue', sessionId, 'Write two short sentences about dogs. Do not use any tools.').catch(fail);
+      }
+      if (e.type === 'done' && doneAt === undefined) doneAt = at;
+      else if (e.type === 'text' && doneAt !== undefined) {
+        clearTimeout(timer);
+        listeners.delete(on);
+        ok(at - doneAt);
+      }
+    };
+    listeners.add(on);
+    call('chat:send', { sessionId, providerId: 'local', modelId: model, text: 'Write four short sentences about birds. Do not use any tools.' }).catch(fail);
+  });
+}
+
+const results = { route, load, runs: [] };
+try {
+  const warm = await newSession();
+  await turn(warm, 'Reply with one word: ready.');
+  const loaders = busy ? Array.from({ length: load }, () => loadLoop(warm)) : [];
+  for (let i = 0; i < runs; i++) {
+    const sid = await newSession();
+    const text = await turn(sid, 'Write four short sentences about cats. Do not use any tools.');
+    const tool = await turn(sid, `Use the write_file tool to create note${i}.txt in the project containing exactly: hello ${i}. Then reply "done".`, { approve: true });
+    const drain = await queuedFollowUp(sid);
+    await new Promise((r) => setTimeout(r, 1000)); // let the follow-up finish
+    const spawnTurn = args.spawn ? await turn(sid, 'Use the spawn_agent tool to delegate: write four short sentences about dogs. Then reply with what it said.', { approve: true }) : null;
+    const fetchTurn = args.tools ? await turn(sid, 'Use the fetch_url tool on the bench page, then summarize it.', { approve: true }) : null;
+    const processTurn = args.tools ? await turn(sid, 'Use the start_process tool to start the bench process, then reply "started".', { approve: true }) : null;
+    const mcpTurn = mcpUrl ? await turn(sid, 'Call the mcp__bench__lookup tool with the key "cats", then say what it returned.', { approve: true }) : null;
+    const r = { firstText: text.firstText, gaps: text.gaps, error: text.error ?? tool.error ?? mcpTurn?.error, approvals: tool.approvals, drain, mcp: mcpTurn?.approvals ?? [], spawn: spawnTurn?.approvals ?? [], fetch: fetchTurn?.approvals ?? [], process: processTurn?.approvals ?? [] };
+    r.error = r.error ?? fetchTurn?.error ?? processTurn?.error;
+    if (spawnTurn?.error) r.error = r.error ?? spawnTurn.error;
+    results.runs.push(r);
+    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms,${args.spawn ? ` spawn ${r.spawn.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''}${args.tools ? ` fetch_url ${r.fetch.map((a) => `${a.toResult?.toFixed(1)} ms`).join(', ') || 'none'}, start_process ${r.process.map((a) => `${a.toResult?.toFixed(1)} ms`).join(', ') || 'none'},` : ''}${mcpUrl ? ` mcp ${r.mcp.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''} approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
+  }
+  if (args.usage) {
+    const lines = (f) => (existsSync(join(data, f)) ? readFileSync(join(data, f), 'utf8').trim().split('\n').filter(Boolean) : []);
+    const before = { usage: lines('usage.jsonl').length, replies: lines('replies.jsonl').length };
+    const first = await call('usage:summary');
+    console.log(`accounted: ${before.usage} usage lines, ${before.replies} reply lines; summary input ${first.totalInput}, output ${first.totalOutput}, replies ${first.replies?.total ?? 0}; daemon owns usage:summary=${info.owned.includes('usage:summary')}`);
+    const seed = [];
+    for (let i = 0; i < 20_000; i++) seed.push(JSON.stringify({ ts: Date.now() - i * 60_000, providerId: 'local', modelId: i % 3 ? 'gemma' : 'claude-sonnet-4-5', inputTokens: 900 + i % 50, cacheReadTokens: i % 7, outputTokens: 120, sessionId: `s_${i % 300}`, auth: i % 5 ? 'apikey' : 'subscription', local: i % 3 !== 0 }));
+    appendFileSync(join(data, 'usage.jsonl'), `${seed.join('\n')}\n`);
+    const ms = [];
+    for (let i = 0; i < Number(args.usage); i++) {
+      const t0 = performance.now();
+      await call('usage:summary');
+      ms.push(performance.now() - t0);
+    }
+    results.usage = { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms), before };
+    console.log(`usage:summary over 20k records: median ${results.usage.median.toFixed(1)} ms, p95 ${results.usage.p95.toFixed(1)} ms, max ${results.usage.max.toFixed(1)} ms`);
+  }
+  if (args.workspace) {
+    const timings = {};
+    const time = async (name, fn) => {
+      const t0 = performance.now();
+      await fn();
+      (timings[name] ??= []).push(performance.now() - t0);
+    };
+    for (let i = 0; i < Number(args.workspace); i++) {
+      await time('index 400 files', () => call('workspace:index', 'w1'));
+      await time('index 2500 files', () => call('workspace:index', 'w2'));
+      await time('search 400 files', () => call('workspace:search', 'w1', 'value1'));
+      await time('search 2500 files (no match)', () => call('workspace:search', 'w2', 'zzz-no-match'));
+      await time('files 400', () => call('workspace:files', 'w1'));
+      await time('dir:list 400', () => call('dir:list', workspace));
+      await time('file:read', () => call('file:read', join(workspace, 'file0.ts')));
+      await time('indexStatus', () => call('workspace:indexStatus', 'w1'));
+      await time('gitStatus (forced)', () => call('workspace:gitStatus', 'w1', true));
+      await time('design:get', () => call('design:get', 'w1'));
+    }
+    results.workspace = Object.fromEntries(Object.entries(timings).map(([k, ms]) => [k, { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms) }]));
+    console.log(`workspace calls (daemon owns workspace:search=${info.owned.includes('workspace:search')}):`);
+    for (const [k, v] of Object.entries(results.workspace)) console.log(`  ${k}: median ${v.median.toFixed(1)} ms, p95 ${v.p95.toFixed(1)} ms, max ${v.max.toFixed(1)} ms`);
+  }
+  if (args.stats) {
+    // The monitor meters' polls and the readiness advisor, under the same load.
+    results.stats = {};
+    for (const channel of ['gpu:stats', 'system:stats', 'machine:readiness']) {
+      const ms = [];
+      for (let i = 0; i < Number(args.stats); i++) {
+        const t0 = performance.now();
+        await call(channel);
+        ms.push(performance.now() - t0);
+        await new Promise((r) => setTimeout(r, 1100)); // past the GPU cache, as a polling meter is
+      }
+      results.stats[channel] = { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms), daemon: info.owned.includes(channel) };
+      console.log(`${channel}: median ${results.stats[channel].median.toFixed(1)} ms, p95 ${results.stats[channel].p95.toFixed(1)} ms, max ${results.stats[channel].max.toFixed(1)} ms (daemon owns it: ${results.stats[channel].daemon})`);
+    }
+  }
+  busy = false;
+  await Promise.all(loaders);
+  const all = (f) => results.runs.flatMap(f).filter((x) => typeof x === 'number');
+  results.summary = {
+    firstTextMedian: pct(all((r) => [r.firstText]), 0.5),
+    gapP50: pct(all((r) => r.gaps), 0.5),
+    gapP95: pct(all((r) => r.gaps), 0.95),
+    gapMax: Math.max(...all((r) => r.gaps)),
+    approvalToResultMedian: pct(all((r) => r.approvals.map((a) => a.toResult)), 0.5),
+    approvalAnswerMedian: pct(all((r) => r.approvals.map((a) => a.seenToAnswered)), 0.5),
+    mcpToResultMedian: pct(all((r) => (r.mcp ?? []).map((a) => a.toResult)), 0.5),
+    fetchToResultMedian: pct(all((r) => (r.fetch ?? []).map((a) => a.toResult)), 0.5),
+    processToResultMedian: pct(all((r) => (r.process ?? []).map((a) => a.toResult)), 0.5),
+    spawnToResultMedian: pct(all((r) => (r.spawn ?? []).map((a) => a.toResult)), 0.5),
+    queueDrainMedian: pct(all((r) => [r.drain]), 0.5),
+    loadCalls,
+    loadCallMedian: pct(loadMs, 0.5),
+  };
+  console.log(JSON.stringify(results.summary));
+  if (args.json) writeFileSync(args.json, JSON.stringify(results, null, 2));
+} finally {
+  busy = false;
+  ws.close();
+  cleanup();
+  setTimeout(() => { try { rmSync(data, { recursive: true, force: true }); } catch { /* still held */ } process.exit(0); }, 1500);
+}

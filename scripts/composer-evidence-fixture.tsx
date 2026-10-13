@@ -1,0 +1,31 @@
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { useStore } from '../apps/desktop/src/renderer/store';
+import { putCachedSession } from '../apps/desktop/src/renderer/sessionCache';
+import { CommandCenterView } from '../apps/desktop/src/renderer/views/CommandCenterView';
+import { DEFAULT_WALL_STATE } from '../apps/desktop/src/renderer/commandWall';
+import { summarizeSession } from '@nekko-agent/shared';
+import { applyEvent, useLiveRunsVersion, runningSessionIds } from '../apps/desktop/src/renderer/liveRuns';
+import { PlanRail } from '../apps/desktop/src/renderer/components/PlanRail';
+import { WorkingSubagents } from '../apps/desktop/src/renderer/components/WorkingSubagents';
+import { ActivityGroup } from '../apps/desktop/src/renderer/components/agent-console/ActivityGroup';
+import { ToolCard } from '../apps/desktop/src/renderer/components/agent-console/ToolCard';
+import * as SubagentCueModule from '../apps/desktop/src/renderer/components/agent-console/SubagentCue';
+const SubagentParentContext = (SubagentCueModule as any).SubagentParentContext || React.createContext<any[]>([]);
+import '../apps/desktop/src/renderer/styles.css';
+const provider = { id:'fixture',kind:'openai',enabled:true,label:'Fixture provider' };
+const models = [{id:'fixture-model',providerId:'fixture',name:'Fixture model',contextWindow:128000}];
+const call = { id:'spawn',name:'spawn_agent',input:{title:'Inspect renderer',task:'PRIVATE PROMPT '.repeat(1000)} };
+const result = {toolCallId:'spawn',output:'PRIVATE RESULT '.repeat(1000)};
+const parent:any = {id:'parent',title:'Composer and activity verification',createdAt:1,updatedAt:1,providerId:'fixture',modelId:'fixture-model',mode:'agent',chatType:'multimodal',messages:[{id:'u',role:'user',content:'Inspect the renderer.',createdAt:1},{id:'a',role:'assistant',content:'',toolCalls:[call],createdAt:2},{id:'t',role:'tool',content:result.output,toolResult:result,createdAt:3}],attachments:[],queue:[{text:'Check footer remains inside the ring.'}],agentPlan:[{id:'a',title:'Inspect layout',status:'done'},{id:'b',title:'Capture evidence',status:'active'}]};
+const child:any = {...parent,id:'child',title:'Inspect renderer',parentSessionId:'parent',messages:[],queue:[]};
+const records=[parent,child];
+const listeners=new Set<any>();
+const bridge:any={listSessionSummaries:async()=>records.map(summarizeSession),getSession:async(id:string)=>records.find(s=>s.id===id),listModels:async()=>models,listTerminals:async()=>[],pendingInput:async()=>({}),runningSessions:async()=>runningSessionIds(),onAgentEvent:(fn:any)=>{listeners.add(fn);return()=>listeners.delete(fn)},listTasks:async()=>[],listShells:async()=>[],listChanges:async()=>[],listFiles:async()=>[],listTools:async()=>[],getMcpStatus:async()=>[],listSkills:async()=>[],previewContext:async()=>({items:[],totalTokens:0,budget:128000}),getGitStatus:async()=>({repo:false}),getUsageSummary:async()=>null,updateSettings:async(p:any)=>({...useStore.getState().settings,...p})};
+Object.assign(window,{nekko:new Proxy(bridge,{get(t,k:string){if(k in t)return t[k];if(k.startsWith('on'))return()=>()=>{};return()=>Promise.resolve(null)}})});
+localStorage.clear();
+useStore.setState({view:'command',providers:[provider],models,activeProviderId:'fixture',sessions:records.map(summarizeSession),terminals:[],workspaces:[],activeSessionId:null,activeWorkspaceId:null,settings:{providers:[provider],workspaceFolders:[],workspaces:[],theme:'light',experimental:{},agent:{},ui:{},commandWall:{...DEFAULT_WALL_STATE,root:{id:'pane',kind:'chat',refId:'parent'},hero:'parent',autoAdd:false,watermark:Date.now(),dock:{...DEFAULT_WALL_STATE.dock,show:false},agentPanel:{show:false,orientation:'vertical'}}},activeSkillBySession:{},prsBySession:{},installedSkillDefs:[],contextPanelOpen:false,planRailOpen:true} as any);
+records.forEach(putCachedSession);
+function Gallery(){useLiveRunsVersion();const summaries=useStore(s=>s.sessions).filter(s=>s.parentSessionId==='parent');return <div style={{display:'flex',height:'100%',padding:24,gap:24}}><SubagentParentContext.Provider value={summaries}><section data-gallery-chat style={{width:'60%',minWidth:0}}><h2>ActivityGroup</h2><ActivityGroup items={[{kind:'tool',call,result}]} streaming/><h2>ToolCard</h2><ToolCard call={call} result={result}/></section></SubagentParentContext.Provider><section data-gallery-rail style={{width:280}}><PlanRail sessionId="parent" session={parent} streaming={false}/></section><div data-gallery-list style={{position:'relative',width:280}}><WorkingSubagents children={summaries} running={new Set(runningSessionIds())} pending={{}} onOpen={()=>{}}/></div></div>}
+function Fixture(){const[route,setRoute]=useState('wall');const[epoch,setEpoch]=useState(0);Object.assign(window,{evidence:{route:setRoute,remount:()=>setEpoch(e=>e+1),state:()=>useStore.getState(),emit:(event:any)=>{applyEvent(event);listeners.forEach(fn=>fn(event));useStore.setState({sessions:records.map(summarizeSession)})}}});return <main data-evidence-route={route} style={{height:'100vh',width:'100vw',display:'flex',flexDirection:'column'}} className="bg-paper" key={epoch}>{route==='wall'?<div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column'}}><CommandCenterView/></div>:<Gallery/>}</main>}
+createRoot(document.getElementById('root')!).render(<Fixture/>);

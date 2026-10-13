@@ -1,0 +1,67 @@
+name: nekkod npm binaries
+
+# Builds the engine daemon for each platform the web edition's npm package
+# ships it to (`@nekko-agent/nekkod-<platform>-<arch>`, optional dependencies
+# of `nekko-agent-web`). Called by release.yml, which publishes them; runs on
+# its own when this file or the packaging script changes, as a build check
+# that publishes nothing.
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - .github/workflows/nekkod-npm.yml
+      - apps/server/scripts/nekkod-packages.mjs
+      - scripts/vc-runtime.mjs
+      - crates/nekkod/build.rs
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: nekkod ${{ matrix.key }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { key: win32-x64, os: windows-latest, target: x86_64-pc-windows-msvc }
+          # The prebuilt ONNX Runtime nekkod links needs a GCC 13 libstdc++ (Ubuntu 24.04, Debian 13).
+          - { key: linux-x64, os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
+          - { key: linux-arm64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+          - { key: darwin-arm64, os: macos-latest, target: aarch64-apple-darwin }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      # rust-toolchain.toml pins the compiler; add the target to that toolchain.
+      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: cargo build -p nekkod --release --locked --target ${{ matrix.target }}
+      - name: Collect the binary and the libraries it loads from beside itself
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="target/${{ matrix.target }}/release"
+          dest="nekkod-bins/${{ matrix.key }}"
+          mkdir -p "$dest"
+          for f in "$src"/*; do
+            name=$(basename "$f")
+            if [[ "$name" == nekkod || "$name" == nekkod.exe || "$name" =~ ^(lib)?onnxruntime.*\.(dll|so(\.[0-9]+)*|dylib)$ ]]; then
+              cp "$f" "$dest/"
+            fi
+          done
+          # The Visual C++ runtime, app-local, so nekkod starts on a PC without the
+          # redistributable (DirectML.dll is delay-loaded on demand, never shipped).
+          if [[ "${{ runner.os }}" == Windows ]]; then
+            node scripts/vc-runtime.mjs --copy "$dest"
+          fi
+          ls -la "$dest"
+          # The binary must start (and say its version) on the machine it was built for.
+          "$dest"/nekkod* --version
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nekkod-${{ matrix.key }}
+          path: nekkod-bins/
+          if-no-files-found: error

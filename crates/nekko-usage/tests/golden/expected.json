@@ -1,0 +1,4519 @@
+{
+ "now": 1760000000000,
+ "costs": [
+  {
+   "modelId": "claude-sonnet-4-5",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 18
+  },
+  {
+   "modelId": "claude-sonnet-4-5",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.0122712
+  },
+  {
+   "modelId": "claude-sonnet-4-5",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.3
+  },
+  {
+   "modelId": "claude-sonnet-4-5",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.000114
+  },
+  {
+   "modelId": "claude-sonnet-4-5",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "claude-opus-4-1-20250805",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 30
+  },
+  {
+   "modelId": "claude-opus-4-1-20250805",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.020452
+  },
+  {
+   "modelId": "claude-opus-4-1-20250805",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.5
+  },
+  {
+   "modelId": "claude-opus-4-1-20250805",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.00019
+  },
+  {
+   "modelId": "claude-opus-4-1-20250805",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "Claude-Haiku-5-5",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.6
+  },
+  {
+   "modelId": "Claude-Haiku-5-5",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00040904
+  },
+  {
+   "modelId": "Claude-Haiku-5-5",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.01
+  },
+  {
+   "modelId": "Claude-Haiku-5-5",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000038
+  },
+  {
+   "modelId": "Claude-Haiku-5-5",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "claude-fable-5.1",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 60
+  },
+  {
+   "modelId": "claude-fable-5.1",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.040837250000000005
+  },
+  {
+   "modelId": "claude-fable-5.1",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.25
+  },
+  {
+   "modelId": "claude-fable-5.1",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.00038
+  },
+  {
+   "modelId": "claude-fable-5.1",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "claude-sonnet-5-5-latest",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 18
+  },
+  {
+   "modelId": "claude-sonnet-5-5-latest",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.0122712
+  },
+  {
+   "modelId": "claude-sonnet-5-5-latest",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.3
+  },
+  {
+   "modelId": "claude-sonnet-5-5-latest",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.000114
+  },
+  {
+   "modelId": "claude-sonnet-5-5-latest",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "qwen3:32b",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.36000000000000004
+  },
+  {
+   "modelId": "qwen3:32b",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00026540000000000005
+  },
+  {
+   "modelId": "qwen3:32b",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.08
+  },
+  {
+   "modelId": "qwen3:32b",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000022
+  },
+  {
+   "modelId": "qwen3:32b",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "qwen3:32b-q4",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.36000000000000004
+  },
+  {
+   "modelId": "qwen3:32b-q4",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00026540000000000005
+  },
+  {
+   "modelId": "qwen3:32b-q4",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.08
+  },
+  {
+   "modelId": "qwen3:32b-q4",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000022
+  },
+  {
+   "modelId": "qwen3:32b-q4",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-oss:20b",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.108
+  },
+  {
+   "modelId": "gpt-oss:20b",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.000074223
+  },
+  {
+   "modelId": "gpt-oss:20b",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.009
+  },
+  {
+   "modelId": "gpt-oss:20b",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 6.84e-7
+  },
+  {
+   "modelId": "gpt-oss:20b",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-oss:120b_x",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": null
+  },
+  {
+   "modelId": "gpt-oss:120b_x",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": null
+  },
+  {
+   "modelId": "gpt-oss:120b_x",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": null
+  },
+  {
+   "modelId": "gpt-oss:120b_x",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": null
+  },
+  {
+   "modelId": "gpt-oss:120b_x",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-5",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 11.25
+  },
+  {
+   "modelId": "gpt-5",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.007236125
+  },
+  {
+   "modelId": "gpt-5",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.125
+  },
+  {
+   "modelId": "gpt-5",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.00007374999999999999
+  },
+  {
+   "modelId": "gpt-5",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-5-mini",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 2.25
+  },
+  {
+   "modelId": "gpt-5-mini",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.001447225
+  },
+  {
+   "modelId": "gpt-5-mini",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.024999999999999998
+  },
+  {
+   "modelId": "gpt-5-mini",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.00001475
+  },
+  {
+   "modelId": "gpt-5-mini",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-5-nano",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.45
+  },
+  {
+   "modelId": "gpt-5-nano",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00028944500000000005
+  },
+  {
+   "modelId": "gpt-5-nano",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.005
+  },
+  {
+   "modelId": "gpt-5-nano",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.00000295
+  },
+  {
+   "modelId": "gpt-5-nano",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-5.1-codex",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 11.25
+  },
+  {
+   "modelId": "gpt-5.1-codex",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00723657
+  },
+  {
+   "modelId": "gpt-5.1-codex",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.13
+  },
+  {
+   "modelId": "gpt-5.1-codex",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.00007374999999999999
+  },
+  {
+   "modelId": "gpt-5.1-codex",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-6-astra",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 60
+  },
+  {
+   "modelId": "gpt-6-astra",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.040904
+  },
+  {
+   "modelId": "gpt-6-astra",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 1
+  },
+  {
+   "modelId": "gpt-6-astra",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.00038
+  },
+  {
+   "modelId": "gpt-6-astra",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-6-astra-2026-01-02",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 60
+  },
+  {
+   "modelId": "gpt-6-astra-2026-01-02",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.040904
+  },
+  {
+   "modelId": "gpt-6-astra-2026-01-02",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 1
+  },
+  {
+   "modelId": "gpt-6-astra-2026-01-02",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.00038
+  },
+  {
+   "modelId": "gpt-6-astra-2026-01-02",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "openai/gpt-6.1-sol",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 12
+  },
+  {
+   "modelId": "openai/gpt-6.1-sol",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.0081719
+  },
+  {
+   "modelId": "openai/gpt-6.1-sol",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.09999999999999999
+  },
+  {
+   "modelId": "openai/gpt-6.1-sol",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.00007599999999999999
+  },
+  {
+   "modelId": "openai/gpt-6.1-sol",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-5-2025-08-07",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 11.25
+  },
+  {
+   "modelId": "gpt-5-2025-08-07",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.007336250000000001
+  },
+  {
+   "modelId": "gpt-5-2025-08-07",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 1.25
+  },
+  {
+   "modelId": "gpt-5-2025-08-07",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.00007374999999999999
+  },
+  {
+   "modelId": "gpt-5-2025-08-07",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-7",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": null
+  },
+  {
+   "modelId": "gpt-7",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": null
+  },
+  {
+   "modelId": "gpt-7",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": null
+  },
+  {
+   "modelId": "gpt-7",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": null
+  },
+  {
+   "modelId": "gpt-7",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "o1-mini",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 5.5
+  },
+  {
+   "modelId": "o1-mini",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.0039610999999999995
+  },
+  {
+   "modelId": "o1-mini",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 1.1
+  },
+  {
+   "modelId": "o1-mini",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000341
+  },
+  {
+   "modelId": "o1-mini",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "o1",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 75
+  },
+  {
+   "modelId": "o1",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.053347500000000006
+  },
+  {
+   "modelId": "o1",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 7.5
+  },
+  {
+   "modelId": "o1",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.000465
+  },
+  {
+   "modelId": "o1",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "o3",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 10
+  },
+  {
+   "modelId": "o3",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.0070685
+  },
+  {
+   "modelId": "o3",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.5
+  },
+  {
+   "modelId": "o3",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.000062
+  },
+  {
+   "modelId": "o3",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "o3-mini",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 5.5
+  },
+  {
+   "modelId": "o3-mini",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00391215
+  },
+  {
+   "modelId": "o3-mini",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.55
+  },
+  {
+   "modelId": "o3-mini",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000341
+  },
+  {
+   "modelId": "o3-mini",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "llama3",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": null
+  },
+  {
+   "modelId": "llama3",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": null
+  },
+  {
+   "modelId": "llama3",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": null
+  },
+  {
+   "modelId": "llama3",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": null
+  },
+  {
+   "modelId": "llama3",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "anthropic/claude-haiku-5.5",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.6
+  },
+  {
+   "modelId": "anthropic/claude-haiku-5.5",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00040904
+  },
+  {
+   "modelId": "anthropic/claude-haiku-5.5",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.01
+  },
+  {
+   "modelId": "anthropic/claude-haiku-5.5",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000038
+  },
+  {
+   "modelId": "anthropic/claude-haiku-5.5",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "claude-haiku-5.5",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.6
+  },
+  {
+   "modelId": "claude-haiku-5.5",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00040904
+  },
+  {
+   "modelId": "claude-haiku-5.5",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.01
+  },
+  {
+   "modelId": "claude-haiku-5.5",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000038
+  },
+  {
+   "modelId": "claude-haiku-5.5",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "stepfun/step-5-preview",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 3.7
+  },
+  {
+   "modelId": "stepfun/step-5-preview",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.0027793500000000003
+  },
+  {
+   "modelId": "stepfun/step-5-preview",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.049999999999999996
+  },
+  {
+   "modelId": "stepfun/step-5-preview",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.000021900000000000004
+  },
+  {
+   "modelId": "stepfun/step-5-preview",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "step-5-preview",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 3.7
+  },
+  {
+   "modelId": "step-5-preview",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.0027793500000000003
+  },
+  {
+   "modelId": "step-5-preview",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.049999999999999996
+  },
+  {
+   "modelId": "step-5-preview",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.000021900000000000004
+  },
+  {
+   "modelId": "step-5-preview",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gemma-3-27b-it",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.53
+  },
+  {
+   "modelId": "gemma-3-27b-it",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00035823
+  },
+  {
+   "modelId": "gemma-3-27b-it",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.04
+  },
+  {
+   "modelId": "gemma-3-27b-it",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000033899999999999997
+  },
+  {
+   "modelId": "gemma-3-27b-it",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-4o-mini-2024",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.75
+  },
+  {
+   "modelId": "gpt-4o-mini-2024",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00054015
+  },
+  {
+   "modelId": "gpt-4o-mini-2024",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.15
+  },
+  {
+   "modelId": "gpt-4o-mini-2024",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000046499999999999995
+  },
+  {
+   "modelId": "gpt-4o-mini-2024",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "GPT-4.1-NANO",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.5
+  },
+  {
+   "modelId": "GPT-4.1-NANO",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.0003534250000000001
+  },
+  {
+   "modelId": "GPT-4.1-NANO",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.024999999999999998
+  },
+  {
+   "modelId": "GPT-4.1-NANO",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000031000000000000004
+  },
+  {
+   "modelId": "GPT-4.1-NANO",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-4.1",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 10
+  },
+  {
+   "modelId": "gpt-4.1",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.0070685
+  },
+  {
+   "modelId": "gpt-4.1",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.5
+  },
+  {
+   "modelId": "gpt-4.1",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.000062
+  },
+  {
+   "modelId": "gpt-4.1",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "gpt-3.5-turbo",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 2
+  },
+  {
+   "modelId": "gpt-3.5-turbo",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.0015170000000000001
+  },
+  {
+   "modelId": "gpt-3.5-turbo",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.5
+  },
+  {
+   "modelId": "gpt-3.5-turbo",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.000012
+  },
+  {
+   "modelId": "gpt-3.5-turbo",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "unknown",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": null
+  },
+  {
+   "modelId": "unknown",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": null
+  },
+  {
+   "modelId": "unknown",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": null
+  },
+  {
+   "modelId": "unknown",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": null
+  },
+  {
+   "modelId": "unknown",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "x/qwen3-32b",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": 0.36000000000000004
+  },
+  {
+   "modelId": "x/qwen3-32b",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": 0.00026540000000000005
+  },
+  {
+   "modelId": "x/qwen3-32b",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": 0.08
+  },
+  {
+   "modelId": "x/qwen3-32b",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": 0.0000022
+  },
+  {
+   "modelId": "x/qwen3-32b",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": 0
+  },
+  {
+   "modelId": "",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000
+   },
+   "output": null
+  },
+  {
+   "modelId": "",
+   "usage": {
+    "inputTokens": 1234,
+    "outputTokens": 567,
+    "cacheReadTokens": 89,
+    "cacheWriteTokens": 10
+   },
+   "output": null
+  },
+  {
+   "modelId": "",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 1000000
+   },
+   "output": null
+  },
+  {
+   "modelId": "",
+   "usage": {
+    "inputTokens": 3,
+    "outputTokens": 7,
+    "cacheWriteTokens": 0
+   },
+   "output": null
+  },
+  {
+   "modelId": "",
+   "usage": {
+    "inputTokens": 1000000,
+    "outputTokens": 1000000,
+    "auth": "subscription"
+   },
+   "output": null
+  }
+ ],
+ "summaries": [
+  {
+   "name": "nothing",
+   "settings": null,
+   "usage": null,
+   "replies": null,
+   "output": {
+    "totalInput": 0,
+    "totalOutput": 0,
+    "totalCost": 0,
+    "byModel": {},
+    "byProvider": {},
+    "bySession": {},
+    "bySessionCost": {},
+    "daily": [],
+    "avoidedCosts": {
+     "subscription": 0,
+     "local": 0,
+     "unpricedTokens": 0,
+     "benchmarkTokens": 0
+    },
+    "bySessionAvoidedCosts": {}
+   }
+  },
+  {
+   "name": "empty log",
+   "settings": null,
+   "usage": "",
+   "replies": null,
+   "output": {
+    "totalInput": 0,
+    "totalOutput": 0,
+    "totalCost": 0,
+    "byModel": {},
+    "byProvider": {},
+    "bySession": {},
+    "bySessionCost": {},
+    "daily": [],
+    "avoidedCosts": {
+     "subscription": 0,
+     "local": 0,
+     "unpricedTokens": 0,
+     "benchmarkTokens": 0
+    },
+    "bySessionAvoidedCosts": {}
+   }
+  },
+  {
+   "name": "api, subscription, local and cache",
+   "settings": "{\"providers\":[{\"id\":\"ol\",\"kind\":\"ollama\"},{\"id\":\"p\",\"kind\":\"openai\"}],\"localCostBenchmark\":\"claude-sonnet\"}",
+   "usage": "{\"ts\":1790856000000,\"providerId\":\"p\",\"modelId\":\"gpt-4o\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s1\"}\n{\"ts\":1790856000000,\"providerId\":\"p\",\"modelId\":\"claude-opus-4-1\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s2\",\"auth\":\"subscription\",\"cacheReadTokens\":2000,\"cacheWriteTokens\":300}\n{\"ts\":1790902800000,\"providerId\":\"ol\",\"modelId\":\"llama3\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s2\"}\n{\"ts\":1790856000000,\"providerId\":\"p\",\"modelId\":\"llama3\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"\",\"local\":true}\n{\"ts\":1790812799999,\"providerId\":\"p\",\"modelId\":\"claude-haiku\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s1\",\"local\":true}\n{\"ts\":1790856000000,\"providerId\":\"ol\",\"modelId\":\"gpt-4o\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s1\",\"local\":false,\"cacheReadTokens\":0}\n{\"ts\":1790856000000,\"providerId\":\"p\",\"modelId\":\"unknown-subscription\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s3\",\"auth\":\"subscription\"}\n\n   \n{\"torn\":\n",
+   "replies": null,
+   "output": {
+    "totalInput": 9300,
+    "totalOutput": 3500,
+    "totalCost": 0.015,
+    "byModel": {
+     "gpt-4o": {
+      "input": 2000,
+      "output": 1000,
+      "cost": 0.015
+     },
+     "claude-opus-4-1": {
+      "input": 3300,
+      "output": 500,
+      "cost": 0,
+      "subscription": true
+     },
+     "llama3": {
+      "input": 2000,
+      "output": 1000,
+      "cost": 0
+     },
+     "claude-haiku": {
+      "input": 1000,
+      "output": 500,
+      "cost": 0
+     },
+     "unknown-subscription": {
+      "input": 1000,
+      "output": 500,
+      "cost": 0,
+      "subscription": true
+     }
+    },
+    "byProvider": {
+     "p": {
+      "input": 7300,
+      "output": 2500
+     },
+     "ol": {
+      "input": 2000,
+      "output": 1000
+     }
+    },
+    "bySession": {
+     "s1": {
+      "input": 3000,
+      "output": 1500,
+      "cost": 0.015,
+      "listCost": 0.0185
+     },
+     "s2": {
+      "input": 4300,
+      "output": 1000,
+      "cost": 0,
+      "listCost": 0.061125
+     },
+     "s3": {
+      "input": 1000,
+      "output": 500,
+      "cost": 0,
+      "listCost": 0
+     }
+    },
+    "bySessionCost": {
+     "s1": 0.015,
+     "s2": 0,
+     "s3": 0
+    },
+    "daily": [
+     {
+      "date": "2026-09-30",
+      "input": 1000,
+      "output": 500,
+      "cost": 0
+     },
+     {
+      "date": "2026-10-01",
+      "input": 7300,
+      "output": 2500,
+      "cost": 0.015
+     },
+     {
+      "date": "2026-10-02",
+      "input": 1000,
+      "output": 500,
+      "cost": 0
+     }
+    ],
+    "avoidedCosts": {
+     "subscription": 0.061125,
+     "local": 0.024499999999999997,
+     "unpricedTokens": 1500,
+     "benchmarkTokens": 3000
+    },
+    "bySessionAvoidedCosts": {
+     "s2": {
+      "subscription": 0.061125,
+      "local": 0.010499999999999999,
+      "unpricedTokens": 0,
+      "benchmarkTokens": 1500
+     },
+     "s1": {
+      "subscription": 0,
+      "local": 0.0035,
+      "unpricedTokens": 0,
+      "benchmarkTokens": 0
+     },
+     "s3": {
+      "subscription": 0,
+      "local": 0,
+      "unpricedTokens": 1500,
+      "benchmarkTokens": 0
+     }
+    },
+    "totalCacheRead": 2000,
+    "totalCacheWrite": 300,
+    "hasSubscriptionUsage": true
+   }
+  },
+  {
+   "name": "default benchmark and opting out",
+   "settings": "{\"providers\":[]}",
+   "usage": "{\"ts\":1790856000000,\"providerId\":\"p\",\"modelId\":\"unlisted-local\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s1\",\"local\":true}\n{\"ts\":1790856000000,\"providerId\":\"p\",\"modelId\":\"qwen3:32b\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s1\",\"local\":true}",
+   "replies": null,
+   "output": {
+    "totalInput": 2000,
+    "totalOutput": 1000,
+    "totalCost": 0,
+    "byModel": {
+     "unlisted-local": {
+      "input": 1000,
+      "output": 500,
+      "cost": 0
+     },
+     "qwen3:32b": {
+      "input": 1000,
+      "output": 500,
+      "cost": 0
+     }
+    },
+    "byProvider": {
+     "p": {
+      "input": 2000,
+      "output": 1000
+     }
+    },
+    "bySession": {
+     "s1": {
+      "input": 2000,
+      "output": 1000,
+      "cost": 0,
+      "listCost": 0.00022000000000000003
+     }
+    },
+    "bySessionCost": {
+     "s1": 0
+    },
+    "daily": [
+     {
+      "date": "2026-10-01",
+      "input": 2000,
+      "output": 1000,
+      "cost": 0
+     }
+    ],
+    "avoidedCosts": {
+     "subscription": 0,
+     "local": 0.00044000000000000007,
+     "unpricedTokens": 0,
+     "benchmarkTokens": 1500
+    },
+    "bySessionAvoidedCosts": {
+     "s1": {
+      "subscription": 0,
+      "local": 0.00044000000000000007,
+      "unpricedTokens": 0,
+      "benchmarkTokens": 1500
+     }
+    },
+    "totalCacheRead": 0,
+    "totalCacheWrite": 0
+   }
+  },
+  {
+   "name": "benchmark switched off",
+   "settings": "{\"providers\":\"nope\",\"localCostBenchmark\":\"\"}",
+   "usage": "{\"ts\":1790856000000,\"providerId\":\"p\",\"modelId\":\"unlisted-local\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s1\",\"local\":true}\n{\"ts\":1790856000000,\"providerId\":\"p\",\"modelId\":\"gpt-4o\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s1\",\"auth\":\"subscription\"}",
+   "replies": null,
+   "output": {
+    "totalInput": 2000,
+    "totalOutput": 1000,
+    "totalCost": 0,
+    "byModel": {
+     "unlisted-local": {
+      "input": 1000,
+      "output": 500,
+      "cost": 0
+     },
+     "gpt-4o": {
+      "input": 1000,
+      "output": 500,
+      "cost": 0,
+      "subscription": true
+     }
+    },
+    "byProvider": {
+     "p": {
+      "input": 2000,
+      "output": 1000
+     }
+    },
+    "bySession": {
+     "s1": {
+      "input": 2000,
+      "output": 1000,
+      "cost": 0,
+      "listCost": 0.0075
+     }
+    },
+    "bySessionCost": {
+     "s1": 0
+    },
+    "daily": [
+     {
+      "date": "2026-10-01",
+      "input": 2000,
+      "output": 1000,
+      "cost": 0
+     }
+    ],
+    "avoidedCosts": {
+     "subscription": 0.0075,
+     "local": 0,
+     "unpricedTokens": 1500,
+     "benchmarkTokens": 0
+    },
+    "bySessionAvoidedCosts": {
+     "s1": {
+      "subscription": 0.0075,
+      "local": 0,
+      "unpricedTokens": 1500,
+      "benchmarkTokens": 0
+     }
+    },
+    "totalCacheRead": 0,
+    "totalCacheWrite": 0,
+    "hasSubscriptionUsage": true
+   }
+  },
+  {
+   "name": "odd records",
+   "settings": "{not json",
+   "usage": "{\"ts\":0,\"providerId\":\"p\",\"modelId\":\"gpt-4o\",\"inputTokens\":1,\"outputTokens\":2,\"sessionId\":\"a\"}\n{\"ts\":null,\"modelId\":\"gpt-4o\",\"inputTokens\":1,\"outputTokens\":2}\n{\"ts\":1.9,\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"inputTokens\":null,\"outputTokens\":2,\"cacheReadTokens\":null,\"sessionId\":\"a\"}\n{\"ts\":-86400001,\"providerId\":\"p\",\"inputTokens\":5,\"outputTokens\":5,\"sessionId\":\"b\"}\n{\"ts\":1790985600000,\"providerId\":\"p\",\"modelId\":\"gpt-4o\",\"outputTokens\":5,\"sessionId\":\"b\"}\n{\"ts\":1790985600000,\"providerId\":\"p\",\"modelId\":\"gpt-4o\",\"inputTokens\":5,\"outputTokens\":5,\"local\":null,\"auth\":\"apikey\",\"sessionId\":\"b\"}\n{\"ts\":1790985600000,\"providerId\":\"p\",\"modelId\":\"0\",\"inputTokens\":1,\"outputTokens\":1,\"sessionId\":\"7\"}\n{\"ts\":1790985600000,\"providerId\":\"p\",\"modelId\":\"gpt-4o\",\"inputTokens\":1,\"outputTokens\":1,\"sessionId\":0}\n{\"ts\":\"2026-10-04T00:00:00Z\",\"providerId\":\"p\",\"modelId\":\"gpt-4o\",\"inputTokens\":1,\"outputTokens\":1,\"sessionId\":\"c\"}\n{\"ts\":true,\"providerId\":\"p\",\"modelId\":\"gpt-4o\",\"inputTokens\":1,\"outputTokens\":1,\"sessionId\":\"c\"}",
+   "replies": null,
+   "output": {
+    "totalInput": null,
+    "totalOutput": 25,
+    "totalCost": null,
+    "byModel": {
+     "0": {
+      "input": 1,
+      "output": 1,
+      "cost": 0
+     },
+     "gpt-4o": {
+      "input": null,
+      "output": 17,
+      "cost": null
+     },
+     "claude-sonnet-4-5": {
+      "input": 0,
+      "output": 2,
+      "cost": 0.000029999999999999997
+     },
+     "undefined": {
+      "input": 5,
+      "output": 5,
+      "cost": 0
+     }
+    },
+    "byProvider": {
+     "p": {
+      "input": null,
+      "output": 23
+     },
+     "undefined": {
+      "input": 1,
+      "output": 2
+     }
+    },
+    "bySession": {
+     "7": {
+      "input": 1,
+      "output": 1,
+      "cost": 0,
+      "listCost": 0
+     },
+     "a": {
+      "input": 1,
+      "output": 4,
+      "cost": 0.000052499999999999995,
+      "listCost": 0.000052499999999999995
+     },
+     "b": {
+      "input": null,
+      "output": 15,
+      "cost": null,
+      "listCost": null
+     },
+     "c": {
+      "input": 2,
+      "output": 2,
+      "cost": 0.000024999999999999998,
+      "listCost": 0.000024999999999999998
+     }
+    },
+    "bySessionCost": {
+     "7": 0,
+     "a": 0.000052499999999999995,
+     "b": null,
+     "c": 0.000024999999999999998
+    },
+    "daily": [
+     {
+      "date": "1969-12-30",
+      "input": 5,
+      "output": 5,
+      "cost": 0
+     },
+     {
+      "date": "1970-01-01",
+      "input": 3,
+      "output": 7,
+      "cost": 0.00008749999999999999
+     },
+     {
+      "date": "2026-10-03",
+      "input": null,
+      "output": 12,
+      "cost": null
+     },
+     {
+      "date": "2026-10-04",
+      "input": 1,
+      "output": 1,
+      "cost": 0.000012499999999999999
+     }
+    ],
+    "avoidedCosts": {
+     "subscription": 0,
+     "local": 0,
+     "unpricedTokens": 0,
+     "benchmarkTokens": 0
+    },
+    "bySessionAvoidedCosts": {},
+    "totalCacheRead": 0,
+    "totalCacheWrite": 0
+   }
+  },
+  {
+   "name": "replies",
+   "settings": null,
+   "usage": null,
+   "replies": "{\"ts\":5,\"sessionId\":\"s\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":3,\"stop\":\"complete\"}\n{\"ts\":9,\"sessionId\":\"s\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":12,\"stop\":\"loop\"}\n{\"ts\":7,\"sessionId\":\"t\",\"providerId\":\"p\",\"modelId\":\"n\",\"steps\":0,\"stop\":\"loop\",\"maxSteps\":50}\n{\"ts\":8,\"sessionId\":\"t\",\"providerId\":\"p\",\"modelId\":\"n\",\"steps\":40,\"stop\":\"step_limit\"}\n{\"ts\":1,\"sessionId\":\"u\",\"providerId\":\"p\",\"modelId\":\"n\",\"steps\":2,\"stop\":\"runaway\"}\n{\"ts\":2,\"sessionId\":\"u\",\"modelId\":\"n\",\"steps\":1,\"stop\":\"loop\"}\n{\"torn\n\n{\"ts\":100,\"sessionId\":\"r0\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":1,\"stop\":\"loop\"}\n{\"ts\":101,\"sessionId\":\"r1\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":2,\"stop\":\"loop\"}\n{\"ts\":102,\"sessionId\":\"r2\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":3,\"stop\":\"loop\"}\n{\"ts\":103,\"sessionId\":\"r3\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":4,\"stop\":\"loop\"}\n{\"ts\":104,\"sessionId\":\"r4\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":5,\"stop\":\"loop\"}\n{\"ts\":105,\"sessionId\":\"r5\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":6,\"stop\":\"loop\"}\n{\"ts\":106,\"sessionId\":\"r6\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":7,\"stop\":\"loop\"}\n{\"ts\":107,\"sessionId\":\"r7\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":8,\"stop\":\"loop\"}\n{\"ts\":108,\"sessionId\":\"r8\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":9,\"stop\":\"loop\"}\n{\"ts\":109,\"sessionId\":\"r9\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":10,\"stop\":\"loop\"}\n{\"ts\":110,\"sessionId\":\"r10\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":11,\"stop\":\"loop\"}\n",
+   "output": {
+    "totalInput": 0,
+    "totalOutput": 0,
+    "totalCost": 0,
+    "byModel": {},
+    "byProvider": {},
+    "bySession": {},
+    "bySessionCost": {},
+    "daily": [],
+    "avoidedCosts": {
+     "subscription": 0,
+     "local": 0,
+     "unpricedTokens": 0,
+     "benchmarkTokens": 0
+    },
+    "bySessionAvoidedCosts": {},
+    "replies": {
+     "total": 17,
+     "byStop": {
+      "complete": 1,
+      "loop": 14,
+      "runaway": 1,
+      "other": 1
+     },
+     "p50Steps": 5,
+     "p90Steps": 12,
+     "mostSteps": 40,
+     "recentStops": [
+      {
+       "ts": 110,
+       "sessionId": "r10",
+       "modelId": "m",
+       "steps": 11,
+       "stop": "loop"
+      },
+      {
+       "ts": 109,
+       "sessionId": "r9",
+       "modelId": "m",
+       "steps": 10,
+       "stop": "loop"
+      },
+      {
+       "ts": 108,
+       "sessionId": "r8",
+       "modelId": "m",
+       "steps": 9,
+       "stop": "loop"
+      },
+      {
+       "ts": 107,
+       "sessionId": "r7",
+       "modelId": "m",
+       "steps": 8,
+       "stop": "loop"
+      },
+      {
+       "ts": 106,
+       "sessionId": "r6",
+       "modelId": "m",
+       "steps": 7,
+       "stop": "loop"
+      },
+      {
+       "ts": 105,
+       "sessionId": "r5",
+       "modelId": "m",
+       "steps": 6,
+       "stop": "loop"
+      },
+      {
+       "ts": 104,
+       "sessionId": "r4",
+       "modelId": "m",
+       "steps": 5,
+       "stop": "loop"
+      },
+      {
+       "ts": 103,
+       "sessionId": "r3",
+       "modelId": "m",
+       "steps": 4,
+       "stop": "loop"
+      },
+      {
+       "ts": 102,
+       "sessionId": "r2",
+       "modelId": "m",
+       "steps": 3,
+       "stop": "loop"
+      },
+      {
+       "ts": 101,
+       "sessionId": "r1",
+       "modelId": "m",
+       "steps": 2,
+       "stop": "loop"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "replies, all blank",
+   "settings": null,
+   "usage": null,
+   "replies": "\n\n{bad\n",
+   "output": {
+    "totalInput": 0,
+    "totalOutput": 0,
+    "totalCost": 0,
+    "byModel": {},
+    "byProvider": {},
+    "bySession": {},
+    "bySessionCost": {},
+    "daily": [],
+    "avoidedCosts": {
+     "subscription": 0,
+     "local": 0,
+     "unpricedTokens": 0,
+     "benchmarkTokens": 0
+    },
+    "bySessionAvoidedCosts": {}
+   }
+  },
+  {
+   "name": "usage and replies together",
+   "settings": "{\"providers\":[{\"id\":\"p\",\"kind\":\"openai\"}],\"localCostBenchmark\":\"gpt-4o-mini\"}",
+   "usage": "{\"ts\":1790856000000,\"providerId\":\"p\",\"modelId\":\"gpt-4o\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s1\"}\n{\"ts\":1735689600000,\"providerId\":\"p\",\"modelId\":\"gpt-6.1-sol\",\"inputTokens\":1000,\"outputTokens\":500,\"sessionId\":\"s1\",\"auth\":\"subscription\",\"cacheReadTokens\":2000000}\n",
+   "replies": "{\"ts\":5,\"sessionId\":\"s\",\"providerId\":\"p\",\"modelId\":\"m\",\"steps\":1,\"stop\":\"complete\",\"effort\":\"normal\",\"inputTokens\":1}\n",
+   "output": {
+    "totalInput": 2002000,
+    "totalOutput": 1000,
+    "totalCost": 0.0075,
+    "byModel": {
+     "gpt-4o": {
+      "input": 1000,
+      "output": 500,
+      "cost": 0.0075
+     },
+     "gpt-6.1-sol": {
+      "input": 2001000,
+      "output": 500,
+      "cost": 0,
+      "subscription": true
+     }
+    },
+    "byProvider": {
+     "p": {
+      "input": 2002000,
+      "output": 1000
+     }
+    },
+    "bySession": {
+     "s1": {
+      "input": 2002000,
+      "output": 1000,
+      "cost": 0.0075,
+      "listCost": 0.2145
+     }
+    },
+    "bySessionCost": {
+     "s1": 0.0075
+    },
+    "daily": [
+     {
+      "date": "2025-01-01",
+      "input": 2001000,
+      "output": 500,
+      "cost": 0
+     },
+     {
+      "date": "2026-10-01",
+      "input": 1000,
+      "output": 500,
+      "cost": 0.0075
+     }
+    ],
+    "avoidedCosts": {
+     "subscription": 0.207,
+     "local": 0,
+     "unpricedTokens": 0,
+     "benchmarkTokens": 0
+    },
+    "bySessionAvoidedCosts": {
+     "s1": {
+      "subscription": 0.207,
+      "local": 0,
+      "unpricedTokens": 0,
+      "benchmarkTokens": 0
+     }
+    },
+    "replies": {
+     "total": 1,
+     "byStop": {
+      "complete": 1,
+      "loop": 0,
+      "runaway": 0,
+      "other": 0
+     },
+     "p50Steps": 1,
+     "p90Steps": 1,
+     "mostSteps": 1,
+     "recentStops": []
+    },
+    "totalCacheRead": 2000000,
+    "totalCacheWrite": 0,
+    "hasSubscriptionUsage": true
+   }
+  }
+ ],
+ "usageLines": [
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "provider": {
+     "kind": "anthropic",
+     "auth": "subscription"
+    },
+    "event": {
+     "type": "usage",
+     "sessionId": "s_1",
+     "inputTokens": 10,
+     "outputTokens": 20
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"inputTokens\":10,\"outputTokens\":20,\"sessionId\":\"s_1\",\"auth\":\"subscription\",\"local\":false}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "provider": {
+     "kind": "llamacpp"
+    },
+    "event": {
+     "type": "usage",
+     "sessionId": "s_1",
+     "inputTokens": 10,
+     "outputTokens": 20
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"inputTokens\":10,\"outputTokens\":20,\"sessionId\":\"s_1\",\"local\":true}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "provider": {
+     "kind": "openai",
+     "auth": "apikey"
+    },
+    "event": {
+     "type": "usage",
+     "sessionId": "s_1",
+     "inputTokens": 10,
+     "outputTokens": 20
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"inputTokens\":10,\"outputTokens\":20,\"sessionId\":\"s_1\",\"auth\":\"apikey\",\"local\":false}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "provider": {
+     "kind": "anthropic",
+     "auth": "subscription"
+    },
+    "event": {
+     "type": "usage",
+     "sessionId": "s_1",
+     "inputTokens": 10,
+     "outputTokens": 20,
+     "cacheReadTokens": 30,
+     "cacheWriteTokens": 0
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"inputTokens\":10,\"cacheReadTokens\":30,\"cacheWriteTokens\":0,\"outputTokens\":20,\"sessionId\":\"s_1\",\"auth\":\"subscription\",\"local\":false}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "provider": {
+     "kind": "llamacpp"
+    },
+    "event": {
+     "type": "usage",
+     "sessionId": "s_1",
+     "inputTokens": 10,
+     "outputTokens": 20,
+     "cacheReadTokens": 30,
+     "cacheWriteTokens": 0
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"inputTokens\":10,\"cacheReadTokens\":30,\"cacheWriteTokens\":0,\"outputTokens\":20,\"sessionId\":\"s_1\",\"local\":true}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "provider": {
+     "kind": "openai",
+     "auth": "apikey"
+    },
+    "event": {
+     "type": "usage",
+     "sessionId": "s_1",
+     "inputTokens": 10,
+     "outputTokens": 20,
+     "cacheReadTokens": 30,
+     "cacheWriteTokens": 0
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"inputTokens\":10,\"cacheReadTokens\":30,\"cacheWriteTokens\":0,\"outputTokens\":20,\"sessionId\":\"s_1\",\"auth\":\"apikey\",\"local\":false}"
+  }
+ ],
+ "replyLines": [
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": false,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "complete",
+     "steps": 3
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "effort": "high",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "cacheReadTokens": 7,
+     "cacheWriteTokens": 0,
+     "outputMs": 120,
+     "wallMs": 400
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"startedAt\":1759999999500,\"sessionId\":\"s_1\",\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"steps\":3,\"stop\":\"complete\",\"effort\":\"high\",\"inputTokens\":5,\"outputTokens\":6,\"cacheReadTokens\":7,\"cacheWriteTokens\":0,\"outputMs\":120,\"wallMs\":400}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": true,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "complete",
+     "steps": 3
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "effort": "high",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "cacheReadTokens": 7,
+     "cacheWriteTokens": 0,
+     "outputMs": 120,
+     "wallMs": 400
+    },
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": false,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "complete",
+     "steps": 3
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "wallMs": 10
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"startedAt\":1759999999500,\"sessionId\":\"s_1\",\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"steps\":3,\"stop\":\"complete\",\"inputTokens\":5,\"outputTokens\":6,\"wallMs\":10}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": true,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "complete",
+     "steps": 3
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "wallMs": 10
+    },
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": false,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "complete",
+     "steps": 3
+    },
+    "finished": null,
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"startedAt\":1759999999500,\"sessionId\":\"s_1\",\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"steps\":3,\"stop\":\"complete\"}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": true,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "complete",
+     "steps": 3
+    },
+    "finished": null,
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": false,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "loop"
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "effort": "high",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "cacheReadTokens": 7,
+     "cacheWriteTokens": 0,
+     "outputMs": 120,
+     "wallMs": 400
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"startedAt\":1759999999500,\"sessionId\":\"s_1\",\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"steps\":0,\"stop\":\"loop\",\"effort\":\"high\",\"inputTokens\":5,\"outputTokens\":6,\"cacheReadTokens\":7,\"cacheWriteTokens\":0,\"outputMs\":120,\"wallMs\":400}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": true,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "loop"
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "effort": "high",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "cacheReadTokens": 7,
+     "cacheWriteTokens": 0,
+     "outputMs": 120,
+     "wallMs": 400
+    },
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": false,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "loop"
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "wallMs": 10
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"startedAt\":1759999999500,\"sessionId\":\"s_1\",\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"steps\":0,\"stop\":\"loop\",\"inputTokens\":5,\"outputTokens\":6,\"wallMs\":10}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": true,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "loop"
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "wallMs": 10
+    },
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": false,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "loop"
+    },
+    "finished": null,
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"startedAt\":1759999999500,\"sessionId\":\"s_1\",\"providerId\":\"p\",\"modelId\":\"claude-sonnet-4-5\",\"steps\":0,\"stop\":\"loop\"}"
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": true,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1",
+     "stop": "loop"
+    },
+    "finished": null,
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": false,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1"
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "effort": "high",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "cacheReadTokens": 7,
+     "cacheWriteTokens": 0,
+     "outputMs": 120,
+     "wallMs": 400
+    },
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": true,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1"
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "effort": "high",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "cacheReadTokens": 7,
+     "cacheWriteTokens": 0,
+     "outputMs": 120,
+     "wallMs": 400
+    },
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": false,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1"
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "wallMs": 10
+    },
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": true,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1"
+    },
+    "finished": {
+     "providerId": "p",
+     "modelId": "m",
+     "inputTokens": 5,
+     "outputTokens": 6,
+     "wallMs": 10
+    },
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": false,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1"
+    },
+    "finished": null,
+    "ts": 1760000000000
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "opts": {
+     "sessionId": "s_1",
+     "providerId": "p",
+     "modelId": "claude-sonnet-4-5"
+    },
+    "incognito": true,
+    "startedAt": 1759999999500,
+    "event": {
+     "type": "done",
+     "sessionId": "s_1"
+    },
+    "finished": null,
+    "ts": 1760000000000
+   },
+   "output": null
+  }
+ ],
+ "sideLines": [
+  {
+   "input": {
+    "provider": {
+     "id": "p",
+     "kind": "llamacpp"
+    },
+    "modelId": "m",
+    "sessionId": "s_1",
+    "item": {
+     "inputTokens": 10,
+     "outputTokens": 4
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"m\",\"sessionId\":\"s_1\",\"inputTokens\":10,\"outputTokens\":4,\"local\":true}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "p",
+     "kind": "llamacpp"
+    },
+    "modelId": null,
+    "sessionId": null,
+    "item": {
+     "inputTokens": 10,
+     "outputTokens": 4
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"\",\"sessionId\":\"\",\"inputTokens\":10,\"outputTokens\":4,\"local\":true}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "p",
+     "kind": "llamacpp"
+    },
+    "modelId": "m",
+    "sessionId": "s_1",
+    "item": {
+     "cacheReadTokens": 3,
+     "cacheWriteTokens": 0
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"m\",\"sessionId\":\"s_1\",\"inputTokens\":0,\"outputTokens\":0,\"cacheReadTokens\":3,\"cacheWriteTokens\":0,\"local\":true}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "p",
+     "kind": "llamacpp"
+    },
+    "modelId": null,
+    "sessionId": null,
+    "item": {
+     "cacheReadTokens": 3,
+     "cacheWriteTokens": 0
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"\",\"sessionId\":\"\",\"inputTokens\":0,\"outputTokens\":0,\"cacheReadTokens\":3,\"cacheWriteTokens\":0,\"local\":true}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "p",
+     "kind": "llamacpp"
+    },
+    "modelId": "m",
+    "sessionId": "s_1",
+    "item": {},
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"m\",\"sessionId\":\"s_1\",\"inputTokens\":0,\"outputTokens\":0,\"local\":true}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "p",
+     "kind": "llamacpp"
+    },
+    "modelId": null,
+    "sessionId": null,
+    "item": {},
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"p\",\"modelId\":\"\",\"sessionId\":\"\",\"inputTokens\":0,\"outputTokens\":0,\"local\":true}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "c",
+     "kind": "anthropic",
+     "auth": "subscription"
+    },
+    "modelId": "m",
+    "sessionId": "s_1",
+    "item": {
+     "inputTokens": 10,
+     "outputTokens": 4
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"c\",\"modelId\":\"m\",\"sessionId\":\"s_1\",\"inputTokens\":10,\"outputTokens\":4,\"auth\":\"subscription\",\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "c",
+     "kind": "anthropic",
+     "auth": "subscription"
+    },
+    "modelId": null,
+    "sessionId": null,
+    "item": {
+     "inputTokens": 10,
+     "outputTokens": 4
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"c\",\"modelId\":\"\",\"sessionId\":\"\",\"inputTokens\":10,\"outputTokens\":4,\"auth\":\"subscription\",\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "c",
+     "kind": "anthropic",
+     "auth": "subscription"
+    },
+    "modelId": "m",
+    "sessionId": "s_1",
+    "item": {
+     "cacheReadTokens": 3,
+     "cacheWriteTokens": 0
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"c\",\"modelId\":\"m\",\"sessionId\":\"s_1\",\"inputTokens\":0,\"outputTokens\":0,\"cacheReadTokens\":3,\"cacheWriteTokens\":0,\"auth\":\"subscription\",\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "c",
+     "kind": "anthropic",
+     "auth": "subscription"
+    },
+    "modelId": null,
+    "sessionId": null,
+    "item": {
+     "cacheReadTokens": 3,
+     "cacheWriteTokens": 0
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"c\",\"modelId\":\"\",\"sessionId\":\"\",\"inputTokens\":0,\"outputTokens\":0,\"cacheReadTokens\":3,\"cacheWriteTokens\":0,\"auth\":\"subscription\",\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "c",
+     "kind": "anthropic",
+     "auth": "subscription"
+    },
+    "modelId": "m",
+    "sessionId": "s_1",
+    "item": {},
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"c\",\"modelId\":\"m\",\"sessionId\":\"s_1\",\"inputTokens\":0,\"outputTokens\":0,\"auth\":\"subscription\",\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {
+     "id": "c",
+     "kind": "anthropic",
+     "auth": "subscription"
+    },
+    "modelId": null,
+    "sessionId": null,
+    "item": {},
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"c\",\"modelId\":\"\",\"sessionId\":\"\",\"inputTokens\":0,\"outputTokens\":0,\"auth\":\"subscription\",\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {},
+    "modelId": "m",
+    "sessionId": "s_1",
+    "item": {
+     "inputTokens": 10,
+     "outputTokens": 4
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"\",\"modelId\":\"m\",\"sessionId\":\"s_1\",\"inputTokens\":10,\"outputTokens\":4,\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {},
+    "modelId": null,
+    "sessionId": null,
+    "item": {
+     "inputTokens": 10,
+     "outputTokens": 4
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"\",\"modelId\":\"\",\"sessionId\":\"\",\"inputTokens\":10,\"outputTokens\":4,\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {},
+    "modelId": "m",
+    "sessionId": "s_1",
+    "item": {
+     "cacheReadTokens": 3,
+     "cacheWriteTokens": 0
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"\",\"modelId\":\"m\",\"sessionId\":\"s_1\",\"inputTokens\":0,\"outputTokens\":0,\"cacheReadTokens\":3,\"cacheWriteTokens\":0,\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {},
+    "modelId": null,
+    "sessionId": null,
+    "item": {
+     "cacheReadTokens": 3,
+     "cacheWriteTokens": 0
+    },
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"\",\"modelId\":\"\",\"sessionId\":\"\",\"inputTokens\":0,\"outputTokens\":0,\"cacheReadTokens\":3,\"cacheWriteTokens\":0,\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {},
+    "modelId": "m",
+    "sessionId": "s_1",
+    "item": {},
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"\",\"modelId\":\"m\",\"sessionId\":\"s_1\",\"inputTokens\":0,\"outputTokens\":0,\"local\":false}"
+  },
+  {
+   "input": {
+    "provider": {},
+    "modelId": null,
+    "sessionId": null,
+    "item": {},
+    "ts": 1760000000000
+   },
+   "output": "{\"ts\":1760000000000,\"providerId\":\"\",\"modelId\":\"\",\"sessionId\":\"\",\"inputTokens\":0,\"outputTokens\":0,\"local\":false}"
+  }
+ ],
+ "quota": [
+  {
+   "input": {
+    "providers": [
+     {
+      "id": "claude",
+      "kind": "anthropic",
+      "tokenKey": "claude:a",
+      "enabled": true
+     },
+     {
+      "id": "or",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": true
+     },
+     {
+      "id": "off",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": false
+     }
+    ],
+    "tokenKey": "claude:a",
+    "source": "headers",
+    "limits": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 12.5,
+       "resetAt": 1760000001000,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_opus",
+       "label": "7-day Opus",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "warning",
+       "modelFamily": "opus"
+      }
+     ],
+     "planType": "max",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   "output": "{\"timestamp\":1760000000000,\"providerId\":\"claude\",\"source\":\"headers\",\"windows\":[{\"id\":\"5h\",\"scope\":\"session\",\"usedPercent\":12.5,\"resetsAt\":1760000001000,\"status\":\"allowed\"},{\"id\":\"7d_opus\",\"scope\":\"model\",\"usedPercent\":10,\"resetsAt\":1,\"status\":\"warning\"}]}"
+  },
+  {
+   "input": {
+    "providers": [
+     {
+      "id": "claude",
+      "kind": "anthropic",
+      "tokenKey": "claude:a",
+      "enabled": true
+     },
+     {
+      "id": "or",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": true
+     },
+     {
+      "id": "off",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": false
+     }
+    ],
+    "tokenKey": "claude:a",
+    "source": "poll",
+    "limits": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 12.5,
+       "resetAt": 1760000001000,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_opus",
+       "label": "7-day Opus",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "warning",
+       "modelFamily": "opus"
+      }
+     ],
+     "planType": "max",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   "output": "{\"timestamp\":1760000000000,\"providerId\":\"claude\",\"source\":\"poll\",\"windows\":[{\"id\":\"5h\",\"scope\":\"session\",\"usedPercent\":12.5,\"resetsAt\":1760000001000,\"status\":\"allowed\"},{\"id\":\"7d_opus\",\"scope\":\"model\",\"usedPercent\":10,\"resetsAt\":1,\"status\":\"warning\"}]}"
+  },
+  {
+   "input": {
+    "providers": [
+     {
+      "id": "claude",
+      "kind": "anthropic",
+      "tokenKey": "claude:a",
+      "enabled": true
+     },
+     {
+      "id": "or",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": true
+     },
+     {
+      "id": "off",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": false
+     }
+    ],
+    "tokenKey": "provider:or",
+    "source": "poll",
+    "limits": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 12.5,
+       "resetAt": 1760000001000,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_opus",
+       "label": "7-day Opus",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "warning",
+       "modelFamily": "opus"
+      }
+     ],
+     "planType": "max",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   "output": "{\"timestamp\":1760000000000,\"providerId\":\"or\",\"source\":\"poll\",\"windows\":[{\"id\":\"5h\",\"scope\":\"session\",\"usedPercent\":12.5,\"resetsAt\":1760000001000,\"status\":\"allowed\"},{\"id\":\"7d_opus\",\"scope\":\"model\",\"usedPercent\":10,\"resetsAt\":1,\"status\":\"warning\"}]}"
+  },
+  {
+   "input": {
+    "providers": [
+     {
+      "id": "claude",
+      "kind": "anthropic",
+      "tokenKey": "claude:a",
+      "enabled": true
+     },
+     {
+      "id": "or",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": true
+     },
+     {
+      "id": "off",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": false
+     }
+    ],
+    "tokenKey": "provider:off",
+    "source": "poll",
+    "limits": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 12.5,
+       "resetAt": 1760000001000,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_opus",
+       "label": "7-day Opus",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "warning",
+       "modelFamily": "opus"
+      }
+     ],
+     "planType": "max",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "providers": [
+     {
+      "id": "claude",
+      "kind": "anthropic",
+      "tokenKey": "claude:a",
+      "enabled": true
+     },
+     {
+      "id": "or",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": true
+     },
+     {
+      "id": "off",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": false
+     }
+    ],
+    "tokenKey": "claude:b",
+    "source": "headers",
+    "limits": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 12.5,
+       "resetAt": 1760000001000,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_opus",
+       "label": "7-day Opus",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "warning",
+       "modelFamily": "opus"
+      }
+     ],
+     "planType": "max",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   "output": null
+  },
+  {
+   "input": {
+    "providers": [
+     {
+      "id": "claude",
+      "kind": "anthropic",
+      "tokenKey": "claude:a",
+      "enabled": true
+     },
+     {
+      "id": "or",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": true
+     },
+     {
+      "id": "off",
+      "kind": "openrouter",
+      "apiKey": "k",
+      "enabled": false
+     }
+    ],
+    "tokenKey": "provider:claude",
+    "source": "poll",
+    "limits": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 12.5,
+       "resetAt": 1760000001000,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_opus",
+       "label": "7-day Opus",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "warning",
+       "modelFamily": "opus"
+      }
+     ],
+     "planType": "max",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   "output": "{\"timestamp\":1760000000000,\"providerId\":\"claude\",\"source\":\"poll\",\"windows\":[{\"id\":\"5h\",\"scope\":\"session\",\"usedPercent\":12.5,\"resetsAt\":1760000001000,\"status\":\"allowed\"},{\"id\":\"7d_opus\",\"scope\":\"model\",\"usedPercent\":10,\"resetsAt\":1,\"status\":\"warning\"}]}"
+  }
+ ],
+ "limits": {
+  "headers": [
+   {
+    "input": [
+     [
+      "anthropic-ratelimit-unified-5h-utilization",
+      "0.62"
+     ],
+     [
+      "anthropic-ratelimit-unified-5h-reset",
+      "1760003600"
+     ],
+     [
+      "anthropic-ratelimit-unified-5h-status",
+      "allowed"
+     ],
+     [
+      "anthropic-ratelimit-unified-7d-utilization",
+      "0.95"
+     ],
+     [
+      "anthropic-ratelimit-unified-7d-status",
+      "allowed_warning"
+     ]
+    ],
+    "output": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 62,
+       "resetAt": 1760003600000,
+       "status": "allowed"
+      },
+      {
+       "id": "7d",
+       "label": "7-day",
+       "scope": "weekly",
+       "usedPercent": 95,
+       "resetAt": 0,
+       "status": "warning"
+      }
+     ],
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   {
+    "input": [
+     [
+      "anthropic-ratelimit-unified-7d_opus-utilization",
+      "0.4"
+     ],
+     [
+      "anthropic-ratelimit-unified-7d_fable-utilization",
+      "1.7"
+     ],
+     [
+      "anthropic-ratelimit-unified-7d_fable-status",
+      "rejected"
+     ],
+     [
+      "anthropic-ratelimit-unified-5h-utilization",
+      "0.1"
+     ]
+    ],
+    "output": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 10,
+       "resetAt": 0,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_fable",
+       "label": "7-day Fable",
+       "scope": "model",
+       "modelFamily": "fable",
+       "usedPercent": 100,
+       "resetAt": 0,
+       "status": "rate_limited"
+      },
+      {
+       "id": "7d_opus",
+       "label": "7-day Opus",
+       "scope": "model",
+       "modelFamily": "opus",
+       "usedPercent": 40,
+       "resetAt": 0,
+       "status": "allowed"
+      }
+     ],
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   {
+    "input": [
+     [
+      "anthropic-ratelimit-unified-weird-utilization",
+      "0.3"
+     ],
+     [
+      "anthropic-ratelimit-unified-7d_claude_next-utilization",
+      "0.2abc"
+     ],
+     [
+      "anthropic-ratelimit-unified-5h-utilization",
+      "nope"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ]
+    ],
+    "output": {
+     "windows": [
+      {
+       "id": "weird",
+       "label": "weird",
+       "scope": "weekly",
+       "usedPercent": 30,
+       "resetAt": 0,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_claude_next",
+       "label": "7-day Claude Next",
+       "scope": "model",
+       "modelFamily": "claude_next",
+       "usedPercent": 20,
+       "resetAt": 0,
+       "status": "allowed"
+      }
+     ],
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   {
+    "input": [
+     [
+      "ANTHROPIC-RATELIMIT-UNIFIED-5H-UTILIZATION",
+      "0.5"
+     ],
+     [
+      "anthropic-ratelimit-unified-5h-reset",
+      "x"
+     ],
+     [
+      "anthropic-ratelimit-unified--utilization",
+      "0.5"
+     ],
+     [
+      "anthropic-ratelimit-unified-seven_day_sonnet-utilization",
+      "-0.2"
+     ]
+    ],
+    "output": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 50,
+       "resetAt": null,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_sonnet",
+       "label": "7-day Sonnet",
+       "scope": "model",
+       "modelFamily": "sonnet",
+       "usedPercent": 0,
+       "resetAt": 0,
+       "status": "allowed"
+      }
+     ],
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   {
+    "input": [
+     [
+      "anthropic-ratelimit-unified-5h-utilization",
+      "0.123456"
+     ],
+     [
+      "anthropic-ratelimit-unified-5h-utilization",
+      "0.5"
+     ],
+     [
+      "anthropic-ratelimit-unified-5h-status",
+      "RATE_LIMITED"
+     ]
+    ],
+    "output": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 50,
+       "resetAt": 0,
+       "status": "rate_limited"
+      }
+     ],
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   },
+   {
+    "input": [],
+    "output": {
+     "windows": [],
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 60000
+    }
+   }
+  ],
+  "usageJson": [
+   {
+    "input": {
+     "five_hour": {
+      "utilization": 62,
+      "resets_at": "2026-10-09T10:00:00.123456+00:00"
+     },
+     "seven_day": {
+      "utilization": "85",
+      "resets_at": "2026-10-12T00:00:00Z"
+     },
+     "seven_day_opus": {
+      "utilization": 100
+     },
+     "extra_usage": {
+      "is_enabled": true,
+      "monthly_limit": 50,
+      "used_credits": 12.5
+     }
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 62,
+       "resetAt": 1791540000123,
+       "status": "allowed"
+      },
+      {
+       "id": "7d",
+       "label": "7-day",
+       "scope": "weekly",
+       "usedPercent": 85,
+       "resetAt": 1791763200000,
+       "status": "warning"
+      },
+      {
+       "id": "7d_opus",
+       "label": "7-day Opus",
+       "scope": "model",
+       "modelFamily": "opus",
+       "usedPercent": 100,
+       "resetAt": 0,
+       "status": "rate_limited"
+      }
+     ],
+     "creditsBalance": 37.5,
+     "creditsState": "balance",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "seven_day_fable": {
+      "utilization": 4.567,
+      "status": "warning"
+     },
+     "five_hour": null,
+     "extra_usage": {
+      "is_enabled": false
+     }
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "7d_fable",
+       "label": "7-day Fable",
+       "scope": "model",
+       "modelFamily": "fable",
+       "usedPercent": 4.57,
+       "resetAt": 0,
+       "status": "warning"
+      }
+     ],
+     "creditsState": "disabled",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "five_hour": {
+      "utilization": "x"
+     },
+     "seven_day": {
+      "utilization": null,
+      "resets_at": 5
+     },
+     "7d_sonnet": {
+      "utilization": 79.999
+     },
+     "extra_usage": {
+      "monthly_limit": "20"
+     },
+     "iguana_necktie": {
+      "utilization": 3
+     },
+     "extra": 5
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "iguana_necktie",
+       "label": "iguana_necktie",
+       "scope": "weekly",
+       "usedPercent": 3,
+       "resetAt": 0,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_sonnet",
+       "label": "7-day Sonnet",
+       "scope": "model",
+       "modelFamily": "sonnet",
+       "usedPercent": 80,
+       "resetAt": 0,
+       "status": "warning"
+      }
+     ],
+     "creditsBalance": 20,
+     "creditsState": "balance",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "five_hour": {
+      "utilization": 200,
+      "status": "rejected"
+     },
+     "extra_usage": {
+      "monthly_limit": "x"
+     }
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 100,
+       "resetAt": 0,
+       "status": "rate_limited"
+      }
+     ],
+     "creditsState": "unknown",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "seven_day": {
+      "utilization": [
+       7
+      ]
+     },
+     "five_hour": {
+      "utilization": true
+     },
+     "extra_usage": "no"
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "7d",
+       "label": "7-day",
+       "scope": "weekly",
+       "usedPercent": 7,
+       "resetAt": 0,
+       "status": "allowed"
+      }
+     ],
+     "creditsState": "unknown",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {},
+    "output": {
+     "windows": [],
+     "creditsState": "unknown",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   }
+  ],
+  "chatgpt": [
+   {
+    "input": {
+     "plan_type": "plus",
+     "rate_limit": {
+      "allowed": true,
+      "limit_reached": false,
+      "primary_window": {
+       "used_percent": 42,
+       "reset_at": 1760003600,
+       "limit_window_seconds": 18000
+      },
+      "secondary_window": {
+       "used_percent": "81.5",
+       "reset_at": 1760500000,
+       "limit_window_seconds": 604800
+      }
+     },
+     "credits": {
+      "balance": "12.50"
+     }
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 42,
+       "resetAt": 1760003600000,
+       "status": "allowed"
+      },
+      {
+       "id": "7d",
+       "label": "7-day",
+       "scope": "weekly",
+       "usedPercent": 81.5,
+       "resetAt": 1760500000000,
+       "status": "warning"
+      }
+     ],
+     "planType": "plus",
+     "creditsBalance": 12.5,
+     "creditsState": "balance",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "rate_limit": {
+      "allowed": false,
+      "primary_window": {
+       "used_percent": 10,
+       "limit_window_seconds": 86400
+      },
+      "secondary_window": {
+       "used_percent": "x"
+      }
+     },
+     "credits": {
+      "unlimited": true
+     }
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "1d",
+       "label": "1-day",
+       "scope": "session",
+       "usedPercent": 10,
+       "resetAt": 0,
+       "status": "rate_limited"
+      }
+     ],
+     "creditsState": "unlimited",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "rate_limit": {
+      "allowed": true,
+      "limit_reached": true,
+      "primary_window": {
+       "used_percent": 5,
+       "limit_window_seconds": 90
+      },
+      "secondary_window": {
+       "used_percent": 99,
+       "limit_window_seconds": 1209600
+      }
+     },
+     "credits": {
+      "balance": 3
+     }
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "90s",
+       "label": "90-second",
+       "scope": "session",
+       "usedPercent": 5,
+       "resetAt": 0,
+       "status": "rate_limited"
+      },
+      {
+       "id": "14d",
+       "label": "14-day",
+       "scope": "weekly",
+       "usedPercent": 99,
+       "resetAt": 0,
+       "status": "rate_limited"
+      }
+     ],
+     "creditsBalance": 3,
+     "creditsState": "balance",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "rate_limit": {
+      "allowed": true,
+      "primary_window": {
+       "used_percent": 150,
+       "limit_window_seconds": 1.5
+      }
+     },
+     "credits": {}
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "primary",
+       "label": "Primary usage",
+       "scope": "session",
+       "usedPercent": 100,
+       "resetAt": 0,
+       "status": "warning"
+      }
+     ],
+     "creditsState": "unknown",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "plan_type": 5
+    },
+    "output": {
+     "windows": [],
+     "creditsState": "unknown",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   }
+  ],
+  "openrouter": [
+   {
+    "input": {
+     "data": {
+      "limit": 10,
+      "usage": 2.5,
+      "is_free_tier": false
+     }
+    },
+    "output": {
+     "windows": [],
+     "creditsBalance": 7.5,
+     "creditsState": "balance",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "data": {
+      "limit": null,
+      "limit_remaining": null,
+      "is_free_tier": true,
+      "free_model_daily_requests": {
+       "limit": 50,
+       "remaining": 10
+      }
+     }
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "free_daily",
+       "label": "Free-model requests",
+       "scope": "session",
+       "usedPercent": 80,
+       "resetAt": 1760054400000,
+       "status": "warning"
+      }
+     ],
+     "planType": "free tier",
+     "creditsState": "unlimited",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "data": {
+      "limit": 5,
+      "limit_remaining": 1,
+      "free_model_daily_requests": {
+       "limit": 50,
+       "used": 45
+      }
+     }
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "free_daily",
+       "label": "Free-model requests",
+       "scope": "session",
+       "usedPercent": 90,
+       "resetAt": 1760054400000,
+       "status": "warning"
+      }
+     ],
+     "creditsBalance": 1,
+     "creditsState": "balance",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "data": {
+      "limit": 5,
+      "usage": 9,
+      "free_model_daily_requests": {
+       "limit": 0
+      }
+     }
+    },
+    "output": {
+     "windows": [],
+     "creditsBalance": 0,
+     "creditsState": "balance",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {
+     "data": {
+      "free_model_daily_requests": {
+       "limit": 10,
+       "used": 10
+      }
+     }
+    },
+    "output": {
+     "windows": [
+      {
+       "id": "free_daily",
+       "label": "Free-model requests",
+       "scope": "session",
+       "usedPercent": 100,
+       "resetAt": 1760054400000,
+       "status": "rate_limited"
+      }
+     ],
+     "creditsState": "unlimited",
+     "updatedAt": 1760000000000,
+     "staleAfterMs": 35000
+    }
+   },
+   {
+    "input": {},
+    "output": {
+     "error": {
+      "kind": "unreadable",
+      "status": 200
+     }
+    }
+   },
+   {
+    "input": null,
+    "output": {
+     "error": {
+      "kind": "unreadable",
+      "status": 200
+     }
+    }
+   }
+  ],
+  "merge": [
+   {
+    "input": {
+     "previous": [
+      {
+       "id": "7d_fable",
+       "label": "7-day Fable",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "allowed"
+      },
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "allowed"
+      },
+      {
+       "id": "7d",
+       "label": "7-day",
+       "scope": "weekly",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "allowed"
+      }
+     ],
+     "fresh": [
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 50,
+       "resetAt": 1,
+       "status": "allowed"
+      }
+     ]
+    },
+    "output": [
+     {
+      "id": "5h",
+      "label": "5-hour",
+      "scope": "session",
+      "usedPercent": 50,
+      "resetAt": 1,
+      "status": "allowed"
+     },
+     {
+      "id": "7d",
+      "label": "7-day",
+      "scope": "weekly",
+      "usedPercent": 10,
+      "resetAt": 1,
+      "status": "allowed"
+     },
+     {
+      "id": "7d_fable",
+      "label": "7-day Fable",
+      "scope": "model",
+      "usedPercent": 10,
+      "resetAt": 1,
+      "status": "allowed"
+     }
+    ]
+   },
+   {
+    "input": {
+     "previous": [],
+     "fresh": [
+      {
+       "id": "7d_opus",
+       "label": "7-day Opus",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_fable",
+       "label": "7-day Fable",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_Zed",
+       "label": "7-day Zed",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "allowed"
+      },
+      {
+       "id": "7d_alpha",
+       "label": "7-day alpha",
+       "scope": "model",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "allowed"
+      },
+      {
+       "id": "weird",
+       "label": "weird",
+       "scope": "weekly",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "allowed"
+      },
+      {
+       "id": "5h",
+       "label": "5-hour",
+       "scope": "session",
+       "usedPercent": 10,
+       "resetAt": 1,
+       "status": "allowed"
+      }
+     ]
+    },
+    "output": [
+     {
+      "id": "5h",
+      "label": "5-hour",
+      "scope": "session",
+      "usedPercent": 10,
+      "resetAt": 1,
+      "status": "allowed"
+     },
+     {
+      "id": "weird",
+      "label": "weird",
+      "scope": "weekly",
+      "usedPercent": 10,
+      "resetAt": 1,
+      "status": "allowed"
+     },
+     {
+      "id": "7d_alpha",
+      "label": "7-day alpha",
+      "scope": "model",
+      "usedPercent": 10,
+      "resetAt": 1,
+      "status": "allowed"
+     },
+     {
+      "id": "7d_fable",
+      "label": "7-day Fable",
+      "scope": "model",
+      "usedPercent": 10,
+      "resetAt": 1,
+      "status": "allowed"
+     },
+     {
+      "id": "7d_opus",
+      "label": "7-day Opus",
+      "scope": "model",
+      "usedPercent": 10,
+      "resetAt": 1,
+      "status": "allowed"
+     },
+     {
+      "id": "7d_Zed",
+      "label": "7-day Zed",
+      "scope": "model",
+      "usedPercent": 10,
+      "resetAt": 1,
+      "status": "allowed"
+     }
+    ]
+   }
+  ],
+  "retryAfter": [
+   {
+    "input": "120",
+    "output": 120000
+   },
+   {
+    "input": "0",
+    "output": 0
+   },
+   {
+    "input": "1.5",
+    "output": 1500
+   },
+   {
+    "input": "-0",
+    "output": 0
+   },
+   {
+    "input": "Fri, 10 Oct 2025 12:00:00 GMT",
+    "output": 97600000
+   },
+   {
+    "input": "Sat, 10 Oct 2026 08:53:30 GMT",
+    "output": 31622410000
+   },
+   {
+    "input": "soon",
+    "output": null
+   },
+   {
+    "input": "",
+    "output": null
+   },
+   {
+    "input": null,
+    "output": null
+   },
+   {
+    "input": null,
+    "output": null
+   },
+   {
+    "input": " 30 ",
+    "output": 30000
+   }
+  ],
+  "classify": [
+   {
+    "input": {
+     "limits": "rate_limited",
+     "status": 429,
+     "retryAfterMs": 5000
+    },
+    "output": {
+     "kind": "rate_limited",
+     "status": 429,
+     "retryAfterMs": 5000
+    }
+   },
+   {
+    "input": {
+     "limits": "http",
+     "status": 500,
+     "retryAfterMs": null
+    },
+    "output": {
+     "kind": "http",
+     "status": 500
+    }
+   },
+   {
+    "input": {
+     "limits": "auth_expired",
+     "status": 401,
+     "retryAfterMs": null
+    },
+    "output": {
+     "kind": "auth_expired",
+     "status": 401
+    }
+   },
+   {
+    "input": {
+     "message": "Subscription session expired for x. Sign in again."
+    },
+    "output": {
+     "kind": "auth_expired"
+    }
+   },
+   {
+    "input": {
+     "message": "No subscription token found for k. Sign in again."
+    },
+    "output": {
+     "kind": "auth_expired"
+    }
+   },
+   {
+    "input": {
+     "message": "No subscription token found"
+    },
+    "output": {
+     "kind": "signed_out"
+    }
+   },
+   {
+    "input": {
+     "message": "Token refresh failed (400)"
+    },
+    "output": {
+     "kind": "http"
+    }
+   },
+   {
+    "input": {
+     "message": "invalid_grant"
+    },
+    "output": {
+     "kind": "auth_expired"
+    }
+   },
+   {
+    "input": {
+     "message": "fetch failed"
+    },
+    "output": {
+     "kind": "network"
+    }
+   },
+   {
+    "input": {
+     "message": "a string"
+    },
+    "output": {
+     "kind": "network"
+    }
+   },
+   {
+    "input": {
+     "message": "Token was REVOKED"
+    },
+    "output": {
+     "kind": "auth_expired"
+    }
+   }
+  ],
+  "backoff": [
+   {
+    "input": {
+     "failures": 1,
+     "retryAfterMs": null
+    },
+    "output": 60000
+   },
+   {
+    "input": {
+     "failures": 2,
+     "retryAfterMs": null
+    },
+    "output": 120000
+   },
+   {
+    "input": {
+     "failures": 3,
+     "retryAfterMs": null
+    },
+    "output": 240000
+   },
+   {
+    "input": {
+     "failures": 6,
+     "retryAfterMs": null
+    },
+    "output": 1800000
+   },
+   {
+    "input": {
+     "failures": 7,
+     "retryAfterMs": null
+    },
+    "output": 1800000
+   },
+   {
+    "input": {
+     "failures": 20,
+     "retryAfterMs": null
+    },
+    "output": 1800000
+   },
+   {
+    "input": {
+     "failures": 0,
+     "retryAfterMs": null
+    },
+    "output": 60000
+   },
+   {
+    "input": {
+     "failures": 1,
+     "retryAfterMs": 5000000
+    },
+    "output": 5000000
+   },
+   {
+    "input": {
+     "failures": 2,
+     "retryAfterMs": 10
+    },
+    "output": 120000
+   }
+  ],
+  "describe": [
+   {
+    "input": {
+     "period": "5h",
+     "family": null
+    },
+    "output": {
+     "id": "5h",
+     "label": "5-hour",
+     "scope": "session"
+    }
+   },
+   {
+    "input": {
+     "period": "7d",
+     "family": "opus"
+    },
+    "output": {
+     "id": "7d_opus",
+     "label": "7-day Opus",
+     "scope": "model",
+     "modelFamily": "opus"
+    }
+   },
+   {
+    "input": {
+     "period": "7d",
+     "family": "claude_next"
+    },
+    "output": {
+     "id": "7d_claude_next",
+     "label": "7-day Claude Next",
+     "scope": "model",
+     "modelFamily": "claude_next"
+    }
+   },
+   {
+    "input": {
+     "period": "weird",
+     "family": null
+    },
+    "output": {
+     "id": "weird",
+     "label": "weird",
+     "scope": "weekly"
+    }
+   },
+   {
+    "input": {
+     "period": "weird",
+     "family": "x-y"
+    },
+    "output": {
+     "id": "weird_x-y",
+     "label": "weird X Y",
+     "scope": "model",
+     "modelFamily": "x-y"
+    }
+   },
+   {
+    "input": {
+     "period": "5h",
+     "family": "fable"
+    },
+    "output": {
+     "id": "5h_fable",
+     "label": "5-hour Fable",
+     "scope": "model",
+     "modelFamily": "fable"
+    }
+   }
+  ]
+ }
+}
