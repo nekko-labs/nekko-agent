@@ -92,7 +92,7 @@ app.whenReady().then(async () => {
         for (let i = 0; i < 50; i++) {
           await sleep(100);
           const snapshot = await terminalHost.terminalSnapshot(realTerminal.id);
-          if (snapshot?.info.running && snapshot.buffer.replace(/\\x1b\\[[0-9;?]*[A-Za-z]/g, '').includes(marker + '\r\n')) return true;
+          if (snapshot?.info.running && snapshot.buffer.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').includes(marker + '\r\n')) return true;
         }
         return false;
       });
@@ -116,7 +116,7 @@ app.whenReady().then(async () => {
       await capture(label + '-closed');
       await run(`${opener}.click()`); await sleep(250);
       await run("document.querySelector('[data-completed-toggle]').scrollIntoView({block:'center',behavior:'instant'})");
-      await check(label + ': opening drawer reveals destination without consuming tip', `document.querySelector('[data-completed-toggle]').getBoundingClientRect().width>0 && lifecycle.state().completionTipSessionId==='alpha'`);
+      if (!base) await check(label + ': opening drawer reveals destination without consuming tip', `document.querySelector('[data-completed-toggle]').getBoundingClientRect().width>0 && lifecycle.state().completionTipSessionId==='alpha'`);
       if (!base) await check(label + ': highlight transfers to destination', `!${opener}.style.outline && document.querySelector('[data-completed-toggle]').style.outline.includes('2px')`);
       await capture(label + '-opened');
       await run("[...document.querySelectorAll('div')].find(e => e.classList.contains('bg-black/40')).click()"); await sleep(200);
@@ -126,6 +126,7 @@ app.whenReady().then(async () => {
       await check(label + ': destination clears tip and expands completed group', `lifecycle.state().completionTipSessionId===null && document.querySelector('[data-completed-toggle]').getAttribute('aria-expanded')==='true'`);
       if (!base) {
         await reset({ command: true }); await themeFor(theme); await run("lifecycle.state().archiveChat('alpha')"); await sleep(400);
+        await run("[...document.querySelectorAll('div')].find(e => e.classList.contains('bg-black/40')).click()"); await sleep(150);
         await run(`(() => { const b=${opener}; b.parentElement.querySelector('button.text-accent').click(); })()`);
         await check(label + ': dismiss clears tip without opening drawer', `!${opener}.style.outline && ${opener}.getAttribute('aria-expanded')==='false' && !lifecycle.state().completionTipSessionId`);
         await reset({ command: true, showTips: false }); await themeFor(theme); await run("lifecycle.state().archiveChat('alpha')"); await sleep(350);
@@ -154,7 +155,7 @@ app.whenReady().then(async () => {
       const completionVisibility = await run(`(() => {
         const e = document.querySelector('[data-completed-toggle]');
         if (!e) throw Error('Missing completed toggle');
-        if (base && innerWidth >= 768) e.scrollIntoView({ block: 'center', behavior: 'instant' });
+        if (${base} && innerWidth >= 768) e.scrollIntoView({ block: 'center', behavior: 'instant' });
         const r = e.getBoundingClientRect();
         const visible = r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight;
         return { visible, outline: e.style.outline, responsiveSidebarHidden: innerWidth < 768 && !visible };
