@@ -20,7 +20,7 @@
  * --dump-trace   also write the streaming trace (large) to the output directory
  * --only <part>  run just 'latency' (keypress, switching), 'frames' (streaming) or
  *                'memory' (GPU tile memory and leaks, see measureMemory)
- * --profile      write a CPU profile and a main-thread trace of each switch phase
+ * --profile      write a CPU profile and a main-thread trace of each measured phase
  *                and print where the time went
  * --timeline     only the main-thread traces of --profile (no CPU profiler overhead)
  * --no-frame-pump measure latency without FRAME_PUMP (to show the 60 Hz idle wake it removes)
@@ -506,6 +506,9 @@ async function measureFrames({ appUrl, mock, api, bigChat }) {
   await paced.cdp.send('Tracing.end');
   await traced;
   offData();
+  // This phase already owns a timeline for the frame-work measurement. Keep
+  // that same trace for diagnostics rather than starting a second CDP trace.
+  if (flag('profile') || flag('timeline')) writeFileSync(join(OUT, 'streaming.trace.json'), JSON.stringify({ traceEvents }));
   if (flag('dump-trace')) writeFileSync(join(OUT, 'trace.json'), JSON.stringify({ traceEvents }));
   await api('chat:abort', bigChat);
   await paced.close();
@@ -722,6 +725,7 @@ async function main() {
     cwd: APP_ROOT,
     env: { ...process.env, NEKKO_DATA_DIR: dataDir, NEKKO_PORT: String(CFG.appPort), NEKKO_HOST: '127.0.0.1' },
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
     // Its own process group on POSIX, so killTree reaches its ptys and tool children.
     detached: process.platform !== 'win32',
   });
