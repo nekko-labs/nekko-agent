@@ -92,14 +92,8 @@ const BUILDS: EngineBuild[] = [
     assetPattern: 'bin-macos',
     requires: 'Apple Silicon. Uses the GPU through Metal.',
   },
-  {
-    id: 'macos-x64-cpu',
-    platform: 'darwin',
-    arch: 'x64',
-    backend: 'cpu',
-    assetPattern: 'bin-macos',
-    requires: 'An Intel Mac.',
-  },
+  // No Intel Mac build: the platform was dropped on 2026-10-13 (see
+  // unsupportedPlatformReason in @nekko-agent/shared).
   // Linux
   {
     id: 'linux-x64-cuda',

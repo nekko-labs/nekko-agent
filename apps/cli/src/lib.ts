@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createHost, defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/host';
-import { brandEnv, CLI_LINK_FILE, isCliLink, IpcEvents, type CliLink } from '@nekko-agent/shared';
+import { brandEnv, CLI_LINK_FILE, isCliLink, IpcEvents, unsupportedPlatformReason, type CliLink } from '@nekko-agent/shared';
 import type {
   AppSettings,
   Session,
@@ -134,6 +134,9 @@ export interface Client {
 
 /** In-process client backed by createHost on the data dir. */
 function localClient(): Client {
+  // A remote client (--url) still works from an Intel Mac; a local engine does not.
+  const unsupported = unsupportedPlatformReason(process.platform, process.arch);
+  if (unsupported) throw new Error(unsupported);
   const host = createHost({ dataDir: prepareUserDataRoot() });
   return {
     ready: async () => {},
