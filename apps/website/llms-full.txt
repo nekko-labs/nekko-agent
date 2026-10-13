@@ -117,6 +117,14 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 - [Pair your phone](https://nekkoagent.com/docs/remote) to use the agent away from your desk.
 - Want to help build it? Read [Contributing](https://nekkoagent.com/docs/contributing) and the [architecture](https://nekkoagent.com/docs/architecture).
 
+### Closing the desktop UI and notifications
+
+Closing the desktop window hides it to the tray; the engine and running work remain alive. This is not Quit. **Quit Nekko Agent** stops the service and managed processes; **Stop Nekko service** stops the service while leaving the UI available. This does not promise execution during OS sleep, shutdown or logout.
+
+**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification restores the UI and opens the chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
+
+The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet landed. Image inspection and native toast delivery/click/permission testing remain pending. Known issue under review: the native listener currently also posts for a focused visible chat.
+
 ### Create an agent, media session or terminal
 
 Hover over the sidebar **+** to choose **Agent**, **Media gen** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Media gen opens an image session; video generation is not available.
@@ -226,6 +234,14 @@ list dirs, run shell commands).
 ![Command palette](https://nekkoagent.com/docs/media/command-palette.png)
 
 ---
+
+### Add windows and read the dock
+
+The Agents toolbar ellipsis opens an anchored dropdown with horizontal **Chat**, **Media** and **Terminal** categories. Narrow widths can scroll the categories horizontally. Opening the dropdown does not move wall tiles, resize the wall or change its layout mode. Escape, Close or an outside pointer dismisses it; pending creation prevents dismissal and double activation. This replaces the prior inline Add-tile reveal.
+
+Utilization shows a Claude subscription account once when provider entries share the same token key, preferring the Anthropic entry. Independent accounts and API entries remain separate. In Budget, choose today, 1wk, 1m, 6m, 1y or all-time; the active range is tinted. Spend, tokens, top agent, local tokens, savings and compared model membership all follow that UTC range, not lifetime totals. See [usage limits and prices](https://nekkoagent.com/docs/usage-limits).
+
+These 2026-10-13 changes are implemented and unit/fixture interaction tested. Matching captures exist, but image/motion inspection remains pending; earlier walkthrough pictures are not visual proof of this batch.
 
 ### Plan and capacity at a glance
 
@@ -604,6 +620,16 @@ Both providers are normalized into the same `SubscriptionLimits` shape in `packa
 ## Live reads, not estimates
 
 The numbers in the chat header chip and the Models card are live reads from the provider. They update after each subscription response and on a throttled poll. Nekko Agent does not extrapolate or predict your usage locally; if a provider does not return a window, that window is simply not shown.
+
+## Utilization and Budget on the Agents wall
+
+Utilization deduplicates enabled Claude subscription entries with the same nonempty token key, preferring the Anthropic provider entry. This only changes the displayed account list, not saved providers, credentials or routing. Different accounts/token keys and API-key entries stay separate.
+
+Budget defaults to **1m**. Its ranges use inclusive **UTC** days: today, 1wk (7 days), 1m (30), 6m (180), 1y (365), and all-time through today. The active button has an accent tint and pressed state. All recorded details follow that selection: estimated API spend, input/output tokens, top agent by API cost, local tokens, local/subscription savings, fallback and unpriced-token counts, and which used models appear in the pricing comparison. Catalog unit prices and the selected fallback are reference/configuration values, not range totals. Older hosts without daily detail show unavailable details rather than substituting lifetime totals.
+
+Savings are estimated API equivalents before subscription fees, hardware and electricity, not actual net savings. Local and subscription usage has $0 incremental recorded API spend. Unknown local models use the explicitly chosen fallback or remain unpriced; unpriced tokens are excluded from savings.
+
+The 2026-10-13 batch is implemented, unit and fixture interaction tested with TS/Rust daily-summary golden parity coverage. Image and motion inspection are pending; parent-owned landing is still outstanding.
 
 ## Off-label caveat
 
@@ -1450,6 +1476,16 @@ Nekko Agent is one engine and one React UI that run in several places: the deskt
 - **The UI never shares a process with the agent.** The window talks to `nekkod`, the engine daemon, over a loopback connection with a per-launch token. The agent loop, terminals and model servers run there, so a busy agent cannot freeze the interface.
 - **The engine is moving from TypeScript to Rust.** `nekkod` answers what has been ported natively and passes the rest to the TypeScript host it supervises. Each ported piece has to match the TypeScript behaviour exactly before it takes over.
 - **Every edition is the same app.** Desktop, web and Docker run the same engine and the same UI. Only the transport differs: Electron IPC on the desktop, HTTP and WebSocket in the browser.
+
+## Desktop lifetime and notifications
+
+Closing the UI already hides it to the tray without stopping the engine. Explicit Quit shuts down the service and managed processes; Stop Nekko service stops the engine without quitting the UI. Neither arrangement promises continued work during OS sleep, shutdown or logout.
+
+The 2026-10-13 implementation moves Electron native notifications into main (`apps/desktop/src/main/notifications.ts`), with a direct authenticated engine WebSocket subscription, fresh settings reads per eligible notice, reconnect/backoff and disposal on Quit. Main creates native notices; click delivery uses an encoded session deep link to restore the window and select the chat. Renderer notifications remain for browser editions only, avoiding duplicate Electron delivery. Settings exposes the default-on toggle in its standalone Notifications section.
+
+TS host and Rust usage summaries emit matching per-day session costs, local tokens, avoided costs and model ids. Budget aggregates those UTC buckets for every recorded detail instead of mixing a range with lifetime totals. Utilization's same-token Claude dedupe is display-only and prefers Anthropic, without changing provider routing or storage.
+
+Status: implemented, unit and isolated fixture interaction tested; image/motion inspection and native toast delivery/click/permissions testing pending. Main currently assumes events are unattended, so focused-visible-chat suppression is a known review issue. Parent owns resolution and landing.
 
 ## Repository layout
 

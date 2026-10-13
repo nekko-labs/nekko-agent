@@ -31,7 +31,7 @@ export function usageSummary(): UsageSummary {
   if (replies) summary.replies = replies;
   if (!existsSync(LOG())) return summary;
 
-  const dailyMap = new Map<string, { input: number; output: number; cost: number }>();
+  const dailyMap = new Map<string, UsageSummary['daily'][number]>();
   for (const line of readFileSync(LOG(), 'utf8').split('\n')) {
     if (!line.trim()) continue;
     let r: UsageRecord;
@@ -47,11 +47,13 @@ export function usageSummary(): UsageSummary {
     const totalInput = r.inputTokens + (r.cacheReadTokens ?? 0) + (r.cacheWriteTokens ?? 0);
     const listCost = estimateCost(r.modelId, tokens) ?? 0;
     const cost = local || r.auth === 'subscription' ? 0 : listCost;
+    const day = new Date(r.ts).toISOString().slice(0, 10);
+    const d = dailyMap.get(day) ?? { date: day, input: 0, output: 0, cost: 0, bySessionCost: {}, localTokens: 0, avoidedCosts: { subscription: 0, local: 0, unpricedTokens: 0, benchmarkTokens: 0 }, modelIds: [] };
     if (local || r.auth === 'subscription') {
       const exact = estimateCost(r.modelId, tokens);
       const benchmark = local && exact == null ? estimateCost(settings.localCostBenchmark ?? DEFAULT_LOCAL_COST_BENCHMARK, tokens) : undefined;
       const equivalent = exact ?? benchmark;
-      const buckets = [summary.avoidedCosts];
+      const buckets = [summary.avoidedCosts, d.avoidedCosts!];
       if (r.sessionId) buckets.push(summary.bySessionAvoidedCosts[r.sessionId] ??= { subscription: 0, local: 0, unpricedTokens: 0, benchmarkTokens: 0 });
       for (const bucket of buckets) {
         if (equivalent == null) bucket.unpricedTokens += totalInput + r.outputTokens;
@@ -86,8 +88,9 @@ export function usageSummary(): UsageSummary {
 
     if (r.auth === 'subscription') summary.hasSubscriptionUsage = true;
 
-    const day = new Date(r.ts).toISOString().slice(0, 10);
-    const d = dailyMap.get(day) ?? { input: 0, output: 0, cost: 0 };
+    if (r.sessionId) d.bySessionCost![r.sessionId] = (d.bySessionCost![r.sessionId] ?? 0) + cost;
+    if (local) d.localTokens! += totalInput + r.outputTokens;
+    if (!d.modelIds!.includes(r.modelId)) d.modelIds!.push(r.modelId);
     d.input += totalInput;
     d.output += r.outputTokens;
     d.cost += cost;
@@ -95,7 +98,7 @@ export function usageSummary(): UsageSummary {
   }
 
   summary.daily = [...dailyMap.entries()]
-    .map(([date, v]) => ({ date, ...v }))
+    .map(([, v]) => v)
     .sort((a, b) => a.date.localeCompare(b.date));
   return summary;
 }

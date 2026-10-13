@@ -100,6 +100,14 @@ list dirs, run shell commands).
 
 ---
 
+### Add windows and read the dock
+
+The Agents toolbar ellipsis opens an anchored dropdown with horizontal **Chat**, **Media** and **Terminal** categories. Narrow widths can scroll the categories horizontally. Opening the dropdown does not move wall tiles, resize the wall or change its layout mode. Escape, Close or an outside pointer dismisses it; pending creation prevents dismissal and double activation. This replaces the prior inline Add-tile reveal.
+
+Utilization shows a Claude subscription account once when provider entries share the same token key, preferring the Anthropic entry. Independent accounts and API entries remain separate. In Budget, choose today, 1wk, 1m, 6m, 1y or all-time; the active range is tinted. Spend, tokens, top agent, local tokens, savings and compared model membership all follow that UTC range, not lifetime totals. See [usage limits and prices](https://nekkoagent.com/docs/usage-limits).
+
+These 2026-10-13 changes are implemented and unit/fixture interaction tested. Matching captures exist, but image/motion inspection remains pending; earlier walkthrough pictures are not visual proof of this batch.
+
 ### Plan and capacity at a glance
 
 The plan icon in an agent window opens or closes only that chat's plan, sub-agents and queue panel. Each chat remembers its own choice locally. Narrow windows fold the panel automatically without changing that choice.

@@ -63,7 +63,7 @@ describe('wall dock presentation', () => {
   });
   it('exposes both savings separately and never asks for a monthly budget', () => {
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, panels: { automations: false, utilization: false, budget: true, insights: false, hardware: false } } };
-    const usage = { totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, bySession: {}, byProvider: {}, bySessionCost: {}, daily: [], avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } };
+    const usage = { totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, bySession: {}, byProvider: {}, bySessionCost: {}, daily: [{ date: '1970-01-01', input: 0, output: 0, cost: 0, avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } }], avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } };
     const html = renderToStaticMarkup(<WallDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={usage} vitals={{ working: 3, waiting: 1, automations: 2, terminals: 1, tokensToday: 212000, spend: 'Included in plan', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     // The Vitals panel is gone from the dock.
     expect(html).not.toContain('tokens today');
@@ -78,19 +78,29 @@ describe('wall dock presentation', () => {
   it('filters Budget spend and tokens with the Insights time ranges', () => {
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, panels: { automations: false, utilization: false, budget: true, insights: false, hardware: false } } };
     const now = Date.parse('2026-10-08T12:00:00Z');
-    const usage = { avoidedCosts: { subscription: 2200, local: 0, benchmarkTokens: 0, unpricedTokens: 0 }, totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, bySession: {}, byProvider: {}, bySessionCost: {}, daily: [
-      { date: '2026-10-08', input: 100, output: 50, cost: 1 },
-      { date: '2026-08-01', input: 1000, output: 500, cost: 10 },
+    const usage: import('@nekko-agent/shared').UsageSummary = { avoidedCosts: { subscription: 2200, local: 0, benchmarkTokens: 0, unpricedTokens: 0 }, totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, bySession: {}, byProvider: {}, bySessionCost: {}, daily: [
+      { date: '2026-10-08', input: 100, output: 50, cost: 1, bySessionCost: { recent: 1 }, localTokens: 42, modelIds: ['recent-local'], avoidedCosts: { local: 2.34, subscription: 5.67, benchmarkTokens: 42, unpricedTokens: 7 } },
+      { date: '2026-08-01', input: 1000, output: 500, cost: 10, bySessionCost: { old: 10 }, localTokens: 9999, modelIds: ['old-model'], avoidedCosts: { local: 1234, subscription: 2200, benchmarkTokens: 9999, unpricedTokens: 8888 } },
     ] };
     const html = renderToStaticMarkup(<WallDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={now} sessions={[]} providers={[]} usage={usage} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(html).toContain('aria-label="Budget time range"');
     for (const r of ['today', '1wk', '1m', '6m', '1y', 'all-time']) expect(html).toContain(`>${r}</button>`);
     // Default 1m (last 30 days) excludes August.
     expect(html).toContain('last 30 days');
-    expect(html).toContain('$2200.00');
-    expect(html).toContain('est. · all time');
+    expect(html).not.toContain('$2200.00');
+    expect(html).not.toContain('est. · all time');
     expect(html).toContain('100 in · 50 out');
     expect(html).toContain('$1.00');
+    expect(html).toContain('$2.34');
+    expect(html).toContain('$5.67');
+    expect(html).toContain('42 tokens');
+    expect(html).toContain('42 local tokens use the fallback');
+    expect(html).toContain('7 unpriced tokens excluded');
+    expect(html).toContain('recent-local:');
+    expect(html).not.toContain('old-model:');
+    expect(html).not.toContain('9999');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('bg-accent/10');
   });
   it('uses named icon controls and meters with exact numbers below', () => {
     const html = render();

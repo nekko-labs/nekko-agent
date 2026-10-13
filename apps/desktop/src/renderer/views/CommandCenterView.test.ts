@@ -6,7 +6,38 @@ vi.mock('../components/CommandWall.js', () => ({ CommandWall: () => null, Termin
 vi.mock('../components/WallComposer.js', () => ({ WallComposer: () => null }));
 vi.mock('../components/WallDock.js', () => ({ WallDock: () => null }));
 vi.mock('../chrome.js', () => ({ hasAppChrome: false }));
-import { wallLayoutShortcut } from './CommandCenterView.js';
+import React, { useState } from 'react';
+vi.mock('react', async (original) => {
+  const actual = await original<typeof import('react')>();
+  return { ...actual, useState: vi.fn(), useRef: () => ({ current: null }), useEffect: vi.fn() };
+});
+import { wallLayoutShortcut, WallToolbar } from './CommandCenterView.js';
+import { DEFAULT_WALL_STATE } from '../commandWall.js';
+import { readFileSync } from 'node:fs';
+
+it.each(['focus', 'grid', 'fixed'] as const)('More opens without changing the %s layout', (mode) => {
+  vi.mocked(useState).mockReturnValueOnce([false, vi.fn()]).mockReturnValueOnce([{ rows: 2, cols: 2 }, vi.fn()]).mockReturnValueOnce([null, vi.fn()]);
+  const setWall = vi.fn(); const setAddOpen = vi.fn();
+  const tree = WallToolbar({ wall: { ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode } }, setWall, setAddOpen, addOpen: false, onAutoArrange: vi.fn(), onAdd: vi.fn() });
+  const elements: React.ReactElement<Record<string, any>>[] = [];
+  const walk = (node: React.ReactNode) => React.Children.forEach(node, (child) => {
+    if (!React.isValidElement<Record<string, any>>(child)) return;
+    elements.push(child); walk(child.props.children);
+  });
+  walk(tree);
+  const more = elements.find((e) => e.props['aria-label'] === 'Add window')!;
+  expect(more.props['aria-haspopup']).toBe('dialog');
+  vi.stubGlobal('document', { querySelector: () => null });
+  try { more.props.onClick(); } finally { vi.unstubAllGlobals(); }
+  expect(setAddOpen.mock.calls[0][0](false)).toBe(true);
+  expect(setWall).not.toHaveBeenCalled();
+});
+
+it('hosts the detailed picker in the toolbar rather than a wall tile', () => {
+  const source = readFileSync(new URL('./CommandCenterView.tsx', import.meta.url), 'utf8');
+  expect(source).not.toContain('addContent=');
+  expect(source).toContain('<AgentWindowDropdown anchorRef={addButtonRef}');
+});
 
 const key = { code: 'Digit1', key: '!', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false, repeat: false, isComposing: false, defaultPrevented: false };
 describe('command center layout shortcuts', () => {

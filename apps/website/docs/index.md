@@ -111,6 +111,14 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 - [Pair your phone](https://nekkoagent.com/docs/remote) to use the agent away from your desk.
 - Want to help build it? Read [Contributing](https://nekkoagent.com/docs/contributing) and the [architecture](https://nekkoagent.com/docs/architecture).
 
+### Closing the desktop UI and notifications
+
+Closing the desktop window hides it to the tray; the engine and running work remain alive. This is not Quit. **Quit Nekko Agent** stops the service and managed processes; **Stop Nekko service** stops the service while leaving the UI available. This does not promise execution during OS sleep, shutdown or logout.
+
+**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification restores the UI and opens the chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
+
+The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet landed. Image inspection and native toast delivery/click/permission testing remain pending. Known issue under review: the native listener currently also posts for a focused visible chat.
+
 ### Create an agent, media session or terminal
 
 Hover over the sidebar **+** to choose **Agent**, **Media gen** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Media gen opens an image session; video generation is not available.

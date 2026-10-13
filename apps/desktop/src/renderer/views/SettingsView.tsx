@@ -178,6 +178,8 @@ export function SettingsView() {
           </div>
         </section>
 
+        <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
+
         {/* Agent loop */}
         <ErrorBoundary label="Agent loop"><AgentLoopSection settings={settings} update={update} /></ErrorBoundary>
         <ErrorBoundary label="Hooks"><HooksSection settings={settings} update={update} /></ErrorBoundary>
@@ -410,16 +412,7 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
           <span className="text-[12px] text-ink-faint">min</span>
         </div>
       </div>
-      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-[13px]">Desktop notifications</span>
-          <p className="text-[11px] text-ink-faint">
-            A system notification when a chat you are not looking at finishes, fails, or stops to ask you something.
-            Clicking it opens that chat.
-          </p>
-        </div>
-        <Toggle on={settings.desktopNotifications !== false} onChange={(v) => update({ desktopNotifications: v })} />
-      </div>
+
     </section>
   );
 }
@@ -1207,5 +1200,23 @@ export function Toggle({ on, onChange, ...aria }: { on: boolean; onChange: (v: b
         style={{ transform: on ? 'translateX(22px)' : 'translateX(2px)' }}
       />
     </button>
+  );
+}
+
+export function NotificationsSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  return (
+    <section id="notifications" className="card mt-5 p-5" aria-labelledby="notifications-heading">
+      <h2 id="notifications-heading" className="font-semibold">Notifications</h2>
+      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-[13px]">Desktop notifications</span>
+          <p className="text-[11px] text-ink-faint">
+            A system notification when a chat you are not looking at finishes, fails, or stops to ask you something.
+            Clicking it opens that chat.
+          </p>
+        </div>
+        <Toggle aria-label="Desktop notifications" on={settings.desktopNotifications !== false} onChange={(v) => update({ desktopNotifications: v })} />
+      </div>
+    </section>
   );
 }

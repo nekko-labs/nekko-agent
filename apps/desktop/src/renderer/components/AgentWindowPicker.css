@@ -1,3 +1,12 @@
+.agent-window-dropdown {
+  position: fixed;
+  z-index: 200;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / .25);
+  -webkit-app-region: no-drag;
+}
 .agent-window-picker {
   container-type: inline-size;
   width: 100%;
@@ -92,7 +101,11 @@
 .agent-window-picker__steps > .agent-window-picker__primary { align-self: stretch; padding: 11px 12px; font-weight: 650; }
 @media (prefers-reduced-motion: reduce) { .agent-window-picker__existing summary::after { transition: none; } }
 @container (max-width: 540px) {
-  .agent-window-picker__options, .agent-window-picker__columns { grid-template-columns: minmax(0, 1fr); }
+  .agent-window-picker__options:not(.agent-window-picker__categories), .agent-window-picker__columns { grid-template-columns: minmax(0, 1fr); }
+  .agent-window-picker__categories { display: flex; overflow-x: auto; padding: 4px; }
+  .agent-window-picker__categories .agent-window-picker__option { flex: 0 0 150px; }
+  .agent-window-picker__folders { grid-template-columns: minmax(0, 1fr); }
+  .agent-window-picker__summary-text { flex-wrap: wrap; }
   .agent-window-picker .agent-window-picker__option { padding: 16px; }
   .agent-window-picker__header { gap: 8px; }
 }

@@ -35,6 +35,7 @@ export interface TitleBarOverlayTheme {
 export interface WindowChromeBridge {
   /** `process.platform`; the renderer only cares whether it is `'darwin'`. */
   serviceControl: (action: import('./engineChannels.js').ServiceAction) => Promise<import('./engineChannels.js').ServiceStatus>;
+  reportNotificationVisibility: (report: import('./notificationVisibility.js').NotificationVisibilityReport) => void;
   platform: string;
   titleBarHeight: number;
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => void;
