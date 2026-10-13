@@ -59,7 +59,7 @@ import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
-import com.nekko.android.util.ago
+import com.nekko.android.util.pairedAgo
 import com.nekko.protocol.Pairing
 import com.nekko.protocol.RelayState
 import kotlinx.coroutines.launch
@@ -206,7 +206,7 @@ private fun ComputerCard(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Dot(state.tone)
                     Text(
-                        "${state.label} · ${Pairing.relayHost(c.relayUrl)} · paired ${ago(c.pairedAt)} ago",
+                        "${state.label} · ${Pairing.relayHost(c.relayUrl)} · ${pairedAgo(c.pairedAt)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkSoft,
                     )

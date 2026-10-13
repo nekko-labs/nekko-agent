@@ -73,6 +73,83 @@ describe('relay agent', () => {
     handle.stop();
   });
 
+  it('survives a refused dial without recursing, and reconnects once', async () => {
+    vi.useFakeTimers();
+    try {
+      const sockets: ReentrantSocket[] = [];
+      /** Mimics Node's WebSocket: close() while CONNECTING re-fires `error` synchronously. */
+      class ReentrantSocket {
+        onopen: (() => void) | null = null;
+        onmessage: ((ev: { data: string }) => void) | null = null;
+        onclose: ((ev: { code: number; reason: string }) => void) | null = null;
+        onerror: (() => void) | null = null;
+        errors = 0;
+        constructor(public url: string) {
+          sockets.push(this);
+        }
+        send() {}
+        close() {
+          this.fail();
+        }
+        fail() {
+          if (++this.errors > 50) throw new RangeError('Maximum call stack size exceeded');
+          this.onerror?.();
+        }
+      }
+      globalThis.WebSocket = ReentrantSocket as unknown as typeof WebSocket;
+      const handle = connectRelayAgent({ events: new EventEmitter() } as unknown as Host, {
+        relayUrl: 'ws://relay.test',
+        room: ROOM,
+        key: KEY,
+        verify: () => ({ type: 'denied', reason: 'invalid' }),
+      });
+      expect(() => sockets[0].fail()).not.toThrow();
+      await vi.advanceTimersByTimeAsync(0); // the deferred close()
+      expect(sockets[0].errors).toBeLessThanOrEqual(2);
+      expect(handle.isOnline()).toBe(false);
+      expect(handle.lastError()).toBe('relay connection failed');
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(sockets).toHaveLength(2); // exactly one reconnect
+      sockets[1].onclose?.({ code: 1006, reason: '' }); // a later close on the new socket
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(sockets).toHaveLength(3);
+      handle.stop();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(sockets).toHaveLength(3); // stopped: no more dials
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reconnects once when error and close both fire for the same socket', async () => {
+    vi.useFakeTimers();
+    try {
+      globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket;
+      const dials: string[] = [];
+      const Counting = class extends FakeSocket {
+        constructor(url: string) {
+          super(url);
+          dials.push(url);
+        }
+      };
+      globalThis.WebSocket = Counting as unknown as typeof WebSocket;
+      const handle = connectRelayAgent({ events: new EventEmitter() } as unknown as Host, {
+        relayUrl: 'ws://relay.test',
+        room: ROOM,
+        key: KEY,
+        verify: () => ({ type: 'denied', reason: 'invalid' }),
+      });
+      const first = FakeSocket.last!;
+      first.onerror?.();
+      first.onclose?.({ code: 1006, reason: 'gone' });
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(dials).toHaveLength(2);
+      handle.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('never sends events to a connection that has not completed HELLO', async () => {
     const { handle, ws, events, key } = await welcomedAgent();
     ws.deliver({ type: 'client-open', cid: 'stranger' });

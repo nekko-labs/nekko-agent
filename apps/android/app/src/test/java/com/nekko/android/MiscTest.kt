@@ -2,6 +2,7 @@ package com.nekko.android
 
 import com.nekko.android.chat.approvalDetail
 import com.nekko.android.util.ago
+import com.nekko.android.util.pairedAgo
 import com.nekko.android.util.plainText
 import com.nekko.protocol.Approval
 import com.nekko.protocol.Severity
@@ -37,6 +38,8 @@ class MiscTest {
         assertEquals("5 mins", ago(now - 5 * 60_000, now))
         assertEquals("1 hr", ago(now - 60 * 60_000, now))
         assertEquals("2 days", ago(now - 2 * 86_400_000L, now))
+        assertEquals("paired just now", pairedAgo(now - 10_000, now))
+        assertEquals("paired 5 mins ago", pairedAgo(now - 5 * 60_000, now))
     }
 
     @Test

@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -56,7 +57,9 @@ fun Composer(
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     var text by rememberSaveable { mutableStateOf("") }
-    var sending by rememberSaveable { mutableStateOf(false) }
+    // Not saveable: the send coroutine dies with the activity, so a restored
+    // `true` would leave the composer stuck on "sending" after a rotation.
+    var sending by remember { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     val canSend = text.isNotBlank() && blocked == null && !sending
     val showStop = running && text.isBlank()

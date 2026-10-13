@@ -33,6 +33,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -135,8 +137,10 @@ fun ApprovalCard(approval: Approval, onDecide: suspend (Boolean) -> Unit) {
 fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Unit) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
-    var form by remember(request.callId) { mutableStateOf(AskForm()) }
-    var otherOpen by remember(request.callId) { mutableStateOf(emptySet<String>()) }
+    // Saveable: a rotation or theme change recreates the activity, and the
+    // user's picks and typed note must survive it.
+    var form by rememberSaveable(request.callId, stateSaver = AskFormSaver) { mutableStateOf(AskForm()) }
+    var otherOpen by rememberSaveable(request.callId, stateSaver = StringSetSaver) { mutableStateOf(emptySet<String>()) }
     var busy by remember(request.callId) { mutableStateOf(false) }
     var error by remember(request.callId) { mutableStateOf<String?>(null) }
     val submit = { answers: List<AskAnswer> ->
@@ -245,3 +249,21 @@ private fun InputCardFrame(edge: androidx.compose.ui.graphics.Color, content: @C
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) { content() }
 }
+
+/** Bundles hold flat lists: "q\u0000label" for picks, "q\u0000note" for notes. */
+private val AskFormSaver = Saver<AskForm, ArrayList<ArrayList<String>>>(
+    save = { f ->
+        arrayListOf(
+            ArrayList(f.picked.flatMap { (q, ls) -> ls.map { "$q\u0000$it" } }),
+            ArrayList(f.notes.map { (q, n) -> "$q\u0000$n" }),
+        )
+    },
+    restore = { (picks, notes) ->
+        AskForm(
+            picked = picks.groupBy({ it.substringBefore('\u0000') }, { it.substringAfter('\u0000') }),
+            notes = notes.associate { it.substringBefore('\u0000') to it.substringAfter('\u0000') },
+        )
+    },
+)
+
+private val StringSetSaver = Saver<Set<String>, ArrayList<String>>(save = { ArrayList(it) }, restore = { it.toSet() })

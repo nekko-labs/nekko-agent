@@ -180,13 +180,36 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
           return;
       }
     };
-    ws.onclose = (event) => {
+    // One socket ends once: whichever of close/error arrives first drops it
+    // and schedules the single reconnect.
+    const socket = ws;
+    let ended = false;
+    const end = (reason: string) => {
+      if (ended) return;
+      ended = true;
       online = false;
-      lastError = event.reason ? String(event.reason) : `relay disconnected (code ${event.code})`;
+      lastError = reason;
       conns.clear();
+      if (ws === socket) ws = null;
       if (!stopped) setTimeout(connect, 2000);
     };
-    ws.onerror = () => ws?.close();
+    ws.onclose = (event) => end(event.reason ? String(event.reason) : `relay disconnected (code ${event.code})`);
+    // Node's WebSocket fires `error` again from inside close() while the socket
+    // is still connecting, so closing from onerror recursed until the stack
+    // overflowed and killed the host (seen when the relay refused the dial).
+    // Close outside the handler, at most once; a socket that fails while
+    // CONNECTING may never fire `close`, so end() reconnects from here too.
+    ws.onerror = () => {
+      if (ended) return;
+      end('relay connection failed');
+      queueMicrotask(() => {
+        try {
+          socket.close();
+        } catch {
+          /* already closing */
+        }
+      });
+    };
   };
   connect();
 

@@ -2,6 +2,7 @@
 //
 //   node fake-model.mjs <port>
 //
+// Prompts containing the word "ask" get an `ask_user` question (3 options).
 // Prompts containing "approve" get a tool call that the host guardrails must
 // hold for approval (`rm -rf ./nekko-itest-dist`); once the tool result comes
 // back, or for any other prompt, it streams "Hello from your computer.".
@@ -30,7 +31,25 @@ createServer((req, res) => {
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
     const userText = typeof lastUser?.content === 'string' ? lastUser.content : JSON.stringify(lastUser?.content ?? '');
     res.writeHead(200, { 'content-type': 'text/event-stream' });
-    if (last?.role === 'user' && /approve/i.test(userText)) {
+    if (last?.role === 'user' && /\bask\b/i.test(userText)) {
+      // An ask_user question, so the phone's question card can be exercised.
+      const args = {
+        questions: [
+          {
+            header: 'Scope',
+            question: 'Which part should I work on first?',
+            options: [
+              { label: 'Parser', description: 'Read the CSV and validate rows' },
+              { label: 'Import UI', description: 'The upload screen and progress' },
+              { label: 'Tests', description: 'Fixtures and edge cases first' },
+            ],
+          },
+        ],
+      };
+      res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_ask', type: 'function', function: { name: 'ask_user', arguments: '' } }] }));
+      res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }));
+      res.write(chunk({}, 'tool_calls'));
+    } else if (last?.role === 'user' && /approve/i.test(userText)) {
       res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_itest', type: 'function', function: { name: 'bash', arguments: '' } }] }));
       res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify({ command: 'rm -rf ./nekko-itest-dist' }) } }] }));
       res.write(chunk({}, 'tool_calls'));

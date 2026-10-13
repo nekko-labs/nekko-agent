@@ -11,6 +11,10 @@ fun plainText(src: String): String = src
     .replace(Regex("\\s+"), " ")
     .trim()
 
+/** "paired just now" / "paired 5 mins ago": [ago] says "now" rather than "0 mins". */
+fun pairedAgo(ts: Long, now: Long = System.currentTimeMillis()): String =
+    ago(ts, now).let { if (it == "now") "paired just now" else "paired $it ago" }
+
 /** Short relative time, in the desktop's wording ("now", "5 mins", "3 hrs", "2 days"). */
 fun ago(ts: Long, now: Long = System.currentTimeMillis()): String {
     val s = maxOf(0L, Math.round((now - ts) / 1000.0))
