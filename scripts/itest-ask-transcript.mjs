@@ -7,11 +7,11 @@ const require = createRequire(resolve(primary, 'package.json'));
 const { build } = require('esbuild');
 const postcss = require('postcss');
 const tailwind = require('@tailwindcss/postcss');
-const out = resolve('.shots/ask-transcript-fixture');
+const out = resolve(process.env.NEKKO_FIXTURE_OUT || '.shots/ask-transcript-fixture');
 const renderer = 'apps/desktop/src/renderer';
 mkdirSync(out, { recursive: true });
 const git = args => execFileSync('git', args, { windowsHide: true });
-const baseline = git(['rev-parse', '1044834c']).toString().trim();
+const baseline = git(['rev-parse', process.env.NEKKO_FIXTURE_BASELINE || '1044834c']).toString().trim();
 const files = git(['ls-tree', '-r', '--name-only', baseline, renderer]).toString().trim().split('\n');
 for (const f of files) { const p = resolve(out, 'baseline-source', f); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, git(['show', `${baseline}:${f}`])); }
 const aliases = { react: dirname(require.resolve('react/package.json')), 'react-dom': dirname(require.resolve('react-dom/package.json')), '@nekko-agent/shared': resolve(primary, 'packages/shared/src/index.ts') };

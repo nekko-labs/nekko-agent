@@ -741,7 +741,13 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       saveSettings({ engine: next });
       return next;
     },
-    onDownloadsChanged: (jobs) => events.emit('downloadsUpdated', jobs),
+    // Under the engine daemon the model downloads are its own: it merges this
+    // host's (the runtime installs) with them and tells the UI.
+    onDownloadsChanged: (jobs) => {
+      const call = daemonOwns('downloads') ? daemonCall() : undefined;
+      if (call) void call('engine:hostDownloads', jobs).catch(() => {});
+      else events.emit('downloadsUpdated', jobs);
+    },
     // A running engine nobody can select is a running engine for nothing, so its
     // provider entry is kept in step with the address it is actually serving on.
     onServing: (baseUrl) => ensureEngineProvider(baseUrl),
@@ -911,6 +917,10 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
         case 'models': return engine.models();
         // The daemon's `engine:models` (it owns the library): load state from this host's server.
         case 'loadState': return engine.loadState();
+        // The daemon's download list and controls, for this host's own jobs.
+        case 'downloads': return engine.hostDownloads();
+        case 'cancelDownload': return engine.cancelHostDownload(String(args[0]));
+        case 'dismissDownload': return engine.dismissHostDownload(String(args[0]));
         case 'resident': return engine.resident();
         case 'start': return engine.start();
         case 'stop': return engine.stop();

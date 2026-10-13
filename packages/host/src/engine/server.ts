@@ -918,6 +918,7 @@ export function createEngineServer(deps: EngineServerDeps) {
     routerModels,
     routerModel,
     sync,
+    sweepIdle,
     reattach,
     reconfigure,
     servedByDaemon: () => serving,

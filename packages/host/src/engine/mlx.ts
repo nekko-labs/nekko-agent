@@ -163,6 +163,19 @@ export function createMlxRuntime(deps: MlxRuntimeDeps) {
 
 export type MlxRuntime = ReturnType<typeof createMlxRuntime>;
 
+/** The MLX runtime under the engine daemon, which installs it (`NEKKOD_OWNS` `runtimes`). */
+export function daemonMlxRuntime(call: <T>(channel: string, ...args: unknown[]) => Promise<T>): MlxRuntime {
+  const detect = () => call<EngineInstall>('engine:detect', 'mlx');
+  return {
+    binPath: async () => (await detect()).binPath,
+    detect,
+    preview: () => call('engine:installPreview', 'mlx', null),
+    install: () => call('engine:install', null, 'mlx'),
+    uninstall: () => call('engine:uninstall', 'mlx'),
+    supported: () => mlxSupported(),
+  };
+}
+
 /** `mlx_lm.server` arguments for one load; `port` may be the daemon's placeholder. */
 export function mlxArgs(model: LocalModel, port: number | string, params: LoadParams, draftPath?: string): string[] {
   const args = ['--model', model.path, '--host', '127.0.0.1', '--port', String(port)];

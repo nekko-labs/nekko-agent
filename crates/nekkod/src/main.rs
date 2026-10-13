@@ -14,12 +14,15 @@ mod connectors;
 mod context;
 mod decide;
 mod decisions;
+mod downloads;
 mod engine;
 mod hub;
 mod hypergate;
+mod installs;
 mod library;
 mod machine;
 mod mcp;
+mod model_server;
 mod oauth;
 mod procgroup;
 mod providers;
@@ -98,6 +101,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                         watches::OWNS,
                         sandbox::OWNS,
                         library::OWNS,
+                        downloads::OWNS,
+                        installs::OWNS,
+                        model_server::OWNS,
                     ]
                     .join(","),
                 );
@@ -137,7 +143,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         || cfg.backend.as_ref().is_some_and(|b| b.env.get("NEKKO_AGENT_LOOP").is_some_and(|v| v == "ts"));
     let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
         .then(|| admission::Admission::new(&hub, cfg.allow_browser_control, ts_loop));
-    let catalog = settings.as_deref().map(catalog::new);
+    let catalog = settings.as_deref().map(|s| catalog::new(s, cfg.hugging_face_url.clone()));
     let automation =
         Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), backend.clone(), hub.clone()));
     let remote = Arc::new(remote::Remote::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
@@ -158,7 +164,35 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let machine =
         Arc::new(nekko_machine::Machine::new(cfg.data_dir.clone().map(std::path::PathBuf::from), Box::new(engine_bin)));
     let library = settings.clone().map(|s| library::Library::new(s, backend.clone(), machine.clone(), engine.clone()));
-    let runtimes = settings.as_deref().map(|s| runtimes::new(s, backend.clone(), machine.clone(), library.clone()));
+    let model_downloads = library.clone().zip(catalog.clone()).map(|(library, catalog)| {
+        let fetch =
+            downloads::Rebased(nekko_engine::download::HttpFetch(reqwest::Client::new()), cfg.hugging_face_url.clone());
+        downloads::ModelDownloads::new(Arc::new(fetch), library, catalog, backend.clone(), hub.clone())
+    });
+    // The runtimes install through the same queue as the models.
+    let installs = cfg.data_dir.clone().zip(model_downloads.clone()).zip(settings.clone()).map(|((dir, d), s)| {
+        installs::Installs::new(
+            &dir,
+            d.queue(),
+            s.store.clone(),
+            machine.clone(),
+            backend.clone(),
+            engine.clone(),
+            cfg.github_api_url.clone(),
+        )
+    });
+    // The model server's policy, over the daemon's own processes and router.
+    let server = cfg.data_dir.clone().zip(settings.clone()).zip(library.clone()).zip(installs.clone()).map(
+        |(((dir, s), library), installs)| {
+            library.set_installs(installs.clone());
+            let server = model_server::Server::new(s, dir, library, installs, machine.clone(), engine.clone());
+            let _ = engine.server.set(server.model.clone());
+            server
+        },
+    );
+    let runtimes = settings
+        .as_deref()
+        .map(|s| runtimes::new(s, backend.clone(), machine.clone(), library.clone(), installs.clone(), server.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -201,6 +235,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         machine,
         runtimes: runtimes.clone(),
         library: library.clone(),
+        downloads: model_downloads.clone(),
+        installs: installs.clone(),
+        server: server.clone(),
         resource_queue: cfg.data_dir.clone().map(|d| {
             Arc::new(resource_queue::ResourceQueue::new(
                 std::path::PathBuf::from(d),
