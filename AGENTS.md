@@ -139,6 +139,10 @@ For every request that adds a feature, changes user-visible behavior, or settles
 
 The docs at nekkoagent.com/docs render from Markdown in this repo (`docs/hub/nav.json` maps each page to its file). When a PR adds or changes something users see or do, update the page that describes it in the same PR, and add a page to `nav.json` for a new feature that needs one. Run `npm run docs` to rebuild the site; if you forget, the Docs site workflow rebuilds and commits it on the PR.
 
+## Record performance changes
+
+`docs/perf-history.md` is the running log of every measured performance change: wins, regressions, null results and measurement fixes alike. When a PR measures a performance change (latency, frame time, memory, GPU, energy, tok/s, build or install time, binary or installer size), add an entry there in the same PR, in the format the file describes: before and after numbers quoted exactly from what you measured, the conditions, and why it moved. A performance-motivated PR that measured nothing goes under its Unmeasured list. Never estimate a number you did not measure.
+
 ## Reports and portable design artifacts
 
 For substantial research, comparisons, architecture, and explanations, provide a concise chat summary plus a linked Markdown report when it improves readability or reuse. Include sources, assumptions, recommendations, and next steps. Use Mermaid for useful diagrams, image links for actual photos/screenshots, and self-contained HTML/CSS/SVG for rich design prototypes. Keep editable source in the project, normally reports/ or nekko-designs/; follow existing conventions. Do not generate artifacts for trivial replies. Never confuse captured evidence with inspected evidence.
