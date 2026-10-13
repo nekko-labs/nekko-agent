@@ -146,8 +146,12 @@ export function parseGitHubLocation(input: string): GitHubLocation | null {
 
   // `new URL` resolves `..` segments, which can silently turn a pasted link
   // into a different repository. Refuse dot segments (plain or encoded) first.
-  const rawPath = raw.replace(/^[a-z]+:\/\//i, '').replace(/[?#].*$/, '');
-  if (rawPath.split('/').some((p) => /^(\.|%2e){1,2}$/i.test(p))) return null;
+  const scheme = raw.indexOf('://');
+  let rawPath = scheme >= 0 ? raw.slice(scheme + 3) : raw;
+  const cut = rawPath.search(/[?#]/);
+  if (cut >= 0) rawPath = rawPath.slice(0, cut);
+  const DOT = new Set(['.', '..', '%2e', '%2e%2e', '.%2e', '%2e.']);
+  if (rawPath.split('/').some((p) => DOT.has(p.toLowerCase()))) return null;
 
   let url: URL;
   try {
@@ -186,7 +190,13 @@ export function parseGitHubLocation(input: string): GitHubLocation | null {
 
 /** Lowercase kebab id fragment. */
 function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  // Split on non-alphanumerics instead of trimming dashes with a regex
+  // (CodeQL: polynomial regex on long runs of '-').
+  return s
+    .toLowerCase()
+    .split(/[^a-z0-9]/)
+    .filter(Boolean)
+    .join('-');
 }
 
 /** Stable id for a GitHub skill: `gh-<owner>-<repo>-<folder>`. */
