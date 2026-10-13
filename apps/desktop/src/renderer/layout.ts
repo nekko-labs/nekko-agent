@@ -234,6 +234,51 @@ export function movePane(root: WbNode | null, paneId: string, targetPaneId: stri
 }
 
 /**
+ * Put `pane` along one whole side of the workspace rather than beside one
+ * window: dropped on the board's right edge it becomes a full-height column,
+ * on the bottom edge a full-width row.
+ *
+ * A root already split along that axis takes it as one more equal sibling (a
+ * row of two becomes a row of three, each a third), so docking again keeps
+ * adding columns. Any other root is wrapped, and the new window gets one
+ * share of however many the root spans that way: half beside a single
+ * column, a third beside two.
+ */
+export function dockPane(root: WbNode | null, pane: WbPane, side: Direction): WbNode {
+  if (!root) return pane;
+  const axis = axisOf(side);
+  const before = isBefore(side);
+  if (isSplit(root) && root.dir === axis) {
+    const n = root.children.length;
+    const sizes = root.sizes.map((s) => (s * n) / (n + 1));
+    return {
+      ...root,
+      children: before ? [pane, ...root.children] : [...root.children, pane],
+      sizes: before ? [1 / (n + 1), ...sizes] : [...sizes, 1 / (n + 1)],
+    };
+  }
+  const { across, down } = extent(root);
+  const share = 1 / ((axis === 'row' ? across : down) + 1);
+  return { id: newSplitId(), dir: axis, children: order(root, pane, before), sizes: before ? [share, 1 - share] : [1 - share, share] };
+}
+
+/**
+ * Drag a window to one side of the whole workspace. Lifted out first, like
+ * `movePane`; unchanged when it is the only window or the move would break
+ * the 8×8 ceiling.
+ */
+export function movePaneToEdge(root: WbNode | null, paneId: string, side: Direction): WbNode | null {
+  if (!root) return root;
+  const pane = findPane(root, paneId);
+  if (!pane) return root;
+  const without = removePane(root, paneId);
+  if (!without) return root;
+  const next = dockPane(without, pane, side);
+  const { across, down } = extent(next);
+  return across <= MAX_ACROSS && down <= MAX_ACROSS ? next : root;
+}
+
+/**
  * Trade two windows' places, leaving the shape of the workspace alone.
  *
  * Every other move rewrites the tree; this one rewrites two leaves and nothing
