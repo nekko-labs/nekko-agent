@@ -3114,3 +3114,136 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
     drop(d);
     std::fs::remove_dir_all(root).ok();
 }
+
+/// A llama.cpp release archive for this machine's CPU build, made with the
+/// system's own tar (bsdtar on Windows and macOS writes zip from the name).
+fn engine_archive(dir: &std::path::Path) -> (String, &'static str, Vec<u8>) {
+    let (build, name, exe) = if cfg!(windows) {
+        ("win-x64-cpu", "llama-b11224-bin-win-cpu-x64.zip", "llama-server.exe")
+    } else if cfg!(target_os = "macos") {
+        ("macos-arm64-metal", "llama-b11224-bin-macos-arm64.tar.gz", "llama-server")
+    } else if cfg!(target_arch = "aarch64") {
+        ("linux-arm64-cpu", "llama-b11224-bin-ubuntu-arm64.tar.gz", "llama-server")
+    } else {
+        ("linux-x64-cpu", "llama-b11224-bin-ubuntu-x64.tar.gz", "llama-server")
+    };
+    let src = dir.join("archive-src/build/bin");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join(exe), "not really llama-server").unwrap();
+    let out = dir.join(name);
+    let args: Vec<String> = if name.ends_with(".zip") {
+        vec![
+            "-a".into(),
+            "-cf".into(),
+            out.to_string_lossy().into(),
+            "-C".into(),
+            dir.join("archive-src").to_string_lossy().into(),
+            "build".into(),
+        ]
+    } else {
+        vec![
+            "-czf".into(),
+            out.to_string_lossy().into(),
+            "-C".into(),
+            dir.join("archive-src").to_string_lossy().into(),
+            "build".into(),
+        ]
+    };
+    let status = Command::new("tar").args(&args).stdin(Stdio::null()).status().expect("tar runs");
+    assert!(status.success(), "tar {args:?}");
+    (build.to_string(), name, std::fs::read(out).unwrap())
+}
+
+/// A loopback GitHub: the pinned llama.cpp release with one archive.
+async fn fake_github(name: &'static str, archive: Vec<u8>) -> u16 {
+    use axum::routing::get;
+    use sha2::Digest;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let digest: String = sha2::Sha256::digest(&archive).iter().map(|b| format!("{b:02x}")).collect();
+    let release = json!({
+        "tag_name": "b11224",
+        "assets": [{ "name": name, "browser_download_url": format!("http://127.0.0.1:{port}/dl/{name}"), "size": archive.len(), "digest": format!("sha256:{digest}") }],
+    });
+    let app = axum::Router::new()
+        .route("/repos/ggml-org/llama.cpp/releases/tags/b11224", get(move || async move { axum::Json(release) }))
+        .route(&format!("/dl/{name}"), get(move || async move { archive }));
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    port
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn installs_and_removes_the_engine_itself() {
+    let root = std::env::temp_dir().join(format!("nekkod-installs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), r#"{"engine":{"modelFolders":[]}}"#).unwrap();
+    let (build, name, archive) = engine_archive(&root);
+    let gh = fake_github(name, archive).await;
+    let d = start_with_env(true, Some(&data), json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }), &[]);
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for channel in
+        ["engine:install", "engine:uninstall", "engine:installPreview", "engine:detect", "engine:installedBin"]
+    {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
+    }
+
+    let (_, preview) = post(d.port, "engine:installPreview", json!(["llama", build]), Some(TOKEN)).await;
+    assert_eq!(
+        (preview["version"].clone(), preview["files"][0]["name"].clone()),
+        (json!("b11224"), json!(name)),
+        "{preview}"
+    );
+    let (status, started) = post(d.port, "engine:install", json!([build, "llama"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{started}");
+    assert_eq!(started["message"], "Downloading llama.cpp b11224.", "{started}");
+    let job =
+        job_until(d.port, started["jobId"].as_str().unwrap(), |j| j["state"] == "done" || j["state"] == "failed").await;
+    assert_eq!(job["state"], "done", "{job}");
+    let exe = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
+    let bin = data.join("engine").join(&build).join("build/bin").join(exe);
+    assert!(bin.exists(), "unpacked: {job}");
+    assert!(!data.join("engine").join(&build).join(name).exists(), "the archive is gone once unpacked");
+    let record: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("engine/engine.json")).unwrap()).unwrap();
+    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b11224")));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&bin).unwrap().permissions().mode() & 0o777, 0o755);
+    }
+
+    let (_, detected) = post(d.port, "engine:detect", json!(["llama"]), Some(TOKEN)).await;
+    assert_eq!(
+        (detected["source"].clone(), detected["version"].clone()),
+        (json!("managed"), json!("b11224")),
+        "{detected}"
+    );
+    assert!(
+        std::path::Path::new(detected["binPath"].as_str().unwrap())
+            .ends_with(std::path::Path::new("build/bin").join(exe))
+    );
+    let (_, installed) = post(d.port, "engine:installedBin", json!([]), Some(TOKEN)).await;
+    assert_eq!(installed, detected["binPath"]);
+    let (_, sd) = post(d.port, "engine:detect", json!(["diffusion"]), Some(TOKEN)).await;
+    assert!(sd["available"].is_array(), "{sd}");
+    let (_, mlx) = post(d.port, "engine:detect", json!(["mlx"]), Some(TOKEN)).await;
+    if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        assert_eq!(mlx["reason"], "MLX runs on Apple Silicon Macs only.");
+    }
+
+    // The server is the host's: it is asked whether one runs before files go.
+    let (_, removed) = post(d.port, "engine:uninstall", json!(["llama"]), Some(TOKEN)).await;
+    assert_eq!(removed, json!({ "ok": true, "message": "Removed the engine." }));
+    assert!(!data.join("engine").join(&build).exists() && !data.join("engine/engine.json").exists());
+    let (_, again) = post(d.port, "engine:uninstall", json!(["llama"]), Some(TOKEN)).await;
+    assert_eq!(again["message"], "No managed engine is installed.");
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let asked = calls.as_array().unwrap().iter().filter(|c| c[0] == "engine:runtime" && c[1][0] == "isRunning").count();
+    assert!(asked >= 3, "before replacing files and before each uninstall: {calls}");
+    drop(d);
+    std::fs::remove_dir_all(root).ok();
+}

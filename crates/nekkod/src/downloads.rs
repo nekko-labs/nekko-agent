@@ -157,7 +157,7 @@ impl ModelDownloads {
 
     fn start(&self, planned: &Value, verify_gguf: bool) -> Value {
         let mut req = Request::from_value(planned);
-        req.verify_gguf = verify_gguf;
+        req.verify = verify_gguf.then(nekko_engine::download::gguf_verify);
         self.queue.start(req)
     }
 
@@ -224,6 +224,11 @@ impl ModelDownloads {
             self.start(request, false);
         }
         Ok(json!({ "ok": plan["ok"], "message": plan["message"] }))
+    }
+
+    /// The queue, which the runtime installs share.
+    pub fn queue(&self) -> Downloads {
+        self.queue.clone()
     }
 
     /// The host's own jobs, asked fresh (a restarted backend has none).

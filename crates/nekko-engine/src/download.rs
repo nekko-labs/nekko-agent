@@ -17,8 +17,38 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(400);
 /// Window for the rate estimate, in milliseconds.
 const RATE_WINDOW_MS: f64 = 3000.0;
 
+/// Check the bytes before they are accepted, given the `.part` path: a
+/// problem rejects the download (`DownloadRequest.verify`).
+pub type Verify = Arc<dyn Fn(String) -> BoxFuture<Option<String>> + Send + Sync>;
+
+/// Do what the download was for, given the final path, after the rename
+/// (unpacking an archive): a problem fails the job and removes the file
+/// (`DownloadRequest.after`).
+pub type After = Arc<dyn Fn(String, Signal) -> BoxFuture<Option<String>> + Send + Sync>;
+
+/// A job's abort signal, as an `after` hook hears it.
+#[derive(Clone)]
+pub struct Signal(Cancel);
+
+impl Signal {
+    pub fn aborted(&self) -> bool {
+        self.0.aborted()
+    }
+}
+
+/// The engine's check of a downloaded model: it must read as a GGUF.
+pub fn gguf_verify() -> Verify {
+    Arc::new(|path: String| {
+        Box::pin(async move {
+            let readable =
+                tokio::task::spawn_blocking(move || crate::gguf::read_metadata(&path).is_some()).await.unwrap_or(false);
+            (!readable).then(|| "The downloaded file is not a readable GGUF.".to_string())
+        })
+    })
+}
+
 /// One file to fetch (`DownloadRequest`).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct Request {
     pub id: String,
     pub kind: String,
@@ -32,8 +62,8 @@ pub struct Request {
     pub file: Option<String>,
     pub role: Option<String>,
     pub headers: Vec<(String, String)>,
-    /// Reject the bytes unless they read as a GGUF header.
-    pub verify_gguf: bool,
+    pub verify: Option<Verify>,
+    pub after: Option<After>,
 }
 
 impl Request {
@@ -56,7 +86,8 @@ impl Request {
                 .and_then(Value::as_object)
                 .map(|h| h.iter().map(|(k, v)| (k.clone(), nekko_js::display(v))).collect())
                 .unwrap_or_default(),
-            verify_gguf: false,
+            verify: None,
+            after: None,
         }
     }
 }
@@ -387,19 +418,16 @@ impl Downloads {
         out.flush().await.map_err(|e| e.to_string())?;
         drop(out);
 
-        if req.verify_gguf {
+        if let Some(verify) = &req.verify {
             self.set(&req.id, cancel, |j| {
                 j.snap.insert("state".into(), json!("verifying"));
             });
             self.notify(true);
-            let p = partial.clone();
-            let readable =
-                tokio::task::spawn_blocking(move || crate::gguf::read_metadata(&p).is_some()).await.unwrap_or(false);
-            if !readable {
+            if let Some(problem) = verify(partial.clone()).await {
                 // A file that failed its check is worse than none: a retry
                 // must not resume onto corrupt bytes.
                 let _ = tokio::fs::remove_file(&partial).await;
-                return Err("The downloaded file is not a readable GGUF.".into());
+                return Err(problem);
             }
         }
 
@@ -409,6 +437,22 @@ impl Downloads {
         }
         let _ = tokio::fs::remove_file(&req.dest).await;
         tokio::fs::rename(&partial, &req.dest).await.map_err(|e| e.to_string())?;
+
+        if let Some(after) = &req.after {
+            self.set(&req.id, cancel, |j| {
+                j.snap.insert("state".into(), json!("verifying"));
+            });
+            self.notify(true);
+            let problem = after(req.dest.clone(), Signal(cancel.clone())).await;
+            if cancel.aborted() {
+                self.settle(&req.id, cancel, "cancelled", Some("Cancelled."));
+                return Ok(());
+            }
+            if let Some(problem) = problem {
+                let _ = tokio::fs::remove_file(&req.dest).await;
+                return Err(problem);
+            }
+        }
         self.settle(&req.id, cancel, "done", None);
         Ok(())
     }
