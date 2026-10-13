@@ -8,6 +8,10 @@ owner:
 
 > **This is the source of truth for the project.** It describes *what* we're building and *why*, vision, users, journeys, the feature set, and what success looks like. It is **not** about stack or technical design (that's `TASKS.md`). It is a **living artifact**: every prompt that adds or changes a feature updates this file so it always describes the system as it actually is and intends to be. The verbatim origin ask lives in [original-prompt.md](../../obsurdian/projects/nekko-agent/original-prompt.md).
 
+## Clarification answers remain visible in chat
+
+Implemented, verification in progress: replies submitted through ask_user appear as visible user-facing Q/A transcript rows at the saved tool result's chronological position, including existing chats when reopened. Selected labels and freeform notes stay literal; skipped or unattended questions show an explicit unanswered state. Pending, failed, malformed and unrelated tool results do not invent a user response. Model-facing answer wrapper instructions remain hidden. This is a display-only projection of existing stored history, not a duplicate user message or a change to model context. Projected replies support ordinary text copying but cannot edit, rewind, split or reuse a nonexistent persisted user-message ID. Acceptance requires focused transcript tests and isolated matched before/after evidence; live-provider and cross-platform verification remain unverified.
+
 ## Command wall state migration (data layer)
 
 ## Continue dependent work with GitHub PR stacks

@@ -6,6 +6,12 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Clarification reply visibility (2026-10-13)
+
+- [x] Project saved ask_user results into chronological user-facing Q/A rows without duplicating model history or exposing wrapper instructions. Preserve literal labels/notes and skip states; guard display-only rows from persisted-ID edit/reuse actions. See [SPEC](SPEC.md#clarification-answers-remain-visible-in-chat).
+- [x] Focused transcript/component regressions and isolated real-renderer assertions for 1200px/390px light/dark, including older history and failed/pending results.
+- [ ] Inspect matching before/after evidence and land passing PR. Browser gallery opens but screenshot calls time out; generated captures are not visually verified. Full desktop typecheck requires isolated dependency resolution; native platforms/live-provider round trips remain unverified.
+
 > Converted from executionplan.md on 2026-06-29. ✅ = done per the prior plan; Part 1 below is the technical plan, Part 2 is the task checklist.
 >
 > **The plan + the build log, in one file.** Part 1 is the **technical plan**, how we build what [SPEC.md](SPEC.md) describes (stack, architecture, data model, conventions, design system, constraints). Part 2 is the **task list**, Now / Backlog / Shipped, recording *how every past feature was built and how future features will be built*, with the context around them. The full technical design for the web/Docker/Cloud editions lives in [spec-web-and-hosted.md](spec-web-and-hosted.md); credential/ops setup lives in [provisioning.md](../../obsurdian/projects/nekko-agent/provisioning.md), referenced here, not duplicated. (Merged from the former `plan.md` + `tasks.md`.)

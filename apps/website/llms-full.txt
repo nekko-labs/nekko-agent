@@ -214,6 +214,7 @@ list dirs, run shell commands).
 - Assistant messages render **markdown and code**; every **tool call** the model
   makes shows up as a card so you can see exactly what it did.
 - Streaming is live; hit **Stop** to abort a turn.
+- Answers to the agent's clarification questions stay visible in the chat as Q/A replies, including when reopening an existing conversation. Selected choices and your typed note remain visible; skipped questions say they were not answered. These reply rows do not create another prompt or offer edit/rewind actions.
 
 **Keyboard shortcuts**: Nekko Agent has a command palette (think Cmd-K everywhere):
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ASK_CANCELLED, ASK_UNATTENDED, formatAskAnswers, parseAskRequest } from '../../../../../../packages/shared/src/ask.js';
 import type { ChatMessage } from '@nekko-agent/shared';
 import { collectSessionPrUrls, extractPrUrls } from '../../../../../../packages/shared/src/pr.js';
 import { estimateRowHeight, fmtDateTime, fmtTime, toTranscriptRows } from './transcript.js';
@@ -74,6 +75,74 @@ describe('toTranscriptRows', () => {
     expect(r).toHaveLength(2);
     const tall = rows([msg('b', 'assistant', '', { images: ['x'], generated: { ...generated, height: 2048 } })])[0];
     expect(estimateRowHeight(tall, 800)).toBeGreaterThan(estimateRowHeight(r[1], 800));
+  });
+});
+
+describe('persisted ask_user replies', () => {
+  const call = { id: 'ask', name: 'ask_user', input: { questions: [
+    { header: 'Scope', question: 'Which scope?', options: ['Module, literal', 'Everything'] },
+    { header: 'Tests', question: 'Which tests?', options: ['Focused', 'All'] },
+  ] } };
+  const parsed = parseAskRequest(call.id, call.input, 1);
+  if ('error' in parsed) throw new Error(parsed.error);
+  const output = formatAskAnswers(parsed.request, [{ questionId: 'q1', labels: ['Module, literal'], note: 'Keep **this**\nexact note' }]);
+  const asking = msg('asking', 'assistant', '', { toolCalls: [call], createdAt: 1 });
+  const reply = (text = output, isError = false) => msg('result', 'tool', '', {
+    createdAt: 2, toolResult: { toolCallId: call.id, output: text, isError },
+  });
+  const visible = (messages: ChatMessage[]) => rows(messages).filter((r) => r.kind === 'msg').map((r) => r.message);
+
+  it('shows literal selections, notes and unanswered questions without the model wrapper', () => {
+    const messages = [asking, reply(), msg('done', 'assistant', 'Done.')];
+    const snapshot = JSON.stringify(messages);
+    expect(visible(messages)[0]).toEqual({ id: 'result_ask_reply', role: 'user', createdAt: 2,
+      content: 'Q: Which scope?\nA: Module, literal \u2014 Keep **this**\nexact note\n\nQ: Which tests?\nA: (not answered)' });
+    expect(JSON.stringify(messages)).toBe(snapshot);
+    expect(visible(messages)[0].content).not.toContain('Work to these answers');
+  });
+
+  it('does not invent an answer while pending or when a result is failed, malformed or orphaned', () => {
+    expect(visible([asking])).toEqual([]);
+    expect(visible([asking, reply(output, true)])).toEqual([]);
+    expect(visible([asking, reply('Question 1 has no question text.')])).toEqual([]);
+    expect(visible([asking, reply('The user answered:\n\nincomplete')])).toEqual([]);
+    expect(visible([reply()])).toEqual([]);
+    expect(visible([reply(), asking])).toEqual([]);
+    expect(visible([asking, reply(), reply()])).toHaveLength(1);
+    expect(visible([msg('bad', 'assistant', '', { toolCalls: [{ ...call, input: {} }] }), reply()])).toEqual([]);
+    expect(visible([msg('other', 'assistant', '', { toolCalls: [{ ...call, name: 'bash' }] }), reply()])).toEqual([]);
+  });
+
+  it('shows skipped and unattended states without exposing instructions', () => {
+    for (const [text, state] of [[ASK_CANCELLED, '(skipped / not answered)'], [ASK_UNATTENDED, '(not answered: unattended time limit)']]) {
+      expect(visible([asking, reply(text)])[0].content).toBe(`Q: Which scope?\nA: ${state}\n\nQ: Which tests?\nA: ${state}`);
+    }
+  });
+
+  it('splits activity at the result chronology, including streaming calls and later user turns', () => {
+    const before = [msg('u', 'user', 'Start'), asking,
+      msg('work', 'assistant', '', { toolCalls: [{ id: 'read', name: 'read_file', input: {} }] }),
+      msg('read-result', 'tool', 'hidden', { toolResult: { toolCallId: 'read', output: 'hidden' } }), reply(),
+      msg('stream', 'assistant', '', { toolCalls: [{ id: 'next', name: 'bash', input: {} }] })];
+    const result = rows(before);
+    expect(result.map((r) => r.kind === 'msg' ? r.message.id : r.kind)).toEqual(['u', 'activity', 'result_ask_reply', 'activity']);
+    const later = rows([...before, msg('done', 'assistant', 'Done.'), msg('u2', 'user', 'Next')]);
+    expect(later.slice(0, result.length)).toEqual(result);
+    expect(later.filter((r) => r.kind === 'msg' && r.message.id === 'result_ask_reply')).toHaveLength(1);
+  });
+
+  it('retains call context across PR anchors and keeps real user messages intact, even duplicate ids', () => {
+    const url = 'https://github.com/o/r/pull/8';
+    const messages = [asking, msg('pr', 'assistant', '', { toolCalls: [{ id: 'pr-call', name: 'bash', input: {} }] }),
+      msg('pr-result', 'tool', url, { toolResult: { toolCallId: 'pr-call', output: url } }), reply(),
+      msg('same', 'user', 'Module, literal'), msg('same', 'user', 'Module, literal')];
+    const result = toTranscriptRows(messages, extractPrUrls, () => [url]);
+    expect(result.map((r) => r.kind)).toEqual(['activity', 'prs', 'msg', 'msg', 'msg']);
+    expect(visible(messages).map((m) => m.content)).toEqual([
+      output.slice('The user answered:\n\n'.length, -'\n\nWork to these answers. Do not ask again about anything settled here.'.length),
+      'Module, literal', 'Module, literal',
+    ]);
+    expect(new Set(result.map((r) => r.key)).size).toBe(result.length);
   });
 });
 
