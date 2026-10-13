@@ -107,7 +107,7 @@ list dirs, run shell commands).
 
 Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts target the window you are using, not every chat. **Complete** keeps the chat under its group's **Show completed** control in the left Agent panel for 60 days. **Minimize** removes only the board window: the item remains in the Agent panel, and a terminal keeps running. Terminals do not have completed history; **Close** ends their process.
 
-Settings has **Show tips**, enabled by default. Your first successful completion highlights Show completed with a dismissible explanation. Turning tips off does not disable deletion warnings. The in-app delete dialog offers **Skip future deletion confirmations**; only choose it if you want permanent deletions without another prompt. Re-enable **Confirm deletions** in Settings at any time. General chats no longer display a redundant missing-project label.
+Settings has **Show tips**, enabled by default. Your first successful completion highlights Show completed with a dismissible explanation. On a narrow screen, the existing agent list drawer opens automatically to reveal Show completed without taking focus. If you close it, the highlighted Agents button lets you return to the destination. Opening or closing the drawer does not dismiss the tip. Turning tips off does not disable deletion warnings. The in-app delete dialog offers **Skip future deletion confirmations**; only choose it if you want permanent deletions without another prompt. Re-enable **Confirm deletions** in Settings at any time. General chats no longer display a redundant missing-project label.
 
 ### Plan and capacity at a glance
 

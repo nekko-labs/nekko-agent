@@ -6,11 +6,6 @@ owner:
 
 # Execution Plan, Nekko Agent
 
-## Window lifecycle guidance (added 2026-10-13)
-
-- [x] Implement focused chat Complete/Minimize/Delete shortcuts and terminal Minimize/confirmed Close, action hotkey titles, persisted Show tips and deletion preferences, first-completion destination highlight, and remove missing-project labels. See [SPEC](SPEC.md#window-lifecycle-shortcuts-and-guidance-2026-10-12). Automated: 947 desktop tests, production build/typecheck, 44 isolated interactions, TS/Rust settings parity.
-- [ ] Inspect matched light/dark wide/narrow screenshots and motion evidence, publish media, and land PR. Local browser gallery navigation rejects the route; offscreen native capture times out. Generated evidence is not yet visually verified. Terminal archive and native macOS/Linux keyboard testing are not implemented/verified.
-
 > Converted from executionplan.md on 2026-06-29. ✅ = done per the prior plan; Part 1 below is the technical plan, Part 2 is the task checklist.
 >
 > **The plan + the build log, in one file.** Part 1 is the **technical plan**, how we build what [SPEC.md](SPEC.md) describes (stack, architecture, data model, conventions, design system, constraints). Part 2 is the **task list**, Now / Backlog / Shipped, recording *how every past feature was built and how future features will be built*, with the context around them. The full technical design for the web/Docker/Cloud editions lives in [spec-web-and-hosted.md](spec-web-and-hosted.md); credential/ops setup lives in [provisioning.md](../../obsurdian/projects/nekko-agent/provisioning.md), referenced here, not duplicated. (Merged from the former `plan.md` + `tasks.md`.)
@@ -19,7 +14,8 @@ owner:
 
 ## Window lifecycle shortcuts and tips (added 2026-10-12)
 
-- [ ] Land [window lifecycle shortcuts and guidance](SPEC.md#window-lifecycle-shortcuts-and-guidance-2026-10-12): shared focused-pane key registry, board-only chat/terminal minimization, safe in-app deletion confirmation with separately persisted skip/reset, and one-time successful-completion highlight. Implementation, 947 desktop tests, typecheck, build, settings parity tests, and 48 isolated renderer interaction assertions passed. Matched wide/narrow light/dark screenshots and timing frames inspected. PR checks and landing pending. Native OS shortcut delivery and real PTY survival remain untested; terminal archive history is outside scope.
+- [x] Implement [window lifecycle shortcuts and guidance](SPEC.md#window-lifecycle-shortcuts-and-guidance-2026-10-12): focused-pane keys, board-only minimization, confirmed deletion with independent skip/reset, successful-completion destination tip, and missing-project label removal. Prior head verification: 947 desktop tests, typecheck, build, settings parity, 48 isolated interactions; r4 matched light/dark wide/narrow captures and timing frames inspected and published. Hosted checks pass at 8163f0f9.
+- [ ] Verify and land the narrow drawer continuation: automatically reveal Show completed in the existing AgentSidebar overlay without focus, then highlight Open agent list if closed without consuming the tip on drawer open/close. Local changes require regression checks, fresh matched hidden owning-view evidence, parent inspection/publication and review, then updated hosted checks. Commit and push preserved work; keep PR draft and unmerged for parent review. Native OS shortcut delivery and real PTY survival remain untested; terminal archive history is outside scope.
 
 ## Phone: what ships now, what the native port owes (consolidated 2026-10-12)
 

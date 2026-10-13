@@ -1,5 +1,5 @@
 // Hidden renderer evidence only. Never foreground or focus an OS window.
-const { app, BrowserWindow, session, screen } = require('electron');
+const { app, BrowserWindow, session, screen, ipcMain } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const cp = require('node:child_process');
@@ -18,7 +18,7 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_c, _p, done) => done(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   const left = Math.min(...screen.getAllDisplays().map(d => d.bounds.x));
-  const win = new BrowserWindow({ width: 1440, height: 1000, useContentSize: true, show: false, focusable: false, skipTaskbar: true, x: left - 4500, y: -3000, title: 'Hidden lifecycle fixture', webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  const win = new BrowserWindow({ width: 1440, height: 1000, useContentSize: true, show: false, focusable: false, skipTaskbar: true, x: left - 4500, y: -3000, title: 'Hidden lifecycle fixture', webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, 'lifecycle-terminal-preload.cjs') } });
   win.on('focus', () => report.errors.push('Fixture took OS focus'));
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', e => e.preventDefault());
@@ -74,12 +74,67 @@ app.whenReady().then(async () => {
   };
   const key = async (id, k) => { await run(`document.querySelector('[aria-label="${id}"]').focus(); window.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(k)},ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))`); await sleep(350); };
   const button = text => run(`(()=>{const e=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(text)});if(!e)throw Error('Missing button '+${JSON.stringify(text)});e.click()})()`);
+  let terminalHost, realTerminal;
   try {
+    if (!base) {
+      const { pathToFileURL } = require('node:url');
+      const hostDir = path.resolve(__dirname, '../../../packages/host/dist');
+      const paths = await import(pathToFileURL(path.join(hostDir, 'paths.js')).href);
+      paths.setDataDir(path.join(profile, 'host'));
+      terminalHost = await import(pathToFileURL(path.join(hostDir, 'terminal.js')).href);
+      realTerminal = await terminalHost.createTerminal({ cwd: profile, shell: path.join(process.env.SystemRoot, 'System32/cmd.exe'), title: 'Disposable PTY survival fixture' });
+      if (!realTerminal.running) throw Error('Real PTY did not start');
+      ipcMain.handle('lifecycle:terminal:list', () => terminalHost.listTerminals());
+      ipcMain.handle('lifecycle:terminal:close', (_event, id) => terminalHost.closeTerminal(id));
+      ipcMain.handle('lifecycle:terminal:probe', async () => {
+        const marker = 'NEKKO_SURVIVAL_' + Date.now();
+        terminalHost.runInTerminal(realTerminal.id, 'echo ' + marker);
+        for (let i = 0; i < 50; i++) {
+          await sleep(100);
+          const snapshot = await terminalHost.terminalSnapshot(realTerminal.id);
+          if (snapshot?.info.running && snapshot.buffer.replace(/\\x1b\\[[0-9;?]*[A-Za-z]/g, '').includes(marker + '\r\n')) return true;
+        }
+        return false;
+      });
+    }
     await win.loadFile(path.join(out, 'index.html'));
     // Off-screen, non-focusable mapping keeps layout and compositor frames alive.
     win.showInactive();
     await sleep(1200);
-    for (const width of [1440, 760]) for (const theme of ['light', 'dark']) {
+    // The actual owning view supplies the existing responsive AgentSidebar overlay.
+    for (const theme of ['light', 'dark']) {
+      await resize(760); await reset({ command: true }); await themeFor(theme); await sleep(500);
+      await run("lifecycle.state().archiveChat('alpha')"); await sleep(500);
+      const label = `narrow-${theme}-drawer`;
+      const opener = "document.querySelector('[aria-label=\"Open agent list\"]')";
+      if (!base) {
+        await check(label + ': completion auto-reveals destination without focus', "document.querySelector('[data-completed-toggle]').getBoundingClientRect().width>0 && lifecycle.state().completionTipSessionId==='alpha'");
+        await run("[...document.querySelectorAll('div')].find(e => e.classList.contains('bg-black/40')).click()"); await sleep(200);
+      }
+      await check(label + ': existing opener visible, destination hidden', `(() => { const b=${opener}, d=document.querySelector('[data-completed-toggle]'); return b?.getBoundingClientRect().width>0 && d?.getBoundingClientRect().width===0; })()`);
+      if (!base) await check(label + ': closed drawer highlights opener', `${opener}.style.outline.includes('2px') && lifecycle.state().completionTipSessionId==='alpha'`);
+      await capture(label + '-closed');
+      await run(`${opener}.click()`); await sleep(250);
+      await run("document.querySelector('[data-completed-toggle]').scrollIntoView({block:'center',behavior:'instant'})");
+      await check(label + ': opening drawer reveals destination without consuming tip', `document.querySelector('[data-completed-toggle]').getBoundingClientRect().width>0 && lifecycle.state().completionTipSessionId==='alpha'`);
+      if (!base) await check(label + ': highlight transfers to destination', `!${opener}.style.outline && document.querySelector('[data-completed-toggle]').style.outline.includes('2px')`);
+      await capture(label + '-opened');
+      await run("[...document.querySelectorAll('div')].find(e => e.classList.contains('bg-black/40')).click()"); await sleep(200);
+      if (!base) await check(label + ': closing restores opener highlight', `${opener}.style.outline.includes('2px') && lifecycle.state().completionTipSessionId==='alpha'`);
+      await run(`${opener}.click()`); await sleep(150);
+      await run("document.querySelector('[data-completed-toggle]').click()"); await sleep(200);
+      await check(label + ': destination clears tip and expands completed group', `lifecycle.state().completionTipSessionId===null && document.querySelector('[data-completed-toggle]').getAttribute('aria-expanded')==='true'`);
+      if (!base) {
+        await reset({ command: true }); await themeFor(theme); await run("lifecycle.state().archiveChat('alpha')"); await sleep(400);
+        await run(`(() => { const b=${opener}; b.parentElement.querySelector('button.text-accent').click(); })()`);
+        await check(label + ': dismiss clears tip without opening drawer', `!${opener}.style.outline && ${opener}.getAttribute('aria-expanded')==='false' && !lifecycle.state().completionTipSessionId`);
+        await reset({ command: true, showTips: false }); await themeFor(theme); await run("lifecycle.state().archiveChat('alpha')"); await sleep(350);
+        await check(label + ': tips disabled leaves opener unchanged', `!${opener}.style.outline && !lifecycle.state().completionTipSessionId`);
+        await reset({ command: true, failSave: true }); await run("lifecycle.state().archiveChat('alpha')"); await sleep(350);
+        await check(label + ': failed completion does not guide drawer', `!${opener}.style.outline && !lifecycle.state().completionTipSessionId && !lifecycle.state().settings.completionTipSeen`);
+      }
+    }
+    for (const width of process.env.NEKKO_DRAWER_ONLY ? [] : [1440, 760]) for (const theme of ['light', 'dark']) {
       await resize(width); await reset(); await themeFor(theme); await sleep(300);
       const label = `${width === 1440 ? 'wide' : 'narrow'}-${theme}`;
       await capture(label + '-panes');
@@ -99,14 +154,15 @@ app.whenReady().then(async () => {
       const completionVisibility = await run(`(() => {
         const e = document.querySelector('[data-completed-toggle]');
         if (!e) throw Error('Missing completed toggle');
-        if (innerWidth >= 768) e.scrollIntoView({ block: 'center', behavior: 'instant' });
+        if (base && innerWidth >= 768) e.scrollIntoView({ block: 'center', behavior: 'instant' });
         const r = e.getBoundingClientRect();
         const visible = r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight;
         return { visible, outline: e.style.outline, responsiveSidebarHidden: innerWidth < 768 && !visible };
       })()`);
       report[label].completionVisibility = completionVisibility;
       if (width === 1440 && (!completionVisibility.visible || (!base && !completionVisibility.outline.includes('2px')))) throw Error('Wide Show completed must be visible and highlighted');
-      if (width === 760) report[label].responsiveNote = 'Sidebar hidden by actual responsive layout intentionally; no forced mobile drawer opening.';
+      if (!base && !completionVisibility.visible) throw Error('Completion destination must be revealed at every viewport');
+      if (width === 760) report[label].responsiveNote = base ? 'Baseline hides the completion destination.' : 'Existing Agents drawer automatically reveals the highlighted destination without focus.';
       await capture(label + '-completion');
       if (!base) {
         await check(label + ': only alpha completed and first tip highlighted', `lifecycle.records().find(s=>s.id==='alpha').archivedAt>0&&!lifecycle.records().find(s=>s.id==='beta').archivedAt&&lifecycle.state().completionTipSessionId==='alpha'&&[...document.querySelectorAll('[data-completed-toggle]')].some(e=>e.style.outline.includes('2px'))`);
@@ -164,7 +220,30 @@ app.whenReady().then(async () => {
       await check('terminal cancel preserves PID', `lifecycle.terminals().length===1&&!lifecycle.calls.some(c=>c.method==='closeTerminal')`);
       await key('Terminal input', 'Delete'); await button('Delete'); await sleep(300);
       await check('terminal confirm closes synthetic host process', `lifecycle.terminals().length===0&&lifecycle.calls.some(c=>c.method==='closeTerminal')`);
+      await reset(); await run('lifecycle.useRealTerminal()');
+      await check('real PTY executes before minimize', 'lifecycleTerminal.probe()');
+      await key('Terminal input', 'm');
+      await check('real PTY minimize retains Agents entry without shutdown', `lifecycle.minimized().includes('term')&&lifecycle.terminals().length===1&&!lifecycle.calls.some(c=>c.method==='closeTerminal')`);
+      await check('real PTY executes after renderer window removal', 'lifecycleTerminal.probe()');
+      report.realPty = { backend: 'TypeScript host node-pty, Windows cmd, disposable cwd/data', beforeAndAfterExecution: true, daemonBackendTested: false };
     }
+    if (process.env.NEKKO_DRAWER_ONLY) {
+      await resize(760); await reset({ command: true }); await themeFor('dark');
+      const frames = path.join(dir, 'drawer-motion-frames'); fs.mkdirSync(frames, { recursive: true });
+      const times = [], start = Date.now(); let stage = 0;
+      while (Date.now() - start < 2600) {
+        const t = Date.now() - start;
+        if (t > 300 && stage === 0) { await run("lifecycle.state().archiveChat('alpha')"); stage++; }
+        if (t > 1000 && stage === 1) { await run("document.querySelector('[aria-label=\"Open agent list\"]').click()"); stage++; }
+        if (t > 1700 && stage === 2) { await run("document.querySelector('[data-completed-toggle]').click()"); stage++; }
+        times.push(Date.now() - start);
+        fs.writeFileSync(path.join(frames, `${times.length}.png`), (await win.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG()); await sleep(65);
+      }
+      fs.writeFileSync(path.join(frames, 'frames.txt'), times.map((t,i)=>`file '${i+1}.png'\nduration ${((times[i+1]??2600)-t)/1000}`).join('\n')+`\nfile '${times.length}.png'\n`);
+      const file = path.join(dir, evidencePrefix + '-drawer-motion.mp4');
+      cp.execFileSync('ffmpeg', ['-y','-f','concat','-safe','0','-i',path.join(frames,'frames.txt'),'-vf','fps=15,pad=ceil(iw/2)*2:ceil(ih/2)*2','-c:v','libx264','-pix_fmt','yuv420p',file], { windowsHide: true, stdio: 'pipe' });
+      report.motion = { timestampsMs: times, file };
+    } else {
     // Timestamped renderer frames: completion tip appears, expands, then modal opens/closes.
     win.setContentSize(1440, 1000); await reset(); await run("document.documentElement.dataset.theme='dark'");
     const frames = path.join(dir, 'motion-frames'); fs.mkdirSync(frames, { recursive: true });
@@ -180,9 +259,10 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(frames, 'frames.txt'), times.map((t,i)=>`file '${i+1}.png'\nduration ${((times[i+1]??3200)-t)/1000}`).join('\n')+`\nfile '${times.length}.png'\n`);
     cp.execFileSync('ffmpeg', ['-y','-f','concat','-safe','0','-i',path.join(frames,'frames.txt'),'-vf','fps=15,pad=ceil(iw/2)*2:ceil(ih/2)*2','-c:v','libx264','-pix_fmt','yuv420p',path.join(dir,evidencePrefix+'-motion.mp4')], { windowsHide: true, stdio: 'pipe' });
     report.motion = { timestampsMs: times, file: path.join(dir, evidencePrefix + '-motion.mp4') };
+    }
     report.background = { focused: win.isFocused(), visible: win.isVisible(), bounds: win.getBounds(), displays: screen.getAllDisplays().map(d=>d.bounds) };
     if (win.isFocused()) throw Error('OS focus acquired');
     report.success = !report.errors.length && report.checks.every(c=>c.passed);
   } catch(e) { report.errors.push(String(e)); report.success = false; }
-  finally { win.destroy(); fs.writeFileSync(path.join(dir, 'status.json'), JSON.stringify(report,null,2)); console.log(JSON.stringify(report,null,2)); app.exit(report.success ? 0 : 1); }
+  finally { if (realTerminal) terminalHost.closeTerminal(realTerminal.id); win.destroy(); fs.writeFileSync(path.join(dir, 'status.json'), JSON.stringify(report,null,2)); console.log(JSON.stringify(report,null,2)); app.exit(report.success ? 0 : 1); }
 });

@@ -331,6 +331,26 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
     try { localStorage.setItem(SIDEBAR_W_KEY, String(w)); } catch { /* private mode */ }
   };
   const [mobileNav, setMobileNav] = useState(false);
+  const completionDestinationRef = useRef<HTMLButtonElement>(null);
+  // Reveal the existing destination without expanding completed chats or taking focus.
+  useEffect(() => {
+    if (!sidebarOnly || !showTips || !completionTipSessionId) return;
+    const completed = sessions.find((s) => s.id === completionTipSessionId && s.archivedAt);
+    if (!completed) return;
+    const group = chatGroupOf(completed);
+    setCollapsed((previous) => {
+      if (!previous.has(group)) return previous;
+      const next = new Set(previous); next.delete(group); return next;
+    });
+    if (!horizontal && window.innerWidth < 768) setMobileNav(true);
+  }, [completionTipSessionId, sidebarOnly, showTips, horizontal, sessions]);
+  useLayoutEffect(() => {
+    if (!sidebarOnly || !showTips || !completionTipSessionId) return;
+    const frame = requestAnimationFrame(() => {
+      completionDestinationRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [completionTipSessionId, sidebarOnly, showTips, mobileNav, collapsed]);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [drag, setDrag] = useState<DragItem | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -759,6 +779,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                         className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-[11px] text-ink-faint hover:bg-surface-2 hover:text-ink"
                         style={sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
                         aria-expanded={completedOpen}
+                        ref={sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId) ? completionDestinationRef : undefined}
                         data-completed-toggle
                         onClick={() => { useStore.setState({ completionTipSessionId: null }); setShowCompleted((c) => { const n = new Set(c); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n; }); }}
                       >
@@ -819,7 +840,15 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
       {sidebarOnly && mobileNav && <div className="absolute inset-0 z-20 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} />}
       {/* A row of cards needs no drawer on a narrow screen: it is already out of the way. */}
       {horizontal && <aside className="flex w-full min-w-0">{Sidebar}</aside>}
-      {sidebarOnly && !horizontal && <><div className="md:hidden"><button className="btn btn-ghost" aria-label="Open agent list" onClick={() => setMobileNav(true)}>Agents</button></div><aside className={`${mobileNav ? 'absolute inset-y-0 left-0 z-30 flex p-[var(--pane-gap)]' : 'hidden'} md:relative md:z-auto md:flex md:p-0`}>{Sidebar}</aside>
+      {sidebarOnly && !horizontal && <><div className="md:hidden">
+        <button className="btn btn-ghost" aria-label="Open agent list" aria-expanded={mobileNav}
+          style={!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
+          onClick={() => setMobileNav(true)}>Agents</button>
+        {!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) && <div role="status" className="mt-1 max-w-40 rounded-md border border-line p-2 text-[11px] text-ink-soft">
+          Your completed chat is in the agent list. Open Agents, then Show completed to find or restore it.
+          <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
+        </div>}
+      </div><aside className={`${mobileNav ? 'absolute inset-y-0 left-0 z-30 flex p-[var(--pane-gap)]' : 'hidden'} md:relative md:z-auto md:flex md:p-0`}>{Sidebar}</aside>
       {/* The handle sits inside the gap itself (negative margins) so the list
           and the windows keep their one-gap rhythm, grabbed like the window
           dividers: pointer capture, arrow keys, double-click resets. */}
