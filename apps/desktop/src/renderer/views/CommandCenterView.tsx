@@ -9,7 +9,7 @@ import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD } from '@nekko
 import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { GridIcon, MoreVerticalIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
+import { GridIcon, MoreVerticalIcon, PhotoIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -399,7 +399,11 @@ export function CommandCenterView() {
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-3 px-4 pb-4 pt-1 xl:px-6">
       <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen}
-        onAdd={(kind) => { setCompletedId(null); void addFromToolbar(kind).catch(reportAddFailure); }} />
+        onAdd={(kind) => {
+          setCompletedId(null);
+          const add = kind === 'image' ? newChat({ kind: 'chat', chatType: 'image' }).then((id) => addFromToolbar('chat', id)) : addFromToolbar(kind);
+          void add.catch(reportAddFailure);
+        }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <WallDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
         <div className="wall-agent-workspace" data-tabs={panel.show && panel.orientation === 'horizontal' ? 'top' : 'left'}>
@@ -482,8 +486,8 @@ export function WallToolbar({
   onAutoArrange: () => void;
   addOpen: boolean;
   setAddOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  /** A new agent or terminal window on the wall. */
-  onAdd: (kind: 'chat' | 'terminal') => void;
+  /** A new agent, image session or terminal window on the wall. */
+  onAdd: (kind: 'chat' | 'image' | 'terminal') => void;
 }) {
   const [fixedOpen, setFixedOpen] = useState(false);
   const [hoverSize, setHoverSize] = useState({ rows: wall.layout.rows, cols: wall.layout.cols });
@@ -529,11 +533,12 @@ export function WallToolbar({
       {!hasAppChrome && <h1 className="view-title text-gradient">Agents</h1>}
       <div className={`ml-auto flex flex-wrap items-center ${slot ? 'gap-2' : 'gap-3'}`}>
 
-        {/* Adding to the wall, first in the row: an agent or a terminal of its
-            own. An agent's Changes, Files and Browser live in that agent's own
+        {/* Adding to the wall, first in the row: an agent, an image session or a
+            terminal of its own. An agent's Changes, Files and Browser live in that agent's own
             header beside Logs. More opens the full picker. */}
         <div className="wall-add-bar" role="group" aria-label="Add to the wall">
           <button type="button" className="wall-add-icon" title="New agent" aria-label="New agent" onClick={() => onAdd('chat')}><NekkoAvatar size={16} stationary eyes={false} /></button>
+          <button type="button" className="wall-add-icon" title="New image session" aria-label="New image session" onClick={() => onAdd('image')}><PhotoIcon className="h-4 w-4" /></button>
           <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
           <button
             type="button"
