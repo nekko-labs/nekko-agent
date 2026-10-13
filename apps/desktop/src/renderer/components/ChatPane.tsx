@@ -2951,7 +2951,6 @@ function ArchivedChatBar({ sessionId, contentWidth, archivedAt }: { sessionId: s
           className="btn btn-outline h-8 px-3 py-0 text-[12px] text-(--danger)"
           disabled={busy}
           onClick={async () => {
-            if (!window.confirm('Delete this chat forever? It cannot be recovered.')) return;
             setBusy(true);
             await deleteChatForever(sessionId);
             setBusy(false);

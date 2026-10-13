@@ -1,3 +1,4 @@
+import { confirmDeletion } from '../components/DeleteConfirmation.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -277,11 +278,11 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   const contextRow = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); const ids = selected.includes(id) ? selected.filter(x => sessions.some(s => s.id === x)) : [id]; setSelected(ids); setMenu({x:e.clientX,y:e.clientY,ids}); };
   const runAction = async (action: 'complete' | 'delete' | 'stop' | 'continue', ids: string[]) => {
     setMenu(null);
-    if (action === 'delete' && !window.confirm('Permanently delete ' + ids.length + ' chat(s)? This cannot be undone.')) return;
+    if (action === 'delete' && !await confirmDeletion('Permanently delete ' + ids.length + ' chat(s)? This cannot be undone.')) return;
     await Promise.all(ids.map(async (id) => {
       try {
         if (action === 'complete') await completeWithExit(findCompletionRow(id), async () => { await archiveChat(id); return useStore.getState().sessions.some((s) => s.id === id && s.archivedAt); });
-        if (action === 'delete') { await window.nekko.abortChat(id); await window.nekko.deleteSession(id); const state = useStore.getState(); const w = state.workspaces.find(w => w.anchor.kind === 'chat' && w.anchor.refId === id); if (w) state.closeWorkspace(w.id); }
+        if (action === 'delete') await useStore.getState().deleteChatForever(id, true);
         if (action === 'stop' && statuses.has(id)) await window.nekko.abortChat(id);
         if (action === 'continue' && !statuses.has(id)) { const s = await window.nekko.getSession(id); if (!s?.providerId || !s.modelId || s.autoModel) throw new Error('Choose a specific model before continuing this chat.'); if (!s.messages.some(m => m.role === 'user')) throw new Error('This chat has no prompt to continue.'); await window.nekko.sendChat({sessionId:id,providerId:s.providerId,modelId:s.modelId,text:'',resume:true}); }
       } catch(e) { useStore.getState().pushToast('error', id + ': ' + String(e)); }
@@ -320,6 +321,8 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   /** Groups whose completed chats are expanded under their active ones. */
+  const completionTipSessionId = useStore((s) => s.completionTipSessionId);
+  const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set());
   const [sidebarW, setSidebarW] = useState(readSidebarWidth);
   const saveSidebarW = (px: number) => {
@@ -328,6 +331,26 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
     try { localStorage.setItem(SIDEBAR_W_KEY, String(w)); } catch { /* private mode */ }
   };
   const [mobileNav, setMobileNav] = useState(false);
+  const completionDestinationRef = useRef<HTMLButtonElement>(null);
+  // Reveal the existing destination without expanding completed chats or taking focus.
+  useEffect(() => {
+    if (!sidebarOnly || !showTips || !completionTipSessionId) return;
+    const completed = sessions.find((s) => s.id === completionTipSessionId && s.archivedAt);
+    if (!completed) return;
+    const group = chatGroupOf(completed);
+    setCollapsed((previous) => {
+      if (!previous.has(group)) return previous;
+      const next = new Set(previous); next.delete(group); return next;
+    });
+    if (!horizontal && window.innerWidth < 768) setMobileNav(true);
+  }, [completionTipSessionId, sidebarOnly, showTips, horizontal, sessions]);
+  useLayoutEffect(() => {
+    if (!sidebarOnly || !showTips || !completionTipSessionId) return;
+    const frame = requestAnimationFrame(() => {
+      completionDestinationRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [completionTipSessionId, sidebarOnly, showTips, mobileNav, collapsed]);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [drag, setDrag] = useState<DragItem | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -754,9 +777,11 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                     <div className="pt-1">
                       <button
                         className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-[11px] text-ink-faint hover:bg-surface-2 hover:text-ink"
+                        style={sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
                         aria-expanded={completedOpen}
+                        ref={sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId) ? completionDestinationRef : undefined}
                         data-completed-toggle
-                        onClick={() => setShowCompleted((c) => { const n = new Set(c); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n; })}
+                        onClick={() => { useStore.setState({ completionTipSessionId: null }); setShowCompleted((c) => { const n = new Set(c); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n; }); }}
                       >
                         <svg
                           className={`h-2.5 w-2.5 shrink-0 transition-transform duration-200 ${completedOpen ? 'rotate-90' : ''}`}
@@ -764,6 +789,10 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                         ><path d="M9 6l6 6-6 6" /></svg>
                         {completedOpen ? 'Hide completed' : `Show completed (${done.length})`}
                       </button>
+                      {sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId) && <div role="status" className="mt-1 rounded-md border border-line p-2 text-[11px] text-ink-soft">
+                        Your completed chat is here. Open Show completed to find or restore it.
+                        <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
+                      </div>}
                       {completedOpen && done.map((s) => (
                         <CompletedRow
                           key={s.id}
@@ -811,7 +840,15 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
       {sidebarOnly && mobileNav && <div className="absolute inset-0 z-20 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} />}
       {/* A row of cards needs no drawer on a narrow screen: it is already out of the way. */}
       {horizontal && <aside className="flex w-full min-w-0">{Sidebar}</aside>}
-      {sidebarOnly && !horizontal && <><div className="md:hidden"><button className="btn btn-ghost" aria-label="Open agent list" onClick={() => setMobileNav(true)}>Agents</button></div><aside className={`${mobileNav ? 'absolute inset-y-0 left-0 z-30 flex p-[var(--pane-gap)]' : 'hidden'} md:relative md:z-auto md:flex md:p-0`}>{Sidebar}</aside>
+      {sidebarOnly && !horizontal && <><div className="md:hidden">
+        <button className="btn btn-ghost" aria-label="Open agent list" aria-expanded={mobileNav}
+          style={!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
+          onClick={() => setMobileNav(true)}>Agents</button>
+        {!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) && <div role="status" className="mt-1 max-w-40 rounded-md border border-line p-2 text-[11px] text-ink-soft">
+          Your completed chat is in the agent list. Open Agents, then Show completed to find or restore it.
+          <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
+        </div>}
+      </div><aside className={`${mobileNav ? 'absolute inset-y-0 left-0 z-30 flex p-[var(--pane-gap)]' : 'hidden'} md:relative md:z-auto md:flex md:p-0`}>{Sidebar}</aside>
       {/* The handle sits inside the gap itself (negative margins) so the list
           and the windows keep their one-gap rhythm, grabbed like the window
           dividers: pointer capture, arrow keys, double-click resets. */}
@@ -1070,6 +1107,7 @@ const WorkspaceCanvas = React.memo(function WorkspaceCanvas({
           canSplit={(dir) => canSplitPane(node.id, dir)}
           onSplit={(dir, kind) => { void addWindow(node.id, dir, kind); }}
           onClose={() => closePane(node.id)}
+          onMinimize={() => closePane(node.id)}
           onFocus={() => setActivePane(node.id)}
           onDragStart={() => setDragging(node.id)}
           onDragEnd={() => setDragging(null)}
