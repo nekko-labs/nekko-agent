@@ -73,6 +73,10 @@ export const DAEMON_SERVED = new Set<string>([
   IpcChannels.engineInstall,
   IpcChannels.engineUninstall,
   IpcChannels.engineInstallPreview,
+  IpcChannels.engineStatus,
+  IpcChannels.engineSettingsSave,
+  IpcChannels.engineSetResidentTtl,
+  IpcChannels.engineGenerateImage,
 ]);
 import { listInstalledSkillDefs } from './skills.js';
 import { watchResume, watchSnapshot } from './agent-watches.js';

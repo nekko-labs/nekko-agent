@@ -72,6 +72,8 @@ pub struct Library {
     lock: tokio::sync::Mutex<()>,
     /// Set once the first-start folder seed has run (or was not needed).
     seeded: tokio::sync::OnceCell<()>,
+    /// The runtime installers, for the installed engine's version.
+    installs: std::sync::OnceLock<Arc<crate::installs::Installs>>,
 }
 
 impl Library {
@@ -92,6 +94,7 @@ impl Library {
             engine,
             lock: tokio::sync::Mutex::new(()),
             seeded: tokio::sync::OnceCell::new(),
+            installs: std::sync::OnceLock::new(),
         })
     }
 
@@ -151,7 +154,16 @@ impl Library {
     /// What the host's model server knows: the resident ids, the last load
     /// errors and the installed llama.cpp version. When the host is not
     /// answering, the daemon's own record of what it runs says what is loaded.
+    pub fn set_installs(&self, installs: Arc<crate::installs::Installs>) {
+        let _ = self.installs.set(installs);
+    }
+
     pub async fn host_state(&self) -> (HashSet<String>, Map<String, Value>, Option<Value>) {
+        // The daemon's own model server, when it runs one.
+        if let (Some(server), Some(installs)) = (self.engine.server.get(), self.installs.get()) {
+            let version = installs.detect("llama").await.get("version").cloned();
+            return (server.loaded_ids().into_iter().collect(), server.load_errors(), version);
+        }
         let state =
             tokio::time::timeout(crate::routes::AUX_WAIT, self.backend.call("engine:runtime", json!(["loadState"])))
                 .await;

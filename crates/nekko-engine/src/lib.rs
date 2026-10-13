@@ -10,9 +10,11 @@ pub mod folders;
 pub mod gguf;
 pub mod gpu_adapters;
 pub mod install;
+pub mod launch;
 pub mod library;
 pub mod mlx;
 pub mod runtimes;
+pub mod server;
 
 use serde_json::Value;
 use std::future::Future;

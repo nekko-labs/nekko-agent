@@ -211,6 +211,14 @@ impl Machine {
         stats
     }
 
+    /// A reading taken now rather than from the cache (`getGpuStatsFresh`):
+    /// the before/after pair around a model load is a measurement.
+    pub async fn gpu_stats_fresh(&self) -> Option<GpuStats> {
+        let stats = self.probe_gpu().await;
+        *self.gpu.lock().await = Some(Cached { at: Instant::now(), value: stats.clone() });
+        stats
+    }
+
     /// macOS never has `nvidia-smi`, so it goes straight to the registry.
     async fn probe_gpu(&self) -> Option<GpuStats> {
         if cfg!(target_os = "macos") {

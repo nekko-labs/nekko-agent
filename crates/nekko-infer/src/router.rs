@@ -119,14 +119,28 @@ impl EngineRouter {
         if self.serving().as_ref() == Some(&config) {
             return Ok(format!("The engine is serving on port {}.", config.port));
         }
+        // Re-serving (a new key or CORS list on the same port) waits for the
+        // listener it just stopped to let go of the port, which happens on its
+        // own task a moment later.
+        let replacing = self.serving().is_some();
         self.stop();
-        let listener = tokio::net::TcpListener::bind((config.host.as_str(), config.port)).await.map_err(|e| {
-            if e.kind() == std::io::ErrorKind::AddrInUse {
-                format!("Port {} is already in use. Pick another port for the engine.", config.port)
-            } else {
-                e.to_string()
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        let listener = loop {
+            match tokio::net::TcpListener::bind((config.host.as_str(), config.port)).await {
+                Ok(l) => break l,
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::AddrInUse
+                        && replacing
+                        && std::time::Instant::now() < deadline =>
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                    return Err(format!("Port {} is already in use. Pick another port for the engine.", config.port));
+                }
+                Err(e) => return Err(e.to_string()),
             }
-        })?;
+        };
         // Port zero requests an OS-assigned listener without a reserve/release race.
         let mut config = config;
         config.port = listener.local_addr().map_err(|e| e.to_string())?.port();

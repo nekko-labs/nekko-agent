@@ -51,6 +51,9 @@ fn now() -> f64 {
 /// Whether the host's model server is running. When the host does not
 /// answer, the daemon serving the engine's port says so instead.
 async fn server_running(backend: &Backend, engine: &crate::engine::Engine) -> bool {
+    if let Some(server) = engine.server.get() {
+        return server.is_running();
+    }
     match tokio::time::timeout(crate::routes::AUX_WAIT, backend.call("engine:runtime", json!(["isRunning"]))).await {
         Ok(Ok(v)) => nekko_js::truthy(Some(&v)),
         _ => engine.router.serving().is_some(),
@@ -94,7 +97,14 @@ impl Installs {
                 // Windows will not replace a running server's files.
                 Box::pin(async move {
                     if server_running(&backend, &engine).await {
-                        let _ = backend.call("engine:runtime", json!(["stop"])).await;
+                        match engine.server.get() {
+                            Some(server) => {
+                                server.stop().await;
+                            }
+                            None => {
+                                let _ = backend.call("engine:runtime", json!(["stop"])).await;
+                            }
+                        }
                     }
                 }) as nekko_engine::BoxFuture<()>
             })
