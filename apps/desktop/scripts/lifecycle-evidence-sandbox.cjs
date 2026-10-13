@@ -46,7 +46,7 @@ app.whenReady().then(async () => {
     throw Error('DOM/frame stability timeout for route ' + ${JSON.stringify(expectedRoute)});
   })()`);
   const capture = async name => {
-    const route = name.endsWith('-settings') ? 'settings' : 'panes';
+    const route = name.includes('-settings') ? 'settings' : 'panes';
     const dom = await stable(route);
     const expectedWidth = name.startsWith('wide-') ? 1440 : 760;
     const expectedTheme = name.includes('-light-') ? 'light' : 'dark';
@@ -96,10 +96,21 @@ app.whenReady().then(async () => {
       await reset(); await themeFor(theme);
       if (base) { await run("lifecycle.state().archiveChat('alpha')"); await sleep(400); }
       else await key('Input alpha', 'e');
+      const completionVisibility = await run(`(() => {
+        const e = document.querySelector('[data-completed-toggle]');
+        if (!e) throw Error('Missing completed toggle');
+        if (innerWidth >= 768) e.scrollIntoView({ block: 'center', behavior: 'instant' });
+        const r = e.getBoundingClientRect();
+        const visible = r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight;
+        return { visible, outline: e.style.outline, responsiveSidebarHidden: innerWidth < 768 && !visible };
+      })()`);
+      report[label].completionVisibility = completionVisibility;
+      if (width === 1440 && (!completionVisibility.visible || (!base && !completionVisibility.outline.includes('2px')))) throw Error('Wide Show completed must be visible and highlighted');
+      if (width === 760) report[label].responsiveNote = 'Sidebar hidden by actual responsive layout intentionally; no forced mobile drawer opening.';
       await capture(label + '-completion');
       if (!base) {
         await check(label + ': only alpha completed and first tip highlighted', `lifecycle.records().find(s=>s.id==='alpha').archivedAt>0&&!lifecycle.records().find(s=>s.id==='beta').archivedAt&&lifecycle.state().completionTipSessionId==='alpha'&&[...document.querySelectorAll('[data-completed-toggle]')].some(e=>e.style.outline.includes('2px'))`);
-        await check(label + ': tip names Show completed in left panel', `document.body.innerText.includes('Open Show completed')`);
+        await check(label + ': tip names Show completed in left panel', `[...document.querySelectorAll('[role="status"]')].some(e=>e.textContent.includes('Open Show completed'))`);
         await run("document.querySelector('[data-completed-toggle]').click()"); await sleep(200);
         await key('Input beta', 'e');
         await check(label + ': completion tip only once', `lifecycle.state().completionTipSessionId===null&&lifecycle.calls.filter(c=>c.method==='settings'&&c.patch.completionTipSeen).length===1`);
@@ -108,6 +119,23 @@ app.whenReady().then(async () => {
       await stable('settings');
       await check(label + ': SettingsView mounted, panes absent', `document.querySelector('[data-lifecycle-route="settings"]')!==null&&!document.querySelector('[aria-label="Input alpha"]')&&document.body.innerText.includes('Appearance')`);
       await capture(label + '-settings');
+      report[label].settingsScroll = await run(`(() => {
+        const anchor = document.getElementById('chat-pane-action');
+        if (!anchor) throw Error('Missing matched Appearance anchor');
+        anchor.scrollIntoView({ block: 'center', behavior: 'instant' });
+        let scroller = anchor.parentElement;
+        while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+        if (!scroller || scroller.scrollTop <= 0) throw Error('Real settings scroller did not scroll');
+        const bounds = scroller.getBoundingClientRect();
+        const rows = ['Chat pane top-right action', 'Show tips', 'Confirm deletions'].map(text => {
+          const e = [...document.querySelectorAll('label, span')].find(e => e.textContent === text);
+          const r = e?.getBoundingClientRect();
+          return { text, present: !!e, visible: !!r && r.height > 0 && r.top >= Math.max(0, bounds.top) && r.bottom <= Math.min(innerHeight, bounds.bottom), top: r?.top, bottom: r?.bottom };
+        });
+        if (!rows[0].visible || (${!base} && rows.some(r => !r.visible))) throw Error('Appearance controls outside visible scroller: ' + JSON.stringify(rows));
+        return { anchor: 'chat-pane-action', scrollTop: scroller.scrollTop, bounds: { top: bounds.top, bottom: bounds.bottom }, rows };
+      })()`);
+      await capture(label + '-settings-controls');
       if (!base) await check(label + ': real Show tips and Confirm deletions settings', `document.body.innerText.includes('Show tips')&&document.body.innerText.includes('Confirm deletions')&&document.body.innerText.includes('Remote access')&&!!document.querySelector('input[placeholder="Relay URL, e.g. wss://nekko-agent-relay.fly.dev"]')`);
     }
     if (!base) {
@@ -143,9 +171,9 @@ app.whenReady().then(async () => {
     const times = [], start = Date.now(); let stage = 0;
     while (Date.now() - start < 3200) {
       const t = Date.now() - start;
-      if (t > 400 && stage === 0) { if (base) await run("lifecycle.state().archiveChat('alpha')"); else await key('Input alpha', 'e'); stage++; }
+      if (t > 400 && stage === 0) { if (base) await run("lifecycle.state().archiveChat('alpha')"); else await run(`document.querySelector('[aria-label="Input alpha"]').focus();window.dispatchEvent(new KeyboardEvent('keydown',{key:'e',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))`); await run(`new Promise(resolve => requestAnimationFrame(() => { document.querySelector('[data-completed-toggle]')?.scrollIntoView({block:'center',behavior:'instant'}); resolve(); }))`); stage++; }
       if (t > 1400 && stage === 1) { await run("document.querySelector('[data-completed-toggle]')?.click()"); stage++; }
-      if (t > 2000 && stage === 2) { if (!base) await key('Input beta', 'Delete'); stage++; }
+      if (t > 2000 && stage === 2) { if (!base) await run(`document.querySelector('[aria-label="Input beta"]').focus();window.dispatchEvent(new KeyboardEvent('keydown',{key:'Delete',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))`); stage++; }
       if (t > 2800 && stage === 3) { if (!base) await button('Cancel'); stage++; }
       times.push(Date.now() - start); fs.writeFileSync(path.join(frames, `${times.length}.png`), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG()); await sleep(65);
     }

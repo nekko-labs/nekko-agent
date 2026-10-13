@@ -17,6 +17,10 @@ owner:
 
 ---
 
+## Window lifecycle shortcuts and tips (added 2026-10-12)
+
+- [ ] Land [window lifecycle shortcuts and guidance](SPEC.md#window-lifecycle-shortcuts-and-guidance-2026-10-12): shared focused-pane key registry, board-only chat/terminal minimization, safe in-app deletion confirmation with separately persisted skip/reset, and one-time successful-completion highlight. Implementation, 947 desktop tests, typecheck, build, settings parity tests, and 48 isolated renderer interaction assertions passed. Matched wide/narrow light/dark screenshots and timing frames inspected. PR checks and landing pending. Native OS shortcut delivery and real PTY survival remain untested; terminal archive history is outside scope.
+
 ## Phone: what ships now, what the native port owes (consolidated 2026-10-12)
 
 **Two phone codebases exist.** The Expo / React Native app in `apps/mobile` is the complete phone
