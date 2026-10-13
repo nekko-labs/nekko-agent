@@ -80,16 +80,18 @@ fn fake_backend() {
                             ),
                             "chats:busy" => (axum::http::StatusCode::OK, axum::Json(json!(["s_busy"]))),
                             // The engine's model server, for the daemon's `engine:models`.
-                            "engine:runtime" if body.0["args"][0] == "loadState" => {
+                            "engine:runtime" => {
                                 recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
-                                (
-                                    axum::http::StatusCode::OK,
-                                    axum::Json(json!({
+                                let answer = match body.0["args"][0].as_str() {
+                                    Some("loadState") => json!({
                                         "loaded": ["chat/acme_tiny-gguf/tiny-q4_k_m"],
                                         "errors": { "ollama/tiny:latest": "Not enough memory to load it." },
                                         "version": "b9999",
-                                    })),
-                                )
+                                    }),
+                                    // The host's own queue (runtime installs) is pushed, not asked for here.
+                                    _ => Value::Null,
+                                };
+                                (axum::http::StatusCode::OK, axum::Json(answer))
                             }
                             "test:designProvider" => {
                                 *design_provider.lock().unwrap() = Some(body.0["args"][0].clone());
@@ -2919,6 +2921,196 @@ async fn serves_the_model_library_and_its_folders_itself() {
     let changed = calls.as_array().unwrap().iter().filter(|c| c[0] == "settings:changed").count();
     assert_eq!(changed, 5, "the seed, three autoload saves and the folder save reach the host: {calls}");
     assert!(calls.as_array().unwrap().iter().any(|c| c[0] == "engine:runtime"));
+    drop(d);
+    std::fs::remove_dir_all(root).ok();
+}
+
+/// A loopback Hugging Face: one GGUF repo with a projector and a tokenizer,
+/// and one whose weights never finish arriving.
+async fn fake_hugging_face(gguf: Vec<u8>) -> u16 {
+    use axum::extract::Path;
+    use axum::routing::get;
+    let tree = |files: Vec<(&str, usize)>| {
+        json!(
+            files
+                .into_iter()
+                .map(|(p, s)| json!({ "type": "file", "oid": "x", "size": s, "path": p }))
+                .collect::<Vec<_>>()
+        )
+    };
+    let tiny = tree(vec![("tiny-Q4_K_M.gguf", gguf.len()), ("mmproj-F16.gguf", gguf.len()), ("tokenizer.json", 2)]);
+    let slow = tree(vec![("slow-Q4_K_M.gguf", 1_000_000)]);
+    let app = axum::Router::new()
+        .route("/api/models/acme/tiny-GGUF", get(|| async { axum::Json(json!({ "tags": ["gguf"], "downloads": 3 })) }))
+        .route("/api/models/acme/slow-GGUF", get(|| async { axum::Json(json!({ "tags": ["gguf"] })) }))
+        .route("/api/models/acme/tiny-GGUF/tree/main", get(move || async move { axum::Json(tiny) }))
+        .route("/api/models/acme/slow-GGUF/tree/main", get(move || async move { axum::Json(slow) }))
+        .route(
+            "/acme/{repo}/resolve/main/{file}",
+            get(move |Path((repo, file)): Path<(String, String)>| {
+                let gguf = gguf.clone();
+                async move {
+                    use axum::response::IntoResponse;
+                    if repo == "slow-GGUF" {
+                        // The first bytes, then nothing: a download to cancel.
+                        let first = futures_util::stream::iter(vec![Ok::<_, std::io::Error>(vec![7u8; 4096])]);
+                        let body = axum::body::Body::from_stream(first.chain(futures_util::stream::pending()));
+                        return ([("content-length", "1000000")], body).into_response();
+                    }
+                    match file.as_str() {
+                        "tokenizer.json" => b"{}".to_vec().into_response(),
+                        _ => gguf.into_response(),
+                    }
+                }
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    port
+}
+
+async fn job_until(port: u16, id: &str, done: impl Fn(&Value) -> bool) -> Value {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let (_, jobs) = post(port, "engine:downloads", json!([]), Some(TOKEN)).await;
+        if let Some(j) = jobs.as_array().and_then(|a| a.iter().find(|j| j["id"] == id)).filter(|j| done(j)) {
+            return j.clone();
+        }
+        assert!(Instant::now() < deadline, "{id} never got there: {jobs}");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn downloads_models_itself_and_merges_the_hosts_jobs() {
+    let root = std::env::temp_dir().join(format!("nekkod-downloads-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    let home = root.join("home");
+    std::fs::create_dir_all(&data).unwrap();
+    // No other apps' folders to seed in this home.
+    std::fs::write(data.join("settings.json"), r#"{"engine":{"modelFolders":[]}}"#).unwrap();
+    let hf = fake_hugging_face(tiny_gguf("llama", "Tiny")).await;
+    let h = home.to_string_lossy().to_string();
+    let d = start_with_env(
+        true,
+        Some(&data),
+        json!({ "huggingFaceUrl": format!("http://127.0.0.1:{hf}") }),
+        &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
+    );
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for channel in [
+        "engine:downloadModel",
+        "engine:downloadCompanions",
+        "engine:imageCompanions",
+        "engine:downloadImageCompanions",
+        "engine:downloads",
+        "engine:cancelDownload",
+        "engine:dismissDownload",
+    ] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
+    }
+    let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), Some("null")).await.unwrap();
+
+    // One quantization, with its projector and tokenizer, from the catalog.
+    let (status, started) =
+        post(d.port, "engine:downloadModel", json!(["acme/tiny-GGUF", "Q4_K_M"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{started}");
+    assert_eq!(started["ok"], true, "{started}");
+    let id = started["jobId"].as_str().unwrap().to_string();
+    assert_eq!(id, "model:acme/tiny-GGUF:Q4_K_M");
+    let done =
+        job_until(d.port, &id, |j| j["state"] != "queued" && j["state"] != "downloading" && j["state"] != "verifying")
+            .await;
+    assert_eq!(done["state"], "done", "{done}");
+    let weights = data.join("models/chat/acme_tiny-GGUF/tiny-Q4_K_M.gguf");
+    assert!(weights.exists(), "{done}");
+    assert!(!data.join("models/chat/acme_tiny-GGUF/tiny-Q4_K_M.gguf.part").exists());
+    for extra in ["mmproj-F16.gguf", "tokenizer.json"] {
+        job_until(d.port, &format!("{id}:{extra}"), |j| j["state"] == "done").await;
+        assert!(data.join("models/chat/acme_tiny-GGUF").join(extra).exists(), "{extra}");
+    }
+    // The UI heard about it.
+    let mut heard = false;
+    while let Some(ev) = next_json(&mut events, Duration::from_secs(2)).await {
+        if ev["channel"] == "downloads:updated"
+            && ev["payload"].as_array().is_some_and(|a| a.iter().any(|j| j["id"] == id.as_str()))
+        {
+            heard = true;
+            break;
+        }
+    }
+    assert!(heard, "no downloads:updated event");
+    // A finished model turns on autoStart, and the library lists it as a vision model.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let settings: Value =
+            serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+        if settings["engine"]["autoStart"] == true {
+            break;
+        }
+        assert!(Instant::now() < deadline, "autoStart was never turned on: {settings}");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
+    let row =
+        models.as_array().unwrap().iter().find(|m| m["id"] == "chat/acme_tiny-GGUF/tiny-Q4_K_M").cloned().unwrap();
+    assert_eq!((row["sourceRepo"].clone(), row["modality"].clone()), (json!("acme/tiny-GGUF"), json!("vision")));
+
+    // Its companions are already there; an image-only call answers null.
+    let (_, companions) =
+        post(d.port, "engine:downloadCompanions", json!(["chat/acme_tiny-GGUF/tiny-Q4_K_M"]), Some(TOKEN)).await;
+    assert_eq!(companions["message"], "Tiny already has every companion file acme/tiny-GGUF ships.", "{companions}");
+    let (_, image) =
+        post(d.port, "engine:imageCompanions", json!(["chat/acme_tiny-GGUF/tiny-Q4_K_M"]), Some(TOKEN)).await;
+    assert_eq!(image, Value::Null);
+    let (_, missing) = post(d.port, "engine:downloadImageCompanions", json!(["nope"]), Some(TOKEN)).await;
+    assert_eq!(missing, json!({ "ok": false, "message": "That model is not in the library." }));
+    let (_, gone) = post(d.port, "engine:downloadModel", json!(["acme/missing-GGUF", "Q4_K_M"]), Some(TOKEN)).await;
+    assert_eq!(gone, json!({ "ok": false, "message": "That model is no longer published." }));
+
+    // A download cancelled midway keeps its partial file for a resume.
+    let (_, slow) = post(d.port, "engine:downloadModel", json!(["acme/slow-GGUF", "Q4_K_M"]), Some(TOKEN)).await;
+    let slow_id = slow["jobId"].as_str().unwrap().to_string();
+    let receiving = job_until(d.port, &slow_id, |j| j["receivedBytes"].as_f64().unwrap_or(0.0) >= 4096.0).await;
+    assert_eq!((receiving["state"].clone(), receiving["totalBytes"].clone()), (json!("downloading"), json!(1_000_000)));
+    let (_, none) = post(d.port, "engine:cancelDownload", json!([slow_id]), Some(TOKEN)).await;
+    assert_eq!(none, Value::Null);
+    let cancelled = job_until(d.port, &slow_id, |j| j["state"] == "cancelled").await;
+    assert_eq!(cancelled["message"], "Cancelled.");
+    assert_eq!(std::fs::metadata(data.join("models/chat/acme_slow-GGUF/slow-Q4_K_M.gguf.part")).unwrap().len(), 4096);
+    post(d.port, "engine:dismissDownload", json!([slow_id]), Some(TOKEN)).await;
+
+    // The host's runtime installs join the list; their controls go back to it.
+    let host_job = json!({ "id": "engine:llama:b9999-cuda", "kind": "engine", "label": "llama.cpp", "target": "b9999-cuda", "state": "downloading", "receivedBytes": 1, "startedAt": 9_999_999_999_999u64 });
+    let (_, none) = post(d.port, "engine:hostDownloads", json!([[host_job]]), Some(TOKEN)).await;
+    assert_eq!(none, Value::Null);
+    let (_, jobs) = post(d.port, "engine:downloads", json!([]), Some(TOKEN)).await;
+    let ids: Vec<&str> = jobs.as_array().unwrap().iter().map(|j| j["id"].as_str().unwrap()).collect();
+    assert_eq!(ids[0], "engine:llama:b9999-cuda", "newest first: {ids:?}");
+    assert!(!ids.contains(&slow_id.as_str()), "dismissed: {ids:?}");
+    assert!(ids.contains(&id.as_str()));
+    post(d.port, "engine:cancelDownload", json!(["engine:llama:b9999-cuda"]), Some(TOKEN)).await;
+    post(d.port, "engine:dismissDownload", json!(["engine:llama:b9999-cuda"]), Some(TOKEN)).await;
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let runtime: Vec<&Value> = calls
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c[0] == "engine:runtime" && c[1][0] != "loadState" && c[1][0] != "downloads")
+        .collect();
+    assert_eq!(
+        runtime,
+        [
+            &json!(["engine:runtime", ["cancelDownload", "engine:llama:b9999-cuda"]]),
+            &json!(["engine:runtime", ["dismissDownload", "engine:llama:b9999-cuda"]])
+        ],
+        "{calls}"
+    );
+    drop(events);
     drop(d);
     std::fs::remove_dir_all(root).ok();
 }

@@ -33,7 +33,7 @@ import { createCatalog, hfFileUrl } from './catalog.js';
 import { companionsDir } from './companions.js';
 import { companionsBeside, imageCompanionsDir, imageCompanionSetFor, imageCompanionStatus } from './image-companions.js';
 import { createDecisions } from './decisions.js';
-import { createDownloads } from './download.js';
+import { createDownloads, type DownloadRequest } from './download.js';
 import { knownFolder, knownFolderCandidates } from './folders.js';
 import { createEngineInstaller } from './install.js';
 import { createLibrary, daemonLibrary, PRIMARY_FOLDER_ID, type Library, type LibraryApi } from './library.js';
@@ -94,6 +94,8 @@ export function createEngine(deps: EngineDeps) {
   const localLibrary = createLibrary({ modelsDir, folders: () => deps.settings().modelFolders ?? [] });
   // Under the engine daemon the library is the daemon's: it alone writes the index.
   const daemon = daemonOwns('library') ? daemonCall() : undefined;
+  // Model downloads too: this queue keeps only the runtime installs.
+  const daemonDownloads = daemonOwns('downloads') ? daemonCall() : undefined;
   const library: LibraryApi = daemon ? daemonLibrary(daemon) : localLibrary;
   const catalog = createCatalog({ token: deps.hfToken, mlx: () => mlxSupported() });
   const installer = createEngineInstaller({
@@ -159,73 +161,21 @@ export function createEngine(deps: EngineDeps) {
   const seenJobStates = new Map<string, DownloadJob['state']>();
 
   async function onDownloadsChanged(jobs: DownloadJob[]): Promise<void> {
-    const present = new Set(jobs.map((j) => j.id));
-    for (const id of [...seenJobStates.keys()]) if (!present.has(id)) seenJobStates.delete(id);
-    const finished = jobs.filter(
-      (j) =>
-        j.kind === 'model' &&
-        j.state === 'done' &&
-        seenJobStates.get(j.id) !== 'done' &&
-        // `model:<repo>:<quant>` is three segments; a companion's id appends
-        // the file (`model:<repo>:<quant>:<file>`) and does not count.
-        j.id.split(':').length === 3 &&
-        j.dest,
-    );
-    for (const j of jobs) seenJobStates.set(j.id, j.state);
-    for (const job of finished) await onModelDownloaded(job);
+    for (const job of finishedModelJobs(jobs, seenJobStates)) await onModelDownloaded(job);
   }
 
   async function onModelDownloaded(job: DownloadJob): Promise<void> {
     // A model on disk makes the engine worth starting on its own.
     if (!deps.settings().autoStart) await deps.saveSettings({ autoStart: true });
-    const model = await findDownloadedModel(job);
+    const model = downloadedModel(await library.list(), job);
     // An existing preset is a choice somebody made; do not overwrite it.
     if (!model || model.format === 'mlx' || model.preset) return;
-    const preset = await gpuFirstPreset(model);
-    if (preset) await library.savePreset(model.id, preset);
-  }
-
-  /** The library row a finished download created, matched on where it landed. */
-  async function findDownloadedModel(job: DownloadJob): Promise<LocalModel | undefined> {
-    const dest = resolve(job.dest as string);
-    const list = await library.list();
-    return list.find((m) => {
-      const p = resolve(m.path);
-      // A GGUF job lands on the model file itself; an MLX job lands on a file
-      // inside the model folder, whose path is what the library lists.
-      return p === dest || p === resolve(dirname(dest));
-    });
-  }
-
-  /**
-   * The preset a fresh download starts with: the planner's best full-GPU
-   * answer, falling back to the honest partial one. Nothing is written when
-   * the planner cannot read the model or says it cannot run at all — a saved
-   * wrong setting is worse than the engine's default.
-   */
-  async function gpuFirstPreset(model: LocalModel): Promise<EngineLoadPreset | undefined> {
     const hw = await hardware().catch(() => undefined);
     // No GPU to fill: the engine defaults already mean CPU.
-    if (!hw || hw.devices.length === 0) return undefined;
+    if (!hw || hw.devices.length === 0) return;
     const install = await installer.detect();
-    const result = autoFit({
-      facts: modelFactsFor(model),
-      hardware: hw,
-      budgetFraction: 0.9,
-      // The engine caps unnamed context at 64k on purpose (see
-      // defaultContextTokens); the preset gets the same ceiling.
-      maxContextTokens: defaultContextTokens(model),
-      options: { overheadFloorBytes: overheadFloorFor('llamacpp', install.version) },
-    });
-    if (result.plan.verdict === 'unknown' || result.plan.verdict === 'wont-load') return undefined;
-    const layers = model.layers ?? result.plan.totalLayers;
-    return {
-      contextTokens: result.request.contextTokens,
-      kvCacheDtype: result.request.kvCacheDtype,
-      parallelSlots: result.request.parallelSlots,
-      gpuLayers: layers !== undefined ? Math.round(layers * result.request.gpuLayerFraction) : undefined,
-      budgetFraction: 0.9,
-    };
+    const preset = gpuFirstPreset(model, hw, overheadFloorFor('llamacpp', install.version));
+    if (preset) await library.savePreset(model.id, preset);
   }
 
   /* ------------------------------------------------------------ acquisition */
@@ -242,58 +192,20 @@ export function createEngine(deps: EngineDeps) {
     modelId: string,
     quantLabel: string,
   ): Promise<{ ok: boolean; message: string; jobId?: string }> {
-    const model = await catalog.model(modelId);
-    const quant = model?.quants.find((q) => q.label === quantLabel) ?? model?.quants[0];
-    if (!model || !quant) return { ok: false, message: 'That model is no longer published.' };
-
-    const mlx = quant.format === 'mlx';
-    const type = mlx ? 'mlx' : modelModality({ name: `${model.name} ${modelId} ${model.tags.join(' ')} ${model.pipelineTag ?? ''} ${quant.file}` });
-    // An MLX checkpoint is a folder, and the library finds it by `mlx` in its
-    // path: `<models>/mlx/<owner>_<repo>/`.
-    const destFor = (file: string) => join(modelsDir(), type, modelId.replace('/', '_'), file.split('/').pop() as string);
-    const jobId = `model:${modelId}:${quant.label}`;
-    // Every file of this build is one download in the UI: the weights, later
-    // shards, projector and tokenizer files all carry the same group.
-    const groupLabel = `${model.name} · ${quant.label}`;
-    const group = { group: jobId, groupLabel };
-
+    const plan = await modelDownloadPlan(await catalog.model(modelId), modelId, quantLabel, modelsDir(), landed);
+    if (!plan.ok) return { ok: false, message: plan.message };
     const job = await downloads.start({
-      id: jobId,
-      kind: 'model',
-      label: groupLabel,
-      target: modelId,
-      url: hfFileUrl(modelId, quant.file),
-      dest: destFor(quant.file),
-      ...group,
-      file: quant.file,
-      verify: mlx
-        ? undefined
-        : async (path) => {
+      ...plan.main,
+      verify: plan.verifyGguf
+        ? async (path) => {
             // A GGUF that will not parse is a failed download wearing the right
             // extension, and catching it here means the library never lists one.
             return (await readGgufMetadata(path)) ? null : 'The downloaded file is not a readable GGUF.';
-          },
+          }
+        : undefined,
     });
-
-    for (const extra of quant.extraFiles ?? []) {
-      const dest = destFor(extra);
-      // Sidecars are shared across quants; one already on disk is not fetched
-      // again when a second build of the same repo is downloaded.
-      const landed = await stat(dest).then((s) => s.size > 0).catch(() => false);
-      if (landed) continue;
-      void downloads.start({
-        id: `${jobId}:${extra}`,
-        kind: 'model',
-        label: `${model.name} · ${extra.split('/').pop()}`,
-        target: modelId,
-        url: hfFileUrl(modelId, extra),
-        dest,
-        ...group,
-        file: extra,
-      });
-    }
-
-    return { ok: true, message: `Downloading ${model.name} (${quant.label}).`, jobId: job.id };
+    for (const extra of plan.extras) void downloads.start(extra);
+    return { ok: true, message: plan.message, jobId: job.id };
   }
 
   /**
@@ -315,42 +227,9 @@ export function createEngine(deps: EngineDeps) {
         message: `Cannot tell which Hugging Face repo ${model.name} came from, so there is nowhere to fetch its companion files from.`,
       };
     }
-    const found = await catalog.companions(repo);
-    if (!found) {
-      return { ok: false, message: `Could not read the ${repo} repo on Hugging Face. It may be private or renamed.` };
-    }
-
-    const wanted = [found.projector, ...found.sidecars].filter((f): f is string => Boolean(f));
-    if (!wanted.length) {
-      return { ok: true, message: `${repo} ships no companion files for ${model.name}.` };
-    }
-    const destDir = model.managed === false ? companionsDir(modelsDir(), model.id) : dirname(model.path);
-    let queued = 0;
-    for (const file of wanted) {
-      const fileName = file.split('/').pop() as string;
-      const dest = join(destDir, fileName);
-      const landed = await stat(dest).then((s) => s.size > 0).catch(() => false);
-      // A file already beside the weights counts even when the destination is
-      // the companions dir: no point fetching what is already there.
-      const beside = join(dirname(model.path), fileName);
-      const already = landed || (dest !== beside && (await stat(beside).then((s) => s.size > 0).catch(() => false)));
-      if (already) continue;
-      void downloads.start({
-        id: `companions:${modelId}:${file}`,
-        kind: 'model',
-        label: `${model.name} · ${fileName}`,
-        target: modelId,
-        url: hfFileUrl(repo, file),
-        dest,
-        group: `companions:${modelId}`,
-        groupLabel: `${model.name} · companion files`,
-        file,
-      });
-      queued += 1;
-    }
-    return queued
-      ? { ok: true, message: `Fetching ${queued} companion file${queued === 1 ? '' : 's'} for ${model.name} from ${repo}.` }
-      : { ok: true, message: `${model.name} already has every companion file ${repo} ships.` };
+    const plan = await companionsPlan(model, repo, await catalog.companions(repo), modelsDir(), landed);
+    for (const request of plan.requests) void downloads.start(request);
+    return { ok: plan.ok, message: plan.message };
   }
 
   /** An image model's text encoders and VAE: which are on disk and what the rest weighs. */
@@ -370,62 +249,9 @@ export function createEngine(deps: EngineDeps) {
   async function downloadImageCompanions(modelId: string): Promise<{ ok: boolean; message: string }> {
     const model = await library.find(modelId);
     if (!model) return { ok: false, message: 'That model is not in the library.' };
-    const set = imageCompanionSetFor(model);
-    const status = await imageCompanions(modelId);
-    if (!set || !status) {
-      return { ok: false, message: `No known text encoders for ${model.name}. Set their paths in its image settings.` };
-    }
-    const token = deps.hfToken?.();
-    const dir = imageCompanionsDir(modelsDir());
-    let queued = 0;
-    let bytes = 0;
-    let stoodIn = '';
-    set.files.forEach((file, i) => {
-      if (status.files[i].path) return;
-      const pick = file.gated && !token && file.fallback ? file.fallback : file;
-      if (pick !== file) stoodIn = ` Its VAE needs a Hugging Face token with the ${file.repo} license accepted, so the small TAESD decoder stands in (slightly softer detail).`;
-      void downloads.start({
-        id: `image-companions:${pick.saveAs}`,
-        kind: 'model',
-        label: `${set.label} · ${pick.role}`,
-        target: modelId,
-        url: hfFileUrl(pick.repo, pick.file),
-        dest: join(dir, pick.saveAs),
-        group: `image-companions:${modelId}`,
-        groupLabel: `${set.label} · text encoders and VAE`,
-        file: pick.file,
-        role: pick.role,
-        headers: pick === file && file.gated && token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      queued += 1;
-      bytes += pick.bytes;
-    });
-    if (!queued) return { ok: true, message: `${model.name} already has its text encoders and VAE.` };
-    return { ok: true, message: `Fetching ${queued} file${queued === 1 ? '' : 's'} (${(bytes / 1e9).toFixed(1)} GB) for ${set.label}.${stoodIn}` };
-  }
-
-  /**
-   * Which Hugging Face repo a library model came from, guessed from its id.
-   *
-   * A borrowed folder nests `publisher/repo/file` under the folder id
-   * (`lmstudio/unsloth/Qwen3-4B/file`), so the repo is the middle two segments.
-   * Our own downloads land in a dir named `owner_repo` (the single `_` the
-   * download path writes), so the first segment splits on its first `_`.
-   * Anything else (a loose import, an id a folder provider invented) returns
-   * undefined, which the caller turns into an honest "cannot tell" answer.
-   */
-  function sourceRepoFor(model: LocalModel): string | undefined {
-    if (model.sourceRepo) return model.sourceRepo;
-    const segs = model.id.split('/');
-    if (model.folderId && model.folderId !== 'primary' && segs.length >= 3) {
-      return `${segs[1]}/${segs[2]}`;
-    }
-    if ((!model.folderId || model.folderId === 'primary') && segs.length >= 2) {
-      const dir = segs[0];
-      const i = dir.indexOf('_');
-      if (i > 0 && i < dir.length - 1) return `${dir.slice(0, i)}/${dir.slice(i + 1)}`;
-    }
-    return undefined;
+    const plan = imageCompanionsPlan(model, await imageCompanions(modelId), deps.hfToken?.(), modelsDir());
+    for (const request of plan.requests) void downloads.start(request);
+    return { ok: plan.ok, message: plan.message };
   }
 
   /* --------------------------------------------------------- model folders */
@@ -589,14 +415,22 @@ export function createEngine(deps: EngineDeps) {
     catalogSearch: (q: string, limit?: number, format?: 'gguf' | 'mlx') => catalog.search(q, limit, format),
     catalogModel: (id: string) => catalog.model(id),
     catalogDetail: (id: string): Promise<CatalogModelDetail | null> => catalog.detail(id),
-    downloadModel,
-    downloadCompanions,
-    imageCompanions,
-    downloadImageCompanions,
+    downloadModel: (modelId: string, quantLabel: string): Promise<{ ok: boolean; message: string; jobId?: string }> =>
+      daemonDownloads ? daemonDownloads('engine:downloadModel', modelId, quantLabel) : downloadModel(modelId, quantLabel),
+    downloadCompanions: (modelId: string): Promise<{ ok: boolean; message: string }> =>
+      daemonDownloads ? daemonDownloads('engine:downloadCompanions', modelId) : downloadCompanions(modelId),
+    imageCompanions: (modelId: string): Promise<ImageCompanionStatus | null> =>
+      daemonDownloads ? daemonDownloads('engine:imageCompanions', modelId) : imageCompanions(modelId),
+    downloadImageCompanions: (modelId: string): Promise<{ ok: boolean; message: string }> =>
+      daemonDownloads ? daemonDownloads('engine:downloadImageCompanions', modelId) : downloadImageCompanions(modelId),
     decisions,
-    downloads: () => downloads.list(),
-    cancelDownload: (id: string) => downloads.cancel(id),
-    dismissDownload: (id: string) => downloads.dismiss(id),
+    downloads: (): DownloadJob[] | Promise<DownloadJob[]> => (daemonDownloads ? daemonDownloads('engine:downloads') : downloads.list()),
+    cancelDownload: (id: string): void | Promise<void> => (daemonDownloads ? daemonDownloads('engine:cancelDownload', id) : downloads.cancel(id)),
+    dismissDownload: (id: string): void | Promise<void> => (daemonDownloads ? daemonDownloads('engine:dismissDownload', id) : downloads.dismiss(id)),
+    /** This host's own queue (the runtime installs), for the daemon that merges it with the model downloads. */
+    hostDownloads: () => downloads.list(),
+    cancelHostDownload: (id: string) => downloads.cancel(id),
+    dismissHostDownload: (id: string) => downloads.dismiss(id),
     // library
     models,
     findModel: (id: string) => library.find(id),
@@ -751,6 +585,242 @@ export async function seedFolderList(library: Library, modelsDir: string, candid
     }
   }
   return found;
+}
+
+/* ------------------------------------------------- downloads, as pure plans */
+
+/** Whether a file is on disk with something in it. */
+export async function landed(path: string): Promise<boolean> {
+  return stat(path).then((s) => s.size > 0).catch(() => false);
+}
+
+type PlannedDownload = Omit<DownloadRequest, 'verify' | 'after'>;
+
+/**
+ * The downloads one quantization of a catalog model takes (`downloadModel`):
+ * the main file, then the sidecars (later shards, a projector, tokenizer
+ * files) not already on disk. Every file of the build carries one group, so
+ * the UI shows them as one download.
+ */
+export async function modelDownloadPlan(
+  model: CatalogModel | null,
+  modelId: string,
+  quantLabel: string,
+  modelsDir: string,
+  isLanded: (path: string) => Promise<boolean>,
+): Promise<{ ok: false; message: string } | { ok: true; message: string; main: PlannedDownload; extras: PlannedDownload[]; verifyGguf: boolean }> {
+  const quant = model?.quants.find((q) => q.label === quantLabel) ?? model?.quants[0];
+  if (!model || !quant) return { ok: false, message: 'That model is no longer published.' };
+
+  const mlx = quant.format === 'mlx';
+  const type = mlx ? 'mlx' : modelModality({ name: `${model.name} ${modelId} ${model.tags.join(' ')} ${model.pipelineTag ?? ''} ${quant.file}` });
+  // An MLX checkpoint is a folder, and the library finds it by `mlx` in its
+  // path: `<models>/mlx/<owner>_<repo>/`.
+  const destFor = (file: string) => join(modelsDir, type, modelId.replace('/', '_'), file.split('/').pop() as string);
+  const jobId = `model:${modelId}:${quant.label}`;
+  const groupLabel = `${model.name} · ${quant.label}`;
+  const group = { group: jobId, groupLabel };
+  const main: PlannedDownload = {
+    id: jobId,
+    kind: 'model',
+    label: groupLabel,
+    target: modelId,
+    url: hfFileUrl(modelId, quant.file),
+    dest: destFor(quant.file),
+    ...group,
+    file: quant.file,
+  };
+  const extras: PlannedDownload[] = [];
+  for (const extra of quant.extraFiles ?? []) {
+    const dest = destFor(extra);
+    // Sidecars are shared across quants; one already on disk is not fetched
+    // again when a second build of the same repo is downloaded.
+    if (await isLanded(dest)) continue;
+    extras.push({
+      id: `${jobId}:${extra}`,
+      kind: 'model',
+      label: `${model.name} · ${extra.split('/').pop()}`,
+      target: modelId,
+      url: hfFileUrl(modelId, extra),
+      dest,
+      ...group,
+      file: extra,
+    });
+  }
+  return { ok: true, message: `Downloading ${model.name} (${quant.label}).`, main, extras, verifyGguf: !mlx };
+}
+
+/**
+ * Which Hugging Face repo a library model came from, guessed from its id.
+ *
+ * A borrowed folder nests `publisher/repo/file` under the folder id
+ * (`lmstudio/unsloth/Qwen3-4B/file`), so the repo is the middle two segments.
+ * Our own downloads land in a dir named `owner_repo` (the single `_` the
+ * download path writes), so the first segment splits on its first `_`.
+ * Anything else (a loose import, an id a folder provider invented) returns
+ * undefined, which the caller turns into an honest "cannot tell" answer.
+ */
+export function sourceRepoFor(model: LocalModel): string | undefined {
+  if (model.sourceRepo) return model.sourceRepo;
+  const segs = model.id.split('/');
+  if (model.folderId && model.folderId !== 'primary' && segs.length >= 3) {
+    return `${segs[1]}/${segs[2]}`;
+  }
+  if ((!model.folderId || model.folderId === 'primary') && segs.length >= 2) {
+    const dir = segs[0];
+    const i = dir.indexOf('_');
+    if (i > 0 && i < dir.length - 1) return `${dir.slice(0, i)}/${dir.slice(i + 1)}`;
+  }
+  return undefined;
+}
+
+/**
+ * The companion files to fetch for a model on disk (`downloadCompanions`),
+ * given what its repo ships (`found`, null when the repo could not be read).
+ */
+export async function companionsPlan(
+  model: LocalModel,
+  repo: string,
+  found: { projector?: string; sidecars: string[] } | null,
+  modelsDir: string,
+  isLanded: (path: string) => Promise<boolean>,
+): Promise<{ ok: boolean; message: string; requests: PlannedDownload[] }> {
+  if (!found) {
+    return { ok: false, message: `Could not read the ${repo} repo on Hugging Face. It may be private or renamed.`, requests: [] };
+  }
+  const wanted = [found.projector, ...found.sidecars].filter((f): f is string => Boolean(f));
+  if (!wanted.length) {
+    return { ok: true, message: `${repo} ships no companion files for ${model.name}.`, requests: [] };
+  }
+  const destDir = model.managed === false ? companionsDir(modelsDir, model.id) : dirname(model.path);
+  const requests: PlannedDownload[] = [];
+  for (const file of wanted) {
+    const fileName = file.split('/').pop() as string;
+    const dest = join(destDir, fileName);
+    // A file already beside the weights counts even when the destination is
+    // the companions dir: no point fetching what is already there.
+    const beside = join(dirname(model.path), fileName);
+    const already = (await isLanded(dest)) || (dest !== beside && (await isLanded(beside)));
+    if (already) continue;
+    requests.push({
+      id: `companions:${model.id}:${file}`,
+      kind: 'model',
+      label: `${model.name} · ${fileName}`,
+      target: model.id,
+      url: hfFileUrl(repo, file),
+      dest,
+      group: `companions:${model.id}`,
+      groupLabel: `${model.name} · companion files`,
+      file,
+    });
+  }
+  const queued = requests.length;
+  return queued
+    ? { ok: true, message: `Fetching ${queued} companion file${queued === 1 ? '' : 's'} for ${model.name} from ${repo}.`, requests }
+    : { ok: true, message: `${model.name} already has every companion file ${repo} ships.`, requests };
+}
+
+/**
+ * The text encoders and VAE to fetch for an image model
+ * (`downloadImageCompanions`), from what its set has on disk. A gated file
+ * goes out with the Hugging Face token; without one its ungated stand-in does.
+ */
+export function imageCompanionsPlan(
+  model: LocalModel,
+  status: ImageCompanionStatus | null,
+  token: string | undefined,
+  modelsDir: string,
+): { ok: boolean; message: string; requests: PlannedDownload[] } {
+  const set = imageCompanionSetFor(model);
+  if (!set || !status) {
+    return { ok: false, message: `No known text encoders for ${model.name}. Set their paths in its image settings.`, requests: [] };
+  }
+  const dir = imageCompanionsDir(modelsDir);
+  const requests: PlannedDownload[] = [];
+  let bytes = 0;
+  let stoodIn = '';
+  set.files.forEach((file, i) => {
+    if (status.files[i].path) return;
+    const pick = file.gated && !token && file.fallback ? file.fallback : file;
+    if (pick !== file) stoodIn = ` Its VAE needs a Hugging Face token with the ${file.repo} license accepted, so the small TAESD decoder stands in (slightly softer detail).`;
+    requests.push({
+      id: `image-companions:${pick.saveAs}`,
+      kind: 'model',
+      label: `${set.label} · ${pick.role}`,
+      target: model.id,
+      url: hfFileUrl(pick.repo, pick.file),
+      dest: join(dir, pick.saveAs),
+      group: `image-companions:${model.id}`,
+      groupLabel: `${set.label} · text encoders and VAE`,
+      file: pick.file,
+      role: pick.role,
+      headers: pick === file && file.gated && token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    bytes += pick.bytes;
+  });
+  const queued = requests.length;
+  if (!queued) return { ok: true, message: `${model.name} already has its text encoders and VAE.`, requests };
+  return { ok: true, message: `Fetching ${queued} file${queued === 1 ? '' : 's'} (${(bytes / 1e9).toFixed(1)} GB) for ${set.label}.${stoodIn}`, requests };
+}
+
+/**
+ * The model jobs that have just finished (`onDownloadsChanged`): main model
+ * files only, each once. `seen` carries every job's last state between calls.
+ */
+export function finishedModelJobs(jobs: DownloadJob[], seen: Map<string, DownloadJob['state']>): DownloadJob[] {
+  const present = new Set(jobs.map((j) => j.id));
+  for (const id of [...seen.keys()]) if (!present.has(id)) seen.delete(id);
+  const finished = jobs.filter(
+    (j) =>
+      j.kind === 'model' &&
+      j.state === 'done' &&
+      seen.get(j.id) !== 'done' &&
+      // `model:<repo>:<quant>` is three segments; a companion's id appends
+      // the file (`model:<repo>:<quant>:<file>`) and does not count.
+      j.id.split(':').length === 3 &&
+      j.dest,
+  );
+  for (const j of jobs) seen.set(j.id, j.state);
+  return finished;
+}
+
+/** The library row a finished download created, matched on where it landed. */
+export function downloadedModel(list: LocalModel[], job: DownloadJob): LocalModel | undefined {
+  const dest = resolve(job.dest as string);
+  return list.find((m) => {
+    const p = resolve(m.path);
+    // A GGUF job lands on the model file itself; an MLX job lands on a file
+    // inside the model folder, whose path is what the library lists.
+    return p === dest || p === resolve(dirname(dest));
+  });
+}
+
+/**
+ * The preset a fresh download starts with: the planner's best full-GPU
+ * answer, falling back to the honest partial one. Nothing is written when
+ * there is no GPU to fill, or the planner cannot read the model or says it
+ * cannot run at all: a saved wrong setting is worse than the engine's default.
+ */
+export function gpuFirstPreset(model: LocalModel, hw: HardwareFacts | undefined, overheadFloorBytes: number): EngineLoadPreset | undefined {
+  if (!hw || hw.devices.length === 0) return undefined;
+  const result = autoFit({
+    facts: modelFactsFor(model),
+    hardware: hw,
+    budgetFraction: 0.9,
+    // The engine caps unnamed context at 64k on purpose (see
+    // defaultContextTokens); the preset gets the same ceiling.
+    maxContextTokens: defaultContextTokens(model),
+    options: { overheadFloorBytes },
+  });
+  if (result.plan.verdict === 'unknown' || result.plan.verdict === 'wont-load') return undefined;
+  const layers = model.layers ?? result.plan.totalLayers;
+  return {
+    contextTokens: result.request.contextTokens,
+    kvCacheDtype: result.request.kvCacheDtype,
+    parallelSlots: result.request.parallelSlots,
+    gpuLayers: layers !== undefined ? Math.round(layers * result.request.gpuLayerFraction) : undefined,
+    budgetFraction: 0.9,
+  };
 }
 
 export { readGgufMetadata } from './gguf.js';

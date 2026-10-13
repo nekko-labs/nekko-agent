@@ -127,15 +127,35 @@ impl Library {
         self.run(|cfg| lib::list(&cfg)).await
     }
 
-    /// `engine:models`: rows with load state, the last failure and the GPU fit.
-    pub async fn models(self: &Arc<Self>) -> Result<Value, String> {
-        let rows = self.list().await?;
-        // What the host's model server knows; when it is not answering, the
-        // daemon's own record of what it is running still says what is loaded.
+    /// One row by id (`library.find`).
+    pub async fn find(self: &Arc<Self>, id: &str) -> Result<Option<Value>, String> {
+        Ok(self.list().await?.into_iter().find(|m| m.get("id").and_then(Value::as_str) == Some(id)))
+    }
+
+    /// Save a model's load preset (`library.savePreset`).
+    pub async fn save_preset(self: &Arc<Self>, id: &str, preset: Value) -> Result<(), String> {
+        let id = id.to_string();
+        self.run(move |cfg| lib::save_preset(&cfg, &id, &preset)).await
+    }
+
+    /// Where downloads land (`modelsDir`).
+    pub fn models_dir(&self) -> String {
+        self.config().models_dir
+    }
+
+    /// The current settings.
+    pub fn settings(&self) -> Value {
+        self.store.get()
+    }
+
+    /// What the host's model server knows: the resident ids, the last load
+    /// errors and the installed llama.cpp version. When the host is not
+    /// answering, the daemon's own record of what it runs says what is loaded.
+    pub async fn host_state(&self) -> (HashSet<String>, Map<String, Value>, Option<Value>) {
         let state =
             tokio::time::timeout(crate::routes::AUX_WAIT, self.backend.call("engine:runtime", json!(["loadState"])))
                 .await;
-        let (loaded, errors, version) = match state {
+        match state {
             Ok(Ok(s)) => (
                 s.get("loaded")
                     .and_then(Value::as_array)
@@ -144,23 +164,30 @@ impl Library {
                 s.get("errors").and_then(Value::as_object).cloned().unwrap_or_default(),
                 s.get("version").cloned(),
             ),
-            _ => (
-                self.engine.supervisor.list().into_iter().map(|c| c.model_id).collect::<HashSet<String>>(),
-                Map::new(),
-                None,
-            ),
-        };
-        let hw = self.hardware().await;
+            _ => (self.engine.supervisor.list().into_iter().map(|c| c.model_id).collect(), Map::new(), None),
+        }
+    }
+
+    /// `overheadFloorFor('llamacpp', version)` from `runtime-calibration.json`.
+    pub fn overhead_floor(&self, version: Option<&Value>) -> f64 {
         let calibration = std::fs::read(self.data_dir.join("runtime-calibration.json"))
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
             .unwrap_or_else(|| json!({}));
-        let floor = nekko_engine::runtimes::overhead_floor(&calibration, "llamacpp", version.as_ref());
+        nekko_engine::runtimes::overhead_floor(&calibration, "llamacpp", version)
+    }
+
+    /// `engine:models`: rows with load state, the last failure and the GPU fit.
+    pub async fn models(self: &Arc<Self>) -> Result<Value, String> {
+        let rows = self.list().await?;
+        let (loaded, errors, version) = self.host_state().await;
+        let hw = self.hardware().await;
+        let floor = self.overhead_floor(version.as_ref());
         Ok(Value::Array(lib::with_load_state(rows, &loaded, &errors, Some(&hw), Some(floor))))
     }
 
     /// The machine's memory pools in the planner's shape (`hardware()`).
-    async fn hardware(&self) -> Hardware {
+    pub async fn hardware(&self) -> Hardware {
         let gpu = self.machine.gpu_stats().await;
         let (ram_total, ram_free) = nekko_machine::probe::memory_now();
         Hardware {
@@ -182,7 +209,7 @@ impl Library {
     /// Save an engine settings patch as the TS engine's `saveSettings` does:
     /// `{ ...DEFAULT_ENGINE_SETTINGS, ...settings.engine, ...patch }`, which
     /// it returns. The host hears about it (`settings:changed`).
-    async fn save_engine(&self, patch: Value) -> Result<Value, String> {
+    pub async fn save_engine(&self, patch: Value) -> Result<Value, String> {
         let mut next = engine_settings(&self.store.get());
         nekko_js::spread_into(&mut next, &patch);
         let next = Value::Object(next);

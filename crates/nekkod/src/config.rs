@@ -44,6 +44,9 @@ pub struct Config {
     /// for the agent's `browser` and `capture` tools. Kept in the config,
     /// never the environment, so the shells the agent starts never see it.
     pub browser_bridge: Option<BrowserBridge>,
+    /// Where Hugging Face is (`https://huggingface.co`), for the model
+    /// catalog and model downloads; tests point it at a loopback server.
+    pub hugging_face_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
