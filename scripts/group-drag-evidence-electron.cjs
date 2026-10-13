@@ -38,7 +38,7 @@ app.whenReady().then(async () => {
       await check(label + ' nested dragleave retains hover', `(evidence.groups()[0].getAttribute('data-group-gap') || evidence.groups()[0].className)===${JSON.stringify(hover)}`);
       await capture(label + '-nested-hover');
       if (kind === 'after') {
-        await check(label + ' insertion gap has expected size', `(()=>{const g=evidence.groups()[0], gap=g.querySelector('.agent-panel-group-gap');return document.querySelector('[data-agent-panel]').dataset.orientation==='vertical'?Math.abs(gap.getBoundingClientRect().height-36)<1:Math.abs(parseFloat(getComputedStyle(g).paddingLeft)-48)<1})()`);
+        await check(label + ' insertion gap has expected size', `(()=>{const g=evidence.groups()[0];return document.querySelector('[data-agent-panel]').dataset.orientation==='vertical'?Math.abs(parseFloat(getComputedStyle(g).paddingTop)-36)<1:Math.abs(parseFloat(getComputedStyle(g).paddingLeft)-48)<1})()`);
         await event(0, 'group', 'dragleave'); await stable();
         await check(label + ' leaving group closes gap', `!evidence.groups()[0].hasAttribute('data-group-gap')`);
         await event(0, 'card', 'dragover'); await stable();

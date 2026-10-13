@@ -669,7 +669,6 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
               onDragLeave={(e) => { if (leftGroup(e.currentTarget, e.relatedTarget) && dropTarget === 'bucket:' + b.key) setDropTarget(null); }}
               onDrop={(e) => { e.preventDefault(); e.stopPropagation(); dropOnBucket(b); }}
             >
-              <div className="agent-panel-group-gap" aria-hidden="true" />
               <div
                 className="group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
                 draggable={!!b.ws}

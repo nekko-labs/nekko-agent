@@ -7,7 +7,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   for (const kind of ['before', 'after']) {
     if (kind === 'after') {
       const deadline = Date.now() + 10 * 60 * 1000;
-      while (!fs.readFileSync(path.join(repo, 'apps/desktop/src/renderer/components/commandWallLayouts.css'), 'utf8').includes('.agent-panel-group-gap')) {
+      while (!fs.readFileSync(path.join(repo, 'apps/desktop/src/renderer/components/commandWallLayouts.css'), 'utf8').includes('.agent-panel-group[data-group-gap]')) {
         if (Date.now() > deadline) throw Error('Timed out waiting for parent group-gap CSS');
         console.log('Waiting for parent .agent-panel-group-gap CSS'); await sleep(3000);
       }

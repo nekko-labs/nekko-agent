@@ -553,3 +553,5 @@ are ever revisited.
 - #214 (2026-09-30) speed contract budgets (8 ms keypress to paint) written down.
 - #102 (2026-07-25) CPU/memory/GPU/VRAM monitors: readings only.
 - Commit `65a9d538` (2026-10-12) hidden perf browsers on Windows.
+
+PR #516 follow-up: run 38378954525 attempt 2 passed Ubuntu daemon tests but streaming frame-work p95 remained 10.32 ms (three attempts: 10.32 / 10.44 / 11.01 ms), against 10 ms. The gap spacer was replaced with animated group padding, removing the idle DOM element entirely while retaining the insertion geometry. This is a cost-removal candidate, not a measured improvement; new-head CI must verify it.
