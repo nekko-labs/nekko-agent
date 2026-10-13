@@ -574,7 +574,7 @@ export function CommandWall({
           onAddWindow={() => live.current.setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
           onSplit={(dir, kind) => { void live.current.addWindow(kind, { paneId: pane.id, dir }); }}
           onClose={() => live.current.update((root) => removePane(root, pane.id))}
-          onMinimize={pane.kind === 'chat' ? () => live.current.update((root) => removePane(root, pane.id)) : undefined}
+          onMinimize={() => live.current.update((root) => removePane(root, pane.id))}
           onFocus={() => { if (pane.kind === 'chat') live.current.onSelect(pane.refId); }}
           onDragStart={() => setDragging(pane.id)}
           onDragEnd={() => setDragging(null)}

@@ -8,6 +8,22 @@ owner:
 
 > **This is the source of truth for the project.** It describes *what* we're building and *why*, vision, users, journeys, the feature set, and what success looks like. It is **not** about stack or technical design (that's `TASKS.md`). It is a **living artifact**: every prompt that adds or changes a feature updates this file so it always describes the system as it actually is and intends to be. The verbatim origin ask lives in [original-prompt.md](../../obsurdian/projects/nekko-agent/original-prompt.md).
 
+## Window lifecycle shortcuts and guidance (2026-10-12)
+
+Implemented, verification in progress: the focused agent window supports Ctrl/Cmd+Shift+E to Complete, Ctrl/Cmd+Shift+M to Minimize, and Ctrl/Cmd+Shift+Delete to Delete. Hover titles and context menus name the action and its hotkey. Minimize removes the board window only, preserving the item in the Agent panel and any running terminal process. Complete saves a chat into its existing left-panel **Show completed** list. Terminals have Minimize and confirmed Close with the delete chord; terminal completion/history is unsupported because no terminal archive exists. Shortcuts ignore repeated/composing keys, hidden panes and open modal dialogs, and never operate on every window.
+
+**Show tips** defaults on in Settings. The first successfully saved chat completion highlights its existing Show completed control in the left panel with a dismissible explanation. The seen state persists locally and is not consumed by a failed completion save. The highlight is static and adds no animation. Permanent chat deletion and terminal Close use an in-app confirmation with Cancel focused first and an explicit **Skip future deletion confirmations** choice. That persisted choice is independent of Show tips and can be reset using **Confirm deletions** in Settings. No new network calls, permissions, terminal archives or external side effects are introduced by guidance. General cards omit the redundant No project attached text and its empty separator.
+
+Acceptance: verify focused-window routing with multiple chats, terminal minimize without process shutdown, cancel/confirm/skip/reset deletion, one-time completion tips after successful saving only, and matched isolated light/dark wide/narrow evidence. Native macOS/Linux keyboard behavior and real terminal processes remain unverified locally.
+
+## Window lifecycle shortcuts and guidance (2026-10-12)
+
+Implemented in the shared desktop/web renderer, with verification and PR landing pending: focused agent windows offer Complete (Ctrl/Cmd+Shift+E), Minimize (Ctrl/Cmd+Shift+M), and Delete (Ctrl/Cmd+Shift+Delete). Header hover tooltips and context actions name the operation and chord. Shortcuts never act on multiple windows, ignore repeated/composing keys, and do not run through an open modal or from unrelated focused controls. Complete saves the chat into the existing left-panel **Show completed** list. Minimize removes only its board window and leaves the chat or running terminal in the agent panel. Terminals have no completed-history model: they support Minimize and confirmed Close/Delete, which stops the terminal, not Complete.
+
+**Show tips** defaults on in Settings. After the first successfully saved chat completion, a dismissible static highlight identifies its group's existing Show completed control. A persisted seen preference prevents repetition; failed completion does not consume it. Tips and deletion safety are independent. Permanent chat deletion and terminal shutdown first present an in-app confirmation with Cancel, Delete, and an explicit **Skip future deletion confirmations** choice. Skipping is persisted only by confirming that choice, and Settings can restore confirmations. These local preferences add no network transmission. General chats no longer display “No project attached” or an empty metadata separator.
+
+Acceptance requires focused-window regression checks, successful/failed completion and one-time tip checks, delete cancel/confirm/skip/reset checks, and matched isolated wide/narrow light/dark evidence. Synthetic terminal verification does not establish real process survival or native OS shortcut delivery.
+
 ## Command wall state migration (data layer)
 
 ## Continue dependent work with GitHub PR stacks

@@ -6,6 +6,11 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Window lifecycle guidance (added 2026-10-13)
+
+- [x] Implement focused chat Complete/Minimize/Delete shortcuts and terminal Minimize/confirmed Close, action hotkey titles, persisted Show tips and deletion preferences, first-completion destination highlight, and remove missing-project labels. See [SPEC](SPEC.md#window-lifecycle-shortcuts-and-guidance-2026-10-12). Automated: 947 desktop tests, production build/typecheck, 44 isolated interactions, TS/Rust settings parity.
+- [ ] Inspect matched light/dark wide/narrow screenshots and motion evidence, publish media, and land PR. Local browser gallery navigation rejects the route; offscreen native capture times out. Generated evidence is not yet visually verified. Terminal archive and native macOS/Linux keyboard testing are not implemented/verified.
+
 > Converted from executionplan.md on 2026-06-29. ✅ = done per the prior plan; Part 1 below is the technical plan, Part 2 is the task checklist.
 >
 > **The plan + the build log, in one file.** Part 1 is the **technical plan**, how we build what [SPEC.md](SPEC.md) describes (stack, architecture, data model, conventions, design system, constraints). Part 2 is the **task list**, Now / Backlog / Shipped, recording *how every past feature was built and how future features will be built*, with the context around them. The full technical design for the web/Docker/Cloud editions lives in [spec-web-and-hosted.md](spec-web-and-hosted.md); credential/ops setup lives in [provisioning.md](../../obsurdian/projects/nekko-agent/provisioning.md), referenced here, not duplicated. (Merged from the former `plan.md` + `tasks.md`.)
