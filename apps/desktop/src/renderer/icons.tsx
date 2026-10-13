@@ -65,6 +65,8 @@ export const DotsIcon = (p: P) => (<S {...p}><circle cx="5" cy="12" r="1.4" fill
 export const PinIcon2 = (p: P) => (<S {...p}><path d="M9 4h6l-1 5 3 2v2H7v-2l3-2-1-5zM12 13v7" /></S>);
 export const CheckIcon = (p: P) => (<S {...p}><path d="M20 6 9 17l-5-5" /></S>);
 export const SunIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></S>);
+/** A tilted instant photo: Nekko's own, not the stock picture glyph. */
+export const PhotoIcon = (p: P) => (<S {...p}><g transform="rotate(-8 12 12)"><rect x="4.5" y="3" width="15" height="18" rx="2" /><rect x="7" y="5.5" width="10" height="9.5" rx="1" /><path d="m7 13.5 3.2-3 2.3 2 1.5-1.2 3 2.5" /><circle cx="14.2" cy="8.4" r="1" /></g></S>);
 export const TerminalIcon = (p: P) => (<S {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 3 3-3 3M13 15h4" /></S>);
 /** Changes: a plus over a minus in a square, the usual diff glyph. */
 export const DiffIcon = (p: P) => (<S {...p}><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M12 7v6M9 10h6M9 16h6" /></S>);
