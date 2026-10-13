@@ -1,6 +1,6 @@
 import { createMlxRuntime, mlxSupported } from './mlx.js';
 import { readGgufMetadata } from './gguf.js';
-import { engineDaemon } from './daemon.js';
+import { daemonCall, daemonOwns, engineDaemon } from './daemon.js';
 import type { GpuAdapter } from '../gpu-adapters.js';
 import { setEngineBinResolver } from '../gpu.js';
 import { freemem, totalmem } from 'os';
@@ -36,7 +36,7 @@ import { createDecisions } from './decisions.js';
 import { createDownloads } from './download.js';
 import { knownFolder, knownFolderCandidates } from './folders.js';
 import { createEngineInstaller } from './install.js';
-import { createLibrary, PRIMARY_FOLDER_ID } from './library.js';
+import { createLibrary, daemonLibrary, PRIMARY_FOLDER_ID, type Library, type LibraryApi } from './library.js';
 import { createEngineServer } from './server.js';
 
 /**
@@ -91,7 +91,10 @@ export function createEngine(deps: EngineDeps) {
       void onDownloadsChanged(jobs).catch(() => {});
     },
   });
-  const library = createLibrary({ modelsDir, folders: () => deps.settings().modelFolders ?? [] });
+  const localLibrary = createLibrary({ modelsDir, folders: () => deps.settings().modelFolders ?? [] });
+  // Under the engine daemon the library is the daemon's: it alone writes the index.
+  const daemon = daemonOwns('library') ? daemonCall() : undefined;
+  const library: LibraryApi = daemon ? daemonLibrary(daemon) : localLibrary;
   const catalog = createCatalog({ token: deps.hfToken, mlx: () => mlxSupported() });
   const installer = createEngineInstaller({
     engineDir,
@@ -435,25 +438,13 @@ export function createEngine(deps: EngineDeps) {
    * invitation to wonder what went wrong.
    */
   async function folders(): Promise<ModelFolderReport> {
-    const configured = await library.folderReport();
-    const taken = new Set(configured.map((f) => resolve(f.path).toLowerCase()));
-
-    const suggestions: ModelFolderSuggestion[] = [];
-    for (const candidate of knownFolderCandidates()) {
-      for (const path of candidate.paths) {
-        if (taken.has(resolve(path).toLowerCase())) continue;
-        const found = await library.probe(path, candidate.provider);
-        if (found.modelCount === 0) continue;
-        taken.add(resolve(path).toLowerCase());
-        suggestions.push({ provider: candidate.provider, path, ...found });
-        break; // One row per app: the first of its candidate paths that has models.
-      }
-    }
-    return { folders: configured, suggestions };
+    if (daemon) return daemon('engine:folders');
+    return folderReport(localLibrary, knownFolderCandidates());
   }
 
   /** Replace the folder list. The primary folder is not in it and never moves here. */
   async function saveFolders(next: ModelFolder[]): Promise<ModelFolderReport> {
+    if (daemon) return daemon('engine:foldersSave', next);
     await deps.saveSettings({ modelFolders: next.filter((f) => f.id !== PRIMARY_FOLDER_ID) });
     return folders();
   }
@@ -468,20 +459,10 @@ export function createEngine(deps: EngineDeps) {
    * purpose should stay removed.
    */
   async function seedFolders(): Promise<void> {
+    // Under the engine daemon the library is its own, and it seeds the list.
+    if (daemon) return;
     if (deps.settings().modelFolders !== undefined) return;
-    const found: ModelFolder[] = [];
-    const taken = new Set([resolve(modelsDir()).toLowerCase()]);
-    for (const candidate of knownFolderCandidates()) {
-      for (const path of candidate.paths) {
-        const key = resolve(path).toLowerCase();
-        if (taken.has(key)) continue;
-        if ((await library.probe(path, candidate.provider)).modelCount === 0) continue;
-        taken.add(key);
-        found.push(knownFolder(candidate.provider, path));
-        break;
-      }
-    }
-    await deps.saveSettings({ modelFolders: found });
+    await deps.saveSettings({ modelFolders: await seedFolderList(localLibrary, modelsDir(), knownFolderCandidates()) });
   }
 
   /* --------------------------------------------------------------- serving */
@@ -536,51 +517,6 @@ export function createEngine(deps: EngineDeps) {
     };
   }
 
-  function modelFactsFor(m: LocalModel): ModelFacts {
-    return {
-      id: m.id,
-      providerId: 'nekko-engine',
-      weightsBytes: m.sizeBytes,
-      layers: m.layers,
-      kvHeads: m.kvHeads,
-      headDim: m.headDim,
-      maxContext: m.maxContext,
-      quantization: m.quantization,
-      parameterSize: m.parameterSize,
-    };
-  }
-
-  /**
-   * Where the planner expects this model to run under the settings it would be
-   * loaded with (its preset, else the engine defaults). Only the loadable
-   * text-family modalities get a verdict: for the rest "where it runs" is not
-   * a GPU-layers question.
-   */
-  function gpuFitFor(model: LocalModel, hw: HardwareFacts, overheadFloorBytes?: number): GpuFit {
-    if (model.format === 'mlx') return 'unknown';
-    const modality = model.modality ?? modelModality(model);
-    if (modality !== 'chat' && modality !== 'vision' && modality !== 'embedding') return 'unknown';
-    const gpuLayerFraction =
-      model.preset?.gpuLayers !== undefined && model.layers
-        ? Math.min(1, Math.max(0, model.preset.gpuLayers / model.layers))
-        : 1;
-    const plan = computeFit(
-      modelFactsFor(model),
-      {
-        contextTokens: model.preset?.contextTokens ?? defaultContextTokens(model),
-        parallelSlots: model.preset?.parallelSlots ?? 1,
-        kvCacheDtype: model.preset?.kvCacheDtype ?? 'f16',
-        gpuLayerFraction,
-      },
-      hw,
-      { overheadFloorBytes },
-    );
-    if (plan.verdict === 'unknown') return 'unknown';
-    if (plan.verdict === 'wont-load') return 'wont';
-    if (hw.devices.length === 0) return 'cpu';
-    return plan.verdict === 'spills' || gpuLayerFraction < 1 ? 'partial' : 'full';
-  }
-
   /**
    * Every model in the library, with load state, the last failure and the
    * planner's residency verdict folded in.
@@ -590,6 +526,7 @@ export function createEngine(deps: EngineDeps) {
    * because a verdict built on no hardware facts is a guess wearing one.
    */
   async function models(): Promise<Array<LocalModel & { loaded: boolean; gpuFit?: GpuFit }>> {
+    if (daemon) return daemon('engine:models');
     const loaded = new Set(server.loadedIds());
     const list = await library.list();
     const hw = await hardware().catch(() => undefined);
@@ -667,6 +604,12 @@ export function createEngine(deps: EngineDeps) {
     deleteModel: (id: string) => library.remove(id),
     saveModelPreset: (id: string, preset: EngineLoadPreset) => library.savePreset(id, preset),
     diskUsage: () => library.diskUsage(),
+    /** For the daemon's `engine:models`: what only this host's server knows about each model. */
+    loadState: async () => ({
+      loaded: server.loadedIds(),
+      errors: Object.fromEntries(server.loadErrors()),
+      version: (await installer.detect()).version,
+    }),
     // model folders
     folders,
     saveFolders,
@@ -681,7 +624,8 @@ export function createEngine(deps: EngineDeps) {
       return { ok: r.ok, message: r.message ?? '' };
     },
     /** Add or remove a model from the list loaded when the engine starts. */
-    setAutoload: (id: string, enabled: boolean) => {
+    setAutoload: (id: string, enabled: boolean): Promise<EngineSettings> => {
+      if (daemon) return daemon('engine:autoload', id, enabled);
       const current = deps.settings().autoload ?? [];
       const next = enabled ? [...new Set([...current, id])] : current.filter((m) => m !== id);
       return deps.saveSettings({ autoload: next });
@@ -714,6 +658,100 @@ export function createEngine(deps: EngineDeps) {
 }
 
 export type Engine = ReturnType<typeof createEngine>;
+
+/** A library row in the shape the fit planner reads. */
+export function modelFactsFor(m: LocalModel): ModelFacts {
+  return {
+    id: m.id,
+    providerId: 'nekko-engine',
+    weightsBytes: m.sizeBytes,
+    layers: m.layers,
+    kvHeads: m.kvHeads,
+    headDim: m.headDim,
+    maxContext: m.maxContext,
+    quantization: m.quantization,
+    parameterSize: m.parameterSize,
+  };
+}
+
+/**
+ * Where the planner expects this model to run under the settings it would be
+ * loaded with (its preset, else the engine defaults). Only the loadable
+ * text-family modalities get a verdict: for the rest "where it runs" is not
+ * a GPU-layers question.
+ */
+export function gpuFitFor(model: LocalModel, hw: HardwareFacts, overheadFloorBytes?: number): GpuFit {
+  if (model.format === 'mlx') return 'unknown';
+  const modality = model.modality ?? modelModality(model);
+  if (modality !== 'chat' && modality !== 'vision' && modality !== 'embedding') return 'unknown';
+  const gpuLayerFraction =
+    model.preset?.gpuLayers !== undefined && model.layers
+      ? Math.min(1, Math.max(0, model.preset.gpuLayers / model.layers))
+      : 1;
+  const plan = computeFit(
+    modelFactsFor(model),
+    {
+      contextTokens: model.preset?.contextTokens ?? defaultContextTokens(model),
+      parallelSlots: model.preset?.parallelSlots ?? 1,
+      kvCacheDtype: model.preset?.kvCacheDtype ?? 'f16',
+      gpuLayerFraction,
+    },
+    hw,
+    { overheadFloorBytes },
+  );
+  if (plan.verdict === 'unknown') return 'unknown';
+  if (plan.verdict === 'wont-load') return 'wont';
+  if (hw.devices.length === 0) return 'cpu';
+  return plan.verdict === 'spills' || gpuLayerFraction < 1 ? 'partial' : 'full';
+}
+
+type FolderCandidates = ReturnType<typeof knownFolderCandidates>;
+
+/**
+ * The folder list, plus the known layouts on this machine nobody has added.
+ *
+ * Suggestions are probed rather than merely tested for existence, because an
+ * empty Ollama folder is not worth a row and "LM Studio (0 models)" is an
+ * invitation to wonder what went wrong.
+ */
+export async function folderReport(library: Library, candidates: FolderCandidates): Promise<ModelFolderReport> {
+  const configured = await library.folderReport();
+  const taken = new Set(configured.map((f) => resolve(f.path).toLowerCase()));
+
+  const suggestions: ModelFolderSuggestion[] = [];
+  for (const candidate of candidates) {
+    for (const path of candidate.paths) {
+      if (taken.has(resolve(path).toLowerCase())) continue;
+      const found = await library.probe(path, candidate.provider);
+      if (found.modelCount === 0) continue;
+      taken.add(resolve(path).toLowerCase());
+      suggestions.push({ provider: candidate.provider, path, ...found });
+      break; // One row per app: the first of its candidate paths that has models.
+    }
+  }
+  return { folders: configured, suggestions };
+}
+
+/**
+ * Every known folder on this machine that has models in it, as the folder
+ * list a first start adopts (`seedFolders`): one row per app, never the
+ * primary folder.
+ */
+export async function seedFolderList(library: Library, modelsDir: string, candidates: FolderCandidates): Promise<ModelFolder[]> {
+  const found: ModelFolder[] = [];
+  const taken = new Set([resolve(modelsDir).toLowerCase()]);
+  for (const candidate of candidates) {
+    for (const path of candidate.paths) {
+      const key = resolve(path).toLowerCase();
+      if (taken.has(key)) continue;
+      if ((await library.probe(path, candidate.provider)).modelCount === 0) continue;
+      taken.add(key);
+      found.push(knownFolder(candidate.provider, path));
+      break;
+    }
+  }
+  return found;
+}
 
 export { readGgufMetadata } from './gguf.js';
 export { buildArgs, explainLoadError } from './server.js';

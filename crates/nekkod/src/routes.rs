@@ -51,6 +51,8 @@ pub struct Ctx {
     pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
     /// The runtime control plane, with the settings store.
     pub runtimes: Option<Arc<nekko_engine::runtimes::Runtimes>>,
+    /// The model library and its folders (`engine:models`...), with the settings store.
+    pub library: Option<Arc<crate::library::Library>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -286,6 +288,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::oauth::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
             ctx.oauth.as_ref().expect("checked").route(c, &args).await
         }
+        c if crate::library::CHANNELS.contains(&c) && ctx.library.is_some() => {
+            ctx.library.clone().expect("checked").route(c, &args).await
+        }
         c if crate::catalog::CHANNELS.contains(&c) && ctx.catalog.is_some() => match &ctx.catalog {
             Some(catalog) => crate::catalog::route(catalog, c, &args).await,
             None => ctx.backend.call(c, Value::Array(args)).await,
@@ -398,6 +403,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.catalog.is_some() {
         all.extend_from_slice(crate::catalog::CHANNELS);
+    }
+    if ctx.library.is_some() {
+        all.extend_from_slice(crate::library::CHANNELS);
     }
     if crate::connectors::owned(ctx) {
         all.extend_from_slice(crate::connectors::CHANNELS);

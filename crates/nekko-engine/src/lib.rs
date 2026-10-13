@@ -3,6 +3,9 @@
 
 pub mod capacity;
 pub mod catalog;
+pub mod folders;
+pub mod gguf;
+pub mod library;
 pub mod runtimes;
 
 use serde_json::Value;

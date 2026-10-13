@@ -18,7 +18,7 @@ const SKIP: &[&str] = &["node_modules", ".git", "dist", "out", "build", ".next",
 fn walk(root: &str, mut visit: impl FnMut(&str, &DirEntry) -> bool) {
     if std::fs::metadata(root).is_ok_and(|m| m.is_file()) {
         let name = std::path::Path::new(root).file_name().unwrap_or_default().to_string_lossy().into_owned();
-        visit(root, &DirEntry { name, is_dir: false });
+        visit(root, &DirEntry { name, is_dir: false, is_file: true });
         return;
     }
     let Ok(first) = nodefs::read_dir(root) else { return };

@@ -79,6 +79,18 @@ fn fake_backend() {
                                 axum::Json(json!({ "result": { "toolCallId": body.0["args"][1]["id"], "output": "host tool ran" } })),
                             ),
                             "chats:busy" => (axum::http::StatusCode::OK, axum::Json(json!(["s_busy"]))),
+                            // The engine's model server, for the daemon's `engine:models`.
+                            "engine:runtime" if body.0["args"][0] == "loadState" => {
+                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
+                                (
+                                    axum::http::StatusCode::OK,
+                                    axum::Json(json!({
+                                        "loaded": ["chat/acme_tiny-gguf/tiny-q4_k_m"],
+                                        "errors": { "ollama/tiny:latest": "Not enough memory to load it." },
+                                        "version": "b9999",
+                                    })),
+                                )
+                            }
                             "test:designProvider" => {
                                 *design_provider.lock().unwrap() = Some(body.0["args"][0].clone());
                                 (axum::http::StatusCode::OK, axum::Json(Value::Null))
@@ -230,6 +242,16 @@ fn start_with(with_backend: bool, data_dir: Option<&std::path::Path>) -> Daemon 
 }
 
 fn start_with_config(with_backend: bool, data_dir: Option<&std::path::Path>, extra: Value) -> Daemon {
+    start_with_env(with_backend, data_dir, extra, &[])
+}
+
+/// With the daemon's own environment changed: `(name, None)` removes a variable.
+fn start_with_env(
+    with_backend: bool,
+    data_dir: Option<&std::path::Path>,
+    extra: Value,
+    env: &[(&str, Option<&str>)],
+) -> Daemon {
     let backend = with_backend.then(|| {
         json!({
             "exe": std::env::current_exe().unwrap(),
@@ -241,7 +263,14 @@ fn start_with_config(with_backend: bool, data_dir: Option<&std::path::Path>, ext
     for (k, v) in extra.as_object().cloned().unwrap_or_default() {
         config[k] = v;
     }
-    let mut child = Command::new(env!("CARGO_BIN_EXE_nekkod"))
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_nekkod"));
+    for (k, v) in env {
+        match v {
+            Some(v) => cmd.env(k, v),
+            None => cmd.env_remove(k),
+        };
+    }
+    let mut child = cmd
         .env("NEKKOD_CONFIG", config.to_string())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -2729,4 +2758,167 @@ async fn stop_during_admission_cancels_setup_and_refuses_duplicate_send() {
         saved_session(&rig, "s_prepare_stop")["messages"].as_array().unwrap().last().unwrap()["content"],
         "after stop"
     );
+}
+
+/// A GGUF header with enough geometry for the planner (`gguf-fixture.ts`).
+fn tiny_gguf(arch: &str, name: &str) -> Vec<u8> {
+    let s = |v: &str| {
+        let mut b = (v.len() as u64).to_le_bytes().to_vec();
+        b.extend_from_slice(v.as_bytes());
+        b
+    };
+    let text = |v: &str| [8u32.to_le_bytes().to_vec(), s(v)].concat();
+    let int = |n: u32| [4u32.to_le_bytes(), n.to_le_bytes()].concat();
+    let pairs: Vec<(String, Vec<u8>)> = vec![
+        ("general.architecture".into(), text(arch)),
+        ("general.name".into(), text(name)),
+        ("general.file_type".into(), int(15)),
+        (format!("{arch}.block_count"), int(16)),
+        (format!("{arch}.attention.head_count"), int(16)),
+        (format!("{arch}.attention.head_count_kv"), int(4)),
+        (format!("{arch}.embedding_length"), int(1024)),
+        (format!("{arch}.context_length"), int(8192)),
+    ];
+    let mut out = [0x4655_4747u32.to_le_bytes(), 3u32.to_le_bytes()].concat();
+    out.extend(0u64.to_le_bytes());
+    out.extend((pairs.len() as u64).to_le_bytes());
+    for (k, v) in pairs {
+        out.extend(s(&k));
+        out.extend(v);
+    }
+    out.extend([0u8; 64]);
+    out
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn serves_the_model_library_and_its_folders_itself() {
+    let root = std::env::temp_dir().join(format!("nekkod-library-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    let home = root.join("home");
+    // Our own download, and a model Ollama pulled in the (scratch) home.
+    let model = data.join("models/chat/acme_tiny-gguf/tiny-q4_k_m.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("llama", "Tiny")).unwrap();
+    let ollama = home.join(".ollama/models");
+    std::fs::create_dir_all(ollama.join("manifests/registry.ollama.ai/library/tiny")).unwrap();
+    std::fs::create_dir_all(ollama.join("blobs")).unwrap();
+    std::fs::write(
+        ollama.join("manifests/registry.ollama.ai/library/tiny/latest"),
+        json!({ "layers": [{ "mediaType": "application/vnd.ollama.image.model", "digest": "sha256:abc" }] })
+            .to_string(),
+    )
+    .unwrap();
+    std::fs::write(ollama.join("blobs/sha256-abc"), tiny_gguf("qwen2", "Ollama Tiny")).unwrap();
+    let outside = root.join("outside/loose.gguf");
+    std::fs::create_dir_all(outside.parent().unwrap()).unwrap();
+    std::fs::write(&outside, tiny_gguf("llama", "Loose")).unwrap();
+    let h = home.to_string_lossy().to_string();
+    let local = home.join("local").to_string_lossy().to_string();
+    let roaming = home.join("roaming").to_string_lossy().to_string();
+    let d = start_with_env(
+        true,
+        Some(&data),
+        json!({}),
+        &[
+            ("HOME", Some(&h)),
+            ("USERPROFILE", Some(&h)),
+            ("LOCALAPPDATA", Some(&local)),
+            ("APPDATA", Some(&roaming)),
+            ("OLLAMA_MODELS", None),
+            ("HF_HOME", None),
+            ("HUGGINGFACE_HUB_CACHE", None),
+        ],
+    );
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for channel in [
+        "engine:models",
+        "engine:importModel",
+        "engine:deleteModel",
+        "engine:saveModelPreset",
+        "engine:folders",
+        "engine:foldersSave",
+        "engine:autoload",
+        "engine:library",
+    ] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
+    }
+
+    // The first read seeds the folder list with Ollama's store, saved as a setting.
+    let (status, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{models}");
+    let settings: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    let folders = settings["engine"]["modelFolders"].as_array().unwrap().clone();
+    assert_eq!(folders.len(), 1, "{folders:?}");
+    assert_eq!((folders[0]["id"].clone(), folders[0]["provider"].clone()), (json!("ollama"), json!("ollama")));
+    let rows = models.as_array().unwrap();
+    let ids: Vec<&str> = rows.iter().map(|m| m["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["chat/acme_tiny-gguf/tiny-q4_k_m", "ollama/tiny:latest"], "sorted by name: {rows:?}");
+    let ours = &rows[0];
+    assert_eq!(ours["name"], "Tiny");
+    assert_eq!(ours["sourceRepo"], "acme/tiny-gguf");
+    assert_eq!(
+        (ours["layers"].clone(), ours["kvHeads"].clone(), ours["headDim"].clone()),
+        (json!(16), json!(4), json!(64))
+    );
+    // Load state from the host's model server, the fit from this machine.
+    assert_eq!(ours["loaded"], true);
+    assert!(ours.get("lastLoadError").is_none());
+    assert!(["full", "partial", "cpu", "wont"].contains(&ours["gpuFit"].as_str().unwrap()), "{ours}");
+    assert_eq!(rows[1]["name"], "tiny:latest", "named as `ollama run` names it");
+    assert_eq!(rows[1]["loaded"], false);
+    assert_eq!(rows[1]["lastLoadError"], "Not enough memory to load it.");
+    assert_eq!(rows[1]["managed"], false);
+    // The bare rows the TS model server reads.
+    let (_, bare) = post(d.port, "engine:library", json!([]), Some(TOKEN)).await;
+    assert_eq!(bare.as_array().unwrap().len(), 2);
+    assert!(bare[0].get("loaded").is_none());
+
+    let (_, report) = post(d.port, "engine:folders", json!([]), Some(TOKEN)).await;
+    let counts: Vec<(Value, Value)> =
+        report["folders"].as_array().unwrap().iter().map(|f| (f["id"].clone(), f["modelCount"].clone())).collect();
+    assert_eq!(counts, [(json!("primary"), json!(1)), (json!("ollama"), json!(1))]);
+    assert_eq!(report["suggestions"], json!([]), "the seeded folder is not suggested again");
+
+    // Presets live in library.json, which only the daemon writes.
+    let id = "chat/acme_tiny-gguf/tiny-q4_k_m";
+    let (_, none) = post(d.port, "engine:saveModelPreset", json!([id, { "contextTokens": 4096 }]), Some(TOKEN)).await;
+    assert_eq!(none, Value::Null);
+    let index: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("models/library.json")).unwrap()).unwrap();
+    assert_eq!(index["models"][id]["preset"], json!({ "contextTokens": 4096 }));
+
+    let (_, imported) = post(d.port, "engine:importModel", json!([outside]), Some(TOKEN)).await;
+    assert_eq!((imported["ok"].clone(), imported["message"].clone()), (json!(true), json!("Added Loose.")));
+    let (_, refused) = post(d.port, "engine:deleteModel", json!(["ollama/tiny:latest"]), Some(TOKEN)).await;
+    assert_eq!(refused["ok"], false);
+    assert!(ollama.join("blobs/sha256-abc").exists(), "a borrowed folder is never written");
+    let (_, deleted) = post(d.port, "engine:deleteModel", json!([id]), Some(TOKEN)).await;
+    assert_eq!(deleted, json!({ "ok": true, "message": "Deleted Tiny." }));
+    assert!(!model.exists());
+
+    // The autoload list and the folder list are engine settings.
+    let (_, engine) = post(d.port, "engine:autoload", json!(["ollama/tiny:latest", true]), Some(TOKEN)).await;
+    assert_eq!(engine["autoload"], json!(["ollama/tiny:latest"]));
+    assert_eq!(engine["port"], 11500, "merged over the engine defaults");
+    let (_, engine) = post(d.port, "engine:autoload", json!(["ollama/tiny:latest", true]), Some(TOKEN)).await;
+    assert_eq!(engine["autoload"], json!(["ollama/tiny:latest"]), "no duplicates");
+    let (_, engine) = post(d.port, "engine:autoload", json!(["ollama/tiny:latest", false]), Some(TOKEN)).await;
+    assert_eq!(engine["autoload"], json!([]));
+    let (_, report) =
+        post(d.port, "engine:foldersSave", json!([[{ "id": "primary", "path": "/x", "enabled": true }]]), Some(TOKEN))
+            .await;
+    assert_eq!(report["folders"].as_array().unwrap().len(), 1, "{report}");
+    assert_eq!(report["suggestions"][0]["provider"], "ollama", "removed, so suggested");
+    let settings: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert_eq!(settings["engine"]["modelFolders"], json!([]));
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let changed = calls.as_array().unwrap().iter().filter(|c| c[0] == "settings:changed").count();
+    assert_eq!(changed, 5, "the seed, three autoload saves and the folder save reach the host: {calls}");
+    assert!(calls.as_array().unwrap().iter().any(|c| c[0] == "engine:runtime"));
+    drop(d);
+    std::fs::remove_dir_all(root).ok();
 }

@@ -25,10 +25,16 @@ pub const CHANNELS: &[&str] = &[
     "server:stop",
 ];
 
-struct BackendEngine(Arc<Backend>);
+/// The engine's host side, except the model list, which is the daemon's library.
+struct BackendEngine(Arc<Backend>, Option<Arc<crate::library::Library>>);
 
 impl HostEngine for BackendEngine {
     fn call(&self, method: &'static str, args: Vec<Value>) -> BoxFuture<Result<Value, String>> {
+        if method == "models"
+            && let Some(library) = self.1.clone()
+        {
+            return Box::pin(async move { library.models().await });
+        }
         let backend = self.0.clone();
         let mut all = vec![json!(method)];
         all.extend(args);
@@ -54,13 +60,14 @@ pub fn new(
     settings: &crate::settings::Settings,
     backend: Arc<Backend>,
     machine: Arc<nekko_machine::Machine>,
+    library: Option<Arc<crate::library::Library>>,
 ) -> Arc<Runtimes> {
     let store = settings.store.clone();
     let data_dir = store.path().parent().map(std::path::Path::to_path_buf);
     let providers = move || store.get().get("providers").cloned().unwrap_or(Value::Null);
     Arc::new(Runtimes::new(
         Arc::new(SystemIo(reqwest::Client::new())),
-        Arc::new(BackendEngine(backend)),
+        Arc::new(BackendEngine(backend, library)),
         Arc::new(MachineProbes(machine)),
         Box::new(providers),
         data_dir,

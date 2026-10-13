@@ -1,6 +1,6 @@
 [package]
 name = "nekko-engine"
-description = "The Nekko Agent engine's services for the daemon: the Hugging Face model catalog (and, as they move, the rest of the TS engine), as the TS host computes them."
+description = "The Nekko Agent engine's services for the daemon: the Hugging Face model catalog, the model library and its folders (and, as they move, the rest of the TS engine), as the TS host computes them."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,10 +10,12 @@ publish.workspace = true
 [dependencies]
 futures-util.workspace = true
 nekko-js = { path = "../nekko-js" }
+nekko-tools = { path = "../nekko-tools" }
 nekko-usage = { path = "../nekko-usage" }
 regress.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
+sha1 = "0.10"
 tokio.workspace = true
 url = "2"
 

@@ -17,6 +17,7 @@ mod decisions;
 mod engine;
 mod hub;
 mod hypergate;
+mod library;
 mod machine;
 mod mcp;
 mod oauth;
@@ -96,6 +97,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                         remote::OWNS,
                         watches::OWNS,
                         sandbox::OWNS,
+                        library::OWNS,
                     ]
                     .join(","),
                 );
@@ -155,7 +157,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     };
     let machine =
         Arc::new(nekko_machine::Machine::new(cfg.data_dir.clone().map(std::path::PathBuf::from), Box::new(engine_bin)));
-    let runtimes = settings.as_deref().map(|s| runtimes::new(s, backend.clone(), machine.clone()));
+    let library = settings.clone().map(|s| library::Library::new(s, backend.clone(), machine.clone(), engine.clone()));
+    let runtimes = settings.as_deref().map(|s| runtimes::new(s, backend.clone(), machine.clone(), library.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -197,6 +200,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         },
         machine,
         runtimes: runtimes.clone(),
+        library: library.clone(),
         resource_queue: cfg.data_dir.clone().map(|d| {
             Arc::new(resource_queue::ResourceQueue::new(
                 std::path::PathBuf::from(d),
