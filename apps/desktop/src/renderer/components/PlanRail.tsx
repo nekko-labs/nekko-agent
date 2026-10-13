@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentEvent, QueuedPrompt, Session, SessionSummary } from '@nekko-agent/shared';
-import { DEFAULT_ORCHESTRATION, getStrategy, planProgress, queueItemPayload, summarizeToolCall } from '@nekko-agent/shared';
+import React, { useEffect, useMemo, useRef } from 'react';
+import type { QueuedPrompt, Session } from '@nekko-agent/shared';
+import { DEFAULT_ORCHESTRATION, getStrategy, planProgress, queueItemPayload } from '@nekko-agent/shared';
+import { useLiveRunsVersion, getLiveRun, runningSessionIds } from '../liveRuns.js';
+import { childActivity, activitySentence } from '../subagentActivity.js';
 import { useStore } from '../store.js';
 import { CheckIcon, ChatIcon, ListIcon, PencilIcon, RobotIcon } from '../icons.js';
 
@@ -31,7 +33,14 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
   const orchestration = useStore((s) => s.settings?.orchestration);
   const spawnAllowed = getStrategy((orchestration ?? DEFAULT_ORCHESTRATION).strategy).allowsSpawn;
   const children = useMemo(() => sessions.filter((s) => s.parentSessionId === sessionId), [sessions, sessionId]);
-  const activity = useSubAgentActivity(sessionId, children.map((c) => c.id));
+  const activityVersion = useLiveRunsVersion();
+  const discovered = useRef(new Set<string>());
+  useEffect(() => {
+    const unknown = runningSessionIds().filter(id => id !== sessionId && !sessions.some(s => s.id === id) && !discovered.current.has(id));
+    if (!unknown.length) return;
+    unknown.forEach(id => discovered.current.add(id));
+    void useStore.getState().refreshSessions();
+  }, [activityVersion, sessions, sessionId]);
   // Keep completed delegates available here until the user chooses to open
   // them; spawning alone never opens another window.
   const activeChildren = children;
@@ -54,11 +63,11 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
           </div>
           {activeChildren.length === 0 ? <p className="px-0.5 text-[11px] leading-snug text-ink-faint">{spawnAllowed ? 'No sub-agents working right now.' : 'Delegation is off. Enable it in Settings → Orchestration.'}</p> : (
             <div className="space-y-0.5">{activeChildren.map((c) => {
-              const a = activity[c.id];
+              const a = childActivity(c, !!getLiveRun(c.id));
               return <button key={c.id} className="flex w-full items-start gap-1.5 rounded-lg px-1 py-1 text-left hover:bg-surface-2" onClick={() => openChatPane(c.id)} title={`Open ${c.title}`}>
                 <RobotIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
                 <span className="min-w-0 flex-1"><span className="block truncate text-[12px] text-ink-soft">{c.title}</span>
-                  <span className="block truncate text-[10px] text-ink-faint">{a?.tool ? a.detail ? `${a.tool} · ${a.detail}` : `Running ${a.tool}` : a?.running ? 'Working…' : a?.running === false || c.lastReplyText ? 'Finished · click to view' : 'Waiting to start'}</span>
+                  <span className="block truncate text-[10px] text-ink-faint">{activitySentence(a)}</span>
                 </span>
               </button>;
             })}</div>
@@ -99,37 +108,4 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
       </div>
     </aside>
   );
-}
-
-interface SubAgentActivity { running: boolean; tool?: string; detail?: string }
-
-/** Discover a child as soon as its first event arrives, and retire it on done/error. */
-function useSubAgentActivity(parentId: string, ids: string[]): Record<string, SubAgentActivity> {
-  const [state, setState] = useState<Record<string, SubAgentActivity>>({});
-  const idsKey = ids.join('|');
-  const idsRef = useRef(ids);
-  idsRef.current = ids;
-  const probed = useRef(new Set<string>());
-  useEffect(() => {
-    const off = window.nekko.onAgentEvent((e: AgentEvent) => {
-      if (!idsRef.current.includes(e.sessionId)) {
-        if (e.sessionId === parentId || probed.current.has(e.sessionId)) return;
-        probed.current.add(e.sessionId);
-        void useStore.getState().refreshSessions();
-        return;
-      }
-      setState((prev) => {
-        const cur = prev[e.sessionId];
-        let next: SubAgentActivity;
-        if (e.type === 'tool_call') next = { running: true, tool: e.call.name, detail: summarizeToolCall(e.call, 40) };
-        else if (e.type === 'done' || e.type === 'error') next = { running: false };
-        else if (e.type === 'text' || e.type === 'reasoning' || e.type === 'tool_result') next = { running: true };
-        else return prev;
-        if (cur?.running === next.running && cur?.tool === next.tool && cur?.detail === next.detail) return prev;
-        return { ...prev, [e.sessionId]: next };
-      });
-    });
-    return off;
-  }, [idsKey, parentId]);
-  return state;
 }

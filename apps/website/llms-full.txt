@@ -227,6 +227,39 @@ list dirs, run shell commands).
 
 ---
 
+### A composer that follows your draft
+
+In the Command Center, one docked composer targets the selected agent window.
+Click another agent window to write in that chat's context, or use the dock picker
+to move the composer above or below the wall.
+
+The reply editor grows with new lines and wrapped text, then shrinks when you
+delete them. In the bottom dock it grows upward, leaving the agent board above
+it in its own scroll area. Once the draft reaches the height cap, only the editor
+scrolls; the header, send controls, queued prompts, images and skill rows stay
+inside the composer ring. A saved manual height remains a preferred minimum,
+not a ceiling that prevents a longer draft from growing.
+
+### Follow delegated work without opening every detail
+
+Delegation cards start collapsed, including while a child is working or returning
+a large result. Their compact, plain-text activity sentence shares its status
+with the plan's sub-agent list and the working-subagent indicator:
+
+- **Working**: the child is thinking, writing or using a tool.
+- **Waiting**: it needs an answer or approval, or is waiting to retry.
+- **Completed**, **Failed** or **Stopped**: recorded terminal events, not guesses
+  based on the presence of a stored reply.
+
+Expand a card to read the full task and result in bounded scroll areas. This does
+not resize the entire agent window. Summaries use existing local events, without
+an extra model request or additional transmission.
+
+Live card-to-child matching is best effort, using the parent, title and creation
+time. There is no authoritative spawn-call child ID yet. Ambiguous matches and
+historical calls without observed events do not borrow another child's status;
+they retain a task summary or report that no current run status is recorded.
+
 ### Plan and capacity at a glance
 
 The plan icon in an agent window opens or closes only that chat's plan, sub-agents and queue panel. Each chat remembers its own choice locally. Narrow windows fold the panel automatically without changing that choice.

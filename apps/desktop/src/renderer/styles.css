@@ -1799,10 +1799,9 @@
 }
 .wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 12px; }
 .wall-workspace[data-dock-side='top'], .wall-workspace[data-dock-side='bottom'] { flex-direction: column; }
-.wall-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 0; overflow-y: auto; }
-/* A tall composer must not collapse the transcript wall out of view. Short
-   viewports scroll the column rather than allowing composer content to cover it. */
-.wall-column > .command-wall-layout { flex: 1 0 280px; }
+.wall-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 0; overflow: hidden; }
+/* The board viewport yields to the composer; its tall stage scrolls internally. */
+.wall-column > .command-wall-layout { flex: 1 1 0; min-height: 0; }
 /* The composer card paints the same --win surface as the chat windows; the
    panel around it stays transparent so no band shows below or behind it. */
 .wall-composer { position: relative; width: 75%; max-width: 100%; flex-shrink: 0; background: transparent; box-shadow: none; }
@@ -1933,9 +1932,8 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-fixed-cells button.is-preview { border-color: var(--accent); background: var(--accent-soft); }
 .wall-layout-segments button:focus-visible, .wall-fixed-cells button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 767px) {
-  .wall-workspace { flex-direction: column; overflow-y: auto; }
-  .wall-workspace > .wall-agent-workspace { flex: 0 0 auto; min-height: 640px; }
-  .wall-column > .command-wall-layout { min-height: 280px; }
+  .wall-workspace { flex-direction: column; overflow: hidden; }
+  .wall-workspace > .wall-agent-workspace { flex: 1 1 0; min-height: 0; }
   .wall-workspace > .wall-dock { flex: 0 0 auto; width: 100%; max-height: 240px; }
 }
 /* The composer surface of a chat is as tall as its content; the message box keeps its own ceiling. */
@@ -1976,18 +1974,18 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-composer-split::after { content: ""; width: 40px; height: 3px; border-radius: 3px; background: var(--line); transition: background var(--dur-fast) ease, width var(--dur-fast) ease; }
 .wall-composer-split:hover::after, .wall-composer-split:focus-visible::after { background: var(--accent); width: 56px; }
 .wall-composer-side:focus-visible, .wall-composer-split:focus-visible { outline: none; }
-.wall-composer > .wall-composer-body { display: flex; flex: 1; min-height: 0; overflow-y: auto; }
+.wall-composer > .wall-composer-body { display: flex; flex: 0 0 auto; min-height: 0; overflow: visible; }
 
-/* Bound every flex step. If controls exceed the panel, scroll the surface
-   instead of clipping the editor or letting it paint beneath the frame. */
-.wall-composer [data-chat-surface="composer"] { flex: 1; overflow: visible; }
-.wall-composer [data-chat-surface="composer"] > section { min-height: 0; overflow: visible; }
-.wall-composer [data-chat-surface="composer"] .composer-section { display: flex; flex: 1; min-height: 0; padding: 0; }
-.wall-composer .composer-column, .wall-composer .composer { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+/* The shell never scrolls or constrains its rows. Only the measured textbox
+   owns vertical scrolling; its cap leaves space for the board above/below. */
+.wall-composer [data-chat-surface="composer"] { flex: 0 0 auto; width: 100%; height: auto; overflow: visible; }
+.wall-composer [data-chat-surface="composer"] > section { flex: 0 0 auto; min-height: 0; overflow: visible; }
+.wall-composer [data-chat-surface="composer"] .composer-section { display: flex; flex: 0 0 auto; min-height: 0; padding: 0; }
+.wall-composer .composer-column, .wall-composer .composer { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; }
 /* COMPOSER_TWO_LINES: two 20px lines of text-sm plus py-3. */
-.wall-composer .composer-editor-wrap > [contenteditable] { flex: 1; min-height: 64px; height: 0 !important; max-height: none !important; overflow-y: auto; }
-.wall-composer .composer-editing-body { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.wall-composer .composer-editor-wrap { display: flex; flex-direction: column; flex: 1; min-height: 64px; }
+.wall-composer .composer-editor-wrap > [contenteditable] { flex: 0 0 auto; min-height: 64px; max-height: none; overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; }
+.wall-composer .composer-editing-body { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; }
+.wall-composer .composer-editor-wrap { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 64px; }
 .wall-composer .composer > :not(.composer-editing-body), .wall-composer .composer-editing-body > :not(.composer-editor-wrap) { flex-shrink: 0; }
 .wall-layout-segments button { display: inline-flex; align-items: center; gap: 6px; }
 

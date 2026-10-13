@@ -3,6 +3,7 @@ import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SessionSummary } from '@nekko-agent/shared';
 import { ChatPane } from './ChatPane.js';
+import { observeWallComposer } from '../composerSizing.js';
 import { ChatIcon, FocusLayoutIcon, LayoutIcon } from '../icons.js';
 import { composerMaxWidth, type ComposerDock, type ComposerAlign, type ComposerSide } from '../commandWall.js';
 
@@ -89,29 +90,12 @@ export function WallComposer({
     return () => cancelAnimationFrame(id);
   }, [agent?.session.id, panelRef]);
 
-  // Attachments and an armed skill add rows above the editor. The panel grows
-  // by their height rather than taking it from the text box.
-  const [extra, setExtra] = useState(0);
-  useEffect(() => {
+  // Grow the editor with its rendered text and keep every control row in the shell.
+  useLayoutEffect(() => {
     const panel = panelRef.current;
-    if (!panel || typeof ResizeObserver === 'undefined') return;
-    let observed: Element[] = [];
-    const ro = new ResizeObserver(() => measure());
-    const measure = () => {
-      const rows = [...panel.querySelectorAll('[data-composer-attachments], [data-composer-skill]')];
-      if (rows.length !== observed.length || rows.some((r, i) => r !== observed[i])) {
-        observed.forEach((r) => ro.unobserve(r));
-        rows.forEach((r) => ro.observe(r));
-        observed = rows;
-      }
-      const next = Math.round(rows.reduce((sum, r) => sum + r.getBoundingClientRect().height, 0));
-      setExtra((prev) => (prev === next ? prev : next));
-    };
-    const mo = new MutationObserver(measure);
-    mo.observe(panel, { childList: true, subtree: true });
-    measure();
-    return () => { mo.disconnect(); ro.disconnect(); };
-  }, [panelRef, agent?.session.id]);
+    if (!panel || !agent) return;
+    return observeWallComposer(panel, height ?? null);
+  }, [panelRef, agent?.session.id, height]);
 
   // A saved width wider than the wall now (a smaller window, the panels
   // opened) is drawn at the wall's width and keeps its saved value for when
@@ -203,9 +187,8 @@ export function WallComposer({
   return (
     <div
       ref={panelRef}
-      // Undragged, the composer is as tall as its content with a two-line
-      // editor (COMPOSER_TWO_LINES); a dragged height is kept with the wall.
-      style={{ height: height == null ? undefined : height + extra, width: width ?? undefined, maxWidth: maxWidth ?? undefined }}
+      // The shell stays in normal flex flow and includes every control row.
+      style={{ width: width ?? undefined, maxWidth: maxWidth ?? undefined }}
       className={`panel wall-composer flex shrink-0 flex-col ${alignClass}`}
       data-has-agent={agent ? true : undefined}
       data-wall-composer
