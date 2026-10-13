@@ -3,6 +3,7 @@ const { app, BrowserWindow, session, screen, ipcMain } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const cp = require('node:child_process');
+const { sourceLiteral, buttonSource, keySource } = require('./lifecycle-renderer-source.cjs');
 const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch with lifecycle-evidence-integration.cjs');
 const base = !!process.env.NEKKO_TEST_REVISION;
@@ -34,7 +35,7 @@ app.whenReady().then(async () => {
       const root = document.querySelector('[data-lifecycle-route]');
       const route = root?.dataset.lifecycleRoute;
       const settings = route === 'settings';
-      const ready = route === ${JSON.stringify(expectedRoute)} && (!settings ||
+      const ready = route === ${sourceLiteral(expectedRoute)} && (!settings ||
         (document.body.innerText.includes('Appearance') && !!document.querySelector('input[placeholder="Relay URL, e.g. wss://nekko-agent-relay.fly.dev"]') && !document.querySelector('[aria-label="Input alpha"]')));
       const fingerprint = JSON.stringify([document.documentElement.dataset.theme, innerWidth, innerHeight, root?.innerText,
         [...(root?.querySelectorAll('section, input, button, main, aside') || [])].map(e => { const r = e.getBoundingClientRect(); return [r.x,r.y,r.width,r.height]; })]);
@@ -43,7 +44,7 @@ app.whenReady().then(async () => {
       previous = fingerprint;
       if (count >= 6) return { route, theme: document.documentElement.dataset.theme, viewport: { width: innerWidth, height: innerHeight }, stableFramePairs: count, settingsMounted: settings, paneInputAbsent: !document.querySelector('[aria-label="Input alpha"]') };
     }
-    throw Error('DOM/frame stability timeout for route ' + ${JSON.stringify(expectedRoute)});
+    throw Error('DOM/frame stability timeout for route ' + ${sourceLiteral(expectedRoute)});
   })()`);
   const capture = async name => {
     const route = name.includes('-settings') ? 'settings' : 'panes';
@@ -59,8 +60,8 @@ app.whenReady().then(async () => {
     if (image.isEmpty()) throw Error('Empty capture ' + name);
     fs.writeFileSync(file, image.toPNG()); report.captures.push({ file, size: image.getSize(), dom });
   };
-  const reset = async (opts = {}) => { await run(`lifecycle.reset(${JSON.stringify(opts)})`); await sleep(450); };
-  const themeFor = async theme => { await run(`lifecycle.patch({theme:${JSON.stringify(theme)}});document.documentElement.dataset.theme=${JSON.stringify(theme)}`); };
+  const reset = async (opts = {}) => { await run(`lifecycle.reset(${sourceLiteral(opts)})`); await sleep(450); };
+  const themeFor = async theme => { await run(`lifecycle.patch({theme:${sourceLiteral(theme)}});document.documentElement.dataset.theme=${sourceLiteral(theme)}`); };
   const resize = async width => {
     win.setContentSize(width, 1000);
     for (let i = 0; i < 5; i++) {
@@ -72,8 +73,8 @@ app.whenReady().then(async () => {
     }
     throw Error('Could not establish exact content viewport ' + width + 'x1000');
   };
-  const key = async (id, k) => { await run(`document.querySelector('[aria-label="${id}"]').focus(); window.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(k)},ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}))`); await sleep(350); };
-  const button = text => run(`(()=>{const e=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(text)});if(!e)throw Error('Missing button '+${JSON.stringify(text)});e.click()})()`);
+  const key = async (id, k) => { await run(keySource(id, k)); await sleep(350); };
+  const button = text => run(buttonSource(text));
   let terminalHost, realTerminal;
   try {
     if (!base) {
