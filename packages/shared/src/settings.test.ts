@@ -24,8 +24,9 @@ describe('command wall settings schema', () => {
     expect(DEFAULT_WALL_DOCK.side).toBe('right');
     expect(DEFAULT_WALL_DOCK.show).toBe(true);
     expect(DEFAULT_WALL_DOCK.minimized).toEqual({
-      vitals: false, automations: false, utilization: false, budget: false, insights: false, hardware: false,
+      automations: false, utilization: false, budget: false, insights: false, hardware: false,
     });
+    expect(DEFAULT_WALL_DOCK.panelOrder?.[0]).toBe('hardware');
     expect(Object.keys(DEFAULT_WALL_DOCK.minimized)).toEqual(Object.keys(DEFAULT_WALL_DOCK.panels));
     expect(Object.entries(DEFAULT_WALL_DOCK.panels).filter(([, enabled]) => !enabled)).toEqual([['insights', false]]);
   });

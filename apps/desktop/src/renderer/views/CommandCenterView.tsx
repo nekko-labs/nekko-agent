@@ -10,7 +10,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { GridIcon, MoreVerticalIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
-import { COMPANION_OPENED_EVENT } from '../components/AgentCompanionButtons.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -110,19 +109,33 @@ export function CommandCenterView() {
   const [wall, setWallState] = useState<CommandWallState>(() => loadWallState(storage, useStore.getState().settings?.commandWall));
   const setWall = useCallback((update: (s: CommandWallState) => CommandWallState) => setWallState((s) => update(s)), []);
   const firstSave = useRef(true);
+  // The wall waiting to reach the host. Leaving the page or closing the app
+  // inside the settle delay used to drop it, and the next load preferred the
+  // host's older copy: a composer resized just before switching tabs came
+  // back at its old size.
+  const unsaved = useRef<CommandWallState | null>(null);
+  const flushWall = useCallback(() => {
+    const pending = unsaved.current;
+    if (!pending) return;
+    unsaved.current = null;
+    const setting = toWallSetting(pending);
+    useStore.setState((s) => (s.settings ? { settings: { ...s.settings, commandWall: setting } } : {}));
+    window.nekko.updateSettings({ commandWall: setting }).catch(() => {});
+  }, []);
   useEffect(() => {
     saveWallState(storage, wall);
     // The first run is the load itself; after that, every change goes to the
     // host a moment after it settles (a divider drag is many changes a second).
     if (firstSave.current) { firstSave.current = false; return; }
-    const t = setTimeout(() => {
-      const setting = toWallSetting(wall);
-      useStore.setState((s) => (s.settings ? { settings: { ...s.settings, commandWall: setting } } : {}));
-      window.nekko.updateSettings({ commandWall: setting }).catch(() => {});
-    }, 600);
+    unsaved.current = wall;
+    const t = setTimeout(flushWall, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wall]);
+  useEffect(() => {
+    window.addEventListener('beforeunload', flushWall);
+    return () => { window.removeEventListener('beforeunload', flushWall); flushWall(); };
+  }, [flushWall]);
   // The stage's shape, as the wall measures it, for placing windows nobody
   // pointed at a side for: beside the biggest window, along its longer side.
   const aspectRef = useRef(DEFAULT_ASPECT);
@@ -382,18 +395,6 @@ export function CommandCenterView() {
   );
   // Adding windows lives in the toolbar's icon bar, so the composer row is the composer alone.
   const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
-  // Changes, Browser and Files open in the selected agent's workspace, which
-  // the wall shows as companions under its window: unfold them so they show.
-  // Companions open from each agent's own header now; unfold that agent's
-  // companions on the wall so the one just opened is visible.
-  useEffect(() => {
-    const opened = (e: Event) => {
-      const id = (e as CustomEvent<{ sessionId: string }>).detail?.sessionId;
-      if (id) setWall((w) => (w.folded[id] === false ? w : { ...w, folded: { ...w.folded, [id]: false } }));
-    };
-    window.addEventListener(COMPANION_OPENED_EVENT, opened);
-    return () => window.removeEventListener(COMPANION_OPENED_EVENT, opened);
-  }, [setWall]);
 
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-3 px-4 pb-4 pt-1 xl:px-6">

@@ -39,7 +39,6 @@ export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal'];
 export type { WallLayout, WallLayoutMode, WallDock, WallDockSide, WallDockPanel } from '@nekko-agent/shared';
 export { DEFAULT_WALL_LAYOUT, DEFAULT_WALL_DOCK };
 export const DOCK_PANELS: Array<{ key: WallDockPanel; label: string; blurb: string }> = [
-  { key: 'vitals', label: 'Vitals', blurb: 'Agents working and waiting on you' },
   { key: 'hardware', label: 'Hardware', blurb: 'Local resource monitors' },
   { key: 'utilization', label: 'Utilization', blurb: 'Tokens and model usage' },
   { key: 'budget', label: 'Budget', blurb: 'Monthly spend against your advisory budget' },

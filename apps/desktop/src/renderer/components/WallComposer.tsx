@@ -203,7 +203,9 @@ export function WallComposer({
   return (
     <div
       ref={panelRef}
-      style={{ height: (height ?? 320) + extra, width: width ?? undefined, maxWidth: maxWidth ?? undefined }}
+      // Undragged, the composer is as tall as its content with a two-line
+      // editor (COMPOSER_TWO_LINES); a dragged height is kept with the wall.
+      style={{ height: height == null ? undefined : height + extra, width: width ?? undefined, maxWidth: maxWidth ?? undefined }}
       className={`panel wall-composer flex shrink-0 flex-col ${alignClass}`}
       data-has-agent={agent ? true : undefined}
       data-wall-composer
