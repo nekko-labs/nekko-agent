@@ -12,6 +12,11 @@ owner:
 
 ---
 
+## Window lifecycle shortcuts and tips (added 2026-10-12)
+
+- [x] Implement [window lifecycle shortcuts and guidance](SPEC.md#window-lifecycle-shortcuts-and-guidance-2026-10-12): focused-pane keys, board-only minimization, confirmed deletion with independent skip/reset, successful-completion destination tip, and missing-project label removal. Prior head verification: 947 desktop tests, typecheck, build, settings parity, 48 isolated interactions; r4 matched light/dark wide/narrow captures and timing frames inspected and published. Hosted checks pass at 8163f0f9.
+- [ ] Verify and land the narrow drawer continuation: automatically reveal Show completed in the existing AgentSidebar overlay without focus, then highlight Open agent list if closed without consuming the tip on drawer open/close. Merged main 76c2db7b while retaining composer changes. Passed 974 desktop tests, typecheck, production build, docs generation, 8 baseline and 71 after hidden fixture assertions; TypeScript-host Windows cmd PTY executed before and after minimize. Fresh matched r5 owning-view screenshots and recordings await parent pixel inspection/publication and review, then updated hosted checks. Keep PR draft and unmerged for parent review. Native OS shortcut delivery and Rust daemon PTY survival remain untested; terminal archive history is outside scope.
+
 ## Phone: what ships now, what the native port owes (consolidated 2026-10-12)
 
 **Two phone codebases exist.** The Expo / React Native app in `apps/mobile` is the complete phone

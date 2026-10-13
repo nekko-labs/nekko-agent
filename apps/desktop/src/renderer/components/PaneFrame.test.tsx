@@ -2,16 +2,19 @@ import React, { useState } from 'react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { PaneFrame, targetAt } from './PaneFrame.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
+import { confirmDeletion } from './DeleteConfirmation.js';
 
 const state = vi.hoisted(() => ({
   settings: null as { chatPaneAction?: 'complete' | 'delete' } | null,
   archiveChat: vi.fn(),
   deleteChatForever: vi.fn(),
 }));
-vi.mock('../store.js', () => ({ useStore: (select: (s: typeof state) => unknown) => select(state) }));
+vi.mock('../store.js', () => ({ useStore: Object.assign((select: (s: typeof state) => unknown) => select(state), { getState: () => ({ refreshTerminals: vi.fn(), pushToast: vi.fn() }) }) }));
+vi.mock('./DeleteConfirmation.js', () => ({ confirmDeletion: vi.fn().mockResolvedValue(false) }));
+vi.mock('../window-shortcuts.js', async (original) => ({ ...await original<typeof import('../window-shortcuts.js')>(), registerWindow: vi.fn(), focusWindow: vi.fn() }));
 vi.mock('react', async (original) => {
   const actual = await original<typeof import('react')>();
-  return { ...actual, useState: vi.fn(actual.useState) };
+  return { ...actual, useState: vi.fn(actual.useState), useRef: () => ({ current: null }), useEffect: vi.fn() };
 });
 
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); state.settings = null; });
@@ -40,6 +43,18 @@ function frame(kind: 'chat' | 'terminal' = 'chat', menu = false, refId = 'sessio
 }
 
 describe('pane lifecycle controls', () => {
+  it.each([false, true])('only closes a terminal process after confirmation (%s)', async (approved) => {
+    vi.mocked(confirmDeletion).mockResolvedValueOnce(approved);
+    const closeTerminal = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('window', { nekko: { closeTerminal } });
+    const { button, onClose } = frame('terminal', false, 'terminal-1');
+    await button.props.onClick();
+    expect(confirmDeletion).toHaveBeenCalledWith(expect.stringContaining('no terminal archive'));
+    expect(closeTerminal).toHaveBeenCalledTimes(approved ? 1 : 0);
+    expect(onClose).toHaveBeenCalledTimes(approved ? 1 : 0);
+    if (approved) expect(closeTerminal).toHaveBeenCalledWith('terminal-1');
+  });
+
   it('places wall minimize immediately before Complete without archiving or deleting', () => {
     const minimize = vi.fn();
     const { elements } = frame('chat', false, 'session-1', minimize);
@@ -51,48 +66,31 @@ describe('pane lifecycle controls', () => {
     expect(state.deleteChatForever).not.toHaveBeenCalled();
   });
 
-  it('does not expose chat minimize on terminal windows', () => {
-    const { elements } = frame('terminal', false, 'terminal-1', vi.fn());
-    expect(elements.some((e) => e.props['aria-label'] === 'Minimize My chat')).toBe(false);
+  it('exposes board-only minimize on terminal windows', () => {
+    const minimize = vi.fn();
+    const closeTerminal = vi.fn();
+    vi.stubGlobal('window', { nekko: { closeTerminal } });
+    const { elements } = frame('terminal', false, 'terminal-1', minimize);
+    elements.find((e) => e.props['aria-label'] === 'Minimize My chat')!.props.onClick();
+    expect(minimize).toHaveBeenCalledOnce();
+    expect(closeTerminal).not.toHaveBeenCalled();
   });
   it('defaults chats to Complete using existing archive semantics, not Close', () => {
     const { button, onClose } = frame();
     expect(button.props['aria-label']).toBe('Complete My chat');
-    expect(button.props.title).toBe('Complete this chat');
+    expect(button.props.title).toBe('Complete this chat (Ctrl+Shift+E)');
     button.props.onClick();
     expect(state.archiveChat).toHaveBeenCalledWith('session-1');
     expect(onClose).not.toHaveBeenCalled();
     expect(state.deleteChatForever).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])('confirms the Delete preference (approved=%s)', (approved) => {
+  it('routes Delete through the shared store confirmation', () => {
     state.settings = { chatPaneAction: 'delete' };
-    const confirm = vi.fn(() => approved);
-    vi.stubGlobal('window', { confirm });
-    const { button, onClose } = frame();
-    expect(button.props['aria-label']).toBe('Delete My chat');
+    const { button } = frame();
     button.props.onClick();
-    expect(confirm).toHaveBeenCalledWith('Delete this chat forever? It cannot be recovered.');
-    expect(state.deleteChatForever).toHaveBeenCalledTimes(approved ? 1 : 0);
-    if (approved) expect(state.deleteChatForever).toHaveBeenCalledWith('session-1');
+    expect(state.deleteChatForever).toHaveBeenCalledWith('session-1');
     expect(state.archiveChat).not.toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('offers Complete, confirmed Delete, and non-destructive Close regardless of preference', () => {
-    state.settings = { chatPaneAction: 'delete' };
-    vi.stubGlobal('window', { confirm: vi.fn(() => false) });
-    const { elements, onClose } = frame('chat', true);
-    expect(elements.some((e) => e.type === ContextMenu)).toBe(true);
-    const actions = elements.filter((e) => e.type === ContextAction);
-    expect(actions.map((e) => e.props.children)).toEqual(['Complete', 'Delete', 'Close']);
-    actions[0].props.onClick();
-    expect(state.archiveChat).toHaveBeenCalledWith('session-1');
-    actions[1].props.onClick();
-    expect(window.confirm).toHaveBeenCalled();
-    expect(state.deleteChatForever).not.toHaveBeenCalled();
-    actions[2].props.onClick();
-    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it('opens the title-bar menu without bubbling to parent menus', () => {
@@ -105,7 +103,7 @@ describe('pane lifecycle controls', () => {
     expect(vi.mocked(useState).mock.results[1].value[1]).toHaveBeenCalledWith({ x: 30, y: 40 });
   });
 
-  it.each([['terminal', 'terminal-1'], ['chat', '']] as const)('keeps Close for %s panes with ref %s', (kind, refId) => {
+  it.each([['chat', '']] as const)('keeps Close for %s panes with ref %s', (kind, refId) => {
     state.settings = { chatPaneAction: 'delete' };
     const { button, elements, onClose } = frame(kind, true, refId);
     expect(button.props['aria-label']).toBe('Close My chat');
