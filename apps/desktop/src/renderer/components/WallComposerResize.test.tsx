@@ -12,10 +12,15 @@ describe('wall edge stability and composer handles', () => {
   });
   it('grows the composer panel by its attachment rows instead of shrinking the editor', () => {
     const source = readFileSync(new URL('./WallComposer.tsx', import.meta.url), 'utf8');
-    expect(source).toContain("'[data-composer-attachments], [data-composer-skill]'");
-    expect(source).toContain('height: height == null ? undefined : height + extra');
-    // Undragged it is as tall as a two-line editor, not a fixed 320px.
-    expect(readFileSync(new URL('../styles.css', import.meta.url), 'utf8')).toContain('.wall-composer .composer-editor-wrap > [contenteditable] { flex: 1; min-height: 64px;');
+    expect(source).toContain('observeWallComposer(panel, height ?? null)');
+    expect(source).not.toContain('height: height == null');
+    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+    // The shell stays natural-height with exactly one vertical scroll owner.
+    expect(css).toContain('.wall-composer > .wall-composer-body { display: flex; flex: 0 0 auto; min-height: 0; overflow: visible; }');
+    expect(css).toContain('.wall-composer .composer-editor-wrap > [contenteditable] { flex: 0 0 auto; min-height: 64px;');
+    expect(css).toContain('overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere;');
+    expect(css).not.toContain('height: 0 !important');
+    expect(css).not.toMatch(/\.wall-composer > \.wall-composer-body[^}]*overflow-y: auto/);
     const chat = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
     expect(chat).toContain('data-composer-attachments');
     expect(chat).toContain('data-composer-skill');

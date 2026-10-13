@@ -266,6 +266,11 @@ fn start_with_env(
         config[k] = v;
     }
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_nekkod"));
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
     for (k, v) in env {
         match v {
             Some(v) => cmd.env(k, v),
@@ -893,6 +898,13 @@ fn call_tool(id: &str, name: &str, args: Value) -> String {
 const HANG: &str = "hang";
 
 async fn scripted_model(script: Vec<String>) -> ScriptedModel {
+    scripted_model_with_titles(script, None).await
+}
+
+async fn scripted_model_with_titles(
+    script: Vec<String>,
+    titles: Option<std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<String>>>>,
+) -> ScriptedModel {
     use axum::routing::post as route_post;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -902,7 +914,7 @@ async fn scripted_model(script: Vec<String>) -> ScriptedModel {
     let app = axum::Router::new().route(
         "/v1/chat/completions",
         route_post(move |axum::Json(request): axum::Json<Value>| {
-            let (seen, script) = (seen.clone(), script.clone());
+            let (seen, script, titles) = (seen.clone(), script.clone(), titles.clone());
             async move {
                 // Title calls are answered by content, so their timing never shifts the script.
                 let titling = request["messages"].as_array().is_some_and(|m| {
@@ -911,7 +923,10 @@ async fn scripted_model(script: Vec<String>) -> ScriptedModel {
                 });
                 seen.lock().unwrap().push(request);
                 let next = if titling {
-                    say_text("\"Login bug fix.\"")
+                    match titles {
+                        Some(titles) => titles.lock().await.recv().await.expect("release the held title response"),
+                        None => say_text("\"Login bug fix.\""),
+                    }
                 } else {
                     script.lock().unwrap().pop_front().unwrap_or_else(|| say_text("(script ended)"))
                 };
@@ -929,6 +944,20 @@ async fn scripted_model(script: Vec<String>) -> ScriptedModel {
     );
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     ScriptedModel { port, requests, server }
+}
+
+fn title_requests(model: &ScriptedModel) -> usize {
+    model.requests.lock().unwrap().iter().filter(|r| r["messages"].to_string().contains("short title")).count()
+}
+
+async fn wait_for_title_requests(model: &ScriptedModel, count: usize) {
+    tokio::time::timeout(Duration::from_secs(20), async {
+        while title_requests(model) < count {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("title request never arrived");
 }
 
 struct TurnRig {
@@ -1337,7 +1366,12 @@ async fn after_a_daemon_turn_the_title_lands_and_the_queue_drains() {
         "id": "s_turn_t", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
     });
     let rig = turn_rig("after", session);
-    let model = scripted_model(vec![say_text("first answer"), say_text("second answer")]).await;
+    let (release, responses) = tokio::sync::mpsc::unbounded_channel();
+    let model = scripted_model_with_titles(
+        vec![say_text("first answer"), say_text("second answer")],
+        Some(std::sync::Arc::new(tokio::sync::Mutex::new(responses))),
+    )
+    .await;
     let spec = turn_spec(&rig, &model, "turn_t", "s_turn_t", json!({}));
     let (status, _) = post(rig.d.port, "test:prepareTemplate", json!([spec.clone()]), Some(TOKEN)).await;
     assert_eq!(status, 200);
@@ -1352,6 +1386,13 @@ async fn after_a_daemon_turn_the_title_lands_and_the_queue_drains() {
     let (_, second) = turn_record(rig.d.port, "turn_next_1").await;
     assert_eq!(second["stop"], "complete", "{second}");
     assert!(second.get("next").is_none(), "the queue is empty after one follow-up");
+
+    wait_for_title_requests(&model, 1).await;
+    let pending = saved_session(&rig, "s_turn_t");
+    assert_eq!(pending["titleAuto"], true, "title response is still held");
+    assert_eq!(pending["queue"], json!([]), "queue drains without waiting for the title");
+    assert_eq!(title_requests(&model), 1, "the queued turn must not request another title");
+    release.send(say_text("\"Login bug fix.\"")).unwrap();
 
     // The title lands on its own, after the first turn.
     let saved = tokio::time::timeout(Duration::from_secs(20), async {

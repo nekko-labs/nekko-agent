@@ -1,13 +1,25 @@
+import { createContext, useContext } from 'react';
 import { BranchIcon, RobotIcon } from '../../icons.js';
-import { truncateWords, type ToolCall } from '@nekko-agent/shared';
+import type { SessionSummary, ToolCall, ToolResult } from '@nekko-agent/shared';
+import { getLiveRun, useLiveRunsVersion } from '../../liveRuns.js';
+import { activitySentence, compactSentence, delegationActivity, delegationChild } from '../../subagentActivity.js';
 
+export const SubagentParentContext = createContext<SessionSummary[]>([]);
 export function subagentSummary(call: ToolCall): string {
-  const task = typeof call.input.task === 'string' ? call.input.task.replace(/\s+/g, ' ').trim() : '';
-  return `Spawned subagent · ${task ? truncateWords(task, 100) : subagentTitle(call)}`;
+  return activitySentence(delegationActivity(call));
 }
-
+export function useSubagentSummary(call: ToolCall, result?: ToolResult): string {
+  useLiveRunsVersion();
+  const children = useContext(SubagentParentContext);
+  const child = delegationChild(call, children);
+  return activitySentence(delegationActivity(call, child, result, !!child && !!getLiveRun(child.id)));
+}
+export function SubagentHeadline({ call, result }: { call: ToolCall; result?: ToolResult }) {
+  const summary = useSubagentSummary(call, result);
+  return <span className="min-w-0 truncate" title={summary}>{summary}</span>;
+}
 export function subagentTitle(call: ToolCall): string {
-  return typeof call.input.title === 'string' && call.input.title.trim() ? call.input.title.trim() : 'Subagent';
+  return typeof call.input.title === 'string' && call.input.title.trim() ? compactSentence(call.input.title) : 'Subagent';
 }
 
 /** A fork and agent together distinguish delegation from ordinary tool work. */
