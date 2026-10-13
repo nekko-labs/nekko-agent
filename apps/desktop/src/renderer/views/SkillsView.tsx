@@ -11,7 +11,14 @@ import {
   vaizerToMarketSkill,
   splitSkillMd,
   VAIZER_SITE_URL,
+  remoteToMarketSkill,
+  matchRemoteSkill,
+  skillSources,
   type VaizerCatalog,
+  type RemoteSkill,
+  type SkillSourceListing,
+  type SkillSearchResult,
+  type SkillPreview,
   type SkillDef,
   type SkillNodeKind,
   type SkillWorkflow,
@@ -240,6 +247,7 @@ const SOURCE_META: Record<MarketplaceSkill['source'], { label: string; color: st
   nekkolabs: { label: 'Nekko Labs', color: 'var(--accent)' },
   community: { label: 'community', color: 'var(--info)' },
   vaizer: { label: 'Vaizer', color: '#a78bfa' },
+  github: { label: 'GitHub', color: 'var(--ink-soft)' },
 };
 
 /** Trust-tier chip for skills from Vaizer. */
@@ -263,12 +271,13 @@ function fmtMetric(n: number): string {
 
 /** Browse + install skills: your installs, Nekko Labs' shelf, and popular online skills. */
 function MarketplaceTab() {
-  const { attachSkillToChat, installedSkills, refreshSkills, pushToast } = useStore(
+  const { attachSkillToChat, installedSkills, refreshSkills, pushToast, settings } = useStore(
     useShallow((s) => ({
       attachSkillToChat: s.attachSkillToChat,
       installedSkills: s.installedSkills,
       refreshSkills: s.refreshSkills,
       pushToast: s.pushToast,
+      settings: s.settings,
     })),
   );
   const [query, setQuery] = useState('');
@@ -279,6 +288,20 @@ function MarketplaceTab() {
   // network is only touched when the user clicks Refresh.
   const [vaizer, setVaizer] = useState<VaizerCatalog | null>(null);
   const [vaizerBusy, setVaizerBusy] = useState(false);
+  // GitHub shelves: shown from the cache; the network is used only on Load /
+  // Refresh, Add from GitHub, Search GitHub, and Install.
+  const [listings, setListings] = useState<SkillSourceListing[]>([]);
+  const [loadingRepo, setLoadingRepo] = useState<string | null>(null);
+  // Skills seen in a URL preview or search, kept so they can be selected.
+  const [extra, setExtra] = useState<MarketplaceSkill[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [search, setSearch] = useState<SkillSearchResult | null>(null);
+  const [searching, setSearching] = useState(false);
+
+  const sourcesKey = JSON.stringify(skillSources(settings));
+  useEffect(() => {
+    window.nekko.listSkillSources?.().then(setListings).catch(() => {});
+  }, [sourcesKey]);
 
   useEffect(() => {
     window.nekko.skillTargets().then(setTargets).catch(() => setTargets([]));
@@ -302,6 +325,60 @@ function MarketplaceTab() {
       );
     } finally {
       setVaizerBusy(false);
+    }
+  };
+
+  const loadSource = async (repo: string) => {
+    setLoadingRepo(repo);
+    try {
+      const next = await window.nekko.listSkillSources(repo);
+      setListings(next);
+      const hit = next.find((l) => l.source.repo === repo);
+      if (hit?.state === 'error') pushToast('error', hit.error ?? `Could not load ${repo}.`);
+    } catch (e) {
+      pushToast('error', `Could not load ${repo}: ${(e as Error).message}`);
+    } finally {
+      setLoadingRepo(null);
+    }
+  };
+
+  const configured = skillSources(settings);
+  const setSources = async (next: typeof configured) => {
+    try {
+      const saved = await window.nekko.updateSettings({ skillSources: next });
+      useStore.setState({ settings: saved, settingsError: null });
+    } catch (e) {
+      pushToast('error', `Could not save shelves: ${(e as Error).message}`);
+    }
+  };
+  const addShelf = async (repo: string) => {
+    if (configured.some((c) => c.repo.toLowerCase() === repo.toLowerCase())) return pushToast('info', `${repo} is already a shelf.`);
+    await setSources([...configured, { repo }]);
+    pushToast('success', `Added ${repo} as a shelf.`);
+  };
+  const removeShelf = async (repo: string) => {
+    await setSources(configured.filter((c) => c.repo !== repo));
+    pushToast('info', `Removed the ${repo} shelf. Installed skills stay installed.`);
+  };
+
+  const remember = (skills: RemoteSkill[]) => {
+    const add = skills.map((r) => remoteToMarketSkill(r));
+    setExtra((prev) => [...add, ...prev.filter((p) => !add.some((a) => a.id === p.id))]);
+    return add;
+  };
+
+  const runSearch = async () => {
+    const q = query.trim();
+    if (!q || searching) return;
+    setSearching(true);
+    try {
+      const res = await window.nekko.searchSkills(q);
+      remember(res.skills);
+      setSearch(res);
+    } catch (e) {
+      pushToast('error', `GitHub search failed: ${(e as Error).message}`);
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -329,11 +406,21 @@ function MarketplaceTab() {
     const m = new Map<string, MarketplaceSkill>();
     for (const r of installedSkills) if (r.skill) m.set(r.skillId, r.skill);
     for (const s of vaizerSkills) m.set(s.id, s);
+    for (const l of listings) for (const r of l.skills) if (!m.has(r.id)) m.set(r.id, remoteToMarketSkill(r));
+    for (const s of extra) if (!m.has(s.id)) m.set(s.id, s);
     return m;
-  }, [installedSkills, vaizerSkills]);
+  }, [installedSkills, vaizerSkills, listings, extra]);
   const resolve = (id: string): MarketplaceSkill | undefined => getMarketSkill(id) ?? byId.get(id);
 
-  const shelves: Array<{ key: string; title: string; hint: string; items: MarketplaceSkill[] }> = [
+  const githubShelves = listings.map((l) => ({
+    key: `gh:${l.source.repo}`,
+    title: l.source.label ?? l.source.repo,
+    hint: `github.com/${l.source.repo}${l.stars != null ? ` · ★ ${fmtMetric(l.stars)}` : ''}`,
+    items: l.skills.filter((r) => matchRemoteSkill(r, query)).map((r) => byId.get(r.id) ?? remoteToMarketSkill(r)),
+    listing: l,
+  }));
+
+  const shelves: Array<{ key: string; title: string; hint: string; items: MarketplaceSkill[]; listing?: SkillSourceListing }> = [
     {
       key: 'installed',
       title: 'Installed',
@@ -343,6 +430,7 @@ function MarketplaceTab() {
     { key: 'nekko-agent', title: 'Nekko Labs', hint: 'First-party skills we maintain', items: NEKKO_SKILLS.filter(matches) },
     { key: 'vaizer', title: 'Vaizer', hint: 'The public skills hub, official + community', items: vaizerSkills.filter(matches) },
     { key: 'popular', title: 'Popular online', hint: 'Ranked by public stars/installs', items: popular.filter(matches) },
+    ...githubShelves,
   ];
 
   const selected = resolve(selectedId) ?? shelves.flatMap((s) => s.items)[0];
@@ -357,6 +445,31 @@ function MarketplaceTab() {
       if (selected.source === 'vaizer') {
         const md = await window.nekko.vaizerSkillMd(selected.name).catch(() => null);
         payload = md ? { ...selected, instructions: splitSkillMd(md).body, markdown: md } : selected;
+      } else if (selected.source === 'github') {
+        // Always the verbatim, current SKILL.md from its own repository.
+        if (selected.blocked) {
+          pushToast('error', selected.blocked);
+          return;
+        }
+        if (!selected.markdown) {
+          const remote = selected.remote;
+          if (!remote) throw new Error('Unknown GitHub location.');
+          const res = await window.nekko.fetchRemoteSkill({
+            id: selected.id,
+            name: selected.name,
+            description: selected.description,
+            sourceUrl: selected.url ?? '',
+            license: selected.license,
+            extraFiles: selected.extraFiles,
+            stars: selected.stars,
+            ...remote,
+          });
+          if (!res.ok) {
+            pushToast('error', res.message);
+            return;
+          }
+          payload = res.skill;
+        } else payload = selected;
       }
       const res = await window.nekko.installSkill(selected.id, target, payload);
       if (res.ok) {
@@ -397,10 +510,55 @@ function MarketplaceTab() {
             className="input mt-3"
             placeholder="Search the marketplace…"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              if (!e.target.value.trim()) setSearch(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void runSearch();
+            }}
           />
+          <div className="mt-2 flex items-center gap-3 text-[11px]">
+            <button
+              className="text-accent hover:underline disabled:opacity-50"
+              disabled={!query.trim() || searching}
+              onClick={() => void runSearch()}
+              title="Search GitHub for more skills (network)"
+            >
+              {searching ? 'Searching GitHub…' : 'Search GitHub ↵'}
+            </button>
+            <button className="text-accent hover:underline" onClick={() => setShowAdd((v) => !v)} aria-expanded={showAdd}>
+              {showAdd ? 'Close' : '+ Add from GitHub'}
+            </button>
+          </div>
+          {showAdd && (
+            <AddFromGitHub
+              shelves={configured.map((c) => c.repo.toLowerCase())}
+              onAddShelf={(repo) => void addShelf(repo)}
+              onFound={(skills) => {
+                const added = remember(skills);
+                if (added[0]) setSelectedId(added[0].id);
+              }}
+            />
+          )}
         </div>
         <div className="flex-1 overflow-y-auto px-3 pb-4">
+          {search && (
+            <SearchResults
+              result={search}
+              selectedId={selected?.id}
+              resolve={resolve}
+              onSelect={setSelectedId}
+              onOpenRepo={async (repo) => {
+                const res = await window.nekko.previewSkillUrl(repo);
+                if (!res.ok) return pushToast('error', res.message ?? `No skills found in ${repo}.`);
+                const added = remember(res.skills);
+                if (added[0]) setSelectedId(added[0].id);
+                setSearch((prev) => (prev ? { ...prev, skills: [...res.skills, ...prev.skills.filter((p) => !res.skills.some((r) => r.id === p.id))] } : prev));
+              }}
+              onClose={() => setSearch(null)}
+            />
+          )}
           {shelves.map((shelf) => (
             <div key={shelf.key} className="mb-4">
               <div className="flex items-center justify-between px-2">
@@ -424,16 +582,50 @@ function MarketplaceTab() {
                     </button>
                   </span>
                 )}
+                {shelf.listing && (
+                  <span className="flex items-center gap-2">
+                    <button
+                      className="text-[10px] text-accent hover:underline disabled:opacity-50"
+                      disabled={loadingRepo !== null}
+                      onClick={() => void loadSource(shelf.listing!.source.repo)}
+                      title={`Fetch the skills in ${shelf.listing.source.repo} from GitHub (network)`}
+                    >
+                      {loadingRepo === shelf.listing.source.repo ? 'Loading…' : shelf.listing.state === 'none' ? '⤓ Load' : '↻ Refresh'}
+                    </button>
+                    <button
+                      className="text-[10px] text-accent hover:underline"
+                      onClick={() => window.nekko.openPath(`https://github.com/${shelf.listing!.source.repo}`)}
+                      title={`Open ${shelf.listing.source.repo} on GitHub`}
+                    >
+                      ↗
+                    </button>
+                    <button
+                      className="text-[10px] text-ink-faint hover:text-ink"
+                      onClick={() => void removeShelf(shelf.listing!.source.repo)}
+                      title="Remove this shelf (installed skills stay installed)"
+                      aria-label={`Remove the ${shelf.listing.source.repo} shelf`}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
               </div>
               <p className="px-2 pb-1 text-[10.5px] text-ink-faint">
                 {shelf.hint}
                 {shelf.key === 'vaizer' && vaizer && (
                   <span> · {vaizer.source === 'live' ? 'live' : vaizer.source === 'cached' ? 'cached' : 'offline snapshot'}</span>
                 )}
+                {shelf.listing && shelf.listing.state !== 'none' && (
+                  <span> · {shelf.listing.state === 'error' ? 'could not refresh' : shelf.listing.state} · {shelf.listing.skills.length} skills</span>
+                )}
               </p>
               {shelf.items.length === 0 && (
                 <p className="px-2 py-1 text-[11.5px] text-ink-faint">
-                  {shelf.key === 'installed' ? 'Nothing installed yet, pick a skill below.' : 'No matches.'}
+                  {shelf.key === 'installed'
+                    ? 'Nothing installed yet, pick a skill below.'
+                    : shelf.listing?.state === 'none'
+                      ? 'Not loaded yet. Load reads this repository from GitHub.'
+                      : 'No matches.'}
                 </p>
               )}
               <div className="space-y-1">
@@ -452,7 +644,8 @@ function MarketplaceTab() {
                         <span className="shrink-0 rounded-full px-1.5 py-0 text-[9px]" style={{ background: 'var(--surface-2)', color: SOURCE_META[s.source].color }}>
                           {SOURCE_META[s.source].label}
                         </span>
-                        <TierChip tier={s.tier} />
+                        {s.source !== 'github' && <TierChip tier={s.tier} />}
+                        {s.blocked && <span className="shrink-0 text-[9px] text-ink-faint" title={s.blocked}>link only</span>}
                         {installs.length > 0 && <span className="chip px-1.5! py-0! text-[9px]">✓ {installs.length}</span>}
                       </div>
                       <p className="mt-0.5 line-clamp-2 text-[11.5px] text-ink-soft">{s.description}</p>
@@ -487,13 +680,26 @@ function MarketplaceTab() {
                   <TierChip tier={selected.tier} />
                 </div>
                 <p className="mt-1 text-[13px] text-ink-soft">{selected.description}</p>
-                {selected.source === 'vaizer' && selected.tier === 'community' && (
+                {selected.tier === 'community' && !selected.blocked && (
                   <p className="mt-1.5 rounded-lg px-2.5 py-1.5 text-[11.5px]" style={{ background: 'color-mix(in srgb, var(--warning) 12%, transparent)', color: 'var(--warning)' }}>
-                    Community skill: it runs with your machine's permissions. Read its instructions before installing.
+                    {selected.source === 'github'
+                      ? "From GitHub, not reviewed by Nekko Labs: it runs with your machine's permissions. Read its instructions before installing."
+                      : "Community skill: it runs with your machine's permissions. Read its instructions before installing."}
+                  </p>
+                )}
+                {selected.blocked && (
+                  <p className="mt-1.5 rounded-lg px-2.5 py-1.5 text-[11.5px]" style={{ background: 'var(--surface-2)', color: 'var(--ink-soft)' }}>
+                    {selected.blocked} Open it on GitHub to use it from its source.
+                  </p>
+                )}
+                {selected.extraFiles && !selected.blocked && (
+                  <p className="mt-1.5 text-[11px] text-ink-faint">
+                    This skill's folder also ships scripts or reference files. Only SKILL.md is installed, so steps that rely on those files may not work.
                   </p>
                 )}
                 <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-ink-faint">
                   <span>by {selected.author}</span>
+                  {selected.license && <span>license: {selected.license}</span>}
                   {selected.stars != null && <span>★ {fmtMetric(selected.stars)} stars</span>}
                   {selected.installs != null && <span>⤓ {fmtMetric(selected.installs)} installs</span>}
                   {selected.url && (
@@ -550,7 +756,7 @@ function MarketplaceTab() {
                         Remove
                       </button>
                     ) : t.available ? (
-                      <button className="btn btn-outline px-2! py-0.5! text-[11px]" disabled={busy} onClick={() => install(t.id)}>
+                      <button className="btn btn-outline px-2! py-0.5! text-[11px]" disabled={busy || !!selected.blocked} onClick={() => install(t.id)}>
                         Install
                       </button>
                     ) : (
@@ -565,13 +771,175 @@ function MarketplaceTab() {
           <WorkflowExplainer workflow={marketWorkflow(selected)}>
             <div className="card mt-6 max-w-2xl p-4">
               <p className="text-[12px] font-medium">What it tells the agent</p>
-              <p className="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-ink-soft">{selected.instructions}</p>
+              {selected.source === 'github' && !selected.markdown ? (
+                <RemoteInstructions skill={selected} />
+              ) : (
+                <p className="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-ink-soft">{selected.instructions}</p>
+              )}
             </div>
           </WorkflowExplainer>
         </section>
       )}
     </div>
   );
+}
+
+/** Paste a GitHub URL or owner/repo and list the skills it holds (nothing is installed). */
+function AddFromGitHub({
+  onFound,
+  shelves,
+  onAddShelf,
+}: {
+  onFound: (skills: RemoteSkill[]) => void;
+  shelves: string[];
+  onAddShelf: (repo: string) => void;
+}) {
+  const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<SkillPreview | null>(null);
+  const go = async () => {
+    if (!url.trim() || busy) return;
+    setBusy(true);
+    try {
+      const res = await window.nekko.previewSkillUrl(url.trim());
+      setResult(res);
+      if (res.ok) onFound(res.skills);
+    } catch (e) {
+      setResult({ ok: false, message: (e as Error).message, skills: [] });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-2 rounded-lg border border-line p-2.5">
+      <p className="text-[11px] text-ink-faint">A skill folder or a whole repository. You see it before anything is installed.</p>
+      <div className="mt-1.5 flex gap-1.5">
+        <input
+          className="input flex-1 text-[12px]"
+          placeholder="github.com/owner/repo/tree/main/skills/name"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void go();
+          }}
+          aria-label="GitHub URL or owner/repo"
+        />
+        <button className="btn btn-outline px-2! py-0.5! text-[11px]" disabled={busy || !url.trim()} onClick={() => void go()}>
+          {busy ? '…' : 'Find'}
+        </button>
+      </div>
+      {result && (
+        <p className="mt-1.5 text-[11px]" style={{ color: result.ok ? 'var(--ink-soft)' : 'var(--danger, #f87171)' }} role="status">
+          {result.ok ? `${result.skills.length} skill${result.skills.length === 1 ? '' : 's'} found in ${result.repo}.` : result.message}
+        </p>
+      )}
+      {result?.ok && result.skills.length > 1 && (
+        <div className="mt-1 flex max-h-32 flex-wrap gap-1 overflow-y-auto">
+          {result.skills.map((r) => (
+            <button key={r.id} className="chip px-1.5! py-0! font-mono text-[10.5px]" onClick={() => onFound([r])} title={r.description}>
+              /{r.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {result?.ok && result.repo && !shelves.includes(result.repo.toLowerCase()) && (
+        <button className="mt-1 text-[11px] text-accent hover:underline" onClick={() => onAddShelf(result.repo!)}>
+          + Keep {result.repo} as a shelf
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** GitHub search results: skills (with a token) or repositories that may hold skills. */
+function SearchResults({
+  result,
+  selectedId,
+  resolve,
+  onSelect,
+  onOpenRepo,
+  onClose,
+}: {
+  result: SkillSearchResult;
+  selectedId?: string;
+  resolve: (id: string) => MarketplaceSkill | undefined;
+  onSelect: (id: string) => void;
+  onOpenRepo: (repo: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [opening, setOpening] = useState<string | null>(null);
+  return (
+    <div className="mb-4">
+      <div className="flex items-center justify-between px-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Search results · GitHub</p>
+        <button className="text-[10px] text-accent hover:underline" onClick={onClose}>
+          Clear
+        </button>
+      </div>
+      {result.note && <p className="px-2 pb-1 text-[10.5px] text-ink-faint">{result.note}</p>}
+      {result.skills.length === 0 && result.repos.length === 0 && <p className="px-2 py-1 text-[11.5px] text-ink-faint">Nothing found.</p>}
+      <div className="space-y-1">
+        {result.skills.map((r) => {
+          const s = resolve(r.id);
+          return (
+            <button
+              key={r.id}
+              className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${selectedId === r.id ? 'border-accent' : 'border-transparent hover:bg-surface-2'}`}
+              onClick={() => onSelect(r.id)}
+            >
+              <span className="font-mono text-[13px] font-medium">/{r.name}</span>
+              <p className="mt-0.5 line-clamp-2 text-[11.5px] text-ink-soft">{s?.description || r.description || r.sourceUrl.replace(/^https:\/\//, '')}</p>
+              <p className="mt-1 text-[10px] text-ink-faint">{r.repo}</p>
+            </button>
+          );
+        })}
+        {result.repos.map((r) => (
+          <div key={r.repo} className="rounded-lg px-2.5 py-2 hover:bg-surface-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-[12.5px] font-medium">{r.repo}</span>
+              <button
+                className="shrink-0 text-[10.5px] text-accent hover:underline disabled:opacity-50"
+                disabled={opening !== null}
+                onClick={async () => {
+                  setOpening(r.repo);
+                  try {
+                    await onOpenRepo(r.repo);
+                  } finally {
+                    setOpening(null);
+                  }
+                }}
+              >
+                {opening === r.repo ? 'Reading…' : 'List skills'}
+              </button>
+            </div>
+            {r.description && <p className="mt-0.5 line-clamp-2 text-[11px] text-ink-soft">{r.description}</p>}
+            {r.stars != null && <p className="mt-0.5 text-[10px] text-ink-faint">★ {fmtMetric(r.stars)}</p>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** A GitHub skill's instructions, fetched from its repository when it is opened. */
+function RemoteInstructions({ skill }: { skill: MarketplaceSkill }) {
+  const [state, setState] = useState<{ id: string; text?: string; error?: string } | null>(null);
+  useEffect(() => {
+    if (!skill.remote || skill.blocked) return;
+    let live = true;
+    setState({ id: skill.id });
+    window.nekko
+      .fetchRemoteSkill({ id: skill.id, name: skill.name, description: skill.description, sourceUrl: skill.url ?? '', ...skill.remote })
+      .then((res) => live && setState(res.ok ? { id: skill.id, text: res.skill.instructions } : { id: skill.id, error: res.message }))
+      .catch((e) => live && setState({ id: skill.id, error: (e as Error).message }));
+    return () => {
+      live = false;
+    };
+  }, [skill.id, skill.blocked]);
+  if (skill.blocked) return <p className="mt-1 text-[12px] text-ink-faint">Not shown: {skill.blocked}</p>;
+  if (!state || state.id !== skill.id || (!state.text && !state.error)) return <p className="mt-1 text-[12px] text-ink-faint">Reading SKILL.md from GitHub…</p>;
+  if (state.error) return <p className="mt-1 text-[12px] text-ink-faint">{state.error}</p>;
+  return <p className="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-ink-soft">{state.text}</p>;
 }
 
 /**

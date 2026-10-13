@@ -482,6 +482,10 @@ function makeWebClient(): NekkoApi {
     installSkill: (skillId, target, payload) => call(IpcChannels.skillInstall, skillId, target, payload),
     uninstallSkill: (skillId, target) => call(IpcChannels.skillUninstall, skillId, target),
     vaizerCatalog: (refresh) => call(IpcChannels.vaizerCatalog, refresh),
+    listSkillSources: (refresh) => call(IpcChannels.skillSourcesList, refresh),
+    previewSkillUrl: (input) => call(IpcChannels.skillSourcesPreview, input),
+    fetchRemoteSkill: (skill) => call(IpcChannels.skillSourcesFetch, skill),
+    searchSkills: (query) => call(IpcChannels.skillSourcesSearch, query),
     vaizerSkillMd: (slug) => call(IpcChannels.vaizerSkillMd, slug),
 
     listTasks: () => call(IpcChannels.tasksList),

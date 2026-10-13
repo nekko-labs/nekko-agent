@@ -254,6 +254,10 @@ const api: NekkoApi = {
   installSkill: (skillId, target, payload) => inv(IpcChannels.skillInstall, skillId, target, payload),
   uninstallSkill: (skillId, target) => inv(IpcChannels.skillUninstall, skillId, target),
   vaizerCatalog: (refresh) => inv(IpcChannels.vaizerCatalog, refresh),
+  listSkillSources: (refresh) => inv(IpcChannels.skillSourcesList, refresh),
+  previewSkillUrl: (input) => inv(IpcChannels.skillSourcesPreview, input),
+  fetchRemoteSkill: (skill) => inv(IpcChannels.skillSourcesFetch, skill),
+  searchSkills: (query) => inv(IpcChannels.skillSourcesSearch, query),
   vaizerSkillMd: (slug) => inv(IpcChannels.vaizerSkillMd, slug),
 
   listTasks: () => inv(IpcChannels.tasksList),

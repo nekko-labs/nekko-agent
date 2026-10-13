@@ -323,6 +323,10 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.skillUninstall]: ([id, target]) => host.uninstallSkill(id, target),
     [C.vaizerCatalog]: ([refresh]) => host.vaizerCatalog(refresh),
     [C.vaizerSkillMd]: ([slug]) => host.vaizerSkillMd(slug),
+    [C.skillSourcesList]: ([refresh]) => host.listSkillSources(refresh),
+    [C.skillSourcesPreview]: ([input]) => host.previewSkillUrl(input),
+    [C.skillSourcesFetch]: ([skill]) => host.fetchRemoteSkill(skill),
+    [C.skillSourcesSearch]: ([query]) => host.searchSkills(query),
 
     [C.tasksList]: () => host.listTasks(),
     [C.taskCreate]: ([task]) => host.createTask(task),
