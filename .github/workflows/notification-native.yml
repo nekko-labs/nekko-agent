@@ -1,0 +1,52 @@
+name: Disposable Windows native notification acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'apps/desktop/src/main/*notification*'
+      - 'apps/desktop/src/main/nativeNotifications*'
+      - 'apps/desktop/src/notification*'
+      - 'apps/desktop/scripts/notification-*'
+      - '.github/workflows/notification-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-toast:
+    # Never move OS interaction onto a self-hosted runner or local user desktop.
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      NEKKO_NATIVE_NOTIFICATION_CI: disposable-desktop
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify exact disposable-runner safety gates
+        run: node --test apps/desktop/scripts/notification-native-ci.test.cjs
+      - name: Native toast delivery, OS click, and isolated fixture foreground
+        run: node apps/desktop/scripts/notification-native-ci.cjs
+      - name: Record unsupported desktop as a blocker, never a skipped pass
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path notification-native-results/results.json) {
+            $result = Get-Content notification-native-results/results.json -Raw | ConvertFrom-Json
+            "## Native toast acceptance: $($result.status)" >> $env:GITHUB_STEP_SUMMARY
+            "OS delivery: $($result.osDelivery); Electron click: $($result.clicked); OS foreground: $($result.focused)" >> $env:GITHUB_STEP_SUMMARY
+            if ($result.blocker) { $result.blocker >> $env:GITHUB_STEP_SUMMARY }
+          } else {
+            'Native acceptance not proven: probe did not produce results.json. Inspect execution/timeout logs.' >> $env:GITHUB_STEP_SUMMARY
+          }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: disposable-windows-native-notification
+          path: notification-native-results/
+          if-no-files-found: error
+          retention-days: 14
