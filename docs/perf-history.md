@@ -169,6 +169,19 @@ Source: [#514](https://github.com/nekko-labs/nekko-agent/pull/514),
 [latest perf job](https://github.com/nekko-labs/nekko-agent/actions/runs/38360444132/job/115173108735),
 and its preceding run's saved `.shots/perf-prev/perf-report.{md,json}`,
 `profile-base/` and `profile-head/` reports, CPU profiles and timeline traces.
+
+### #516 Group drag fix: CI latency diagnostics (2026-10-13)
+Area: renderer / perf harness. Result: inconclusive, mixed diagnostic results.
+Conditions: GitHub Actions Ubuntu shared runner, CI run 38378954525 attempt 1. Same-run head/base diagnostics used `--quick --only latency --profile --timeline --no-gpu`; 40 composer samples, 10 warm switches, 11 cold switches. Profiling differs from the full gate, so these are not proof of a regression or improvement.
+
+| Diagnostic p95 metric | Unchanged base | PR head |
+|---|---|---|
+| Composer keypress to paint | 22.0 ms | 25.1 ms |
+| Warm chat switch | 26.8 ms | 22.3 ms |
+| Cold chat frame painted | 28.4 ms | 26.4 ms |
+
+The full head gate's best streaming frame-work p95 was 10.4 ms against a 10 ms gate (198 samples). The latency-only base diagnostic skips this metric, so no matched base number is available. Both base and head diagnostics missed warm/cold switch budgets. A single failed-job rerun was requested to distinguish runner variability; no budgets were relaxed. The group-drag change does not alter streaming logic, but causality remains unverified. Source: [PR #516](https://github.com/nekko-labs/nekko-agent/pull/516), [CI logs](https://github.com/nekko-labs/nekko-agent/actions/runs/38378954525/job/115234283340).
+
 ### #512 Transcript identity lookup and failed stream diagnostics (2026-10-13)
 Area: renderer, perf harness. Result: improvement (projection), hosted failure unresolved
 Conditions: Windows, Ryzen 9 9950X3D, Node 24.1.0; projection benchmark uses 1,000 alternating messages, 100 warm-up batches then 1,000 samples of ten folds each. Streaming uses HeadlessChrome/151.0.7922.34, mandatory release nekkod built from this branch (same daemon for all three renderer variants), 1440x1000, no GPU, 300 tokens/s, six seconds, one run per variant.
@@ -696,3 +709,8 @@ Base -> head stream-frame-work: p50 **5.91 -> 5.33 ms**, p95 **8.62 -> 7.5 ms**,
 Measurement fix: frames is a valid selector, but its existing trace was discarded unless --dump-trace was supplied; --timeline alone saved nothing. Save that already collected trace as streaming.trace.json for --timeline/--profile. Add --dump-trace to both CI diagnostics so the unchanged base harness also retains trace.json. Keep full-gate command, sampling, budgets and failure intact. Hide the perf server child on Windows. An initial full Chromium launch failed with an exited launcher and replacement processes; cleaned up only those owned scratch-profile trees, then used the installed headless shell. No samples from that failed attempt. No foreground app or user data used.
 
 Evidence (local, untracked): .shots/perf-stream-local/{base,head}-timeline/perf-report.json and streaming.trace.json, comparison.json and build/run logs. Next: matched Linux release-daemon base/head stream traces with this retained attribution before claiming baseline or fixing product code.
+PR #516 follow-up: run 38378954525 attempt 2 passed Ubuntu daemon tests but streaming frame-work p95 remained 10.32 ms (three attempts: 10.32 / 10.44 / 11.01 ms), against 10 ms. The gap spacer was replaced with animated group padding, removing the idle DOM element entirely while retaining the insertion geometry. This is a cost-removal candidate, not a measured improvement; new-head CI must verify it.
+
+PR #516 padding candidate (a6c8d43f), run 38385871207, Linux EPYC7763/Chrome154: full-head streaming p95 **10.20 ms**, attempts **10.20 / 11.11 / 10.95 ms** (198 frames, p50 7.84 ms). Matched profiled 3-second streaming diagnostics: head p95 **11.54 ms**, base **13.02 ms** (93/96 frames, p50 9.05/9.01 ms). Both fail the unchanged 10 ms gate. CPU profiles are dominated by unattributed/native program time (987.761/990.768 ms); named/anonymous JS self time is99.475/103.749 ms. These diagnostics do not establish causality or a fix. Add --dump-trace to existing head/base diagnostics because CPU profiles alone cannot attribute style/layout/paint; --timeline did not save a streaming trace. No budgets changed.
+
+PR #516 trace follow-up, CI38388615665: profiled head/base streaming p95 11.6/12.4 ms,93/95frames,3seconds300tok/s, Intel Xeon Platinum8573C/Linux/Chrome154. Saved traces show document-root non-partial layout with1203 objects on both. Head/base trace duration sums: Paint152.724/151.262 ms, UpdateLayoutTree116.003/118.212 ms, Layout77.419/76.672 ms. Nested trace sums are not disjoint CPU totals. Shared baseline rendering work confirmed; invalidation cause and corrective optimization remain unverified. Gate unchanged.

@@ -400,6 +400,10 @@ a GitHub issue.
 Questions or ideas? Open an issue on
 [GitHub](https://github.com/nekko-labs/nekko-agent/issues).
 
+### Reordering project groups
+
+Drag a project group header in the agent panel onto another group to place it before that group. A quick gap opens above the hovered group (beside it in the horizontal panel) and closes when you move away. You can drop on either the header or an agent card in that group. The project order is saved. Dragging an individual agent card still reorders or moves that agent, rather than the whole group.
+
 ---
 
 <!-- https://nekkoagent.com/docs/local-models -->
