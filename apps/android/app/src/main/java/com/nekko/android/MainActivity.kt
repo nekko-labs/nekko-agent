@@ -1,13 +1,20 @@
 package com.nekko.android
 
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.ui.NekkoNavHost
 import com.nekko.android.ui.theme.NekkoTheme
+import com.nekko.android.ui.theme.ThemeResolver
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /** The only activity. Deep links (pairing QR from the system camera) arrive here too. */
@@ -20,10 +27,24 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // A recreated activity must not replay the link it was first opened with.
         if (savedInstanceState == null) handle(intent)
-        val repo = (application as NekkoApp).computers
+        val app = application as NekkoApp
+        val repo = app.computers
         setContent {
-            NekkoTheme {
-                NekkoNavHost(repo = repo, incomingLink = incomingLink, onLinkHandled = { incomingLink.value = null })
+            val choice by app.themePrefs.choice.collectAsStateWithLifecycle()
+            val computer by repo.appearance.collectAsStateWithLifecycle()
+            val look = ThemeResolver.resolve(choice, computer, isSystemInDarkTheme())
+            // Status and navigation bar icons follow the app's theme, not only the phone's.
+            LaunchedEffect(look.dark) {
+                val bars = if (look.dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+            }
+            NekkoTheme(dark = look.dark, accent = look.accent) {
+                NekkoNavHost(
+                    repo = repo,
+                    themePrefs = app.themePrefs,
+                    incomingLink = incomingLink,
+                    onLinkHandled = { incomingLink.value = null },
+                )
             }
         }
     }

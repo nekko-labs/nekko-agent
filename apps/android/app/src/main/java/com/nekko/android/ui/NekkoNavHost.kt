@@ -15,11 +15,13 @@ import androidx.navigation.navArgument
 import com.nekko.android.DeepLink
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
+import com.nekko.android.data.ThemePrefs
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.ChatsScreen
 import com.nekko.android.ui.screens.ComputersScreen
 import com.nekko.android.ui.screens.NewChatScreen
 import com.nekko.android.ui.screens.PairScreen
+import com.nekko.android.ui.screens.SettingsScreen
 import kotlinx.coroutines.flow.StateFlow
 
 object Routes {
@@ -28,6 +30,7 @@ object Routes {
     const val NEW = "new"
     const val PAIR = "pair?link={link}"
     const val COMPUTERS = "computers"
+    const val SETTINGS = "settings"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
@@ -36,6 +39,7 @@ object Routes {
 @Composable
 fun NekkoNavHost(
     repo: ComputersRepository,
+    themePrefs: ThemePrefs,
     incomingLink: StateFlow<DeepLink?>,
     onLinkHandled: () -> Unit,
     nav: NavHostController = rememberNavController(),
@@ -58,6 +62,7 @@ fun NekkoNavHost(
                 onNewChat = { nav.navigate(Routes.NEW) },
                 onPair = { nav.navigate(Routes.pair()) },
                 onComputers = { nav.navigate(Routes.COMPUTERS) },
+                onSettings = { nav.navigate(Routes.SETTINGS) },
             )
         }
         composable(Routes.CHAT, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
@@ -85,6 +90,9 @@ fun NekkoNavHost(
                 onBack = { nav.popBackStack() },
                 onPaired = { nav.backToChats() },
             )
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(repo = repo, themePrefs = themePrefs, onBack = { nav.popBackStack() })
         }
         composable(Routes.COMPUTERS) {
             ComputersScreen(

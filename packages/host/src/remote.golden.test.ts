@@ -276,6 +276,7 @@ it('runs the relay agent protocol frame for frame', async () => {
       { event: IpcEvents.trainingUpdated, payload: [] },
       { event: IpcEvents.workflowsUpdated, payload: { workflows: [], runs: [] } },
       { event: IpcEvents.limitsUpdated, payload: { tokenKey: 'claude:a', limits: { windows: [] } } },
+      { event: IpcEvents.appearanceUpdated, payload: { theme: 'dark', accent: '#fb923c' } },
       { event: IpcEvents.indexProgress, payload: { workspaceId: 'w1', done: 3, total: 9 } },
       { kick: 'phone-2' },
       { relay: { type: 'client-close', cid: 'c2' } },
@@ -322,6 +323,7 @@ it('runs the relay agent protocol frame for frame', async () => {
       relayedEvents: [
         IpcEvents.agentEvent, IpcEvents.indexProgress, IpcEvents.terminalEvent, IpcEvents.changesUpdated,
         IpcEvents.tasksUpdated, IpcEvents.trainingUpdated, IpcEvents.workflowsUpdated, IpcEvents.limitsUpdated,
+        IpcEvents.appearanceUpdated,
       ],
     });
   } finally {

@@ -32,6 +32,12 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > **Native apps.** The phone apps are moving to platform-native code: Kotlin / Jetpack Compose in
 > `apps/android` (pairing, chats, live replies, approvals and questions; no phone models yet) and
 > SwiftUI in `apps/ios`. The Expo app described below stays as the reference until they reach parity.
+>
+> The Android app looks like your desktop by default: **Settings → Appearance → Same as computer**
+> uses the computer's light or dark theme and its accent color, and follows a change on the
+> computer right away. Pick **Phone setting**, **Light** or **Dark** to choose on the phone instead;
+> that choice is kept on the phone. Only the theme, theme preset and the two accent colors are sent
+> for this (the `appearance:updated` event), never the rest of the computer's settings.
 
 The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
 small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
