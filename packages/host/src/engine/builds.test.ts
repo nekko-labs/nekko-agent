@@ -29,6 +29,11 @@ const apple: GpuStats = {
 const noGpu: GpuStats = { source: 'none', devices: [], totalMB: 0, usedMB: 0, freeMB: 0 };
 
 describe('build selection', () => {
+  it('offers nothing for an Intel Mac, a dropped platform', () => {
+    expect(buildsFor('darwin', 'x64', null)).toEqual([]);
+    expect(buildsFor('darwin', 'arm64', null).map((b) => b.id)).toEqual(['macos-arm64-metal']);
+  });
+
   it('picks CUDA on Windows and Linux with an NVIDIA card that can run it', () => {
     const ok = cudaSupportFrom('12.0, 617.14');
     expect(recommendedBuild('win32', 'x64', nvidia, [], ok)?.backend).toBe('cuda');

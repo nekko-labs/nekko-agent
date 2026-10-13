@@ -6,7 +6,7 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
 import { createHost, createDispatcher, defaultUserDataDir, flushAgentLogs, prepareUserDataRoot } from '@nekko-agent/host';
-import { brandEnv } from '@nekko-agent/shared';
+import { brandEnv, unsupportedPlatformReason } from '@nekko-agent/shared';
 import { runRelayAgent } from './relay-agent.js';
 import { runCli } from 'nekko-agent/run';
 import { isLoopbackHost, tokenMatches, validateBindSecurity } from './security.js';
@@ -106,6 +106,10 @@ async function main() {
     return;
   }
 
+  // Intel Macs were dropped (no engine daemon for them): refuse before
+  // anything starts. CLI subcommands above still reach a remote app (--url).
+  const unsupported = unsupportedPlatformReason(process.platform, process.arch);
+  if (unsupported) throw new Error(unsupported);
   prepareUserDataRoot();
 
   // Relay-agent mode: connect out to a relay instead of serving HTTP locally.

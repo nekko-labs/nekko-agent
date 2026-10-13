@@ -16,8 +16,9 @@ import { fileURLToPath } from 'node:url';
 /**
  * npm platform/arch → the Rust target the release workflow builds for it. No
  * Intel macOS: ONNX Runtime (ort-sys) has no prebuilt library for
- * x86_64-apple-darwin, and the desktop app ships arm64 only on macOS too. An
- * Intel Mac runs the web edition on the in-process engine.
+ * x86_64-apple-darwin, and the desktop app ships arm64 only on macOS too.
+ * Intel Macs are not a supported platform (dropped 2026-10-13); the server
+ * refuses to start there (unsupportedPlatformReason).
  */
 export const PLATFORMS = {
   'win32-x64': { os: 'win32', cpu: 'x64', target: 'x86_64-pc-windows-msvc', exe: 'nekkod.exe' },
