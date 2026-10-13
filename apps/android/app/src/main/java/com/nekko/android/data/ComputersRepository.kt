@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -68,6 +69,8 @@ class ComputersRepository(
     private val newId: () -> String = { UUID.randomUUID().toString() },
     private val now: () -> Long = System::currentTimeMillis,
     private val summariesDebounceMs: Long = 600,
+    /** One provider's model list may take this long, like the desktop picker (MODEL_LIST_TIMEOUT_MS). */
+    private val modelListTimeoutMs: Long = 6_000,
 ) {
     private val _state = MutableStateFlow(ComputersState())
     val state: StateFlow<ComputersState> = _state.asStateFlow()
@@ -141,7 +144,7 @@ class ComputersRepository(
             _state.update {
                 it.copy(
                     computers = next, activeId = activeId, summaries = emptyList(), providers = emptyList(),
-                    models = emptyMap(), workspaces = emptyList(), denied = if (wasActive) null else it.denied,
+                    models = emptyMap(), modelErrors = emptyMap(), workspaces = emptyList(), denied = if (wasActive) null else it.denied,
                 )
             }
             if (wasActive) activeId else null
@@ -158,7 +161,7 @@ class ComputersRepository(
         _state.update {
             it.copy(
                 activeId = id, conn = RelayState.CONNECTING, denied = null, connDetail = null,
-                summaries = emptyList(), providers = emptyList(), models = emptyMap(), activity = emptyMap(),
+                summaries = emptyList(), providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(),
                 lastError = null,
             )
         }
@@ -253,9 +256,36 @@ class ComputersRepository(
 
     suspend fun loadModels(providerId: String): List<ModelInfo> {
         _state.value.models[providerId]?.let { return it }
-        val list = ModelInfo.list(remote().call(Channels.MODELS_LIST, JsonPrimitive(providerId)))
-        _state.update { it.copy(models = it.models + (providerId to list)) }
+        val list = ModelInfo.list(remote().callWithTimeout(modelListTimeoutMs, Channels.MODELS_LIST, JsonPrimitive(providerId)))
+        _state.update { it.copy(models = it.models + (providerId to list), modelErrors = it.modelErrors - providerId) }
         return list
+    }
+
+    /**
+     * Every enabled provider's models on the computer, asked in parallel so the
+     * picker shows them all at once like the desktop's. A provider that fails or
+     * is slower than the desktop's limit is marked unreachable instead of holding
+     * up the others. [force] asks again for lists already loaded (Retry).
+     */
+    suspend fun loadAllModels(force: Boolean = false): List<ModelGroup> = coroutineScope {
+        val enabled = _state.value.providers.filter { it.enabled }
+        if (force) {
+            val ids = enabled.map { it.id }.toSet()
+            _state.update { it.copy(models = it.models - ids, modelErrors = it.modelErrors - ids) }
+        }
+        enabled.map { pr ->
+            async {
+                try {
+                    loadModels(pr.id)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    val why = if (e.message?.endsWith("timed out") == true) "Didn’t answer in time." else (e.message ?: "Couldn’t list its models.")
+                    _state.update { it.copy(modelErrors = it.modelErrors + (pr.id to why)) }
+                }
+            }
+        }.awaitAll()
+        modelGroups(_state.value)
     }
 
     private fun scheduleSummaries() {
@@ -328,3 +358,7 @@ class ComputersRepository(
         fun secretKey(id: String) = "nekko.computer.$id"
     }
 }
+
+/** The picker's groups: every enabled provider on the computer, with its models once listed. */
+fun modelGroups(s: ComputersState): List<ModelGroup> =
+    s.providers.filter { it.enabled }.map { pr -> ModelGroup(pr, s.models[pr.id], s.modelErrors[pr.id]) }

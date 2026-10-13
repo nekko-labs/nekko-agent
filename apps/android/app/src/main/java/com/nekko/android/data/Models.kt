@@ -54,6 +54,8 @@ data class ComputersState(
     val providers: List<PublicProvider> = emptyList(),
     val defaults: RemoteDefaults = RemoteDefaults(),
     val models: Map<String, List<ModelInfo>> = emptyMap(),
+    /** Why a provider's models could not be listed, by provider id. */
+    val modelErrors: Map<String, String> = emptyMap(),
     val workspaces: List<WorkspaceFolder> = emptyList(),
     /** Chats mid-run or waiting on an approval/answer, by session id. */
     val activity: Map<String, Activity> = emptyMap(),

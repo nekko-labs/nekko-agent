@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,8 +32,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -41,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,12 +55,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.ComputersRepository
+import com.nekko.android.data.ModelChoice
+import com.nekko.android.data.ModelGroup
+import com.nekko.android.data.ModelPick
+import com.nekko.android.data.modelGroups
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
-import com.nekko.protocol.AUTO_MODEL_ID
 import com.nekko.protocol.Channels
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.RelayState
@@ -81,40 +88,42 @@ fun NewChatScreen(
     val scope = rememberCoroutineScope()
     val active = c.active
     val online = c.conn == RelayState.ONLINE
-    val providers = c.providers.filter { it.enabled }
+    val groups = modelGroups(c)
 
-    var providerId by rememberSaveable { mutableStateOf(c.defaults.defaultProviderId) }
-    var modelId by rememberSaveable { mutableStateOf(c.defaults.defaultModelId?.takeIf { it != AUTO_MODEL_ID }) }
+    var pick by rememberSaveable(stateSaver = ModelPickSaver) { mutableStateOf<ModelPick?>(null) }
+    var touched by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
     var workspaceId by rememberSaveable { mutableStateOf<String?>(null) }
-    var models by remember { mutableStateOf<List<ModelInfo>?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    // Defaults may arrive after the screen opens (first refresh still running).
-    LaunchedEffect(c.defaults) {
-        if (providerId == null) providerId = c.defaults.defaultProviderId
-        if (modelId == null) modelId = c.defaults.defaultModelId?.takeIf { it != AUTO_MODEL_ID }
+    // The models are the computer's: ask every enabled provider there, in parallel.
+    LaunchedEffect(online, c.providers) {
+        if (online && c.providers.isNotEmpty()) {
+            try {
+                repo.loadAllModels()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Per-provider failures are in the state; a lost connection shows above.
+            }
+        }
     }
-    LaunchedEffect(online, providerId) {
-        val pid = providerId
-        if (!online || pid == null) return@LaunchedEffect
-        models = null
-        models = try {
-            repo.loadModels(pid)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            emptyList()
+    // Open on the computer's default, else the model of its latest chat, until the user picks.
+    LaunchedEffect(groups, c.defaults, c.summaries) {
+        if (!touched && (pick == null || !ModelChoice.exists(pick!!, groups))) {
+            pick = ModelChoice.initial(c.defaults, c.summaries, groups)
         }
     }
 
     val start: () -> Unit = start@{
-        val pid = providerId
-        val mid = modelId
-        if (pid == null || mid == null || mid == AUTO_MODEL_ID) {
+        val chosen = pick
+        if (chosen == null) {
             error = "Pick a model for this chat."
             return@start
         }
+        val pid = chosen.providerId
+        val mid = chosen.modelId
         busy = true
         error = null
         scope.launch {
@@ -172,40 +181,30 @@ fun NewChatScreen(
                         )
                     }
                     else -> NCard {
-                        Label(Icons.Filled.Memory, "Model")
-                        if (providers.isEmpty()) {
-                            Text("No providers are enabled on your computer.", style = MaterialTheme.typography.bodyMedium, color = p.inkFaint)
-                        }
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            providers.forEach { pr ->
-                                Chip(pr.label, pr.id == providerId) {
-                                    if (providerId != pr.id) {
-                                        providerId = pr.id
-                                        modelId = null
+                        Label(Icons.Filled.Memory, "Model · from ${active.name}")
+                        ModelList(
+                            groups = groups,
+                            favorites = c.defaults.favoriteModels,
+                            query = query,
+                            onQuery = { query = it },
+                            selected = pick,
+                            onPick = {
+                                pick = it
+                                touched = true
+                                error = null
+                            },
+                            onRetry = {
+                                scope.launch {
+                                    try {
+                                        repo.loadAllModels(force = true)
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (_: Exception) {
+                                        // Shown per provider.
                                     }
                                 }
-                            }
-                        }
-                        val list = models
-                        when {
-                            providerId == null -> Unit
-                            list == null -> CircularProgressIndicator(color = p.accent, modifier = Modifier.size(24.dp))
-                            list.isEmpty() -> Text(
-                                "No models found for this provider on your computer.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = p.inkFaint,
-                            )
-                            else -> Column(
-                                Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState()),
-                            ) {
-                                list.forEach { m ->
-                                    ModelRow(m, selected = m.id == modelId) {
-                                        modelId = m.id
-                                        error = null
-                                    }
-                                }
-                            }
-                        }
+                            },
+                        )
                         if (c.workspaces.isNotEmpty()) {
                             Label(Icons.Filled.Folder, "Folder")
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -256,8 +255,112 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
+/**
+ * Every enabled provider's models on the computer in one list, grouped by
+ * provider like the desktop picker, the computer's starred models first.
+ */
 @Composable
-private fun ModelRow(m: ModelInfo, selected: Boolean, onClick: () -> Unit) {
+private fun ModelList(
+    groups: List<ModelGroup>,
+    favorites: List<String>,
+    query: String,
+    onQuery: (String) -> Unit,
+    selected: ModelPick?,
+    onPick: (ModelPick) -> Unit,
+    onRetry: () -> Unit,
+) {
+    val p = Nekko.palette
+    if (groups.isEmpty()) {
+        Text(
+            "No model providers are switched on in Nekko Agent on your computer. Add or enable one in its Models settings.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = p.inkFaint,
+        )
+        return
+    }
+    val total = groups.sumOf { it.models?.size ?: 0 }
+    if (total > 8 || query.isNotEmpty()) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQuery,
+            singleLine = true,
+            placeholder = { Text("Search models") },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    val shown = ModelChoice.filter(groups, query)
+    val starred = if (query.isBlank()) ModelChoice.starred(groups, favorites) else emptyList()
+    Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+        if (starred.isNotEmpty()) {
+            GroupTitle("Starred")
+            starred.forEach { (pr, m) ->
+                val k = ModelPick(pr.id, m.id)
+                ModelRow(m, detail = pr.label, selected = k == selected) { onPick(k) }
+            }
+        }
+        shown.forEach { g ->
+            GroupTitle(g.provider.label)
+            val list = g.models
+            when {
+                g.error != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Couldn’t list its models. ${g.error}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = p.danger,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onRetry) { Text("Retry") }
+                }
+                list == null -> Row(
+                    Modifier.padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                    Text("Asking your computer…", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                }
+                list.isEmpty() -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "No models available. Is its server running?",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = p.inkFaint,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onRetry) { Text("Retry") }
+                }
+                else -> list.forEach { m ->
+                    val k = ModelPick(g.provider.id, m.id)
+                    ModelRow(m, detail = null, selected = k == selected) { onPick(k) }
+                }
+            }
+        }
+        if (shown.isEmpty()) {
+            Text("No models match “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = p.inkFaint)
+        }
+    }
+}
+
+@Composable
+private fun GroupTitle(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = Nekko.palette.inkFaint,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp, start = 8.dp),
+    )
+}
+
+/** Keeps the pick across rotation and theme changes. */
+private val ModelPickSaver = listSaver<ModelPick?, String>(
+    save = { if (it == null) emptyList() else listOf(it.providerId, it.modelId) },
+    restore = { if (it.size == 2) ModelPick(it[0], it[1]) else null },
+)
+
+@Composable
+private fun ModelRow(m: ModelInfo, detail: String?, selected: Boolean, onClick: () -> Unit) {
     val p = Nekko.palette
     Row(
         Modifier
@@ -270,7 +373,10 @@ private fun ModelRow(m: ModelInfo, selected: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(m.name, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(m.name, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
         if (m.loaded) Pill("loaded", Tone.SUCCESS)
         if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = p.accent, modifier = Modifier.size(18.dp))
     }

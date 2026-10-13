@@ -274,4 +274,44 @@ class ComputersRepositoryTest {
         assertEquals(1, remotes.last.channels().count { it == Channels.MODELS_LIST })
         assertEquals(JsonPrimitive("p"), remotes.last.calls.first { it.channel == Channels.MODELS_LIST }.args.single())
     }
+
+    @Test
+    fun `loadAllModels asks every enabled provider, keeps going past one that fails, and retries`() = runTest {
+        var cloudFails = true
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.PROVIDERS_LIST -> buildJsonArray {
+                    listOf("engine" to true, "cloud" to true, "off" to false).forEach { (id, on) ->
+                        add(buildJsonObject { put("id", id); put("kind", "openai-compat"); put("label", id.uppercase()); put("enabled", on) })
+                    }
+                }
+                Channels.MODELS_LIST -> when ((c.args.single() as JsonPrimitive).content) {
+                    "engine" -> buildJsonArray { add(buildJsonObject { put("id", "qwen"); put("providerId", "engine"); put("name", "Qwen") }) }
+                    "cloud" -> if (cloudFails) throw com.nekko.protocol.RelayException("models:list: timed out") else buildJsonArray {
+                        add(buildJsonObject { put("id", "opus"); put("providerId", "cloud"); put("name", "Opus") })
+                    }
+                    else -> error("a disabled provider must not be asked")
+                }
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals(3, repo.state.value.providers.size)
+
+        val groups = repo.loadAllModels()
+        assertEquals(listOf("engine", "cloud"), groups.map { it.provider.id })
+        assertEquals(listOf("qwen"), groups[0].models?.map { it.id })
+        assertNull(groups[1].models)
+        assertEquals("Didn’t answer in time.", groups[1].error)
+        // Each list gets the desktop picker's limit, not the two-minute default.
+        assertTrue(remotes.last.calls.filter { it.channel == Channels.MODELS_LIST }.all { it.timeoutMs == 6_000L })
+
+        cloudFails = false
+        val again = repo.loadAllModels(force = true)
+        assertEquals(listOf("opus"), again[1].models?.map { it.id })
+        assertNull(again[1].error)
+    }
 }
