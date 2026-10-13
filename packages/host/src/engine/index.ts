@@ -24,6 +24,7 @@ import type {
   ModelFolder,
   ModelFolderReport,
   ModelFolderSuggestion,
+  ResidentModel,
   StopResult,
 } from '@nekko-agent/shared';
 import { DEFAULT_ENGINE_SETTINGS, defaultContextTokens, engineBaseUrl, modelModality } from '@nekko-agent/shared';
@@ -120,6 +121,9 @@ export function createEngine(deps: EngineDeps) {
     : createEngineInstaller({ runtime: 'diffusion', engineDir: () => join(engineDir(), 'diffusion'), downloads, getGpuStats: deps.getGpuStats });
   const mlxRuntime = daemonRuntimes ? daemonMlxRuntime(daemonRuntimes) : createMlxRuntime({ dir: () => join(engineDir(), 'mlx'), downloads });
 
+  // The model server too: the daemon runs its policy over its own processes,
+  // and this host only asks it (`NEKKOD_OWNS` `server`).
+  const remote = daemonOwns('server') ? daemonCall() : undefined;
   const server = createEngineServer({
     settings: deps.settings,
     promptCaching: deps.promptCaching,
@@ -136,8 +140,16 @@ export function createEngine(deps: EngineDeps) {
       const install = await installer.detect();
       return install.backend !== undefined && install.backend !== 'cpu';
     },
-    daemon: engineDaemon(),
+    daemon: remote ? undefined : engineDaemon(),
   });
+  // What the daemon's server last said, for the callers that read it synchronously.
+  let remoteRunning = false;
+  let remoteResident: ResidentModel[] = [];
+  if (remote) {
+    const poll = () => void remote<boolean>('engine:running').then((r) => { remoteRunning = Boolean(r); }, () => {});
+    poll();
+    setInterval(poll, 3000).unref?.();
+  }
   const decisions = createDecisions({
     modelsDir,
     downloads,
@@ -149,7 +161,7 @@ export function createEngine(deps: EngineDeps) {
   });
 
   // A backend restarted under a daemon that kept serving picks its models up.
-  void server.reattach();
+  if (!remote) void server.reattach();
 
   /* ----------------------------------------------------- download follow-up */
 
@@ -298,6 +310,7 @@ export function createEngine(deps: EngineDeps) {
   /* --------------------------------------------------------------- serving */
 
   async function load(modelId: string, params: LoadParams): Promise<LoadResult> {
+    if (remote) return remote('engine:load', modelId, params);
     // Loading is the moment a user expects the engine to be up, so starting it
     // here beats making them press two buttons in the right order.
     if (!server.isRunning()) {
@@ -307,16 +320,20 @@ export function createEngine(deps: EngineDeps) {
     return server.load(modelId, params);
   }
 
-  async function status() {
+  async function status(): Promise<import('@nekko-agent/shared').EngineStatus> {
+    if (remote) {
+      const s = await remote<import('@nekko-agent/shared').EngineStatus>('engine:status');
+      remoteRunning = s.running;
+      remoteResident = s.resident;
+      return s;
+    }
     const install = await installer.detect();
     const state = server.status();
     const gpu = await deps.getGpuStats().catch(() => null);
     // What the "will it fit" chips compare against: VRAM when there is a GPU to
     // name, system RAM otherwise. Total, not free: the question is whether the
     // model can ever be served here, not whether it fits beside open apps.
-    const memory = gpu && gpu.devices.length > 0
-      ? { budgetBytes: gpu.totalMB * 1024 * 1024, kind: gpu.unified ? ('unified' as const) : ('vram' as const) }
-      : { budgetBytes: totalmem(), kind: 'ram' as const };
+    const memory = engineMemory(gpu, totalmem());
     return {
       install,
       diffusionInstall: await diffusionInstaller.detect(),
@@ -370,6 +387,12 @@ export function createEngine(deps: EngineDeps) {
   }
 
   async function start(): Promise<{ ok: boolean; message: string }> {
+    if (remote) {
+      // The daemon keeps the provider entry pointing at the engine itself.
+      const res = await remote<{ ok: boolean; message: string }>('engine:start');
+      if (res.ok) remoteRunning = true;
+      return res;
+    }
     const res = await server.start();
     if (res.ok) deps.onServing?.(engineBaseUrl(deps.settings()));
     return res;
@@ -398,10 +421,19 @@ export function createEngine(deps: EngineDeps) {
       request: import('@nekko-agent/shared').ImageGenerationRequest,
       onStage?: (stage: 'loading' | 'generating') => void,
     ): Promise<import('@nekko-agent/shared').ImageGenerationResult> => {
-      const { modelId, prompt, width, height, steps = 28, cfgScale = 4.5, seed = -1 } = request;
-      if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 20_000 || ![width, height].every(n => Number.isInteger(n) && n >= 256 && n <= 2048 && n % 64 === 0) || !Number.isInteger(steps) || steps < 1 || steps > 100 || !Number.isFinite(cfgScale) || cfgScale < 0 || cfgScale > 30 || !Number.isSafeInteger(seed) || seed < -1) throw new Error('Use a prompt, dimensions from 256 to 2048 in multiples of 64, 1 to 100 steps and CFG from 0 to 30.');
+      const { modelId } = request;
+      const body = imageGenerationBody(request);
+      if ('problem' in body) throw new Error(body.problem);
       const model = await library.find(modelId);
       if (model?.modality !== 'image') throw new Error('Choose an image-generation model.');
+      if (remote) {
+        // The daemon loads and generates; the stages are told from here.
+        if (!(await remote<string[]>('engine:loadedIds')).includes(modelId)) onStage?.('loading');
+        const loaded = await remote<LoadResult>('engine:load', modelId, model.preset ?? {});
+        if (!loaded.ok) throw new Error(loaded.message);
+        onStage?.('generating');
+        return remote('engine:generateImage', request);
+      }
       if (!server.loadedIds().includes(modelId)) onStage?.('loading');
       const started = await load(modelId, model.preset ?? {});
       if (!started.ok) throw new Error(started.message);
@@ -409,7 +441,7 @@ export function createEngine(deps: EngineDeps) {
       const key = deps.settings().apiKey;
       const res = await fetch(`${engineBaseUrl(deps.settings())}/images/generations`, {
         method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
-        body: JSON.stringify({ model: modelId, prompt: `${prompt}\n<sd_cpp_extra_args>${JSON.stringify({ sample_params: { sample_steps: steps, guidance: { txt_cfg: cfgScale } }, seed })}</sd_cpp_extra_args>`, size: `${width}x${height}`, n: 1, output_format: 'png' }),
+        body: body.body,
         signal: AbortSignal.timeout(30 * 60_000),
       });
       const result = await res.json() as import('@nekko-agent/shared').ImageGenerationResult & { error?: { message?: string } };
@@ -456,10 +488,16 @@ export function createEngine(deps: EngineDeps) {
     seedFolders,
     // server
     start,
-    stop: (): Promise<StopResult> => server.stop(),
+    stop: async (): Promise<StopResult> => {
+      if (!remote) return server.stop();
+      const res = await remote<StopResult>('engine:stop');
+      remoteRunning = false;
+      return res;
+    },
     load,
-    unload: (id: string) => server.unload(id),
-    setResidentTtl: (id: string, ttlSeconds: number) => {
+    unload: (id: string): Promise<LoadResult> => (remote ? remote('engine:unload', id) : server.unload(id)),
+    setResidentTtl: async (id: string, ttlSeconds: number): Promise<{ ok: boolean; message: string }> => {
+      if (remote) return remote('engine:residentTtl', id, ttlSeconds);
       const r = server.setResidentTtl(id, ttlSeconds);
       return { ok: r.ok, message: r.message ?? '' };
     },
@@ -471,9 +509,11 @@ export function createEngine(deps: EngineDeps) {
       return deps.saveSettings({ autoload: next });
     },
     status,
-    isRunning: () => server.isRunning(),
-    resident: () => server.resident(),
-    saveSettings: async (patch: Partial<EngineSettings>) => {
+    isRunning: () => (remote ? remoteRunning : server.isRunning()),
+    resident: () => (remote ? remoteResident : server.resident()),
+    saveSettings: async (patch: Partial<EngineSettings>): Promise<EngineSettings> => {
+      // The daemon saves it and re-serves its listener when the endpoint changed.
+      if (remote) return remote('engine:settings', patch);
       const next = await deps.saveSettings(patch);
       // The port and the binding are read when the socket is opened, so a change
       // to either only takes effect on the next start. Restarting here rather
@@ -482,7 +522,7 @@ export function createEngine(deps: EngineDeps) {
       if (server.isRunning() && server.servedByDaemon()) {
         // The daemon's listener holds the key and CORS list as well, so any
         // endpoint setting re-serves; loaded models stay loaded.
-        if (endpoint || patch.apiKey !== undefined || patch.corsOrigins !== undefined) await server.reconfigure();
+        if (reservesEndpoint(patch)) await server.reconfigure();
       } else if (server.isRunning() && endpoint) {
         await server.stop();
         await start();
@@ -498,6 +538,35 @@ export function createEngine(deps: EngineDeps) {
 }
 
 export type Engine = ReturnType<typeof createEngine>;
+
+/**
+ * What the "will it fit" chips compare against (`status().memory`): VRAM
+ * when there is a GPU to name, system RAM otherwise. Total, not free: the
+ * question is whether the model can ever be served here.
+ */
+export function engineMemory(gpu: GpuStats | null, totalMemBytes: number): { budgetBytes: number; kind: 'vram' | 'unified' | 'ram' } {
+  return gpu && gpu.devices.length > 0
+    ? { budgetBytes: gpu.totalMB * 1024 * 1024, kind: gpu.unified ? 'unified' : 'vram' }
+    : { budgetBytes: totalMemBytes, kind: 'ram' };
+}
+
+/** Whether an engine settings change re-serves the daemon's listener: the port, binding, key or CORS list. */
+export function reservesEndpoint(patch: Partial<EngineSettings>): boolean {
+  return patch.port !== undefined || patch.bind !== undefined || patch.apiKey !== undefined || patch.corsOrigins !== undefined;
+}
+
+/**
+ * One image request as stable-diffusion.cpp's server takes it, or why it is
+ * refused (`generateImage`): a prompt, dimensions from 256 to 2048 in
+ * multiples of 64, 1 to 100 steps and CFG from 0 to 30.
+ */
+export function imageGenerationBody(request: import('@nekko-agent/shared').ImageGenerationRequest): { body: string } | { problem: string } {
+  const { modelId, prompt, width, height, steps = 28, cfgScale = 4.5, seed = -1 } = request;
+  if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 20_000 || ![width, height].every(n => Number.isInteger(n) && n >= 256 && n <= 2048 && n % 64 === 0) || !Number.isInteger(steps) || steps < 1 || steps > 100 || !Number.isFinite(cfgScale) || cfgScale < 0 || cfgScale > 30 || !Number.isSafeInteger(seed) || seed < -1) {
+    return { problem: 'Use a prompt, dimensions from 256 to 2048 in multiples of 64, 1 to 100 steps and CFG from 0 to 30.' };
+  }
+  return { body: JSON.stringify({ model: modelId, prompt: `${prompt}\n<sd_cpp_extra_args>${JSON.stringify({ sample_params: { sample_steps: steps, guidance: { txt_cfg: cfgScale } }, seed })}</sd_cpp_extra_args>`, size: `${width}x${height}`, n: 1, output_format: 'png' }) };
+}
 
 /** A library row in the shape the fit planner reads. */
 export function modelFactsFor(m: LocalModel): ModelFacts {

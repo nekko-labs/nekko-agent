@@ -2864,13 +2864,13 @@ async fn serves_the_model_library_and_its_folders_itself() {
         (ours["layers"].clone(), ours["kvHeads"].clone(), ours["headDim"].clone()),
         (json!(16), json!(4), json!(64))
     );
-    // Load state from the host's model server, the fit from this machine.
-    assert_eq!(ours["loaded"], true);
+    // Load state from the daemon's own model server (nothing loaded), the fit from this machine.
+    assert_eq!(ours["loaded"], false);
     assert!(ours.get("lastLoadError").is_none());
     assert!(["full", "partial", "cpu", "wont"].contains(&ours["gpuFit"].as_str().unwrap()), "{ours}");
     assert_eq!(rows[1]["name"], "tiny:latest", "named as `ollama run` names it");
     assert_eq!(rows[1]["loaded"], false);
-    assert_eq!(rows[1]["lastLoadError"], "Not enough memory to load it.");
+    assert!(rows[1].get("lastLoadError").is_none());
     assert_eq!(rows[1]["managed"], false);
     // The bare rows the TS model server reads.
     let (_, bare) = post(d.port, "engine:library", json!([]), Some(TOKEN)).await;
@@ -2920,7 +2920,7 @@ async fn serves_the_model_library_and_its_folders_itself() {
     let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
     let changed = calls.as_array().unwrap().iter().filter(|c| c[0] == "settings:changed").count();
     assert_eq!(changed, 5, "the seed, three autoload saves and the folder save reach the host: {calls}");
-    assert!(calls.as_array().unwrap().iter().any(|c| c[0] == "engine:runtime"));
+    assert!(!calls.as_array().unwrap().iter().any(|c| c[0] == "engine:runtime"), "the daemon runs the server: {calls}");
     drop(d);
     std::fs::remove_dir_all(root).ok();
 }
@@ -3243,7 +3243,182 @@ async fn installs_and_removes_the_engine_itself() {
     assert_eq!(again["message"], "No managed engine is installed.");
     let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
     let asked = calls.as_array().unwrap().iter().filter(|c| c[0] == "engine:runtime" && c[1][0] == "isRunning").count();
-    assert!(asked >= 3, "before replacing files and before each uninstall: {calls}");
+    assert_eq!(asked, 0, "the daemon's own model server answers whether one runs: {calls}");
+    drop(d);
+    std::fs::remove_dir_all(root).ok();
+}
+
+/// The stand-in `llama-server`, built beside this test if `cargo test` did not build examples.
+fn fake_llama() -> std::path::PathBuf {
+    let exe = format!("fake_llama_server{}", std::env::consts::EXE_SUFFIX);
+    let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    let path = deps.parent().unwrap().join("examples").join(exe);
+    if !path.is_file() {
+        let target = deps.parent().unwrap().parent().unwrap();
+        let ok = Command::new(env!("CARGO"))
+            .args(["build", "-p", "nekkod", "--example", "fake_llama_server"])
+            .env("CARGO_TARGET_DIR", target)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "the fake llama-server builds");
+    }
+    path
+}
+
+fn free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runs_the_model_server_itself() {
+    let root = std::env::temp_dir().join(format!("nekkod-server-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    let model = data.join("models/chat/acme_tiny-gguf/tiny-q4_k_m.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("llama", "Tiny")).unwrap();
+    let other = data.join("models/chat/acme_other-gguf/other-q4_k_m.gguf");
+    std::fs::create_dir_all(other.parent().unwrap()).unwrap();
+    std::fs::write(&other, tiny_gguf("qwen2", "Other")).unwrap();
+    let port = free_port();
+    let settings = json!({
+        "engineBinPath": fake_llama(),
+        "engine": { "port": port, "modelFolders": [], "maxLoaded": 1 },
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with_env(true, Some(&data), json!({}), &[]);
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for channel in [
+        "engine:status",
+        "engine:settings",
+        "engine:residentTtl",
+        "engine:generateImage",
+        "engine:start",
+        "engine:load",
+    ] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
+    }
+
+    let (status, s) = post(d.port, "engine:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{s}");
+    assert_eq!(
+        (s["running"].clone(), s["install"]["source"].clone(), s["install"]["version"].clone()),
+        (json!(false), json!("external"), json!("b4242"))
+    );
+    assert_eq!(s["port"], port);
+
+    // Start: the daemon listens, and a provider entry points at the engine.
+    let (_, started) = post(d.port, "engine:start", json!([]), Some(TOKEN)).await;
+    assert_eq!(started, json!({ "ok": true, "message": format!("The engine is serving on port {port}.") }));
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    let provider = saved["providers"].as_array().unwrap().iter().find(|p| p["kind"] == "llamacpp").cloned().unwrap();
+    assert_eq!(
+        (provider["id"].clone(), provider["baseUrl"].clone()),
+        (json!("nekko-engine"), json!(format!("http://127.0.0.1:{port}/v1")))
+    );
+
+    // A load through the daemon's own policy, with the flags the binary knows.
+    let id = "chat/acme_tiny-gguf/tiny-q4_k_m";
+    let (_, loaded) = post(d.port, "engine:load", json!([id, { "contextTokens": 4096 }]), Some(TOKEN)).await;
+    assert_eq!(loaded, json!({ "ok": true, "message": format!("Loaded {id}.") }), "{loaded}");
+    let (_, s) = post(d.port, "engine:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(s["running"], true);
+    assert_eq!(s["resident"][0]["id"], id);
+    assert_eq!(s["resident"][0]["contextLength"], 4096);
+    assert!(
+        s["log"].as_array().unwrap().iter().any(|l| l
+            .as_str()
+            .unwrap()
+            .ends_with(&format!("Loaded {id} on port {}.", ""))
+            || l.as_str().unwrap().contains(&format!("Loaded {id} on port"))),
+        "{s}"
+    );
+    let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
+    let row = models.as_array().unwrap().iter().find(|m| m["id"] == id).cloned().unwrap();
+    assert_eq!(row["loaded"], true);
+
+    // The router serves it, and loads another on demand (evicting the first: one resident).
+    let http = reqwest::Client::new();
+    let list: Value =
+        http.get(format!("http://127.0.0.1:{port}/v1/models")).send().await.unwrap().json().await.unwrap();
+    let states: Vec<(Value, Value)> =
+        list["data"].as_array().unwrap().iter().map(|m| (m["id"].clone(), m["state"].clone())).collect();
+    assert!(states.contains(&(json!(id), json!("loaded"))), "{list}");
+    let reply: Value = http
+        .post(format!("http://127.0.0.1:{port}/v1/chat/completions"))
+        .json(&json!({ "model": id, "messages": [{ "role": "user", "content": "hi" }] }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let said = reply["choices"][0]["message"]["content"].as_str().unwrap().to_string();
+    assert!(
+        said.contains("--ctx-size 4096") && said.contains("--cache-reuse 256") && said.contains("--spec-default"),
+        "{said}"
+    );
+    assert!(!said.contains("--cache-ram"), "a flag the binary does not list is left out: {said}");
+    let other_id = "chat/acme_other-gguf/other-q4_k_m";
+    let reply: Value = http
+        .post(format!("http://127.0.0.1:{port}/v1/chat/completions"))
+        .json(&json!({ "model": other_id, "messages": [] }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(reply["model"], other_id, "{reply}");
+    let (_, s) = post(d.port, "engine:status", json!([]), Some(TOKEN)).await;
+    let resident: Vec<Value> = s["resident"].as_array().unwrap().iter().map(|r| r["id"].clone()).collect();
+    assert_eq!(resident, [json!(other_id)], "{s}");
+
+    // Residency and endpoint settings.
+    let (_, ttl) = post(d.port, "engine:residentTtl", json!([other_id, 120]), Some(TOKEN)).await;
+    assert_eq!(ttl, json!({ "ok": true, "message": format!("{other_id} now unloads after 120s idle.") }));
+    let (_, next) = post(d.port, "engine:settings", json!([{ "apiKey": "sekret" }]), Some(TOKEN)).await;
+    assert_eq!((next["apiKey"].clone(), next["port"].clone()), (json!("sekret"), json!(port)));
+    let refused = http.get(format!("http://127.0.0.1:{port}/v1/models")).send().await.unwrap().status().as_u16();
+    assert_eq!(refused, 401, "the listener was re-served with the key");
+    let allowed = http
+        .get(format!("http://127.0.0.1:{port}/v1/models"))
+        .bearer_auth("sekret")
+        .send()
+        .await
+        .unwrap()
+        .status()
+        .as_u16();
+    assert_eq!(allowed, 200);
+    let (_, image) = post(
+        d.port,
+        "engine:generateImage",
+        json!([{ "modelId": other_id, "prompt": "x", "width": 100, "height": 512 }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(
+        image["error"],
+        "Use a prompt, dimensions from 256 to 2048 in multiples of 64, 1 to 100 steps and CFG from 0 to 30.",
+        "{image}"
+    );
+    let (_, image) = post(
+        d.port,
+        "engine:generateImage",
+        json!([{ "modelId": other_id, "prompt": "x", "width": 512, "height": 512 }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(image["error"], "Choose an image-generation model.", "{image}");
+
+    let (_, unloaded) = post(d.port, "engine:unload", json!([other_id]), Some(TOKEN)).await;
+    assert_eq!(unloaded["ok"], true);
+    let (_, stopped) = post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+    assert_eq!(stopped, json!({ "ok": true, "message": "Stopped the engine." }));
+    let (_, s) = post(d.port, "engine:status", json!([]), Some(TOKEN)).await;
+    assert_eq!((s["running"].clone(), s["resident"].clone()), (json!(false), json!([])));
+    assert!(http.get(format!("http://127.0.0.1:{port}/v1/models")).send().await.is_err(), "the listener is closed");
     drop(d);
     std::fs::remove_dir_all(root).ok();
 }

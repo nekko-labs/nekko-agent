@@ -22,6 +22,7 @@ mod installs;
 mod library;
 mod machine;
 mod mcp;
+mod model_server;
 mod oauth;
 mod procgroup;
 mod providers;
@@ -102,6 +103,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                         library::OWNS,
                         downloads::OWNS,
                         installs::OWNS,
+                        model_server::OWNS,
                     ]
                     .join(","),
                 );
@@ -179,9 +181,18 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             cfg.github_api_url.clone(),
         )
     });
+    // The model server's policy, over the daemon's own processes and router.
+    let server = cfg.data_dir.clone().zip(settings.clone()).zip(library.clone()).zip(installs.clone()).map(
+        |(((dir, s), library), installs)| {
+            library.set_installs(installs.clone());
+            let server = model_server::Server::new(s, dir, library, installs, machine.clone(), engine.clone());
+            let _ = engine.server.set(server.model.clone());
+            server
+        },
+    );
     let runtimes = settings
         .as_deref()
-        .map(|s| runtimes::new(s, backend.clone(), machine.clone(), library.clone(), installs.clone()));
+        .map(|s| runtimes::new(s, backend.clone(), machine.clone(), library.clone(), installs.clone(), server.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
         backend: backend.clone(),
@@ -226,6 +237,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         library: library.clone(),
         downloads: model_downloads.clone(),
         installs: installs.clone(),
+        server: server.clone(),
         resource_queue: cfg.data_dir.clone().map(|d| {
             Arc::new(resource_queue::ResourceQueue::new(
                 std::path::PathBuf::from(d),
