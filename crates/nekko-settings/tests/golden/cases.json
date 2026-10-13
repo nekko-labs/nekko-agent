@@ -1,4 +1,5 @@
 [
+  { "name": "tips and deletion preferences persist independently and reset", "file": null, "ops": [{ "op": "update", "patch": { "showTips": false, "completionTipSeen": true, "skipDeleteConfirmation": true } }, { "op": "get" }, { "op": "update", "patch": { "showTips": true } }, { "op": "get" }, { "op": "reset" }, { "op": "get" }] },
   { "name": "no file", "file": null, "ops": [{ "op": "get" }] },
   { "name": "no file then update", "file": null, "ops": [{ "op": "update", "patch": { "theme": "dark" } }, { "op": "get" }] },
   {

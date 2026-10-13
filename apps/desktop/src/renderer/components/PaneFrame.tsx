@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Direction, DropTarget, PaneKind, WbPane } from '../layout.js';
 import { CheckIcon, CloseIcon, TrashIcon, MinimizeIcon } from '../icons.js';
 import { useStore } from '../store.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
+import { confirmDeletion } from './DeleteConfirmation.js';
+import { focusWindow, registerWindow, WINDOW_HOTKEYS } from '../window-shortcuts.js';
 import { SplitCompass } from './SplitCompass.js';
 
 /**
@@ -177,11 +179,24 @@ export function PaneFrame({
   const isChat = pane.kind === 'chat' && !!pane.refId;
   const action = isChat ? chatPaneAction : 'close';
   const complete = () => { void archiveChat(pane.refId); };
-  const deleteChat = () => {
-    if (window.confirm('Delete this chat forever? It cannot be recovered.')) {
-      void deleteChatForever(pane.refId);
-    }
+  const deleteChat = () => { void deleteChatForever(pane.refId); };
+  const deleteWindow = async () => {
+    if (isChat) return deleteChat();
+    if (pane.kind !== 'terminal' || !await confirmDeletion('Close this terminal? Its running process will be stopped. There is no terminal archive.')) return;
+    try {
+      await window.nekko.closeTerminal(pane.refId);
+      onClose();
+      await useStore.getState().refreshTerminals();
+    } catch (error) { useStore.getState().pushToast('error', 'Could not close terminal: ' + String(error)); }
   };
+  const element = useRef<HTMLDivElement>(null);
+  const actions = useRef({ complete, deleteWindow, onMinimize, isChat });
+  actions.current = { complete, deleteWindow, onMinimize, isChat };
+  useEffect(() => element.current ? registerWindow(pane.id, element.current, (action) => {
+    if (action === 'complete' && actions.current.isChat) actions.current.complete();
+    if (action === 'minimize') actions.current.onMinimize?.();
+    if (action === 'delete') void actions.current.deleteWindow();
+  }) : undefined, [pane.id]);
   // Set once the strip is on screen, which is what lets the portal find it.
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   const [metadataSlot, setMetadataSlot] = useState<HTMLElement | null>(null);
@@ -205,7 +220,10 @@ export function PaneFrame({
           ? 'color-mix(in srgb, var(--accent) 40%, var(--line))'
           : 'var(--line)'),
       } as React.CSSProperties}
-      onMouseDown={onFocus}
+      ref={element}
+      data-shortcut-pane={pane.id}
+      onFocusCapture={() => focusWindow(pane.id)}
+      onMouseDown={() => { focusWindow(pane.id); onFocus(); }}
     >
       <div
         className="flex shrink-0 items-center gap-1.5 border-b border-line px-2 py-1"
@@ -242,10 +260,10 @@ export function PaneFrame({
             rather than the frame's and the pane's stacked on each other. */}
         <div ref={setActionSlot} className="flex shrink-0 items-center gap-0.5" />
         {!hideSplit && <SplitCompass kind={pane.kind} canSplit={canSplit} onSplit={onSplit} onOpen={onAddWindow} addable={addable} />}
-        {isChat && onMinimize && <button
+        {onMinimize && <button
           type="button"
           className="rounded-sm p-1 text-ink-faint hover:text-ink"
-          title="Minimize this window (keep chat incomplete)"
+          title={`Minimize this window (keep item in Agent panel) (${WINDOW_HOTKEYS.minimize})`}
           aria-label={`Minimize ${title}`}
           onClick={onMinimize}
         >
@@ -253,9 +271,9 @@ export function PaneFrame({
         </button>}
         <button
           className="rounded-sm p-1 text-ink-faint hover:text-ink"
-          title={action === 'complete' ? 'Complete this chat' : action === 'delete' ? 'Delete this chat forever' : closeTitle}
+          title={action === 'complete' ? `Complete this chat (${WINDOW_HOTKEYS.complete})` : action === 'delete' ? `Delete this chat forever (${WINDOW_HOTKEYS.delete})` : pane.kind === 'terminal' ? `Close terminal (${WINDOW_HOTKEYS.delete})` : closeTitle}
           aria-label={`${action === 'complete' ? 'Complete' : action === 'delete' ? 'Delete' : 'Close'} ${title}`}
-          onClick={action === 'complete' ? complete : action === 'delete' ? deleteChat : onClose}
+          onClick={action === 'complete' ? complete : action === 'delete' || pane.kind === 'terminal' ? deleteWindow : onClose}
         >
           {action === 'complete' ? <CheckIcon className="h-3 w-3" /> : action === 'delete' ? <TrashIcon className="h-3 w-3" /> : <CloseIcon className="h-3 w-3" />}
         </button>
@@ -263,9 +281,10 @@ export function PaneFrame({
 
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-          {isChat && <ContextAction onClick={() => { setMenu(null); complete(); }}>Complete</ContextAction>}
-          {isChat && <ContextAction onClick={() => { setMenu(null); deleteChat(); }}>Delete</ContextAction>}
-          <ContextAction onClick={() => { setMenu(null); onClose(); }}>Close</ContextAction>
+          {isChat && <ContextAction onClick={() => { setMenu(null); complete(); }}>Complete ({WINDOW_HOTKEYS.complete})</ContextAction>}
+          {isChat && <ContextAction onClick={() => { setMenu(null); void deleteWindow(); }}>Delete ({WINDOW_HOTKEYS.delete})</ContextAction>}
+          {onMinimize && <ContextAction onClick={() => { setMenu(null); onMinimize(); }}>Minimize ({WINDOW_HOTKEYS.minimize})</ContextAction>}
+          <ContextAction onClick={() => { setMenu(null); if (pane.kind === 'terminal') void deleteWindow(); else onClose(); }}>{pane.kind === 'terminal' ? `Close (${WINDOW_HOTKEYS.delete})` : 'Close'}</ContextAction>
         </ContextMenu>
       )}
 

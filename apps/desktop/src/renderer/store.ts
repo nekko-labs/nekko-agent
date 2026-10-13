@@ -1,3 +1,4 @@
+import { confirmDeletion } from './components/DeleteConfirmation.js';
 import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
 import type { AppSettings, Session, SessionSummary, ProviderConfig, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
@@ -167,6 +168,7 @@ reserveIdSeq(wsSeq);
 const newWorkspaceId = () => `ws_${(++wsSeq).toString(36)}`;
 
 interface UiState {
+  completionTipSessionId: string | null;
   settings: AppSettings | null;
   view: View;
   /**
@@ -329,7 +331,7 @@ interface UiState {
   /** Bring an archived chat back to the workspace list and open it. */
   restoreChat: (sessionId: string) => Promise<void>;
   /** Delete an archived chat for good. */
-  deleteChatForever: (sessionId: string) => Promise<void>;
+  deleteChatForever: (sessionId: string, confirmed?: boolean) => Promise<void>;
   /** Whether the sidebar shows the Archived list instead of the workspaces. */
   archiveOpen: boolean;
   setArchiveOpen: (open: boolean) => void;
@@ -535,7 +537,11 @@ export function addCreatedSession(s: Session): void {
   useStore.setState((state) => ({ sessions: [summarizeSession(s), ...state.sessions.filter((x) => x.id !== s.id)] }));
 }
 
+// Reserve the first-completion tip while its persistent seen flag is being saved.
+let completionTipPending = false;
+
 export const useStore = create<UiState>((set, get) => ({
+  completionTipSessionId: null,
   settings: null,
   view: 'command',
   sessions: [],
@@ -1079,7 +1085,15 @@ export const useStore = create<UiState>((set, get) => ({
           activeSessionId: s.activeSessionId === sessionId ? null : s.activeSessionId,
         };
       });
-      get().pushToast('success', 'Chat completed. Find it under Completed for 60 days.');
+      if (!completionTipPending && get().settings?.showTips !== false && !get().settings?.completionTipSeen) {
+        completionTipPending = true;
+        try {
+          const settings = await window.nekko.updateSettings({ completionTipSeen: true });
+          set({ settings, completionTipSessionId: sessionId });
+        } catch { /* Leave the tip eligible if its seen state could not be saved. */ }
+        finally { completionTipPending = false; }
+      }
+      get().pushToast('success', 'Chat completed. Find it under Show completed in the left panel for 60 days.');
     } catch (e) {
       get().pushToast('error', `Could not complete the chat: ${(e as Error).message}`);
     }
@@ -1106,7 +1120,8 @@ export const useStore = create<UiState>((set, get) => ({
     get().openChatPane(sessionId);
   },
 
-  deleteChatForever: async (sessionId) => {
+  deleteChatForever: async (sessionId, confirmed = false) => {
+    if (!confirmed && !await confirmDeletion('Delete this chat forever? It cannot be recovered.')) return;
     try {
       await window.nekko.abortChat(sessionId);
     } catch { /* nothing running */ }

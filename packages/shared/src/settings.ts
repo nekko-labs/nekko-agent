@@ -238,6 +238,10 @@ export interface AppSettings {
   language?: string;
   /** Default tool-execution policy for new chats. */
   defaultChatMode?: import('./chat.js').ChatMode;
+  /** Contextual UI tips are enabled by default. */
+  showTips?: boolean;
+  completionTipSeen?: boolean;
+  skipDeleteConfirmation?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';
   /** Path to the shell new terminals launch by default (undefined = auto-detect). */
