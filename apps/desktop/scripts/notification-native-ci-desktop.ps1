@@ -10,6 +10,7 @@ using System;
 using System.Runtime.InteropServices;
 public class ToastDesktop {
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
 }
@@ -47,28 +48,6 @@ function RecordCenterAttempt([string]$Method, [string]$Outcome, $Details) {
   $script:CenterAttempts += @{ method = $Method; outcome = $Outcome; details = $Details; at = (Get-Date).ToUniversalTime().ToString('o') }
   $script:CenterAttempts | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $Out 'setup-center-attempts.json')
 }
-function ClickCenterButton {
-  # Reacquire rather than trusting a stale rectangle from the failed Invoke.
-  $button = NotificationCenterButton
-  $rect = $button.Current.BoundingRectangle
-  $screen = [System.Windows.Forms.SystemInformation]::VirtualScreen
-  if (-not $button.Current.IsEnabled -or $rect.IsEmpty -or $rect.Width -le 0 -or $rect.Height -le 0 -or $rect.Left -lt $screen.Left -or $rect.Top -lt $screen.Top -or $rect.Right -gt $screen.Right -or $rect.Bottom -gt $screen.Bottom) {
-    throw 'Notification center button has no safe visible screen rectangle.'
-  }
-  $x = [int][Math]::Floor($rect.Left + $rect.Width / 2)
-  $y = [int][Math]::Floor($rect.Top + $rect.Height / 2)
-  $hit = [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($x, $y))
-  $verified = $false
-  for ($depth = 0; $hit -and $depth -lt 8; $depth++) {
-    if ([System.Windows.Automation.Automation]::Compare($hit, $button)) { $verified = $true; break }
-    $hit = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($hit)
-  }
-  if (-not $verified) { throw 'Notification center button center is obscured or UIA hit target differs; refusing OS click.' }
-  RecordCenterAttempt 'OS mouse' 'verified target' @{ name = $button.Current.Name; bounds = $rect.ToString(); x = $x; y = $y }
-  if (-not [ToastDesktop]::SetCursorPos($x, $y)) { throw 'Cannot position cursor on notification center button.' }
-  [ToastDesktop]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
-  [ToastDesktop]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
-}
 function WaitDndControl {
   $deadline = (Get-Date).AddSeconds(5)
   do {
@@ -77,6 +56,25 @@ function WaitDndControl {
     Start-Sleep -Milliseconds 250
   } while ((Get-Date) -lt $deadline)
   return $null
+}
+# Standard shell shortcut, reachable only after the independent disposable CI gate.
+$script:CenterKeyboardUsed = @{}
+function CenterKeyboard([ValidateSet('open','close')][string]$Purpose) {
+  if ($script:CenterKeyboardUsed[$Purpose]) { throw "Refusing repeated Win+N $Purpose attempt on an unproven panel state." }
+  # Recheck immediately before input: do not toggle an already open panel closed,
+  # and never toggle a panel open during cleanup when its state is unknown.
+  $control = DndControl -Optional
+  if ($Purpose -eq 'open' -and $control) { return $control }
+  if ($Purpose -eq 'close' -and -not $control) { return }
+  $script:CenterKeyboardUsed[$Purpose] = $true
+  RecordCenterAttempt 'OS keyboard' 'Win+N used, transition unproven' @{ purpose = $Purpose; shortcut = 'Win+N' }
+  try {
+    [ToastDesktop]::keybd_event(0x5B, 0, 0, [UIntPtr]::Zero) # Left Windows down
+    [ToastDesktop]::keybd_event(0x4E, 0, 0, [UIntPtr]::Zero) # N down
+  } finally {
+    [ToastDesktop]::keybd_event(0x4E, 0, 2, [UIntPtr]::Zero)
+    [ToastDesktop]::keybd_event(0x5B, 0, 2, [UIntPtr]::Zero)
+  }
 }
 function OpenNotificationCenter {
   $control = DndControl -Optional
@@ -92,23 +90,23 @@ function OpenNotificationCenter {
   Capture 'setup-center-invoke'
   if ($control) { RecordCenterAttempt 'UIA InvokePattern' 'explicit control observed' $control.source; return $control }
   RecordCenterAttempt 'UIA InvokePattern' 'no explicit control after timeout' $null
-  ClickCenterButton
+  CenterKeyboard open
   $control = WaitDndControl
-  RecordUia 'setup-center-mouse'
-  Capture 'setup-center-mouse'
-  if (-not $control) { throw 'Notification center did not expose an explicit DND control after UIA invoke and verified OS click; refusing to send a toast.' }
-  RecordCenterAttempt 'OS mouse' 'explicit control observed' $control.source
+  RecordUia 'setup-center-keyboard'
+  Capture 'setup-center-keyboard'
+  if (-not $control) { throw 'Notification center did not expose an explicit DND control after UIA invoke and Win+N; refusing to send a toast.' }
+  RecordCenterAttempt 'Win+N' 'explicit control observed' $control.source
   return $control
 }
 function CloseNotificationCenter {
   if (-not (DndControl -Optional)) { return }
-  ClickCenterButton
+  CenterKeyboard close
   $deadline = (Get-Date).AddSeconds(5)
   do {
     Start-Sleep -Milliseconds 250
     if (-not (DndControl -Optional)) { RecordCenterAttempt 'close' 'DND control no longer visible' $null; return }
   } while ((Get-Date) -lt $deadline)
-  throw 'Notification center remained open after verified OS click.'
+  throw 'Notification center remained open after Win+N.'
 }
 function DndControl([switch]$Optional) {
   $controls = @(Elements | Where-Object { $_.Current.Name -match '^(Do not disturb|Turn (on|off) do not disturb)' -and -not $_.Current.IsOffscreen })
