@@ -1,4 +1,4 @@
-param([ValidateSet('baseline','toast','focus')][string]$Action, [string]$Out, [string]$Marker, [string]$Handle)
+param([ValidateSet('baseline','setup','toast','focus')][string]$Action, [string]$Out, [string]$Marker, [string]$Handle)
 $ErrorActionPreference = 'Stop'
 # Independent gate before loading UI Automation, capturing pixels, or sending input.
 if ($env:CI -cne 'true' -or $env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_OS -cne 'Windows' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or $env:NEKKO_NATIVE_NOTIFICATION_CI -cne 'disposable-desktop' -or -not $env:GITHUB_RUN_ID -or -not $env:GITHUB_WORKSPACE) {
@@ -27,11 +27,70 @@ function Elements {
   $root = [System.Windows.Automation.AutomationElement]::RootElement
   $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
 }
+function RecordUia([string]$Name) {
+  @(Elements | ForEach-Object { @{ name = $_.Current.Name; class = $_.Current.ClassName; automationId = $_.Current.AutomationId; offscreen = $_.Current.IsOffscreen; bounds = $_.Current.BoundingRectangle.ToString() } }) | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $Out "$Name-uia.json")
+}
+function NotificationCenterButton {
+  $buttons = @(Elements | Where-Object { $_.Current.AutomationId -eq 'SystemTrayIcon' -and $_.Current.Name -like 'Notifications*' -and -not $_.Current.IsOffscreen })
+  if ($buttons.Count -ne 1) { throw 'Cannot uniquely identify the hosted Windows notification center button.' }
+  return $buttons[0]
+}
+function InvokeElement($Element) {
+  $pattern = $null
+  if (-not $Element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) { throw 'Hosted notification control does not support UIA InvokePattern.' }
+  $pattern.Invoke()
+}
+function DndControl {
+  $controls = @(Elements | Where-Object { $_.Current.Name -match '^(Do not disturb|Turn (on|off) do not disturb)' -and -not $_.Current.IsOffscreen })
+  foreach ($control in $controls) {
+    $pattern = $null
+    if ($control.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$pattern)) {
+      return @{ element = $control; pattern = $pattern; state = $pattern.Current.ToggleState.ToString(); source = 'TogglePattern' }
+    }
+    # Windows builds may expose an action button rather than TogglePattern.
+    if ($control.Current.Name -match '^Turn (on|off) do not disturb$') {
+      return @{ element = $control; pattern = $null; state = $(if ($Matches[1] -eq 'on') { 'Off' } else { 'On' }); source = 'explicit action label' }
+    }
+  }
+  throw 'No explicit DND state available from notification center UIA; refusing to assume delivery is allowed.'
+}
+function SetupNotifications {
+  RecordUia 'setup-before'
+  InvokeElement (NotificationCenterButton)
+  $opened = $true
+  try {
+    Start-Sleep -Milliseconds 500
+    RecordUia 'setup-center-before'
+    Capture 'setup-center-before'
+    $before = DndControl
+    @{ dnd = $before.state; source = $before.source } | ConvertTo-Json | Set-Content (Join-Path $Out 'setup-state-before.json')
+    if ($before.state -eq 'On') {
+      if ($before.pattern) { $before.pattern.Toggle() } else { InvokeElement $before.element }
+    } elseif ($before.state -ne 'Off') { throw 'DND state is indeterminate; refusing to send a toast.' }
+    $deadline = (Get-Date).AddSeconds(5)
+    do {
+      Start-Sleep -Milliseconds 250
+      $after = DndControl
+    } while ($after.state -ne 'Off' -and (Get-Date) -lt $deadline)
+    RecordUia 'setup-center-after'
+    Capture 'setup-center-after'
+    @{ dnd = $after.state; source = $after.source; deliveryAllowed = ($after.state -eq 'Off'); scope = 'DND prerequisite only, actual delivery still requires visible toast UIA evidence' } | ConvertTo-Json | Set-Content (Join-Path $Out 'setup-state-after.json')
+    if ($after.state -ne 'Off') { throw 'DND remains enabled; notification delivery prerequisite failed.' }
+  } finally {
+    if ($opened) { InvokeElement (NotificationCenterButton) }
+  }
+  Start-Sleep -Milliseconds 250
+  RecordUia 'setup-after'
+  Capture 'setup-after'
+  if ((NotificationCenterButton).Current.Name -match 'Do not disturb on') { throw 'DND re-enabled after closing notification center; refusing to send a toast.' }
+}
 try {
   @{ sessionId = [System.Diagnostics.Process]::GetCurrentProcess().SessionId; userInteractive = [Environment]::UserInteractive; sessionName = $env:SESSIONNAME; action = $Action } | ConvertTo-Json | Set-Content (Join-Path $Out "$Action-desktop.json")
   Capture "$Action-before"
   if (-not [Environment]::UserInteractive) { throw 'Noninteractive hosted service desktop; actual toast acceptance unsupported.' }
-  if ($Action -eq 'toast') {
+  if ($Action -eq 'setup') {
+    SetupNotifications
+  } elseif ($Action -eq 'toast') {
     $deadline = (Get-Date).AddSeconds(20)
     $match = $null
     do {

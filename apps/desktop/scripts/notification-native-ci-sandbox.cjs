@@ -39,6 +39,11 @@ async function main() {
   window = new BrowserWindow({ show: false, focusable: false, width: 600, height: 300, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
   await window.loadURL('data:text/html,<title>Disposable CI notification focus target</title><h1>Native toast click target</h1>');
   await desktop('baseline', marker);
+  await desktop('setup', marker);
+  const setup = JSON.parse(fs.readFileSync(path.join(out, 'setup-state-after.json'), 'utf8').replace(/^\uFEFF/, ''));
+  assert.equal(setup.dnd, 'Off', 'DND must be explicitly off before sending');
+  assert.equal(setup.deliveryAllowed, true, 'Notification delivery prerequisite not established');
+  results.setup = setup;
   toast = new Notification({ title: marker, body: 'Disposable CI only: click to focus isolated fixture.', silent: true, timeoutType: 'never' });
   toast.on('show', () => { results.events.push({ event: 'show', at: Date.now() }); });
   toast.on('failed', (_event, error) => { results.events.push({ event: 'failed', error: String(error), at: Date.now() }); results.failure = String(error); });
