@@ -51,6 +51,18 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### #516 Group drag fix: CI latency diagnostics (2026-10-13)
+Area: renderer / perf harness. Result: inconclusive, mixed diagnostic results.
+Conditions: GitHub Actions Ubuntu shared runner, CI run 38378954525 attempt 1. Same-run head/base diagnostics used `--quick --only latency --profile --timeline --no-gpu`; 40 composer samples, 10 warm switches, 11 cold switches. Profiling differs from the full gate, so these are not proof of a regression or improvement.
+
+| Diagnostic p95 metric | Unchanged base | PR head |
+|---|---|---|
+| Composer keypress to paint | 22.0 ms | 25.1 ms |
+| Warm chat switch | 26.8 ms | 22.3 ms |
+| Cold chat frame painted | 28.4 ms | 26.4 ms |
+
+The full head gate's best streaming frame-work p95 was 10.4 ms against a 10 ms gate (198 samples). The latency-only base diagnostic skips this metric, so no matched base number is available. Both base and head diagnostics missed warm/cold switch budgets. A single failed-job rerun was requested to distinguish runner variability; no budgets were relaxed. The group-drag change does not alter streaming logic, but causality remains unverified. Source: [PR #516](https://github.com/nekko-labs/nekko-agent/pull/516), [CI logs](https://github.com/nekko-labs/nekko-agent/actions/runs/38378954525/job/115234283340).
+
 ### #503 npm install at the start of npm run dev (2026-10-13)
 Area: dev build. Result: regression (deliberate, small)
 Conditions: Windows, warm npm cache, nothing to install
