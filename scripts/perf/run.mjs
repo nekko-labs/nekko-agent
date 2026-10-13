@@ -49,6 +49,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { connectCdp } from './lib/cdp.mjs';
+import { reportProvenance } from './lib/provenance.mjs';
 import { killTree, launchBrowser } from './lib/browser.mjs';
 import { startMockProvider, STREAM_TRIGGER } from './lib/mock-provider.mjs';
 import { seedDataDir, chatTitle, lastMarker } from './lib/seed.mjs';
@@ -791,7 +792,7 @@ async function main() {
   // ------------------------------------------------------------------ report
   const report = {
     at: new Date().toISOString(),
-    git: process.env.GITHUB_SHA ?? null,
+    ...reportProvenance(APP_ROOT),
     machine: { platform: process.platform, cpus: os.cpus().length, cpu: os.cpus()[0]?.model?.trim(), memGb: Math.round(os.totalmem() / 2 ** 30) },
     browser: browserVersion,
     config: CFG,
