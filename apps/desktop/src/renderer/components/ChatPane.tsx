@@ -33,6 +33,7 @@ import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/Liv
 import { liveTokenRate } from './agent-console/liveTokenRate.js';
 import { ImageModeControls } from './agent-console/ImageModeControls.js';
 import { ImageLiveTurn } from './agent-console/ImageLiveTurn.js';
+import { SubagentParentContext } from './agent-console/SubagentCue.js';
 import { VirtualTranscript, type VirtualTranscriptHandle } from './agent-console/VirtualTranscript.js';
 import { MarkdownEditor, type MarkdownEditorElement } from './agent-console/MarkdownEditor.js';
 import { MarkdownSandbox } from './Markdown.js';
@@ -549,6 +550,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    */
   readOnly?: boolean;
 }) {
+  const subagentSessions = useStore(s => s.sessions);
+  const subagentChildren = useMemo(() => subagentSessions.filter(s => s.parentSessionId === sessionId), [subagentSessions, sessionId]);
   const { providers, setMascotMood, refreshSessions } = useStore(
     useShallow((s) => ({
       providers: s.providers,
@@ -2157,7 +2160,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         )}
         {surface !== 'composer' && (
         <div className="relative flex min-h-0 w-full flex-1">
-          <VirtualTranscript
+          <SubagentParentContext.Provider value={subagentChildren}><VirtualTranscript
             ref={transcriptRef}
             rows={rows}
             renderRow={renderRow}
@@ -2262,7 +2265,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
               </>
             }
-          />
+          /></SubagentParentContext.Provider>
           {/* The plan panel's toggle floats in the chat area's top-right corner,
               in its own place whether the panel is open or not. */}
           {wideEnoughForRail && (

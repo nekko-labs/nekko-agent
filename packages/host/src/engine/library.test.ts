@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { createLibrary } from './library.js';
+import { createLibrary, daemonLibrary } from './library.js';
 import { buildGguf, str, u32 } from './gguf-fixture.js';
 
 /**
@@ -198,5 +198,32 @@ describe('model library', () => {
     await writeFile(join(sidecarDir, 'stray.gguf'), 'x');
 
     expect((await library.list()).map((m) => m.id)).toEqual(['plain']);
+  });
+});
+
+describe('the library under the engine daemon', () => {
+  it('reads and writes through the daemon, which alone writes library.json', async () => {
+    const calls: unknown[][] = [];
+    const rows = [
+      { id: 'a', name: 'A', path: '/m/a.gguf', sizeBytes: 3, addedAt: 0 },
+      { id: 'b', name: 'B', path: '/m/b.gguf', sizeBytes: 4, addedAt: 0 },
+    ];
+    const call = async <T,>(channel: string, ...args: unknown[]): Promise<T> => {
+      calls.push([channel, ...args]);
+      return (channel === 'engine:library' ? rows : { ok: true, message: channel }) as T;
+    };
+    const remote = daemonLibrary(call);
+
+    expect((await remote.find('b'))?.name).toBe('B');
+    expect(await remote.find('nope')).toBeUndefined();
+    expect(await remote.diskUsage()).toBe(7);
+    await remote.savePreset('a', { contextTokens: 4096 });
+    expect(await remote.importFile('/x.gguf')).toEqual({ ok: true, message: 'engine:importModel' });
+    expect(await remote.remove('a')).toEqual({ ok: true, message: 'engine:deleteModel' });
+    expect(calls.filter((c) => c[0] !== 'engine:library')).toEqual([
+      ['engine:saveModelPreset', 'a', { contextTokens: 4096 }],
+      ['engine:importModel', '/x.gguf'],
+      ['engine:deleteModel', 'a'],
+    ]);
   });
 });

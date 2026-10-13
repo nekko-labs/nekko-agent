@@ -25,10 +25,46 @@ pub const CHANNELS: &[&str] = &[
     "server:stop",
 ];
 
-struct BackendEngine(Arc<Backend>);
+/// The engine's host side, except the model list (the daemon's library) and
+/// the install state (the daemon's installers).
+struct BackendEngine(
+    Arc<Backend>,
+    Option<Arc<crate::library::Library>>,
+    Option<Arc<crate::installs::Installs>>,
+    Option<Arc<crate::model_server::Server>>,
+);
 
 impl HostEngine for BackendEngine {
     fn call(&self, method: &'static str, args: Vec<Value>) -> BoxFuture<Result<Value, String>> {
+        if method == "models"
+            && let Some(library) = self.1.clone()
+        {
+            return Box::pin(async move { library.models().await });
+        }
+        if method == "detectEngine"
+            && let Some(installs) = self.2.clone()
+        {
+            return Box::pin(async move { Ok(installs.detect("llama").await) });
+        }
+        if let Some(server) = self.3.clone() {
+            let arg = |i: usize| args.get(i).cloned().unwrap_or(Value::Null);
+            let (first, second) = (arg(0), arg(1));
+            match method {
+                "isRunning" => return Box::pin(async move { Ok(json!(server.model.is_running())) }),
+                "status" => return Box::pin(async move { Ok(server.status().await) }),
+                "resident" => return Box::pin(async move { Ok(json!(server.model.resident())) }),
+                "start" => return Box::pin(async move { Ok(server.model.start().await) }),
+                "stop" => return Box::pin(async move { Ok(server.model.stop().await) }),
+                "load" => {
+                    return Box::pin(async move {
+                        let params = if second.is_object() { second } else { json!({}) };
+                        Ok(server.load(&nekko_js::display(&first), params).await)
+                    });
+                }
+                "unload" => return Box::pin(async move { Ok(server.model.unload(&nekko_js::display(&first)).await) }),
+                _ => {}
+            }
+        }
         let backend = self.0.clone();
         let mut all = vec![json!(method)];
         all.extend(args);
@@ -54,13 +90,16 @@ pub fn new(
     settings: &crate::settings::Settings,
     backend: Arc<Backend>,
     machine: Arc<nekko_machine::Machine>,
+    library: Option<Arc<crate::library::Library>>,
+    installs: Option<Arc<crate::installs::Installs>>,
+    server: Option<Arc<crate::model_server::Server>>,
 ) -> Arc<Runtimes> {
     let store = settings.store.clone();
     let data_dir = store.path().parent().map(std::path::Path::to_path_buf);
     let providers = move || store.get().get("providers").cloned().unwrap_or(Value::Null);
     Arc::new(Runtimes::new(
         Arc::new(SystemIo(reqwest::Client::new())),
-        Arc::new(BackendEngine(backend)),
+        Arc::new(BackendEngine(backend, library, installs, server)),
         Arc::new(MachineProbes(machine)),
         Box::new(providers),
         data_dir,

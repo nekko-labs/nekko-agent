@@ -251,7 +251,32 @@ impl Shared {
     }
 }
 
+/// A title attempt owns its session until its future completes or is dropped.
+#[derive(Default)]
+struct TitleFlights(Arc<Mutex<HashSet<String>>>);
+
+struct TitleFlight {
+    flights: Arc<Mutex<HashSet<String>>>,
+    session_id: String,
+}
+
+impl TitleFlights {
+    fn claim(&self, session_id: &str) -> Option<TitleFlight> {
+        if !lock(&self.0).insert(session_id.to_string()) {
+            return None;
+        }
+        Some(TitleFlight { flights: self.0.clone(), session_id: session_id.to_string() })
+    }
+}
+
+impl Drop for TitleFlight {
+    fn drop(&mut self) {
+        lock(&self.flights).remove(&self.session_id);
+    }
+}
+
 pub struct Turns {
+    title_flights: TitleFlights,
     store: Option<Arc<SessionStore>>,
     data_dir: Option<PathBuf>,
     changes: Arc<ChangeTracker>,
@@ -303,6 +328,7 @@ impl Turns {
         decide: Arc<DecideService>,
     ) -> Self {
         Self {
+            title_flights: TitleFlights::default(),
             store,
             data_dir,
             changes,
@@ -546,10 +572,10 @@ impl Turns {
             && !js::truthy(fresh.get("offline"))
             && fresh.get("titleAuto") == Some(&Value::Bool(true))
             && spec.pointer("/facts/provider").is_some_and(Value::is_object)
+            && let Some(flight) = self.title_flights.claim(&session_id)
         {
-            let messages = fresh.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
             let accounts = self.accounts.enabled().then(|| self.accounts.clone());
-            tokio::spawn(generate_title(backend.clone(), hub.clone(), store.clone(), accounts, spec.clone(), messages));
+            tokio::spawn(generate_title(backend.clone(), hub.clone(), store.clone(), accounts, spec.clone(), flight));
         }
         if summary.get("aborted") == Some(&Value::Bool(true)) || js::truthy(fresh.get("archivedAt")) {
             return summary;
@@ -906,12 +932,24 @@ async fn generate_title(
     store: Arc<SessionStore>,
     accounts: Option<Arc<Accounts>>,
     spec: Value,
-    messages: Vec<Value>,
+    _flight: TitleFlight,
 ) {
-    let Some(content) = turn::title_prompt(&messages) else { return };
     let opts = &spec["opts"];
     let facts = &spec["facts"];
     let session_id = str_at(opts, "sessionId").unwrap_or_default().to_string();
+    // Re-read after claiming: another title may have landed, or the user may
+    // have renamed the chat, since after_turn took its queue snapshot.
+    let (st, id) = (store.clone(), session_id.clone());
+    let Some(fresh) = tokio::task::spawn_blocking(move || st.get(&id)).await.ok().flatten() else { return };
+    if js::truthy(fresh.get("incognito"))
+        || js::truthy(fresh.get("offline"))
+        || fresh.get("titleAuto") != Some(&Value::Bool(true))
+        || !facts.get("provider").is_some_and(Value::is_object)
+    {
+        return;
+    }
+    let messages = fresh.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
+    let Some(content) = turn::title_prompt(&messages) else { return };
     let request = json!({
         "provider": facts["provider"],
         "request": {
@@ -1710,6 +1748,123 @@ impl TurnTools {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn title_flights_are_session_scoped_and_release_on_cancellation() {
+        let flights = TitleFlights::default();
+        let flight = flights.claim("s1").unwrap();
+        assert!(flights.claim("s1").is_none());
+        assert!(flights.claim("s2").is_some());
+        let task = tokio::spawn(async move {
+            let _flight = flight;
+            std::future::pending::<()>().await;
+        });
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(flights.claim("s1").is_some());
+    }
+
+    #[tokio::test]
+    async fn title_flights_release_after_failure_empty_and_protect_renames() {
+        use axum::routing::post;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tx, rx) = mpsc::unbounded_channel::<(bool, String)>();
+        let responses = Arc::new(tokio::sync::Mutex::new(rx));
+        let (seen_tx, mut seen_rx) = mpsc::unbounded_channel();
+        let app = axum::Router::new().route(
+            "/v1/chat/completions",
+            post(move || {
+                let responses = responses.clone();
+                let seen_tx = seen_tx.clone();
+                async move {
+                    seen_tx.send(()).unwrap();
+                    let (fail, text) = responses.lock().await.recv().await.unwrap();
+                    if fail {
+                        return (axum::http::StatusCode::BAD_REQUEST, "bad request".to_string());
+                    }
+                    (
+                        axum::http::StatusCode::OK,
+                        format!(
+                            "data: {}\n\ndata: [DONE]\n\n",
+                            json!({
+                                "choices": [{ "delta": { "content": text }, "finish_reason": "stop" }]
+                            })
+                        ),
+                    )
+                }
+            }),
+        );
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let dir = std::env::temp_dir().join(format!("nekkod-title-flight-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sessions")).unwrap();
+        let path = dir.join("sessions/s_title.json");
+        let session = json!({ "id": "s_title", "title": "Placeholder", "titleAuto": true,
+            "messages": [{ "role": "user", "content": "Fix login" }] });
+        std::fs::write(&path, session.to_string()).unwrap();
+        let store = Arc::new(SessionStore::new(&dir));
+        let flights = TitleFlights::default();
+        let spec = json!({ "opts": { "sessionId": "s_title", "modelId": "synthetic" },
+            "facts": { "provider": { "id": "p1", "kind": "openai-compat",
+                "baseUrl": format!("http://127.0.0.1:{port}/v1") } } });
+        for fail in [true, false] {
+            tx.send((fail, String::new())).unwrap();
+            tokio::time::timeout(
+                Duration::from_secs(10),
+                generate_title(
+                    Backend::disabled(),
+                    Hub::new(),
+                    store.clone(),
+                    None,
+                    spec.clone(),
+                    flights.claim("s_title").unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+            assert_eq!(store.get("s_title").unwrap()["titleAuto"], true);
+            assert!(flights.claim("s_title").is_some(), "failed or empty output releases the claim");
+        }
+        tx.send((false, "Later attempt".into())).unwrap();
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            generate_title(
+                Backend::disabled(),
+                Hub::new(),
+                store.clone(),
+                None,
+                spec.clone(),
+                flights.claim("s_title").unwrap(),
+            ),
+        )
+        .await
+        .unwrap();
+        assert_eq!(store.get("s_title").unwrap()["title"], "Later attempt");
+        assert_eq!(store.get("s_title").unwrap()["titleAuto"], false);
+        std::fs::write(&path, session.to_string()).unwrap();
+        // Hold a successful response, then rename while it is pending.
+        while seen_rx.try_recv().is_ok() {}
+        let task = tokio::spawn(generate_title(
+            Backend::disabled(),
+            Hub::new(),
+            store.clone(),
+            None,
+            spec,
+            flights.claim("s_title").unwrap(),
+        ));
+        tokio::time::timeout(Duration::from_secs(10), seen_rx.recv()).await.unwrap().unwrap();
+        let mut renamed = store.get("s_title").unwrap();
+        renamed["title"] = json!("My name");
+        renamed["titleAuto"] = json!(false);
+        std::fs::write(&path, renamed.to_string()).unwrap();
+        tx.send((false, "Generated title".into())).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+        assert_eq!(store.get("s_title").unwrap()["title"], "My name");
+        assert!(flights.claim("s_title").is_some());
+        server.abort();
+        let _ = server.await;
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     fn call(id: &str) -> Value {
         json!({ "id": id, "name": "bash", "input": { "command": "rm -rf x" } })

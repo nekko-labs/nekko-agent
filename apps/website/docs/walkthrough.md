@@ -107,7 +107,40 @@ list dirs, run shell commands).
 
 Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts target the window you are using, not every chat. **Complete** keeps the chat under its group's **Show completed** control in the left Agent panel for 60 days. **Minimize** removes only the board window: the item remains in the Agent panel, and a terminal keeps running. Terminals do not have completed history; **Close** ends their process.
 
-Settings has **Show tips**, enabled by default. Your first successful completion highlights Show completed with a dismissible explanation. Turning tips off does not disable deletion warnings. The in-app delete dialog offers **Skip future deletion confirmations**; only choose it if you want permanent deletions without another prompt. Re-enable **Confirm deletions** in Settings at any time. General chats no longer display a redundant missing-project label.
+Settings has **Show tips**, enabled by default. Your first successful completion highlights Show completed with a dismissible explanation. On a narrow screen, the existing agent list drawer opens automatically to reveal Show completed without taking focus. If you close it, the highlighted Agents button lets you return to the destination. Opening or closing the drawer does not dismiss the tip. Turning tips off does not disable deletion warnings. The in-app delete dialog offers **Skip future deletion confirmations**; only choose it if you want permanent deletions without another prompt. Re-enable **Confirm deletions** in Settings at any time. General chats no longer display a redundant missing-project label.
+
+### A composer that follows your draft
+
+In the Command Center, one docked composer targets the selected agent window.
+Click another agent window to write in that chat's context, or use the dock picker
+to move the composer above or below the wall.
+
+The reply editor grows with new lines and wrapped text, then shrinks when you
+delete them. In the bottom dock it grows upward, leaving the agent board above
+it in its own scroll area. Once the draft reaches the height cap, only the editor
+scrolls; the header, send controls, queued prompts, images and skill rows stay
+inside the composer ring. A saved manual height remains a preferred minimum,
+not a ceiling that prevents a longer draft from growing.
+
+### Follow delegated work without opening every detail
+
+Delegation cards start collapsed, including while a child is working or returning
+a large result. Their compact, plain-text activity sentence shares its status
+with the plan's sub-agent list and the working-subagent indicator:
+
+- **Working**: the child is thinking, writing or using a tool.
+- **Waiting**: it needs an answer or approval, or is waiting to retry.
+- **Completed**, **Failed** or **Stopped**: recorded terminal events, not guesses
+  based on the presence of a stored reply.
+
+Expand a card to read the full task and result in bounded scroll areas. This does
+not resize the entire agent window. Summaries use existing local events, without
+an extra model request or additional transmission.
+
+Live card-to-child matching is best effort, using the parent, title and creation
+time. There is no authoritative spawn-call child ID yet. Ambiguous matches and
+historical calls without observed events do not borrow another child's status;
+they retain a task summary or report that no current run status is recorded.
 
 ### Plan and capacity at a glance
 

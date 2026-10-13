@@ -199,6 +199,8 @@ impl Backend {
         tx: &watch::Sender<State>,
     ) -> Result<String, String> {
         let mut command = Command::new(&cmd.exe);
+        #[cfg(windows)]
+        command.creation_flags(0x0800_0000);
         command
             .args(&cmd.args)
             .envs(&cmd.env)

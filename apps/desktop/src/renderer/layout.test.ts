@@ -5,7 +5,9 @@ import {
   canSplit,
   extent,
   isSplit,
+  dockPane,
   movePane,
+  movePaneToEdge,
   removePane,
   resizeSplit,
   splitPane,
@@ -257,5 +259,44 @@ describe('swapPanes', () => {
 
     const viaSwap = swapPanes(pair(), 'a', 'b') as WbSplit;
     expect(viaSwap.children.map((c) => (c as WbPane).refId)).toEqual(['term-1', 'chat-1']);
+  });
+});
+
+describe('dragging to an edge of the whole board', () => {
+  const stacked = (): WbSplit => ({ id: 's', dir: 'col', children: [pane('a'), pane('b')], sizes: [0.5, 0.5] });
+  const columns = (): WbSplit => ({ id: 'r', dir: 'row', children: [pane('a'), pane('b')], sizes: [0.5, 0.5] });
+
+  it('turns two stacked windows into two columns', () => {
+    const root = movePaneToEdge(stacked(), 'b', 'right')!;
+    expect(isSplit(root) && root.dir).toBe('row');
+    expect(kids(root)).toEqual(['a', 'b']);
+    expect((root as WbSplit).sizes).toEqual([0.5, 0.5]);
+  });
+
+  it('adds a third equal column on the right edge of two columns', () => {
+    const root = dockPane(columns(), pane('c'), 'right') as WbSplit;
+    expect(kids(root)).toEqual(['a', 'b', 'c']);
+    for (const s of root.sizes) expect(s).toBeCloseTo(1 / 3);
+  });
+
+  it('puts one wide row under two columns from the bottom edge', () => {
+    const root = dockPane(columns(), pane('c'), 'down') as WbSplit;
+    expect(root.dir).toBe('col');
+    expect(kids(root)).toEqual(['row', 'c']);
+    expect(root.sizes).toEqual([0.5, 0.5]);
+  });
+
+  it('docks on the left and top edges too', () => {
+    expect(kids(dockPane(columns(), pane('c'), 'up'))).toEqual(['c', 'row']);
+    const left = dockPane(stacked(), pane('c'), 'left') as WbSplit;
+    expect(kids(left)).toEqual(['c', 'col']);
+    expect(left.sizes).toEqual([0.5, 0.5]);
+  });
+
+  it('leaves a lone window and the 8x8 ceiling alone', () => {
+    expect(movePaneToEdge(pane('a'), 'a', 'right')).toEqual(pane('a'));
+    const full: WbSplit = { id: 'f', dir: 'row', children: Array.from({ length: MAX_ACROSS }, (_, i) => pane(`p${i}`)), sizes: Array(MAX_ACROSS).fill(1 / MAX_ACROSS) };
+    const withExtra: WbSplit = { id: 'c', dir: 'col', children: [full, pane('x')], sizes: [0.5, 0.5] };
+    expect(movePaneToEdge(withExtra, 'x', 'right')).toBe(withExtra);
   });
 });

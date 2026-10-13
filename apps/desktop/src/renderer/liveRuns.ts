@@ -69,6 +69,8 @@ export interface LiveRun {
   retrying?: { attempt: number; maxAttempts: number; delayMs: number; reason: string; at: number };
 }
 
+import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity } from './subagentActivity.js';
+
 const runs = new Map<string, LiveRun>();
 /**
  * Runs that just ended, kept until the pane showing them has the persisted
@@ -173,6 +175,8 @@ const STARTS_RUN = new Set<AgentEvent['type']>([
  */
 export function applyEvent(event: AgentEvent, now = Date.now()): void {
   const id = event.sessionId;
+  if (!runs.has(id) && STARTS_RUN.has(event.type)) startSubagentActivity(id);
+  foldSubagentActivity(event, now);
 
   // The rail folds first, so a card repainted this frame is never a step behind.
   const folded = reduceLiveActivity(runs.get(id)?.activity, event, now);
@@ -306,7 +310,9 @@ export function runningSessionIds(): string[] {
  * transcript, so the live copy and the stored copy are never both on screen.
  */
 export function clearLiveRun(sessionId: string): void {
-  if (!runs.delete(sessionId)) return;
+  if (!runs.has(sessionId)) return;
+  stopSubagentActivity(sessionId);
+  runs.delete(sessionId);
   markDirty(sessionId);
 }
 
@@ -369,6 +375,7 @@ export function describeRun(sessionId: string): string {
 
 /** Reset everything. Tests only. */
 export function __resetLiveRuns(): void {
+  resetSubagentActivity();
   runs.clear();
   finished.clear();
   listeners.clear();

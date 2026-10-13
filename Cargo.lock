@@ -1420,10 +1420,13 @@ dependencies = [
  "futures-util",
  "libc",
  "nekko-js",
+ "nekko-tools",
  "nekko-usage",
  "regress",
  "reqwest",
  "serde_json",
+ "sha1",
+ "sha2",
  "tokio",
  "url",
 ]

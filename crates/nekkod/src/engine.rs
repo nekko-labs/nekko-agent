@@ -14,6 +14,9 @@ use std::sync::Arc;
 
 pub struct Engine {
     pub supervisor: Arc<Supervisor>,
+    /// The model server's policy, once the daemon runs it (`model_server.rs`);
+    /// until then the router asks the TS engine.
+    pub server: Arc<std::sync::OnceLock<Arc<nekko_engine::server::ModelServer>>>,
     pub router: EngineRouter,
     /// The resident decision model, shared by the `decide:*` channels and the router.
     pub decide: Arc<DecideService>,
@@ -23,9 +26,10 @@ impl Engine {
     pub fn new(backend: Arc<Backend>) -> Self {
         let supervisor = Arc::new(Supervisor::new());
         let decide = DecideService::new();
-        let router = EngineRouter::new(supervisor.clone(), Arc::new(BackendPolicy { backend }))
+        let server: Arc<std::sync::OnceLock<Arc<nekko_engine::server::ModelServer>>> = Arc::default();
+        let router = EngineRouter::new(supervisor.clone(), Arc::new(BackendPolicy { backend, server: server.clone() }))
             .with_decisions(Arc::new(RouterDecisions(decide.clone())));
-        Self { supervisor, router, decide }
+        Self { supervisor, server, router, decide }
     }
 
     pub fn shutdown(&self) {
@@ -34,15 +38,21 @@ impl Engine {
     }
 }
 
+/// The model server's answers: the daemon's own policy when it runs it, else the TS engine's.
 struct BackendPolicy {
     backend: Arc<Backend>,
+    server: Arc<std::sync::OnceLock<Arc<nekko_engine::server::ModelServer>>>,
 }
 
 impl Policy for BackendPolicy {
     fn load(&self, model: String, image: bool) -> BoxFuture<Result<(), (u16, String)>> {
         let backend = self.backend.clone();
+        let server = self.server.get().cloned();
         Box::pin(async move {
-            let r = backend.call("engine:routerLoad", json!([model, image])).await.map_err(|e| (503, e))?;
+            let r = match server {
+                Some(server) => server.router_load(&model, image).await,
+                None => backend.call("engine:routerLoad", json!([model, image])).await.map_err(|e| (503, e))?,
+            };
             if r.get("ok").and_then(Value::as_bool) == Some(true) {
                 return Ok(());
             }
@@ -54,13 +64,23 @@ impl Policy for BackendPolicy {
 
     fn models(&self) -> BoxFuture<Result<Value, String>> {
         let backend = self.backend.clone();
-        Box::pin(async move { backend.call("engine:routerModels", json!([])).await })
+        let server = self.server.get().cloned();
+        Box::pin(async move {
+            match server {
+                Some(server) => Ok(server.router_models().await),
+                None => backend.call("engine:routerModels", json!([])).await,
+            }
+        })
     }
 
     fn model(&self, id: String) -> BoxFuture<Result<Option<Value>, String>> {
         let backend = self.backend.clone();
+        let server = self.server.get().cloned();
         Box::pin(async move {
-            let v = backend.call("engine:routerModel", json!([id])).await?;
+            let v = match server {
+                Some(server) => server.router_model(&id).await,
+                None => backend.call("engine:routerModel", json!([id])).await?,
+            };
             Ok((!v.is_null()).then_some(v))
         })
     }

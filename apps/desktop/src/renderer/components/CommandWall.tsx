@@ -7,6 +7,7 @@ import {
   canSplit,
   isSplit,
   movePane,
+  movePaneToEdge,
   removePane,
   resizeSplit,
   splitPane,
@@ -121,7 +122,7 @@ function CompanionBody({ pane }: { pane: WbPane }) {
 }
 import { COMPACT_HEIGHT, COMPACT_WIDTH, PaneDensityHint } from './agent-console/useElementWidth.js';
 import { TerminalPane } from './TerminalPane.js';
-import { PaneActions, PaneFrame } from './PaneFrame.js';
+import { PANE_DRAG_TYPE, PaneActions, PaneFrame } from './PaneFrame.js';
 import { Divider } from './Divider.js';
 import { WallEmptyIllustration } from './WallEmptyIllustration.js';
 import { AgentLogsDrawer } from './AgentLogsDrawer.js';
@@ -169,6 +170,8 @@ export interface WallGeometry {
   addGrid: WbNode | null;
   grid: WbNode | null;
   stageHeight: number;
+  /** Grid (fixed) only: the cells no window fills, drawn as quiet placeholders. */
+  empty: Array<{ x: number; y: number; width: number; height: number }>;
 }
 
 /** Expand companion-bearing leaves for display only; never write these ratios back. */
@@ -223,7 +226,14 @@ export function commandWallGeometry(state: CommandWallState, width: number, heig
     const add = { x: (i % cols) * (cellWidth + gap), y: Math.floor(i / cols) * (rowHeight + gap), width: cellWidth, height: rowHeight };
     if (!preview) Object.assign(add, { x: width, y: contentHeight, width: 0, height: rail });
     deckPanes.forEach((p, i) => panes.set(p.id, { x: i * 248, y: contentHeight + gap, width: 240, height: 160 }));
-    return { panes, deck, hero, height: contentHeight + (deck.size ? 168 + gap : 0), add, addGrid: grid, grid, stageHeight };
+    // Every cell of the chosen grid (and the rest of an overflow row) that no
+    // window or Add slot takes. A one-column phone stack has no empty squares.
+    const empty: WallGeometry['empty'] = [];
+    if (width >= NARROW_WIDTH) {
+      const cells = Math.max(cols * state.layout.rows, Math.ceil(slots / cols) * cols);
+      for (let c = slots; c < cells; c++) empty.push({ x: (c % cols) * (cellWidth + gap), y: Math.floor(c / cols) * (rowHeight + gap), width: cellWidth, height: rowHeight });
+    }
+    return { panes, deck, hero, height: contentHeight + (deck.size ? 168 + gap : 0), add, addGrid: grid, grid, stageHeight, empty };
   } else {
     const rectOf = (r: { x: number; y: number; width: number; height: number }) => ({
       x: r.x * width + (r.x > 0 ? gap / 2 : 0),
@@ -234,10 +244,27 @@ export function commandWallGeometry(state: CommandWallState, width: number, heig
     for (const [id, r] of leafRects(addGrid)) panes.set(id, rectOf(r));
     const add = preview ? panes.get('__wall_add__') ?? { x: 0, y: stageHeight + gap, width, height: 240 } : { x: width, y: stageHeight, width: 0, height: rail };
     panes.delete('__wall_add__');
-    return { panes, deck, hero, height: stageHeight, add, addGrid, grid, stageHeight };
+    return { panes, deck, hero, height: stageHeight, add, addGrid, grid, stageHeight, empty: [] };
   }
   // Focus keeps other bodies warm but selects them through the row above the hero.
-  return { panes, deck, hero, height: state.layout.mode === 'focus' ? contentHeight : contentHeight + gap + deckHeight, add: { x: 0, y: contentHeight + gap, width: Math.min(width, Math.max(280, width / 3)), height: 240 }, addGrid, grid, stageHeight };
+  return { panes, deck, hero, height: state.layout.mode === 'focus' ? contentHeight : contentHeight + gap + deckHeight, add: { x: 0, y: contentHeight + gap, width: Math.min(width, Math.max(280, width / 3)), height: 240 }, addGrid, grid, stageHeight, empty: [] };
+}
+
+const BOARD_EDGES: Direction[] = ['up', 'down', 'left', 'right'];
+
+/**
+ * Where a window dragged to one side of the whole Dynamic board would end up,
+ * in stage pixels: a full-height column on the left or right, a full-width
+ * row on the top or bottom. Null when that drop would change nothing.
+ */
+export function boardEdgePreview(state: CommandWallState, paneId: string, side: Direction, width: number, height: number, expanded = new Set<string>()): { x: number; y: number; width: number; height: number } | null {
+  const moved = movePaneToEdge(state.root, paneId, side);
+  if (!moved || moved === state.root) return null;
+  const r = leafRects(companionTree(filterTree(moved, state.filter), expanded)).get(paneId);
+  if (!r) return null;
+  const before = leafRects(companionTree(filterTree(state.root, state.filter), expanded)).get(paneId);
+  if (before && Math.abs(before.x - r.x) < 1e-6 && Math.abs(before.y - r.y) < 1e-6 && Math.abs(before.width - r.width) < 1e-6 && Math.abs(before.height - r.height) < 1e-6) return null;
+  return { x: r.x * width, y: r.y * height, width: r.width * width, height: r.height * height };
 }
 
 /** Stable keyed windows across layouts keep transcripts, terminals and drafts warm. */
@@ -336,6 +363,10 @@ export function CommandWall({
       document.removeEventListener('visibilitychange', measure);
     };
   }, [measure]);
+
+  // The side of the whole board a dragged window is over, in Dynamic.
+  const [edgeOver, setEdgeOver] = useState<Direction | null>(null);
+  useEffect(() => { if (!dragging) setEdgeOver(null); }, [dragging]);
 
   useEffect(() => {
     if (!dragging) return;
@@ -660,9 +691,50 @@ export function CommandWall({
       {companionNotice && <div className="command-wall-notice" role="status">A companion opened in a narrow window. <button onClick={() => { focusWindow(companionNotice); setCompanionNotice(null); }}>Focus {titleOf(companionNotice)}</button><button aria-label="Dismiss companion notice" onClick={() => setCompanionNotice(null)}>×</button></div>}
       <div className="command-wall-stage" style={{ height: Math.max(geometry.height, addContent ? geometry.add.y + createHeight + 64 : 0), width: size.width }}>
         <div className="command-wall-pane-stage" style={{ position: 'absolute', inset: 0, top: 0 }}>
+        {/* Grid's unfilled squares, drawn under the windows as quiet hatching. */}
+        {state.layout.mode === 'fixed' && geometry.panes.size > 0 && geometry.empty.map((r, i) => (
+          <div key={`empty-${i}`} className="command-wall-empty-cell" aria-hidden data-wall-empty-cell style={{ left: r.x, top: r.y, width: r.width, height: r.height }} />
+        ))}
         {allPanes(state.root).map(renderLeaf)}
         {logsPane && logsLayout?.drawer && <AgentLogsDrawer key={logsPane.refId} sessionId={logsPane.refId} title={titleOf(logsPane)} rect={logsLayout.drawer} overlay={logsOverlay} selected={logsPane.refId === selectedId} />}
         {!addContent && state.layout.mode === 'grid' && size.width >= NARROW_WIDTH && geometry.addGrid && renderDividers(geometry.addGrid)}
+        {/* Dynamic: each side of the whole board is a landing zone too, so a
+            window can become a full-height column or a full-width row without
+            aiming at another window. The preview shows where it would land. */}
+        {dragging && !addContent && state.layout.mode === 'grid' && size.width >= NARROW_WIDTH && allPanes(state.root).length > 1 && <>
+          {edgeOver && (() => {
+            const r = boardEdgePreview(state, dragging, edgeOver, size.width, geometry.stageHeight, expanded);
+            return r && <div className="command-wall-edge-preview" aria-hidden data-edge={edgeOver} style={{ left: r.x, top: r.y, width: r.width, height: r.height }}>
+              <span>{edgeOver === 'left' || edgeOver === 'right' ? 'New column' : 'Full-width row'}</span>
+            </div>;
+          })()}
+          {BOARD_EDGES.map((side) => (
+            <div
+              key={side}
+              className="command-wall-edge"
+              data-edge={side}
+              data-over={edgeOver === side || undefined}
+              aria-hidden
+              onDragOver={(e) => {
+                if (!e.dataTransfer.types.includes(PANE_DRAG_TYPE)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (edgeOver !== side) setEdgeOver(side);
+              }}
+              onDragLeave={(e) => {
+                const to = e.relatedTarget as Node | null;
+                if (!to || !e.currentTarget.contains(to)) setEdgeOver((s) => (s === side ? null : s));
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const { dragging, update } = live.current;
+                if (dragging) update((root) => movePaneToEdge(root, dragging, side));
+                setEdgeOver(null);
+                setDragging(null);
+              }}
+            />
+          ))}
+        </>}
         </div>
         {/* Add window lives beside the composer; the wall only shows the slot it opens. */}
         {addContent && <div className="command-wall-add-zone">

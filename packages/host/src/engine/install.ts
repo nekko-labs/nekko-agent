@@ -361,6 +361,21 @@ export function createEngineInstaller(deps: EngineInstallerDeps) {
 
 export type EngineInstaller = ReturnType<typeof createEngineInstaller>;
 
+/**
+ * One runtime's installer as a host under the engine daemon sees it: the
+ * daemon installs and removes runtimes and writes `<data>/engine`
+ * (`NEKKOD_OWNS` `runtimes`), so every call is the daemon's.
+ */
+export function daemonInstaller(call: <T>(channel: string, ...args: unknown[]) => Promise<T>, runtime: 'llama' | 'diffusion'): EngineInstaller {
+  return {
+    detect: () => call('engine:detect', runtime),
+    install: (buildId?: string) => call('engine:install', buildId ?? null, runtime),
+    uninstall: () => call('engine:uninstall', runtime),
+    preview: (buildId?: string) => call('engine:installPreview', runtime, buildId ?? null),
+    installedBin: async () => (await call<string | null>('engine:installedBin')) ?? undefined,
+  };
+}
+
 async function isExecutable(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isFile();
