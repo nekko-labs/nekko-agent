@@ -14,6 +14,7 @@ mod connectors;
 mod context;
 mod decide;
 mod decisions;
+mod downloads;
 mod engine;
 mod hub;
 mod hypergate;
@@ -98,6 +99,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                         watches::OWNS,
                         sandbox::OWNS,
                         library::OWNS,
+                        downloads::OWNS,
                     ]
                     .join(","),
                 );
@@ -137,7 +139,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         || cfg.backend.as_ref().is_some_and(|b| b.env.get("NEKKO_AGENT_LOOP").is_some_and(|v| v == "ts"));
     let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
         .then(|| admission::Admission::new(&hub, cfg.allow_browser_control, ts_loop));
-    let catalog = settings.as_deref().map(catalog::new);
+    let catalog = settings.as_deref().map(|s| catalog::new(s, cfg.hugging_face_url.clone()));
     let automation =
         Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), backend.clone(), hub.clone()));
     let remote = Arc::new(remote::Remote::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
@@ -201,6 +203,13 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         machine,
         runtimes: runtimes.clone(),
         library: library.clone(),
+        downloads: library.clone().zip(catalog.clone()).map(|(library, catalog)| {
+            let fetch = downloads::Rebased(
+                nekko_engine::download::HttpFetch(reqwest::Client::new()),
+                cfg.hugging_face_url.clone(),
+            );
+            downloads::ModelDownloads::new(Arc::new(fetch), library, catalog, backend.clone(), hub.clone())
+        }),
         resource_queue: cfg.data_dir.clone().map(|d| {
             Arc::new(resource_queue::ResourceQueue::new(
                 std::path::PathBuf::from(d),

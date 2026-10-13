@@ -1,8 +1,10 @@
 //! The engine's services for the daemon, ported from `packages/host/src/engine`
 //! one at a time and held to the TS by golden sets the host writes.
 
+pub mod acquire;
 pub mod capacity;
 pub mod catalog;
+pub mod download;
 pub mod folders;
 pub mod gguf;
 pub mod library;
