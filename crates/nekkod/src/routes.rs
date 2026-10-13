@@ -55,6 +55,8 @@ pub struct Ctx {
     pub library: Option<Arc<crate::library::Library>>,
     /// Model downloads (`engine:downloadModel`...), with the library and the catalog.
     pub downloads: Option<Arc<crate::downloads::ModelDownloads>>,
+    /// The runtime installers (`engine:install`...), with the downloads.
+    pub installs: Option<Arc<crate::installs::Installs>>,
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -290,6 +292,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::oauth::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
             ctx.oauth.as_ref().expect("checked").route(c, &args).await
         }
+        c if crate::installs::CHANNELS.contains(&c) && ctx.installs.is_some() => {
+            ctx.installs.clone().expect("checked").route(c, &args).await
+        }
         c if crate::downloads::CHANNELS.contains(&c) && ctx.downloads.is_some() => {
             ctx.downloads.clone().expect("checked").route(c, &args).await
         }
@@ -414,6 +419,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.downloads.is_some() {
         all.extend_from_slice(crate::downloads::CHANNELS);
+    }
+    if ctx.installs.is_some() {
+        all.extend_from_slice(crate::installs::CHANNELS);
     }
     if crate::connectors::owned(ctx) {
         all.extend_from_slice(crate::connectors::CHANNELS);

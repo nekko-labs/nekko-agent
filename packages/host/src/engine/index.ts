@@ -1,4 +1,4 @@
-import { createMlxRuntime, mlxSupported } from './mlx.js';
+import { createMlxRuntime, daemonMlxRuntime, mlxSupported } from './mlx.js';
 import { readGgufMetadata } from './gguf.js';
 import { daemonCall, daemonOwns, engineDaemon } from './daemon.js';
 import type { GpuAdapter } from '../gpu-adapters.js';
@@ -35,7 +35,7 @@ import { companionsBeside, imageCompanionsDir, imageCompanionSetFor, imageCompan
 import { createDecisions } from './decisions.js';
 import { createDownloads, type DownloadRequest } from './download.js';
 import { knownFolder, knownFolderCandidates } from './folders.js';
-import { createEngineInstaller } from './install.js';
+import { createEngineInstaller, daemonInstaller } from './install.js';
 import { createLibrary, daemonLibrary, PRIMARY_FOLDER_ID, type Library, type LibraryApi } from './library.js';
 import { createEngineServer } from './server.js';
 
@@ -98,7 +98,9 @@ export function createEngine(deps: EngineDeps) {
   const daemonDownloads = daemonOwns('downloads') ? daemonCall() : undefined;
   const library: LibraryApi = daemon ? daemonLibrary(daemon) : localLibrary;
   const catalog = createCatalog({ token: deps.hfToken, mlx: () => mlxSupported() });
-  const installer = createEngineInstaller({
+  // The runtimes too: the daemon installs them and writes `<data>/engine`.
+  const daemonRuntimes = daemonOwns('runtimes') ? daemonCall() : undefined;
+  const installer = daemonRuntimes ? daemonInstaller(daemonRuntimes, 'llama') : createEngineInstaller({
     engineDir,
     downloads,
     getGpuStats: deps.getGpuStats,
@@ -113,8 +115,10 @@ export function createEngine(deps: EngineDeps) {
   // llama.cpp runtime: it is the one that serves the models being sized.
   setEngineBinResolver(() => installer.installedBin());
 
-  const diffusionInstaller = createEngineInstaller({ runtime: 'diffusion', engineDir: () => join(engineDir(), 'diffusion'), downloads, getGpuStats: deps.getGpuStats });
-  const mlxRuntime = createMlxRuntime({ dir: () => join(engineDir(), 'mlx'), downloads });
+  const diffusionInstaller = daemonRuntimes
+    ? daemonInstaller(daemonRuntimes, 'diffusion')
+    : createEngineInstaller({ runtime: 'diffusion', engineDir: () => join(engineDir(), 'diffusion'), downloads, getGpuStats: deps.getGpuStats });
+  const mlxRuntime = daemonRuntimes ? daemonMlxRuntime(daemonRuntimes) : createMlxRuntime({ dir: () => join(engineDir(), 'mlx'), downloads });
 
   const server = createEngineServer({
     settings: deps.settings,
@@ -376,7 +380,9 @@ export function createEngine(deps: EngineDeps) {
     detectEngine: () => installer.detect(),
     installEngine: (buildId?: string, runtime: 'llama' | 'diffusion' | 'mlx' = 'llama') =>
       runtime === 'mlx' ? mlxRuntime.install() : (runtime === 'diffusion' ? diffusionInstaller : installer).install(buildId),
-    uninstallEngine: async (runtime: 'llama' | 'diffusion' | 'mlx' = 'llama') => {
+    uninstallEngine: async (runtime: 'llama' | 'diffusion' | 'mlx' = 'llama'): Promise<{ ok: boolean; message: string }> => {
+      // The daemon checks the server (through this host) and its own queue.
+      if (daemonRuntimes) return daemonRuntimes('engine:uninstall', runtime);
       if (server.isRunning()) return { ok: false, message: 'Stop the model server before uninstalling a runtime.' };
       if (downloads.list().some(j => j.id.startsWith(`engine:${runtime}:`) && downloads.isActive(j.id))) return { ok: false, message: 'Wait for the runtime installation to finish or cancel it before uninstalling.' };
       if (runtime === 'mlx') return mlxRuntime.uninstall();

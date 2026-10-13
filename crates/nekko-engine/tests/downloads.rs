@@ -133,7 +133,8 @@ async fn runs_the_queue_as_the_host_does() {
                 "start" => {
                     let raw = denorm(&root, &op["req"]);
                     let mut req = Request::from_value(&raw);
-                    req.verify_gguf = raw.get("verifyGguf") == Some(&Value::Bool(true));
+                    req.verify =
+                        (raw.get("verifyGguf") == Some(&Value::Bool(true))).then(nekko_engine::download::gguf_verify);
                     downloads.start(req)
                 }
                 "settle" => {

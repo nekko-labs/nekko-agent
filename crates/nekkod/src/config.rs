@@ -47,6 +47,9 @@ pub struct Config {
     /// Where Hugging Face is (`https://huggingface.co`), for the model
     /// catalog and model downloads; tests point it at a loopback server.
     pub hugging_face_url: Option<String>,
+    /// Where GitHub's API is (`https://api.github.com`), for the runtime
+    /// installers; tests point it at a loopback server.
+    pub github_api_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
