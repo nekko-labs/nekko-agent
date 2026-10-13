@@ -1,3 +1,5 @@
+// First, so every module below sees the real packaging state in dev.
+import './devRuntime.js';
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';

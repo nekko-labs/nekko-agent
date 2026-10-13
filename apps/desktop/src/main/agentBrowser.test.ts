@@ -24,7 +24,7 @@ const fake = vi.hoisted(() => {
   return { Window, windows };
 });
 vi.mock('electron', () => ({ BrowserWindow: fake.Window, app: { userAgentFallback: 'test', getPath: () => '' } }));
-import { startAgentBrowser, type BrowserDriver } from './agentBrowser.js';
+import { errorLine, startAgentBrowser, type BrowserDriver } from './agentBrowser.js';
 
 afterEach(() => { fake.windows.length = 0; });
 
@@ -132,5 +132,15 @@ describe('private Electron browser bridge', () => {
       expect(fake.windows[2].destroyed).toBe(false);
     } finally { bridge.close(); }
     expect(fake.windows.every((w) => w.destroyed)).toBe(true);
+  });
+});
+
+describe('errorLine', () => {
+  it('reports a message-less page rejection instead of crashing on it', () => {
+    expect(errorLine({})).toBe('Browser request failed.');
+    expect(errorLine(undefined)).toBe('Browser request failed.');
+    expect(errorLine({ message: 'denied\nstack' })).toBe('denied');
+    expect(errorLine(new Error('first\nsecond'))).toBe('first');
+    expect(errorLine('plain')).toBe('plain');
   });
 });
