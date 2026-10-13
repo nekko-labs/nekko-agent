@@ -372,7 +372,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
     // Historical milestones stay anchored to their original transcript positions.
     return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} />)}</>;
   }
-  const persisted = row.message.id !== 'tmp' && row.message.id !== 'live';
+  const persisted = !row.displayOnly && row.message.id !== 'tmp' && row.message.id !== 'live';
   const editable = !readOnly && !streaming && row.message.role === 'user' && persisted;
   return (
     <>

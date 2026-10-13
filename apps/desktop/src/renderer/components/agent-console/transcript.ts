@@ -1,4 +1,26 @@
+import { ASK_CANCELLED, ASK_UNATTENDED, parseAskRequest } from '@nekko-agent/shared';
 import type { ChatMessage, ToolCall, ToolResult, PrInfo, PrState } from '@nekko-agent/shared';
+
+/** Display-only projection of the persisted tool reply, never model history.
+ * Keep the Q/A body literal: labels and notes cannot be reconstructed from the
+ * formatter's comma-separated text without losing what the person selected. */
+function askReply(call: ToolCall, message: ChatMessage): ChatMessage | undefined {
+  const result = message.toolResult;
+  if (call.name !== 'ask_user' || !result || result.isError) return;
+  const parsed = parseAskRequest(call.id, call.input, message.createdAt);
+  if ('error' in parsed) return;
+  const prefix = 'The user answered:\n\n';
+  const suffix = '\n\nWork to these answers. Do not ask again about anything settled here.';
+  let content: string;
+  if (result.output.startsWith(prefix) && result.output.endsWith(suffix)) {
+    content = result.output.slice(prefix.length, -suffix.length);
+    if (!content.startsWith('Q: ') || !content.includes('\nA: ')) return;
+  } else if (result.output === ASK_CANCELLED || result.output === ASK_UNATTENDED) {
+    const state = result.output === ASK_CANCELLED ? '(skipped / not answered)' : '(not answered: unattended time limit)';
+    content = parsed.request.questions.map((q) => `Q: ${q.question}\nA: ${state}`).join('\n\n');
+  } else return;
+  return { id: `${message.id}_ask_reply`, role: 'user', content, createdAt: message.createdAt };
+}
 
 /**
  * Pure transcript model for the agent console: how a raw message list folds
@@ -25,7 +47,17 @@ export type StreamBlock =
  * activity group so a many-step turn reads as a single expandable line instead
  * of a wall of "Used <tool>" rows. Only the final answer stays a bubble.
  */
-export function toStreamBlocks(messages: ChatMessage[]): StreamBlock[] {
+export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] = messages): StreamBlock[] {
+  const calls = new Map<string, ToolCall>();
+  const replies = new Map<ChatMessage, ChatMessage>();
+  const answered = new Set<string>();
+  for (const m of context) {
+    if (m.role === 'assistant') for (const call of m.toolCalls ?? []) calls.set(call.id, call);
+    if (m.role !== 'tool' || !m.toolResult) continue;
+    const call = calls.get(m.toolResult.toolCallId);
+    const reply = call && !answered.has(call.id) && askReply(call, m);
+    if (reply) { replies.set(m, reply); answered.add(m.toolResult.toolCallId); }
+  }
   const results = new Map(messages.flatMap((m) => m.toolResult ? [[m.toolResult.toolCallId, m.toolResult] as const] : []));
   const blocks: StreamBlock[] = [];
   let run: Activity[] = [];
@@ -58,7 +90,11 @@ export function toStreamBlocks(messages: ChatMessage[]): StreamBlock[] {
   messages.forEach((m, i) => { if (m.role === 'assistant') lastAssistant = i; });
 
   messages.forEach((m, i) => {
-    if (m.role === 'tool') return;
+    if (m.role === 'tool') {
+      const reply = replies.get(m);
+      if (reply) { flush(); blocks.push({ type: 'msg', message: reply }); }
+      return;
+    }
     if (m.role === 'user') { flush(); blocks.push({ type: 'msg', message: m }); return; }
     // Assistant messages that still call tools are working steps; the one that
     // stops calling tools is the answer.
@@ -88,7 +124,7 @@ const PR_CARD_GAP = 8;
  * PR lifecycle milestone. PR cards never live at a moving transcript tail.
  */
 export type TranscriptRow =
-  | { key: string; kind: 'msg'; message: ChatMessage; prUrls: string[]; gapAfter?: number }
+  | { key: string; kind: 'msg'; message: ChatMessage; prUrls: string[]; displayOnly?: boolean; gapAfter?: number }
   | { key: string; kind: 'activity'; items: Activity[]; gapAfter?: number }
   | { key: string; kind: 'prs'; urls: string[]; event: 'created' | PrState; gapAfter?: number }
   /** A compaction summary: a divider under the turns it replaced, then the summary. */
@@ -108,6 +144,8 @@ export function toTranscriptRows(
   prs: PrInfo[] = [],
 ): TranscriptRow[] {
   const rows: TranscriptRow[] = [];
+  // Identity membership is shared by every row, not a full history scan per row.
+  const persisted = new Set(messages);
   const known = new Set(collectUrls(messages));
   const shown = new Set<string>();
   const anchors = new Map<number, Array<{ url: string; event: 'created' | PrState }>>();
@@ -151,7 +189,7 @@ export function toTranscriptRows(
   let latestSummary: string | undefined;
   for (const m of messages) if (m.compaction) latestSummary = m.id;
   const append = (chunk: ChatMessage[]) => {
-    for (const b of toStreamBlocks(chunk)) {
+    for (const b of toStreamBlocks(chunk, messages)) {
       if (b.type !== 'msg') {
         rows.push({ key: unique(b.key), kind: 'activity', items: b.items });
         continue;
@@ -162,7 +200,7 @@ export function toTranscriptRows(
         continue;
       }
       if (m.role === 'assistant' && !m.content && !m.reasoning && !m.toolCalls?.length && !m.images?.length) continue;
-      rows.push({ key: unique('m_' + m.id), kind: 'msg', message: m, prUrls: [] });
+      rows.push({ key: unique('m_' + m.id), kind: 'msg', message: m, prUrls: [], ...(persisted.has(m) ? {} : m.role === 'user' ? { displayOnly: true } : {}) });
     }
   };
   let start = 0;
