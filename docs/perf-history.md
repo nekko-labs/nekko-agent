@@ -617,3 +617,11 @@ are ever revisited.
 - #214 (2026-09-30) speed contract budgets (8 ms keypress to paint) written down.
 - #102 (2026-07-25) CPU/memory/GPU/VRAM monitors: readings only.
 - Commit `65a9d538` (2026-10-12) hidden perf browsers on Windows.
+
+### #514 Current-head streaming diagnostic gap (2026-10-13)
+Area: renderer, perf harness. Result: regression gate failure; attribution unresolved.
+Conditions: Actions run 38363888450, PR head bdaa164c merged into bf494d77 as 9a22b4e, Ubuntu shared runner, headless Chrome/154.0.8037.97, release nekkod, three full attempts.
+
+The full gate reports stream-frame-work p50 8.5 ms, p95 **10.7 ms**, max 14.0 ms, n=190 over 6s at 300 tokens/s (27% main-thread busy). All attempt p95 values **10.7 / 10.9 / 11.4 ms** miss the unchanged **10 ms** gate. Other full-gate rows pass. This is not a passing result.
+
+Downloaded perf-report and profile-base/profile-head evidence confirm both followup diagnostics ran only latency, not streaming. Their warm/cold misses cannot attribute this stream failure. The diagnostic workflow now profiles frames on base and head and requires release nekkod without fallback; the original full-gate failure remains failed. No diagnostic rerun or measured improvement is claimed. Next: inspect the next pushed-head streaming profiles and compare base/head frame costs before proposing a renderer fix. Source: https://github.com/nekko-labs/nekko-agent/actions/runs/38363888450
