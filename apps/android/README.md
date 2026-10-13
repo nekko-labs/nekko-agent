@@ -15,7 +15,9 @@ reference until this app reaches parity.
   or a `nekko-agent-pair:` link from the system camera (with confirmation).
   Several computers; one connected at a time; rename / switch / forget.
 - **Chats on the computer:** list with *Running* / *Needs you* badges and
-  pull-to-refresh; new chat with provider, model and folder; live streamed
+  pull-to-refresh; new chat on any of the computer's models (every enabled
+  provider's list in one picker, opening on its default or latest-used model)
+  and folder; live streamed
   replies; Stop; prompts sent during a run are queued; **Allow / Deny** cards
   that show the exact command; the agent's questions as choices with a free-text
   answer. Transcripts are re-read after each turn and after reconnecting.

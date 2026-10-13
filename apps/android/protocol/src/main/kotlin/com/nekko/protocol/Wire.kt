@@ -168,6 +168,7 @@ data class SessionSummary(
     val parentSessionId: String?,
     val taskId: String?,
     val trainingRunId: String?,
+    val providerId: String? = null,
 ) {
     /** Real, top-level, unarchived chats: what the phone's list shows. */
     val isVisible: Boolean get() = !archived && parentSessionId == null && taskId == null && trainingRunId == null
@@ -186,6 +187,7 @@ data class SessionSummary(
                 parentSessionId = o.str("parentSessionId"),
                 taskId = o.str("taskId"),
                 trainingRunId = o.str("trainingRunId"),
+                providerId = o.str("providerId"),
             )
         }
 
@@ -205,11 +207,17 @@ data class PublicProvider(val id: String, val kind: String, val label: String, v
 }
 
 /** The settings fields the phone reads (`settings:get` returns far more, including secrets). */
-data class RemoteDefaults(val defaultProviderId: String? = null, val defaultModelId: String? = null) {
+data class RemoteDefaults(
+    val defaultProviderId: String? = null,
+    val defaultModelId: String? = null,
+    /** The computer's starred models, as `providerId::modelId` (shared/settings.ts). */
+    val favoriteModels: List<String> = emptyList(),
+) {
     companion object {
         fun from(e: JsonElement?): RemoteDefaults {
             val o = e.obj() ?: return RemoteDefaults()
-            return RemoteDefaults(o.str("defaultProviderId"), o.str("defaultModelId"))
+            val favorites = o["favoriteModels"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList()
+            return RemoteDefaults(o.str("defaultProviderId"), o.str("defaultModelId"), favorites)
         }
     }
 }
