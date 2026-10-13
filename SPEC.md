@@ -16,6 +16,10 @@ Delegation activity is compact and collapsed by default while sending tasks or r
 
 Acceptance includes multiline/wrapping/long-token drafts, queued messages and attachments, manual sizing, shrink/cap and board displacement, plus synchronized child status transitions and large collapsed results. Matched isolated light/dark wide/narrow renderer evidence and typing motion are required. User screenshots are reference evidence, not implementation verification. Verified: 952 desktop tests, desktop typecheck/build, and 96 isolated renderer assertions with inspected matched light/dark wide/narrow captures and typing frames. Published media URLs were verified. Native macOS/Linux interaction and live-provider integration remain untested. Child identity is best-effort parent/title/creation timing; historical or ambiguous matches remain unknown until the transport provides an authoritative child ID.
 
+## Automatic title requests during queued turns (2026-10-13)
+
+Implemented, native macOS CI verification pending: automatic chat naming has one in-flight title request per session. A queued follow-up continues without waiting for that title request, but cannot start duplicate title work while it is pending. Failure, empty output or cancellation releases the claim so a later turn can try again. Eligibility is checked again after claiming; a user rename is never replaced by a pending automatic title result. Session-specific claims do not block naming in another chat. A held-response regression verifies queue progress before the title lands, plus failure/empty retry, cancellation and rename protection. This fixes the duplicate-request race exposed by macOS CI; it does not alter composer pixels or provider routing.
+
 ## Command wall state migration (data layer)
 
 ## Continue dependent work with GitHub PR stacks
