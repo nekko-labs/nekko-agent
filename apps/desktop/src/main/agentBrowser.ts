@@ -61,6 +61,15 @@ export const playwrightDriver: BrowserDriverFactory = async () => {
 };
 
 interface Tab { win: BrowserWindow; page: Page; log: PageLogEntry[] }
+
+/** First line of anything thrown. A page-side rejection (a DOMException from
+ *  getDisplayMedia, say) crosses executeJavaScript as a plain object with no
+ *  message, and reading `.message.split` on it crashed the request handler. */
+export function errorLine(error: unknown): string {
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : (error as { message?: unknown } | null)?.message;
+  return (typeof message === 'string' && message.trim() ? message : 'Browser request failed.').split('\n')[0];
+}
+
 interface ChatBrowser { tabs: Tab[]; active: number; driver: BrowserDriver; lastUsed: number; queue: Promise<unknown> }
 
 /** Private tool bridge. Only the backend receives its capability token, never page content. */
@@ -107,6 +116,9 @@ export async function startAgentBrowser(options: { driver?: BrowserDriverFactory
       webPreferences: { partition: partitionFor(sessionId), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, disableDialogs: true },
     });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    // The agent already gets a failed navigation back from Playwright. Without
+    // a listener Electron also warns about it on the app's console.
+    win.webContents.on('did-fail-load', () => {});
     win.webContents.on('will-navigate', (event, target) => { if (!/^https?:\/\//i.test(target)) event.preventDefault(); });
     win.webContents.on('will-redirect', (event, target) => { if (!/^https?:\/\//i.test(target)) event.preventDefault(); });
     win.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
@@ -247,7 +259,7 @@ export async function startAgentBrowser(options: { driver?: BrowserDriverFactory
       validateBrowserInput(input);
       if (input.action === 'navigate' && !isAllowedNavigation(input.url)) throw new Error('Only HTTP(S) pages can be opened.');
       reply(200, await run(sessionId, input));
-    } catch (error) { reply(400, { error: (error as Error).message.split('\n')[0] }); }
+    } catch (error) { reply(400, { error: errorLine(error) }); }
   });
   server.requestTimeout = 30_000;
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });

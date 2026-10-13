@@ -1,3 +1,5 @@
+// First, so every module below sees the real packaging state in dev.
+import './devRuntime.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, notificationWindowContext, trustedNotificationReporter } from '../notificationVisibility.js';
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell } from 'electron';
 import { fileURLToPath } from 'url';
