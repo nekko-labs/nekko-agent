@@ -1,0 +1,77 @@
+name: Native Android
+# The Kotlin / Jetpack Compose app in apps/android. JVM unit tests for the
+# protocol and app logic, a cross-language E2E check against the agent's
+# WebCrypto implementation, the live phone ↔ relay ↔ computer integration test,
+# lint, and debug + release (unsigned, minified) builds.
+on:
+  pull_request:
+    paths:
+      - 'apps/android/**'
+      - 'apps/relay/**'
+      - 'packages/shared/src/e2e.ts'
+      - 'packages/shared/src/remote.ts'
+      - 'packages/shared/src/ipc.ts'
+      - 'packages/host/src/relay.ts'
+      - '.github/workflows/android-native.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/android/**'
+      - '.github/workflows/android-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-native-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.2" "build-tools;36.0.0"
+      - name: Build the relay and headless agent for the integration test
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build:core
+          npm run build -w @nekko-agent/host
+          npm run build --workspace=apps/cli
+          npm run build -w @nekko-agent/server
+          npm run build -w @nekko-agent/relay
+      - name: Unit, cross-language and integration tests
+        working-directory: apps/android
+        env:
+          NEKKO_ITEST: '1'
+          NEKKO_E2E_OUT: ${{ runner.temp }}/kotlin-frames.json
+        run: ./gradlew :protocol:test :app:testDebugUnitTest --console=plain
+      - name: Agent opens Kotlin-sealed frames
+        run: node apps/android/scripts/e2e-vector.mjs open "$RUNNER_TEMP/kotlin-frames.json"
+      - name: Lint and build
+        working-directory: apps/android
+        run: ./gradlew :app:lintDebug :app:assembleDebug :app:assembleRelease --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-reports
+          path: |
+            apps/android/protocol/build/reports/tests/
+            apps/android/app/build/reports/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

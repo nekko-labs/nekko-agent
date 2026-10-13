@@ -57,15 +57,31 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
       /* closing */
     }
   };
-  const sendTo = async (cid: string, frame: unknown) => {
-    sendRaw({ type: 'd', cid, data: JSON.stringify({ enc: await seal(await keyP, frame) }) });
+  /**
+   * Sealing is async (WebCrypto), and a streamed reply emits one event per
+   * token. Sealing each frame independently let a later, smaller frame finish
+   * first, so phones could receive "from your Hello computer.". Every outgoing
+   * sealed frame goes through this queue: seals still start immediately, but
+   * frames are written to the socket strictly in the order they were sent.
+   */
+  let outbox: Promise<void> = Promise.resolve();
+  const enqueue = (sealed: Promise<string>, write: (data: string) => void): Promise<void> => {
+    const sent = outbox.then(() => sealed).then(write, () => {
+      /* sealing failed (e.g. key derivation): drop this frame, keep the queue alive */
+    });
+    outbox = sent;
+    return sent;
   };
+  const sealFrame = async (frame: unknown) => JSON.stringify({ enc: await seal(await keyP, frame) });
+  const sendTo = (cid: string, frame: unknown) =>
+    enqueue(sealFrame(frame), (data) => sendRaw({ type: 'd', cid, data }));
   /** Fan an event out to every welcomed connection (one seal per event). */
-  const broadcast = async (frame: unknown) => {
-    const welcomed = [...conns.entries()].filter(([, c]) => c.deviceId);
-    if (welcomed.length === 0) return;
-    const data = JSON.stringify({ enc: await seal(await keyP, frame) });
-    for (const [cid] of welcomed) sendRaw({ type: 'd', cid, data });
+  const broadcast = (frame: unknown) => {
+    if (![...conns.values()].some((c) => c.deviceId)) return Promise.resolve();
+    return enqueue(sealFrame(frame), (data) => {
+      // Recipients are read at write time, so a device revoked meanwhile gets nothing.
+      for (const [cid, c] of conns) if (c.deviceId) sendRaw({ type: 'd', cid, data });
+    });
   };
 
   const onAgent = (e: unknown) => {

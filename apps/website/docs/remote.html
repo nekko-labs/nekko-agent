@@ -80,6 +80,11 @@ app, open the pairing link in a browser to get the full app over the relay.</li>
 <li>The phone shows up under <strong>Paired devices</strong>, with a live connection dot.</li>
 </ol>
 <h2 id="the-phone-app"><a class="anchor" href="#the-phone-app" aria-hidden="true" tabindex="-1">#</a>The phone app</h2>
+<blockquote>
+<p><strong>Native apps.</strong> The phone apps are moving to platform-native code: Kotlin / Jetpack Compose in
+<code>apps/android</code> (pairing, chats, live replies, approvals and questions; no phone models yet) and
+SwiftUI in <code>apps/ios</code>. The Expo app described below stays as the reference until they reach parity.</p>
+</blockquote>
 <p>The iOS and Android app (<code>apps/mobile</code>) is built for the phone rather than being the desktop on a
 small screen: your computer&#39;s chats with <strong>Working</strong> / <strong>Needs you</strong> badges, new chats on any of the
 computer&#39;s models and folders, live replies, <strong>Allow this?</strong> cards for risky commands, the agent&#39;s
