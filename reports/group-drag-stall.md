@@ -37,3 +37,9 @@ A product/policy alternative would be a deliberately reviewed baseline-aware reg
 ## Limitations
 
 Physical OS dragging, packaged release behavior and macOS/Linux group-drag runtime checks remain untested. The synthetic Electron tests and inspected media prove renderer interactions, not native input behavior. No numerical performance benefit is claimed for the prevention changes.
+
+## Trace batch outcome (run 38388615665)
+
+All checks completed; only perf failed. Both requested streaming traces were successfully saved and inspected. Same-run profiled diagnostics on Intel Xeon Platinum 8573C, Linux, Chrome154: head p95 11.6 ms (93frames), unchanged base12.4 ms (95frames), three seconds300tok/s. Trace durations (not disjoint CPU totals): head/base Paint152.724/151.262 ms, UpdateLayoutTree116.003/118.212 ms, Layout77.419/76.672 ms, PrePaint70.901/69.644 ms. Paint samples include the full1440x1000 document and command-wall-layout; layout samples have document roots, partialLayout:false, totalObjects1203 on both. This establishes a shared broad rendering workload, not the specific invalidation cause or a proven drag regression/no-regression.
+
+Next distinct work: use invalidation tracking to attribute document-wide layout/paint, test a scoped containment/render-update candidate on matching base/head, verify visual correctness, and pass the unchanged full gate. Keep this baseline repair separate from further drag changes. No additional automatic gate reruns or watches are scheduled for this completed failure.
