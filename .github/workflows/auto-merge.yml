@@ -24,6 +24,8 @@ permissions:
   pull-requests: write
   # Needed to dispatch version-release.yml once the PR lands.
   actions: write
+  # Needed for the bot's merge to close issues linked with `Closes #n`.
+  issues: write
 
 jobs:
   auto-merge:
