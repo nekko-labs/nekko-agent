@@ -83,7 +83,8 @@ const LOGS: string[][] = [
   ['error: chat template not supported'],
   ['llama_model_load: error loading model: missing tensor \'blk.0.attn_q.weight\''],
   ['ggml_backend_cuda_buffer_type_alloc_buffer: allocating 9000 MiB on device 0: cudaMalloc failed: out of memory'],
-  ['llama_model_load: error: failed to open \'C:\\models\\x\\shard-00002-of-00002.gguf\': No such file'],
+  // Forward slashes: `basename` splits on them on every platform.
+  ['llama_model_load: error: failed to open \'/models/x/shard-00002-of-00002.gguf\': No such file'],
   ['error: unable to read file "/models/tokenizer.json"'],
   ['I srv  load_model: loading model', 'E llama_model_load: error loading model: create_model: something exotic happened', 'main: exiting due to model loading error'],
   ['some line', 'cleaning up before exit', 'exiting due to model loading error'],

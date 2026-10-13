@@ -427,7 +427,7 @@
     },
     {
       "log": [
-        "llama_model_load: error: failed to open 'C:\\models\\x\\shard-00002-of-00002.gguf': No such file"
+        "llama_model_load: error: failed to open '/models/x/shard-00002-of-00002.gguf': No such file"
       ],
       "out": "A file the model needs is missing or unreadable: shard-00002-of-00002.gguf. Re-download the model so its companion files come with it."
     },
