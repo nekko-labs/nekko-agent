@@ -6,6 +6,8 @@ vi.mock('../../store.js', async (original) => {
   const actual = await original<typeof import('../../store.js')>();
   return { ...actual, useStore: Object.assign((selector: (s: ReturnType<typeof actual.useStore.getState>) => unknown) => selector(actual.useStore.getState()), actual.useStore) };
 });
+const emails = vi.hoisted(() => ({ byToken: {} as Record<string, string> }));
+vi.mock('../../accountEmails.js', async (orig) => ({ ...(await orig<typeof import('../../accountEmails.js')>()), useAccountEmails: () => emails.byToken }));
 import { useStore } from '../../store.js';
 import { ModelPicker } from './ModelPicker.js';
 
@@ -44,5 +46,18 @@ describe('default model in the picker', () => {
       expect(out).toContain('>Default<');
       expect(out.match(/role="option"/g)).toHaveLength(1);
     } finally { useStore.setState({settings:prev}); }
+  });
+});
+
+describe('account emails in the picker', () => {
+  it('names the signed-in account next to the provider, in its own case', () => {
+    emails.byToken = { 'claude:a': 'Davide@Example.com' };
+    try {
+      const providers = [{ id: 'a', kind: 'anthropic' as const, label: 'Anthropic (Claude)', enabled: true, baseUrl: '', auth: 'subscription' as const, tokenKey: 'claude:a' }];
+      const out = renderToStaticMarkup(<ModelPicker expanded open providers={providers} providerId="a" modelId="m" models={[{ id: 'm', providerId: 'a', name: 'Claude Opus' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+      expect(out).toContain('Anthropic (Claude)<span class="font-normal normal-case tracking-normal" data-account-email="true"> · Davide@Example.com</span>');
+      const chip = renderToStaticMarkup(<ModelPicker open={false} providers={providers} providerId="a" modelId="m" models={[{ id: 'm', providerId: 'a', name: 'Claude Opus' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+      expect(chip).toContain('Model: Claude Opus · Anthropic (Claude) · Davide@Example.com');
+    } finally { emails.byToken = {}; }
   });
 });

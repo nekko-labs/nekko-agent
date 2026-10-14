@@ -242,6 +242,19 @@ fn jwt_payload(jwt: &str) -> Option<Value> {
     serde_json::from_str(&String::from_utf8_lossy(&base64url_decode(parts[1]))).ok()
 }
 
+/// `cleanEmail`: a plausible email address, trimmed (display only).
+pub fn clean_email(raw: Option<&Value>) -> Option<String> {
+    let email = nekko_js::trim(raw?.as_str()?);
+    let (local, domain) = email.split_once('@')?;
+    let plain = |p: &str| !p.is_empty() && !p.chars().any(|c| c == '@' || nekko_js::is_js_space(c));
+    (email.encode_utf16().count() <= 254 && plain(local) && plain(domain)).then(|| email.to_string())
+}
+
+/// `extractEmail`: the `email` claim of a ChatGPT id token.
+pub fn extract_email(id_token: &str) -> Option<String> {
+    clean_email(prop(Some(&jwt_payload(id_token)?), "email"))
+}
+
 /// `extractAccountId`: the ChatGPT account id an id token carries.
 pub fn extract_account_id(id_token: &str) -> Option<String> {
     let json = jwt_payload(id_token)?;
@@ -289,6 +302,14 @@ pub fn token_from_response(provider: &str, json: &Value, obtained_at: f64, now: 
     } else {
         None
     };
+    let account_email = if provider == "claude" {
+        clean_email(prop(prop(Some(json), "account"), "email_address"))
+    } else {
+        match id_token {
+            Some(Value::String(s)) if !s.is_empty() => extract_email(s),
+            _ => None,
+        }
+    };
     let expires_in = prop(Some(json), "expires_in").and_then(Value::as_f64).unwrap_or(3600.0);
     let jwt_exp = if chatgpt { exp_from_jwt(access.as_ref()) } else { None };
     let expires_at = jwt_exp.unwrap_or(now + expires_in * 1000.0);
@@ -298,6 +319,7 @@ pub fn token_from_response(provider: &str, json: &Value, obtained_at: f64, now: 
         ("refreshToken", prop(Some(json), "refresh_token").cloned()),
         ("expiresAt", Some(num(expires_at))),
         ("accountId", account_id),
+        ("accountEmail", account_email.map(Value::String)),
         ("scopes", prop(Some(json), "scope").cloned()),
         ("obtainedAt", Some(num(obtained_at))),
     ]))
@@ -463,6 +485,9 @@ pub fn refresh_result(
     if nullish(&next, "accountId") && nekko_js::truthy(token.get("accountId")) {
         next.set("accountId", token.get("accountId").cloned());
     }
+    if nullish(&next, "accountEmail") && nekko_js::truthy(token.get("accountEmail")) {
+        next.set("accountEmail", token.get("accountEmail").cloned());
+    }
     if nullish(&next, "scopes") && nekko_js::truthy(token.get("scopes")) {
         next.set("scopes", token.get("scopes").cloned());
     }
@@ -487,6 +512,7 @@ pub fn status(token_key: &str, token: Option<&Value>, state: &str, message: Opti
         ("provider", t.get("provider").cloned()),
         ("connected", Some(json!(!expired))),
         ("accountId", t.get("accountId").cloned()),
+        ("accountEmail", t.get("accountEmail").cloned()),
         ("expiresAt", t.get("expiresAt").cloned()),
         ("scopes", t.get("scopes").cloned()),
         ("state", Some(json!(state))),
@@ -559,6 +585,13 @@ pub fn codex_cli_token(raw: &str, now: f64) -> Result<Option<Value>, String> {
             ("accessToken", access.cloned()),
             ("refreshToken", prop(tokens, "refresh_token").cloned()),
             ("accountId", prop(tokens, "account_id").cloned()),
+            (
+                "accountEmail",
+                match prop(tokens, "id_token") {
+                    Some(Value::String(s)) => extract_email(s).map(Value::String),
+                    _ => None,
+                },
+            ),
             ("expiresAt", Some(num(expires_at))),
             ("obtainedAt", Some(num(obtained_at))),
         ])

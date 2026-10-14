@@ -5,6 +5,8 @@ import { DEFAULT_WALL_STATE } from '../commandWall.js';
 vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ settings: {} }) }));
 const quota = vi.hoisted(() => ({ byToken: {} as Record<string, any>, answered: new Set<string>(), nextRefreshAt: null as number | null }));
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => quota }));
+const emails = vi.hoisted(() => ({ byToken: {} as Record<string, string> }));
+vi.mock('../accountEmails.js', async (orig) => ({ ...(await orig<typeof import('../accountEmails.js')>()), useAccountEmails: () => emails.byToken }));
 vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
 const resources = vi.hoisted(() => ({ gpu: null as import('@nekko-agent/shared').GpuStats | null }));
@@ -60,6 +62,24 @@ describe('wall dock presentation', () => {
     expect(html).not.toContain('in Settings');
     expect(html).toContain(kind === 'signed_out' ? 'Not signed in.' : 'Sign-in expired.');
     (quota as any).problems = {};
+  });
+  it('tells two Claude plans apart by the email each is signed in as', () => {
+    quota.byToken = {};
+    (quota as any).problems = {};
+    emails.byToken = { 'claude:a': 'davide@example.com', 'claude:b': 'davide@work.example' };
+    try {
+      const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, panels: { automations: false, utilization: true, budget: false, insights: false, hardware: false } } };
+      const providers = [
+        { id: 'p1', kind: 'anthropic' as const, label: 'Anthropic (Claude)', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'claude:a' },
+        { id: 'p2', kind: 'anthropic' as const, label: 'Anthropic (Claude)', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'claude:b' },
+        { id: 'p3', kind: 'anthropic' as const, label: 'Anthropic (Claude)', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'claude:c' },
+      ];
+      const html = renderToStaticMarkup(<WallDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={providers} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+      expect(html).toContain('Anthropic (Claude)<span class="wall-dock__account" data-account-email="true"> · davide@example.com</span>');
+      expect(html).toContain('davide@work.example');
+      // A plan signed in before emails were recorded keeps the bare label.
+      expect(html.match(/data-account-email/g)).toHaveLength(2);
+    } finally { emails.byToken = {}; }
   });
   it('exposes both savings separately and never asks for a monthly budget', () => {
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, panels: { automations: false, utilization: false, budget: true, insights: false, hardware: false } } };

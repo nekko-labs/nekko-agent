@@ -51,6 +51,18 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### Android reconnect on network change (2026-10-14)
+Area: mobile app
+Result: improvement
+Conditions: headless Android emulator (Pixel_10_Pro AVD, API 37.2) on an Apple Silicon Mac, debug sandbox build, local relay on the host, airplane mode toggled with `cmd connectivity airplane-mode`, time from airplane-off until the app's banner read "online" polled through uiautomator (adds ~0.5–1 s to every reading).
+
+| Metric | Before | After |
+|---|---|---|
+| Back online after 8 s offline (3 runs) | 6.3 s, 6.3 s, 6.3 s | 4.1 s, 4.2 s, 4.2 s |
+| Back online after 40 s offline | 21.5 s, 26.6 s | 4.4 s, 4.6 s, 4.7 s |
+
+Why: a default-network callback now redials as soon as a network is back, instead of waiting out the client's exponential backoff (up to 30 s). Source: the Android background-connection PR.
+
 ### #514 Current-main gate and checkout attribution repair (2026-10-13)
 Area: renderer, perf harness. Result: failed gate remains unresolved; measurement provenance fix, no measured runtime improvement.
 Conditions: run 38382178477, job 115245050089, Ubuntu / AMD EPYC 7763 (4 threads), Chrome/154.0.8037.97, production web + optimized release nekkod, 1440x1000, no GPU, 1,000-message chat, 300 tokens/s. Logs establish actual head checkout `b4b976650cc99f9cef333fb5bea23794c879c76b` (07c18568 merged into bdd75023) and unchanged base `bdd75023c313f4cad206851c75f52136558f512a`. All reports inherited the merge GITHUB_SHA, including base. The harness now records actual APP_ROOT `git rev-parse HEAD` as `git` and inherited SHA separately as `workflowGit`, with source archives reported unknown and unit coverage. This changes attribution only, not sampling or budgets.

@@ -44,6 +44,11 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version and the open-source licenses of the app and the libraries it ships.
 >
+> **Vibration** (Android): while the app is open, the phone vibrates when the agent needs your
+> approval (two pulses) or asks you a question (one long pulse). In **Settings → Vibration** you can
+> also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them
+> off. It never vibrates in silent mode or Do Not Disturb, or while the app is in the background.
+>
 > The Android app is **locked by default**: every time you open it, or come back to it, it asks for
 > your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows
 > anything. While it is locked nothing can be read or approved, and the recent-apps preview stays
@@ -51,6 +56,18 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > **Settings → Security → App lock**; turning it off asks for the same check first. With the lock on,
 > the app can't be screenshotted or screen-recorded. A phone with no screen lock can't be locked;
 > Settings says so and links to the phone's security settings.
+>
+> The Android app **reconnects by itself** as soon as the phone changes network (Wi-Fi to mobile data,
+> airplane mode off), instead of waiting out its retry delay. While a chat on your computer is running,
+> **Settings → Connection → Stay connected while a chat runs** (on by default) keeps the app connected
+> after you leave it, with a silent "Staying connected · 1 chat running on Mac" notification that goes
+> away as soon as the reply is done. **Notify me** (on by default; Android 13+ asks for permission)
+> sends a notification when a reply finishes or fails, or a chat waits for your approval or answer,
+> while you're out of the app. Notifications say what happened and in which chat, never the reply, the
+> command or the question; with the app lock on they don't name the chat either, and tapping one opens
+> the chat through the lock. Without push (not built yet), these only arrive while the phone is still
+> connected. If Android restricts Nekko in the background, Settings says so and opens the app's
+> system page.
 
 The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
 small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the

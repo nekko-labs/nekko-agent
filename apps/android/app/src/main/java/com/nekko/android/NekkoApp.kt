@@ -6,11 +6,14 @@ import android.provider.Settings
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.nekko.android.connection.ConnectionKeeper
 import com.nekko.android.data.AndroidSecureStore
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.RelayRemoteFactory
 import com.nekko.android.data.ThemePrefs
+import com.nekko.android.haptics.AndroidHaptics
+import com.nekko.android.haptics.EventHaptics
 import com.nekko.android.lock.AppLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +33,8 @@ class NekkoApp : Application() {
         private set
     lateinit var appLock: AppLock
         private set
+    lateinit var haptics: AndroidHaptics
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -42,21 +47,30 @@ class NekkoApp : Application() {
             deviceName = ::deviceName,
         )
         appLock = AppLock(enabled = phonePrefs.get(AppLock.ENABLED), persist = { phonePrefs.set(AppLock.ENABLED, it) })
+        connection = ConnectionKeeper(this, computers, phonePrefs, appLock, appScope)
+        connection.start()
         // Nothing reaches the computer until the user has unlocked once: no
         // relay connection, no chat list, no approvals behind the lock screen.
         appScope.launch {
             appLock.status.first { !it.locked }
             computers.load()
         }
+        haptics = AndroidHaptics(this, EventHaptics(phonePrefs), computers)
+        // Vibrate for the active computer's agent events, per Settings → Vibration.
+        appScope.launch { computers.events.collect(haptics::onEvent) }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 appLock.onForeground()
+                connection.onForeground(true)
                 // App came to the foreground: reconnect now rather than after the backoff.
                 computers.nudge()
             }
 
             // Fires ~700 ms after the last activity stops, so rotations do not lock.
-            override fun onStop(owner: LifecycleOwner) = appLock.onBackground()
+            override fun onStop(owner: LifecycleOwner) {
+                appLock.onBackground()
+                connection.onForeground(false)
+            }
         })
     }
 
