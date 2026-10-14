@@ -24,6 +24,7 @@ typealias SettingsSection = @Composable (SettingsDeps) -> Unit
 val SettingsSections: List<SettingsSection> = listOf(
     { AppearanceSection(it) },
     { SecuritySection(it) },
+    { NewChatsSection(it) },
     { ComputersSection(it) },
     { AboutSection(it) },
 )

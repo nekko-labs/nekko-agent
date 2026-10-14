@@ -7,6 +7,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.nekko.android.data.AndroidSecureStore
+import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.RelayRemoteFactory
@@ -30,23 +31,28 @@ class NekkoApp : Application() {
         private set
     lateinit var appLock: AppLock
         private set
+    lateinit var newChatDefaults: NewChatDefaults
+        private set
 
     override fun onCreate() {
         super.onCreate()
         themePrefs = ThemePrefs(this)
         phonePrefs = PhonePrefs(this)
+        newChatDefaults = NewChatDefaults(phonePrefs)
         computers = ComputersRepository(
             store = AndroidSecureStore(this),
             remotes = RelayRemoteFactory(),
             scope = appScope,
             deviceName = ::deviceName,
+            onForget = newChatDefaults::forget,
         )
         appLock = AppLock(enabled = phonePrefs.get(AppLock.ENABLED), persist = { phonePrefs.set(AppLock.ENABLED, it) })
         // Nothing reaches the computer until the user has unlocked once: no
         // relay connection, no chat list, no approvals behind the lock screen.
         appScope.launch {
             appLock.status.first { !it.locked }
-            computers.load()
+            // The phone's default computer (Settings → New chats), else the one used last.
+            computers.load(preferredId = newChatDefaults.computerId())
         }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {

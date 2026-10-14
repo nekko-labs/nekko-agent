@@ -76,6 +76,8 @@ class ComputersRepository(
     private val summariesDebounceMs: Long = 600,
     /** One provider's model list may take this long, like the desktop picker (MODEL_LIST_TIMEOUT_MS). */
     private val modelListTimeoutMs: Long = 6_000,
+    /** A computer was forgotten: drop what the phone kept about it elsewhere (New chat defaults). */
+    private val onForget: (id: String) -> Unit = {},
 ) {
     private val _state = MutableStateFlow(ComputersState())
     val state: StateFlow<ComputersState> = _state.asStateFlow()
@@ -105,10 +107,14 @@ class ComputersRepository(
 
     fun remote(): Remote = client ?: throw RelayException("Not connected to a computer.")
 
-    suspend fun load() {
+    /**
+     * Read the paired computers and connect to one: [preferredId] (the phone's
+     * default computer, Settings → New chats) when it is still paired, else the
+     * one used last, else the first.
+     */
+    suspend fun load(preferredId: String? = null) {
         val list = StoredJson.decodeIndex(store.get(INDEX_KEY))
-        val saved = store.get(ACTIVE_KEY)
-        val activeId = if (list.any { it.id == saved }) saved else list.firstOrNull()?.id
+        val activeId = NewChatDefaults.startComputer(preferredId, store.get(ACTIVE_KEY), list.map { it.id })
         _state.update { it.copy(ready = true, computers = list, activeId = activeId) }
         activeId?.let { connect(it) }
     }
@@ -146,6 +152,7 @@ class ComputersRepository(
             val wasActive = _state.value.activeId == id
             if (wasActive) disconnect()
             store.set(secretKey(id), null)
+            onForget(id)
             val next = _state.value.computers.filter { it.id != id }
             saveIndex(next)
             val activeId = if (wasActive) next.firstOrNull()?.id else _state.value.activeId

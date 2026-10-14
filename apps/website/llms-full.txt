@@ -744,6 +744,11 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version and the open-source licenses of the app and the libraries it ships.
 >
+> **New chat defaults** (Android): **Settings → New chats** picks the computer the app connects to
+> when it starts (default: the one used last) and, for each computer, the model New chat opens with
+> (default: the computer's own default model). They are saved on the phone; the computer's settings
+> don't change. If that model is no longer offered, New chat says so and uses the computer's default.
+>
 > The Android app is **locked by default**: every time you open it, or come back to it, it asks for
 > your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows
 > anything. While it is locked nothing can be read or approved, and the recent-apps preview stays

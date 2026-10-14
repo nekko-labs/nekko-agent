@@ -27,6 +27,10 @@ reference until this app reaches parity.
   is shown or approvable, recents stay blank (`FLAG_SECURE`), and after a restart
   the relay doesn't connect until the first unlock.
 
+- **New chat defaults:** *Settings → New chats* sets the computer to connect
+  to at start and a model per computer, on the phone only; a model the
+  computer no longer offers falls back to its default with a notice.
+
 **Not yet:** models on the phone, push notifications, Markdown rendering,
 attachments, Play Store release. See `TASKS.md` → *Native Android app*.
 

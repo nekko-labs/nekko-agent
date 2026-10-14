@@ -14,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nekko.android.DeepLink
+import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
@@ -77,8 +78,14 @@ fun NekkoNavHost(
             ChatScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable(Routes.NEW) {
+            // The phone's default model for the active computer (Settings → New chats).
+            val defaults = remember(phonePrefs) { NewChatDefaults(phonePrefs) }
+            val c by repo.state.collectAsStateWithLifecycle()
+            val models by defaults.modelsFlow.collectAsStateWithLifecycle()
+            val phonePick = remember(models, c.activeId) { c.activeId?.let(defaults::model) }
             NewChatScreen(
                 repo = repo,
+                phonePick = phonePick,
                 onBack = { nav.popBackStack() },
                 onPair = { nav.navigate(Routes.pair()) },
                 onCreated = { id ->
