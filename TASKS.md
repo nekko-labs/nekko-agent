@@ -1,10 +1,14 @@
 ---
 status: active
-last-updated: 2026-10-10
+last-updated: 2026-10-14
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Composer skill picker after existing text (added 2026-10-14)
+
+- [ ] Fix [#535: skill menu does not open for `/` after existing composer text](https://github.com/nekko-labs/nekko-agent/issues/535). User reports that `/` opens the skill picker in an empty fresh-chat composer, but not after other draft text. Open the picker after existing text (for example `Help me with this /`), preserve surrounding text when selecting a skill, and retain the empty-composer behavior. Add regression coverage for both draft states. Reported behavior has not been independently reproduced; implementation and verification remain pending.
 
 ## Clarification reply visibility (2026-10-13)
 
