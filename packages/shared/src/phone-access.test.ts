@@ -9,6 +9,7 @@ import {
   callFromPhone,
   phoneAlwaysDenied,
   phoneChannelAllowed,
+  phoneSettingsUpdate,
   redactPhoneResult,
   screenPhoneCall,
 } from './phone-access.js';
@@ -112,6 +113,12 @@ describe('settings from a phone', () => {
     };
     await callFromPhone(dispatch, 'settings:update', [{ voice: { language: 'it' } }]);
     expect(calls[1]).toEqual(['settings:update', [{ voice: { ...SETTINGS.voice, language: 'it' } }]]);
+  });
+
+  it('never writes a key that is not phone-settable, even when handed one', () => {
+    const patch = phoneSettingsUpdate([['__proto__.polluted', true], ['sandboxMode', 'off'], ['chatPaneAction', 'delete']], {});
+    expect(patch).toEqual({ chatPaneAction: 'delete' });
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 
   it('returns a view with no secrets, for get and update alike', async () => {

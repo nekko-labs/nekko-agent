@@ -275,11 +275,19 @@ export function screenPhoneCall(channel: string, args: unknown[]): { settingsPat
   }
 }
 
-/** The patch to save for checked phone settings, given the current settings. */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * The patch to save for checked phone settings, given the current settings.
+ * Paths that are not phone-settable are dropped here too, so this never
+ * writes a key it was not meant to, whatever it is given.
+ */
 export function phoneSettingsUpdate(sets: Array<[string, unknown]>, current: unknown): Obj {
   const patch: Obj = {};
   for (const [path, value] of sets) {
+    if (!(PHONE_SETTINGS_KEYS as readonly string[]).includes(path)) continue;
     const [head, sub] = path.split('.', 2);
+    if (UNSAFE_KEYS.has(head) || (sub !== undefined && UNSAFE_KEYS.has(sub))) continue;
     if (sub === undefined) {
       patch[head] = value;
       continue;

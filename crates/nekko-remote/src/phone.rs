@@ -176,10 +176,11 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Option<Vec<(String, Value
 }
 
 /// The patch to save for checked phone settings, given the current settings.
-/// `voice` is saved whole (settings merge one level deep), so the rest of it is kept.
+/// `voice` is saved whole (settings merge one level deep), so the rest of it is
+/// kept. Paths that are not phone-settable are dropped here too.
 pub fn settings_update(sets: &[(String, Value)], current: &Value) -> Value {
     let mut patch = Map::new();
-    for (path, value) in sets {
+    for (path, value) in sets.iter().filter(|(p, _)| has(&policy().settings_keys, p)) {
         match path.split_once('.') {
             None => {
                 patch.insert(path.clone(), value.clone());
@@ -351,6 +352,16 @@ mod tests {
     }
 
     #[test]
+    fn never_writes_a_key_that_is_not_phone_settable() {
+        let sets = vec![
+            ("__proto__.polluted".to_string(), json!(true)),
+            ("sandboxMode".to_string(), json!("off")),
+            ("chatPaneAction".to_string(), json!("delete")),
+        ];
+        assert_eq!(settings_update(&sets, &json!({})), json!({ "chatPaneAction": "delete" }));
+    }
+
+    #[test]
     fn settings_reach_a_phone_without_secrets() {
         let calls = Arc::default();
         for (channel, args) in
@@ -358,8 +369,8 @@ mod tests {
         {
             let view = run(&calls, channel, args).unwrap();
             let text = view.to_string();
-            for secret in ["secret", "providers", "hooks", "guardrails", "sandboxMode", "modelPath"] {
-                assert!(!text.contains(secret), "{channel} leaked {secret}: {text}");
+            for hidden in ["secret", "providers", "hooks", "guardrails", "sandboxMode", "modelPath"] {
+                assert!(!text.contains(hidden), "{channel} returned a field the phone must not see: {hidden}");
             }
             assert_eq!(view["voice"], json!({ "enabled": true, "language": "en" }));
         }
