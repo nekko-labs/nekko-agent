@@ -877,28 +877,48 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }).catch(() => { setCost(0); setAvoidedCosts(undefined); });
   }), [sessionId, session?.modelId, session?.messages.length, settings?.localCostBenchmark]);
 
-  // Keep the sidebar's per-workspace context readout fresh while a turn runs.
-  // The pane already re-reads its context bundle per step (throttled to
-  // CTX_REFRESH_MS); this adds a slow heartbeat so the number also creeps up
-  // between steps, and so it settles once at the end of the turn.
+  // Keep the sidebar's per-workspace context readout on the same number as the
+  // composer's gauge: every included bundle item (system prompt, tools,
+  // guidelines, memory, conversation) plus what the running turn has produced.
+  // It used to count only the conversation, so the card read a few thousand
+  // tokens under the gauge for the same chat. The unsent draft and an armed
+  // skill stay out: they are not in the window until the message is sent.
+  // Published whenever the bundle changes, plus a slow heartbeat while a turn
+  // runs so the number creeps up between steps; cleared when the pane closes,
+  // and the card falls back to its transcript estimate.
+  //
+  // Only a pane that draws the gauge publishes. The Agents view opens the
+  // selected chat twice (its window, and again in the wall composer), and the
+  // composer copy shows no gauge and drops a finished reply's tokens, so when
+  // both wrote the last one won and the card read thousands under the gauge.
+  // Leaving the composer out also stops it wiping the window's number when the
+  // chat is deselected and the composer copy unmounts.
+  const publishesContext = surface !== 'composer' && !readOnly;
   const latestCtxRef = useRef(ctx);
   latestCtxRef.current = ctx;
   const latestSessionRef = useRef(session);
   latestSessionRef.current = session;
   useEffect(() => {
-    if (!streaming) return;
-    const t = setInterval(() => {
-      const conversationTokens = latestCtxRef.current?.items.find((i) => i.included && i.source === 'conversation')?.tokens
-        ?? estimateTranscriptTokens(latestSessionRef.current?.messages ?? []);
-      const produced = producedTokens(getLiveRun(sessionId)).context;
+    if (!publishesContext) return;
+    const publish = () => {
+      const bundle = latestCtxRef.current;
+      const base = bundle
+        ? bundle.items.filter((i) => i.included).reduce((s, i) => s + i.tokens, 0)
+        : estimateTranscriptTokens(latestSessionRef.current?.messages ?? []);
+      const run = getLiveRun(sessionId);
+      const produced = run ? producedTokens(run).context : marksRef.current.ctxTail;
       const live = Math.max(0, produced - marksRef.current.ctxMark);
-      useStore.getState().setSessionCtxEstimate(sessionId, conversationTokens + live);
-    }, 4_000);
-    return () => {
-      clearInterval(t);
-      useStore.getState().setSessionCtxEstimate(sessionId, null);
+      useStore.getState().setSessionCtxEstimate(sessionId, base + live);
     };
-  }, [streaming, sessionId]);
+    publish();
+    if (!streaming) return;
+    const t = setInterval(publish, 4_000);
+    return () => clearInterval(t);
+  }, [publishesContext, streaming, sessionId, ctx, marks]);
+  useEffect(() => {
+    if (!publishesContext) return;
+    return () => useStore.getState().setSessionCtxEstimate(sessionId, null);
+  }, [publishesContext, sessionId]);
 
   /**
    * Adopt a turn that was already running when this pane mounted.

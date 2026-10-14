@@ -573,7 +573,9 @@ export function WallToolbar({
             </div>
           </div>}
         </div>
-        <div className="inline-flex rounded-lg border border-line p-0.5" role="tablist" aria-label="Show">
+        {/* Same frame as the layout segments beside it (plain 8px corners, not
+            the squircle `rounded-lg` gets), so the two groups match. */}
+        <div className="wall-filter-segments" role="tablist" aria-label="Show">
           {FILTERS.map((f) => (
             <button
               key={f.key}
