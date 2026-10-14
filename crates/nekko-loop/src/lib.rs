@@ -8,12 +8,14 @@
 //! Behavior matches the TS functions exactly; `tests/golden.rs` holds these to
 //! outputs the TS functions wrote.
 
+pub mod fit;
 pub mod history;
 pub mod progress;
 pub mod resume;
 pub mod run;
 pub mod runaway;
 
+pub use fit::is_context_overflow;
 pub use history::{
     COMPACTION_PREAMBLE, as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history,
 };

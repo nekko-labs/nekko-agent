@@ -11,6 +11,7 @@ export * from './agent/loop.js';
 export * from './agent/runaway.js';
 export * from './agent/progress.js';
 export * from './agent/resume.js';
+export * from './agent/fit.js';
 export * from './agent/tools.js';
 export * from './agent/prompt.js';
 export * from './guardrails/classifier.js';

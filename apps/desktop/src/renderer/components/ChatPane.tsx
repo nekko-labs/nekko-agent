@@ -977,6 +977,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           setStreaming(true);
           // A turn this pane did not start: nothing it produces is counted yet.
           setMarks({ ctxMark: 0, ctxTail: 0, outMark: 0 });
+          // The host carried the chat on (after compacting it, say): the
+          // failure that preceded it is no longer the chat's state.
+          setErrorNotice(null);
         }
         if (!turnStart.current) { turnStart.current = Date.now(); setMascotMood('thinking'); }
       }
