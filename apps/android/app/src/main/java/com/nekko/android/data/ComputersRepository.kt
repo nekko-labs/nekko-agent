@@ -238,6 +238,11 @@ class ComputersRepository(
         client?.nudge()
     }
 
+    /** The phone changed network, or the socket may have died while frozen: dial a fresh one now. */
+    fun reconnect() {
+        client?.reconnect()
+    }
+
     suspend fun refresh() {
         val c = client ?: return
         _state.update { it.copy(summariesLoading = true, lastError = null) }
