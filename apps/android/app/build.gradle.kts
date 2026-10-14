@@ -59,6 +59,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.gms.code.scanner)
+    // App lock: the system fingerprint / face / screen-lock prompt. BiometricPrompt needs a FragmentActivity.
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment.ktx)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
