@@ -270,7 +270,7 @@ interface UiState {
   pushToast: (kind: Toast['kind'], message: string) => void;
   dismissToast: (id: string) => void;
   setPaletteOpen: (open: boolean) => void;
-  newChat: () => Promise<void>;
+  newChat: (workspaceId?: string) => Promise<void>;
   /** A new Image chat on this image model, starting from its family's tuned steps and CFG. */
   newImageChat: (modelId: string, defaults?: { steps: number; cfgScale: number }) => Promise<void>;
   setMascotMood: (m: MascotMood) => void;
@@ -602,13 +602,13 @@ export const useStore = create<UiState>((set, get) => ({
       if (p === r || (p && r && p.x === r.x && p.y === r.y && p.w === r.w && p.h === r.h)) return s;
       return { monitorDockRect: r };
     }),
-  newChat: async () => {
+  newChat: async (workspaceId) => {
     await get().refreshProviders();
     if (needsProviderSetup(get().providers, get().activeModelId ?? get().models[0]?.id)) {
       get().setView('models');
       return;
     }
-    const s = await window.nekko.createSession(defaultChatFolder(get()));
+    const s = await window.nekko.createSession(workspaceId ?? defaultChatFolder(get()));
     // The host already returned the full record: seed before opening the pane
     // so its first frame has the session and brain, without a round-trip.
     putCachedSession(s);
