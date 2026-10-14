@@ -115,6 +115,8 @@ const NARROW_PANE = 620;
  */
 const COMPOSER_H_KEY = 'nekko.composer.height';
 const COMPOSER_MIN_H = 64;
+/** Drag distance (px) within which the composer snaps to its default or full size. */
+const COMPOSER_SNAP = 24;
 /** The conversation keeps at least this much of the pane, however tall the composer. */
 const TRANSCRIPT_MIN_H = 160;
 
@@ -1182,16 +1184,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     // Whatever in the composer is not the text box, which the drag cannot shrink.
     const chrome = section.getBoundingClientRect().height - startH;
     const maxH = Math.max(COMPOSER_MIN_H, Math.min(pane.getBoundingClientRect().height - chrome - TRANSCRIPT_MIN_H, Math.min(window.innerHeight, pane.getBoundingClientRect().height) * 0.5 - chrome));
-    let latest = startH;
+    // Snap points: the default (content-fitted) size and full size.
+    const defaultH = composerH === null ? startH : null;
+    let latest: number | null = startH;
     const onMove = (ev: PointerEvent) => {
-      latest = Math.round(Math.min(maxH, Math.max(COMPOSER_MIN_H, startH + (startY - ev.clientY))));
+      const h = Math.round(Math.min(maxH, Math.max(COMPOSER_MIN_H, startH + (startY - ev.clientY))));
+      latest = defaultH !== null && Math.abs(h - defaultH) <= COMPOSER_SNAP ? null : maxH - h <= COMPOSER_SNAP ? Math.round(maxH) : h;
       setComposerH(latest);
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       document.body.style.cursor = '';
-      try { window.localStorage.setItem(COMPOSER_H_KEY, String(latest)); } catch { /* private mode */ }
+      try {
+        if (latest === null) window.localStorage.removeItem(COMPOSER_H_KEY);
+        else window.localStorage.setItem(COMPOSER_H_KEY, String(latest));
+      } catch { /* private mode */ }
     };
     document.body.style.cursor = 'row-resize';
     window.addEventListener('pointermove', onMove);

@@ -33,7 +33,7 @@ export interface WallDockProps {
   onOpenModels: () => void;
 }
 
-const DEFAULT_DOCK_WIDTH = 408;
+const DEFAULT_DOCK_WIDTH = 368;
 
 /** A flow-layout sibling of the wall stage. The parent places it using data-dock-side. */
 export function WallDock(props: WallDockProps) {
