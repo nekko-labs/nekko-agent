@@ -2445,16 +2445,37 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
     assert_eq!(saved["devices"][0]["id"], "phone-1");
 
-    // A daemon channel, a channel the host serves, and an internal callback a phone may not call.
-    agent.send(client("c1", json!({ "type": "req", "id": 2, "channel": "remote:devices", "args": [] }))).await.unwrap();
-    let (_, res) = next_agent_frame(&mut agent, &key).await;
-    assert_eq!(res.unwrap()["result"][0]["id"], "phone-1");
-    agent.send(client("c1", json!({ "type": "req", "id": 3, "channel": "training:list", "args": [] }))).await.unwrap();
-    let (_, res) = next_agent_frame(&mut agent, &key).await;
-    assert_eq!(res.unwrap()["result"], json!({ "echo": "training:list", "args": [] }));
-    agent.send(client("c1", json!({ "type": "req", "id": 4, "channel": "turn:pending", "args": [] }))).await.unwrap();
-    let (_, res) = next_agent_frame(&mut agent, &key).await;
-    assert_eq!(res.unwrap()["error"], "Unknown channel: turn:pending");
+    // What a phone may call is the computer's decision (nekko_remote::phone):
+    // a daemon channel it may not call, a channel the host serves that it may,
+    // a public channel off its list, and an internal callback.
+    let mut ask = async |id: u32, channel: &str, args: Value| {
+        agent.send(client("c1", json!({ "type": "req", "id": id, "channel": channel, "args": args }))).await.unwrap();
+        next_agent_frame(&mut agent, &key).await.1.unwrap()
+    };
+    let res = ask(2, "remote:devices", json!([])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): remote:devices");
+    let res = ask(3, "app:info", json!([])).await;
+    assert_eq!(res["result"], json!({ "echo": "app:info", "args": [] }));
+    let res = ask(4, "training:list", json!([])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): training:list");
+    let res = ask(5, "turn:pending", json!([])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): turn:pending");
+    // Settings: the daemon's own, redacted for the phone, and only the phone's keys.
+    post(d.port, "settings:update", json!([{ "hfToken": "hf_secret", "defaultChatMode": "ask" }]), Some(TOKEN)).await;
+    let res = ask(6, "settings:get", json!([])).await;
+    assert_eq!(res["result"]["defaultChatMode"], "ask", "{res}");
+    assert!(!res.to_string().contains("hf_secret"), "{res}");
+    assert!(res["result"].get("providers").is_none(), "{res}");
+    let res = ask(7, "settings:update", json!([{ "defaultChatMode": "turbo" }])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (value-invalid): defaultChatMode");
+    let res = ask(8, "settings:update", json!([{ "chatPaneAction": "delete", "sandboxMode": "off" }])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (setting-denied): sandboxMode");
+    let res = ask(9, "settings:update", json!([{ "chatPaneAction": "delete" }])).await;
+    assert_eq!(res["result"]["chatPaneAction"], "delete", "{res}");
+    let (_, saved) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
+    assert_eq!(saved["defaultChatMode"], "ask", "the refused updates applied nothing");
+    assert_ne!(saved["sandboxMode"], "off");
+    assert_eq!(saved["hfToken"], "hf_secret");
 
     // The host's events reach the welcomed phone.
     let f = next_json(&mut agent, Duration::from_secs(20)).await.expect("a relayed event");

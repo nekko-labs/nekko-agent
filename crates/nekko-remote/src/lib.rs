@@ -13,6 +13,7 @@ pub mod agent;
 pub mod e2e;
 pub mod hello;
 pub mod jsobj;
+pub mod phone;
 pub mod service;
 pub mod socket;
 
@@ -20,15 +21,16 @@ pub use agent::{AgentCore, Out, RELAYED_EVENTS};
 pub use service::{CHANNELS, Clock, Link, LinkHandle, RemoteService, Verifier, system_clock};
 pub use socket::{Dispatcher, Events, RelayAgent, Spawn, agent_url};
 
-/// The host channels a paired phone may call: every public IPC channel the
-/// host's dispatcher serves (`IpcChannels`, written by the golden test). The
-/// daemon's internal callbacks (`turn:*`, `loop:*`, ...) are not among them.
+/// Every public IPC channel the host's dispatcher serves (`IpcChannels`,
+/// written by the golden test); the daemon's internal callbacks (`turn:*`,
+/// `loop:*`, ...) are not among them. A paired phone may call only the subset
+/// `phone` allows.
 pub fn public_channels() -> &'static [String] {
     static LIST: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
     LIST.get_or_init(|| serde_json::from_str(include_str!("channels.json")).unwrap_or_default())
 }
 
-/// Whether a phone may call `channel`.
+/// Whether `channel` is a public host channel (see `phone::channel_allowed` for phones).
 pub fn is_public(channel: &str) -> bool {
     public_channels().iter().any(|c| c == channel)
 }
