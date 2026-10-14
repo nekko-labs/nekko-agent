@@ -24,7 +24,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
    paste your self-hosted relay URL), then **Pair a device**.
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
-   app, open the pairing link in a browser to get the full app over the relay.
+   app, the pairing link also opens the web app in a browser over the relay, but it is limited to
+   what a phone may do (below), so most desktop screens there are unavailable.
 3. The phone shows up under **Paired devices**, with a live connection dot.
 
 ## The phone app
@@ -38,6 +39,35 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > computer right away. Pick **Phone setting**, **Light** or **Dark** to choose on the phone instead;
 > that choice is kept on the phone. Only the theme, theme preset and the two accent colors are sent
 > for this (the `appearance:updated` event), never the rest of the computer's settings.
+>
+> The Android app's **Settings** also has a **Computers** row, which opens the list of paired
+> computers (rename, switch, forget, pair another), and an **About** section with the installed
+> version and the open-source licenses of the app and the libraries it ships.
+>
+> **Vibration** (Android): while the app is open, the phone vibrates when the agent needs your
+> approval (two pulses) or asks you a question (one long pulse). In **Settings → Vibration** you can
+> also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them
+> off. It never vibrates in silent mode or Do Not Disturb, or while the app is in the background.
+>
+> The Android app is **locked by default**: every time you open it, or come back to it, it asks for
+> your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows
+> anything. While it is locked nothing can be read or approved, and the recent-apps preview stays
+> blank. After a restart it doesn't connect to your computer until you unlock. Turn it off in
+> **Settings → Security → App lock**; turning it off asks for the same check first. With the lock on,
+> the app can't be screenshotted or screen-recorded. A phone with no screen lock can't be locked;
+> Settings says so and links to the phone's security settings.
+>
+> The Android app **reconnects by itself** as soon as the phone changes network (Wi-Fi to mobile data,
+> airplane mode off), instead of waiting out its retry delay. While a chat on your computer is running,
+> **Settings → Connection → Stay connected while a chat runs** (on by default) keeps the app connected
+> after you leave it, with a silent "Staying connected · 1 chat running on Mac" notification that goes
+> away as soon as the reply is done. **Notify me** (on by default; Android 13+ asks for permission)
+> sends a notification when a reply finishes or fails, or a chat waits for your approval or answer,
+> while you're out of the app. Notifications say what happened and in which chat, never the reply, the
+> command or the question; with the app lock on they don't name the chat either, and tapping one opens
+> the chat through the lock. Without push (not built yet), these only arrive while the phone is still
+> connected. If Android restricts Nekko in the background, Settings says so and opens the app's
+> system page.
 
 The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
 small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
@@ -59,6 +89,30 @@ everything at once.
 
 Remote access survives restarts: if it was enabled, the agent reconnects when Nekko Agent starts.
 
+## What a paired phone can do
+
+Your computer decides what a paired phone may ask for, whatever the phone app does: locking the
+phone app is not the boundary, your computer is. A phone can use your chats and nothing that
+changes how the computer itself is set up:
+
+- **Allowed:** list, open, start, complete and delete chats; send, queue and stop messages; answer
+  approvals and the agent's questions; pick a model from the computer's providers and a folder from
+  its list; voice status and transcription; and a few settings (below).
+- **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
+  revoking, rotating the secret), terminals, writing files, adding or removing folders, installing
+  or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
+  servers and hooks. Everything not on the allowed list is refused too, with an error that starts
+  *Not allowed from a paired phone*.
+- **Settings a phone may change:** the chat mode for new chats (Ask, Guardrails or YOLO), what the chat pane's top-right button does (Complete or Delete),
+  whether deleting asks first, and voice on/off and its language. An update that touches any other
+  setting is refused as a whole: nothing in it is applied.
+- **Settings a phone can read:** only the theme and accents, the default and starred models, and
+  the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
+  instructions never leave the computer this way; provider lists arrive as name and type only.
+- **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
+  switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
+  offline/incognito switches. Messages cannot attach files from the computer.
+
 ## Security model, honestly stated
 
 | Threat | Defense |
@@ -66,10 +120,10 @@ Remote access survives restarts: if it was enabled, the agent reconnects when Ne
 | Relay operator reads your traffic | Impossible by construction: E2E encryption, relay sees ciphertext only |
 | Stranger connects to your room | Needs the pairing secret (128-bit) for transport auth, then a registered device or a live pairing code |
 | Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
-| Lost/stolen phone | Revoke it in Settings: kicked immediately, denied afterward, push token dropped |
+| Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; rotate the secret for a full cryptographic reset |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
-| Phone asks for something dangerous | Tool calls run on your machine under your guardrails/sandbox and chat mode (Ask/Guardrails/YOLO) |
+| Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
 
 What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
 enable push, device push tokens plus the content-free fact "a run finished". That's the whole list,

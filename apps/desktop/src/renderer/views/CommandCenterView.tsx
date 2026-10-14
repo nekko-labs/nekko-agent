@@ -9,7 +9,7 @@ import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD } from '@nekko
 import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { GridIcon, MoreVerticalIcon, PhotoIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
+import { GridIcon, PhotoIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -294,7 +294,7 @@ export function CommandCenterView() {
   /** A window from the toolbar, with no side pointed at: beside the biggest window. */
   const addFromToolbar = async (kind: PaneKind, refId?: string) => {
     const ref = refId ?? (kind === 'chat' ? await newChat() : kind === 'terminal' ? await newTerminal() : kind);
-    setWall((w) => ({ ...w, root: hasPane(w.root, kind, ref) ? w.root : addPane(w.root, wallPane(kind, ref), aspectRef.current), ...(kind === 'chat' ? { hero: ref } : {}) }));
+    setWall((w) => ({ ...w, root: hasPane(w.root, kind, ref) ? w.root : addPane(w.root, wallPane(kind, ref), aspectRef.current), ...(kind === 'chat' || w.layout.mode === 'focus' ? { hero: ref } : {}), filter: w.filter === 'all' || w.filter === kind ? w.filter : 'all' }));
     if (kind === 'chat') setSelected(ref);
   };
   /** A one-click add that failed says so, instead of silently opening nothing. */
@@ -315,9 +315,9 @@ export function CommandCenterView() {
   const agentsOnWall = useMemo(() => wallAgents(wall.root), [wall.root]);
   const panel = readAgentPanel(wall.agentPanel);
   useEffect(() => {
-    if (agentsOnWall.length === 0) { if (selected) selectAgent(null); return; }
-    if (!selected || !agentsOnWall.some((p) => p.refId === selected)) selectAgent(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
-  }, [agentsOnWall, selected, wall.hero, selectAgent]);
+    if (agentsOnWall.length === 0) { if (selected) setSelected(null); return; }
+    if (!selected || !agentsOnWall.some((p) => p.refId === selected)) setSelected(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
+  }, [agentsOnWall, selected, wall.hero]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (useStore.getState().view !== 'command' || document.visibilityState === 'hidden' || !viewRef.current?.getClientRects().length || e.defaultPrevented || e.repeat || e.isComposing) return;
@@ -553,28 +553,11 @@ export function WallToolbar({
 
         {/* Adding to the wall, first in the row: an agent, an image session or a
             terminal of its own. An agent's Changes, Files and Browser live in that agent's own
-            header beside Logs. More opens the full picker. */}
+            header beside Logs. The empty wall can still open the full picker. */}
         <div className="wall-add-bar" role="group" aria-label="Add to the wall">
           <button type="button" className="wall-add-icon" title="New agent" aria-label="New agent" onClick={() => onAdd('chat')}><NekkoAvatar size={16} stationary eyes={false} /></button>
           <button type="button" className="wall-add-icon" title="New image session" aria-label="New image session" onClick={() => onAdd('image')}><PhotoIcon className="h-4 w-4" /></button>
-          <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
-          <button
-            type="button"
-            className="wall-add-icon"
-            ref={addButtonRef}
-            data-wall-add-button
-            onClick={() => {
-              if (document.querySelector('#wall-window-picker [aria-busy="true"]')) return;
-              setAddOpen((o) => !o);
-            }}
-            aria-haspopup="dialog"
-            aria-controls="wall-window-picker"
-            aria-expanded={addOpen}
-            aria-label="Add window"
-            title="More: a chat already running, an image session, or a new chat with details"
-          >
-            <MoreVerticalIcon className="h-4 w-4" />
-          </button>
+          <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" ref={addButtonRef} onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
         <div className="wall-layout-control" ref={fixedRef}>

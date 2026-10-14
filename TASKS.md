@@ -1,10 +1,14 @@
 ---
 status: active
-last-updated: 2026-10-10
+last-updated: 2026-10-14
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Composer skill picker after existing text (added 2026-10-14)
+
+- [ ] Fix [#535: skill menu does not open for `/` after existing composer text](https://github.com/nekko-labs/nekko-agent/issues/535). User reports that `/` opens the skill picker in an empty fresh-chat composer, but not after other draft text. Open the picker after existing text (for example `Help me with this /`), preserve surrounding text when selecting a skill, and retain the empty-composer behavior. Add regression coverage for both draft states. Reported behavior has not been independently reproduced; implementation and verification remain pending.
 
 ## Clarification reply visibility (2026-10-13)
 
@@ -114,7 +118,10 @@ Layout: `apps/android` is a standalone Gradle build (wrapper 9.8.1, AGP 9.4.1 wi
 - [x] **AN-2, Relay client.** Same state machine as the Expo client (connecting/online/offline/denied, backoff, offline polling, agent-online re-HELLO, kick 4001 and bad-key terminal, pair code never resent). 12 fake-agent tests.
 - [x] **AN-3, Live integration test.** `NEKKO_ITEST=1 ./gradlew :protocol:test` runs the Kotlin client against the real relay + headless agent + `scripts/fake-model.mjs`: enrollment, provider-key stripping, streamed turn, guarded `rm -rf` approval denied from the phone, same-device reconnect, stranger and spent-code refusal.
 - [x] **AN-4, App.** Pairing (code scanner, paste, deep link with confirmation), chats list with activity badges and pull-to-refresh, chat with streaming/queue/stop/approval/question cards, new chat (provider, model, folder), computers (rename, switch, forget). 30 JVM tests for controller/repository/ask form. Lint clean; debug and minified release APKs build.
+- [x] **AN-10, Settings scaffolding.** Settings is an ordered list of section files (`ui/settings/SettingsSections.kt`: Appearance, Computers, About); a new phone setting is one section file plus one line there, reaching dependencies through `SettingsDeps`. `PhonePrefs` (non-secret prefs, `StateFlow` per key, own file `nekko_phone`, backup-excluded; `ThemePrefs` left as is) and `PhoneEvent` (pure `AgentEvent` mapping) are in place for later work and unwired. About shows the version and a hand-kept licenses screen with bundled MIT/Apache 2.0 texts. 13 new JVM tests; headless-emulator screenshots light/dark show Appearance unchanged.
 - [ ] **AN-5, Emulator and device verification.** Needs Android Studio (or an emulator system image) and/or a phone: run the debug APK against a local relay (`adb reverse tcp:4400 tcp:4400`, pair with `ws://localhost:4400`) and against the managed relay; capture light/dark screenshots of pairing, chats, a streaming reply, an approval and a question; check deep links, the scanner, keyboard/insets, TalkBack and large fonts. Then Compose UI tests (`androidTest`).
+- [x] **AN-10, App lock.** Fingerprint / face / screen lock on every open and every return (`lock/AppLock.kt` state machine with 10 JVM tests, `BiometricPrompt` in `lock/Authenticator.kt`, lock screen in `lock/LockScreen.kt`, *Settings → Security → App lock* (`ui/settings/SecuritySection.kt`, `PhonePrefs` key `app_lock`) on by default, turning off needs auth, `FLAG_SECURE` while on, relay held until the first unlock). Verified on an API 37 emulator with a PIN. Still open: fingerprint/face and Android 9–12 on real devices; re-auth before an Allow (proposed, not built).
+- [x] **AN-13, Vibration.** *Settings → Vibration*, one switch per `PhoneEvent` (approval and question on by default), foreground only, never silent/DND, sub-agent finish ignored, 1.5 s gap (`haptics/EventHaptics.kt` with 7 JVM tests, `haptics/AndroidHaptics.kt`). Verified on an API 37 emulator via `dumpsys vibrator_manager`. Still open: feel the patterns on a physical phone.
 - [ ] **AN-6, Push.** FCM token → relay `register-push` after pairing; needs a Firebase project (`google-services.json`) and the relay's FCM service account.
 - [ ] **AN-7, Phone models.** llama.cpp via JNI/NDK (or a maintained binding), memory-fit catalog, resumable downloads with integrity checks, no backup of model files, one loaded model, thermal handling. Parity with the Expo "On this phone" tab.
 - [ ] **AN-8, Markdown + attachments** in transcripts (no remote image fetches).
@@ -877,6 +884,17 @@ Philip's batch of feedback from a live session: the ChatGPT subscription connect
 Verification: `npm run typecheck` across workspaces, host tests (`oauth`, `download`/`engine` presets), core capacity tests untouched, desktop `npm test` (composer, picker, layout), `npm run build:web` + desktop build. Visual evidence: before/after of the Model server page, the picker, a themed select popup, and the workspace column; a short recording of the sidebar resize.
 
 ## Backlog / Planned
+
+### Chat completion X icons ([#533](https://github.com/nekko-labs/nekko-agent/issues/533))
+
+Planned, not implemented: multiple users did not recognize the checkmark as a way to close chats. Replace the completion-action checkmark with the existing X (`CloseIcon`) in chat pane headers and active chat cards/saved-chat rows, preserving completion/archive semantics, 60-day retention, restoration, shortcuts and existing exit timing. Delete remains a separate trash-icon action; unrelated status checkmarks are unchanged. See the [detailed implementation plan](reports/chat-close-icon-implementation-plan.md) and [planned specification](SPEC.md#chat-completion-x-icons-planned).
+
+- [ ] Audit current completion controls and arrange isolated unchanged-base wide/narrow light/dark evidence.
+- [ ] Substitute `CloseIcon` in `PaneFrame.tsx` and `WorkspaceCard.tsx`, preserving icon sizes, handlers, accurate labels and configured Delete behavior.
+- [ ] Add focused icon/lifecycle regressions; run desktop tests, typecheck and build.
+- [ ] Inspect matched visual evidence and completion recording; verify archive/restore, failure recovery, keyboard activation, reduced motion and no click propagation.
+- [ ] Update the implemented SPEC.md description and walkthrough; regenerate docs.
+- [ ] Publish evidence in the implementation PR, pass required checks/reviews, then land and close #533. Do not close the issue with the planning-only PR.
 
 ### Later: native shell and the phone as its own product (added 2026-09-30)
 

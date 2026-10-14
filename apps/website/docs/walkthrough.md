@@ -106,7 +106,9 @@ list dirs, run shell commands).
 
 ### Add windows and read the dock
 
-The Agents toolbar ellipsis opens an anchored dropdown with horizontal **Chat**, **Media** and **Terminal** categories. Narrow widths can scroll the categories horizontally. Opening the dropdown does not move wall tiles, resize the wall or change its layout mode. Escape, Close or an outside pointer dismisses it; pending creation prevents dismissal and double activation. This replaces the prior inline Add-tile reveal.
+The Agents toolbar provides direct **New agent**, **New image session** and **New terminal** actions, with no ellipsis or overflow button. The empty wall can still open the full window picker. Its Chat, Media and Terminal categories remain horizontal; opening it does not change the wall layout.
+
+Each repository heading in the Agent panel also has a **plus** button for a new agent chat and a **terminal** button for a new shell in that repository. These actions use the repository you clicked, not another selected or default folder. In Focus, the new window becomes visible; other layout modes stay unchanged. On narrow screens, the agent list closes after successful creation so it does not cover the result. If a wall filter would hide the window, it switches to All. The controls wait for creation to finish before accepting another click for the same repository, and failures show an error you can act on and retry.
 
 Utilization shows a Claude subscription account once when provider entries share the same token key, preferring the Anthropic entry. Independent accounts and API entries remain separate. In Budget, choose today, 1wk, 1m, 6m, 1y or all-time; the active range is tinted. Spend, tokens, top agent, local tokens, savings and compared model membership all follow that UTC range, not lifetime totals. See [usage limits and prices](https://nekkoagent.com/docs/usage-limits).
 

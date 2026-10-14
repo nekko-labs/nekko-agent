@@ -230,7 +230,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   const {
     sessions, terminals, workspaces, activeWorkspaceId, settings, activeSessionId,
     refreshSessions, refreshTerminals, openChatPane, openTerminalPane, newTerminal: storeNewTerminal, newTerminalWorkspace: storeNewTerminalWorkspace,
-    setActiveWorkspace, newChat: storeNewChat, setActiveProject,
+    setActiveWorkspace, newChat: storeNewChat,
     reorderWorkspaces, layoutChats, layoutTerminals, contextPanelOpen,
     archiveWorkspace, archiveChat, archiveOpen, archivedViewId,
   } = useStore(
@@ -249,7 +249,6 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
       newTerminalWorkspace: s.newTerminalWorkspace,
       setActiveWorkspace: s.setActiveWorkspace,
       newChat: s.newChat,
-      setActiveProject: s.setActiveProject,
       reorderWorkspaces: s.reorderWorkspaces,
       layoutChats: s.layoutChats,
       layoutTerminals: s.layoutTerminals,
@@ -260,11 +259,29 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
       archivedViewId: s.archivedViewId,
     })),
   );
-  const newChat = () => sidebarOnly && onCreate ? onCreate('chat', activeProjectId()) : storeNewChat();
+  const newChat = (projectId?: string) => sidebarOnly && onCreate ? onCreate('chat', projectId ?? activeProjectId()) : storeNewChat(projectId);
   const activeProjectId = () => useStore.getState().activeProjectId ?? undefined;
   const newTerminal = (projectId?: string) => sidebarOnly && onCreate ? onCreate('terminal', projectId) : storeNewTerminal(projectId);
   const newTerminalWorkspace = (projectId?: string, shell?: string) => sidebarOnly && onCreate ? onCreate('terminal', projectId ?? activeProjectId(), shell) : storeNewTerminalWorkspace(projectId, shell);
   const newImageChat = () => sidebarOnly && onCreate ? onCreate('image', activeProjectId()) : useStore.getState().newImageChat('');
+  const pendingProjectActions = useRef(new Set<string>());
+  const [pendingProjects, setPendingProjects] = useState<string[]>([]);
+  const createInProject = async (kind: 'chat' | 'terminal', projectId: string | undefined, name: string) => {
+    const key = projectId ?? '__none';
+    if (pendingProjectActions.current.has(key)) return;
+    pendingProjectActions.current.add(key);
+    setPendingProjects([...pendingProjectActions.current]);
+    try {
+      if (kind === 'chat') await newChat(projectId);
+      else await newTerminal(projectId);
+      setMobileNav(false);
+    } catch (error) {
+      useStore.getState().pushToast('error', `Could not ${kind === 'chat' ? 'create an agent' : 'open a terminal'} in ${name}: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      pendingProjectActions.current.delete(key);
+      setPendingProjects([...pendingProjectActions.current]);
+    }
+  };
   const [selected, setSelected] = useState<string[]>([]);
   const anchor = useRef<string | null>(null);
   const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
@@ -713,9 +730,11 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                 </button>
                 <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                   <button className="rounded-md p-1 text-ink-faint hover:bg-paper hover:text-ink" title="New agent in this project"
-                    onClick={() => { setActiveProject(b.ws?.id ?? null); void newTerminalWorkspace(b.ws?.id); }}><PlusIcon className="h-3.5 w-3.5" /></button>
+                    disabled={pendingProjects.includes(b.key)} aria-label={`New agent in ${b.name}`}
+                    onClick={() => { void createInProject('chat', b.ws?.id, b.name); }}><PlusIcon className="h-3.5 w-3.5" /></button>
                   <button className="rounded-md p-1 text-ink-faint hover:bg-paper hover:text-ink" title="New terminal in project"
-                    onClick={() => newTerminal(b.ws?.id)}><TerminalIcon className="h-3.5 w-3.5" /></button>
+                    disabled={pendingProjects.includes(b.key)} aria-label={`New terminal in ${b.name}`}
+                    onClick={() => { void createInProject('terminal', b.ws?.id, b.name); }}><TerminalIcon className="h-3.5 w-3.5" /></button>
                 </span>
               </div>
               {/* Collapsed means gone: hidden, out of the tab order, and taking
@@ -922,7 +941,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
             <ChatPane key={`archived:${archivedViewId}`} sessionId={archivedViewId} readOnly />
           </div>
         )}
-        {!reading && !active?.root && <EmptyState onNewChat={newChat} onNewTerminal={() => newTerminal()} />}
+        {!reading && !active?.root && <EmptyState onNewChat={() => { void newChat(); }} onNewTerminal={() => newTerminal()} />}
         {mounted.length > 0 && (
           // The mounted workspaces share one box, stacked; the one on screen is
           // on top. See WorkspaceCanvas for how the others are kept.

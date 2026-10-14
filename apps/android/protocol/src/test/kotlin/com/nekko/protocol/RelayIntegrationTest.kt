@@ -129,7 +129,8 @@ class RelayIntegrationTest {
         val providers = PublicProvider.list(rawProviders)
         // The host also lists its built-in engine; the point is that keys never survive.
         assertTrue(providers.contains(PublicProvider("fake", "openai-compat", "Fake", true)))
-        assertTrue("the raw reply does carry the key", rawProviders.toString().contains("sk-should-never"))
+        // The computer strips provider keys before they leave it (packages/shared/src/phone-access.ts).
+        assertFalse("the raw reply carries no key", rawProviders.toString().contains("sk-should-never"))
         assertFalse(providers.toString().contains("sk-"))
         assertEquals(RemoteDefaults("fake", "fake-model"), RemoteDefaults.from(c.call(Channels.SETTINGS_GET)))
         println("itest: enrolled as ${deviceId.take(8)}, host ${info.version}, ${providers.size} public providers")

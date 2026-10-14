@@ -23,6 +23,13 @@ tasks.test {
     listOf("NEKKO_ITEST", "NEKKO_E2E_OUT").forEach { key ->
         System.getenv(key)?.let { environment(key, it) }
     }
+    // These checks write files or reach live processes as a side effect, which a
+    // build-cache hit would skip: CI then found no kotlin-frames.json for the
+    // node step. Never take the task from the cache while either switch is on.
+    if (System.getenv("NEKKO_E2E_OUT") != null || System.getenv("NEKKO_ITEST") == "1") {
+        outputs.cacheIf { false }
+        outputs.upToDateWhen { false }
+    }
     testLogging {
         events("failed", "skipped")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

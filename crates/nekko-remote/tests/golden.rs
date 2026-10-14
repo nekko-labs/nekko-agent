@@ -123,6 +123,7 @@ fn the_relay_agent_sends_the_same_frames() {
         }
     };
     let responses = g["responses"].as_object().unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
     let mut calls = Vec::new();
     let steps = g["steps"].as_array().unwrap();
     assert!(steps.len() > 25);
@@ -152,14 +153,24 @@ fn the_relay_agent_sends_the_same_frames() {
                 match out {
                     Out::Send(f) => sent.push(f),
                     Out::Dispatch { cid, id, channel, args } => {
-                        if responses.contains_key(&channel) {
-                            calls.push(json!({ "channel": channel, "args": args }));
-                        }
-                        let result = match responses.get(&channel) {
-                            Some(r) if r.get("error").is_some() => Err(s(&r["error"]).to_string()),
-                            Some(r) => Ok(r.get("result").cloned().unwrap_or(Value::Null)),
-                            None => Err(format!("Unknown channel: {channel}")),
-                        };
+                        // As the daemon runs it: through the phone gate, then the host.
+                        let seen = Arc::new(Mutex::new(Vec::new()));
+                        let (record, responses) = (seen.clone(), responses.clone());
+                        let host: nekko_remote::Dispatcher = Arc::new(move |channel: String, args: Value| {
+                            let result = match responses.get(&channel) {
+                                Some(r) => {
+                                    record.lock().unwrap().push(json!({ "channel": channel, "args": args }));
+                                    match r.get("error") {
+                                        Some(e) => Err(s(e).to_string()),
+                                        None => Ok(r.get("result").cloned().unwrap_or(Value::Null)),
+                                    }
+                                }
+                                None => Err(format!("Unknown channel: {channel}")),
+                            };
+                            Box::pin(std::future::ready(result))
+                        });
+                        let result = rt.block_on(nekko_remote::phone::gate(host)(channel, args));
+                        calls.extend(seen.lock().unwrap().drain(..));
                         sent.push(core.reply(&cid, id, result));
                     }
                 }
@@ -253,5 +264,38 @@ fn remote_json_and_replies_match_across_operations() {
         }
         let want_kicked: Vec<&str> = op["kicked"].as_array().unwrap().iter().map(s).collect();
         assert_eq!(*kicked.lock().unwrap(), want_kicked, "op {i} kicked");
+    }
+}
+
+#[test]
+fn the_phone_gate_decides_as_the_ts_does() {
+    // phone-access.json and phone.json are both written from
+    // packages/shared/src/phone-access.ts by the TS golden test.
+    let g = golden("phone.json");
+    let settings = g["settings"].clone();
+    let cases = g["cases"].as_array().unwrap();
+    assert!(cases.len() >= 30);
+    let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+    for case in cases {
+        let calls: Arc<Mutex<Vec<Value>>> = Arc::default();
+        let (seen, settings) = (calls.clone(), settings.clone());
+        let host: nekko_remote::Dispatcher = Arc::new(move |channel: String, args: Value| {
+            seen.lock().unwrap().push(json!([channel, args]));
+            let out = match channel.as_str() {
+                "providers:list" => settings["providers"].clone(),
+                c if c.starts_with("settings:") => settings.clone(),
+                c => json!({ "ok": c }),
+            };
+            Box::pin(std::future::ready(Ok(out)))
+        });
+        let gated = nekko_remote::phone::gate(host);
+        let channel = s(&case["channel"]).to_string();
+        let got = rt.block_on(gated(channel.clone(), case["args"].clone()));
+        let what = format!("{channel} {}", case["args"]);
+        match case.get("error") {
+            Some(e) => assert_eq!(got.as_ref().unwrap_err(), s(e), "{what}"),
+            None => same(got.as_ref().unwrap(), &case["result"], &what),
+        }
+        same(&json!(*calls.lock().unwrap()), &case["calls"], &format!("{what}: host calls"));
     }
 }
