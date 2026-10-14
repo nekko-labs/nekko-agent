@@ -595,6 +595,30 @@ thing holding port 11434 might be a service you depend on.
 LM Studio is the exception that needs no such warning, since it has a real shutdown
 command rather than a process to kill.
 
+## Long tasks on a small context window
+
+A local model is often loaded with an 8k or 32k context, and an agent fills that in a few
+steps: one large file read or one noisy build log is most of it. Nekko Agent keeps the work
+going rather than stopping when the window fills:
+
+- **It uses the window the model was loaded with**, not the model's advertised maximum.
+  LM Studio and the Nekko engine report it in their model list, and Ollama reports it for a
+  loaded model. For anything that reports nothing, it falls back to a guess from the name.
+- **Older tool output is left out of the request** once the conversation nears 80% of that
+  window. The oldest large results (file reads, command output) are replaced, in what is sent,
+  by a one-line note saying how much was there; the chat itself keeps everything, and the model
+  can simply run the tool again if it needs that output back.
+- **If the server still says the prompt is too long**, the request is sent once more with all
+  of the older tool output left out.
+- **If that is not enough, the chat compacts and carries on by itself.** The older part of the
+  conversation is summarized, and the agent is asked to continue from the summary. This happens
+  at most twice in a row before the chat waits for you, so a model that cannot make progress
+  does not loop.
+
+Giving the model more room is still the best fix. Raise its context when you load it (the
+Models page shows what that costs in memory), and `OLLAMA_KV_CACHE_TYPE=q8_0` roughly halves
+the memory a longer context needs.
+
 ## What is not here yet
 
 Browsing and downloading models from inside the app, and a bundled inference engine so a
