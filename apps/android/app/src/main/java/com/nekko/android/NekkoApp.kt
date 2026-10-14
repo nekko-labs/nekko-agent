@@ -11,9 +11,11 @@ import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.RelayRemoteFactory
 import com.nekko.android.data.ThemePrefs
+import com.nekko.android.lock.AppLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** App-scoped singletons (manual DI). */
@@ -26,6 +28,8 @@ class NekkoApp : Application() {
         private set
     lateinit var phonePrefs: PhonePrefs
         private set
+    lateinit var appLock: AppLock
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -37,10 +41,22 @@ class NekkoApp : Application() {
             scope = appScope,
             deviceName = ::deviceName,
         )
-        appScope.launch { computers.load() }
+        appLock = AppLock(enabled = phonePrefs.get(AppLock.ENABLED), persist = { phonePrefs.set(AppLock.ENABLED, it) })
+        // Nothing reaches the computer until the user has unlocked once: no
+        // relay connection, no chat list, no approvals behind the lock screen.
+        appScope.launch {
+            appLock.status.first { !it.locked }
+            computers.load()
+        }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            // App came to the foreground: reconnect now rather than after the backoff.
-            override fun onStart(owner: LifecycleOwner) = computers.nudge()
+            override fun onStart(owner: LifecycleOwner) {
+                appLock.onForeground()
+                // App came to the foreground: reconnect now rather than after the backoff.
+                computers.nudge()
+            }
+
+            // Fires ~700 ms after the last activity stops, so rotations do not lock.
+            override fun onStop(owner: LifecycleOwner) = appLock.onBackground()
         })
     }
 
