@@ -11,6 +11,8 @@ import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.RelayRemoteFactory
 import com.nekko.android.data.ThemePrefs
+import com.nekko.android.haptics.AndroidHaptics
+import com.nekko.android.haptics.EventHaptics
 import com.nekko.android.lock.AppLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +32,8 @@ class NekkoApp : Application() {
         private set
     lateinit var appLock: AppLock
         private set
+    lateinit var haptics: AndroidHaptics
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -48,6 +52,9 @@ class NekkoApp : Application() {
             appLock.status.first { !it.locked }
             computers.load()
         }
+        haptics = AndroidHaptics(this, EventHaptics(phonePrefs), computers)
+        // Vibrate for the active computer's agent events, per Settings → Vibration.
+        appScope.launch { computers.events.collect(haptics::onEvent) }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 appLock.onForeground()

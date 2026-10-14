@@ -5,6 +5,8 @@
     <!-- INTERNET only: the Google code scanner runs its own camera UI inside Play
          services, so this app never asks for the CAMERA permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Settings → Vibration: a short buzz when the agent needs you (install-time, no prompt). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".NekkoApp"
