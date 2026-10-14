@@ -77,3 +77,17 @@ it('requires automatic UI verification and authorized landing, not a draft-PR ha
   // GitHub release naming is repository policy, not a global side effect.
   expect(prompt).not.toContain('pr-media');
 });
+
+it('ends a PR task at merge or a named blocker, never at a draft with residual notes', () => {
+  const prompt = buildSystemPrompt({ workspaces: [], platform: 'linux', contextBlock: '' });
+  for (const rule of [
+    'A PR task ends when the PR is merged or you have named the exact blocker',
+    'A non-empty Unfinished work section is not a blocker',
+    'Only a release blocker holds a PR',
+    'mark the draft ready and merge it',
+    'do not hand the PR back to the user in draft',
+    'A check that also fails on the base branch is a baseline problem',
+    'file one if none exists',
+    'Never weaken a budget or disable a check to get green',
+  ]) expect(prompt).toContain(rule);
+});
