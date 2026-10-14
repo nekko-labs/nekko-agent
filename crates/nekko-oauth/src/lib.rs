@@ -585,10 +585,13 @@ pub fn codex_cli_token(raw: &str, now: f64) -> Result<Option<Value>, String> {
             ("accessToken", access.cloned()),
             ("refreshToken", prop(tokens, "refresh_token").cloned()),
             ("accountId", prop(tokens, "account_id").cloned()),
-            ("accountEmail", match prop(tokens, "id_token") {
-                Some(Value::String(s)) => extract_email(s).map(Value::String),
-                _ => None,
-            }),
+            (
+                "accountEmail",
+                match prop(tokens, "id_token") {
+                    Some(Value::String(s)) => extract_email(s).map(Value::String),
+                    _ => None,
+                },
+            ),
             ("expiresAt", Some(num(expires_at))),
             ("obtainedAt", Some(num(obtained_at))),
         ])
