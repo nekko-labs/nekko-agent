@@ -43,6 +43,7 @@ async fn main() {
             think: Some(false),
             prompt_caching: None,
             max_history_turns: None,
+            context_window: None,
             max_output_tokens: Some(256),
             resume: false,
             cancel: Cancel::default(),

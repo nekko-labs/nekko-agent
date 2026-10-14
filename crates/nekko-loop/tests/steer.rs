@@ -71,6 +71,7 @@ async fn folds_a_steering_message_in_at_the_next_tool_boundary() {
             think: None,
             prompt_caching: None,
             max_history_turns: None,
+            context_window: None,
             max_output_tokens: None,
             resume: false,
             cancel: Cancel::default(),

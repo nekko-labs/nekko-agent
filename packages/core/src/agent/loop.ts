@@ -1,5 +1,6 @@
 import type { AgentEvent, ChatMessage, EffortLevel, ToolCall, ToolResult } from '@nekko-agent/shared';
-import { COMPACTION_PREAMBLE, latestCompactionIndex } from '@nekko-agent/shared';
+import { COMPACTION_PREAMBLE, isContextOverflowError, latestCompactionIndex } from '@nekko-agent/shared';
+import { ELIDE_ALL, applyElision, elidable, elisionFor } from './fit.js';
 import type { Provider, ToolSpec } from '../providers/types.js';
 import { BUILTIN_TOOLS } from './tools.js';
 import { RUNAWAY_NOTE, createRunawayGuard } from './runaway.js';
@@ -51,6 +52,12 @@ export interface RunAgentOptions {
    * loops so they don't replay an ever-growing transcript every turn.
    */
   maxHistoryTurns?: number;
+  /**
+   * The model's context window in tokens. When set, older tool outputs are
+   * elided from what is sent once the prompt nears it (fit.ts), so a long run
+   * on a small local model keeps going instead of overflowing.
+   */
+  contextWindow?: number;
   /** Hard cap on tokens one provider response may generate (see MAX_OUTPUT_TOKENS_DEFAULT). */
   maxOutputTokens?: number;
   /**
@@ -177,6 +184,13 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
   const tools = opts.tools ?? BUILTIN_TOOLS;
   let route = { provider: opts.provider, model: opts.model, onHeaders: opts.onHeaders, maxOutputTokens: opts.maxOutputTokens };
   let switched = false;
+  // How many of the oldest bulky tool outputs this run elides from what it
+  // sends (fit.ts). Only grows, so consecutive requests share their prefix.
+  let elided = 0;
+  // A context-overflow error gets one retry with everything eligible elided.
+  let squeezed = false;
+  /** Elidable tool outputs in the last request: whether a squeeze could still help. */
+  let sentEligible = 0;
 
   // Stream one provider response, yielding its events and accumulating the
   // result into `turn`. `extraMessages` are appended to the sent history only
@@ -198,10 +212,15 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
       else opts.signal.addEventListener('abort', onAbort, { once: true });
     }
 
+    const full = [...windowHistory(fromLatestCompaction(opts.history), opts.maxHistoryTurns).map(asSeenByChatModel), ...extraMessages];
+    elided = elisionFor(opts.system, sendTools, full, opts.contextWindow, elided);
+    sentEligible = elidable(full).length;
+    const messages = applyElision(full, elided);
+
     try {
       for await (const chunk of route.provider.chat({
         model: route.model,
-        messages: [...windowHistory(fromLatestCompaction(opts.history), opts.maxHistoryTurns).map(asSeenByChatModel), ...extraMessages],
+        messages,
         system: opts.system,
         tools: sendTools,
         temperature: opts.temperature,
@@ -284,6 +303,16 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
         yield* stream(turn, extraMessages, sendTools);
         return;
       } catch (e) {
+        // The prompt no longer fits: send it once more with every older tool
+        // output elided before giving up on the reply.
+        if (!opts.signal?.aborted && !squeezed && isContextOverflowError(e) && elided < sentEligible) {
+          squeezed = true;
+          elided = ELIDE_ALL;
+          Object.assign(turn, before, { calls: [...before.calls] });
+          yield { type: 'retry', sessionId: opts.sessionId, attempt, maxAttempts: MAX_STREAM_ATTEMPTS, delayMs: 0, reason: 'The conversation no longer fits the context window: retrying with older tool output left out' };
+          attempt = 0;
+          continue;
+        }
         if (opts.signal?.aborted || !isTransientProviderError(e)) throw e;
         if (attempt >= MAX_STREAM_ATTEMPTS) {
           if (switched || !opts.failover) throw e;

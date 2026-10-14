@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentEvent, ChatMessage, CompactionProgress, ProviderConfig, Session } from '@nekko-agent/shared';
-import { estimateTranscriptTokens, guessContextWindow, latestCompactionIndex } from '@nekko-agent/shared';
+import { estimateTranscriptTokens, latestCompactionIndex } from '@nekko-agent/shared';
+import { knownContextWindow } from './context-window.js';
 import { createHostProvider as createProvider } from './prompt-caching.js';
 import { getSettings } from './store.js';
 import { forkSession, getSession, saveSession } from './sessions.js';
@@ -272,7 +273,9 @@ async function run(session: Session, job: Job): Promise<Session> {
   const signal = job.controller.signal;
   const provider = getSettings().providers.find((item) => item.id === session.providerId)!;
   const resolved = await resolveSubscriptionProvider(provider);
-  const contextWindow = guessContextWindow(session.modelId);
+  // The window the model was last loaded with when a turn found out, else the
+  // id's guess: summary chunks sized for a 128k guess overflow an 8k local model.
+  const contextWindow = knownContextWindow(session.providerId, session.modelId);
 
   // Only what a model is still sent gets summarized: the latest summary (if
   // any) and what follows it. The last couple of turns stay verbatim when they

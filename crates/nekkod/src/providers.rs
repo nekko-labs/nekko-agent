@@ -209,6 +209,75 @@ pub async fn list_models(ctx: &Ctx, id: &str) -> Value {
     }
 }
 
+/// How long a provider's reported windows are trusted (`CACHE_MS`, context-window.ts).
+const WINDOW_CACHE: Duration = Duration::from_secs(60);
+const WINDOW_LOOKUP: Duration = Duration::from_millis(2500);
+
+type WindowCache = Mutex<Vec<(String, Instant, Vec<(String, u64)>)>>;
+fn window_cache() -> &'static WindowCache {
+    static CACHE: std::sync::OnceLock<WindowCache> = std::sync::OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// Ollama's loaded context per model (`/api/ps`).
+async fn ollama_loaded(base_url: &str) -> Vec<(String, u64)> {
+    let root = base_url.trim_end_matches('/').trim_end_matches("/v1").trim_end_matches('/');
+    let client = reqwest::Client::builder().no_proxy().timeout(WINDOW_LOOKUP).build().unwrap_or_default();
+    let Ok(res) = client.get(format!("{root}/api/ps")).send().await else { return Vec::new() };
+    let Ok(body) = res.json::<Value>().await else { return Vec::new() };
+    let mut out = Vec::new();
+    for m in body.get("models").and_then(Value::as_array).into_iter().flatten() {
+        let Some(ctx) = m.get("context_length").and_then(Value::as_u64).filter(|c| *c > 0) else { continue };
+        for key in ["name", "model"] {
+            if let Some(id) = m.get(key).and_then(Value::as_str) {
+                out.push((id.to_string(), ctx));
+            }
+        }
+    }
+    out
+}
+
+/// `contextWindowFor` (context-window.ts): the window `model_id` was loaded
+/// with on this provider when the server reports one, else the id guess.
+/// Never blocks a turn for long, and never fails it.
+pub async fn context_window_for(ctx: &Ctx, provider: &Value, model_id: &str) -> u64 {
+    let guess = crate::context::guess_context_window(Some(model_id));
+    let kind = provider.get("kind").and_then(Value::as_str).unwrap_or("");
+    let asks = matches!(kind, "ollama" | "lmstudio" | "vllm" | "llamacpp" | "engine" | "openai-compat" | "openrouter");
+    let id = provider.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+    if !asks || id.is_empty() {
+        return guess;
+    }
+    let cached = {
+        let cache = window_cache().lock().unwrap_or_else(|e| e.into_inner());
+        cache.iter().find(|(p, at, _)| *p == id && at.elapsed() < WINDOW_CACHE).map(|(_, _, w)| w.clone())
+    };
+    let windows = match cached {
+        Some(w) => w,
+        None => {
+            let mut windows: Vec<(String, u64)> = match tokio::time::timeout(WINDOW_LOOKUP, list_models(ctx, &id)).await
+            {
+                Ok(Value::Array(models)) => models
+                    .iter()
+                    .filter_map(|m| {
+                        let ctx = m.get("contextLength").and_then(Value::as_u64).filter(|c| *c > 0)?;
+                        Some((m.get("id")?.as_str()?.to_string(), ctx))
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            if kind == "ollama" {
+                windows.extend(ollama_loaded(provider.get("baseUrl").and_then(Value::as_str).unwrap_or("")).await);
+            }
+            let mut cache = window_cache().lock().unwrap_or_else(|e| e.into_inner());
+            cache.retain(|(p, _, _)| *p != id);
+            cache.push((id, Instant::now(), windows.clone()));
+            windows
+        }
+    };
+    windows.iter().rev().find(|(m, _)| m == model_id).map(|(_, w)| *w).unwrap_or(guess)
+}
+
 /// `discoverLocalProviders()`: each well-known server that answers, IPv4
 /// first (on Windows `localhost` often resolves to `::1` while the servers
 /// bind only IPv4), in the order they answer.
