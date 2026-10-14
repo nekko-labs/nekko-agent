@@ -6,7 +6,7 @@
         "source": "system",
         "label": "System prompt",
         "origin": "Nekko Agent",
-        "tokens": 2783,
+        "tokens": 3016,
         "pinned": false,
         "included": true,
         "preview": "You are Nekko, the assistant inside Nekko Agent, a local-first coding and cowork app. You unify chat, cowork, and code: you hold normal conversations, help with…"
@@ -72,7 +72,7 @@
         "preview": "Only for w1."
       }
     ],
-    "totalTokens": 2825,
+    "totalTokens": 3058,
     "contextWindow": 1000000
   },
   {
@@ -82,7 +82,7 @@
         "source": "system",
         "label": "System prompt",
         "origin": "Nekko Agent",
-        "tokens": 2783,
+        "tokens": 3016,
         "pinned": false,
         "included": true,
         "preview": "You are Nekko, the assistant inside Nekko Agent, a local-first coding and cowork app. You unify chat, cowork, and code: you hold normal conversations, help with…"
@@ -128,7 +128,7 @@
         "preview": "Only for w1."
       }
     ],
-    "totalTokens": 2820,
+    "totalTokens": 3053,
     "contextWindow": 400000
   },
   {
@@ -138,7 +138,7 @@
         "source": "system",
         "label": "System prompt",
         "origin": "Nekko Agent",
-        "tokens": 2754,
+        "tokens": 2987,
         "pinned": false,
         "included": true,
         "preview": "You are Nekko, the assistant inside Nekko Agent, a local-first coding and cowork app. You unify chat, cowork, and code: you hold normal conversations, help with…"
@@ -154,7 +154,7 @@
         "preview": "Ship every change as a PR."
       }
     ],
-    "totalTokens": 2761,
+    "totalTokens": 2994,
     "contextWindow": 128000
   },
   {
@@ -164,7 +164,7 @@
         "source": "system",
         "label": "System prompt",
         "origin": "Nekko Agent",
-        "tokens": 2783,
+        "tokens": 3016,
         "pinned": false,
         "included": true,
         "preview": "You are Nekko, the assistant inside Nekko Agent, a local-first coding and cowork app. You unify chat, cowork, and code: you hold normal conversations, help with…"
@@ -190,7 +190,7 @@
         "preview": "Ship every change as a PR."
       }
     ],
-    "totalTokens": 2796,
+    "totalTokens": 3029,
     "contextWindow": 128000
   }
 ]
