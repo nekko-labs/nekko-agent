@@ -109,8 +109,7 @@ export const PHONE_PROVIDER_VIEW = ['enabled', 'id', 'kind', 'label'] as const;
 
 /**
  * Chat options a phone may set with `session:setOptions`: the model, the
- * title and organisation, completing (`archivedAt`) and the chat mode, which
- * goes through `phoneChatModeAllowed`. Not the tools, the execution mode, Git
+ * title and organisation, completing (`archivedAt`) and the chat mode. Not the tools, the execution mode, Git
  * isolation or offline/incognito.
  */
 export const PHONE_SESSION_OPTION_KEYS = [
@@ -136,22 +135,13 @@ export const PHONE_CHAT_SEND_KEYS = [
   'text',
 ] as const;
 
-/** Chat modes a phone may choose, for new chats or for one chat. */
-export const PHONE_CHAT_MODES = ['ask', 'guardrails'] as const;
-
 /**
- * The open policy decision, kept in one place: may a phone switch a chat (or
- * the default for new chats) to YOLO? Until the owner decides between "never"
- * and "only after confirming on the computer", it may not. Replace this check
- * with the confirmation flow once decided; its Rust twin is
- * `phone::chat_mode_allowed`.
+ * Chat modes a phone may choose, for new chats or for one chat. YOLO is
+ * included on purpose: the owner decided a paired phone may pick it.
  */
-export const PHONE_YOLO_MODE = 'yolo';
-export function phoneChatModeAllowed(mode: string): boolean {
-  return mode !== PHONE_YOLO_MODE;
-}
+export const PHONE_CHAT_MODES = ['ask', 'guardrails', 'yolo'] as const;
 
-export type PhoneAccessCode = 'channel-denied' | 'setting-denied' | 'option-denied' | 'value-invalid' | 'yolo-denied';
+export type PhoneAccessCode = 'channel-denied' | 'setting-denied' | 'option-denied' | 'value-invalid';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
 export class PhoneAccessError extends Error {
@@ -199,7 +189,6 @@ function pick(value: unknown, paths: readonly string[]): Obj {
 
 function chatMode(value: unknown, what: string): void {
   if (typeof value !== 'string') throw new PhoneAccessError('value-invalid', what);
-  if (!phoneChatModeAllowed(value)) throw new PhoneAccessError('yolo-denied', what);
   if (!(PHONE_CHAT_MODES as readonly string[]).includes(value)) throw new PhoneAccessError('value-invalid', what);
 }
 
@@ -345,6 +334,5 @@ export function phoneAccessPolicy() {
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
     chatSendKeys: [...PHONE_CHAT_SEND_KEYS],
     chatModes: [...PHONE_CHAT_MODES],
-    yoloMode: PHONE_YOLO_MODE,
   };
 }

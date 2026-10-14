@@ -92,16 +92,17 @@ describe('settings from a phone', () => {
     expect(code(() => screenPhoneCall('settings:update', [[]]))).toBe('value-invalid');
   });
 
-  it('refuses YOLO as the default chat mode, and for one chat', () => {
-    expect(code(() => screenPhoneCall('settings:update', [{ defaultChatMode: 'yolo' }]))).toBe('yolo-denied');
-    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { mode: 'yolo' }]))).toBe('yolo-denied');
+  it('allows YOLO as the default chat mode, and for one chat', () => {
+    expect(code(() => screenPhoneCall('settings:update', [{ defaultChatMode: 'yolo' }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { mode: 'yolo' }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { mode: 'ask' }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { mode: 'turbo' }]))).toBe('value-invalid');
   });
 
   it('applies nothing when one key of the patch is refused', async () => {
     const dispatch = vi.fn(() => SETTINGS);
     await expect(callFromPhone(dispatch, 'settings:update', [{ chatPaneAction: 'delete', sandboxMode: 'off' }])).rejects.toThrow(PhoneAccessError);
-    await expect(callFromPhone(dispatch, 'settings:update', [{ chatPaneAction: 'delete', defaultChatMode: 'yolo' }])).rejects.toThrow(/yolo-denied/);
+    await expect(callFromPhone(dispatch, 'settings:update', [{ chatPaneAction: 'delete', defaultChatMode: 'turbo' }])).rejects.toThrow(/value-invalid/);
     expect(dispatch).not.toHaveBeenCalled();
   });
 

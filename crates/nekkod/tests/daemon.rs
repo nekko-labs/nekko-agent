@@ -2466,8 +2466,8 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     assert_eq!(res["result"]["defaultChatMode"], "ask", "{res}");
     assert!(!res.to_string().contains("hf_secret"), "{res}");
     assert!(res["result"].get("providers").is_none(), "{res}");
-    let res = ask(7, "settings:update", json!([{ "defaultChatMode": "yolo" }])).await;
-    assert_eq!(res["error"], "Not allowed from a paired phone (yolo-denied): defaultChatMode");
+    let res = ask(7, "settings:update", json!([{ "defaultChatMode": "turbo" }])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (value-invalid): defaultChatMode");
     let res = ask(8, "settings:update", json!([{ "chatPaneAction": "delete", "sandboxMode": "off" }])).await;
     assert_eq!(res["error"], "Not allowed from a paired phone (setting-denied): sandboxMode");
     let res = ask(9, "settings:update", json!([{ "chatPaneAction": "delete" }])).await;

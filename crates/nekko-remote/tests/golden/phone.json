@@ -347,8 +347,32 @@
      "defaultChatMode": "yolo"
     }
    ],
-   "calls": [],
-   "error": "Not allowed from a paired phone (yolo-denied): defaultChatMode"
+   "calls": [
+    [
+     "settings:update",
+     [
+      {
+       "defaultChatMode": "yolo"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "accent": "#6d5efc",
+    "chatPaneAction": "complete",
+    "defaultChatMode": "ask",
+    "defaultModelId": "m1",
+    "defaultProviderId": "p1",
+    "favoriteModels": [
+     "p1::m1"
+    ],
+    "theme": "dark",
+    "themePreset": "nebula",
+    "voice": {
+     "enabled": true,
+     "language": "en"
+    }
+   }
   },
   {
    "channel": "settings:update",
@@ -521,8 +545,20 @@
      "mode": "yolo"
     }
    ],
-   "calls": [],
-   "error": "Not allowed from a paired phone (yolo-denied): mode"
+   "calls": [
+    [
+     "session:setOptions",
+     [
+      "s1",
+      {
+       "mode": "yolo"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "session:setOptions"
+   }
   },
   {
    "channel": "session:setOptions",

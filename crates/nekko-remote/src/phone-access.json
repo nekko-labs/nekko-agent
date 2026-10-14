@@ -96,7 +96,7 @@
  ],
  "chatModes": [
   "ask",
-  "guardrails"
- ],
- "yoloMode": "yolo"
+  "guardrails",
+  "yolo"
+ ]
 }

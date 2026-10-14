@@ -132,12 +132,14 @@ describe('relay agent: what a phone may do', () => {
     handle.stop();
   });
 
-  it('refuses YOLO and other settings, applying nothing', async () => {
+  it('refuses other settings, applying nothing, and allows YOLO', async () => {
     const { call, saved, handle } = await phone();
-    expect((await call('settings:update', { defaultChatMode: 'yolo' })).error).toMatch(/yolo-denied/);
     expect((await call('settings:update', { chatPaneAction: 'delete', sandboxMode: 'off' })).error).toMatch(/setting-denied\): sandboxMode/);
-    expect((await call('session:setOptions', 's1', { mode: 'yolo' })).error).toMatch(/yolo-denied/);
+    expect((await call('settings:update', { defaultChatMode: 'turbo' })).error).toMatch(/value-invalid/);
     expect(saved).toEqual([]);
+    expect((await call('settings:update', { defaultChatMode: 'yolo' })).error).toBeUndefined();
+    expect(saved).toEqual([{ defaultChatMode: 'yolo' }]);
+    saved.length = 0;
     const ok = await call('settings:update', { chatPaneAction: 'delete' });
     expect(saved).toEqual([{ chatPaneAction: 'delete' }]);
     expect(ok.result.chatPaneAction).toBe('delete');

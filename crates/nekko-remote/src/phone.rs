@@ -24,7 +24,6 @@ pub struct Policy {
     pub session_option_keys: Vec<String>,
     pub chat_send_keys: Vec<String>,
     pub chat_modes: Vec<String>,
-    pub yolo_mode: String,
 }
 
 fn strings(v: &Value) -> Vec<String> {
@@ -48,8 +47,6 @@ pub fn policy() -> &'static Policy {
             session_option_keys: strings(&v["sessionOptionKeys"]),
             chat_send_keys: strings(&v["chatSendKeys"]),
             chat_modes: strings(&v["chatModes"]),
-            // Unknown: treat every mode as the forbidden one.
-            yolo_mode: v["yoloMode"].as_str().unwrap_or("").to_string(),
         }
     })
 }
@@ -89,18 +86,8 @@ pub fn channel_allowed(channel: &str) -> bool {
     !always_denied(channel) && has(&policy().channels, channel)
 }
 
-/// The open policy decision, in one place: may a phone pick YOLO? Not until
-/// the owner decides between "never" and "only after confirming on the
-/// computer" (`phoneChatModeAllowed` in the TS).
-pub fn chat_mode_allowed(mode: &str) -> bool {
-    !policy().yolo_mode.is_empty() && mode != policy().yolo_mode
-}
-
 fn chat_mode(value: &Value, what: &str) -> Result<(), Denied> {
     let Some(mode) = value.as_str() else { return Err(denied("value-invalid", what)) };
-    if !chat_mode_allowed(mode) {
-        return Err(denied("yolo-denied", what));
-    }
     if !has(&policy().chat_modes, mode) {
         return Err(denied("value-invalid", what));
     }
@@ -301,7 +288,7 @@ mod tests {
     #[test]
     fn the_policy_loaded() {
         assert!(policy().channels.len() >= 15);
-        assert!(!policy().yolo_mode.is_empty());
+        assert!(has(&policy().chat_modes, "yolo"), "a phone may pick YOLO");
         for c in &policy().channels {
             assert!(!always_denied(c), "{c} is allowed and always denied");
             assert!(crate::is_public(c), "{c} is not a public channel");
@@ -340,15 +327,21 @@ mod tests {
     }
 
     #[test]
-    fn refuses_other_settings_and_yolo_and_applies_nothing() {
+    fn refuses_other_settings_and_applies_nothing() {
         let calls = Arc::default();
         let err = run(&calls, "settings:update", json!([{ "chatPaneAction": "delete", "sandboxMode": "off" }]));
         assert_eq!(err.unwrap_err(), "Not allowed from a paired phone (setting-denied): sandboxMode");
-        let err = run(&calls, "settings:update", json!([{ "chatPaneAction": "delete", "defaultChatMode": "yolo" }]));
-        assert_eq!(err.unwrap_err(), "Not allowed from a paired phone (yolo-denied): defaultChatMode");
-        let err = run(&calls, "session:setOptions", json!(["s1", { "mode": "yolo" }]));
-        assert_eq!(err.unwrap_err(), "Not allowed from a paired phone (yolo-denied): mode");
+        let err = run(&calls, "settings:update", json!([{ "chatPaneAction": "delete", "defaultChatMode": "turbo" }]));
+        assert_eq!(err.unwrap_err(), "Not allowed from a paired phone (value-invalid): defaultChatMode");
         assert!(calls.lock().unwrap().is_empty(), "nothing reached the host");
+    }
+
+    #[test]
+    fn a_phone_may_pick_yolo() {
+        let calls = Arc::default();
+        assert!(run(&calls, "settings:update", json!([{ "defaultChatMode": "yolo" }])).is_ok());
+        assert!(run(&calls, "session:setOptions", json!(["s1", { "mode": "yolo" }])).is_ok());
+        assert_eq!(calls.lock().unwrap().len(), 2);
     }
 
     #[test]

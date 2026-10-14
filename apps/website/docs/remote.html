@@ -129,15 +129,14 @@ revoking, rotating the secret), terminals, writing files, adding or removing fol
 or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
 servers and hooks. Everything not on the allowed list is refused too, with an error that starts
 <em>Not allowed from a paired phone</em>.</li>
-<li><strong>Settings a phone may change:</strong> the chat mode for new chats (Ask or Guardrails; <strong>YOLO can only
-be chosen on the computer</strong>), what the chat pane&#39;s top-right button does (Complete or Delete),
+<li><strong>Settings a phone may change:</strong> the chat mode for new chats (Ask, Guardrails or YOLO), what the chat pane&#39;s top-right button does (Complete or Delete),
 whether deleting asks first, and voice on/off and its language. An update that touches any other
 setting is refused as a whole: nothing in it is applied.</li>
 <li><strong>Settings a phone can read:</strong> only the theme and accents, the default and starred models, and
 the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
 instructions never leave the computer this way; provider lists arrive as name and type only.</li>
 <li><strong>One chat&#39;s options:</strong> a phone can change a chat&#39;s model, title, pin and tags, complete it, and
-switch it between Ask and Guardrails, but not to YOLO, and not its tools, isolation or
+switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
 offline/incognito switches. Messages cannot attach files from the computer.</li>
 </ul>
 <h2 id="security-model-honestly-stated"><a class="anchor" href="#security-model-honestly-stated" aria-hidden="true" tabindex="-1">#</a>Security model, honestly stated</h2>
@@ -174,7 +173,7 @@ offline/incognito switches. Messages cannot attach files from the computer.</li>
 </tr>
 <tr>
 <td>Phone asks for something dangerous</td>
-<td>Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes, YOLO); tool calls run on your machine under your guardrails/sandbox and chat mode</td>
+<td>Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode</td>
 </tr>
 </tbody></table></div>
 <p>What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
