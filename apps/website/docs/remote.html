@@ -93,6 +93,13 @@ for this (the <code>appearance:updated</code> event), never the rest of the comp
 <p>The Android app&#39;s <strong>Settings</strong> also has a <strong>Computers</strong> row, which opens the list of paired
 computers (rename, switch, forget, pair another), and an <strong>About</strong> section with the installed
 version and the open-source licenses of the app and the libraries it ships.</p>
+<p>The Android app is <strong>locked by default</strong>: every time you open it, or come back to it, it asks for
+your fingerprint, face or the phone&#39;s screen lock (PIN, pattern or password) before it shows
+anything. While it is locked nothing can be read or approved, and the recent-apps preview stays
+blank. After a restart it doesn&#39;t connect to your computer until you unlock. Turn it off in
+<strong>Settings → Security → App lock</strong>; turning it off asks for the same check first. With the lock on,
+the app can&#39;t be screenshotted or screen-recorded. A phone with no screen lock can&#39;t be locked;
+Settings says so and links to the phone&#39;s security settings.</p>
 </blockquote>
 <p>The iOS and Android app (<code>apps/mobile</code>) is built for the phone rather than being the desktop on a
 small screen: your computer&#39;s chats with <strong>Working</strong> / <strong>Needs you</strong> badges, new chats on any of the
@@ -155,7 +162,7 @@ offline/incognito switches. Messages cannot attach files from the computer.</li>
 </tr>
 <tr>
 <td>Lost/stolen phone</td>
-<td>Revoke it in Settings: kicked immediately, denied afterward, push token dropped</td>
+<td>The Android app asks for the phone&#39;s fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped</td>
 </tr>
 <tr>
 <td>Revoked device replays old creds</td>
