@@ -33,10 +33,10 @@ afterEach(() => {
   globalThis.WebSocket = realWebSocket;
 });
 
-async function welcomedAgent() {
+async function welcomedAgent(methods: Record<string, unknown> = {}) {
   globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket;
   const events = new EventEmitter();
-  const host = { events } as unknown as Host;
+  const host = { events, ...methods } as unknown as Host;
   const handle = connectRelayAgent(host, {
     relayUrl: 'ws://relay.test',
     room: ROOM,
@@ -82,3 +82,75 @@ describe('relay agent', () => {
     handle.stop();
   });
 });
+
+describe('relay agent: what a phone may do', () => {
+  const SETTINGS = {
+    theme: 'dark', defaultModelId: 'm1', defaultChatMode: 'ask', sandboxMode: 'workspace', hfToken: 'hf_secret',
+    providers: [{ id: 'p1', kind: 'openai', label: 'GPT', apiKey: 'sk-secret', enabled: true }],
+    voice: { enabled: true, language: 'en', modelPath: '/m.bin' },
+  };
+
+  async function phone() {
+    const saved: unknown[] = [];
+    const wipe = vi.fn();
+    const host = {
+      getSettings: () => SETTINGS,
+      updateSettings: (patch: object) => {
+        saved.push(patch);
+        return { ...SETTINGS, ...patch };
+      },
+      wipeAllData: wipe,
+      listSessionSummaries: () => [{ id: 's1' }],
+    };
+    const agent = await welcomedAgent(host);
+    let id = 0;
+    const call = async (channel: string, ...args: unknown[]) => {
+      const rid = ++id;
+      agent.ws.deliver({ type: 'c', cid: 'c1', data: JSON.stringify({ enc: await seal(agent.key, { type: 'req', id: rid, channel, args }) }) });
+      let res: any;
+      await vi.waitFor(async () => {
+        res = (await framesFor(agent.ws, agent.key, 'c1')).find((f) => f.type === 'res' && f.id === rid);
+        expect(res).toBeDefined();
+      });
+      return res;
+    };
+    return { ...agent, call, saved, wipe };
+  }
+
+  it('refuses channels off the allowlist before the host runs them', async () => {
+    const { call, wipe, handle } = await phone();
+    for (const channel of ['data:wipe', 'settings:reset', 'remote:rotate', 'terminal:create', 'file:write', 'tasks:list']) {
+      expect((await call(channel)).error).toBe(`Not allowed from a paired phone (channel-denied): ${channel}`);
+    }
+    expect(wipe).not.toHaveBeenCalled();
+    handle.stop();
+  });
+
+  it('still serves an allowed channel', async () => {
+    const { call, handle } = await phone();
+    expect(await call('sessions:summaries')).toMatchObject({ result: [{ id: 's1' }] });
+    handle.stop();
+  });
+
+  it('refuses other settings, applying nothing, and allows YOLO', async () => {
+    const { call, saved, handle } = await phone();
+    expect((await call('settings:update', { chatPaneAction: 'delete', sandboxMode: 'off' })).error).toMatch(/setting-denied\): sandboxMode/);
+    expect((await call('settings:update', { defaultChatMode: 'turbo' })).error).toMatch(/value-invalid/);
+    expect(saved).toEqual([]);
+    expect((await call('settings:update', { defaultChatMode: 'yolo' })).error).toBeUndefined();
+    expect(saved).toEqual([{ defaultChatMode: 'yolo' }]);
+    saved.length = 0;
+    const ok = await call('settings:update', { chatPaneAction: 'delete' });
+    expect(saved).toEqual([{ chatPaneAction: 'delete' }]);
+    expect(ok.result.chatPaneAction).toBe('delete');
+    handle.stop();
+  });
+
+  it('returns settings without secrets', async () => {
+    const { call, handle } = await phone();
+    const { result } = await call('settings:get');
+    expect(result).toEqual({ theme: 'dark', defaultModelId: 'm1', defaultChatMode: 'ask', voice: { enabled: true, language: 'en' } });
+    handle.stop();
+  });
+});
+

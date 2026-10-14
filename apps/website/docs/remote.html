@@ -76,7 +76,8 @@ device registry</strong>: new devices enroll only through a <strong>single-use p
 paste your self-hosted relay URL), then <strong>Pair a device</strong>.</li>
 <li>On your phone: scan the QR in the Nekko Agent app (<strong>Computers → Pair a computer</strong>), or with the
 phone&#39;s camera app, which hands the <code>nekko-agent-pair:</code> link to the Nekko Agent app. Without the
-app, open the pairing link in a browser to get the full app over the relay.</li>
+app, the pairing link also opens the web app in a browser over the relay, but it is limited to
+what a phone may do (below), so most desktop screens there are unavailable.</li>
 <li>The phone shows up under <strong>Paired devices</strong>, with a live connection dot.</li>
 </ol>
 <h2 id="the-phone-app"><a class="anchor" href="#the-phone-app" aria-hidden="true" tabindex="-1">#</a>The phone app</h2>
@@ -115,6 +116,29 @@ stores them.</p>
 denied from then on), or <strong>Rotate secret</strong> to cryptographically reset the room, which unpairs
 everything at once.</p>
 <p>Remote access survives restarts: if it was enabled, the agent reconnects when Nekko Agent starts.</p>
+<h2 id="what-a-paired-phone-can-do"><a class="anchor" href="#what-a-paired-phone-can-do" aria-hidden="true" tabindex="-1">#</a>What a paired phone can do</h2>
+<p>Your computer decides what a paired phone may ask for, whatever the phone app does: locking the
+phone app is not the boundary, your computer is. A phone can use your chats and nothing that
+changes how the computer itself is set up:</p>
+<ul>
+<li><strong>Allowed:</strong> list, open, start, complete and delete chats; send, queue and stop messages; answer
+approvals and the agent&#39;s questions; pick a model from the computer&#39;s providers and a folder from
+its list; voice status and transcription; and a few settings (below).</li>
+<li><strong>Never allowed from a phone:</strong> wiping data or resetting settings, remote access itself (pairing,
+revoking, rotating the secret), terminals, writing files, adding or removing folders, installing
+or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
+servers and hooks. Everything not on the allowed list is refused too, with an error that starts
+<em>Not allowed from a paired phone</em>.</li>
+<li><strong>Settings a phone may change:</strong> the chat mode for new chats (Ask, Guardrails or YOLO), what the chat pane&#39;s top-right button does (Complete or Delete),
+whether deleting asks first, and voice on/off and its language. An update that touches any other
+setting is refused as a whole: nothing in it is applied.</li>
+<li><strong>Settings a phone can read:</strong> only the theme and accents, the default and starred models, and
+the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
+instructions never leave the computer this way; provider lists arrive as name and type only.</li>
+<li><strong>One chat&#39;s options:</strong> a phone can change a chat&#39;s model, title, pin and tags, complete it, and
+switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
+offline/incognito switches. Messages cannot attach files from the computer.</li>
+</ul>
 <h2 id="security-model-honestly-stated"><a class="anchor" href="#security-model-honestly-stated" aria-hidden="true" tabindex="-1">#</a>Security model, honestly stated</h2>
 <div class="table-wrap"><table>
 <thead>
@@ -149,7 +173,7 @@ everything at once.</p>
 </tr>
 <tr>
 <td>Phone asks for something dangerous</td>
-<td>Tool calls run on your machine under your guardrails/sandbox and chat mode (Ask/Guardrails/YOLO)</td>
+<td>Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode</td>
 </tr>
 </tbody></table></div>
 <p>What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
@@ -248,7 +272,7 @@ registry as the desktop app.</p>
           </footer>
         </article>
       </main>
-      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Phone remote control</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d2"><a href="#pairing-a-phone">Pairing a phone</a></li><li class="d2"><a href="#the-phone-app">The phone app</a></li><li class="d2"><a href="#security-model-honestly-stated">Security model, honestly stated</a></li><li class="d2"><a href="#choosing-a-relay">Choosing a relay</a></li><li class="d3"><a href="#managed-relay-default-wssnekko-agent-relayflydev">Managed relay (default): wss://nekko-agent-relay.fly.dev</a></li><li class="d3"><a href="#private-relay-over-tailscale-free-no-account-nothing-hosted">Private relay over Tailscale (free, no account, nothing hosted)</a></li><li class="d3"><a href="#self-host-free-forever-one-command">Self-host (free forever, one command)</a></li><li class="d2"><a href="#headless-agents">Headless agents</a></li></ul></nav></aside>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Phone remote control</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d2"><a href="#pairing-a-phone">Pairing a phone</a></li><li class="d2"><a href="#the-phone-app">The phone app</a></li><li class="d2"><a href="#what-a-paired-phone-can-do">What a paired phone can do</a></li><li class="d2"><a href="#security-model-honestly-stated">Security model, honestly stated</a></li><li class="d2"><a href="#choosing-a-relay">Choosing a relay</a></li><li class="d3"><a href="#managed-relay-default-wssnekko-agent-relayflydev">Managed relay (default): wss://nekko-agent-relay.fly.dev</a></li><li class="d3"><a href="#private-relay-over-tailscale-free-no-account-nothing-hosted">Private relay over Tailscale (free, no account, nothing hosted)</a></li><li class="d3"><a href="#self-host-free-forever-one-command">Self-host (free forever, one command)</a></li><li class="d2"><a href="#headless-agents">Headless agents</a></li></ul></nav></aside>
     </div>
     <dialog class="search-dialog" aria-label="Search the docs">
       <form method="dialog" class="search-box">
