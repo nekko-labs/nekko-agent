@@ -19,7 +19,7 @@
 import type { SkillCategory, SkillDef, SkillWorkflow } from './skills.js';
 import { parseSkillMarkdown } from './skill-markdown.js';
 
-export type SkillSource = 'nekkolabs' | 'community' | 'vaizer';
+export type SkillSource = 'nekkolabs' | 'community' | 'vaizer' | 'github';
 
 /** Where a skill can be installed. */
 export type InstallTarget = 'nekko-agent' | 'claude' | 'codex';
@@ -79,13 +79,21 @@ export interface MarketplaceSkill {
   instructions: string;
   /** Optional bespoke workflow graph; `marketWorkflow` derives one otherwise. */
   workflow?: SkillWorkflow;
-  /** Trust tier for skills from the Vaizer hub. */
+  /** Trust tier for skills from the Vaizer hub (GitHub skills are always `community`). */
   tier?: 'nekko-official' | 'community';
   /**
    * Verbatim SKILL.md for skills sourced outside the built-in catalog
    * (Vaizer). File-based installs write this instead of a generated summary.
    */
   markdown?: string;
+  /** Where a skill installed from GitHub came from (see `skill-sources.ts`). */
+  remote?: { repo: string; ref: string; path: string };
+  /** License of a GitHub skill as detected at listing time. */
+  license?: string;
+  /** Set when a GitHub skill is shown but cannot be installed (e.g. proprietary). */
+  blocked?: string;
+  /** A GitHub skill's folder ships more than SKILL.md; only SKILL.md is installed. */
+  extraFiles?: boolean;
 }
 
 /** One installed copy of a skill (a skill can be installed to several targets). */

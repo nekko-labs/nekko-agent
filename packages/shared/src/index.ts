@@ -37,6 +37,7 @@ export * from './workflows.js';
 export * from './skills.js';
 export * from './skills-market.js';
 export * from './skill-markdown.js';
+export * from './skill-sources.js';
 export * from './vaizer.js';
 export * from './agent-types.js';
 export * from './browser-tool.js';

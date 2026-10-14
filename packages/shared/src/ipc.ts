@@ -214,6 +214,11 @@ export const IpcChannels = {
   vaizerCatalog: 'vaizer:catalog',
   vaizerSkillMd: 'vaizer:skillMd',
 
+  skillSourcesList: 'skillSources:list',
+  skillSourcesPreview: 'skillSources:preview',
+  skillSourcesFetch: 'skillSources:fetch',
+  skillSourcesSearch: 'skillSources:search',
+
   tasksList: 'tasks:list',
   taskCreate: 'task:create',
   taskUpdate: 'task:update',
@@ -714,6 +719,14 @@ export interface NekkoApi {
   /** Vaizer skills hub (optional integration): catalog + SKILL.md fetch. */
   vaizerCatalog(refresh?: boolean): Promise<import('./vaizer.js').VaizerCatalog>;
   vaizerSkillMd(slug: string): Promise<string | null>;
+  /**
+   * Skills from GitHub. `listSkillSources` reads the cache unless `refresh`
+   * (true = every shelf, a repo = that one); preview/fetch/search use the network.
+   */
+  listSkillSources(refresh?: boolean | string): Promise<import('./skill-sources.js').SkillSourceListing[]>;
+  previewSkillUrl(input: string): Promise<import('./skill-sources.js').SkillPreview>;
+  fetchRemoteSkill(skill: import('./skill-sources.js').RemoteSkill): Promise<import('./skill-sources.js').SkillFetchResult>;
+  searchSkills(query: string): Promise<import('./skill-sources.js').SkillSearchResult>;
 
   /** Automation tasks: scheduled, recurring, and long-running background agents. */
   listTasks(): Promise<AutomationTask[]>;

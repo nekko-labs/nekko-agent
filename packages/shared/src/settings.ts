@@ -234,6 +234,8 @@ export interface AppSettings {
   autoUpdatePrompted?: boolean;
   /** Per-check toggles for Settings → Updates (see `updateChecks`). */
   updates?: UpdateCheckSettings;
+  /** GitHub repositories the Skills Marketplace shows as shelves. Unset = `DEFAULT_SKILL_SOURCES`. */
+  skillSources?: import('./skill-sources.js').SkillSourceRepo[];
   /** UI language (BCP-47-ish code, e.g. "en", "es"). Undefined = follow system. */
   language?: string;
   /** Default tool-execution policy for new chats. */

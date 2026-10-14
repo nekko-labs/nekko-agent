@@ -133,6 +133,7 @@ import {
 import { listInstalledSkills, readInstalledSkills, skillTargets, installSkill, uninstallSkill, listInstalledSkillDefs } from './skills.js';
 import { discoverExternalSkills } from './external-skills.js';
 import { getVaizerCatalog, getVaizerSkillMd } from './vaizer.js';
+import { fetchRemoteSkill, listSkillSources, previewSkillUrl, searchSkills } from './skill-sources.js';
 import {
   listTasks,
   createTask,
@@ -500,6 +501,11 @@ export interface Host {
   /** Vaizer skills hub (optional): catalog + a skill's SKILL.md. */
   vaizerCatalog(refresh?: boolean): Promise<import('@nekko-agent/shared').VaizerCatalog>;
   vaizerSkillMd(slug: string): Promise<string | null>;
+  /** Skills from GitHub: shelves, install-from-URL preview, fetch for install, search. */
+  listSkillSources(refresh?: boolean | string): Promise<import('@nekko-agent/shared').SkillSourceListing[]>;
+  previewSkillUrl(input: string): Promise<import('@nekko-agent/shared').SkillPreview>;
+  fetchRemoteSkill(skill: import('@nekko-agent/shared').RemoteSkill): Promise<import('@nekko-agent/shared').SkillFetchResult>;
+  searchSkills(query: string): Promise<import('@nekko-agent/shared').SkillSearchResult>;
 
   /** Automation tasks: scheduled, recurring, and long-running background agents. */
   listTasks(): Promise<AutomationTask[]>;
@@ -1207,6 +1213,10 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     uninstallSkill,
     vaizerCatalog: (refresh?: boolean) => getVaizerCatalog(refresh),
     vaizerSkillMd: (slug: string) => getVaizerSkillMd(slug),
+    listSkillSources: (refresh?: boolean | string) => listSkillSources(refresh),
+    previewSkillUrl: (input: string) => previewSkillUrl(String(input ?? '')),
+    fetchRemoteSkill: (skill) => fetchRemoteSkill(skill),
+    searchSkills: (query: string) => searchSkills(String(query ?? '')),
 
     // The daemon runs tasks when it owns them (crates/nekko-automation).
     listTasks: () => viaDaemon('tasks', 'tasks:list', [], listTasks),
