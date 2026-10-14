@@ -116,6 +116,24 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
   return blocks;
 }
 
+/**
+ * The transcript to draw while its newest turn is still being written by the
+ * live run: everything up to and including the prompt that started it.
+ *
+ * The daemon checkpoints the chat after every tool result and the pane
+ * re-reads it, so mid-turn the persisted copy already holds the turn's
+ * narration and tool calls. The live run (liveRuns.ts) holds the same blocks
+ * and draws them under the transcript, so drawing both showed the reply twice:
+ * once as a settled bubble with a Done row, once streaming below it. The
+ * persisted tail comes back as soon as the live run is released.
+ */
+export function transcriptBeforeLiveTurn(messages: ChatMessage[]): ChatMessage[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') return i === messages.length - 1 ? messages : messages.slice(0, i + 1);
+  }
+  return messages;
+}
+
 /** A PR card's own vertical margin, which used to set the gap after it. */
 const PR_CARD_GAP = 8;
 
