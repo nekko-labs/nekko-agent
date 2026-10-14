@@ -100,6 +100,17 @@ blank. After a restart it doesn&#39;t connect to your computer until you unlock.
 <strong>Settings → Security → App lock</strong>; turning it off asks for the same check first. With the lock on,
 the app can&#39;t be screenshotted or screen-recorded. A phone with no screen lock can&#39;t be locked;
 Settings says so and links to the phone&#39;s security settings.</p>
+<p>The Android app <strong>reconnects by itself</strong> as soon as the phone changes network (Wi-Fi to mobile data,
+airplane mode off), instead of waiting out its retry delay. While a chat on your computer is running,
+<strong>Settings → Connection → Stay connected while a chat runs</strong> (on by default) keeps the app connected
+after you leave it, with a silent &quot;Staying connected · 1 chat running on Mac&quot; notification that goes
+away as soon as the reply is done. <strong>Notify me</strong> (on by default; Android 13+ asks for permission)
+sends a notification when a reply finishes or fails, or a chat waits for your approval or answer,
+while you&#39;re out of the app. Notifications say what happened and in which chat, never the reply, the
+command or the question; with the app lock on they don&#39;t name the chat either, and tapping one opens
+the chat through the lock. Without push (not built yet), these only arrive while the phone is still
+connected. If Android restricts Nekko in the background, Settings says so and opens the app&#39;s
+system page.</p>
 </blockquote>
 <p>The iOS and Android app (<code>apps/mobile</code>) is built for the phone rather than being the desktop on a
 small screen: your computer&#39;s chats with <strong>Working</strong> / <strong>Needs you</strong> badges, new chats on any of the
