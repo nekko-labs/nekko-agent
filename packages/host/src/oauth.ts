@@ -129,6 +129,7 @@ export function buildStatus(
     provider: tokenSet.provider,
     connected: !expired,
     accountId: tokenSet.accountId,
+    accountEmail: tokenSet.accountEmail,
     expiresAt: tokenSet.expiresAt,
     scopes: tokenSet.scopes,
     state,
@@ -492,6 +493,25 @@ export function cancelOAuth(sessionId: string): void {
   closeSession(session);
 }
 
+/** The `email` claim of an unvalidated ChatGPT id_token, if it carries one. */
+export function extractEmail(idToken: string): string | undefined {
+  const parts = idToken.split('.');
+  if (parts.length < 2) return undefined;
+  try {
+    const json = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<string, unknown>;
+    return cleanEmail(json.email);
+  } catch {
+    return undefined;
+  }
+}
+
+/** A plausible email address, trimmed, or undefined. Display-only, never used to authorize. */
+export function cleanEmail(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const email = raw.trim();
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+$/.test(email) ? email : undefined;
+}
+
 export function extractAccountId(idToken: string): string | undefined {
   const parts = idToken.split('.');
   if (parts.length < 2) return undefined;
@@ -538,6 +558,12 @@ export function tokenFromResponse(provider: OAuthProvider, json: Record<string, 
 
   const idToken = json.id_token as string | undefined;
   const accountId = provider === 'chatgpt' ? (idToken ? extractAccountId(idToken) : undefined) : undefined;
+  // Claude's token response names the account it signed in; ChatGPT's id_token
+  // carries an `email` claim (the sign-in asks for the `email` scope).
+  const account = json.account as Record<string, unknown> | undefined;
+  const accountEmail = provider === 'claude'
+    ? cleanEmail(account?.email_address)
+    : idToken ? extractEmail(idToken) : undefined;
 
   const expiresIn = typeof json.expires_in === 'number' ? json.expires_in : 3600;
   const scopes = json.scope as string | undefined;
@@ -553,6 +579,7 @@ export function tokenFromResponse(provider: OAuthProvider, json: Record<string, 
     refreshToken: json.refresh_token as string | undefined,
     expiresAt,
     accountId,
+    accountEmail,
     scopes,
     obtainedAt,
   };
@@ -693,6 +720,7 @@ export function refreshResult(tokenSet: OAuthTokenSet, ok: boolean, status: numb
   const next = tokenFromResponse(tokenSet.provider, json, obtainedAt);
   if (next.refreshToken == null) next.refreshToken = tokenSet.refreshToken;
   if (next.accountId == null && tokenSet.accountId) next.accountId = tokenSet.accountId;
+  if (next.accountEmail == null && tokenSet.accountEmail) next.accountEmail = tokenSet.accountEmail;
   if (next.scopes == null && tokenSet.scopes) next.scopes = tokenSet.scopes;
   return next;
 }
@@ -825,12 +853,13 @@ export function codexCliToken(raw: string, now: number): OAuthTokenSet | undefin
   const accessToken = tokens.access_token as string;
   const refreshToken = tokens.refresh_token as string | undefined;
   const accountId = tokens.account_id as string | undefined;
+  const accountEmail = typeof tokens.id_token === 'string' ? extractEmail(tokens.id_token) : undefined;
   const obtainedAt = parseCliTimestamp(parsed.last_refresh, now);
   const expiresAt =
     expFromJwt(accessToken) ??
     expFromJwt(tokens.id_token as string) ??
     obtainedAt + CHATGPT_CLI_TOKEN_TTL_MS;
-  return { provider: 'chatgpt', accessToken, refreshToken, accountId, expiresAt, obtainedAt };
+  return { provider: 'chatgpt', accessToken, refreshToken, accountId, accountEmail, expiresAt, obtainedAt };
 }
 
 export function importCliAuth(): Record<OAuthProvider, boolean> {

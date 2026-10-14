@@ -66,6 +66,9 @@
 </li>
 </ol>
 <p>The host keeps the actual access and refresh tokens in <code>tokens.json</code> inside the data directory. At chat time, the host resolves a fresh access token and injects it into the request. The renderer only ever sees a sanitized status object: connected, account id, token key, and expiry. It never sees or stores the token itself.</p>
+<h2 id="more-than-one-account"><a class="anchor" href="#more-than-one-account" aria-hidden="true" tabindex="-1">#</a>More than one account</h2>
+<p>You can sign in more than one plan from the same vendor, for example a personal Claude plan and a work one. Each gets its own provider, its own token and its own usage limits. To tell them apart, the app shows the email each one is signed in as next to its name, as in <code>Anthropic (Claude) · you@example.com</code>, in the model picker, the Utilization panel and the Capacity list.</p>
+<p>The email comes from the sign-in itself (Claude&#39;s sign-in response, or the ChatGPT <code>id_token</code>), stays in <code>tokens.json</code> next to the token, and is not part of a settings export. A plan signed in before this was added shows no email until you sign it in again. API keys, OpenRouter and tokens pasted from <code>claude setup-token</code> carry no email, so they show just the provider name.</p>
 <h2 id="caveats"><a class="anchor" href="#caveats" aria-hidden="true" tabindex="-1">#</a>Caveats</h2>
 <p>Both OAuth clients are the same first-party clients used by the vendors&#39; own CLI tools. Anthropic and OpenAI consumer terms are written around their own apps, so using a subscription token with a third-party app like Nekko Agent is off-label. The flows may stop working at any time if the vendor rotates a client id, changes a scope, or blocks the client.</p>
 <p>Because of this, the subscription paths are offered as-is alongside the API key options, which are unaffected. The features are live-validated on the current versions of the vendor flows. If a flow breaks, the fallback paths below still work.</p>
@@ -95,7 +98,7 @@
           </footer>
         </article>
       </main>
-      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Subscription sign-in</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d2"><a href="#caveats">Caveats</a></li><li class="d2"><a href="#fallbacks">Fallbacks</a></li><li class="d2"><a href="#security">Security</a></li></ul></nav></aside>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Subscription sign-in</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d2"><a href="#more-than-one-account">More than one account</a></li><li class="d2"><a href="#caveats">Caveats</a></li><li class="d2"><a href="#fallbacks">Fallbacks</a></li><li class="d2"><a href="#security">Security</a></li></ul></nav></aside>
     </div>
     <dialog class="search-dialog" aria-label="Search the docs">
       <form method="dialog" class="search-box">

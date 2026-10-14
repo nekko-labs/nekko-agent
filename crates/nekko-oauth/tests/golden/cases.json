@@ -16,7 +16,7 @@
       "provider": "chatgpt",
       "redirectUri": "http://localhost:1455/auth/callback",
       "challenge": "c!*'()~",
-      "state": "é ü&"
+      "state": "\u00e9 \u00fc&"
     },
     {
       "provider": "openrouter",
@@ -206,6 +206,46 @@
       "text": "{\"error_description\":\"nah\"}",
       "obtainedAt": 1760000000000,
       "now": 1760000000000
+    },
+    {
+      "provider": "claude",
+      "text": "{\"access_token\": \"at\", \"refresh_token\": \"rt\", \"expires_in\": 28800, \"scope\": \"user:inference\", \"account\": {\"uuid\": \"u1\", \"email_address\": \"davide@example.com\"}, \"organization\": {\"uuid\": \"o1\", \"name\": \"Org\"}}",
+      "ok": true,
+      "status": 200,
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "claude",
+      "text": "{\"access_token\": \"at\", \"account\": {\"email_address\": \"two@@example.com\"}}",
+      "ok": true,
+      "status": 200,
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "claude",
+      "text": "{\"access_token\": \"at\", \"account\": \"davide@example.com\"}",
+      "ok": true,
+      "status": 200,
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "chatgpt",
+      "text": "{\"access_token\": \"at\", \"refresh_token\": \"rt\", \"id_token\": \"eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF85In0sImVtYWlsIjoiIHdvcmtAZXhhbXBsZS5jb20gIiwiZXhwIjoxNzYwMDAzNjAwfQ.sig\", \"expires_in\": 10}",
+      "ok": true,
+      "status": 200,
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "provider": "chatgpt",
+      "text": "{\"access_token\": \"at\", \"id_token\": \"eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF85In0sImVtYWlsIjoibm90IGFuIGVtYWlsIn0.sig\"}",
+      "ok": true,
+      "status": 200,
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
     }
   ],
   "refreshRequests": [
@@ -306,6 +346,34 @@
       "text": "[",
       "obtainedAt": 1760000000000,
       "now": 1760000000000
+    },
+    {
+      "tokenSet": {
+        "provider": "claude",
+        "accessToken": "old",
+        "refreshToken": "rt",
+        "accountEmail": "davide@example.com",
+        "obtainedAt": 1
+      },
+      "text": "{\"access_token\": \"new\", \"expires_in\": 60}",
+      "ok": true,
+      "status": 200,
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
+    },
+    {
+      "tokenSet": {
+        "provider": "claude",
+        "accessToken": "old",
+        "refreshToken": "rt",
+        "accountEmail": "old@example.com",
+        "obtainedAt": 1
+      },
+      "text": "{\"access_token\": \"new\", \"account\": {\"email_address\": \"new@example.com\"}}",
+      "ok": true,
+      "status": 200,
+      "obtainedAt": 1760000000000,
+      "now": 1760000000000
     }
   ],
   "statuses": [
@@ -354,6 +422,18 @@
       "tokenSet": {
         "provider": "openrouter",
         "accessToken": "sk",
+        "obtainedAt": 1
+      },
+      "state": "success",
+      "now": 1760000000000
+    },
+    {
+      "tokenKey": "claude:abcd1234",
+      "tokenSet": {
+        "provider": "claude",
+        "accessToken": "secret",
+        "accountEmail": "davide@example.com",
+        "expiresAt": 1760000100000,
         "obtainedAt": 1
       },
       "state": "success",
@@ -409,6 +489,11 @@
     {
       "kind": "codex",
       "raw": "{\"tokens\":{}}",
+      "now": 1760000000000
+    },
+    {
+      "kind": "codex",
+      "raw": "{\"tokens\": {\"access_token\": \"at\", \"refresh_token\": \"rt\", \"account_id\": \"acct_9\", \"id_token\": \"eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF85In0sImVtYWlsIjoiIHdvcmtAZXhhbXBsZS5jb20gIiwiZXhwIjoxNzYwMDAzNjAwfQ.sig\"}, \"last_refresh\": 1760000000000}",
       "now": 1760000000000
     }
   ],

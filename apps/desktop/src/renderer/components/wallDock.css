@@ -183,3 +183,6 @@
 /* Sign in again, inline under an expired subscription: the primary button keeps its own look on hover. */ 
 .wall-dock__signin { display: grid; gap: 6px; justify-items: start; } 
 .wall-dock .wall-dock__signin .btn-primary, .wall-dock .wall-dock__signin .btn-primary:hover:not(:disabled) { border: 0; border-radius: 10px; padding: 6px 14px; background: var(--brand-grad); color: #fff; font-weight: 600; }
+/* A long account email truncates rather than widening the panel. */
+.wall-dock__provider-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wall-dock__account { font-weight: 400; color: var(--ink-faint); }
