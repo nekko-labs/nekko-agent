@@ -52,10 +52,12 @@ fun Composer(
     onSend: suspend (String) -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Pre-filled once (text shared from another app); the user still presses Send. */
+    initialText: String? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
-    var text by rememberSaveable { mutableStateOf("") }
+    var text by rememberSaveable { mutableStateOf(initialText.orEmpty()) }
     var sending by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     val canSend = text.isNotBlank() && blocked == null && !sending

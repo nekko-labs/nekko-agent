@@ -44,6 +44,11 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version and the open-source licenses of the app and the libraries it ships.
 >
+> **Share to Nekko** (Android): in any app's share menu, pick **Nekko Agent** to start a new chat
+> with the shared text or link. You can edit it on the New chat screen; after you start the chat it
+> waits in the message box and you send it yourself. Nekko never sends shared text on its own, and
+> it is kept only in memory until then. Text and links only for now, up to 20,000 characters.
+>
 > The Android app is **locked by default**: every time you open it, or come back to it, it asks for
 > your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows
 > anything. While it is locked nothing can be read or approved, and the recent-apps preview stays

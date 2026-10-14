@@ -47,6 +47,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nekko-agent" />
             </intent-filter>
+            <!-- Share sheet: text or a link from another app pre-fills a new chat (never sent by itself). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

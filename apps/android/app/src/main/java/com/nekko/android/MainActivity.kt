@@ -21,6 +21,7 @@ import com.nekko.android.lock.Authenticator
 import com.nekko.android.lock.LocalAppLock
 import com.nekko.android.lock.LocalAuthenticator
 import com.nekko.android.lock.LockGate
+import com.nekko.android.share.SharedText
 import com.nekko.android.ui.NekkoNavHost
 import com.nekko.android.ui.theme.NekkoTheme
 import com.nekko.android.ui.theme.ThemeResolver
@@ -62,6 +63,7 @@ class MainActivity : FragmentActivity() {
                             repo = repo,
                             themePrefs = app.themePrefs,
                             phonePrefs = app.phonePrefs,
+                            shareInbox = app.shareInbox,
                             incomingLink = incomingLink,
                             onLinkHandled = { incomingLink.value = null },
                         )
@@ -93,9 +95,19 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun handle(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_VIEW) return
-        val uri = intent.data ?: return
-        DeepLink.from(uri)?.let { incomingLink.value = it }
+        when (intent?.action) {
+            Intent.ACTION_VIEW -> intent.data?.let(DeepLink::from)?.let { incomingLink.value = it }
+            Intent.ACTION_SEND -> {
+                // Only plain text and links; files and images are not taken (no URI read permission asked).
+                val text = SharedText.from(
+                    intent.type,
+                    intent.getCharSequenceExtra(Intent.EXTRA_TEXT),
+                    intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT),
+                ) ?: return
+                (application as NekkoApp).shareInbox.offer(text)
+                incomingLink.value = DeepLink.Share
+            }
+        }
     }
 }
 
