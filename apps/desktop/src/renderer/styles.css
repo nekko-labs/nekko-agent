@@ -650,45 +650,57 @@
 }
 
 @utility rail {
-  /* The collapsible left rail: 64px of icons at rest; hovering (or keyboard
-     focus inside) expands it over the content to reveal the labels. */
-  width: 64px;
+  /* The collapsible left rail: a slim strip of icons at rest, centred
+     vertically on a faded-accent band whose top and bottom curve back into
+     the left edge (a wave, like a tab pulled out of the window side).
+     Hovering (or keyboard focus inside) expands it over the content to
+     reveal the labels; the band swells with it. */
+  width: 52px;
+  justify-content: center;
+  isolation: isolate;
   transition:
-    width var(--dur-slow) var(--ease-out),
-    box-shadow var(--dur-slow) ease;
+    width var(--dur-slow) var(--ease-spring, var(--ease-out));
   will-change: width;
-  &::after {
+  &::before {
     content: '';
     position: absolute;
-    inset-block: 0;
-    right: 0;
-    width: 1px;
-    background: var(--line);
-    opacity: 0;
-    transition: opacity var(--dur-slow) ease;
+    inset: 0;
+    z-index: -1;
+    background: color-mix(in srgb, var(--accent) 14%, var(--paper));
+    /* Concave top and bottom: full width through the middle, merging into
+       the left edge early (by ~14% from each end). */
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 1000' preserveAspectRatio='none'%3E%3Cpath d='M0 0 C0 90 100 60 100 180 L100 820 C100 940 0 910 0 1000 Z'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 1000' preserveAspectRatio='none'%3E%3Cpath d='M0 0 C0 90 100 60 100 180 L100 820 C100 940 0 910 0 1000 Z'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
+    transition: background var(--dur-slow) ease;
   }
-  &:hover {
-    width: 200px;
-    box-shadow: var(--shadow-md);
-  }
+  &:hover,
   &:has(:focus-visible) {
-    width: 200px;
-    box-shadow: var(--shadow-md);
+    width: 188px;
   }
-  &:hover::after,
-  &:has(:focus-visible)::after {
-    opacity: 1;
+  &:hover::before,
+  &:has(:focus-visible)::before {
+    background: color-mix(in srgb, var(--accent) 20%, var(--paper));
+    filter: drop-shadow(0 6px 18px rgb(0 0 0 / 0.25));
   }
-  &:hover .rail-label {
-    opacity: 1;
-    transform: none;
-    transition-delay: 0.05s;
-  }
+  &:hover .rail-label,
   &:has(:focus-visible) .rail-label {
     opacity: 1;
     transform: none;
-    transition-delay: 0.05s;
+    transition-delay: 0.06s;
   }
+  &:hover .nav-item,
+  &:has(:focus-visible) .nav-item {
+    animation: rail-item-in var(--dur-slow) var(--ease-out) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:hover .nav-item, &:has(:focus-visible) .nav-item { animation: none; }
+  }
+}
+
+@keyframes rail-item-in {
+  from { transform: translateX(-4px); }
+  to { transform: none; }
 }
 
 @utility rail-label {
@@ -718,8 +730,10 @@
      read as part of the page instead of as a frame around it. Its height is
      `TITLEBAR_HEIGHT` in src/windowChrome.ts — the main process gives the
      Window Controls Overlay the same number, and the two have to agree or the
-     buttons stop lining up with the wordmark. */
-  height: 38px;
+     buttons stop lining up with the wordmark. The strip itself is 58px, 20px
+     taller than that band, so the mark and heading get more space above
+     them; the trailing controls stay in the top 38px (see below). */
+  height: 58px;
   flex: none;
   display: flex;
   align-items: center;
@@ -742,7 +756,7 @@
   /* macOS puts its traffic lights at the leading edge, inside our strip
      (`trafficLightPosition` in the main process centres them on this line), so
      the wordmark starts after them rather than underneath. */
-  padding-left: 78px;
+  padding-left: 92px;
 }
 
 @utility titlebar-heading {
@@ -775,6 +789,24 @@
    Windows/Linux caption buttons unless the developer controls already do. */
 .titlebar:not(.titlebar-mac):not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 138px; }
 .titlebar-mac:not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 10px; }
+/* The strip is 58px but the native caption buttons keep their 38px band
+   (`TITLEBAR_HEIGHT`). Hold the trailing controls in that band. */
+.titlebar:not(.titlebar-mac) #command-titlebar-slot,
+.titlebar:not(.titlebar-mac) .developer-server-controls { align-self: flex-start; height: 38px; align-items: flex-end; }
+/* Inside that band every control centres on one line, so the labels (All,
+   Focus, Panels...) share a text line even though the pills differ in height. */
+.titlebar:not(.titlebar-mac) #command-titlebar-slot > .wall-toolbar-titlebar,
+.titlebar:not(.titlebar-mac) #command-titlebar-slot > .wall-toolbar-titlebar > div { align-items: center; }
+/* The caption buttons centre their glyphs in the 38px band, at 19px. Bottom
+   alignment above leaves the labels' letters (the cap-height midline, which
+   the icons share) at ~23.85px, so lift the row by the difference to centre
+   the text on the minimise icon, then 2.5px back down to match the native
+   glyph as rendered (checked by eye against the real caption buttons). */
+/* Offset by layout (position/top), not transform: a fractional transform let
+   Chromium rasterise the groups at different sub-pixel phases, so the
+   Focus/Dynamic/Grid and All/Agents/Terminals borders drew at different
+   weights. Layout offsets are pixel-snapped the same way for every group. */
+.titlebar:not(.titlebar-mac) #command-titlebar-slot > .wall-toolbar-titlebar { position: relative; top: -2.35px; }
 #command-titlebar-slot > .wall-toolbar-titlebar { flex: 1; min-width: 0; flex-wrap: nowrap; }
 #command-titlebar-slot .wall-fixed-picker { z-index: 60; }
 #command-titlebar-slot > .wall-toolbar-titlebar > div { flex-wrap: nowrap; }
@@ -1015,7 +1047,7 @@
 }
 
 @utility nav-item {
-  @apply relative flex h-11 w-full items-center rounded-xl text-ink-faint;
+  @apply relative flex h-10 w-full shrink-0 items-center rounded-xl text-ink-faint;
   transition:
     background 0.14s ease,
     color 0.14s ease;
@@ -1797,7 +1829,7 @@
   font-variant-numeric: tabular-nums; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
-.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 12px; }
+.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 6px; }
 .wall-workspace[data-dock-side='top'], .wall-workspace[data-dock-side='bottom'] { flex-direction: column; }
 .wall-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 0; overflow: hidden; }
 /* The board viewport yields to the composer; its tall stage scrolls internally. */
@@ -1912,17 +1944,22 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-layout-control { position: relative; display: inline-flex; align-items: center; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was
    narrower than the button once the title bar's own button padding applied,
-   so the wand spilled under the All/Agents/Terminals toggle beside it. */
-.wall-auto-arrange { position: relative; display: grid; grid-template-columns: 0fr; align-items: center; opacity: 0; visibility: hidden; transform: translateX(-18px) scale(.6); transition: grid-template-columns 240ms ease, opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
-.wall-auto-arrange[data-visible='true'] { grid-template-columns: 1fr; opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+   so the wand spilled under the All/Agents/Terminals toggle beside it.
+   Its slot is always reserved (hidden only by opacity/visibility), so picking
+   Dynamic fades it in place without shifting the filter and Panels beside it. */
+.wall-auto-arrange { position: relative; display: grid; grid-template-columns: 1fr; align-items: center; margin-left: 6px; opacity: 0; visibility: hidden; transform: scale(.6); transition: opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
+.wall-auto-arrange[data-visible='true'] { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .wall-auto-arrange > button { min-width: 0; overflow: hidden; }
-.wall-auto-arrange[data-visible='true'] { margin-left: 6px; }
+
 .wall-auto-arrange [role='tooltip'] { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; width: 230px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--win); color: var(--ink); font-size: 12px; pointer-events: none; opacity: 0; visibility: hidden; }
 .wall-auto-arrange[data-visible='true']:hover [role='tooltip'], .wall-auto-arrange[data-visible='true']:focus-within [role='tooltip'] { opacity: 1; visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .wall-auto-arrange { transition: none; transform: none; } }
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-selected] > .panel { --panel-ring-color: var(--accent) !important; box-shadow: none; }
 .command-wall-layout[data-wall-layout='focus'] .composer, .command-wall-layout[data-wall-layout='focus'] .composer:focus-within { box-shadow: none; }
-.wall-layout-segments { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
+/* The All/Agents/Terminals filter shares this frame exactly. It used to be
+   `rounded-lg`, which also picks up `corner-shape: squircle`, so its corners
+   looked squarer than the layout group's beside it. */
+.wall-layout-segments, .wall-filter-segments { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
 .wall-layout-segments button { padding: 4px 10px; border-radius: 6px; font-size: 12px; color: var(--ink-faint); }
 .wall-layout-segments button[aria-pressed='true'] { background: var(--surface-2); color: var(--ink); font-weight: 500; }
 .wall-fixed-picker { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
