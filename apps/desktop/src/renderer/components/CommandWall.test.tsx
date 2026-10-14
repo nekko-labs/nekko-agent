@@ -294,9 +294,9 @@ it('leaves shared composer sizing to CSS and reveals only focused carets', () =>
 });
 
 describe('Command Center header spacing', () => {
-  it('keeps a compact top inset without changing gutters or toolbar wrapping', () => {
+  it('keeps compact insets beside the rail and window edges without changing toolbar wrapping', () => {
     const source = readFileSync(new URL('../views/CommandCenterView.tsx', import.meta.url), 'utf8');
-    expect(source).toContain('gap-3 px-4 pb-4 pt-1 xl:px-6');
+    expect(source).toContain('gap-2 pb-1.5 pl-1 pr-1.5 pt-1');
     expect(source).toContain('flex flex-wrap items-center gap-x-4 gap-y-2');
     expect(source).not.toContain('pb-4 pt-5');
   });
