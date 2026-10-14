@@ -740,6 +740,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version and the open-source licenses of the app and the libraries it ships.
+>
+> The Android app is **locked by default**: every time you open it, or come back to it, it asks for
+> your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows
+> anything. While it is locked nothing can be read or approved, and the recent-apps preview stays
+> blank. After a restart it doesn't connect to your computer until you unlock. Turn it off in
+> **Settings → Security → App lock**; turning it off asks for the same check first. With the lock on,
+> the app can't be screenshotted or screen-recorded. A phone with no screen lock can't be locked;
+> Settings says so and links to the phone's security settings.
 
 The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
 small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
@@ -768,7 +776,7 @@ Remote access survives restarts: if it was enabled, the agent reconnects when Ne
 | Relay operator reads your traffic | Impossible by construction: E2E encryption, relay sees ciphertext only |
 | Stranger connects to your room | Needs the pairing secret (128-bit) for transport auth, then a registered device or a live pairing code |
 | Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
-| Lost/stolen phone | Revoke it in Settings: kicked immediately, denied afterward, push token dropped |
+| Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; rotate the secret for a full cryptographic reset |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
 | Phone asks for something dangerous | Tool calls run on your machine under your guardrails/sandbox and chat mode (Ask/Guardrails/YOLO) |
