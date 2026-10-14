@@ -161,6 +161,27 @@ class RelayClient(
         dial()
     }
 
+    /**
+     * The phone moved to another network (Wi-Fi to mobile data, airplane mode off):
+     * the open socket, if any, is bound to the old one and would only be noticed
+     * dead at the next ping. Drop it and dial again now, even if it looks online.
+     * Calls in flight fail like on any lost connection. No-op once closed or denied.
+     */
+    fun reconnect() {
+        val c: WsConnection?
+        synchronized(lock) {
+            if (stopped || state == RelayState.DENIED) return
+            retryJob?.cancel(); retryJob = null
+            retry = 0
+            c = conn; conn = null
+            welcomed = false
+        }
+        // conn is already null, so this socket's late onClosed is ignored.
+        runCatching { c?.close(1000, "network changed") }
+        if (c != null) failPending("connection lost")
+        dial()
+    }
+
     /** Call a host IPC channel. Waits (briefly) for the handshake if needed. */
     suspend fun call(channel: String, vararg args: JsonElement): JsonElement =
         callWithTimeout(config.requestTimeoutMs, channel, *args)

@@ -619,6 +619,12 @@ The host-side OAuth service runs the sign-in flow:
 
 The host keeps the actual access and refresh tokens in `tokens.json` inside the data directory. At chat time, the host resolves a fresh access token and injects it into the request. The renderer only ever sees a sanitized status object: connected, account id, token key, and expiry. It never sees or stores the token itself.
 
+## More than one account
+
+You can sign in more than one plan from the same vendor, for example a personal Claude plan and a work one. Each gets its own provider, its own token and its own usage limits. To tell them apart, the app shows the email each one is signed in as next to its name, as in `Anthropic (Claude) · you@example.com`, in the model picker, the Utilization panel and the Capacity list.
+
+The email comes from the sign-in itself (Claude's sign-in response, or the ChatGPT `id_token`), stays in `tokens.json` next to the token, and is not part of a settings export. A plan signed in before this was added shows no email until you sign it in again. API keys, OpenRouter and tokens pasted from `claude setup-token` carry no email, so they show just the provider name.
+
 ## Caveats
 
 Both OAuth clients are the same first-party clients used by the vendors' own CLI tools. Anthropic and OpenAI consumer terms are written around their own apps, so using a subscription token with a third-party app like Nekko Agent is off-label. The flows may stop working at any time if the vendor rotates a client id, changes a scope, or blocks the client.
@@ -756,6 +762,18 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > **Settings → Security → App lock**; turning it off asks for the same check first. With the lock on,
 > the app can't be screenshotted or screen-recorded. A phone with no screen lock can't be locked;
 > Settings says so and links to the phone's security settings.
+>
+> The Android app **reconnects by itself** as soon as the phone changes network (Wi-Fi to mobile data,
+> airplane mode off), instead of waiting out its retry delay. While a chat on your computer is running,
+> **Settings → Connection → Stay connected while a chat runs** (on by default) keeps the app connected
+> after you leave it, with a silent "Staying connected · 1 chat running on Mac" notification that goes
+> away as soon as the reply is done. **Notify me** (on by default; Android 13+ asks for permission)
+> sends a notification when a reply finishes or fails, or a chat waits for your approval or answer,
+> while you're out of the app. Notifications say what happened and in which chat, never the reply, the
+> command or the question; with the app lock on they don't name the chat either, and tapping one opens
+> the chat through the lock. Without push (not built yet), these only arrive while the phone is still
+> connected. If Android restricts Nekko in the background, Settings says so and opens the app's
+> system page.
 
 The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
 small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
