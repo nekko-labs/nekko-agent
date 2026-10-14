@@ -4,6 +4,7 @@ import { RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRIC
 import { DOCK_PANELS, normalizeDockPanelOrder, placeDockPanel, reorderDockPanel, type CommandWallState, type InsightsPrefs, type WallDockPanel } from '../commandWall.js';
 import { useStore } from '../store.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
+import { accountEmailOf, useAccountEmails } from '../accountEmails.js';
 import { BUDGET_RANGE_LABEL, budgetRange, localRuntimeMetrics, utilizationProviders } from './wallDockMetrics.js';
 import { AutomationsPane } from './AutomationsPane.js';
 import { InsightsBox, type Vitals } from './InsightsBox.js';
@@ -290,6 +291,9 @@ function ResizablePanelBody({ label, children }: { label: string; children: Reac
 function Utilization({ providers, usage, now, onOpenModels }: Pick<WallDockProps, 'providers' | 'usage' | 'now' | 'onOpenModels'>) {
   const enabled = utilizationProviders(providers);
   const { byToken, answered, problems, refresh, nextRefreshAt } = useProviderLimitsPortfolio(enabled);
+  // Two plans on one vendor (personal and work, say) carry the same label;
+  // the signed-in email is what tells them apart.
+  const accountEmails = useAccountEmails(enabled);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const today = new Date(now).toISOString().slice(0, 10);
@@ -318,8 +322,9 @@ function Utilization({ providers, usage, now, onOpenModels }: Pick<WallDockProps
         : !limits ? (answered.has(key) ? 'Quota unavailable.' : 'Reading provider quota…')
         : windows.length === 0 ? 'No quota windows reported.' : null;
       const needsSignIn = problem?.kind === 'auth_expired' || problem?.kind === 'signed_out';
+      const email = accountEmailOf(provider, accountEmails);
       return <div key={provider.id} className="wall-dock__provider" data-limits-problem={problem?.kind}>
-        <strong>{provider.label}</strong>
+        <strong className="wall-dock__provider-name" title={email ? `${provider.label} · ${email}` : undefined}>{provider.label}{email && <span className="wall-dock__account" data-account-email> · {email}</span>}</strong>
         {status && <p role={problem ? 'status' : undefined} style={problem ? { color: needsSignIn ? 'var(--danger)' : 'var(--warning)' } : undefined}>{needsSignIn ? signInStatus(problem!.kind) : status}</p>}
         {/* An expired or missing sign-in is fixed right here, with the same
             sign-in the provider card uses, not by a trip to Settings. */}

@@ -3,6 +3,7 @@ import type { LimitWindow, ProviderConfig, SubscriptionLimits } from '@nekko-age
 import { formatUSD, isLocalProvider, limitsKeyFor } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
+import { accountEmailOf, useAccountEmails } from '../accountEmails.js';
 import { ChevronIcon } from '../icons.js';
 
 /**
@@ -73,6 +74,7 @@ export function ProviderLimitsDock({ standalone = false }: { standalone?: boolea
   // to show and an unconfigured one has nothing to ask.
   const metered = providers.filter((p) => p.enabled && !isLocalProvider(p.kind));
   const { byToken: limitsByToken, answered } = useProviderLimitsPortfolio(metered, open);
+  const accountEmails = useAccountEmails(metered);
 
   // Fetching is keyed by limits key, so a provider without one can only be
   // listed as unsigned or unmeasurable rather than measured.
@@ -122,7 +124,7 @@ export function ProviderLimitsDock({ standalone = false }: { standalone?: boolea
       {open && (
         <div className="mt-2.5 space-y-2">
           {rows.map(({ provider, limits, answered: settled }) => (
-            <ProviderRow key={provider.id} provider={provider} limits={limits} answered={settled} />
+            <ProviderRow key={provider.id} provider={provider} email={accountEmailOf(provider, accountEmails)} limits={limits} answered={settled} />
           ))}
           <p className="pt-0.5 text-[10px] leading-snug text-ink-faint">
             Live reads from each provider's documented usage endpoint, not a bill. Providers
@@ -137,10 +139,13 @@ export function ProviderLimitsDock({ standalone = false }: { standalone?: boolea
 /** One provider: its headline number, then a bar per window it reports. */
 function ProviderRow({
   provider,
+  email,
   limits,
   answered,
 }: {
   provider: ProviderConfig;
+  /** The account this provider is signed in as, when known. */
+  email?: string;
   limits: SubscriptionLimits | undefined;
   /** The provider has replied, even if the reply was "no limits". */
   answered: boolean;
@@ -180,8 +185,9 @@ function ProviderRow({
   return (
     <div>
       <div className="flex items-baseline gap-1.5">
-        <span className="min-w-0 flex-1 truncate font-medium text-ink-soft" title={provider.label}>
+        <span className="min-w-0 flex-1 truncate font-medium text-ink-soft" title={email ? `${provider.label} · ${email}` : provider.label}>
           {provider.label}
+          {email && <span className="font-normal text-ink-faint" data-account-email> · {email}</span>}
         </span>
         {limits?.creditsState === 'balance' && limits.creditsBalance !== undefined && (
           <span className="shrink-0 text-[10px] tabular-nums text-ink-faint" title="Credit balance left">
