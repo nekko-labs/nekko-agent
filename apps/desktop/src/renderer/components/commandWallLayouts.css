@@ -74,8 +74,8 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
 .command-wall-add:hover { border-color: var(--accent); color: var(--accent); background: var(--surface-2); }
 .command-wall-empty { padding: 32px; color: var(--ink-faint); font-size: 13px; }
 /* An empty wall centres its illustration in the space the windows would use. */
-.command-wall-stage:has(> .command-wall-empty .command-wall-empty-state) { min-height: 100%; }
-.command-wall-empty:has(.command-wall-empty-state) { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.command-wall-stage[data-wall-vacant] { min-height: 100%; }
+.command-wall-stage[data-wall-vacant] > .command-wall-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .command-wall-empty-state { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 340px; text-align: center; line-height: 1.5; }
 .command-wall-empty-title { margin-top: 6px; color: var(--ink); font-size: 15px; font-weight: 600; }
 .wall-empty-art { position: relative; width: 240px; height: 150px; }
