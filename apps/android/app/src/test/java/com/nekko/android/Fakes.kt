@@ -54,6 +54,7 @@ class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement
     var connected = false
     var closed = false
     var nudges = 0
+    var reconnects = 0
 
     override fun connect() {
         connected = true
@@ -67,6 +68,10 @@ class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement
 
     override fun nudge() {
         nudges++
+    }
+
+    override fun reconnect() {
+        reconnects++
     }
 
     fun goOnline() {

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -14,6 +15,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nekko.android.DeepLink
+import com.nekko.android.NekkoApp
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
@@ -76,6 +78,9 @@ fun NekkoNavHost(
         composable(Routes.CHAT, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("id").orEmpty()
             val vm = viewModel(key = "chat:$id") { ChatViewModel(id, repo) }
+            // Opening the chat answers its notification, if one is up.
+            val app = LocalContext.current.applicationContext as? NekkoApp
+            LaunchedEffect(id) { app?.connection?.notices?.clear(id) }
             ChatScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable(Routes.NEW) {

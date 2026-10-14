@@ -50,5 +50,12 @@
                 <data android:scheme="nekko-agent" />
             </intent-filter>
         </activity>
+
+        <!-- remoteMessaging: carries the conversation between the user's computer and this
+             phone; no runtime permission and, unlike dataSync, no daily time limit. -->
+        <service
+            android:name=".connection.KeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
     </application>
 </manifest>

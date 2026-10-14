@@ -33,6 +33,8 @@ class PhoneEventTest {
     @Test
     fun `a stopped turn is not a failure`() {
         assertNull(PhoneEvent.of(AgentEvent.Error(sid, "Stopped")))
+        // A stop between two steps of the loop (loop.ts, run.rs).
+        assertNull(PhoneEvent.of(AgentEvent.Error(sid, "Aborted")))
     }
 
     @Test

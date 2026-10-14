@@ -154,3 +154,88 @@ describe('relay agent: what a phone may do', () => {
   });
 });
 
+
+describe('relay agent: connection failures', () => {
+  /** A local TCP port that accepts and immediately drops: the WebSocket handshake fails. */
+  async function droppingServer() {
+    const net = await import('node:net');
+    let accepted = 0;
+    const server = net.createServer((s) => {
+      accepted++;
+      s.destroy();
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as { port: number }).port;
+    return { url: `ws://127.0.0.1:${port}`, accepted: () => accepted, close: () => server.close() };
+  }
+
+  it('survives a failed handshake with the real WebSocket and keeps retrying', async () => {
+    // Before: onerror called close() while CONNECTING, undici fired `error` again
+    // synchronously, and the process died with "Maximum call stack size exceeded".
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    const relay = await droppingServer();
+    const crashes: unknown[] = [];
+    const onCrash = (e: unknown) => crashes.push(e);
+    process.on('uncaughtException', onCrash);
+    // Count `error` events per socket: the old handler re-entered hundreds of times.
+    const errorsPerSocket: number[] = [];
+    globalThis.WebSocket = class extends realWebSocket {
+      constructor(url: string | URL) {
+        super(url);
+        const i = errorsPerSocket.push(0) - 1;
+        this.addEventListener('error', () => errorsPerSocket[i]++);
+      }
+    } as typeof WebSocket;
+    try {
+      const handle = connectRelayAgent({ events: new EventEmitter() } as unknown as Host, {
+        relayUrl: relay.url,
+        room: ROOM,
+        key: KEY,
+        verify: () => ({ type: 'denied', reason: 'unknown-device' }) as any,
+      });
+      await vi.waitFor(() => expect(handle.lastError()).toBeTruthy(), { timeout: 3000 });
+      expect(handle.isOnline()).toBe(false);
+      expect(relay.accepted()).toBe(1);
+      // A failed handshake never fires `close`; the retry must come anyway.
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.waitFor(() => expect(relay.accepted()).toBe(2), { timeout: 3000 });
+      await vi.waitFor(() => expect(errorsPerSocket[1]).toBe(1), { timeout: 3000 });
+      // One error per failed socket: nothing re-enters the failure path.
+      expect(errorsPerSocket).toEqual([1, 1]);
+      handle.stop();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(relay.accepted()).toBe(2); // stop() ends the retries
+      expect(errorsPerSocket).toEqual([1, 1]); // and leaves a socket that already failed alone
+      expect(crashes).toEqual([]);
+    } finally {
+      process.off('uncaughtException', onCrash);
+      relay.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it('schedules one retry per lost connection, even when error and close both fire', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket;
+      const handle = connectRelayAgent({ events: new EventEmitter() } as unknown as Host, {
+        relayUrl: 'ws://relay.test',
+        room: ROOM,
+        key: KEY,
+        verify: () => ({ type: 'denied', reason: 'unknown-device' }) as any,
+      });
+      const first = FakeSocket.last!;
+      first.onerror?.();
+      first.onclose?.({ code: 1006, reason: '' });
+      expect(handle.lastError()).toBe('could not reach the relay');
+      await vi.advanceTimersByTimeAsync(2000);
+      const second = FakeSocket.last!;
+      expect(second).not.toBe(first);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(FakeSocket.last).toBe(second); // the duplicate event did not schedule a second retry
+      handle.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
