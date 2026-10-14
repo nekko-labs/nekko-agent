@@ -159,8 +159,10 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
 .numbered-chat-icon > span { position: absolute; top: 5px; left: 5px; right: 4px; text-align: center; font-size: 10px; font-weight: 700; line-height: 13px; color: var(--ink); }
 [data-wall-selected] .numbered-chat-icon, [aria-pressed="true"] .numbered-chat-icon { color: var(--accent); }
 .numbered-agent-icon { position: relative; display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; flex-shrink: 0; color: var(--ink-faint); }
-/* The number is the robot's face: centred in the head, below the antenna. */
-.numbered-agent-icon > span { position: absolute; left: 0; right: 0; top: 10px; text-align: center; font-size: 10.5px; font-weight: 700; line-height: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
+/* The number is the robot's face: centred in the head, below the antenna.
+   top is set by the digit's ink, not its line box: at 10px the figures sat
+   ~1.1px low (3.6px of head above them, 1.4px below). */
+.numbered-agent-icon > span { position: absolute; left: 0; right: 0; top: 8.9px; text-align: center; font-size: 10.5px; font-weight: 700; line-height: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
 [data-wall-selected] .numbered-agent-icon, [data-wall-working] .numbered-agent-icon { color: var(--accent); }
 .wall-focus-agents { display: flex; gap: 6px; flex-shrink: 0; overflow-x: auto; padding: 2px; }
 .wall-focus-agent { display: flex; align-items: center; gap: 6px; max-width: 260px; flex-shrink: 0; padding: 3px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; color: var(--ink-soft); }
