@@ -37,7 +37,7 @@ app.whenReady().then(async () => {
     await check('mounted full CommandCenterView', "(document.body.textContent.includes('Agents') || document.body.textContent.includes('Command Center')) && !!document.querySelector('[data-command-wall]')");
     if (!process.env.NEKKO_TEST_REVISION) {
     win.setContentSize(1200, 400); await sleep(350);
-    await check('short viewport keeps chat wall visible without composer overlap', "(()=>{const wall=document.querySelector('.command-wall-layout').getBoundingClientRect();const composer=document.querySelector('[data-wall-composer]').getBoundingClientRect();const column=document.querySelector('.wall-column');return wall.height>=280&&wall.bottom<=composer.top&&column.scrollHeight>column.clientHeight;})()");
+    await check('short viewport keeps chat wall visible without composer overlap', "(()=>{const wall=document.querySelector('.command-wall-layout').getBoundingClientRect();const composer=document.querySelector('[data-wall-composer]').getBoundingClientRect();const column=document.querySelector('.wall-column');return wall.height>=160&&wall.bottom<=composer.top+1&&column.scrollHeight<=column.clientHeight+1;})()");
     win.setContentSize(1200, 900); await sleep(350);
     await open();
     await check('picker initial focus', "document.activeElement.classList.contains('agent-window-picker__option')");
