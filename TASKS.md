@@ -880,6 +880,17 @@ Verification: `npm run typecheck` across workspaces, host tests (`oauth`, `downl
 
 ## Backlog / Planned
 
+### Chat completion X icons ([#533](https://github.com/nekko-labs/nekko-agent/issues/533))
+
+Planned, not implemented: multiple users did not recognize the checkmark as a way to close chats. Replace the completion-action checkmark with the existing X (`CloseIcon`) in chat pane headers and active chat cards/saved-chat rows, preserving completion/archive semantics, 60-day retention, restoration, shortcuts and existing exit timing. Delete remains a separate trash-icon action; unrelated status checkmarks are unchanged. See the [detailed implementation plan](reports/chat-close-icon-implementation-plan.md) and [planned specification](SPEC.md#chat-completion-x-icons-planned).
+
+- [ ] Audit current completion controls and arrange isolated unchanged-base wide/narrow light/dark evidence.
+- [ ] Substitute `CloseIcon` in `PaneFrame.tsx` and `WorkspaceCard.tsx`, preserving icon sizes, handlers, accurate labels and configured Delete behavior.
+- [ ] Add focused icon/lifecycle regressions; run desktop tests, typecheck and build.
+- [ ] Inspect matched visual evidence and completion recording; verify archive/restore, failure recovery, keyboard activation, reduced motion and no click propagation.
+- [ ] Update the implemented SPEC.md description and walkthrough; regenerate docs.
+- [ ] Publish evidence in the implementation PR, pass required checks/reviews, then land and close #533. Do not close the issue with the planning-only PR.
+
 ### Later: native shell and the phone as its own product (added 2026-09-30)
 
 Planned by Philip for later; not started. See [SPEC roadmap](SPEC.md#roadmap-beyond-one-machine).
