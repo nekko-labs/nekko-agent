@@ -117,6 +117,14 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 - [Pair your phone](https://nekkoagent.com/docs/remote) to use the agent away from your desk.
 - Want to help build it? Read [Contributing](https://nekkoagent.com/docs/contributing) and the [architecture](https://nekkoagent.com/docs/architecture).
 
+### Closing the desktop UI and notifications
+
+Closing the desktop window hides it to the tray; the engine and running work remain alive. This is not Quit. **Quit Nekko Agent** stops the service and managed processes; **Stop Nekko service** stops the service while leaving the UI available. This does not promise execution during OS sleep, shutdown or logout.
+
+**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification restores the UI and opens the chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
+
+The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet landed. Image inspection and native toast delivery/click/permission testing remain pending. Known issue under review: the native listener currently also posts for a focused visible chat.
+
 ### Create an agent, media session or terminal
 
 Hover over the sidebar **+** to choose **Agent**, **Media gen** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Media gen opens an image session; video generation is not available.
@@ -230,6 +238,16 @@ list dirs, run shell commands).
 ![Command palette](https://nekkoagent.com/docs/media/command-palette.png)
 
 ---
+
+### Add windows and read the dock
+
+The Agents toolbar provides direct **New agent**, **New image session** and **New terminal** actions, with no ellipsis or overflow button. The empty wall can still open the full window picker. Its Chat, Media and Terminal categories remain horizontal; opening it does not change the wall layout.
+
+Each repository heading in the Agent panel also has a **plus** button for a new agent chat and a **terminal** button for a new shell in that repository. These actions use the repository you clicked, not another selected or default folder. In Focus, the new window becomes visible; other layout modes stay unchanged. On narrow screens, the agent list closes after successful creation so it does not cover the result. If a wall filter would hide the window, it switches to All. The controls wait for creation to finish before accepting another click for the same repository, and failures show an error you can act on and retry.
+
+Utilization shows a Claude subscription account once when provider entries share the same token key, preferring the Anthropic entry. Independent accounts and API entries remain separate. In Budget, choose today, 1wk, 1m, 6m, 1y or all-time; the active range is tinted. Spend, tokens, top agent, local tokens, savings and compared model membership all follow that UTC range, not lifetime totals. See [usage limits and prices](https://nekkoagent.com/docs/usage-limits).
+
+These 2026-10-13 changes are implemented and unit/fixture interaction tested. Matching captures exist, but image/motion inspection remains pending; earlier walkthrough pictures are not visual proof of this batch.
 
 ### Complete, minimize, and delete
 
@@ -601,6 +619,12 @@ The host-side OAuth service runs the sign-in flow:
 
 The host keeps the actual access and refresh tokens in `tokens.json` inside the data directory. At chat time, the host resolves a fresh access token and injects it into the request. The renderer only ever sees a sanitized status object: connected, account id, token key, and expiry. It never sees or stores the token itself.
 
+## More than one account
+
+You can sign in more than one plan from the same vendor, for example a personal Claude plan and a work one. Each gets its own provider, its own token and its own usage limits. To tell them apart, the app shows the email each one is signed in as next to its name, as in `Anthropic (Claude) · you@example.com`, in the model picker, the Utilization panel and the Capacity list.
+
+The email comes from the sign-in itself (Claude's sign-in response, or the ChatGPT `id_token`), stays in `tokens.json` next to the token, and is not part of a settings export. A plan signed in before this was added shows no email until you sign it in again. API keys, OpenRouter and tokens pasted from `claude setup-token` carry no email, so they show just the provider name.
+
 ## Caveats
 
 Both OAuth clients are the same first-party clients used by the vendors' own CLI tools. Anthropic and OpenAI consumer terms are written around their own apps, so using a subscription token with a third-party app like Nekko Agent is off-label. The flows may stop working at any time if the vendor rotates a client id, changes a scope, or blocks the client.
@@ -652,6 +676,16 @@ Both providers are normalized into the same `SubscriptionLimits` shape in `packa
 
 The numbers in the chat header chip and the Models card are live reads from the provider. They update after each subscription response and on a throttled poll. Nekko Agent does not extrapolate or predict your usage locally; if a provider does not return a window, that window is simply not shown.
 
+## Utilization and Budget on the Agents wall
+
+Utilization deduplicates enabled Claude subscription entries with the same nonempty token key, preferring the Anthropic provider entry. This only changes the displayed account list, not saved providers, credentials or routing. Different accounts/token keys and API-key entries stay separate.
+
+Budget defaults to **1m**. Its ranges use inclusive **UTC** days: today, 1wk (7 days), 1m (30), 6m (180), 1y (365), and all-time through today. The active button has an accent tint and pressed state. All recorded details follow that selection: estimated API spend, input/output tokens, top agent by API cost, local tokens, local/subscription savings, fallback and unpriced-token counts, and which used models appear in the pricing comparison. Catalog unit prices and the selected fallback are reference/configuration values, not range totals. Older hosts without daily detail show unavailable details rather than substituting lifetime totals.
+
+Savings are estimated API equivalents before subscription fees, hardware and electricity, not actual net savings. Local and subscription usage has $0 incremental recorded API spend. Unknown local models use the explicitly chosen fallback or remain unpriced; unpriced tokens are excluded from savings.
+
+The 2026-10-13 batch is implemented, unit and fixture interaction tested with TS/Rust daily-summary golden parity coverage. Image and motion inspection are pending; parent-owned landing is still outstanding.
+
 ## Off-label caveat
 
 The Anthropic and ChatGPT usage endpoints used here are documented by or reverse-engineered from the providers' subscription flows. They can change, move, or stop returning data at any time. Nekko Agent is not affiliated with Anthropic or OpenAI, and the readouts are provided as a convenience for subscribers, not as an official feature of those services.
@@ -696,7 +730,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
    paste your self-hosted relay URL), then **Pair a device**.
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
-   app, open the pairing link in a browser to get the full app over the relay.
+   app, the pairing link also opens the web app in a browser over the relay, but it is limited to
+   what a phone may do (below), so most desktop screens there are unavailable.
 3. The phone shows up under **Paired devices**, with a live connection dot.
 
 ## The phone app
@@ -704,6 +739,41 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > **Native apps.** The phone apps are moving to platform-native code: Kotlin / Jetpack Compose in
 > `apps/android` (pairing, chats, live replies, approvals and questions; no phone models yet) and
 > SwiftUI in `apps/ios`. The Expo app described below stays as the reference until they reach parity.
+>
+> The Android app looks like your desktop by default: **Settings → Appearance → Same as computer**
+> uses the computer's light or dark theme and its accent color, and follows a change on the
+> computer right away. Pick **Phone setting**, **Light** or **Dark** to choose on the phone instead;
+> that choice is kept on the phone. Only the theme, theme preset and the two accent colors are sent
+> for this (the `appearance:updated` event), never the rest of the computer's settings.
+>
+> The Android app's **Settings** also has a **Computers** row, which opens the list of paired
+> computers (rename, switch, forget, pair another), and an **About** section with the installed
+> version and the open-source licenses of the app and the libraries it ships.
+>
+> **Vibration** (Android): while the app is open, the phone vibrates when the agent needs your
+> approval (two pulses) or asks you a question (one long pulse). In **Settings → Vibration** you can
+> also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them
+> off. It never vibrates in silent mode or Do Not Disturb, or while the app is in the background.
+>
+> The Android app is **locked by default**: every time you open it, or come back to it, it asks for
+> your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows
+> anything. While it is locked nothing can be read or approved, and the recent-apps preview stays
+> blank. After a restart it doesn't connect to your computer until you unlock. Turn it off in
+> **Settings → Security → App lock**; turning it off asks for the same check first. With the lock on,
+> the app can't be screenshotted or screen-recorded. A phone with no screen lock can't be locked;
+> Settings says so and links to the phone's security settings.
+>
+> The Android app **reconnects by itself** as soon as the phone changes network (Wi-Fi to mobile data,
+> airplane mode off), instead of waiting out its retry delay. While a chat on your computer is running,
+> **Settings → Connection → Stay connected while a chat runs** (on by default) keeps the app connected
+> after you leave it, with a silent "Staying connected · 1 chat running on Mac" notification that goes
+> away as soon as the reply is done. **Notify me** (on by default; Android 13+ asks for permission)
+> sends a notification when a reply finishes or fails, or a chat waits for your approval or answer,
+> while you're out of the app. Notifications say what happened and in which chat, never the reply, the
+> command or the question; with the app lock on they don't name the chat either, and tapping one opens
+> the chat through the lock. Without push (not built yet), these only arrive while the phone is still
+> connected. If Android restricts Nekko in the background, Settings says so and opens the app's
+> system page.
 
 The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
 small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
@@ -725,6 +795,30 @@ everything at once.
 
 Remote access survives restarts: if it was enabled, the agent reconnects when Nekko Agent starts.
 
+## What a paired phone can do
+
+Your computer decides what a paired phone may ask for, whatever the phone app does: locking the
+phone app is not the boundary, your computer is. A phone can use your chats and nothing that
+changes how the computer itself is set up:
+
+- **Allowed:** list, open, start, complete and delete chats; send, queue and stop messages; answer
+  approvals and the agent's questions; pick a model from the computer's providers and a folder from
+  its list; voice status and transcription; and a few settings (below).
+- **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
+  revoking, rotating the secret), terminals, writing files, adding or removing folders, installing
+  or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
+  servers and hooks. Everything not on the allowed list is refused too, with an error that starts
+  *Not allowed from a paired phone*.
+- **Settings a phone may change:** the chat mode for new chats (Ask, Guardrails or YOLO), what the chat pane's top-right button does (Complete or Delete),
+  whether deleting asks first, and voice on/off and its language. An update that touches any other
+  setting is refused as a whole: nothing in it is applied.
+- **Settings a phone can read:** only the theme and accents, the default and starred models, and
+  the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
+  instructions never leave the computer this way; provider lists arrive as name and type only.
+- **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
+  switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
+  offline/incognito switches. Messages cannot attach files from the computer.
+
 ## Security model, honestly stated
 
 | Threat | Defense |
@@ -732,10 +826,10 @@ Remote access survives restarts: if it was enabled, the agent reconnects when Ne
 | Relay operator reads your traffic | Impossible by construction: E2E encryption, relay sees ciphertext only |
 | Stranger connects to your room | Needs the pairing secret (128-bit) for transport auth, then a registered device or a live pairing code |
 | Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
-| Lost/stolen phone | Revoke it in Settings: kicked immediately, denied afterward, push token dropped |
+| Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; rotate the secret for a full cryptographic reset |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
-| Phone asks for something dangerous | Tool calls run on your machine under your guardrails/sandbox and chat mode (Ask/Guardrails/YOLO) |
+| Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
 
 What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
 enable push, device push tokens plus the content-free fact "a run finished". That's the whole list,
@@ -1501,6 +1595,16 @@ Nekko Agent is one engine and one React UI that run in several places: the deskt
 - **The UI never shares a process with the agent.** The window talks to `nekkod`, the engine daemon, over a loopback connection with a per-launch token. The agent loop, terminals and model servers run there, so a busy agent cannot freeze the interface.
 - **The engine is moving from TypeScript to Rust.** `nekkod` answers what has been ported natively and passes the rest to the TypeScript host it supervises. Each ported piece has to match the TypeScript behaviour exactly before it takes over.
 - **Every edition is the same app.** Desktop, web and Docker run the same engine and the same UI. Only the transport differs: Electron IPC on the desktop, HTTP and WebSocket in the browser.
+
+## Desktop lifetime and notifications
+
+Closing the UI already hides it to the tray without stopping the engine. Explicit Quit shuts down the service and managed processes; Stop Nekko service stops the engine without quitting the UI. Neither arrangement promises continued work during OS sleep, shutdown or logout.
+
+The 2026-10-13 implementation moves Electron native notifications into main (`apps/desktop/src/main/notifications.ts`), with a direct authenticated engine WebSocket subscription, fresh settings reads per eligible notice, reconnect/backoff and disposal on Quit. Main creates native notices; click delivery uses an encoded session deep link to restore the window and select the chat. Renderer notifications remain for browser editions only, avoiding duplicate Electron delivery. Settings exposes the default-on toggle in its standalone Notifications section.
+
+TS host and Rust usage summaries emit matching per-day session costs, local tokens, avoided costs and model ids. Budget aggregates those UTC buckets for every recorded detail instead of mixing a range with lifetime totals. Utilization's same-token Claude dedupe is display-only and prefers Anthropic, without changing provider routing or storage.
+
+Status: implemented, unit and isolated fixture interaction tested; image/motion inspection and native toast delivery/click/permissions testing pending. Main currently assumes events are unattended, so focused-visible-chat suppression is a known review issue. Parent owns resolution and landing.
 
 ## Repository layout
 

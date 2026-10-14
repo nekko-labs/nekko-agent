@@ -56,10 +56,10 @@ describe('Agents header placement', () => {
     for (const label of ['Wall layout', 'Focus', 'Dynamic', 'Grid', 'Show', 'Auto-arrange', 'Panels']) expect(html).toContain(label);
     expect(html).not.toContain('>Fixed<');
     // Adding lives in the toolbar's icon bar in every layout: agent, terminal,
-    // then More (the full picker). An agent's Changes/Files/Browser moved into
+    // without an overflow button. An agent's Changes/Files/Browser moved into
     // its own window header beside Logs.
-    for (const label of ['New agent', 'New terminal', 'Add window']) expect(html).toContain(`aria-label="${label}"`);
-    for (const label of ['Changes', 'Browser', 'Files']) expect(html).not.toContain(`aria-label="${label}"`);
+    for (const label of ['New agent', 'New image session', 'New terminal']) expect(html).toContain(`aria-label="${label}"`);
+    for (const label of ['Add window', 'Changes', 'Browser', 'Files']) expect(html).not.toContain(`aria-label="${label}"`);
     // The add bar leads the controls, left of the layout switcher.
     expect(html.indexOf('aria-label="Add to the wall"')).toBeLessThan(html.indexOf('aria-label="Wall layout"'));
   });

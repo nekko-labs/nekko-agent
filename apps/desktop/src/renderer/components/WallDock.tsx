@@ -4,7 +4,8 @@ import { RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRIC
 import { DOCK_PANELS, normalizeDockPanelOrder, placeDockPanel, reorderDockPanel, type CommandWallState, type InsightsPrefs, type WallDockPanel } from '../commandWall.js';
 import { useStore } from '../store.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
-import { BUDGET_RANGE_LABEL, budgetRange, localRuntimeMetrics, recordedBudgetMetrics } from './wallDockMetrics.js';
+import { accountEmailOf, useAccountEmails } from '../accountEmails.js';
+import { BUDGET_RANGE_LABEL, budgetRange, localRuntimeMetrics, utilizationProviders } from './wallDockMetrics.js';
 import { AutomationsPane } from './AutomationsPane.js';
 import { InsightsBox, type Vitals } from './InsightsBox.js';
 import { RangeToggles } from './RangeToggles.js';
@@ -288,8 +289,11 @@ function ResizablePanelBody({ label, children }: { label: string; children: Reac
 
 
 function Utilization({ providers, usage, now, onOpenModels }: Pick<WallDockProps, 'providers' | 'usage' | 'now' | 'onOpenModels'>) {
-  const enabled = providers.filter((p) => p.enabled && !isLocalProvider(p.kind));
+  const enabled = utilizationProviders(providers);
   const { byToken, answered, problems, refresh, nextRefreshAt } = useProviderLimitsPortfolio(enabled);
+  // Two plans on one vendor (personal and work, say) carry the same label;
+  // the signed-in email is what tells them apart.
+  const accountEmails = useAccountEmails(enabled);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const today = new Date(now).toISOString().slice(0, 10);
@@ -318,8 +322,9 @@ function Utilization({ providers, usage, now, onOpenModels }: Pick<WallDockProps
         : !limits ? (answered.has(key) ? 'Quota unavailable.' : 'Reading provider quota…')
         : windows.length === 0 ? 'No quota windows reported.' : null;
       const needsSignIn = problem?.kind === 'auth_expired' || problem?.kind === 'signed_out';
+      const email = accountEmailOf(provider, accountEmails);
       return <div key={provider.id} className="wall-dock__provider" data-limits-problem={problem?.kind}>
-        <strong>{provider.label}</strong>
+        <strong className="wall-dock__provider-name" title={email ? `${provider.label} · ${email}` : undefined}>{provider.label}{email && <span className="wall-dock__account" data-account-email> · {email}</span>}</strong>
         {status && <p role={problem ? 'status' : undefined} style={problem ? { color: needsSignIn ? 'var(--danger)' : 'var(--warning)' } : undefined}>{needsSignIn ? signInStatus(problem!.kind) : status}</p>}
         {/* An expired or missing sign-in is fixed right here, with the same
             sign-in the provider card uses, not by a trip to Settings. */}
@@ -398,13 +403,12 @@ function Budget({ usage, now, sessions, providers }: Pick<WallDockProps, 'usage'
   const [saving, setSaving] = useState(false);
   // The same time ranges as the Insights token chart; defaults to its 1m.
   const [range, setRange] = useState<InsightRange>('1m');
-  const recorded = recordedBudgetMetrics(usage, sessions, providers);
   const ranged = budgetRange(usage, range, new Date(now));
   const spend = ranged?.spend;
-  const avoided = usage?.avoidedCosts;
-  const top = Object.entries(usage?.bySessionCost ?? {}).sort((a, b) => b[1] - a[1])[0];
+  const avoided = ranged?.avoidedCosts;
+  const top = Object.entries(ranged?.bySessionCost ?? {}).sort((a, b) => b[1] - a[1])[0];
   const price = getModelPrice(benchmark);
-  const comparedModels = Object.keys(usage?.byModel ?? {}).map(id => ({ id, price: getModelPrice(id) }));
+  const comparedModels = (ranged?.modelIds ?? []).map(id => ({ id, price: getModelPrice(id) }));
   const changeBenchmark = async (value: string) => {
     setSaving(true); setError(null);
     try {
@@ -418,12 +422,12 @@ function Budget({ usage, now, sessions, providers }: Pick<WallDockProps, 'usage'
     <RangeToggles chart="Budget" range={range} onChange={setRange} />
     <div><div className="wall-dock__metric-row"><span>Spend <small>({BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{spend == null ? 'Unavailable' : formatUSD(spend)}</strong></div><p className="wall-dock__note">Estimated recorded API spend · UTC · excludes subscriptions</p></div>
     <div className="wall-dock__metric-row"><span>Tokens <small>({BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{ranged ? `${ranged.input.toLocaleString()} in · ${ranged.output.toLocaleString()} out` : 'Unavailable'}</strong></div>
-    <div className="wall-dock__metric-row"><span>Top agent <small>(all time)</small></span><strong>{top && top[1] > 0 ? `${sessions.find(s => s.id === top[0])?.title ?? 'Chat'} · ${formatUSD(top[1])}` : 'No API spend'}</strong></div>
-    <div className="wall-dock__metric-row"><span>Local models</span><strong>{usage ? '$0 API' : 'Unavailable'} · {recorded.localTokens} tokens</strong></div>
+    <div className="wall-dock__metric-row"><span>Top agent <small>({BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{top && top[1] > 0 ? `${sessions.find(s => s.id === top[0])?.title ?? 'Chat'} · ${formatUSD(top[1])}` : ranged?.bySessionCost == null ? 'Unavailable' : 'No API spend'}</strong></div>
+    <div className="wall-dock__metric-row"><span>Local models <small>({BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{usage ? '$0 API' : 'Unavailable'} · {ranged?.localTokens == null ? 'Unavailable' : ranged.localTokens.toLocaleString()} tokens</strong></div>
     <div className="wall-dock__savings">
-      <div className="wall-dock__metric-row"><span>Local AI saved <small>(est.)</small></span><strong>{avoided ? formatUSD(avoided.local) : 'Unavailable'}</strong></div>
-      <div className="wall-dock__metric-row"><span>Subscription saved <small>(est. · all time)</small></span><strong>{avoided ? formatUSD(avoided.subscription) : 'Unavailable'}</strong></div>
-      <p className="wall-dock__note">All-time API equivalents, before plan fees, hardware and electricity.</p>
+      <div className="wall-dock__metric-row"><span>Local AI saved <small>(est. · {BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{avoided ? formatUSD(avoided.local) : 'Unavailable'}</strong></div>
+      <div className="wall-dock__metric-row"><span>Subscription saved <small>(est. · {BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{avoided ? formatUSD(avoided.subscription) : 'Unavailable'}</strong></div>
+      <p className="wall-dock__note">{BUDGET_RANGE_LABEL[range]} API equivalents, before plan fees, hardware and electricity.</p>
     </div>
     <details><summary>Cloud pricing comparison</summary>
       <label className="wall-dock__benchmark">Fallback for unpriced local models

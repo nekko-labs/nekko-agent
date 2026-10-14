@@ -10,6 +10,7 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
 import { useAllProviderLimits } from '../../useLimits.js';
+import { accountEmailOf, providerDisplayName, useAccountEmails } from '../../accountEmails.js';
 import { ContextMenu, ContextAction } from '../ContextMenu.js';
 import { StarIcon } from '../../icons.js';
 
@@ -76,6 +77,10 @@ export function ModelPicker({
   // Live usage limits for every signed-in provider, so a model that can't run
   // right now can say so instead of quietly failing on send.
   const limitsByToken = useAllProviderLimits(providers, open);
+  // Which account each signed-in provider uses, so two plans on one vendor
+  // (personal and work, say) are told apart in the chip and the list.
+  const accountEmails = useAccountEmails(providers);
+  const nameOf = (p: ProviderConfig) => providerDisplayName(p, accountEmails);
   const ref = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<React.CSSProperties>({});
@@ -155,7 +160,8 @@ export function ModelPicker({
   const pinnedKeys = new Set([...recentModels, ...starred].map((s) => `${s.provider.id}::${s.model.id}`));
 
   if (defaultKey) pinnedKeys.add(defaultKey);
-  const providerLabel = providers.find((p) => p.id === providerId)?.label ?? 'No provider';
+  const currentProvider = providers.find((p) => p.id === providerId);
+  const providerLabel = currentProvider ? nameOf(currentProvider) : 'No provider';
   const currentName =
     modelId === AUTO_MODEL_ID ? '✨ Auto' : models.find((m) => m.id === modelId)?.name ?? 'No model';
 
@@ -222,7 +228,7 @@ export function ModelPicker({
                 {blockLabel(availability)}
               </span>
             )}
-            {showProvider && <span className="ml-auto shrink-0 text-[10px] text-ink-faint">{p.label}</span>}
+            {showProvider && <span className="ml-auto min-w-0 max-w-[55%] shrink truncate text-[10px] text-ink-faint" title={nameOf(p)}>{nameOf(p)}</span>}
           </div>
           <span
             className={`truncate text-[10px] text-ink-faint ${sub ? 'font-mono' : ''}`}
@@ -244,8 +250,11 @@ export function ModelPicker({
     );
   };
 
-  const header = (label: string) => (
-    <p className="px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{label}</p>
+  const header = (label: string, email?: string) => (
+    <p className="truncate px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint" title={email ? `${label} · ${email}` : undefined}>
+      {label}
+      {email && <span className="font-normal normal-case tracking-normal" data-account-email> · {email}</span>}
+    </p>
   );
 
   const popup = (
@@ -298,7 +307,7 @@ export function ModelPicker({
                   : [{ loc: '', models: remaining }];
               return (
                 <React.Fragment key={g.provider.id}>
-                  {header(g.provider.label)}
+                  {header(g.provider.label, accountEmailOf(g.provider, accountEmails))}
                   {byLoc.map(({ loc, models: ms }) => (
                     <React.Fragment key={loc || '_'}>
                       {loc && (

@@ -51,6 +51,137 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### Android reconnect on network change (2026-10-14)
+Area: mobile app
+Result: improvement
+Conditions: headless Android emulator (Pixel_10_Pro AVD, API 37.2) on an Apple Silicon Mac, debug sandbox build, local relay on the host, airplane mode toggled with `cmd connectivity airplane-mode`, time from airplane-off until the app's banner read "online" polled through uiautomator (adds ~0.5–1 s to every reading).
+
+| Metric | Before | After |
+|---|---|---|
+| Back online after 8 s offline (3 runs) | 6.3 s, 6.3 s, 6.3 s | 4.1 s, 4.2 s, 4.2 s |
+| Back online after 40 s offline | 21.5 s, 26.6 s | 4.4 s, 4.6 s, 4.7 s |
+
+Why: a default-network callback now redials as soon as a network is back, instead of waiting out the client's exponential backoff (up to 30 s). Source: the Android background-connection PR.
+
+### #514 Current-main gate and checkout attribution repair (2026-10-13)
+Area: renderer, perf harness. Result: failed gate remains unresolved; measurement provenance fix, no measured runtime improvement.
+Conditions: run 38382178477, job 115245050089, Ubuntu / AMD EPYC 7763 (4 threads), Chrome/154.0.8037.97, production web + optimized release nekkod, 1440x1000, no GPU, 1,000-message chat, 300 tokens/s. Logs establish actual head checkout `b4b976650cc99f9cef333fb5bea23794c879c76b` (07c18568 merged into bdd75023) and unchanged base `bdd75023c313f4cad206851c75f52136558f512a`. All reports inherited the merge GITHUB_SHA, including base. The harness now records actual APP_ROOT `git rev-parse HEAD` as `git` and inherited SHA separately as `workflowGit`, with source archives reported unknown and unit coverage. This changes attribution only, not sampling or budgets.
+
+Full six-second gate: stream p95 **10.48 / 10.48 / 10.6 ms** across three attempts, all fail unchanged **10 ms**. Selected row: p50 **7.86 ms**, p95 **10.48 ms**, p99 **12.69 ms**, max **12.7 ms**, mean **8.03 ms**, **193 frames**, **26%** busy. Other selected p95 rows pass: composer **18 ms**, terminal **6.2 ms**, warm switch **15.6 ms**, cold frame/history **22.7 ms**. Memory passes: clipped-layer ratio **0**, tiles **189.7024688720703 MB**, heap **0.023772239685058594 MB/lap**, nodes/listeners **0/lap**. Selected rows are best per metric, not one common attempt; raw samples in the report are not necessarily the selected attempt.
+
+Sequential head then base diagnostics use one three-second `--quick --only frames --profile --timeline` measurement each, required release daemon on both. The head additionally retains `--dump-trace`; unchanged base does not support that retained-trace option, but both contain profile traces. Exact JSON values (base -> head): p50 **9.38 -> 8.72 ms**, p95 **13.09 -> 12.02 ms**, max/p99 **102.67 -> 124.46 ms**, mean **10.48 -> 10.11 ms**, frames **87 -> 93**, busy **30% -> 30%**. Both fail. The head/base order is important: head is 12.02, not 13.09. These single profiled short samples prove a diagnostic miss on base, not an unprofiled full-gate baseline or causal improvement.
+
+CrRendererMain trace duration totals in ms, base -> head (nested spans overlap): FunctionCall **206.850 -> 208.105**, FireAnimationFrame **98.044 -> 100.545**, Paint **143.881 -> 154.795**, UpdateLayoutTree **117.638 -> 122.032**, Layout **70.010 -> 71.693**, PrePaint **62.524 -> 65.781**, Layerize **65.119 -> 64.100**. Paint counts **1134 -> 1141**, layout **138 -> 148**, style **177 -> 198**, rAF **88 -> 94**. Largest renderer tasks **95.487 -> 116.576 ms** contain DevToolsSession receives **95.473 -> 116.565 ms**, consistent with instrumentation overhead; the command is not identified, so profiler-start attribution is not proven. No gate samples are excluded.
+
+CPU self samples: idle **2025.384 -> 2013.009 ms**, program **955.207 -> 994.087 ms**, compactSentence **10.588 -> 12.771 ms**, ws.onmessage **7.158 -> 5.737 ms**. Shared script/render/layout/paint work persists on both. Avoidable excerpt compaction remains a candidate, not evidence that notification scope causes the miss or that removing it would pass. No speculative renderer fix, benchmark rerun or threshold relaxation was made. Next: matched full-duration timeline-only baseline/head measurements on a suitable runner to separate instrumentation from sustained work, then unit-backed causal optimization and the unchanged hosted gate.
+
+Sources: [run](https://github.com/nekko-labs/nekko-agent/actions/runs/38382178477), [artifact 11803884737](https://github.com/nekko-labs/nekko-agent/actions/runs/38382178477/artifacts/11803884737), downloaded `.shots/perf-07/` JSON, traces and CPU profiles, `.shots/514-perf-latest.log` (untracked). No new before/after runtime measurement exists for the attribution repair.
+
+### #514 Matched Linux release-daemon streaming attribution (2026-10-13)
+Area: renderer, perf harness. Result: existing baseline diagnostic failure; full gate still failed, no improvement established.
+Conditions: Actions run 38375945871, PR head `99ddc95a8648e3e8c9d9fbdf9c118684a8140e47`, Ubuntu shared runner, AMD EPYC 7763 (4 threads), Chrome/154.0.8037.97, 1440x1000, GPU disabled, 1,000-message chat, 300 tokens/s. Logs verify the full gate and head diagnostic actually checked out merge `34dcf477897f258cca86eeb0931c1be58eab4d6f` (head into base `76c2db7be45182e69b8ffd9cfd7838b3b641e770`). The base worktree log says `HEAD is now at 76c2db7 Fix composer overflow and compact live subagent activity (#515)`. Both builds finished the optimized release profile and both diagnostics logged `engine: nekkod`. The base JSON's `git: 34dcf477...` is inherited GITHUB_SHA, not its actual checkout.
+
+Full gate: three 6s attempts, stream-frame-work p95 **10.35 / 10.85 / 11.22 ms**, all fail the unchanged **10 ms** gate. Best row p50 **7.8 ms**, p95 **10.35 ms**, max **13.53 ms**, mean **7.96 ms**, n **198**, main-thread busy **26%**. The Markdown rounds this p95 to 10.3 ms. Other final speed rows pass: composer p95 **20.8 ms** (attempts **20.8 / 25.5 / 25 ms**, so one attempt fails); terminal **6.1 ms** (6.1 / 6.5 / 6.6); warm switch **15.9 ms** (22.7 / 15.9 / 15.9, first attempt fails); cold first frame and history each **22.3 ms** (24.9 / 22.3 / 23.9). Memory rows all pass: worst clipped layer **0**, compositor tiles **197.31 MB**, retained heap **0.08 MB/lap**, DOM nodes **0/lap**, listeners **0/lap**. These final rows select the best attempt per metric, not a single all-passing attempt.
+
+Matched diagnostics: head then base, one 3s `--quick --only frames --profile --timeline --dump-trace --no-gpu` run each, release daemon, all other contracts skipped. Exact JSON measurements:
+
+| Metric | Base 76c2db7b | Merge head 34dcf477 |
+|---|---|---|
+| Stream frame work p50 | 9.66 ms | 9.1 ms |
+| Stream frame work p95 | 14.8 ms | 13.2 ms |
+| Stream frame work max | 108.18 ms | 105.37 ms |
+| Stream frame work mean | 11.08 ms | 10.51 ms |
+| Frames | 89 | 92 |
+| Main-thread busy | 32% | 31% |
+
+Both diagnostics fail. This proves a failure exists on the current base under diagnostic conditions, not that the unprofiled full-gate miss is entirely baseline or that head improved performance. Single sequential samples, profiling overhead, 3s versus 6s windows and different fixture history prevent causal subtraction; no base full-gate measurement is supplied.
+
+Streaming trace main-thread duration totals, base -> head (ms, nested spans overlap and must not be summed): FunctionCall **226.541 -> 214.243**, FireAnimationFrame **100.165 -> 103.502**, Paint **160.962 -> 155.548**, UpdateLayoutTree **125.467 -> 122.904**, Layout **76.579 -> 77.041**, PrePaint **69.414 -> 66.857**, Layerize **82.252 -> 77.948**. Paint events **1154 -> 1125**, layout events **141 -> 146**, style events **186 -> 190**, rAF callbacks **90 -> 93**. Shared script/rAF and rendering work dominates the actionable categories, not a new head-only callback. Largest RunTask **100.604 -> 98.307 ms** contains a **100.593 -> 98.297 ms** `blink.mojom.DevToolsSession` receive; this is consistent with profiler/CDP overhead, but the trace does not identify the command, so attribution to Profiler.start/stop is not proven. Do not interpret the ~105-108 ms frame maxima as established product stalls.
+
+CPU self samples are mostly `(program)` (**1071.275 -> 1007.955 ms**) and `(idle)` (**1923.729 -> 1973.734 ms**), not attributable JS functions. Largest named JS self sample is `compactSentence` (**6.382 -> 12.232 ms**), followed by `ws.onmessage` (**5.628 -> 6.608 ms**), with React traversal, streaming tick and stick-to-bottom/resize callbacks also present. `liveRuns.ts` folds subagent activity for every event, and `subagentActivity.ts` recompacts a bounded 2,000-character text tail on every text delta even for ordinary chats. That is avoidable candidate work, but already exists in this base (#515), is not the dominant total cost, and does not prove it causes the gate miss.
+
+Why/attribution: comparing verified base to PR head shows no change to ChatPane, liveRuns, subagentActivity, store or daemon turn streaming. Notification visibility subscriptions are Electron-only; the browser policy is moved without a new streaming renderer loop. Grid/picker changes are outside this single-chat fixture. Usage-summary changes are not shown to run per text delta. The harness change retains an already collected trace after tracing ends and hides Windows server children; the full Linux gate sampling/budgets are unchanged. No measured head-specific causal regression is established, and the original gate remains a release blocker, not ready.
+
+Cheapest next steps: fix report provenance to record actual `git rev-parse HEAD` separately from workflow GITHUB_SHA; analyze existing per-frame trace intervals to locate style/layout/paint roots and exclude identified DevTools tasks only in an explanatory diagnostic, never silently in the gate. A focused unit-backed candidate is avoiding repeated child-activity excerpt compaction for ordinary non-child streams while preserving child-event behavior. It cannot be claimed to resolve this miss without measurement. Before a broader renderer fix, an authorized later timeline-only matched full-duration base/head diagnostic would distinguish profiler artifacts from sustained rendering cost; no benchmark was rerun here, no budget changed, and no sensitive native desktop probe was touched.
+
+Sources: [Actions run 38375945871](https://github.com/nekko-labs/nekko-agent/actions/runs/38375945871), full checkout/build/diagnostic job logs and local untracked `.shots/ci-99-failed.log`, `.shots/perf-99/perf-report.{json,md}`, `.shots/perf-99/profile-{base,head}/{perf-report.json,trace.json,streaming.cpuprofile}`. Read-only artifact analysis; no commits or push.
+
+### #514 Background notifications and panels: failed gate investigation (2026-10-13)
+Area: renderer, perf harness. Result: mixed (diagnostic latency comparison; stream failure attribution unresolved)
+Conditions: same GitHub Actions `ubuntu-latest` perf job, AMD EPYC 7763
+64-Core Processor (4 threads), Linux, 16 GB RAM, headless Chrome/154.0.8037.97,
+web production build with release `nekkod` (confirmed in both diagnostic logs),
+1440 x 1000 viewport at device scale 1. Base and head diagnostics used identical
+`--quick --only latency --profile --timeline --no-gpu` options, one attempt each,
+a scripted 300 tokens/s reply of 7,000 tokens, a 1,000-message chat and twelve
+400-message chats, 40 composer keys at 45 ms spacing, 30 terminal keys, 10 warm
+switches and one cold cycle (11 samples). Head ran first, then base after its
+separate dependency install and production/release builds; these are sequential
+profiled diagnostics, not simultaneous or unprofiled full-gate measurements.
+
+Before is actual unchanged base `bf494d77a57655c51b4c32030c826e4acae837fc`.
+After is CI merge `8d339052ba01d220341fce4ee767cdcb3676e018`, merging PR head
+`7f19d0768b4353b272080b938af08ae80715f73d` into that base. Both diagnostic JSON
+reports incorrectly label `git` with the merge SHA: `run.mjs` records inherited
+`GITHUB_SHA`, not the worktree revision. The CI checkout/worktree logs establish
+the actual base; its release daemon build succeeded, with no engine fallback.
+
+| Metric (diagnostic latency) | Before (base) | After (head merge) |
+|---|---|---|
+| Composer keypress p50 / p95 / max, n=40 | 13.5 / 26.6 / 30.4 ms | 14.6 / 22.5 / 27.9 ms |
+| Terminal keypress p50 / p95 / max, n=30 | 5.1 / 5.9 / 6.1 ms | 4.8 / 6.7 / 6.8 ms |
+| Warm switch p50 / p95 / max, n=10 | 16.4 / 21.6 / 21.6 ms | 18.9 / 23.8 / 23.8 ms |
+| Cold frame/history p50 / p95 / max, n=11 | 25.3 / 28.9 / 28.9 ms | 26.6 / 29.5 / 29.5 ms |
+| Browser frame wake p50 / p95 | 0.2 / 0.5 ms | 0.3 / 0.6 ms |
+| Stream main-thread frame work | Not measured (`--only latency`) | Not measured (`--only latency`) |
+
+Why: #514 moves Electron native notification ownership into main and changes
+wall picker/usage panels. The diagnostics are mixed: base composer p95 misses
+25 ms; both warm-switch p95 values miss 20.8 ms and both cold-frame p95 values
+miss 25 ms. Cold-history p95 passes its separate 250 ms gate. These misses on
+unchanged base support pre-existing latency sensitivity, not a clean pass or
+proof that the changed renderer has no regression. Matching CPU profiles and
+timeline traces show common React/rendering work: typing `renderWithHooks` self
+time is 19.2 ms on each; warm-switch Paint totals are 956.3 / 953.4 ms and
+cold-switch Paint totals 1106.3 / 1110.6 ms (base/head). These are whole diagnostic
+trace totals with nested events overlapping, not per-frame gate measurements.
+No clear new changed-code hotspot was established. Electron main/preload paths
+are not exercised by the web gate; the new picker is conditional on opening it,
+while shared renderer/usage changes remain plausible indirect contributors.
+
+The original full gate in run **38359023328 remains failed**. Its only failed
+row is stream main-thread work at 300 tokens/s: p50 7.9 ms, p95 **11.0 ms**,
+max 38.0 ms, n=189 over 6s, against a **10 ms CI gate** (4 ms SPEC target).
+All three attempt p95 values miss: **11.5 / 11.2 / 11.0 ms**. Other full-gate
+p95 values pass: composer 20.1 ms, terminal 6.2 ms, warm switch 16.8 ms,
+cold frame/history 24.4 ms; all memory checks pass. The latency-only diagnostics
+skip this failing metric and contain no dedicated streaming profile/trace, so
+they cannot establish whether its overrun exists on unchanged base.
+
+Later run **38360444132**, PR head `0f35af4c9187ccc0dbca7c597fd488357d4cd38a`
+(CI merge `876c817` into the same base), has a **successful perf job**, not a
+successful overall CI run (build and macOS daemon jobs failed). Its logs report
+the same CPU/thread count, Linux, browser, daemon and full-gate command
+`--attempts 3 --no-gpu`; it stopped after two measurements and reports each row's
+best attempt. Stream p95 was **10.3 / 9.6 ms**, with selected p50 7.4 ms,
+p95 9.6 ms, max 46.4 ms, n=193. Selected p95 values: composer 19.1 ms,
+terminal 5.7 ms, warm switch 15.4 ms, cold frame/history 23.1 ms. The intervening
+commit changes only native-notification verification/setup scripts, not runtime
+renderer or perf code. This supports run variability as a plausible explanation,
+not a measured causal improvement or retroactive pass for the earlier run.
+
+Limitation / next action: attribution of the original stream overrun remains
+unverified. If investigating further, measure the unchanged base and failed head
+with matching full streaming conditions, including the vsync-paced browser,
+and retain dedicated streaming traces/profiles for both. Do not substitute the
+quick latency diagnostics, relax budgets, or rerun blindly to erase the failure.
+No new benchmarks were run for this investigation.
+Source: [#514](https://github.com/nekko-labs/nekko-agent/pull/514),
+[failed run 38359023328](https://github.com/nekko-labs/nekko-agent/actions/runs/38359023328),
+[latest perf job](https://github.com/nekko-labs/nekko-agent/actions/runs/38360444132/job/115173108735),
+and its preceding run's saved `.shots/perf-prev/perf-report.{md,json}`,
+`profile-base/` and `profile-head/` reports, CPU profiles and timeline traces.
+
 ### #516 Group drag fix: CI latency diagnostics (2026-10-13)
 Area: renderer / perf harness. Result: inconclusive, mixed diagnostic results.
 Conditions: GitHub Actions Ubuntu shared runner, CI run 38378954525 attempt 1. Same-run head/base diagnostics used `--quick --only latency --profile --timeline --no-gpu`; 40 composer samples, 10 warm switches, 11 cold switches. Profiling differs from the full gate, so these are not proof of a regression or improvement.
@@ -572,6 +703,24 @@ are ever revisited.
 - #102 (2026-07-25) CPU/memory/GPU/VRAM monitors: readings only.
 - Commit `65a9d538` (2026-10-12) hidden perf browsers on Windows.
 
+### #514 Current-head streaming diagnostic gap (2026-10-13)
+Area: renderer, perf harness. Result: regression gate failure; attribution unresolved.
+Conditions: Actions run 38363888450, PR head bdaa164c merged into bf494d77 as 9a22b4e, Ubuntu shared runner, headless Chrome/154.0.8037.97, release nekkod, three full attempts.
+
+The full gate reports stream-frame-work p50 8.5 ms, p95 **10.7 ms**, max 14.0 ms, n=190 over 6s at 300 tokens/s (27% main-thread busy). All attempt p95 values **10.7 / 10.9 / 11.4 ms** miss the unchanged **10 ms** gate. Other full-gate rows pass. This is not a passing result.
+
+Downloaded perf-report and profile-base/profile-head evidence confirm both followup diagnostics ran only latency, not streaming. Their warm/cold misses cannot attribute this stream failure. The diagnostic workflow now profiles frames on base and head and requires release nekkod without fallback; the original full-gate failure remains failed. No diagnostic rerun or measured improvement is claimed. Next: inspect the next pushed-head streaming profiles and compare base/head frame costs before proposing a renderer fix. Source: https://github.com/nekko-labs/nekko-agent/actions/runs/38363888450
+
+### #514 Focused stream attribution and trace retention (2026-10-13)
+Area: renderer, perf harness. Result: no renderer regression demonstrated locally; Linux daemon gate unresolved.
+
+Conditions: exact archived renderer sources bf494d77 (base) and bdaa164c (head), same locally built eca9a8ad TS web backend and installed dependencies (React 19.3.0), Windows Ryzen 9 9950X3D, Playwright headless-shell HeadlessChrome/151.0.7922.34, 1440x1000, GPU disabled, fresh isolated data/profile per run, 1,000-message chat, 300 tokens/s, one 6s timeline-only run each, base then head. These are renderer-only comparisons, not matching release-daemon/Linux CI reproductions or evidence of an improvement.
+
+Base -> head stream-frame-work: p50 **5.91 -> 5.33 ms**, p95 **8.62 -> 7.5 ms**, max **13.33 -> 9.41 ms**, n **360 -> 359**, mean **5.99 -> 5.39 ms**, main-thread busy **36% -> 32%**. Both local runs pass the unchanged 10 ms gate. Nested timeline totals (overlap, do not sum): PrePaint **710.361 -> 609.158 ms**, FunctionCall **652.865 -> 616.895 ms**, FireAnimationFrame **591.110 -> 559.302 ms**, Paint **269.503 -> 254.664 ms**, UpdateLayoutTree **142.965 -> 116.157 ms**, Layout **133.403 -> 122.311 ms**. Both exhibit the same pre-paint/script/rAF/paint/style/layout costs; no new head-only cost is identified. ChatPane, store and scripts/perf have no base-to-bdaa diff. Notification changes add no Electron visibility subscription in the web path; wall picker changes do not render in this chat fixture. This does not prove the original CI miss is baseline: its full run had 190 frames, Chrome 154, release nekkod and slower Linux runner.
+
+Measurement fix: frames is a valid selector, but its existing trace was discarded unless --dump-trace was supplied; --timeline alone saved nothing. Save that already collected trace as streaming.trace.json for --timeline/--profile. Add --dump-trace to both CI diagnostics so the unchanged base harness also retains trace.json. Keep full-gate command, sampling, budgets and failure intact. Hide the perf server child on Windows. An initial full Chromium launch failed with an exited launcher and replacement processes; cleaned up only those owned scratch-profile trees, then used the installed headless shell. No samples from that failed attempt. No foreground app or user data used.
+
+Evidence (local, untracked): .shots/perf-stream-local/{base,head}-timeline/perf-report.json and streaming.trace.json, comparison.json and build/run logs. Next: matched Linux release-daemon base/head stream traces with this retained attribution before claiming baseline or fixing product code.
 PR #516 follow-up: run 38378954525 attempt 2 passed Ubuntu daemon tests but streaming frame-work p95 remained 10.32 ms (three attempts: 10.32 / 10.44 / 11.01 ms), against 10 ms. The gap spacer was replaced with animated group padding, removing the idle DOM element entirely while retaining the insertion geometry. This is a cost-removal candidate, not a measured improvement; new-head CI must verify it.
 
 PR #516 padding candidate (a6c8d43f), run 38385871207, Linux EPYC7763/Chrome154: full-head streaming p95 **10.20 ms**, attempts **10.20 / 11.11 / 10.95 ms** (198 frames, p50 7.84 ms). Matched profiled 3-second streaming diagnostics: head p95 **11.54 ms**, base **13.02 ms** (93/96 frames, p50 9.05/9.01 ms). Both fail the unchanged 10 ms gate. CPU profiles are dominated by unattributed/native program time (987.761/990.768 ms); named/anonymous JS self time is99.475/103.749 ms. These diagnostics do not establish causality or a fix. Add --dump-trace to existing head/base diagnostics because CPU profiles alone cannot attribute style/layout/paint; --timeline did not save a streaming trace. No budgets changed.

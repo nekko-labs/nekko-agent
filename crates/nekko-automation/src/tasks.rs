@@ -316,33 +316,54 @@ impl Tasks {
 
     /// `fireTask(id)`: one turn on the task's chat, then re-arm or finish it.
     pub async fn fire(&self, id: &str) {
-        if lock(&self.in_flight).contains(id) {
+        self.fire_when(id, None).await
+    }
+
+    /// The scheduler's fire: only if the task is still due at `now` once
+    /// claimed. The loop picks due tasks from a read of the file that can be
+    /// stale by the time the fire starts (an earlier fire of the same task may
+    /// have finished and re-armed it in between), and the TS scheduler cannot
+    /// interleave that way, so without this check a task could run twice.
+    pub async fn fire_if_due(&self, id: &str, now: f64) {
+        self.fire_when(id, Some(now)).await
+    }
+
+    async fn fire_when(&self, id: &str, due_at: Option<f64>) {
+        // Claim the task before the first await, so no other fire can start
+        // between the check and the claim.
+        if !lock(&self.in_flight).insert(id.to_string()) {
             return;
         }
+        if let Some(patch) = self.fire_claimed(id, due_at).await {
+            self.persist(id, &patch);
+        }
+        lock(&self.in_flight).remove(id);
+    }
+
+    /// The body of a fire, with the task already claimed.
+    async fn fire_claimed(&self, id: &str, due_at: Option<f64>) -> Option<Vec<(&'static str, Option<Value>)>> {
         let task = {
             let _io = lock(&self.io);
             self.load().into_iter().find(|t| id_of(t) == Some(id))
         };
-        let Some(task) = task.filter(|t| t.get("status").and_then(Value::as_str) == Some("active")) else { return };
+        let task = task.filter(|t| t.get("status").and_then(Value::as_str) == Some("active"))?;
+        if let Some(now) = due_at
+            && !task.get("nextRunAt").is_some_and(|n| !n.is_null() && nekko_js::to_number(Some(n)) <= now)
+        {
+            return None;
+        }
         let settings = self.host.settings().await;
         let provider = nullish_or(task.get("providerId"), settings.get("defaultProviderId")).cloned();
         let model = nullish_or(task.get("modelId"), settings.get("defaultModelId")).cloned();
         let (Some(provider), Some(model)) =
             (provider.filter(|v| nekko_js::truthy(Some(v))), model.filter(|v| nekko_js::truthy(Some(v))))
         else {
-            self.persist(id, &[("status", Some(json!("error"))), ("lastResult", Some(json!(NO_MODEL)))]);
-            return;
+            return Some(vec![("status", Some(json!("error"))), ("lastResult", Some(json!(NO_MODEL)))]);
         };
-        if !lock(&self.in_flight).insert(id.to_string()) {
-            return;
-        }
-        let result = self.drive(id, &task, provider, model).await;
-        let patch = match result {
+        Some(match self.drive(id, &task, provider, model).await {
             Ok(answer) => task_run_patch(&task, &answer, (self.clock)()),
             Err(e) => vec![("status", Some(json!("error"))), ("lastResult", Some(json!(format!("Run failed: {e}"))))],
-        };
-        self.persist(id, &patch);
-        lock(&self.in_flight).remove(id);
+        })
     }
 
     /// The fire's turn; the last answer, or why it failed.
@@ -457,7 +478,7 @@ impl Tasks {
                 let now = (me.clock)();
                 for id in me.due(now) {
                     let me = me.clone();
-                    tokio::spawn(async move { me.fire(&id).await });
+                    tokio::spawn(async move { me.fire_if_due(&id, now).await });
                 }
                 let wait = me.sleep_for((me.clock)());
                 tokio::select! {

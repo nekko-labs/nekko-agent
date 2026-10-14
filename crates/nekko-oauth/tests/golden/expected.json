@@ -101,6 +101,21 @@
     },
     {
       "error": "Key exchange failed: nah"
+    },
+    {
+      "value": "{\"provider\":\"claude\",\"accessToken\":\"at\",\"refreshToken\":\"rt\",\"expiresAt\":1760028800000,\"accountEmail\":\"davide@example.com\",\"scopes\":\"user:inference\",\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"claude\",\"accessToken\":\"at\",\"expiresAt\":1760003600000,\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"claude\",\"accessToken\":\"at\",\"expiresAt\":1760003600000,\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"at\",\"refreshToken\":\"rt\",\"expiresAt\":1760000010000,\"accountId\":\"acct_9\",\"accountEmail\":\"work@example.com\",\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"at\",\"expiresAt\":1760003600000,\"accountId\":\"acct_9\",\"obtainedAt\":1760000000000}"
     }
   ],
   "refreshRequests": [
@@ -132,6 +147,12 @@
     },
     {
       "error": "Token refresh response was not valid JSON."
+    },
+    {
+      "value": "{\"provider\":\"claude\",\"accessToken\":\"new\",\"refreshToken\":\"rt\",\"expiresAt\":1760000060000,\"accountEmail\":\"davide@example.com\",\"obtainedAt\":1760000000000}"
+    },
+    {
+      "value": "{\"provider\":\"claude\",\"accessToken\":\"new\",\"refreshToken\":\"rt\",\"expiresAt\":1760003600000,\"accountEmail\":\"new@example.com\",\"obtainedAt\":1760000000000}"
     }
   ],
   "statuses": [
@@ -149,6 +170,9 @@
     },
     {
       "value": "{\"tokenKey\":\"k\",\"provider\":\"openrouter\",\"connected\":true,\"state\":\"success\"}"
+    },
+    {
+      "value": "{\"tokenKey\":\"claude:abcd1234\",\"provider\":\"claude\",\"connected\":true,\"accountEmail\":\"davide@example.com\",\"expiresAt\":1760000100000,\"state\":\"success\"}"
     }
   ],
   "cli": [
@@ -181,6 +205,9 @@
     },
     {
       "value": "undefined"
+    },
+    {
+      "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"at\",\"refreshToken\":\"rt\",\"accountId\":\"acct_9\",\"accountEmail\":\"work@example.com\",\"expiresAt\":1760003600000,\"obtainedAt\":1760000000000}"
     }
   ],
   "tokenKeys": [

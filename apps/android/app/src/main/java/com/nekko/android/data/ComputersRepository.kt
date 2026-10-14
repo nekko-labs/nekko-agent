@@ -3,6 +3,7 @@ package com.nekko.android.data
 import com.nekko.protocol.Activity
 import com.nekko.protocol.ActivityTracker
 import com.nekko.protocol.AgentEvent
+import com.nekko.protocol.Appearance
 import com.nekko.protocol.AppInfo
 import com.nekko.protocol.Channels
 import com.nekko.protocol.E2E
@@ -27,6 +28,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -74,6 +79,10 @@ class ComputersRepository(
 ) {
     private val _state = MutableStateFlow(ComputersState())
     val state: StateFlow<ComputersState> = _state.asStateFlow()
+
+    /** The computer's theme alone, so the app's root only recomposes when it changes. */
+    val appearance: StateFlow<Appearance?> = _state.map { it.appearance }.distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, null)
 
     private val _events = MutableSharedFlow<AgentEvent>(extraBufferCapacity = 512)
     /** Every `agent:event` from the active computer. Chat screens filter by session. */
@@ -145,6 +154,7 @@ class ComputersRepository(
                 it.copy(
                     computers = next, activeId = activeId, summaries = emptyList(), providers = emptyList(),
                     models = emptyMap(), modelErrors = emptyMap(), workspaces = emptyList(), denied = if (wasActive) null else it.denied,
+                    appearance = if (next.isEmpty()) null else it.appearance,
                 )
             }
             if (wasActive) activeId else null
@@ -193,7 +203,13 @@ class ComputersRepository(
             }
             launch {
                 c.events.collect { (channel, payload) ->
-                    if (channel != Events.AGENT_EVENT || client !== c) return@collect
+                    if (client !== c) return@collect
+                    if (channel == Events.APPEARANCE_UPDATED) {
+                        // The desktop's theme changed: follow it live.
+                        _state.update { it.copy(appearance = Appearance.from(payload)) }
+                        return@collect
+                    }
+                    if (channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
                     _events.emit(e)
                     _state.update { s ->
@@ -222,6 +238,11 @@ class ComputersRepository(
         client?.nudge()
     }
 
+    /** The phone changed network, or the socket may have died while frozen: dial a fresh one now. */
+    fun reconnect() {
+        client?.reconnect()
+    }
+
     suspend fun refresh() {
         val c = client ?: return
         _state.update { it.copy(summariesLoading = true, lastError = null) }
@@ -230,11 +251,13 @@ class ComputersRepository(
                 val summaries = async { SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES)) }
                 // Only the public projections: providers and settings carry secrets.
                 val providers = async { PublicProvider.list(c.call(Channels.PROVIDERS_LIST)) }
-                val defaults = async { RemoteDefaults.from(c.call(Channels.SETTINGS_GET)) }
+                // Only public projections leave this block: settings carry secrets.
+                val settings = async { c.call(Channels.SETTINGS_GET).let { RemoteDefaults.from(it) to Appearance.from(it) } }
                 val workspaces = async { orNull { WorkspaceFolder.list(c.call(Channels.WORKSPACE_LIST)) } ?: emptyList() }
                 val info = async { orNull { AppInfo.from(c.call(Channels.APP_INFO)) } }
                 val pending = async { orNull { PendingInput.map(c.call(Channels.CHAT_PENDING)) } ?: emptyMap() }
-                Refresh(summaries.await(), providers.await(), defaults.await(), workspaces.await(), info.await(), pending.await())
+                val (defaults, appearance) = settings.await()
+                Refresh(summaries.await(), providers.await(), defaults, appearance, workspaces.await(), info.await(), pending.await())
             }
             if (client !== c) return
             _state.update { s ->
@@ -242,7 +265,7 @@ class ComputersRepository(
                 val activity = s.activity.toMutableMap()
                 r.pending.forEach { (sid, p) -> if (p.approval != null || p.question != null) activity[sid] = Activity.NEEDS_YOU }
                 s.copy(
-                    summaries = r.summaries, providers = r.providers, defaults = r.defaults,
+                    summaries = r.summaries, providers = r.providers, defaults = r.defaults, appearance = r.appearance,
                     workspaces = r.workspaces, activity = activity, summariesLoading = false,
                 )
             }
@@ -346,6 +369,7 @@ class ComputersRepository(
         val summaries: List<SessionSummary>,
         val providers: List<PublicProvider>,
         val defaults: RemoteDefaults,
+        val appearance: Appearance,
         val workspaces: List<WorkspaceFolder>,
         val info: AppInfo?,
         val pending: Map<String, PendingInput>,

@@ -49,6 +49,8 @@ object Channels {
 
 object Events {
     const val AGENT_EVENT = "agent:event"
+    /** The desktop's theme changed (`IpcEvents.appearanceUpdated`); payload is an [Appearance]. */
+    const val APPEARANCE_UPDATED = "appearance:updated"
 }
 
 /** `sendChat` errors unless the session names a concrete, enabled model. */
@@ -218,6 +220,41 @@ data class RemoteDefaults(
             val o = e.obj() ?: return RemoteDefaults()
             val favorites = o["favoriteModels"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList()
             return RemoteDefaults(o.str("defaultProviderId"), o.str("defaultModelId"), favorites)
+        }
+    }
+}
+
+/**
+ * The desktop's look, as `appearanceOf` (packages/shared/src/themes.ts) builds
+ * it for the `appearance:updated` event, or read from `settings:get`. Same
+ * rules on both paths: the mode (anything unknown is system), a preset id, and
+ * accents as `#rrggbb`.
+ */
+data class Appearance(
+    val theme: ThemeMode = ThemeMode.SYSTEM,
+    val preset: String? = null,
+    val accent: Long? = null,
+    val accent2: Long? = null,
+) {
+    enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+    companion object {
+        fun from(e: JsonElement?): Appearance {
+            val o = e.obj() ?: return Appearance()
+            val theme = when (o.str("theme")) {
+                "light" -> ThemeMode.LIGHT
+                "dark" -> ThemeMode.DARK
+                else -> ThemeMode.SYSTEM
+            }
+            val preset = o.str("themePreset")?.takeIf { it.length in 1..32 && it.all { c -> c in 'a'..'z' || c in '0'..'9' || c == '-' } }
+            return Appearance(theme, preset, hex(o.str("accent")), hex(o.str("accent2")))
+        }
+
+        /** `#rrggbb` as an opaque ARGB value, else null. */
+        fun hex(v: String?): Long? {
+            if (v == null || v.length != 7 || v[0] != '#') return null
+            val rgb = v.substring(1).toLongOrNull(16) ?: return null
+            return 0xFF000000L or rgb
         }
     }
 }

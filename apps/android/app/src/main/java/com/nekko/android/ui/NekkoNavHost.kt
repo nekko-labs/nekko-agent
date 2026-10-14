@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -13,13 +15,20 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nekko.android.DeepLink
+import com.nekko.android.NekkoApp
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
+import com.nekko.android.data.PhonePrefs
+import com.nekko.android.haptics.AndroidHaptics
+import com.nekko.android.data.ThemePrefs
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.ChatsScreen
 import com.nekko.android.ui.screens.ComputersScreen
 import com.nekko.android.ui.screens.NewChatScreen
 import com.nekko.android.ui.screens.PairScreen
+import com.nekko.android.ui.screens.SettingsScreen
+import com.nekko.android.ui.settings.LicensesScreen
+import com.nekko.android.ui.settings.SettingsDeps
 import kotlinx.coroutines.flow.StateFlow
 
 object Routes {
@@ -28,6 +37,8 @@ object Routes {
     const val NEW = "new"
     const val PAIR = "pair?link={link}"
     const val COMPUTERS = "computers"
+    const val SETTINGS = "settings"
+    const val LICENSES = "settings/licenses"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
@@ -36,6 +47,9 @@ object Routes {
 @Composable
 fun NekkoNavHost(
     repo: ComputersRepository,
+    themePrefs: ThemePrefs,
+    phonePrefs: PhonePrefs,
+    haptics: AndroidHaptics? = null,
     incomingLink: StateFlow<DeepLink?>,
     onLinkHandled: () -> Unit,
     nav: NavHostController = rememberNavController(),
@@ -58,11 +72,15 @@ fun NekkoNavHost(
                 onNewChat = { nav.navigate(Routes.NEW) },
                 onPair = { nav.navigate(Routes.pair()) },
                 onComputers = { nav.navigate(Routes.COMPUTERS) },
+                onSettings = { nav.navigate(Routes.SETTINGS) },
             )
         }
         composable(Routes.CHAT, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("id").orEmpty()
             val vm = viewModel(key = "chat:$id") { ChatViewModel(id, repo) }
+            // Opening the chat answers its notification, if one is up.
+            val app = LocalContext.current.applicationContext as? NekkoApp
+            LaunchedEffect(id) { app?.connection?.notices?.clear(id) }
             ChatScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable(Routes.NEW) {
@@ -85,6 +103,15 @@ fun NekkoNavHost(
                 onBack = { nav.popBackStack() },
                 onPaired = { nav.backToChats() },
             )
+        }
+        composable(Routes.SETTINGS) {
+            val deps = remember(nav) {
+                SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } })
+            }
+            SettingsScreen(deps = deps, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.LICENSES) {
+            LicensesScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.COMPUTERS) {
             ComputersScreen(

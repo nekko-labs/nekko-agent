@@ -110,3 +110,18 @@ it('sums all historical subscription records and caches without filtering dates 
   expect(summary.totalCost).toBe(0);
   expect(Object.values(summary.bySessionAvoidedCosts ?? {}).reduce((sum, v) => sum + v.subscription, 0)).toBeCloseTo(30.2);
 });
+
+it('records daily budget details with cache tokens and recorded locality across provider changes', () => {
+  setup();
+  record('llama3', { ts: Date.parse('2026-10-08T00:00:00Z'), local: true, cacheReadTokens: 10 });
+  record('claude-opus', { ts: Date.parse('2026-10-08T23:59:59Z'), auth: 'subscription' });
+  record('gpt-4o', { ts: Date.parse('2026-10-09T00:00:00Z'), sessionId: 'api' });
+  saveSettings({ providers: [{ id: 'p', kind: 'openai', baseUrl: '', label: 'Changed', enabled: true }] });
+  const summary = usageSummary();
+  expect(summary.daily).toHaveLength(2);
+  expect(summary.daily[0]).toMatchObject({ date: '2026-10-08', input: 2_000_010, output: 2_000_000, cost: 0, localTokens: 2_000_010, bySessionCost: { s: 0 }, modelIds: ['llama3', 'claude-opus'] });
+  expect(summary.daily[0].avoidedCosts?.local).toBeGreaterThan(18);
+  expect(summary.daily[0].avoidedCosts?.subscription).toBe(30);
+  expect(summary.daily[0].avoidedCosts?.benchmarkTokens).toBe(2_000_010);
+  expect(summary.daily[1]).toMatchObject({ localTokens: 0, bySessionCost: { api: 12.5 }, modelIds: ['gpt-4o'], avoidedCosts: { local: 0, subscription: 0 } });
+});

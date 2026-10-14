@@ -86,7 +86,7 @@ export async function captureWindow(sessionId: string, input: Record<string, unk
         const { width, height } = track.getSettings();
         return { data, width, height };
       } finally { stream.getTracks().forEach(t => t.stop()); }
-    })()`, true);
+    })().catch(e => { throw new Error(e && e.name === 'NotReadableError' ? 'The OS refused to capture the selected window; it may be elevated, protected or closed' : String(e && e.message || e)); })`, true);
     return { ...result, title, window_id: id, capturedAt: Date.now(), ...(action === 'screenshot' ? { mime: 'image/png', source: 'native-window', background: true } : { seconds, mime: 'video/webm' }) };
   } finally {
     try {

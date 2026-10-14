@@ -1,4 +1,4 @@
-import { AgentWindowPicker, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
+import { AgentWindowDropdown, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
 import { AgentSidebar } from './WorkspacesView.js';
 import { ChatPane } from '../components/ChatPane.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -9,7 +9,7 @@ import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD } from '@nekko
 import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { GridIcon, MoreVerticalIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
+import { GridIcon, PhotoIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -294,7 +294,7 @@ export function CommandCenterView() {
   /** A window from the toolbar, with no side pointed at: beside the biggest window. */
   const addFromToolbar = async (kind: PaneKind, refId?: string) => {
     const ref = refId ?? (kind === 'chat' ? await newChat() : kind === 'terminal' ? await newTerminal() : kind);
-    setWall((w) => ({ ...w, root: hasPane(w.root, kind, ref) ? w.root : addPane(w.root, wallPane(kind, ref), aspectRef.current), ...(kind === 'chat' ? { hero: ref } : {}) }));
+    setWall((w) => ({ ...w, root: hasPane(w.root, kind, ref) ? w.root : addPane(w.root, wallPane(kind, ref), aspectRef.current), ...(kind === 'chat' || w.layout.mode === 'focus' ? { hero: ref } : {}), filter: w.filter === 'all' || w.filter === kind ? w.filter : 'all' }));
     if (kind === 'chat') setSelected(ref);
   };
   /** A one-click add that failed says so, instead of silently opening nothing. */
@@ -315,9 +315,9 @@ export function CommandCenterView() {
   const agentsOnWall = useMemo(() => wallAgents(wall.root), [wall.root]);
   const panel = readAgentPanel(wall.agentPanel);
   useEffect(() => {
-    if (agentsOnWall.length === 0) { if (selected) selectAgent(null); return; }
-    if (!selected || !agentsOnWall.some((p) => p.refId === selected)) selectAgent(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
-  }, [agentsOnWall, selected, wall.hero, selectAgent]);
+    if (agentsOnWall.length === 0) { if (selected) setSelected(null); return; }
+    if (!selected || !agentsOnWall.some((p) => p.refId === selected)) setSelected(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
+  }, [agentsOnWall, selected, wall.hero]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (useStore.getState().view !== 'command' || document.visibilityState === 'hidden' || !viewRef.current?.getClientRects().length || e.defaultPrevented || e.repeat || e.isComposing) return;
@@ -399,7 +399,18 @@ export function CommandCenterView() {
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-3 px-4 pb-4 pt-1 xl:px-6">
       <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen}
-        onAdd={(kind) => { setCompletedId(null); void addFromToolbar(kind).catch(reportAddFailure); }} />
+        onAdd={(kind) => {
+          setCompletedId(null);
+          const add = kind === 'image' ? newChat({ kind: 'chat', chatType: 'image' }).then((id) => addFromToolbar('chat', id)) : addFromToolbar(kind);
+          void add.catch(reportAddFailure);
+        }}
+        onPick={async (selection) => {
+          const ref = selection.refId ?? (selection.kind === 'chat' ? await newChat(selection) : await newTerminal());
+          await addFromToolbar(selection.kind, ref);
+          if (selection.kind === 'chat') selectAgent(ref);
+          setCompletedId(null);
+          setAddOpen(false);
+        }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <WallDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
         <div className="wall-agent-workspace" data-tabs={panel.show && panel.orientation === 'horizontal' ? 'top' : 'left'}>
@@ -446,12 +457,6 @@ export function CommandCenterView() {
         onNewChat={newChat}
         onNewTerminal={newTerminal}
         onAddWindow={() => setAddOpen((open) => !open)}
-        addContent={addOpen ? <AgentWindowPicker onClose={() => setAddOpen(false)} onAdd={async (selection) => {
-          const ref = selection.refId ?? (selection.kind === 'chat' ? await newChat(selection) : await newTerminal());
-          await addFromToolbar(selection.kind, ref);
-          if (selection.kind === 'chat') selectAgent(ref);
-          setAddOpen(false);
-        }} /> : undefined}
       />}
       {!completedId && wall.layout.mode !== 'focus' && wall.composer.side === 'bottom' && composerRow}
         </div>
@@ -476,15 +481,18 @@ export function WallToolbar({
   addOpen,
   setAddOpen,
   onAdd,
+  onPick,
 }: {
   wall: CommandWallState;
   setWall: (update: (s: CommandWallState) => CommandWallState) => void;
   onAutoArrange: () => void;
   addOpen: boolean;
   setAddOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  /** A new agent or terminal window on the wall. */
-  onAdd: (kind: 'chat' | 'terminal') => void;
+  /** A new agent, image session or terminal window on the wall. */
+  onAdd: (kind: 'chat' | 'image' | 'terminal') => void;
+  onPick?: (selection: AgentWindowSelection) => Promise<void>;
 }) {
+  const addButtonRef = useRef<HTMLButtonElement>(null);
   const [fixedOpen, setFixedOpen] = useState(false);
   const [hoverSize, setHoverSize] = useState({ rows: wall.layout.rows, cols: wall.layout.cols });
   const fixedRef = useRef<HTMLDivElement>(null);
@@ -529,28 +537,15 @@ export function WallToolbar({
       {!hasAppChrome && <h1 className="view-title text-gradient">Agents</h1>}
       <div className={`ml-auto flex flex-wrap items-center ${slot ? 'gap-2' : 'gap-3'}`}>
 
-        {/* Adding to the wall, first in the row: an agent or a terminal of its
-            own. An agent's Changes, Files and Browser live in that agent's own
-            header beside Logs. More opens the full picker. */}
+        {/* Adding to the wall, first in the row: an agent, an image session or a
+            terminal of its own. An agent's Changes, Files and Browser live in that agent's own
+            header beside Logs. The empty wall can still open the full picker. */}
         <div className="wall-add-bar" role="group" aria-label="Add to the wall">
           <button type="button" className="wall-add-icon" title="New agent" aria-label="New agent" onClick={() => onAdd('chat')}><NekkoAvatar size={16} stationary eyes={false} /></button>
-          <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
-          <button
-            type="button"
-            className="wall-add-icon"
-            data-wall-add-button
-            onClick={() => {
-              if (!addOpen) setWall((w) => w.layout.mode === 'focus' ? { ...w, layout: { ...w.layout, mode: 'grid' } } : w);
-              setAddOpen((o) => !o);
-            }}
-            aria-controls="wall-window-picker"
-            aria-expanded={addOpen}
-            aria-label="Add window"
-            title="More: a chat already running, an image session, or a new chat with details"
-          >
-            <MoreVerticalIcon className="h-4 w-4" />
-          </button>
+          <button type="button" className="wall-add-icon" title="New image session" aria-label="New image session" onClick={() => onAdd('image')}><PhotoIcon className="h-4 w-4" /></button>
+          <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" ref={addButtonRef} onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
         </div>
+        {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
         <div className="wall-layout-control" ref={fixedRef}>
           <div className="wall-layout-segments" role="group" aria-label="Wall layout">
             {(['focus', 'grid', 'fixed'] as const).map((mode) => (

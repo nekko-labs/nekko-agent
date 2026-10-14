@@ -1,4 +1,4 @@
-import { IpcEvents, deriveKey, seal, open, type RemoteHelloReply } from '@nekko-agent/shared';
+import { IpcEvents, callFromPhone, deriveKey, seal, open, type RemoteHelloReply } from '@nekko-agent/shared';
 import { createDispatcher } from './dispatch.js';
 import type { Host } from './host.js';
 
@@ -33,6 +33,9 @@ export interface RelayAgentHandle {
  * gated behind the device HELLO handshake: requests from un-welcomed
  * connections are ignored, denied connections are kicked, and replies + events
  * are unicast per device so no client ever receives another's traffic.
+ * Every request goes through the phone access policy (`callFromPhone`): only
+ * the allowlisted channels, a filtered `settings:update`, and redacted
+ * settings and provider records.
  * Reconnects on drop until stop() is called.
  */
 export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAgentHandle {
@@ -99,6 +102,7 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
   const onTraining = (r: unknown) => void broadcast({ type: 'event', channel: IpcEvents.trainingUpdated, payload: r });
   const onWorkflows = (s: unknown) => void broadcast({ type: 'event', channel: IpcEvents.workflowsUpdated, payload: s });
   const onLimits = (e: unknown) => void broadcast({ type: 'event', channel: IpcEvents.limitsUpdated, payload: e });
+  const onAppearance = (a: unknown) => void broadcast({ type: 'event', channel: IpcEvents.appearanceUpdated, payload: a });
   host.events.on('agentEvent', onAgent);
   host.events.on('indexProgress', onIndex);
   host.events.on('terminalEvent', onTerminal);
@@ -107,6 +111,7 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
   host.events.on('trainingUpdated', onTraining);
   host.events.on('workflowsUpdated', onWorkflows);
   host.events.on('limitsUpdated', onLimits);
+  host.events.on('appearanceUpdated', onAppearance);
 
   const handleClientFrame = async (cid: string, data: string) => {
     let envelope: { enc?: string };
@@ -143,7 +148,10 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
       return;
     }
     try {
-      const result = await dispatch(frame.channel, frame.args ?? []);
+      // Phones reach only what packages/shared/src/phone-access.ts allows,
+      // checked here on the computer, with secrets stripped from replies.
+      const args = Array.isArray(frame.args) ? frame.args : [];
+      const result = await callFromPhone(dispatch, String(frame.channel), args);
       await sendTo(cid, { type: 'res', id: frame.id, result: result ?? null });
     } catch (e) {
       await sendTo(cid, { type: 'res', id: frame.id, error: (e as Error).message });
@@ -152,12 +160,34 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
 
   const connect = () => {
     if (stopped) return;
-    ws = new WebSocket(url);
-    ws.onopen = () => {
+    const sock = new WebSocket(url);
+    ws = sock;
+    /**
+     * The one way a connection ends, reached from `close` or from `error`.
+     * Node's WebSocket (undici) fires `error` synchronously, and when the
+     * handshake fails it never fires `close` at all. Calling `close()` inside
+     * that `error` re-enters the failure path while the socket is still
+     * CONNECTING and recurses until the stack overflows, killing the process.
+     * So this never calls `close()`, runs once per socket, and schedules the
+     * next attempt itself.
+     */
+    let ended = false;
+    const end = (reason: string) => {
+      if (ended) return;
+      ended = true;
+      sock.onopen = sock.onmessage = sock.onclose = sock.onerror = null;
+      if (ws !== sock) return; // a newer socket took over
+      ws = null; // finished: stop() has nothing left to close
+      online = false;
+      lastError = reason;
+      conns.clear();
+      if (!stopped) setTimeout(connect, 2000);
+    };
+    sock.onopen = () => {
       online = true;
       lastError = undefined;
     };
-    ws.onmessage = async (ev) => {
+    sock.onmessage = async (ev) => {
       let msg: any;
       try {
         msg = JSON.parse(typeof ev.data === 'string' ? ev.data : ev.data.toString());
@@ -180,13 +210,21 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
           return;
       }
     };
-    ws.onclose = (event) => {
-      online = false;
-      lastError = event.reason ? String(event.reason) : `relay disconnected (code ${event.code})`;
-      conns.clear();
-      if (!stopped) setTimeout(connect, 2000);
+    sock.onclose = (event) => end(event.reason ? String(event.reason) : `relay disconnected (code ${event.code})`);
+    sock.onerror = (event) => {
+      end((event as { message?: string } | undefined)?.message || 'could not reach the relay');
+      // An error on an open socket: let it go, outside this dispatch. Never while
+      // CONNECTING, which is the recursive path described above.
+      if (sock.readyState === WebSocket.OPEN) {
+        setTimeout(() => {
+          try {
+            sock.close();
+          } catch {
+            /* already closing */
+          }
+        }, 0);
+      }
     };
-    ws.onerror = () => ws?.close();
   };
   connect();
 
@@ -201,6 +239,7 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
       host.events.off('trainingUpdated', onTraining);
       host.events.off('workflowsUpdated', onWorkflows);
       host.events.off('limitsUpdated', onLimits);
+      host.events.off('appearanceUpdated', onAppearance);
       try {
         ws?.close();
       } catch {

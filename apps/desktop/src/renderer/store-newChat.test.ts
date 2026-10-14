@@ -82,3 +82,11 @@ describe('last explicit primary folder', () => {
     expect(window.nekko.createSession).toHaveBeenLastCalledWith(undefined);
   });
 });
+
+it('explicit repository overrides active and saved default folders without changing them', async () => {
+  window.nekko = { createSession: vi.fn().mockResolvedValue(created), listProviders: vi.fn().mockResolvedValue([{ id: 'p', kind: 'chatgpt', enabled: true }]), listModels: vi.fn().mockResolvedValue([]) } as unknown as typeof window.nekko;
+  useStore.setState({ activeProjectId: 'a', settings: { workspaces: [{ id: 'a' }], defaultWorkspaceIds: ['a'] } as any });
+  await useStore.getState().newChat('b');
+  expect(window.nekko.createSession).toHaveBeenCalledWith('b');
+  expect(useStore.getState().activeProjectId).toBe('a');
+});

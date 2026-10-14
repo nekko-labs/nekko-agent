@@ -50,6 +50,7 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.nekko.android.data.ComputersRepository
+import com.nekko.android.lock.LocalAppLock
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Pairing
@@ -74,6 +75,7 @@ fun PairScreen(
 ) {
     val p = Nekko.palette
     val context = LocalContext.current
+    val appLock = LocalAppLock.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var text by rememberSaveable { mutableStateOf("") }
@@ -120,7 +122,10 @@ fun PairScreen(
             .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
             .enableAutoZoom()
             .build()
+        // The scanner is another app's screen: coming back from it is not a new visit.
+        appLock?.expectReturn()
         GmsBarcodeScanning.getClient(context, options).startScan()
+            .addOnCompleteListener { appLock?.returned() }
             .addOnSuccessListener { code ->
                 val raw = code.rawValue.orEmpty()
                 text = raw

@@ -89,7 +89,7 @@ import type {
   ModelFolderReport,
   SkillDef,
 } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, queueItemPayload, SKILLS, sameFolderPath } from '@nekko-agent/shared';
+import { appearanceOf, AUTO_MODEL_ID, touchesAppearance, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, queueItemPayload, SKILLS, sameFolderPath } from '@nekko-agent/shared';
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
@@ -133,6 +133,7 @@ import {
 import { listInstalledSkills, readInstalledSkills, skillTargets, installSkill, uninstallSkill, listInstalledSkillDefs } from './skills.js';
 import { discoverExternalSkills } from './external-skills.js';
 import { getVaizerCatalog, getVaizerSkillMd } from './vaizer.js';
+import { fetchRemoteSkill, listSkillSources, previewSkillUrl, searchSkills } from './skill-sources.js';
 import {
   listTasks,
   createTask,
@@ -500,6 +501,11 @@ export interface Host {
   /** Vaizer skills hub (optional): catalog + a skill's SKILL.md. */
   vaizerCatalog(refresh?: boolean): Promise<import('@nekko-agent/shared').VaizerCatalog>;
   vaizerSkillMd(slug: string): Promise<string | null>;
+  /** Skills from GitHub: shelves, install-from-URL preview, fetch for install, search. */
+  listSkillSources(refresh?: boolean | string): Promise<import('@nekko-agent/shared').SkillSourceListing[]>;
+  previewSkillUrl(input: string): Promise<import('@nekko-agent/shared').SkillPreview>;
+  fetchRemoteSkill(skill: import('@nekko-agent/shared').RemoteSkill): Promise<import('@nekko-agent/shared').SkillFetchResult>;
+  searchSkills(query: string): Promise<import('@nekko-agent/shared').SkillSearchResult>;
 
   /** Automation tasks: scheduled, recurring, and long-running background agents. */
   listTasks(): Promise<AutomationTask[]>;
@@ -789,6 +795,12 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     emit: (channel, payload) => events.emit(channel, payload),
   });
 
+  // A paired phone follows the desktop's theme: tell it (through the relay)
+  // when one changes, with the public look only (appearanceOf), never settings.
+  const announceAppearance = (patch: unknown) => {
+    if (touchesAppearance(patch)) events.emit('appearanceUpdated', appearanceOf(getSettings()));
+  };
+
   const host: Host = {
     events,
     dataDir,
@@ -797,6 +809,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     getSettings,
     updateSettings: (patch) => {
       const next = saveSettings(patch);
+      announceAppearance(patch);
       if (patch.voice !== undefined) stopVoice();
       if (patch.messaging !== undefined) messaging.update(next.messaging);
       return next;
@@ -937,6 +950,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       kind === 'connector' ? connectorSnippetsFor(args[0] as string | undefined) : indexSnippetsForAdmission(args[0] as string[], String(args[1] ?? '')),
     settingsChanged: (next, patch) => {
       settingsChanged(next, patch);
+      // Not announceAppearance: the daemon that saved it told the phone already (nekkod settings.rs).
       // What updateSettings does after a save, for a save the daemon made.
       if (patch && typeof patch === 'object') {
         if (patch.voice !== undefined) stopVoice();
@@ -1032,13 +1046,19 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     clearSessions: sessions.clearSessions,
     purgeExpiredArchives: () => sessions.purgeExpiredArchives(),
     forkSession: (id, beforeMessageId) => sessions.forkSession(id, beforeMessageId),
-    resetSettings,
+    resetSettings: () => {
+      const next = resetSettings();
+      announceAppearance(null);
+      return next;
+    },
     wipeAllData: () => {
       sessions.clearSessions('all');
       memory.clearMemory();
       clearUsage();
       clearLimits();
-      return resetSettings();
+      const next = resetSettings();
+      announceAppearance(null);
+      return next;
     },
     listTools: () => [...BUILTIN_TOOLS.map((t) => ({ name: t.name, description: t.description })), ...mcpToolList()],
     sendChat: (o) => {
@@ -1207,6 +1227,10 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     uninstallSkill,
     vaizerCatalog: (refresh?: boolean) => getVaizerCatalog(refresh),
     vaizerSkillMd: (slug: string) => getVaizerSkillMd(slug),
+    listSkillSources: (refresh?: boolean | string) => listSkillSources(refresh),
+    previewSkillUrl: (input: string) => previewSkillUrl(String(input ?? '')),
+    fetchRemoteSkill: (skill) => fetchRemoteSkill(skill),
+    searchSkills: (query: string) => searchSkills(String(query ?? '')),
 
     // The daemon runs tasks when it owns them (crates/nekko-automation).
     listTasks: () => viaDaemon('tasks', 'tasks:list', [], listTasks),

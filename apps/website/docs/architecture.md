@@ -23,6 +23,16 @@ Nekko Agent is one engine and one React UI that run in several places: the deskt
 - **The engine is moving from TypeScript to Rust.** `nekkod` answers what has been ported natively and passes the rest to the TypeScript host it supervises. Each ported piece has to match the TypeScript behaviour exactly before it takes over.
 - **Every edition is the same app.** Desktop, web and Docker run the same engine and the same UI. Only the transport differs: Electron IPC on the desktop, HTTP and WebSocket in the browser.
 
+## Desktop lifetime and notifications
+
+Closing the UI already hides it to the tray without stopping the engine. Explicit Quit shuts down the service and managed processes; Stop Nekko service stops the engine without quitting the UI. Neither arrangement promises continued work during OS sleep, shutdown or logout.
+
+The 2026-10-13 implementation moves Electron native notifications into main (`apps/desktop/src/main/notifications.ts`), with a direct authenticated engine WebSocket subscription, fresh settings reads per eligible notice, reconnect/backoff and disposal on Quit. Main creates native notices; click delivery uses an encoded session deep link to restore the window and select the chat. Renderer notifications remain for browser editions only, avoiding duplicate Electron delivery. Settings exposes the default-on toggle in its standalone Notifications section.
+
+TS host and Rust usage summaries emit matching per-day session costs, local tokens, avoided costs and model ids. Budget aggregates those UTC buckets for every recorded detail instead of mixing a range with lifetime totals. Utilization's same-token Claude dedupe is display-only and prefers Anthropic, without changing provider routing or storage.
+
+Status: implemented, unit and isolated fixture interaction tested; image/motion inspection and native toast delivery/click/permissions testing pending. Main currently assumes events are unattended, so focused-visible-chat suppression is a known review issue. Parent owns resolution and landing.
+
 ## Repository layout
 
 | Path | What lives there |

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -68,6 +69,7 @@ fun ChatsScreen(
     onNewChat: () -> Unit,
     onPair: () -> Unit,
     onComputers: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
@@ -84,6 +86,9 @@ fun ChatsScreen(
                 actions = {
                     IconButton(onClick = onComputers) {
                         Icon(Icons.Filled.Computer, contentDescription = "Computers", tint = p.inkSoft)
+                    }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = p.inkSoft)
                     }
                 },
             )

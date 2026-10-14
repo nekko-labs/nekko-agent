@@ -7,6 +7,7 @@ import {
   IpcChannels,
   IpcEvents,
   PAIRING_TTL_MS,
+  callFromPhone,
   defaultDeviceName,
   deriveKey,
   newPairingCode,
@@ -14,6 +15,7 @@ import {
   newRoomSecret,
   normalizePlatform,
   open,
+  phoneAccessPolicy,
   seal,
   verifyHello,
   type RemoteHelloReply,
@@ -27,7 +29,10 @@ import {
  * - the HELLO rules (`verifyHello`) and the random material (codes, rooms, secrets);
  * - the remote service's `remote.json` and replies across a run of operations;
  * - the relay agent's frames: what it sends the relay for a scripted run of
- *   relay frames, sealed client frames and host events.
+ *   relay frames, sealed client frames and host events;
+ * - the phone access policy (`phone-access.json`, from
+ *   packages/shared/src/phone-access.ts) and how it decides a set of phone
+ *   requests (`phone.json`).
  *
  * The phone apps (Expo, iOS, Android) and apps/relay speak this protocol, so
  * any drift here breaks every paired device. Fails if the file is stale;
@@ -178,6 +183,77 @@ it('lists the channels a paired phone may call', async () => {
   expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(served.sort());
 });
 
+it('writes the phone access policy the daemon enforces', () => {
+  // The Rust gate (crates/nekko-remote/src/phone.rs) reads these lists; the
+  // TS constants in packages/shared/src/phone-access.ts are the source.
+  check(join(crate, 'src', 'phone-access.json'), phoneAccessPolicy());
+  const served = new Set<string>(JSON.parse(readFileSync(join(crate, 'src', 'channels.json'), 'utf8')));
+  for (const c of phoneAccessPolicy().channels) expect(served.has(c), c).toBe(true);
+});
+
+it('decides phone requests the way the daemon must', async () => {
+  // Each case: what the phone sent, what reached the host and what the phone got back.
+  const settings = {
+    theme: 'dark', accent: '#6d5efc', themePreset: 'nebula', defaultProviderId: 'p1', defaultModelId: 'm1',
+    favoriteModels: ['p1::m1'], defaultChatMode: 'ask', chatPaneAction: 'complete', sandboxMode: 'workspace',
+    providers: [{ id: 'p1', kind: 'openai', label: 'GPT', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
+    guardrails: [{ id: 'g' }], hooks: [{ id: 'h', command: 'curl' }], hfToken: 'hf_secret', aboutUser: 'me',
+    voice: { enabled: true, language: 'en', modelPath: '/m.bin', sensitivity: 50 },
+  };
+  const requests: Array<[string, unknown]> = [
+    ['data:wipe', []],
+    ['settings:reset', []],
+    ['remote:rotate', []],
+    ['remote:status', []],
+    ['terminal:create', [{}]],
+    ['file:write', ['/etc/hosts', 'x']],
+    ['workspace:addByPath', ['/']],
+    ['voice:install', []],
+    ['mcp:hypergate:connect', [1]],
+    ['tasks:list', []],
+    ['turn:pending', []],
+    ['sessions:summaries', []],
+    ['session:get', ['s1', { deep: [1] }]],
+    ['session:delete', ['s1']],
+    ['voice:transcribe', [[0, 1, 2]]],
+    ['settings:get', []],
+    ['settings:get', 'not a list'],
+    ['providers:list', []],
+    ['settings:update', [{ chatPaneAction: 'delete', skipDeleteConfirmation: true }]],
+    ['settings:update', [{ defaultChatMode: 'guardrails' }]],
+    ['settings:update', [{ defaultChatMode: 'yolo' }]],
+    ['settings:update', [{ defaultChatMode: 'turbo' }]],
+    ['settings:update', [{ chatPaneAction: 'delete', sandboxMode: 'off' }]],
+    ['settings:update', [{ voice: { language: 'it' } }]],
+    ['settings:update', [{ voice: { enabled: false, modelPath: '/evil' } }]],
+    ['settings:update', [{ voice: { language: 'x y' } }]],
+    ['settings:update', [{ voice: null }]],
+    ['settings:update', [null]],
+    ['settings:update', []],
+    ['session:setOptions', ['s1', { providerId: 'p1', modelId: 'm1' }]],
+    ['session:setOptions', ['s1', { archivedAt: 5 }]],
+    ['session:setOptions', ['s1', { mode: 'yolo' }]],
+    ['session:setOptions', ['s1', { mode: 'guardrails', disabledTools: [] }]],
+    ['session:setOptions', ['s1']],
+    ['chat:send', [{ sessionId: 's1', providerId: 'p1', modelId: 'm1', text: 'hi' }]],
+    ['chat:send', [{ sessionId: 's1', text: 'hi', attachedPaths: ['/etc/passwd'] }]],
+  ];
+  const cases = [];
+  for (const [channel, args] of requests) {
+    const calls: unknown[] = [];
+    const dispatch = (ch: string, a: unknown[]) => {
+      calls.push([ch, a]);
+      return ch.startsWith('settings:') || ch === 'providers:list' ? (ch === 'providers:list' ? settings.providers : settings) : { ok: ch };
+    };
+    const outcome = await callFromPhone(dispatch, channel, Array.isArray(args) ? args : []).then(
+      (result) => ({ result }),
+      (e: Error) => ({ error: e.message }),
+    );
+    cases.push({ channel, args, calls, ...outcome });
+  }
+  check(join(crate, 'tests', 'golden', 'phone.json'), { settings, cases });
+});
+
 /** A relay socket the agent dials, recording what it sends. */
 class FakeSocket {
   static last: FakeSocket | null = null;
@@ -207,10 +283,11 @@ it('runs the relay agent protocol frame for frame', async () => {
     const key = await deriveKey(SECRET, ROOM);
     // The host the phone reaches: a few channels with fixed answers.
     const responses: Record<string, { result?: unknown; error?: string }> = {
+      [IpcChannels.sessionsSummaries]: { result: [{ id: 's1', title: 'Nightly', updatedAt: 1.5 }] },
       [IpcChannels.tasksList]: { result: [{ id: 't1', title: 'Nightly', nextRunAt: 1.5 }] },
-      [IpcChannels.remoteStatus]: { result: { enabled: true, devices: [] } },
       [IpcChannels.settingsGet]: { error: 'settings are broken' },
-      [IpcChannels.taskRunNow]: { result: undefined },
+      [IpcChannels.chatAbort]: { result: undefined },
+      [IpcChannels.providersList]: { result: [{ id: 'p1', kind: 'openai', label: 'GPT', baseUrl: 'https://x', apiKey: 'sk-secret', enabled: true }] },
       [IpcChannels.sessionGet]: { result: { id: 's1', title: 'ünï 🐱', messages: [{ role: 'user', content: 'a b' }] } },
     };
     const calls: Array<{ channel: string; args: unknown[] }> = [];
@@ -223,10 +300,11 @@ it('runs the relay agent protocol frame for frame', async () => {
     };
     const host = {
       events,
+      listSessionSummaries: answer(IpcChannels.sessionsSummaries),
       listTasks: answer(IpcChannels.tasksList),
-      remoteStatus: answer(IpcChannels.remoteStatus),
       getSettings: answer(IpcChannels.settingsGet),
-      runTaskNow: answer(IpcChannels.taskRunNow),
+      abortChat: answer(IpcChannels.chatAbort),
+      listProviders: answer(IpcChannels.providersList),
       getSession: answer(IpcChannels.sessionGet),
     };
     const verify = (hello: unknown): RemoteHelloReply => {
@@ -250,15 +328,20 @@ it('runs the relay agent protocol frame for frame', async () => {
       | { kick: string };
     const script: Step[] = [
       { relay: { type: 'client-open', cid: 'c1' } },
-      { client: 'c1', value: { type: 'req', id: 1, channel: IpcChannels.tasksList, args: [] } },
+      { client: 'c1', value: { type: 'req', id: 1, channel: IpcChannels.sessionsSummaries, args: [] } },
       { client: 'c1', value: { type: 'hello', deviceId: 'stranger' } },
       { relay: { type: 'client-open', cid: 'c2' } },
       { client: 'c2', value: { type: 'hello', deviceId: 'phone-1', name: 'P' } },
-      { client: 'c2', value: { type: 'req', id: 2, channel: IpcChannels.tasksList, args: [] } },
+      { client: 'c2', value: { type: 'req', id: 2, channel: IpcChannels.sessionsSummaries, args: [] } },
       { client: 'c2', value: { type: 'req', id: 3, channel: IpcChannels.settingsGet } },
-      { client: 'c2', value: { type: 'req', id: 4, channel: IpcChannels.taskRunNow, args: ['t1'] } },
+      { client: 'c2', value: { type: 'req', id: 4, channel: IpcChannels.chatAbort, args: ['s1'] } },
       { client: 'c2', value: { type: 'req', id: 'five', channel: IpcChannels.sessionGet, args: ['s1', { deep: [1, 2] }] } },
       { client: 'c2', value: { type: 'req', id: 6, channel: 'no:such', args: [] } },
+      // Served by the host, but not to a phone: refused before the host sees it.
+      { client: 'c2', value: { type: 'req', id: 61, channel: IpcChannels.tasksList, args: [] } },
+      { client: 'c2', value: { type: 'req', id: 62, channel: IpcChannels.dataWipe, args: [] } },
+      // Provider records reach a phone without their keys; a non-list `args` counts as none.
+      { client: 'c2', value: { type: 'req', id: 63, channel: IpcChannels.providersList, args: 'not a list' } },
       { client: 'c2', value: { type: 'pong' } },
       { client: 'c2', data: 'not json' },
       { client: 'c2', data: '{"plain":true}' },
@@ -276,11 +359,12 @@ it('runs the relay agent protocol frame for frame', async () => {
       { event: IpcEvents.trainingUpdated, payload: [] },
       { event: IpcEvents.workflowsUpdated, payload: { workflows: [], runs: [] } },
       { event: IpcEvents.limitsUpdated, payload: { tokenKey: 'claude:a', limits: { windows: [] } } },
+      { event: IpcEvents.appearanceUpdated, payload: { theme: 'dark', accent: '#fb923c' } },
       { event: IpcEvents.indexProgress, payload: { workspaceId: 'w1', done: 3, total: 9 } },
       { kick: 'phone-2' },
       { relay: { type: 'client-close', cid: 'c2' } },
       { event: IpcEvents.agentEvent, payload: { type: 'text', sessionId: 's1', delta: 'after close' } },
-      { client: 'c2', value: { type: 'req', id: 7, channel: IpcChannels.tasksList, args: [] } },
+      { client: 'c2', value: { type: 'req', id: 7, channel: IpcChannels.sessionsSummaries, args: [] } },
       { kick: 'phone-1' },
     ];
 
@@ -322,6 +406,7 @@ it('runs the relay agent protocol frame for frame', async () => {
       relayedEvents: [
         IpcEvents.agentEvent, IpcEvents.indexProgress, IpcEvents.terminalEvent, IpcEvents.changesUpdated,
         IpcEvents.tasksUpdated, IpcEvents.trainingUpdated, IpcEvents.workflowsUpdated, IpcEvents.limitsUpdated,
+        IpcEvents.appearanceUpdated,
       ],
     });
   } finally {

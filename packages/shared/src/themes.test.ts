@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { THEME_PRESETS, currentPresetAccent, type ThemePreset } from './themes.js';
+import { THEME_PRESETS, appearanceOf, currentPresetAccent, touchesAppearance, type ThemePreset } from './themes.js';
 
 describe('currentPresetAccent', () => {
   it('upgrades accents a retuned preset used to save', () => {
@@ -90,5 +90,29 @@ describe('THEME_PRESETS', () => {
         }
       }
     }
+  });
+});
+
+describe('appearanceOf', () => {
+  it('keeps only the look, validated, and nothing else from the settings', () => {
+    const a = appearanceOf({
+      theme: 'dark', themePreset: 'nebula', accent: '#FB923C', accent2: 'red',
+      // Secrets and everything else must never reach the relay.
+      ...({ providers: [{ apiKey: 'sk-secret' }], hfToken: 'hf_x' } as object),
+    });
+    expect(a).toEqual({ theme: 'dark', themePreset: 'nebula', accent: '#fb923c' });
+    expect(JSON.stringify(a)).not.toContain('secret');
+  });
+
+  it('reads anything unknown as system and drops malformed fields', () => {
+    expect(appearanceOf(null)).toEqual({ theme: 'system' });
+    expect(appearanceOf({ theme: 'sepia', themePreset: '<script>', accent: '#12345' })).toEqual({ theme: 'system' });
+  });
+
+  it('knows which patches change it', () => {
+    expect(touchesAppearance({ theme: 'light' })).toBe(true);
+    expect(touchesAppearance({ accent2: '#000000' })).toBe(true);
+    expect(touchesAppearance(null)).toBe(true);
+    expect(touchesAppearance({ providers: [] })).toBe(false);
   });
 });

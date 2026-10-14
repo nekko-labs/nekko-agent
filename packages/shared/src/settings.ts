@@ -234,6 +234,8 @@ export interface AppSettings {
   autoUpdatePrompted?: boolean;
   /** Per-check toggles for Settings → Updates (see `updateChecks`). */
   updates?: UpdateCheckSettings;
+  /** GitHub repositories the Skills Marketplace shows as shelves. Unset = `DEFAULT_SKILL_SOURCES`. */
+  skillSources?: import('./skill-sources.js').SkillSourceRepo[];
   /** UI language (BCP-47-ish code, e.g. "en", "es"). Undefined = follow system. */
   language?: string;
   /** Default tool-execution policy for new chats. */
@@ -447,7 +449,14 @@ export interface UsageSummary {
   /** Per-session estimated spend (USD), accurate to the model used per record. */
   bySessionCost: Record<string, number>;
   /** Daily buckets (YYYY-MM-DD → tokens + estimated cost) for the charts. */
-  daily: Array<{ date: string; input: number; output: number; cost: number }>;
+  daily: Array<{
+    date: string; input: number; output: number; cost: number;
+    /** Optional for older hosts; never substitute lifetime totals for a range. */
+    bySessionCost?: Record<string, number>;
+    localTokens?: number;
+    avoidedCosts?: AvoidedCosts;
+    modelIds?: string[];
+  }>;
   /** True if any recorded usage came from a subscription provider. */
   hasSubscriptionUsage?: boolean;
 }

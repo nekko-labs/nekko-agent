@@ -22,6 +22,15 @@ reference until this app reaches parity.
   that show the exact command; the agent's questions as choices with a free-text
   answer. Transcripts are re-read after each turn and after reconnecting.
 
+- **App lock:** fingerprint, face or the phone's screen lock every time the app
+  opens or comes back (on by default, *Settings → Security*). Locked means nothing
+  is shown or approvable, recents stay blank (`FLAG_SECURE`), and after a restart
+  the relay doesn't connect until the first unlock.
+
+- **Vibration:** a distinct buzz while the app is open when the agent needs an
+  approval or asks a question (on by default), and optionally when a reply
+  finishes or fails; never in silent mode or Do Not Disturb.
+
 **Not yet:** models on the phone, push notifications, Markdown rendering,
 attachments, Play Store release. See `TASKS.md` → *Native Android app*.
 
@@ -45,6 +54,10 @@ apps/android/
 | Computers | `app/.../data/ComputersRepository.kt` | `apps/mobile/src/services/computers.ts` |
 
 ## Security notes
+
+- The app lock (`app/.../lock/`) is UI-only: it gates what the phone shows and
+  sends, it does not encrypt anything with the user's credential. A rooted or
+  compromised phone is out of scope; revoke the phone on the computer instead.
 
 - Pairing material (room, secret, PBKDF2-derived key, device id) is sealed with
   AES-256-GCM under a non-exportable **Android Keystore** key before it touches

@@ -1,9 +1,15 @@
 package com.nekko.android.ui.chat
 
+import android.content.ClipData
+import android.content.Context
+import android.os.Build
+import android.widget.Toast
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,13 +36,23 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +60,9 @@ import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
 import com.nekko.protocol.ToolStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun BlockView(block: Block) {
@@ -65,9 +84,7 @@ private fun UserBubble(b: Block.User) {
                 .background(p.userBubble)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            SelectionContainer {
-                Text(b.text, style = MaterialTheme.typography.bodyLarge, color = p.userInk)
-            }
+            Text(b.text, style = MaterialTheme.typography.bodyLarge, color = p.userInk, modifier = Modifier.copyOnLongPress(b.text))
             if (b.images > 0) {
                 Text(
                     if (b.images == 1) "1 image" else "${b.images} images",
@@ -124,9 +141,7 @@ private fun Reply(b: Block.Assistant) {
             }
         }
         if (b.text.isNotEmpty()) {
-            SelectionContainer {
-                Text(b.text, style = MaterialTheme.typography.bodyLarge, color = p.ink)
-            }
+            Text(b.text, style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.copyOnLongPress(b.text))
         } else if (b.streaming && reasoning.isNullOrEmpty()) {
             CircularProgressIndicator(
                 color = p.accent,
@@ -219,4 +234,47 @@ private fun ToolRow(b: Block.Tool) {
             }
         }
     }
+}
+
+/**
+ * Long press copies the whole message. Messages are not wrapped in a
+ * SelectionContainer: its press-and-drag gesture starts a text selection and
+ * swallows the drag, so a chat of long messages (one can fill the screen)
+ * could not be scrolled by a finger that rests before moving. This gesture
+ * never consumes anything: a press that moves first is the list's scroll, and
+ * a drag after the copy still scrolls the list.
+ */
+@Composable
+private fun Modifier.copyOnLongPress(text: String): Modifier {
+    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    return this
+        .semantics { onLongClick(label = "Copy message") { copy(scope, clipboard, context, text); true } }
+        .pointerInput(text) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                // Null when the press outlasts the long-press timeout without moving or lifting.
+                val ended = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    var done = false
+                    while (!done) {
+                        val c = awaitPointerEvent(PointerEventPass.Final).changes.firstOrNull { it.id == down.id }
+                        done = c == null || !c.pressed || c.isConsumed ||
+                            (c.position - down.position).getDistance() > viewConfiguration.touchSlop
+                    }
+                    true
+                }
+                if (ended == null) {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    copy(scope, clipboard, context, text)
+                }
+            }
+        }
+}
+
+private fun copy(scope: CoroutineScope, clipboard: Clipboard, context: Context, text: String) {
+    scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Message", text))) }
+    // Android 13+ shows its own copied confirmation.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
 }

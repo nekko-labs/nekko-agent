@@ -41,15 +41,11 @@ impl Remote {
         self.svc.is_some()
     }
 
-    /// How a phone's request runs: through the router, public channels only.
+    /// How a phone's request runs: through the router, limited to what the
+    /// phone access policy allows (`nekko_remote::phone`), with secrets
+    /// stripped from what it returns.
     pub fn set_dispatcher(&self, run: Dispatcher) {
-        let gated: Dispatcher = Arc::new(move |channel: String, args: Value| {
-            if !nekko_remote::is_public(&channel) {
-                return Box::pin(std::future::ready(Err(format!("Unknown channel: {channel}"))));
-            }
-            run(channel, args)
-        });
-        let _ = self.dispatch.set(gated);
+        let _ = self.dispatch.set(nekko_remote::phone::gate(run));
     }
 
     /// Reconnect when remote access was left on.

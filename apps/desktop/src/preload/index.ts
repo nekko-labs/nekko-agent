@@ -1,3 +1,4 @@
+import { NOTIFICATION_VISIBILITY_CHANNEL } from '../notificationVisibility.js';
 import { contextBridge, ipcRenderer } from 'electron';
 import { PREVIEW_CHANNEL } from '../previewPolicy.js';
 if (process.isMainFrame) contextBridge.exposeInMainWorld('nekkoPreview', { open: (source: string) => ipcRenderer.invoke(PREVIEW_CHANNEL, source) });
@@ -253,6 +254,10 @@ const api: NekkoApi = {
   installSkill: (skillId, target, payload) => inv(IpcChannels.skillInstall, skillId, target, payload),
   uninstallSkill: (skillId, target) => inv(IpcChannels.skillUninstall, skillId, target),
   vaizerCatalog: (refresh) => inv(IpcChannels.vaizerCatalog, refresh),
+  listSkillSources: (refresh) => inv(IpcChannels.skillSourcesList, refresh),
+  previewSkillUrl: (input) => inv(IpcChannels.skillSourcesPreview, input),
+  fetchRemoteSkill: (skill) => inv(IpcChannels.skillSourcesFetch, skill),
+  searchSkills: (query) => inv(IpcChannels.skillSourcesSearch, query),
   vaizerSkillMd: (slug) => inv(IpcChannels.vaizerSkillMd, slug),
 
   listTasks: () => inv(IpcChannels.tasksList),
@@ -413,6 +418,7 @@ contextBridge.exposeInMainWorld('nekko', api);
  */
 const chrome: WindowChromeBridge = {
   serviceControl: (action) => ipcRenderer.invoke(SERVICE_CONTROL_CHANNEL, action),
+  reportNotificationVisibility: report => { if (process.isMainFrame) ipcRenderer.send(NOTIFICATION_VISIBILITY_CHANNEL, report); },
   platform: process.platform,
   titleBarHeight: TITLEBAR_HEIGHT,
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
