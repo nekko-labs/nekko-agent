@@ -23,10 +23,13 @@ enum class PhoneEvent {
 
     companion object {
         /**
-         * The error message of a turn the user stopped: `packages/core/src/agent/loop.ts` and
-         * `crates/nekko-loop/src/run.rs` both report an aborted run as exactly this.
+         * The error message of a turn the user stopped mid-call: `packages/core/src/agent/loop.ts`
+         * and `crates/nekko-loop/src/run.rs` both report it as exactly this.
          */
         const val STOPPED = "Stopped"
+
+        /** The same, when the stop lands between two steps of the loop (both loops say "Aborted"). */
+        const val ABORTED = "Aborted"
 
         /**
          * What [e] means for the user, or null for the events in between (text, tool steps,
@@ -34,7 +37,7 @@ enum class PhoneEvent {
          */
         fun of(e: AgentEvent): PhoneEvent? = when (e) {
             is AgentEvent.Done -> FINISHED
-            is AgentEvent.Error -> if (e.message == STOPPED) null else FAILED
+            is AgentEvent.Error -> if (e.message == STOPPED || e.message == ABORTED) null else FAILED
             is AgentEvent.Question -> NEEDS_INPUT
             is AgentEvent.ApprovalRequired -> APPROVAL
             is AgentEvent.Text,

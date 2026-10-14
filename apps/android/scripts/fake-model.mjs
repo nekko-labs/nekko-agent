@@ -5,6 +5,8 @@
 // Prompts containing "approve" get a tool call that the host guardrails must
 // hold for approval (`rm -rf ./nekko-itest-dist`); once the tool result comes
 // back, or for any other prompt, it streams "Hello from your computer.".
+// Prompts containing "slow" stream one word a second for ~20 s, so a run can be
+// watched with the app in the background (keep-alive, local notifications).
 import { createServer } from 'node:http';
 
 const port = Number(process.argv[2] || 4700);
@@ -34,6 +36,17 @@ createServer((req, res) => {
       res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_itest', type: 'function', function: { name: 'bash', arguments: '' } }] }));
       res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify({ command: 'rm -rf ./nekko-itest-dist' }) } }] }));
       res.write(chunk({}, 'tool_calls'));
+    } else if (last?.role === 'user' && /slow/i.test(userText)) {
+      const words = Array.from({ length: 20 }, (_, i) => `word${i + 1} `);
+      let i = 0;
+      const timer = setInterval(() => {
+        if (i < words.length) return void res.write(chunk({ content: words[i++] }));
+        clearInterval(timer);
+        res.write(chunk({}, 'stop'));
+        res.end('data: [DONE]\n\n');
+      }, 1000);
+      res.on('close', () => clearInterval(timer));
+      return;
     } else {
       for (const w of ['Hello ', 'from ', 'your ', 'computer.']) res.write(chunk({ content: w }));
       res.write(chunk({}, 'stop'));
