@@ -41,7 +41,7 @@ import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
 import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, describeInterruption, suggestedReplyClassName } from './agent-console/interruption.js';
 
-import { estimateRowHeight, toTranscriptRows, type TranscriptRow } from './agent-console/transcript.js';
+import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { PlanRail, appendPlanChangeRequest } from './PlanRail.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
@@ -2022,9 +2022,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   // --- The transcript, as windowed rows ---
   const messages = session?.messages;
+  // While the live run draws the newest turn (streaming, or held until its
+  // persisted copy has replaced it), the transcript stops at that turn's prompt:
+  // the checkpointed tail would be the same narration and steps drawn twice.
+  const liveTurn = streaming || !!held;
+  const settled = useMemo(() => (messages && liveTurn ? transcriptBeforeLiveTurn(messages) : messages), [messages, liveTurn]);
   const rows = useMemo(
-    () => (messages ? toTranscriptRows(messages, extractPrUrls, collectSessionPrUrls, prs) : []),
-    [messages, prs],
+    () => (settled ? toTranscriptRows(settled, extractPrUrls, collectSessionPrUrls, prs) : []),
+    [settled, prs],
   );
   // Every PR the transcript mentions, scanned once per transcript: the scan is
   // a regular expression over every message, and it used to run on every

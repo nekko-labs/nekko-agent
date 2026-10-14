@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ASK_CANCELLED, ASK_UNATTENDED, formatAskAnswers, parseAskRequest } from '../../../../../../packages/shared/src/ask.js';
 import type { ChatMessage } from '@nekko-agent/shared';
 import { collectSessionPrUrls, extractPrUrls } from '../../../../../../packages/shared/src/pr.js';
-import { estimateRowHeight, fmtDateTime, fmtTime, toTranscriptRows } from './transcript.js';
+import { estimateRowHeight, fmtDateTime, fmtTime, toTranscriptRows, transcriptBeforeLiveTurn } from './transcript.js';
 
 const msg = (id: string, role: ChatMessage['role'], content: string, extra: Partial<ChatMessage> = {}): ChatMessage => ({
   id, role, content, createdAt: 0, ...extra,
@@ -19,6 +19,30 @@ describe('toTranscriptRows', () => {
     ]);
     expect(r.map((x) => x.kind)).toEqual(['msg', 'activity', 'msg']);
     expect(new Set(r.map((x) => x.key)).size).toBe(r.length);
+  });
+
+  it('stops at the live turn\'s prompt while the run draws that turn', () => {
+    // The daemon checkpoints the transcript after every tool result. Mid-turn
+    // the persisted copy already holds the turn's narration and tool calls,
+    // which the live run is drawing below the transcript; the transcript must
+    // not draw them too.
+    const turn = [
+      msg('u0', 'user', 'earlier'),
+      msg('a0', 'assistant', 'Earlier answer.'),
+      msg('u', 'user', 'finish the PRs'),
+      msg('a1', 'assistant', "I'll start by reading the guidance.", { toolCalls: [{ id: 'c1', name: 'read_file', input: {} }] }),
+      msg('t1', 'tool', '', { toolResult: { toolCallId: 'c1', output: 'x' } }),
+    ];
+    expect(transcriptBeforeLiveTurn(turn).map((m) => m.id)).toEqual(['u0', 'a0', 'u']);
+    // Nothing to cut when the prompt is already the tail (same array back), or there is no prompt.
+    const tail = turn.slice(0, 3);
+    expect(transcriptBeforeLiveTurn(tail)).toBe(tail);
+    expect(transcriptBeforeLiveTurn([])).toEqual([]);
+    const noPrompt = [msg('a9', 'assistant', 'only')];
+    expect(transcriptBeforeLiveTurn(noPrompt)).toBe(noPrompt);
+    const r = rows(transcriptBeforeLiveTurn(turn));
+    expect(r.map((x) => x.kind)).toEqual(['msg', 'msg', 'msg']);
+    expect(r.filter((x) => x.kind === 'msg' && x.message.role === 'assistant')).toHaveLength(1);
   });
 
   it('anchors discoveries including tool-only PRs instead of moving them after new messages', () => {
