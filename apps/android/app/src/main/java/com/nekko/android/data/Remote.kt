@@ -25,6 +25,8 @@ interface Remote : Caller {
     fun connect()
     fun close()
     fun nudge()
+    /** The phone changed network: drop the socket and dial again now. */
+    fun reconnect()
 }
 
 fun interface RemoteFactory {
@@ -38,6 +40,7 @@ class RelayRemote(private val client: RelayClient) : Remote {
     override fun connect() = client.connect()
     override fun close() = client.close()
     override fun nudge() = client.nudge()
+    override fun reconnect() = client.reconnect()
     override suspend fun call(channel: String, vararg args: JsonElement) = client.call(channel, *args)
     override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) =
         client.callWithTimeout(timeoutMs, channel, *args)

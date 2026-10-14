@@ -233,6 +233,63 @@ class RelayClientTest {
         c.close()
     }
 
+    @Test fun `reconnect drops a live socket and dials a fresh one`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.answer = { null } // never answer: the call must fail, not hang
+        val c = client(relay)
+        c.connect()
+        c.await(RelayState.ONLINE)
+        val old = relay.current!!
+        val inflight = async { runCatching { c.call(Channels.CHAT_PENDING) } }
+        delay(50)
+        c.reconnect()
+        assertTrue(inflight.await().exceptionOrNull() is RelayException)
+        assertTrue(!old.open)
+        c.await(RelayState.ONLINE)
+        assertEquals(2, relay.urls.size)
+        assertEquals(2, relay.hellos.size)
+        // The old socket's late close must not schedule another dial.
+        delay(150)
+        assertEquals(2, relay.urls.size)
+        c.close()
+    }
+
+    @Test fun `reconnect skips the backoff while the relay is unreachable`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.refuseNext = 1006 to "network down"
+        val c = RelayClient(
+            RelayConfig(
+                relayUrl = "wss://relay.test/", room = "abcd1234", key = "k", keyBytes = key, deviceId = "dev-1", deviceName = "Pixel",
+                handshakeTimeoutMs = 2_000, requestTimeoutMs = 2_000, retryBaseMs = 60_000, retryMaxMs = 60_000,
+            ),
+            relay, scope,
+        )
+        c.connect()
+        withTimeout(2_000) { c.status.first { it.state == RelayState.CONNECTING && it.detail == "network down" } }
+        c.reconnect() // without it the next try would be a minute away
+        c.await(RelayState.ONLINE)
+        assertEquals(2, relay.urls.size)
+        c.close()
+    }
+
+    @Test fun `reconnect does nothing once closed or denied`() = runBlocking {
+        val closed = FakeRelay(known = mutableSetOf("dev-1"))
+        val a = client(closed)
+        a.connect(); a.await(RelayState.ONLINE); a.close()
+        a.reconnect()
+        delay(100)
+        assertEquals(1, closed.urls.size)
+        assertEquals(RelayState.IDLE, a.state)
+
+        val stranger = FakeRelay()
+        val b = client(stranger)
+        b.connect(); b.await(RelayState.DENIED)
+        b.reconnect()
+        delay(100)
+        assertEquals(1, stranger.urls.size)
+        assertEquals(RelayState.DENIED, b.state)
+    }
+
     @Test fun `close stops reconnecting and rejects new calls`() = runBlocking {
         val relay = FakeRelay(known = mutableSetOf("dev-1"))
         val c = client(relay)
