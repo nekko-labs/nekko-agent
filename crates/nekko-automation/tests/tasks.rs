@@ -192,3 +192,80 @@ fn prompts_and_finished_fires_match() {
         same(&Value::Object(m), &c["patch"], &format!("{} with {:?}", c["task"], c["result"]));
     }
 }
+
+/// A host whose settings read yields to the runtime before answering, as the
+/// daemon's real host does (it asks the backend over IPC).
+struct SlowSettings(Fake);
+
+impl TaskHost for SlowSettings {
+    fn settings(&self) -> BoxFut<'_, Value> {
+        Box::pin(async move {
+            tokio::task::yield_now().await;
+            self.0.settings.lock().unwrap().clone()
+        })
+    }
+    fn create_session(
+        &self,
+        workspace_id: Option<Value>,
+        fields: Vec<(&'static str, Value)>,
+    ) -> BoxFut<'_, Result<String, String>> {
+        self.0.create_session(workspace_id, fields)
+    }
+    fn get_session(&self, id: &str) -> Option<Value> {
+        self.0.get_session(id)
+    }
+    fn delete_session(&self, id: &str) -> BoxFut<'_, ()> {
+        self.0.delete_session(id)
+    }
+    fn send_chat(&self, opts: Value) -> BoxFut<'_, Result<(), String>> {
+        self.0.send_chat(opts)
+    }
+    fn notify(&self, list: &Value) {
+        self.0.notify(list)
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_fires_at_once_send_one_turn() {
+    let dir = std::env::temp_dir().join(format!("nekko-automation-double-fire-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let host = Arc::new(SlowSettings(Fake::default()));
+    *host.0.settings.lock().unwrap() = json!({});
+    let svc = Tasks::new(&dir, host.clone(), Arc::new(|| 1_000.0), Arc::new(|| "t1".to_string()));
+    let input = json!({ "title": "Nightly", "kind": "recurring", "prompt": "Summarize", "intervalMs": 3_600_000, "providerId": "p1", "modelId": "m1" });
+    svc.create(&input).await.unwrap();
+    let (a, b) = (svc.clone(), svc.clone());
+    let (ra, rb) =
+        tokio::join!(tokio::spawn(async move { a.fire("t1").await }), tokio::spawn(async move { b.fire("t1").await }));
+    ra.unwrap();
+    rb.unwrap();
+    assert_eq!(host.0.turns.lock().unwrap().len(), 1, "{:?}", host.0.turns.lock().unwrap());
+    assert_eq!(svc.list()[0]["runCount"], json!(1));
+    // Once the first fire is done the task can fire again on demand.
+    svc.fire("t1").await;
+    assert_eq!(host.0.turns.lock().unwrap().len(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The scheduler picked the task from a read made before an earlier fire
+/// re-armed it an hour out: the late fire must not run it again.
+#[tokio::test]
+async fn a_scheduler_fire_from_a_stale_read_does_not_run_again() {
+    let dir = std::env::temp_dir().join(format!("nekko-automation-stale-fire-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let host = Arc::new(Fake::default());
+    *host.settings.lock().unwrap() = json!({});
+    let svc = Tasks::new(&dir, host.clone(), Arc::new(|| 1_000.0), Arc::new(|| "t1".to_string()));
+    let input = json!({ "title": "Nightly", "kind": "recurring", "prompt": "Summarize", "intervalMs": 3_600_000, "providerId": "p1", "modelId": "m1" });
+    svc.create(&input).await.unwrap();
+    let picked = svc.due(1_000.0);
+    assert_eq!(picked, vec!["t1".to_string()]);
+    // Two loop passes picked it from the same stale read; the first fire ran to the end.
+    svc.fire_if_due("t1", 1_000.0).await;
+    svc.fire_if_due("t1", 1_000.0).await;
+    assert_eq!(host.turns.lock().unwrap().len(), 1);
+    assert_eq!(svc.list()[0]["runCount"], json!(1));
+    let _ = std::fs::remove_dir_all(&dir);
+}
