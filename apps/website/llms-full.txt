@@ -942,6 +942,12 @@ skills [--json]
 skills install ID [--target nekko-agent|claude|codex] [--json]
 tools [--json]
 models [PROVIDER_ID] [--json]
+local status|list [--json]
+local search [QUERY] [--json]
+local download OWNER/REPO [--quant LABEL] [--json]
+local downloads [--active] | local cancel JOB_ID [--json]
+local load MODEL_ID [--provider ID] [--ctx N] [--gpu-layers N] [--ttl SECONDS] [--json]
+local unload MODEL_ID [--provider ID] | local start [--provider ID] | local stop [--provider ID] [--force]
 train start NAME GOAL [--provider ID] [--model ID] [--workspace ID] [--json]
 train status|hint ID TEXT|stop ID [--json]
 watch [--session ID] [--json]
@@ -1048,7 +1054,49 @@ The MCP tool list mirrors the CLI coverage: `nekko-agent_chat`,
 `nekko-agent_task_run`, `nekko-agent_task_delete`, `nekko-agent_skills_list`,
 `nekko-agent_skill_install`, `nekko-agent_tools_list`, `nekko-agent_models_list`,
 `nekko-agent_train_start`, `nekko-agent_train_status`, `nekko-agent_train_hint`,
-`nekko-agent_train_stop`, and `nekko-agent_status`.
+`nekko-agent_train_stop`, `nekko-agent_status`, and the local-model tools below.
+
+### Local models
+
+An MCP client can run a model on this machine without opening the app: check
+what is installed and loaded, download a model, load it, send it work through
+`nekko-agent_chat`, and unload it again. The CLI's `local` command does the same
+from a terminal.
+
+| Tool | CLI | What it does |
+| --- | --- | --- |
+| `nekko-agent_local_status` | `local status` | The built-in engine (installed, running, loaded models, memory budget) and every enabled local runtime (Ollama, LM Studio, vLLM). |
+| `nekko-agent_local_models` | `local list` | Models in the engine library: id, size, quantization, loaded, and whether it fits on the GPU (`full`, `partial`, `cpu`, `wont`). |
+| `nekko-agent_model_search` | `local search` | Hugging Face GGUF repos the engine can download (the curated list with no query). |
+| `nekko-agent_model_download` | `local download` | Start downloading one quantization; `Q4_K_M` (or the closest) when none is named. Returns a job id at once. |
+| `nekko-agent_downloads` | `local downloads` | Progress of each download: state, percent, size, ETA. |
+| `nekko-agent_download_cancel` | `local cancel` | Cancel a download. |
+| `nekko-agent_model_load` | `local load` | Load a model; the engine starts itself if it is not running. Returns the `provider` and `model` to pass to `nekko-agent_chat`. |
+| `nekko-agent_model_unload` | `local unload` | Unload a model to free memory. |
+| `nekko-agent_runtime_start` | `local start` | Start the engine, or a runtime named by `providerId`. |
+| `nekko-agent_runtime_stop` | `local stop` | Stop it. A server Nekko Agent did not start is refused with `needsConfirmation`; ask before retrying with `force`. |
+
+Every tool targets the built-in engine unless it is given a `providerId` (CLI
+`--provider`) for another local runtime; cloud providers are refused. Download,
+load and stop are the same operations as the Model Server page and follow its
+rules: a download is several GB more often than not, so compare its size with
+the memory budget in `local_status` first.
+
+Who keeps the model running depends on whether the app is open. With the app
+serving, the engine is the app's and a loaded model stays loaded after the CLI
+or MCP client exits. Without the app, `nekko-agent mcp` runs the engine itself
+for the length of its session and stops it when the client disconnects, so no
+model server is left behind. The one-shot `local load` and `local start`
+commands need the app for that reason, and an in-process `local download` waits
+until the files have landed.
+
+A typical hand-off from Claude Code: "run qwen3 4B locally and have it review
+this file" becomes `nekko-agent_local_models` (or `model_search` and
+`model_download`, polling `nekko-agent_downloads`), then `nekko-agent_model_load`,
+then `nekko-agent_chat` with the returned `provider` and `model`. A chat turn
+carries the agent's system prompt and tool list, several thousand tokens, so a
+model loaded with a very small `contextTokens` cannot answer one; leave it unset
+for the engine default.
 
 ## Recipes
 
@@ -1079,6 +1127,18 @@ nekko-agent train start "ranking-v1" "Improve ranking accuracy" \
 nekko-agent train status --json
 nekko-agent train hint RUN_ID "Try a larger validation split" --json
 nekko-agent train stop RUN_ID --json
+```
+
+### Run a local model from a script
+
+```bash
+nekko-agent local status --json
+nekko-agent local download unsloth/Qwen3-4B-GGUF --quant Q4_K_M --json
+nekko-agent local downloads --active --json   # poll until done
+nekko-agent local list --json                  # find the model id
+nekko-agent local load "$MODEL_ID" --json
+nekko-agent chat "Summarize README.md" --provider nekko-engine --model "$MODEL_ID" --new --json
+nekko-agent local unload "$MODEL_ID" --json
 ```
 
 ---
