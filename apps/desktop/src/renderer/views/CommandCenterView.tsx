@@ -1,7 +1,7 @@
 import { AgentWindowDropdown, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
 import { AgentSidebar } from './WorkspacesView.js';
 import { ChatPane } from '../components/ChatPane.js';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, AutomationTask, PendingInput, SessionSummary, UsageSummary } from '@nekko-agent/shared';
 import type { AgentType } from '@nekko-agent/shared';
@@ -368,9 +368,23 @@ export function CommandCenterView() {
     return { ...w, composer: next === undefined ? rest : { ...rest, width: next } };
   }), [setWall]);
   const composerDrag = useRef<{ y: number; height: number } | null>(null);
+  // The composer's natural (unsized) height, remembered whenever it is at its
+  // default so a drag can snap back to it.
+  const composerDefaultH = useRef<number | null>(null);
+  useLayoutEffect(() => { if (composerHeight === null && composerRef.current) composerDefaultH.current = composerRef.current.offsetHeight; });
+  // Two snap points while dragging: the default size and full size (the 70% cap).
+  const snapComposerHeight = (raw: number) => {
+    const available = composerRef.current?.closest('.wall-column')?.clientHeight ?? 700;
+    const max = available * .7;
+    const h = Math.max(120, Math.min(max, raw));
+    const def = composerDefaultH.current;
+    if (def !== null && Math.abs(h - def) <= 24) return null;
+    if (max - h <= 24) return max;
+    return h;
+  };
   const composerSplit = <div className="wall-composer-split" role="separator" tabIndex={0} aria-label="Resize composer versus wall" aria-orientation="horizontal" title="Drag to resize composer versus wall; double-click to reset"
     onPointerDown={(e) => { composerDrag.current = { y: e.clientY, height: composerRef.current?.offsetHeight ?? 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
-    onPointerMove={(e) => { const drag = composerDrag.current; if (!drag) return; const available = composerRef.current?.closest('.wall-column')?.clientHeight ?? 700; setComposerHeight(Math.max(120, Math.min(available * .7, drag.height + (e.clientY - drag.y) * (wall.composer.side === 'top' ? 1 : -1)))); }}
+    onPointerMove={(e) => { const drag = composerDrag.current; if (!drag) return; setComposerHeight(snapComposerHeight(drag.height + (e.clientY - drag.y) * (wall.composer.side === 'top' ? 1 : -1))); }}
     onPointerUp={() => { composerDrag.current = null; }} onPointerCancel={() => { composerDrag.current = null; }}
     onDoubleClick={() => setComposerHeight(null)}
     onKeyDown={(e) => { if (e.key === 'Home') { e.preventDefault(); setComposerHeight(null); } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const available = composerRef.current?.closest('.wall-column')?.clientHeight ?? 700; setComposerHeight(Math.max(120, Math.min(available * .7, (composerHeight ?? composerRef.current?.offsetHeight ?? 240) + (e.key === 'ArrowUp' ? 20 : -20) * (wall.composer.side === 'top' ? -1 : 1)))); } }} />;
@@ -397,7 +411,7 @@ export function CommandCenterView() {
   const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
 
   return (
-    <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-3 px-4 pb-4 pt-1 xl:px-6">
+    <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-2 pb-1.5 pl-1 pr-1.5 pt-1">
       <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);
@@ -573,7 +587,9 @@ export function WallToolbar({
             </div>
           </div>}
         </div>
-        <div className="inline-flex rounded-lg border border-line p-0.5" role="tablist" aria-label="Show">
+        {/* Same frame as the layout segments beside it (plain 8px corners, not
+            the squircle `rounded-lg` gets), so the two groups match. */}
+        <div className="wall-filter-segments" role="tablist" aria-label="Show">
           {FILTERS.map((f) => (
             <button
               key={f.key}
