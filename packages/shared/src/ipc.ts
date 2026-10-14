@@ -314,6 +314,8 @@ export const IpcEvents = {
   trainingUpdated: 'training:updated',
   workflowsUpdated: 'workflows:updated',
   limitsUpdated: 'limits:updated',
+  /** The look a paired phone mirrors changed: `appearanceOf(settings)`, never anything else. */
+  appearanceUpdated: 'appearance:updated',
   downloadsUpdated: 'downloads:updated',
   /** A provider's model list changed in a background refresh. */
   modelsUpdated: 'models:updated',

@@ -89,7 +89,7 @@ import type {
   ModelFolderReport,
   SkillDef,
 } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, queueItemPayload, SKILLS, sameFolderPath } from '@nekko-agent/shared';
+import { appearanceOf, AUTO_MODEL_ID, touchesAppearance, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, queueItemPayload, SKILLS, sameFolderPath } from '@nekko-agent/shared';
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
@@ -795,6 +795,12 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     emit: (channel, payload) => events.emit(channel, payload),
   });
 
+  // A paired phone follows the desktop's theme: tell it (through the relay)
+  // when one changes, with the public look only (appearanceOf), never settings.
+  const announceAppearance = (patch: unknown) => {
+    if (touchesAppearance(patch)) events.emit('appearanceUpdated', appearanceOf(getSettings()));
+  };
+
   const host: Host = {
     events,
     dataDir,
@@ -803,6 +809,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     getSettings,
     updateSettings: (patch) => {
       const next = saveSettings(patch);
+      announceAppearance(patch);
       if (patch.voice !== undefined) stopVoice();
       if (patch.messaging !== undefined) messaging.update(next.messaging);
       return next;
@@ -943,6 +950,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       kind === 'connector' ? connectorSnippetsFor(args[0] as string | undefined) : indexSnippetsForAdmission(args[0] as string[], String(args[1] ?? '')),
     settingsChanged: (next, patch) => {
       settingsChanged(next, patch);
+      // Not announceAppearance: the daemon that saved it told the phone already (nekkod settings.rs).
       // What updateSettings does after a save, for a save the daemon made.
       if (patch && typeof patch === 'object') {
         if (patch.voice !== undefined) stopVoice();
@@ -1038,13 +1046,19 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     clearSessions: sessions.clearSessions,
     purgeExpiredArchives: () => sessions.purgeExpiredArchives(),
     forkSession: (id, beforeMessageId) => sessions.forkSession(id, beforeMessageId),
-    resetSettings,
+    resetSettings: () => {
+      const next = resetSettings();
+      announceAppearance(null);
+      return next;
+    },
     wipeAllData: () => {
       sessions.clearSessions('all');
       memory.clearMemory();
       clearUsage();
       clearLimits();
-      return resetSettings();
+      const next = resetSettings();
+      announceAppearance(null);
+      return next;
     },
     listTools: () => [...BUILTIN_TOOLS.map((t) => ({ name: t.name, description: t.description })), ...mcpToolList()],
     sendChat: (o) => {

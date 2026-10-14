@@ -131,7 +131,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         backend.clone(),
         hub.clone(),
     ));
-    let settings = cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), backend.clone()));
+    let settings = cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), backend.clone(), hub.clone()));
     // Voice reads its settings from the daemon's store.
     let voice = cfg.data_dir.clone().zip(settings.clone()).map(|(d, s)| {
         let store = s.store.clone();

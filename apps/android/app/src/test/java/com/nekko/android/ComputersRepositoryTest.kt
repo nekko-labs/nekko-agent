@@ -314,4 +314,26 @@ class ComputersRepositoryTest {
         assertEquals(listOf("opus"), again[1].models?.map { it.id })
         assertNull(again[1].error)
     }
+
+    @Test
+    fun `the computer's theme comes from settings and then follows the live event`() = runTest {
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.SETTINGS_GET -> buildJsonObject { put("theme", "light"); put("accent", "#6D5EFC"); put("hfToken", "hf_secret") }
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        assertNull(repo.state.value.appearance)
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals(com.nekko.protocol.Appearance.ThemeMode.LIGHT, repo.state.value.appearance?.theme)
+        assertEquals(0xFF6D5EFCL, repo.state.value.appearance?.accent)
+
+        remotes.last.events.emit(Events.APPEARANCE_UPDATED to buildJsonObject { put("theme", "dark"); put("accent", "#fb923c") })
+        runCurrent()
+        assertEquals(com.nekko.protocol.Appearance.ThemeMode.DARK, repo.state.value.appearance?.theme)
+        assertEquals(0xFFFB923CL, repo.state.value.appearance?.accent)
+    }
 }

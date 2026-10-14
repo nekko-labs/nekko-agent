@@ -32,6 +32,8 @@ pub const RELAYED_EVENTS: &[&str] = &[
     "training:updated",
     "workflows:updated",
     "limits:updated",
+    // The desktop's public look (theme, preset, accents) for a phone that mirrors it.
+    "appearance:updated",
 ];
 
 /// What to do after a relay frame.

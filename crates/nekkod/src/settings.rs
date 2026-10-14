@@ -28,10 +28,11 @@ pub const OWNS: &str = "settings";
 pub struct Settings {
     pub store: Arc<SettingsStore>,
     notify: mpsc::UnboundedSender<Value>,
+    hub: crate::hub::Hub,
 }
 
 impl Settings {
-    pub fn new(dir: std::path::PathBuf, backend: Arc<crate::backend::Backend>) -> Arc<Self> {
+    pub fn new(dir: std::path::PathBuf, backend: Arc<crate::backend::Backend>, hub: crate::hub::Hub) -> Arc<Self> {
         let (notify, mut rx) = mpsc::unbounded_channel::<Value>();
         tokio::spawn(async move {
             while let Some(args) = rx.recv().await {
@@ -39,12 +40,57 @@ impl Settings {
                 let _ = backend.call("settings:changed", args).await;
             }
         });
-        Arc::new(Settings { store: Arc::new(SettingsStore::new(dir)), notify })
+        Arc::new(Settings { store: Arc::new(SettingsStore::new(dir)), notify, hub })
     }
 
     fn changed(&self, settings: &Value, patch: &Value) {
         let _ = self.notify.send(json!([settings, patch]));
+        // A paired phone mirrors the desktop's look; it hears the public part only.
+        if touches_appearance(patch) {
+            self.hub.publish(APPEARANCE_UPDATED, appearance_of(settings), false);
+        }
     }
+}
+
+/// The event a paired phone follows the desktop's theme by (`IpcEvents.appearanceUpdated`).
+pub const APPEARANCE_UPDATED: &str = "appearance:updated";
+
+const APPEARANCE_KEYS: [&str; 4] = ["theme", "themePreset", "accent", "accent2"];
+
+/// Whether a settings patch can change [`appearance_of`] (a reset is `null`).
+pub fn touches_appearance(patch: &Value) -> bool {
+    match patch {
+        Value::Null => true,
+        Value::Object(o) => APPEARANCE_KEYS.iter().any(|k| o.contains_key(*k)),
+        _ => false,
+    }
+}
+
+/// The public look of the settings, field by field (`appearanceOf` in
+/// packages/shared/src/themes.ts): nothing else in the settings reaches the
+/// relay. The mode, anything unknown reading as `system`; a preset id shaped
+/// like one; the accents as lowercase 6-digit hex.
+pub fn appearance_of(settings: &Value) -> Value {
+    let str_of = |k: &str| settings.get(k).and_then(Value::as_str);
+    let theme = str_of("theme").filter(|t| matches!(*t, "light" | "dark")).unwrap_or("system");
+    let mut out = serde_json::Map::new();
+    out.insert("theme".into(), json!(theme));
+    if let Some(p) = str_of("themePreset")
+        && (1..=32).contains(&p.len())
+        && p.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    {
+        out.insert("themePreset".into(), json!(p));
+    }
+    for k in ["accent", "accent2"] {
+        if let Some(v) = str_of(k)
+            && v.len() == 7
+            && v.starts_with('#')
+            && v[1..].bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            out.insert(k.into(), json!(v.to_ascii_lowercase()));
+        }
+    }
+    Value::Object(out)
 }
 
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
@@ -94,5 +140,53 @@ pub async fn update(ctx: &Ctx, patch: Value) -> Result<Value, String> {
     match &ctx.settings {
         Some(s) => route(s, "settings:update", &[patch]).await,
         None => ctx.backend.call("settings:update", json!([patch])).await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn appearance_keeps_only_the_public_look() {
+        let a = appearance_of(&json!({
+            "theme": "dark", "themePreset": "nebula", "accent": "#FB923C", "accent2": "red",
+            "providers": [{ "apiKey": "sk-secret" }], "hfToken": "hf_x"
+        }));
+        assert_eq!(a, json!({ "theme": "dark", "themePreset": "nebula", "accent": "#fb923c" }));
+        assert!(!a.to_string().contains("secret"));
+        assert_eq!(appearance_of(&Value::Null), json!({ "theme": "system" }));
+        assert_eq!(
+            appearance_of(&json!({ "theme": "sepia", "themePreset": "<script>", "accent": "#12345" })),
+            json!({ "theme": "system" })
+        );
+    }
+
+    #[test]
+    fn only_look_patches_and_resets_are_announced() {
+        assert!(touches_appearance(&json!({ "theme": "light" })));
+        assert!(touches_appearance(&json!({ "accent2": "#000000" })));
+        assert!(touches_appearance(&Value::Null));
+        assert!(!touches_appearance(&json!({ "providers": [] })));
+    }
+
+    #[tokio::test]
+    async fn a_theme_change_reaches_the_hub_with_the_public_look_only() {
+        let hub = crate::hub::Hub::new();
+        let mut rx = hub.subscribe();
+        let (notify, _keep) = mpsc::unbounded_channel();
+        let dir = std::env::temp_dir().join(format!("nekkod-appearance-{}", std::process::id()));
+        let s = Arc::new(Settings { store: Arc::new(SettingsStore::new(dir.clone())), notify, hub });
+        route(&s, "settings:update", &[json!({ "theme": "dark", "accent": "#FB923C" })]).await.unwrap();
+        let ev = rx.recv().await.unwrap();
+        let v: Value = serde_json::from_str(&ev.text).unwrap();
+        assert_eq!(v["channel"], APPEARANCE_UPDATED);
+        assert_eq!(v["payload"]["theme"], "dark");
+        assert_eq!(v["payload"]["accent"], "#fb923c");
+        assert_eq!(v["payload"].as_object().unwrap().len(), 2, "{v}");
+        // Something that is not the look stays off the relay.
+        route(&s, "settings:update", &[json!({ "mascotEnabled": false })]).await.unwrap();
+        assert!(rx.try_recv().is_err());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

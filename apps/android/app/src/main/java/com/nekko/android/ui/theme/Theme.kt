@@ -11,6 +11,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -90,6 +91,24 @@ val DarkPalette = Palette(
     code = Color(0xFF101016),
 )
 
+/**
+ * The palette with the computer's accent in place of Nekko's indigo: the
+ * accent, its soft tint, the text drawn on it (dark or white, whichever reads
+ * better) and, in light mode, the user's bubble, as the desktop paints them.
+ */
+fun Palette.withAccent(argb: Long?, dark: Boolean): Palette {
+    if (argb == null) return this
+    val a = Color(argb)
+    val onAccent = if (a.luminance() > 0.45f) Color(0xFF0C0C11) else Color(0xFFFFFFFF)
+    return copy(
+        accent = a,
+        accentInk = onAccent,
+        accentSoft = a.copy(alpha = if (dark) 0.18f else 0.13f),
+        userBubble = if (dark) userBubble else a,
+        userInk = if (dark) userInk else onAccent,
+    )
+}
+
 private val LocalPalette = staticCompositionLocalOf { DarkPalette }
 
 object Nekko {
@@ -111,8 +130,8 @@ private val typography = Typography().let { t ->
 
 /** Material 3 with the Nekko palette; dynamic color is deliberately off. */
 @Composable
-fun NekkoTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val p = if (dark) DarkPalette else LightPalette
+fun NekkoTheme(dark: Boolean = isSystemInDarkTheme(), accent: Long? = null, content: @Composable () -> Unit) {
+    val p = (if (dark) DarkPalette else LightPalette).withAccent(accent, dark)
     val scheme = if (dark) {
         darkColorScheme(
             primary = p.accent, onPrimary = p.accentInk, primaryContainer = p.accentSoft, onPrimaryContainer = p.ink,
