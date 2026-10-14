@@ -19,6 +19,7 @@
     "test:subagents": "node scripts/subagent-integration.cjs",
     "test:wall-controls": "node scripts/wall-controls-integration.cjs",
     "test:grid-bugs": "node scripts/wall-controls-integration.cjs --grid-bugs",
+    "test:repo-actions": "node scripts/agent-sidebar-integration.cjs --repo-actions",
     "test:command-center": "node scripts/command-center-integration.cjs",
     "prestart": "node scripts/ensure-electron.mjs",
     "start": "node scripts/dev-launch.mjs preview",
