@@ -24,7 +24,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
    paste your self-hosted relay URL), then **Pair a device**.
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
-   app, open the pairing link in a browser to get the full app over the relay.
+   app, the pairing link also opens the web app in a browser over the relay, but it is limited to
+   what a phone may do (below), so most desktop screens there are unavailable.
 3. The phone shows up under **Paired devices**, with a live connection dot.
 
 ## The phone app
@@ -63,6 +64,31 @@ everything at once.
 
 Remote access survives restarts: if it was enabled, the agent reconnects when Nekko Agent starts.
 
+## What a paired phone can do
+
+Your computer decides what a paired phone may ask for, whatever the phone app does: locking the
+phone app is not the boundary, your computer is. A phone can use your chats and nothing that
+changes how the computer itself is set up:
+
+- **Allowed:** list, open, start, complete and delete chats; send, queue and stop messages; answer
+  approvals and the agent's questions; pick a model from the computer's providers and a folder from
+  its list; voice status and transcription; and a few settings (below).
+- **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
+  revoking, rotating the secret), terminals, writing files, adding or removing folders, installing
+  or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
+  servers and hooks. Everything not on the allowed list is refused too, with an error that starts
+  *Not allowed from a paired phone*.
+- **Settings a phone may change:** the chat mode for new chats (Ask or Guardrails; **YOLO can only
+  be chosen on the computer**), what the chat pane's top-right button does (Complete or Delete),
+  whether deleting asks first, and voice on/off and its language. An update that touches any other
+  setting is refused as a whole: nothing in it is applied.
+- **Settings a phone can read:** only the theme and accents, the default and starred models, and
+  the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
+  instructions never leave the computer this way; provider lists arrive as name and type only.
+- **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
+  switch it between Ask and Guardrails, but not to YOLO, and not its tools, isolation or
+  offline/incognito switches. Messages cannot attach files from the computer.
+
 ## Security model, honestly stated
 
 | Threat | Defense |
@@ -73,7 +99,7 @@ Remote access survives restarts: if it was enabled, the agent reconnects when Ne
 | Lost/stolen phone | Revoke it in Settings: kicked immediately, denied afterward, push token dropped |
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; rotate the secret for a full cryptographic reset |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
-| Phone asks for something dangerous | Tool calls run on your machine under your guardrails/sandbox and chat mode (Ask/Guardrails/YOLO) |
+| Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes, YOLO); tool calls run on your machine under your guardrails/sandbox and chat mode |
 
 What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
 enable push, device push tokens plus the content-free fact "a run finished". That's the whole list,

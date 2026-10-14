@@ -1,4 +1,4 @@
-import { IpcEvents, deriveKey, seal, open, type RemoteHelloReply } from '@nekko-agent/shared';
+import { IpcEvents, callFromPhone, deriveKey, seal, open, type RemoteHelloReply } from '@nekko-agent/shared';
 import { createDispatcher } from './dispatch.js';
 import type { Host } from './host.js';
 
@@ -33,6 +33,9 @@ export interface RelayAgentHandle {
  * gated behind the device HELLO handshake: requests from un-welcomed
  * connections are ignored, denied connections are kicked, and replies + events
  * are unicast per device so no client ever receives another's traffic.
+ * Every request goes through the phone access policy (`callFromPhone`): only
+ * the allowlisted channels, a filtered `settings:update`, and redacted
+ * settings and provider records.
  * Reconnects on drop until stop() is called.
  */
 export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAgentHandle {
@@ -145,7 +148,10 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
       return;
     }
     try {
-      const result = await dispatch(frame.channel, frame.args ?? []);
+      // Phones reach only what packages/shared/src/phone-access.ts allows,
+      // checked here on the computer, with secrets stripped from replies.
+      const args = Array.isArray(frame.args) ? frame.args : [];
+      const result = await callFromPhone(dispatch, String(frame.channel), args);
       await sendTo(cid, { type: 'res', id: frame.id, result: result ?? null });
     } catch (e) {
       await sendTo(cid, { type: 'res', id: frame.id, error: (e as Error).message });

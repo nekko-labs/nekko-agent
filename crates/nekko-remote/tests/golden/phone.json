@@ -1,0 +1,589 @@
+{
+ "settings": {
+  "theme": "dark",
+  "accent": "#6d5efc",
+  "themePreset": "nebula",
+  "defaultProviderId": "p1",
+  "defaultModelId": "m1",
+  "favoriteModels": [
+   "p1::m1"
+  ],
+  "defaultChatMode": "ask",
+  "chatPaneAction": "complete",
+  "sandboxMode": "workspace",
+  "providers": [
+   {
+    "id": "p1",
+    "kind": "openai",
+    "label": "GPT",
+    "baseUrl": "https://x",
+    "apiKey": "sk-secret",
+    "tokenKey": "tk",
+    "enabled": true
+   }
+  ],
+  "guardrails": [
+   {
+    "id": "g"
+   }
+  ],
+  "hooks": [
+   {
+    "id": "h",
+    "command": "curl"
+   }
+  ],
+  "hfToken": "hf_secret",
+  "aboutUser": "me",
+  "voice": {
+   "enabled": true,
+   "language": "en",
+   "modelPath": "/m.bin",
+   "sensitivity": 50
+  }
+ },
+ "cases": [
+  {
+   "channel": "data:wipe",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): data:wipe"
+  },
+  {
+   "channel": "settings:reset",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): settings:reset"
+  },
+  {
+   "channel": "remote:rotate",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): remote:rotate"
+  },
+  {
+   "channel": "remote:status",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): remote:status"
+  },
+  {
+   "channel": "terminal:create",
+   "args": [
+    {}
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): terminal:create"
+  },
+  {
+   "channel": "file:write",
+   "args": [
+    "/etc/hosts",
+    "x"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): file:write"
+  },
+  {
+   "channel": "workspace:addByPath",
+   "args": [
+    "/"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): workspace:addByPath"
+  },
+  {
+   "channel": "voice:install",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): voice:install"
+  },
+  {
+   "channel": "mcp:hypergate:connect",
+   "args": [
+    1
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): mcp:hypergate:connect"
+  },
+  {
+   "channel": "tasks:list",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): tasks:list"
+  },
+  {
+   "channel": "turn:pending",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): turn:pending"
+  },
+  {
+   "channel": "sessions:summaries",
+   "args": [],
+   "calls": [
+    [
+     "sessions:summaries",
+     []
+    ]
+   ],
+   "result": {
+    "ok": "sessions:summaries"
+   }
+  },
+  {
+   "channel": "session:get",
+   "args": [
+    "s1",
+    {
+     "deep": [
+      1
+     ]
+    }
+   ],
+   "calls": [
+    [
+     "session:get",
+     [
+      "s1",
+      {
+       "deep": [
+        1
+       ]
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "session:get"
+   }
+  },
+  {
+   "channel": "session:delete",
+   "args": [
+    "s1"
+   ],
+   "calls": [
+    [
+     "session:delete",
+     [
+      "s1"
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "session:delete"
+   }
+  },
+  {
+   "channel": "voice:transcribe",
+   "args": [
+    [
+     0,
+     1,
+     2
+    ]
+   ],
+   "calls": [
+    [
+     "voice:transcribe",
+     [
+      [
+       0,
+       1,
+       2
+      ]
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "voice:transcribe"
+   }
+  },
+  {
+   "channel": "settings:get",
+   "args": [],
+   "calls": [
+    [
+     "settings:get",
+     []
+    ]
+   ],
+   "result": {
+    "accent": "#6d5efc",
+    "chatPaneAction": "complete",
+    "defaultChatMode": "ask",
+    "defaultModelId": "m1",
+    "defaultProviderId": "p1",
+    "favoriteModels": [
+     "p1::m1"
+    ],
+    "theme": "dark",
+    "themePreset": "nebula",
+    "voice": {
+     "enabled": true,
+     "language": "en"
+    }
+   }
+  },
+  {
+   "channel": "settings:get",
+   "args": "not a list",
+   "calls": [
+    [
+     "settings:get",
+     []
+    ]
+   ],
+   "result": {
+    "accent": "#6d5efc",
+    "chatPaneAction": "complete",
+    "defaultChatMode": "ask",
+    "defaultModelId": "m1",
+    "defaultProviderId": "p1",
+    "favoriteModels": [
+     "p1::m1"
+    ],
+    "theme": "dark",
+    "themePreset": "nebula",
+    "voice": {
+     "enabled": true,
+     "language": "en"
+    }
+   }
+  },
+  {
+   "channel": "providers:list",
+   "args": [],
+   "calls": [
+    [
+     "providers:list",
+     []
+    ]
+   ],
+   "result": [
+    {
+     "enabled": true,
+     "id": "p1",
+     "kind": "openai",
+     "label": "GPT"
+    }
+   ]
+  },
+  {
+   "channel": "settings:update",
+   "args": [
+    {
+     "chatPaneAction": "delete",
+     "skipDeleteConfirmation": true
+    }
+   ],
+   "calls": [
+    [
+     "settings:update",
+     [
+      {
+       "chatPaneAction": "delete",
+       "skipDeleteConfirmation": true
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "accent": "#6d5efc",
+    "chatPaneAction": "complete",
+    "defaultChatMode": "ask",
+    "defaultModelId": "m1",
+    "defaultProviderId": "p1",
+    "favoriteModels": [
+     "p1::m1"
+    ],
+    "theme": "dark",
+    "themePreset": "nebula",
+    "voice": {
+     "enabled": true,
+     "language": "en"
+    }
+   }
+  },
+  {
+   "channel": "settings:update",
+   "args": [
+    {
+     "defaultChatMode": "guardrails"
+    }
+   ],
+   "calls": [
+    [
+     "settings:update",
+     [
+      {
+       "defaultChatMode": "guardrails"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "accent": "#6d5efc",
+    "chatPaneAction": "complete",
+    "defaultChatMode": "ask",
+    "defaultModelId": "m1",
+    "defaultProviderId": "p1",
+    "favoriteModels": [
+     "p1::m1"
+    ],
+    "theme": "dark",
+    "themePreset": "nebula",
+    "voice": {
+     "enabled": true,
+     "language": "en"
+    }
+   }
+  },
+  {
+   "channel": "settings:update",
+   "args": [
+    {
+     "defaultChatMode": "yolo"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (yolo-denied): defaultChatMode"
+  },
+  {
+   "channel": "settings:update",
+   "args": [
+    {
+     "defaultChatMode": "turbo"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): defaultChatMode"
+  },
+  {
+   "channel": "settings:update",
+   "args": [
+    {
+     "chatPaneAction": "delete",
+     "sandboxMode": "off"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (setting-denied): sandboxMode"
+  },
+  {
+   "channel": "settings:update",
+   "args": [
+    {
+     "voice": {
+      "language": "it"
+     }
+    }
+   ],
+   "calls": [
+    [
+     "settings:get",
+     []
+    ],
+    [
+     "settings:update",
+     [
+      {
+       "voice": {
+        "enabled": true,
+        "language": "it",
+        "modelPath": "/m.bin",
+        "sensitivity": 50
+       }
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "accent": "#6d5efc",
+    "chatPaneAction": "complete",
+    "defaultChatMode": "ask",
+    "defaultModelId": "m1",
+    "defaultProviderId": "p1",
+    "favoriteModels": [
+     "p1::m1"
+    ],
+    "theme": "dark",
+    "themePreset": "nebula",
+    "voice": {
+     "enabled": true,
+     "language": "en"
+    }
+   }
+  },
+  {
+   "channel": "settings:update",
+   "args": [
+    {
+     "voice": {
+      "enabled": false,
+      "modelPath": "/evil"
+     }
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (setting-denied): voice.modelPath"
+  },
+  {
+   "channel": "settings:update",
+   "args": [
+    {
+     "voice": {
+      "language": "x y"
+     }
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): voice.language"
+  },
+  {
+   "channel": "settings:update",
+   "args": [
+    {
+     "voice": null
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (setting-denied): voice"
+  },
+  {
+   "channel": "settings:update",
+   "args": [
+    null
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): settings patch"
+  },
+  {
+   "channel": "settings:update",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): settings patch"
+  },
+  {
+   "channel": "session:setOptions",
+   "args": [
+    "s1",
+    {
+     "providerId": "p1",
+     "modelId": "m1"
+    }
+   ],
+   "calls": [
+    [
+     "session:setOptions",
+     [
+      "s1",
+      {
+       "providerId": "p1",
+       "modelId": "m1"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "session:setOptions"
+   }
+  },
+  {
+   "channel": "session:setOptions",
+   "args": [
+    "s1",
+    {
+     "archivedAt": 5
+    }
+   ],
+   "calls": [
+    [
+     "session:setOptions",
+     [
+      "s1",
+      {
+       "archivedAt": 5
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "session:setOptions"
+   }
+  },
+  {
+   "channel": "session:setOptions",
+   "args": [
+    "s1",
+    {
+     "mode": "yolo"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (yolo-denied): mode"
+  },
+  {
+   "channel": "session:setOptions",
+   "args": [
+    "s1",
+    {
+     "mode": "guardrails",
+     "disabledTools": []
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (option-denied): disabledTools"
+  },
+  {
+   "channel": "session:setOptions",
+   "args": [
+    "s1"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): chat options"
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "providerId": "p1",
+     "modelId": "m1",
+     "text": "hi"
+    }
+   ],
+   "calls": [
+    [
+     "chat:send",
+     [
+      {
+       "sessionId": "s1",
+       "providerId": "p1",
+       "modelId": "m1",
+       "text": "hi"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:send"
+   }
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "hi",
+     "attachedPaths": [
+      "/etc/passwd"
+     ]
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (option-denied): attachedPaths"
+  }
+ ]
+}

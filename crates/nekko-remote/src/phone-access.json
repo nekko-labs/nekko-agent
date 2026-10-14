@@ -1,0 +1,102 @@
+{
+ "channels": [
+  "app:info",
+  "chat:abort",
+  "chat:answer",
+  "chat:pending",
+  "chat:queue",
+  "chat:send",
+  "models:list",
+  "providers:list",
+  "session:create",
+  "session:delete",
+  "session:get",
+  "session:setOptions",
+  "sessions:summaries",
+  "settings:get",
+  "settings:update",
+  "tool:approve",
+  "voice:status",
+  "voice:transcribe",
+  "workspace:list"
+ ],
+ "alwaysDenied": {
+  "channels": [
+   "connector:connect",
+   "connector:disconnect",
+   "data:wipe",
+   "file:write",
+   "providers:importCliAuth",
+   "providers:remove",
+   "providers:save",
+   "settings:reset",
+   "voice:cancel",
+   "voice:install",
+   "voice:uninstall",
+   "workspace:addByPath",
+   "workspace:remove"
+  ],
+  "prefixes": [
+   "mcp:",
+   "oauth:",
+   "remote:",
+   "terminal:",
+   "terminals:"
+  ],
+  "except": [
+   "remote:status"
+  ]
+ },
+ "settingsKeys": [
+  "chatPaneAction",
+  "defaultChatMode",
+  "skipDeleteConfirmation",
+  "voice.enabled",
+  "voice.language"
+ ],
+ "settingsView": [
+  "accent",
+  "accent2",
+  "chatPaneAction",
+  "defaultChatMode",
+  "defaultModelId",
+  "defaultProviderId",
+  "favoriteModels",
+  "skipDeleteConfirmation",
+  "theme",
+  "themePreset",
+  "voice.enabled",
+  "voice.language"
+ ],
+ "providerView": [
+  "enabled",
+  "id",
+  "kind",
+  "label"
+ ],
+ "sessionOptionKeys": [
+  "archivedAt",
+  "mode",
+  "modelId",
+  "pinned",
+  "providerId",
+  "tags",
+  "thinking",
+  "title"
+ ],
+ "chatSendKeys": [
+  "images",
+  "modelId",
+  "providerId",
+  "regenerate",
+  "resume",
+  "sessionId",
+  "skill",
+  "text"
+ ],
+ "chatModes": [
+  "ask",
+  "guardrails"
+ ],
+ "yoloMode": "yolo"
+}
