@@ -44,9 +44,15 @@ or visual evidence, and verification limitations with concrete next steps. Write
 notes only in chat, review comments, or local files are not sufficient.
 
 Read back the published description to verify the update succeeded. If publishing
-fails, report the failure and preserve the pending description locally. Keep work
-with release blockers draft/unmerged; do not claim the notes are published or the
-work is ready to ship.
+fails, report the failure and preserve the pending description locally; do not
+claim the notes are published.
+
+An entry in this section is not by itself a reason to stay draft. Residual notes
+(a platform not checked, a tuned pixel offset, a test that already fails on
+`main`) are recorded and the PR lands. Only a **release blocker** holds a PR:
+the change breaks something that worked, a required check is red because of this
+PR, the evidence this repo requires for the change is missing, or the user said
+to wait. Name which one applies when you keep a PR draft.
 
 ## Continue through verification and landing
 
@@ -69,6 +75,29 @@ request the remaining work again. For UI changes:
    checks, reviews, evidence and release-blocker requirements are satisfied.
    Never bypass required reviews, failing checks, or branch protections. The
    example merge command above is not permission to override these gates.
+6. **Mark the PR ready and merge it.** A draft never merges: `gh pr merge` refuses
+   drafts and the auto-merge workflow only runs on `ready_for_review`. Once the
+   gates in step 5 are met, run `gh pr ready <n>` and then merge (or let auto-merge
+   do it). Opening a draft is the start of this workflow, not its last step.
+
+## When a check fails on `main` too
+
+The repo's required check is `build`. The other jobs (`perf`, `capture`, `daemon`,
+CodeQL) are gates on the quality of this PR, not on whether `main` is healthy.
+When one of them is red:
+
+1. Diagnose the failing step. If the failure is in something this PR touches, fix it.
+2. Otherwise compare against `main`: the same job on the merge-base commit, or the
+   most recent `main` runs (`gh run list --workflow ci.yml --branch main`). If
+   `main` fails the same way on the same metric, the failure is a baseline problem.
+3. A baseline failure does not block this PR. Record it in Unfinished work with the
+   `main` run that proves it, make sure an issue exists for it (search first, file
+   one if not, link it), and land the PR. Do not spend this PR's budget fixing `main`
+   unless the user asked; do not weaken the budget or delete the check.
+4. A failure that only this PR produces is a release blocker until it is fixed or
+   shown to be runner noise with two matched base/head measurements.
+
+This is the policy the "Bound failed-check investigations" rules below apply to.
 
 Keep verification plan steps pending/active until verified; recording missing
 screenshots in a draft PR does not complete the verification step. Pause only
