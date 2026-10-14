@@ -15,7 +15,7 @@ import { wallLayoutShortcut, WallToolbar } from './CommandCenterView.js';
 import { DEFAULT_WALL_STATE } from '../commandWall.js';
 import { readFileSync } from 'node:fs';
 
-it.each(['focus', 'grid', 'fixed'] as const)('More opens without changing the %s layout', (mode) => {
+it.each(['focus', 'grid', 'fixed'] as const)('direct creation replaces More without changing the %s layout', (mode) => {
   vi.mocked(useState).mockReturnValueOnce([false, vi.fn()]).mockReturnValueOnce([{ rows: 2, cols: 2 }, vi.fn()]).mockReturnValueOnce([null, vi.fn()]);
   const setWall = vi.fn(); const setAddOpen = vi.fn();
   const tree = WallToolbar({ wall: { ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode } }, setWall, setAddOpen, addOpen: false, onAutoArrange: vi.fn(), onAdd: vi.fn() });
@@ -25,11 +25,13 @@ it.each(['focus', 'grid', 'fixed'] as const)('More opens without changing the %s
     elements.push(child); walk(child.props.children);
   });
   walk(tree);
-  const more = elements.find((e) => e.props['aria-label'] === 'Add window')!;
-  expect(more.props['aria-haspopup']).toBe('dialog');
-  vi.stubGlobal('document', { querySelector: () => null });
-  try { more.props.onClick(); } finally { vi.unstubAllGlobals(); }
-  expect(setAddOpen.mock.calls[0][0](false)).toBe(true);
+  expect(elements.some((e) => e.props['aria-label'] === 'Add window')).toBe(false);
+  for (const label of ['New agent', 'New image session', 'New terminal']) {
+    const button = elements.find((e) => e.props['aria-label'] === label)!;
+    expect(button).toBeDefined();
+    button.props.onClick();
+  }
+  expect(setAddOpen).not.toHaveBeenCalled();
   expect(setWall).not.toHaveBeenCalled();
 });
 

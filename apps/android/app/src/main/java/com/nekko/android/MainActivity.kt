@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
                 NekkoNavHost(
                     repo = repo,
                     themePrefs = app.themePrefs,
+                    phonePrefs = app.phonePrefs,
                     incomingLink = incomingLink,
                     onLinkHandled = { incomingLink.value = null },
                 )

@@ -241,7 +241,7 @@ list dirs, run shell commands).
 
 ### Add windows and read the dock
 
-The Agents toolbar ellipsis opens an anchored dropdown with horizontal **Chat**, **Media** and **Terminal** categories. Narrow widths can scroll the categories horizontally. Opening the dropdown does not move wall tiles, resize the wall or change its layout mode. Escape, Close or an outside pointer dismisses it; pending creation prevents dismissal and double activation. This replaces the prior inline Add-tile reveal.
+The Agents toolbar provides direct **New agent**, **New image session** and **New terminal** actions, with no ellipsis or overflow button. The empty wall can still open the full window picker. Its Chat, Media and Terminal categories remain horizontal; opening it does not change the wall layout.
 
 Utilization shows a Claude subscription account once when provider entries share the same token key, preferring the Anthropic entry. Independent accounts and API entries remain separate. In Budget, choose today, 1wk, 1m, 6m, 1y or all-time; the active range is tinted. Spend, tokens, top agent, local tokens, savings and compared model membership all follow that UTC range, not lifetime totals. See [usage limits and prices](https://nekkoagent.com/docs/usage-limits).
 
@@ -736,6 +736,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > computer right away. Pick **Phone setting**, **Light** or **Dark** to choose on the phone instead;
 > that choice is kept on the phone. Only the theme, theme preset and the two accent colors are sent
 > for this (the `appearance:updated` event), never the rest of the computer's settings.
+>
+> The Android app's **Settings** also has a **Computers** row, which opens the list of paired
+> computers (rename, switch, forget, pair another), and an **About** section with the installed
+> version and the open-source licenses of the app and the libraries it ships.
 
 The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
 small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the

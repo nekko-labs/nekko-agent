@@ -106,7 +106,7 @@ list dirs, run shell commands).
 
 ### Add windows and read the dock
 
-The Agents toolbar ellipsis opens an anchored dropdown with horizontal **Chat**, **Media** and **Terminal** categories. Narrow widths can scroll the categories horizontally. Opening the dropdown does not move wall tiles, resize the wall or change its layout mode. Escape, Close or an outside pointer dismisses it; pending creation prevents dismissal and double activation. This replaces the prior inline Add-tile reveal.
+The Agents toolbar provides direct **New agent**, **New image session** and **New terminal** actions, with no ellipsis or overflow button. The empty wall can still open the full window picker. Its Chat, Media and Terminal categories remain horizontal; opening it does not change the wall layout.
 
 Utilization shows a Claude subscription account once when provider entries share the same token key, preferring the Anthropic entry. Independent accounts and API entries remain separate. In Budget, choose today, 1wk, 1m, 6m, 1y or all-time; the active range is tinted. Spend, tokens, top agent, local tokens, savings and compared model membership all follow that UTC range, not lifetime totals. See [usage limits and prices](/docs/usage-limits).
 

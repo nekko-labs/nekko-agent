@@ -8,6 +8,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.nekko.android.data.AndroidSecureStore
 import com.nekko.android.data.ComputersRepository
+import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.RelayRemoteFactory
 import com.nekko.android.data.ThemePrefs
 import kotlinx.coroutines.CoroutineScope
@@ -23,10 +24,13 @@ class NekkoApp : Application() {
         private set
     lateinit var themePrefs: ThemePrefs
         private set
+    lateinit var phonePrefs: PhonePrefs
+        private set
 
     override fun onCreate() {
         super.onCreate()
         themePrefs = ThemePrefs(this)
+        phonePrefs = PhonePrefs(this)
         computers = ComputersRepository(
             store = AndroidSecureStore(this),
             remotes = RelayRemoteFactory(),
