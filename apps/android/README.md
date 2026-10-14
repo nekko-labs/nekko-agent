@@ -27,6 +27,10 @@ reference until this app reaches parity.
   is shown or approvable, recents stay blank (`FLAG_SECURE`), and after a restart
   the relay doesn't connect until the first unlock.
 
+- **Vibration:** a distinct buzz while the app is open when the agent needs an
+  approval or asks a question (on by default), and optionally when a reply
+  finishes or fails; never in silent mode or Do Not Disturb.
+
 **Not yet:** models on the phone, push notifications, Markdown rendering,
 attachments, Play Store release. See `TASKS.md` → *Native Android app*.
 

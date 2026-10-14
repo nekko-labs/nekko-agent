@@ -19,6 +19,7 @@ import com.nekko.android.NekkoApp
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
+import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.data.ThemePrefs
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.ChatsScreen
@@ -48,6 +49,7 @@ fun NekkoNavHost(
     repo: ComputersRepository,
     themePrefs: ThemePrefs,
     phonePrefs: PhonePrefs,
+    haptics: AndroidHaptics? = null,
     incomingLink: StateFlow<DeepLink?>,
     onLinkHandled: () -> Unit,
     nav: NavHostController = rememberNavController(),
@@ -104,7 +106,7 @@ fun NekkoNavHost(
         }
         composable(Routes.SETTINGS) {
             val deps = remember(nav) {
-                SettingsDeps(repo, themePrefs, phonePrefs, open = { route -> nav.navigate(route) { launchSingleTop = true } })
+                SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } })
             }
             SettingsScreen(deps = deps, onBack = { nav.popBackStack() })
         }
