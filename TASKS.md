@@ -1664,3 +1664,13 @@ Ask: rather than copying many skills into the bundled catalog, let users find sk
 - [x] Bias desktop rail destinations upward with 1:3 free-space distribution and short-window scrolling.
 - [x] Check source-derived isolated layouts at 600/1000/1400 px, dark/light: all six move upward and retain eleven full-size visible destinations.
 - [ ] Inspect matching native before/after captures, hover/focus expansion and short-window scroll recording; OS native capture currently refuses isolated windows.
+
+### Guarded chat-switch updates (2026-10-15) · [spec](SPEC.md#guarded-chat-switch-updates-2026-10-15)
+
+Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after #438 and #573.
+- [x] `openWallPane` in `commandWall.ts`: one guarded add-or-select that returns the same state when nothing changed. The toolbar and the sidebar both use it; the sidebar no longer issues a second and third wall update. Focused tests: `chatSwitchPerf.test.ts`. Done: 2026-10-15
+- [x] `restoredDraftImages` in `composerDrafts.ts`: keep an equal attachment array when a draft is restored. Done: 2026-10-15
+- [x] Perf browser: fail fast on a taken DevTools port and match the page by a unique `data:` start URL (Windows Chrome turns `about:blank#...` into `chrome://newtab/`). `node --test scripts/perf/browser.test.mjs`. The original's PowerShell owner lookup and removed retry were dropped: #573's `--do-not-de-elevate` and the `close()` tree kill already keep Chrome in the owned tree. Done: 2026-10-15
+- [x] Synthetic Electron check `apps/desktop/scripts/chat-switch-{integration,sandbox}.cjs`, rewritten for the current sidebar: base vs head, Grid and Focus, wall saves per switch and per reselect, draft flush and image restore. Done: 2026-10-15
+- [ ] Add `scripts/perf/browser.test.mjs` to the root `npm test` list once its real-launch case is confirmed on the Linux CI runner (it skips when no Chromium is found).
+- [ ] Captures are pixel-compared only (7 of 8 byte-identical to base; the eighth differs only in the mascot avatar's idle animation frame). Not inspected by eye; no native-window capture.

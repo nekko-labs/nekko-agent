@@ -22,6 +22,8 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:net';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -92,6 +94,29 @@ export function killTree(proc) {
   }
 }
 
+/**
+ * Fail before launching when something already listens on the DevTools port.
+ * A browser left over from an earlier run would otherwise answer /json, be
+ * measured in place of ours, and outlive close(), which only ends our tree.
+ */
+export async function assertPortFree(port) {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', resolve);
+  });
+  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+}
+
+/** The page this launch opened: its unique start URL, served on our local port. */
+export function selectPage(targets, marker, port) {
+  const page = targets?.find((t) => t.type === 'page' && t.url === marker);
+  let url = null;
+  try { url = page ? new URL(page.webSocketDebuggerUrl) : null; } catch { /* malformed */ }
+  if (!url || url.protocol !== 'ws:' || url.hostname !== '127.0.0.1' || url.port !== String(port) || !/^\/devtools\/page\/[^/]+$/.test(url.pathname)) return null;
+  return page;
+}
+
 export async function launchBrowser({ port, width, height, vsync = false, gpu = true }) {
   const bin = findBrowser();
   // A cold Chrome on a shared runner sometimes never opens its DevTools page
@@ -109,6 +134,11 @@ export async function launchBrowser({ port, width, height, vsync = false, gpu = 
 }
 
 async function launchOnce(bin, { port, width, height, vsync, gpu }) {
+  await assertPortFree(port);
+  // Only the page with this run's start URL counts, never another browser's.
+  // A data: URL, because Windows Chrome turns any about:blank with a query or
+  // fragment into chrome://newtab/ and the marker would be lost.
+  const marker = `data:text/html,nekko-perf-${randomUUID()}`;
   const profile = mkdtempSync(join(tmpdir(), 'nekko-perf-browser-'));
   const args = [
     // Prevent Windows Chrome from re-launching outside the owned process tree.
@@ -127,7 +157,7 @@ async function launchOnce(bin, { port, width, height, vsync, gpu }) {
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--disable-backgrounding-occluded-windows',
-    'about:blank',
+    marker,
   ];
   if (!vsync) args.unshift('--disable-frame-rate-limit', '--disable-gpu-vsync');
   // On a machine with no GPU, Chrome otherwise emulates one in software
@@ -159,13 +189,13 @@ async function launchOnce(bin, { port, width, height, vsync, gpu }) {
     try {
       const r = await fetch(`http://127.0.0.1:${port}/json`);
       targets = await r.json();
-      if (targets.some((t) => t.type === 'page')) break;
+      if (selectPage(targets, marker, port)) break;
     } catch {
       /* not up yet */
     }
     await sleep(250);
   }
-  const page = targets?.find((t) => t.type === 'page');
+  const page = selectPage(targets, marker, port);
   if (!page) {
     await close();
     const how = exited ? `exited (code ${exited.code}, signal ${exited.signal})` : 'still running after 30 s';

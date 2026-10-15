@@ -301,6 +301,19 @@ export function addPane(root: WbNode | null, pane: WbPane, aspect = DEFAULT_ASPE
   return root;
 }
 
+/**
+ * Open a window from the toolbar or sidebar: add it when the wall lacks it,
+ * make a chat (or anything, in Focus) the hero, and show it past the filter.
+ * Returns the same state when nothing changed, so reselecting a chat neither
+ * re-renders the wall nor saves it again.
+ */
+export function openWallPane(state: CommandWallState, kind: PaneKind, refId: string, aspect = DEFAULT_ASPECT): CommandWallState {
+  const root = hasPane(state.root, kind, refId) ? state.root : addPane(state.root, wallPane(kind, refId), aspect);
+  const hero = kind === 'chat' || state.layout.mode === 'focus' ? refId : state.hero;
+  const filter = state.filter === 'all' || state.filter === kind ? state.filter : 'all';
+  return root === state.root && hero === state.hero && filter === state.filter ? state : { ...state, root, hero, filter };
+}
+
 export function addPanes(root: WbNode | null, panes: WbPane[], aspect = DEFAULT_ASPECT): WbNode | null {
   return panes.reduce<WbNode | null>((tree, p) => addPane(tree, p, aspect), root);
 }
