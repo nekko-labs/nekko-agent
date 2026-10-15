@@ -134,7 +134,7 @@ export function WallComposer({
             <span className="text-ink-faint" data-composer-title>No agent selected</span>
           )}
           <div className="min-w-0 flex-1" />
-          {agent && <button type="button" className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Show selected chat in Focus" aria-label="Show selected chat in Focus" onClick={() => onFocus(agent.session.id)}><FocusLayoutIcon className="h-3.5 w-3.5" /></button>}
+          {agent && <button type="button" className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Show selected chat in Focused view" aria-label="Show selected chat in Focused view" onClick={() => onFocus(agent.session.id)}><FocusLayoutIcon className="h-3.5 w-3.5" /></button>}
           <div className="relative" ref={pickerRef}>
             <button
               className={`flex items-center gap-1 rounded-sm p-1 text-ink-faint hover:text-ink ${pickerOpen ? 'text-ink' : ''}`}

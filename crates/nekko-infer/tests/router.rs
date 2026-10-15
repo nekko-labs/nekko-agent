@@ -112,10 +112,6 @@ impl Policy for Loader {
     }
 }
 
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn waits_for_ready_and_reports_the_process() {
     let sup = Arc::new(Supervisor::new());
@@ -148,11 +144,14 @@ async fn streams_through_the_router_and_loads_on_demand() {
     let sup = Arc::new(Supervisor::new());
     let loader = Arc::new(Loader { sup: sup.clone(), loads: AtomicUsize::new(0) });
     let router = EngineRouter::new(sup.clone(), loader.clone());
-    let port = free_port();
+    // Port 0: the router binds an OS-assigned port and reports it. Picking a
+    // "free" port first and binding it later raced the parallel tests' fake
+    // model servers for it ("Port ... is already in use").
     router
-        .serve(ServeConfig { port, host: "127.0.0.1".into(), api_key: Some("k".into()), cors_origins: vec![] })
+        .serve(ServeConfig { port: 0, host: "127.0.0.1".into(), api_key: Some("k".into()), cors_origins: vec![] })
         .await
         .unwrap();
+    let port = router.serving().unwrap().port;
     let http = reqwest::Client::new();
     let base = format!("http://127.0.0.1:{port}");
 

@@ -17,17 +17,14 @@ function queueLabel(item: QueuedPrompt): string {
   return bits.join(' · ');
 }
 
+/** Leads the message a plan change sends (see PlanChangePrompt). */
 export const PLAN_CHANGE_REQUEST = 'Please revise the current agent plan. I would like to change the approach as follows:\n';
-
-export function appendPlanChangeRequest(draft: string): string {
-  return draft.trim() ? `${draft}\n\n${PLAN_CHANGE_REQUEST}` : PLAN_CHANGE_REQUEST;
-}
 
 export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
   sessionId: string;
   session: Session | null;
   streaming: boolean;
-  /** Opens an editable follow-up, never mutates or submits the plan directly. */
+  /** Pops up the plan-change prompt; nothing is sent until the user types and sends. */
   onChangePlan?: () => void;
 }) {
   const sessions = useStore((s) => s.sessions);
@@ -108,7 +105,7 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
               ))}
             </ol>
           ) : <p className="px-0.5 text-[11px] leading-snug text-ink-faint">{streaming ? 'Waiting for the agent to publish its plan.' : 'The agent’s plan will appear here when it starts work.'}</p>}
-          {!!agentPlan?.length && <button type="button" className="mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-ink-soft hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={!onChangePlan} onClick={onChangePlan} title="Describe a plan adjustment in the composer before sending"><PencilIcon className="h-3 w-3" />Change plan</button>}
+          {!!agentPlan?.length && <button type="button" className="mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-ink-soft hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={!onChangePlan} onClick={onChangePlan} title="Tell the agent what to change about its plan"><PencilIcon className="h-3 w-3" />Change plan</button>}
         </section>
         {queued.length > 0 && <section>
           <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">After this · {queued.length}</div>

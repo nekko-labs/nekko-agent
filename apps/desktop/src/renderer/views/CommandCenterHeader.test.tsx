@@ -53,7 +53,7 @@ describe('Agents header placement', () => {
     expect(html).not.toContain('on the wall');
     expect(html).not.toContain('0 agents');
     expect(html).not.toContain('0 terminals');
-    for (const label of ['Wall layout', 'Focus', 'Dynamic', 'Grid', 'Show', 'Auto-arrange', 'Panels']) expect(html).toContain(label);
+    for (const label of ['Wall layout', 'Focused', 'Dynamic', 'Grid', 'Show', 'Auto-arrange', 'Panels']) expect(html).toContain(label);
     expect(html).not.toContain('>Fixed<');
     // Adding lives in the toolbar's icon bar in every layout: agent, terminal,
     // without an overflow button. An agent's Changes/Files/Browser moved into
@@ -71,7 +71,7 @@ describe('Agents header placement', () => {
     expect(html).not.toContain('agent panel');
   });
   it('names the saved layout modes Focus, Dynamic and Grid without migrating keys', () => {
-    expect(LAYOUT_LABEL).toEqual({ focus: 'Focus', grid: 'Dynamic', fixed: 'Grid' });
+    expect(LAYOUT_LABEL).toEqual({ focus: 'Focused', grid: 'Dynamic', fixed: 'Grid' });
     const html = toolbar();
     expect(html).toMatch(/title="Dynamic \((Ctrl|⌘)\+Shift\+2\)"/);
     expect(html).toMatch(/title="Grid \((Ctrl|⌘)\+Shift\+3\)"/);

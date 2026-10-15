@@ -41,7 +41,7 @@ app.whenReady().then(async () => {
     for (const theme of ['light','dark']) {
       await run(`document.documentElement.dataset.theme='${theme}'`);
       for (const [width,label] of [[1200,'desktop'],[400,'narrow']]) {
-        win.setContentSize(width,900); await reset(); await click('Focus'); await scroll(true);
+        win.setContentSize(width,900); await reset(); await click('Focused'); await scroll(true);
         await capture(`collapsed-${theme}-${label}`);
         if(current) await check('collapsed subagent cue '+theme+label,"document.querySelector('.command-wall-window').textContent.includes('3 subagents')");
         await expand(); await scroll(true); await capture(`expanded-${theme}-${label}`);
@@ -52,27 +52,27 @@ app.whenReady().then(async () => {
         }
       }
     }
-    win.setContentSize(1200,900); await reset(); await click('Focus'); await scroll(true);
+    win.setContentSize(1200,900); await reset(); await click('Focused'); await scroll(true);
     if(current) {
       for(let i=0;i<12 && !await run("document.querySelector('.command-wall-window').textContent.includes('automated wake-up')");i++){await run("document.querySelector('[data-transcript-scroll]').scrollTop-=200");await sleep(250);}
       await capture('watch-and-controls-dark-desktop');
       await check('watch and ordinary messages coexist',"document.querySelector('.command-wall-window').textContent.includes('automated wake-up') && document.querySelector('.command-wall-window').textContent.includes('Please check the integration')");
       await check('ordinary message controls remain',"!!document.querySelector('.command-wall-window button[title=\"Copy prompt\"]')");
     }
-    await run('window.integration.clean()'); await sleep(350); await click('Focus');
+    await run('window.integration.clean()'); await sleep(350); await click('Focused');
     await run('window.integration.wake(Date.now()+120000)');
     await check('sleeping deadline appears', "document.body.textContent.includes('Sleeping · will check in')");
     await run("window.integration.inbox('Reply while sleeping')");
     await check('reply can be sent while sleeping', "window.integration.calls.some(c=>c.method==='send' && c.input.text==='Reply while sleeping')");
     await run('window.integration.wake(null)');
     await check('cancelled watch clears sleeping status', "!document.body.textContent.includes('Sleeping · will check in')");
-    await run('window.integration.clean()'); await sleep(350); await click('Focus');
+    await run('window.integration.clean()'); await sleep(350); await click('Focused');
     await run("window.integration.failures.send=true; window.integration.inbox('Request that fails')");
     await check('failed request is visible', "document.querySelector('.command-wall-window')?.textContent.includes('Synthetic request failure')");
     await run('window.integration.failures.send=false');
     await click(process.env.NEKKO_TEST_REVISION ? 'Continue' : 'Retry');
     await check('retry sends after failed request', "window.integration.calls.some(c=>c.method==='send' && c.input.resume===true)");
-    await run('window.integration.restore()'); await sleep(350); await click('Focus'); await scroll(true);
+    await run('window.integration.restore()'); await sleep(350); await click('Focused'); await scroll(true);
     const motion=path.join(runDir,'motion');fs.mkdirSync(motion);
     for(let frame=0;frame<16;frame++){
       if(frame===3) await expand();

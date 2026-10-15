@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { ChatMode, McpServerStatus, Session } from '@nekko-agent/shared';
-import { getExecutionMode, type ExecutionMode } from '@nekko-agent/shared';
+import { getExecutionMode, groupToolsByCategory, toolAllowedOffline, type ExecutionMode } from '@nekko-agent/shared';
 import { SandboxSetup, SandboxReview } from './SandboxSetup.js';
 import { useStore } from '../store.js';
 import { WrenchIcon, PlaneIcon, IncognitoIcon, PlugIcon, PlusIcon, GlobeIcon, GlobeOffIcon } from '../icons.js';
@@ -182,7 +182,8 @@ export function McpMenu() {
 /**
  * Which tools this chat may call, as a picker. Lives in the agent window's
  * footer beside MCP: what the agent can use reads together with what it can
- * reach. Tools are off while the chat is blocked from the internet.
+ * reach. Grouped by category; while the chat is blocked from the internet the
+ * Online and MCP groups are off and every local tool keeps working.
  */
 export function ToolsMenu({ session, onChange }: { session: Session; onChange: (s: Session | null) => void }) {
   const [tools, setTools] = useState<Array<{ name: string; description: string }>>([]);
@@ -202,14 +203,27 @@ export function ToolsMenu({ session, onChange }: { session: Session; onChange: (
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open]);
+  // Blocking the internet turns off only the tools that reach a network; the
+  // local ones (files, shell, desktop) keep working and keep their switches.
   const offline = !!session.offline;
   const disabled = new Set(session.disabledTools ?? []);
   const availableTools = getExecutionMode(session) === 'sandbox' ? tools.filter((t) => ['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash'].includes(t.name)) : tools;
-  const enabledCount = availableTools.filter((t) => !disabled.has(t.name)).length;
-  const shown = query.trim() ? availableTools.filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase())) : availableTools;
+  const blockedOffline = (name: string) => offline && !toolAllowedOffline(name);
+  const usable = availableTools.filter((t) => !blockedOffline(t.name));
+  const enabledCount = usable.filter((t) => !disabled.has(t.name)).length;
+  const q = query.trim().toLowerCase();
+  const shown = q ? availableTools.filter((t) => t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)) : availableTools;
+  const groups = groupToolsByCategory(shown);
   const toggle = async (name: string) => {
     const next = new Set(disabled);
     next.has(name) ? next.delete(name) : next.add(name);
+    onChange(await window.nekko.setSessionOptions(session.id, { disabledTools: [...next] } as Partial<Session> as any));
+  };
+  /** Turn a whole category on or off in one write. */
+  const toggleGroup = async (names: string[]) => {
+    const next = new Set(disabled);
+    const allOn = names.every((n) => !next.has(n));
+    for (const n of names) allOn ? next.add(n) : next.delete(n);
     onChange(await window.nekko.setSessionOptions(session.id, { disabledTools: [...next] } as Partial<Session> as any));
   };
   return (
@@ -218,33 +232,56 @@ export function ToolsMenu({ session, onChange }: { session: Session; onChange: (
         ref={button}
         className="ctl-menu whitespace-nowrap"
         onClick={() => { setOpen((o) => !o); setQuery(''); }}
-        disabled={offline}
         aria-haspopup="menu"
         aria-expanded={open}
-        title={offline ? 'Tools are off while internet access is blocked' : 'Enable/disable tools for this chat'}
+        title={offline ? 'Internet blocked: online tools are off, local tools still work' : 'Enable/disable tools for this chat'}
       >
         <WrenchIcon className="h-3 w-3 text-ink-faint" />
         <span className="ctl-menu-label">Tools</span>
-        <span className="tabular-nums">{offline ? 'off' : `${enabledCount}/${availableTools.length}`}</span>
+        <span className="tabular-nums">{`${enabledCount}/${usable.length}`}</span>
         <span className="ctl-caret">▾</span>
       </button>
-      {open && !offline && createPortal(
+      {open && createPortal(
         <div ref={pop} style={floating} className="card fixed z-[100] flex flex-col p-1.5 shadow-lg" role="menu" aria-label="Tools">
           {availableTools.length > 7 && (
             <input className="input mb-1 rounded-lg px-2.5 py-1 text-[12px]" placeholder="Filter tools…" value={query} autoFocus aria-label="Filter tools" onChange={(e) => setQuery(e.target.value)} />
           )}
+          {offline && (
+            <p className="mb-1 rounded-md px-2.5 py-1.5 text-[11px] text-ink-faint" style={{ background: 'var(--surface-2)' }} data-offline-note>
+              Internet is blocked for this chat. Online tools are off; file, shell and desktop tools still work. Shell commands are not network-sandboxed.
+            </p>
+          )}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {shown.length === 0 && <p className="px-2.5 py-1.5 text-[11px] text-ink-faint">No tools match.</p>}
-            {shown.map((t) => {
-              const on = !disabled.has(t.name);
+            {groups.map(({ category, tools: items }) => {
+              const groupBlocked = items.every((t) => blockedOffline(t.name));
+              const switchable = items.filter((t) => !blockedOffline(t.name)).map((t) => t.name);
+              const groupOn = switchable.length > 0 && switchable.every((n) => !disabled.has(n));
               return (
-                <button key={t.name} className="flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2" onClick={() => void toggle(t.name)} title={t.description} role="menuitemcheckbox" aria-checked={on}>
-                  <span className="mt-0.5 text-[12px]" style={{ color: on ? 'var(--accent)' : 'var(--ink-faint)' }}>{on ? '☑' : '☐'}</span>
-                  <span className="min-w-0">
-                    <span className="block font-mono text-[12px]">{t.name.startsWith('mcp__') ? `🔌 ${t.name.split('__').slice(2).join('__')}` : t.name}</span>
-                    <span className="block truncate text-[11px] text-ink-faint">{t.description}</span>
-                  </span>
-                </button>
+                <div key={category.id} role="group" aria-label={category.label} data-tool-category={category.id} className="mb-1">
+                  <div className="flex items-center gap-2 px-2.5 pb-0.5 pt-1.5" title={category.description}>
+                    <span className="text-[11px] font-semibold text-ink">{category.label}</span>
+                    {groupBlocked && <span className="rounded-sm px-1 text-[10px] text-ink-faint" style={{ background: 'var(--surface-2)' }}>Off while internet is blocked</span>}
+                    {!groupBlocked && switchable.length > 1 && (
+                      <button type="button" className="ml-auto text-[10px] text-ink-faint hover:text-ink" onClick={() => void toggleGroup(switchable)} aria-label={`${groupOn ? 'Turn off' : 'Turn on'} all ${category.label} tools`}>
+                        {groupOn ? 'All off' : 'All on'}
+                      </button>
+                    )}
+                  </div>
+                  {items.map((t) => {
+                    const blocked = blockedOffline(t.name);
+                    const on = !blocked && !disabled.has(t.name);
+                    return (
+                      <button key={t.name} disabled={blocked} className="flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent" onClick={() => void toggle(t.name)} title={blocked ? `${t.name} needs the internet` : t.description} role="menuitemcheckbox" aria-checked={on}>
+                        <span className="mt-0.5 text-[12px]" style={{ color: on ? 'var(--accent)' : 'var(--ink-faint)' }}>{on ? '☑' : '☐'}</span>
+                        <span className="min-w-0">
+                          <span className="block font-mono text-[12px]">{t.name.startsWith('mcp__') ? `🔌 ${t.name.split('__').slice(2).join('__')}` : t.name}</span>
+                          <span className="block truncate text-[11px] text-ink-faint">{t.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               );
             })}
           </div>
@@ -258,7 +295,8 @@ export function ToolsMenu({ session, onChange }: { session: Session; onChange: (
 /**
  * This agent's internet access as one icon toggle: a globe when it may reach
  * the internet, the globe struck through when it is blocked. Blocking it is
- * the chat's Offline mode (no tools, connectors or network).
+ * the chat's Offline mode: a local model only, no connectors or MCP, and only
+ * the local tools (files, shell, desktop); fetch and the browser are off.
  */
 export function InternetToggle({ session, onToggle, cloudModel = false }: { session: Session | null; onToggle: () => void; cloudModel?: boolean }) {
   const blocked = !!session?.offline;
@@ -268,8 +306,8 @@ export function InternetToggle({ session, onToggle, cloudModel = false }: { sess
   const hint = locked
     ? 'Internet allowed: this agent uses a cloud model, so it needs internet connectivity. Pick a local model to block internet access.'
     : blocked
-      ? 'Internet blocked for this agent. Click to allow internet connectivity.'
-      : 'Internet allowed for this agent. Click to block internet connectivity.';
+      ? 'Internet blocked for this agent: online tools are off, local tools still work. Click to allow internet connectivity.'
+      : 'Internet allowed for this agent. Click to block internet connectivity (local tools keep working).';
   return (
     <button
       type="button"
@@ -331,8 +369,6 @@ export function ChatControls({
   only?: 'mode' | 'privacy';
 }) {
   const defaultChatMode = useStore((s) => s.settings?.defaultChatMode);
-  const [tools, setTools] = useState<Array<{ name: string; description: string }>>([]);
-  const [toolsOpen, setToolsOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [executionError, setExecutionError] = useState('');
@@ -359,17 +395,14 @@ export function ChatControls({
     window.addEventListener('resize', position);
     return () => { document.removeEventListener('scroll', position, true); window.removeEventListener('resize', position); };
   }, [modeOpen]);
-  const [toolQuery, setToolQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
-  // After the first frame: a pane that just opened paints before it asks.
-  useEffect(() => afterPaint(() => { window.nekko.listTools().then(setTools); }), []);
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node) && !modeMenu.current?.contains(e.target as Node)) { setToolsOpen(false); setModeOpen(false); }
+      if (ref.current && !ref.current.contains(e.target as Node) && !modeMenu.current?.contains(e.target as Node)) setModeOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setToolsOpen(false); setModeOpen(false); if (modeMenu.current) modeButton.current?.focus({ preventScroll: true }); }
+      if (e.key === 'Escape') { setModeOpen(false); if (modeMenu.current) modeButton.current?.focus({ preventScroll: true }); }
     };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
@@ -390,24 +423,12 @@ export function ChatControls({
     } catch (e) { setExecutionError(String((e as Error).message ?? e)); }
   };
   const mode: ChatMode = session.mode ?? defaultChatMode ?? 'guardrails';
-  const disabled = new Set(session.disabledTools ?? []);
-  const availableTools = sandbox ? tools.filter((t) => ['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash'].includes(t.name)) : tools;
-  const enabledCount = availableTools.filter((t) => !disabled.has(t.name)).length;
   const offline = !!session.offline;
   const incognito = !!session.incognito;
-  const shownTools = toolQuery.trim()
-    ? availableTools.filter((t) => t.name.toLowerCase().includes(toolQuery.trim().toLowerCase()))
-    : availableTools;
 
   const patch = async (p: Partial<Session>) => {
     const next = await window.nekko.setSessionOptions(session.id, p as any);
     onChange(next);
-  };
-
-  const toggleTool = (name: string) => {
-    const next = new Set(disabled);
-    next.has(name) ? next.delete(name) : next.add(name);
-    patch({ disabledTools: [...next] });
   };
 
   const showMode = only !== 'privacy';
@@ -424,7 +445,7 @@ export function ChatControls({
         <button
           ref={modeButton}
           className="ctl-menu max-w-full whitespace-nowrap"
-          onClick={() => { setModeOpen((o) => !o); setToolsOpen(false); }}
+          onClick={() => setModeOpen((o) => !o)}
           aria-haspopup="menu"
           aria-expanded={modeOpen}
           title={MODE_DESC[mode]}
@@ -460,60 +481,8 @@ export function ChatControls({
       {executionError && <p role="alert" className="text-danger">{executionError}</p>}
       {setupOpen && <SandboxSetup session={session} onChange={onChange} onClose={() => setSetupOpen(false)} />}
       {sandbox && <><span className="text-[11px] text-ink-faint">Scoped files/bash only; host previews, hooks and MCP unavailable.</span><button className="ctl-menu" onClick={() => setSetupOpen(true)}>Sandbox setup</button><SandboxReview sessionId={session.id} /></>}
-      {/* Tools */}
-      {!toolsInWindow && !only && <div className="relative shrink-0">
-        <button
-          className="ctl-menu whitespace-nowrap"
-          onClick={() => { setToolsOpen((o) => !o); setModeOpen(false); setToolQuery(''); }}
-          disabled={offline}
-          aria-haspopup="menu"
-          aria-expanded={toolsOpen}
-          title={offline ? 'Tools are off in Offline mode' : 'Enable/disable tools for this chat'}
-        >
-          <WrenchIcon className="h-3 w-3 text-ink-faint" />
-          <span className="ctl-menu-label">Tools</span>
-          <span className="tabular-nums">{offline ? 'off' : `${enabledCount}/${tools.length}`}</span>
-          <span className="ctl-caret">▾</span>
-        </button>
-        {toolsOpen && !offline && (
-          <div className="card absolute bottom-8 left-0 z-40 flex max-h-80 w-64 flex-col p-1.5 shadow-lg">
-            {tools.length > 7 && (
-              <input
-                className="input mb-1 rounded-lg px-2.5 py-1 text-[12px]"
-                placeholder="Filter tools…"
-                value={toolQuery}
-                autoFocus
-                aria-label="Filter tools"
-                onChange={(e) => setToolQuery(e.target.value)}
-              />
-            )}
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {shownTools.length === 0 && <p className="px-2.5 py-1.5 text-[11px] text-ink-faint">No tools match.</p>}
-              {shownTools.map((t) => {
-                const on = !disabled.has(t.name);
-                return (
-                  <button
-                    key={t.name}
-                    className="flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2"
-                    onClick={() => toggleTool(t.name)}
-                    title={t.description}
-                    role="menuitemcheckbox"
-                    aria-checked={on}
-                  >
-                    <span className="mt-0.5 text-[12px]" style={{ color: on ? 'var(--accent)' : 'var(--ink-faint)' }}>{on ? '☑' : '☐'}</span>
-                    <span className="min-w-0">
-                      <span className="block font-mono text-[12px]">
-                        {t.name.startsWith('mcp__') ? `🔌 ${t.name.split('__').slice(2).join('__')}` : t.name}
-                      </span>
-                      <span className="block truncate text-[11px] text-ink-faint">{t.description}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>}
+      {/* Tools: the same grouped picker the agent window's footer carries. */}
+      {!toolsInWindow && !only && <ToolsMenu session={session} onChange={onChange} />}
 
       {/* MCP servers, right of Tools: their tools are what the agent can reach. */}
       {!toolsInWindow && !only && (sandbox ? <span title="MCP is unavailable in Sandbox">MCP unavailable</span> : <McpMenu />)}
@@ -530,7 +499,7 @@ export function ChatControls({
           onClick={() => !isCloudModel && patch({ offline: !offline })}
           disabled={isCloudModel}
           aria-pressed={offline}
-          title={isCloudModel ? 'Offline mode is only for local models' : 'No tools, no connectors, no internet'}
+          title={isCloudModel ? 'Offline mode is only for local models' : 'No internet: local tools only, no online tools, connectors or MCP'}
         >
           <span className="ctl-dot" />
           <PlaneIcon className="h-3 w-3" /> Offline

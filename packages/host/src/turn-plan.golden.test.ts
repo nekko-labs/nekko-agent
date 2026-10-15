@@ -7,7 +7,9 @@ import {
   ASK_UNATTENDED,
   DEFAULT_ORCHESTRATION,
   DEFAULT_TURN_WRAPPER,
+  OFFLINE_BLOCKED_AGENT_TOOLS,
   ORCHESTRATION_STRATEGIES,
+  TOOL_CATEGORY_OF,
   TurnStatsAccumulator,
   applyPlanUpdate,
   attachTurnStats,
@@ -84,8 +86,13 @@ function toolCases() {
       }
     }
   }
-  const offline = { session: {}, offline: true, allowBrowserControl: true, mcpTools: mcp, decide: true };
-  out.push({ input: offline, output: turnTools(offline as never).map((t) => t.name) });
+  // Blocking the internet keeps the local tools and drops the online ones.
+  for (const session of [{}, { disabledTools: ['bash', 'grep'] }, { parentSessionId: 's_parent' }, { incognito: true }]) {
+    for (const strategy of ['solo', 'swarm'] as const) {
+      const offline = { session, offline: true, orchestration: { ...DEFAULT_ORCHESTRATION, strategy }, allowBrowserControl: true, mcpTools: mcp, decide: true };
+      out.push({ input: offline, output: turnTools(offline as never).map((t) => t.name) });
+    }
+  }
   return out;
 }
 
@@ -263,6 +270,8 @@ describe('turn plan golden set', () => {
       sandboxInstructions: SANDBOX_INSTRUCTIONS,
       askCancelled: ASK_CANCELLED,
       askUnattended: ASK_UNATTENDED,
+      toolCategories: TOOL_CATEGORY_OF,
+      offlineBlockedTools: OFFLINE_BLOCKED_AGENT_TOOLS,
     });
   });
 
