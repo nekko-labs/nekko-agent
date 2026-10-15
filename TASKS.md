@@ -1680,3 +1680,7 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] Synthetic Electron check `apps/desktop/scripts/chat-switch-{integration,sandbox}.cjs`, rewritten for the current sidebar: base vs head, Grid and Focus, wall saves per switch and per reselect, draft flush and image restore. Done: 2026-10-15
 - [ ] Add `scripts/perf/browser.test.mjs` to the root `npm test` list once its real-launch case is confirmed on the Linux CI runner (it skips when no Chromium is found).
 - [ ] Captures are pixel-compared only (7 of 8 byte-identical to base; the eighth differs only in the mascot avatar's idle animation frame). Not inspected by eye; no native-window capture.
+
+### Effort default on its own rung (2026-10-16)
+- [x] Native-effort Claude models show Default on the rung it resolves to instead of a separate stop left of Low (ported from the stale gentle-sage-wren WIP; its window title, sub-agent chip and folder chip parts were superseded on main). See SPEC.md: Effort that follows the model.
+- [ ] Matched before/after desktop captures of the composer and Add window effort slider for Opus 5.5 and Opus 5.

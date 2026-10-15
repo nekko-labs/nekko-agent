@@ -321,13 +321,10 @@ export function CommandCenterView() {
     if (!chat) { useStore.getState().pushToast('error', 'That chat no longer exists.'); return; }
     if (chat.archivedAt) { setCompletedId(chat.id); return; }
     setCompletedId(null);
-    setWall((w) => ({
-      ...w,
-      root: hasPane(w.root, 'chat', chat.id) ? w.root : addPane(w.root, wallPane('chat', chat.id), aspectRef.current),
-      hero: chat.id,
-      filter: w.filter === 'terminal' ? 'all' : w.filter,
-      layout: { ...w.layout, mode: 'focus' },
-    }));
+    setWall((w) => {
+      const opened = openWallPane(w, 'chat', chat.id, aspectRef.current);
+      return opened.layout.mode === 'focus' ? opened : { ...opened, layout: { ...opened.layout, mode: 'focus' } };
+    });
     setSelected(chat.id);
   }, [focusRequest, listsReady, sessions, setWall]);
   const agentsOnWall = useMemo(() => wallAgents(wall.root), [wall.root]);
