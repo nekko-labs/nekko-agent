@@ -241,7 +241,9 @@ export function App() {
             reveal each destination's label. Hidden on phones (hover is useless on
             touch), where the bottom tab bar below takes over. */}
         <nav className="relative z-40 hidden w-[52px] shrink-0 md:block">
-          <div className="rail absolute inset-y-0 left-0 flex flex-col gap-1 overflow-hidden px-1.5 py-4">
+          <div className="rail absolute inset-y-0 left-0 flex flex-col overflow-hidden px-1.5 py-4">
+            <div className="rail-space-before" aria-hidden="true" />
+            <div className="rail-destinations flex min-h-0 flex-col gap-1 overflow-y-auto overflow-x-hidden">
             {/* The brand mark heads the rail. The wordmark joins it only where
                 there is no title bar to carry it (web and phone builds), so the
                 name is never shown twice. */}
@@ -274,6 +276,8 @@ export function App() {
                 <span className="rail-label text-[13px] font-medium">{t(labelKey)}</span>
               </button>
             ))}
+            </div>
+            <div className="rail-space-after" aria-hidden="true" />
           </div>
         </nav>
 

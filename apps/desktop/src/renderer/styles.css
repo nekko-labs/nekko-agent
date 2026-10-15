@@ -650,13 +650,13 @@
 }
 
 @utility rail {
-  /* The collapsible left rail: a slim strip of icons at rest, centred
-     vertically on a faded-accent band whose top and bottom curve back into
+  /* The collapsible left rail: a slim strip of icons at rest, biased toward
+     the upper-middle on a faded-accent band whose top and bottom curve back into
      the left edge (a wave, like a tab pulled out of the window side).
      Hovering (or keyboard focus inside) expands it over the content to
      reveal the labels; the band swells with it. */
   width: 52px;
-  justify-content: center;
+  justify-content: flex-start;
   isolation: isolate;
   transition:
     width var(--dur-slow) var(--ease-spring, var(--ease-out));
@@ -696,6 +696,23 @@
     transition: none;
     &:hover .nav-item, &:has(:focus-visible) .nav-item { animation: none; }
   }
+}
+
+/* Split unused space 1:3 above/below the destinations. This places the
+   group between the top and midpoint without a fragile viewport offset.
+   On short windows the spacers collapse and destinations scroll instead. */
+@utility rail-space-before {
+  flex: 1 1 0;
+}
+
+@utility rail-space-after {
+  flex: 3 1 0;
+}
+
+@utility rail-destinations {
+  flex: 0 1 auto;
+  scrollbar-width: thin;
+  & > .nav-item { flex-shrink: 0; }
 }
 
 @keyframes rail-item-in {
