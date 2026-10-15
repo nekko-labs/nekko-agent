@@ -28,6 +28,8 @@ import com.nekko.android.data.ComputersState
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.DenyReason
 import com.nekko.protocol.Pairing
+import com.nekko.protocol.RelayHint
+import com.nekko.android.BuildConfig
 import com.nekko.protocol.RelayState
 
 fun deniedCopy(reason: DenyReason?): String = when (reason) {
@@ -45,9 +47,12 @@ fun ConnectionBanner(s: ComputersState, onPair: () -> Unit, onComputers: () -> U
     val active = s.active ?: return
     val p = Nekko.palette
     val denied = s.denied != null || s.conn == RelayState.DENIED
+    // An address the phone can never reach: say why instead of "Connecting…" forever.
+    val hint = RelayHint.problem(active.relayUrl, BuildConfig.DEBUG)
     val (tone, line) = when {
         denied -> Tone.DANGER to deniedCopy(s.denied)
         s.conn == RelayState.ONLINE -> Tone.SUCCESS to "${active.name} is online"
+        hint != null -> Tone.DANGER to RelayHint.message(hint, active.name)
         s.conn == RelayState.OFFLINE -> Tone.WARNING to "${active.name} is offline. Open Nekko Agent on it."
         else -> Tone.WARNING to "Connecting to ${active.name}…"
     }
@@ -68,7 +73,7 @@ fun ConnectionBanner(s: ComputersState, onPair: () -> Unit, onComputers: () -> U
     ) {
         Dot(tone)
         Column(Modifier.weight(1f)) {
-            Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null) 5 else 2, overflow = TextOverflow.Ellipsis)
             if (s.conn == RelayState.ONLINE && !denied) {
                 Text(
                     "End-to-end encrypted via ${Pairing.relayHost(active.relayUrl)}",

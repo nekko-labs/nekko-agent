@@ -178,11 +178,16 @@ The script prints the URL to paste into **Settings → Remote access** (for exam
 Tailscale switched on. The relay only listens on the Tailscale interface, so
 `NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` is safe here; never use that flag on a public bind.
 
-Plain `ws://` is fine on a tailnet: the transport is already encrypted end to end by WireGuard and
-the iOS app ships with Expo's default App Transport Security (arbitrary loads allowed). If you
-prefer `wss://`, enable **HTTPS certificates** in the tailnet's DNS settings and either put
-`tailscale serve --bg 4400` in front (needs Serve enabled once per tailnet) or terminate TLS with
-`tailscale cert` on your own proxy.
+Plain `ws://` is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
+the app's own end-to-end encryption sits on top. The iOS app ships with Expo's default App Transport
+Security (arbitrary loads allowed). **The Android app allows plain `ws://` only to Tailscale
+MagicDNS names (`*.ts.net`)**, so use the name the script prints (`ws://gomi.tailfd6474.ts.net:4400`),
+not the `100.x.y.z` address: Android can't allow an IP range, and blocks the bare address. If you
+use an address the phone can't reach (a bare Tailscale IP, `localhost`, or any other plain `ws://`
+host), the Android app says so on its pairing screen and in the chat list instead of spinning on
+"Connecting…". If you prefer `wss://`, enable **HTTPS certificates** in the tailnet's DNS settings
+and either put `tailscale serve --bg 4400` in front (needs Serve enabled once per tailnet) or
+terminate TLS with `tailscale cert` on your own proxy.
 
 Trade-offs: the computer must be awake and Tailscale running; push notifications need APNs/FCM
 keys on this relay like any other; Tailscale's free plan covers up to 100 devices and 3 users.

@@ -21,6 +21,8 @@ android {
     }
 
     buildFeatures {
+        // BuildConfig.DEBUG: the relay hint knows debug builds allow ws://localhost (adb reverse).
+        buildConfig = true
         compose = true
     }
 
