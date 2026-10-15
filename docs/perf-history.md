@@ -51,6 +51,15 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### CI cache and stale-run optimization (2026-10-15)
+Area: CI build. Result: baseline measured; post-change savings unverified.
+Conditions: GitHub-hosted runners, one successful CI run [38608506782](https://github.com/nekko-labs/nekko-agent/actions/runs/38608506782), step timestamps from the Jobs API.
+
+Baseline: required Linux build job 220 s, uncached debug daemon build 86 s; perf job 388 s, release daemon build 89 s, speed contract 250 s; Windows daemon job 450 s, cargo tests 232 s. These are observations from one run, not controlled before/after measurements.
+
+Changes: cache the required debug Rust build; cancel superseded PR runs only; give the app and relay Docker builds distinct BuildKit cache scopes. Keep every test, platform and performance budget unchanged. npm caching and current Action major versions are already present. Cache-miss versus warm-cache timing and actual runner-minute savings remain to be measured after hosted runs. No visual or application behavior change.
+
+
 ### Android reconnect on network change (2026-10-14)
 Area: mobile app
 Result: improvement
