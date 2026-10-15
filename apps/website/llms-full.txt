@@ -330,7 +330,7 @@ Open **Settings**. Two layers keep Nekko Agent from doing something you didn't i
 
 | Mode | Behavior |
 | --- | --- |
-| Workspace jail *(default)* | File access confined to your added folders |
+| Workspace jail *(default)* | File access confined to your added folders; symlinks and junctions that point outside them are refused |
 | Ask everything | Every write or command requires approval |
 | Docker | Run shell commands inside a container if Docker is present |
 | Off | No restrictions (power users) |

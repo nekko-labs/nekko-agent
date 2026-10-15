@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 
 // These unit fixtures use synthetic normal-session handles, not persisted user data.
 vi.mock('./sessions.js', () => ({ getSession: (id: string) => ({ id, executionMode: 'unified' }) }));
@@ -71,12 +71,15 @@ function tempRoot(): string {
 // ---------------------------------------------------------------------------
 // Fixture trees and snapshots (the Rust test implements the same three).
 
-type Entry = string | { hex: string } | { repeat: string; times: number } | { dir: true };
+/** `link` is a directory link to another path under the root: a junction on Windows, a symlink elsewhere. */
+type Entry = string | { hex: string } | { repeat: string; times: number } | { dir: true } | { link: string };
 
 function materialize(root: string, tree: Record<string, Entry>): void {
   rmSync(root, { recursive: true, force: true });
   mkdirSync(root, { recursive: true });
-  for (const [rel, e] of Object.entries(tree)) {
+  const entries = Object.entries(tree);
+  for (const [rel, e] of entries) {
+    if (typeof e === 'object' && 'link' in e) continue;
     const p = join(root, ...rel.split('/'));
     if (typeof e === 'object' && 'dir' in e) { mkdirSync(p, { recursive: true }); continue; }
     mkdirSync(dirname(p), { recursive: true });
@@ -84,6 +87,14 @@ function materialize(root: string, tree: Record<string, Entry>): void {
       : 'hex' in e ? Buffer.from(e.hex, 'hex')
         : Buffer.from(e.repeat.repeat(e.times), 'utf8');
     writeFileSync(p, bytes);
+  }
+  // Links last, so their targets exist. No privilege is needed for a junction
+  // or a Unix symlink; `junction` is ignored off Windows.
+  for (const [rel, e] of entries) {
+    if (typeof e !== 'object' || !('link' in e)) continue;
+    const p = join(root, ...rel.split('/'));
+    mkdirSync(dirname(p), { recursive: true });
+    symlinkSync(join(root, ...e.link.split('/')), p, 'junction');
   }
 }
 
@@ -100,14 +111,16 @@ function describeBytes(b: Buffer): unknown {
   return Buffer.from(s, 'utf8').equals(b) ? { text: s } : { hex: b.toString('hex') };
 }
 
-/** Every file and directory under root, byte for byte (large files hashed). */
+/** Every file and directory under root, byte for byte (large files hashed). Links are recorded, not followed. */
 function snapshot(root: string): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const walk = (dir: string, rel: string) => {
     for (const name of readdirSync(dir).sort()) {
       const full = join(dir, name);
       const r = rel ? `${rel}/${name}` : name;
-      if (statSync(full).isDirectory()) { out[`${r}/`] = null; walk(full, r); }
+      const stat = lstatSync(full);
+      if (stat.isSymbolicLink()) out[r] = { link: true };
+      else if (stat.isDirectory()) { out[`${r}/`] = null; walk(full, r); }
       else out[r] = describeBytes(readFileSync(full));
     }
   };
@@ -399,7 +412,17 @@ describe('agent tools golden sets', () => {
     const list = (path: unknown) => ({ call: { name: 'list_dir', input: { path } } });
     const glob = (pattern?: unknown) => ({ call: { name: 'glob', input: pattern === undefined ? {} : { pattern } } });
     const grep = (pattern?: unknown, path?: unknown) => ({ call: { name: 'grep', input: { ...(pattern === undefined ? {} : { pattern }), ...(path === undefined ? {} : { path }) } } });
-    const sequences: Array<{ name: string; policy: Policy; steps: Step[] }> = [
+    // A workspace holding a link out of it (#550): `escape` leaves every
+    // workspace, `sibling` lands in the other one.
+    const linked: Record<string, Entry> = {
+      'ws/app/readme.md': '# App\n\nMain docs.\n',
+      'ws/app/escape': { link: 'ws/outside-dir' },
+      'ws/app/sibling': { link: 'ws/lib' },
+      'ws/lib/index.ts': 'lib main\n',
+      'ws/outside-dir/secret.txt': 'outside main\n',
+      'ws/outside-dir/nested/deep.txt': 'deep main\n',
+    };
+    const sequences: Array<{ name: string; policy: Policy; steps: Step[]; fixture?: Record<string, Entry> }> = [
       { name: 'reads', policy: { setup: 'two', mode: 'guardrails', sandboxMode: 'workspace-jail', rules: 'default' }, steps: [
         read('src/main.ts'), read('src/util.ts'), read('bom.txt'), read('unicode.txt'), read('invalid.bin'), read('binary.png'),
         read('empty.txt'), read('big.txt'), read('exact.txt'), read('wide.txt'), read('src'), read('missing.txt'), read('../outside.txt'),
@@ -486,12 +509,26 @@ describe('agent tools golden sets', () => {
       { name: 'no-session', policy: { setup: 'two', mode: 'guardrails', sandboxMode: 'off', rules: 'default' }, steps: [
         write('untracked.txt', 'x'), edit({ path: 'readme.md', old_string: 'Main docs', new_string: 'Docs' }),
       ] },
+      { name: 'links', fixture: linked, policy: { setup: 'two', mode: 'guardrails', sandboxMode: 'workspace-jail', rules: 'default', sessionId: 's_links' }, steps: [
+        read('escape/secret.txt'), read('escape/nested/deep.txt'), read('<ROOT>/ws/app/escape/secret.txt'), read('escape'),
+        write('escape/new.txt', 'through the link'), write('escape/nested/new/dir/file.txt', 'deeper'), write('escape/secret.txt', 'overwrite'),
+        edit({ path: 'escape/secret.txt', old_string: 'main', new_string: 'MAIN' }),
+        list('escape'), list('escape/nested'),
+        { call: { name: 'glob', input: { pattern: '*.txt', path: 'escape' } } }, { call: { name: 'glob', input: { pattern: '**/*.txt', path: 'escape/nested' } } },
+        grep('main', 'escape'), grep('main', 'escape/secret.txt'),
+        list('.'), glob('**'), grep('main'),
+        read('sibling/index.ts'), write('sibling/from-app.txt', 'via the link'), list('sibling'), grep('lib', 'sibling'),
+        { changes: true },
+      ] },
+      { name: 'links-unjailed', fixture: linked, policy: { setup: 'two', mode: 'guardrails', sandboxMode: 'off', rules: 'default' }, steps: [
+        read('escape/secret.txt'), list('escape'), grep('main', 'escape'),
+      ] },
     ];
 
     const results = [];
     for (const seq of sequences) {
       const root = tempRoot();
-      materialize(root, tree);
+      materialize(root, seq.fixture ?? tree);
       const before = snapshot(root);
       const out: unknown[] = [];
       const sid = seq.policy.sessionId ?? '';
@@ -509,7 +546,7 @@ describe('agent tools golden sets', () => {
           out.push(await runCall(root, SETUPS, seq.policy, call, step.approve ?? true));
         }
       }
-      results.push({ name: seq.name, policy: seq.policy, steps: seq.steps, results: out, tree: treeDiff(before, snapshot(root)) });
+      results.push({ name: seq.name, ...(seq.fixture ? { fixture: seq.fixture } : {}), policy: seq.policy, steps: seq.steps, results: out, tree: treeDiff(before, snapshot(root)) });
     }
     writeGolden('files.json', { tree, sequences: results });
   }, 120_000);
