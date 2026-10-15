@@ -762,7 +762,7 @@
   "maxDepth": 2,
   "maxParallel": 4
  },
- "agentWatchInstructions": "When work must wait for PR checks or another background task, register agent_watch before ending the turn. State its id and wake condition; do not claim to be watching unless registration succeeded. Use a deadline so waiting cannot silently last forever. On wake, verify current status and re-arm if necessary. Do not register automatic continuations when waiting for a user decision, missing permission, credentials, or visual evidence that requires human action.",
+ "agentWatchInstructions": "Do not wait on PR checks to verify: run tests, visual checks and evidence while CI runs, and use the wait to finish remaining work (docs, spec, evidence, cleanup, the next independent task). When something still depends on a check or another background task, register agent_watch before ending the turn. State its id and wake condition; do not claim to be watching unless registration succeeded. Use a deadline so waiting cannot silently last forever. On wake, verify current status and re-arm if necessary. Do not register automatic continuations when waiting for a user decision, missing permission, credentials, or visual evidence that requires human action.",
  "sandboxInstructions": "Sandbox: only folder-N copied paths are accessible. All tool actions require approval. No host controls, networking, MCP, delegation or host fallback.",
  "askCancelled": "The user did not answer. Do not ask again: pick the most reasonable option, say which one you picked and why, and carry on.",
  "askUnattended": "Nobody answered within the unattended time limit. Do not ask again: choose the most reasonable, least destructive option yourself, state the assumption plainly in your reply, and carry on."

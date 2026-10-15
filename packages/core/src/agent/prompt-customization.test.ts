@@ -71,6 +71,11 @@ it('requires automatic UI verification and authorized landing, not a draft-PR ha
     'Investigate available isolation and verification paths',
     'A user-requested pause or narrower scope always takes precedence',
     'register agent_watch when available before ending the turn',
+    // Verification runs alongside CI, and the wait is spent finishing work.
+    'CI is not a gate for your own verification',
+    'while the checks run, not after them',
+    'Waiting on checks is time to finish remaining work',
+    'first do everything that does not depend on the result',
     'If unavailable or registration fails',
     'Do not schedule continuations to bypass',
   ]) expect(prompt).toContain(rule);
