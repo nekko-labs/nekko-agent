@@ -56,7 +56,10 @@ state, so moving one moves the other, and either can be saved as that model's de
 computer, an API key, allowed browser origins, how many models may be resident, the idle
 timeout, load-on-demand, start-with-the-app, and the models folder. The defaults are
 loopback-only with no key, which is safe; binding to the network is a deliberate act and
-the app says what it means next to the setting.
+the app says what it means next to the setting. **A network bind requires a key**: the
+engine refuses to listen on your network with the key empty, and picking **This computer
+and my network** with no key set fills one in for you (a key you already typed is kept).
+Send it as a Bearer token from the apps you point at the engine.
 
 Because the engine holds the file, it reads the GGUF header directly, so the projection
 below is **exact** for its own models where it has to report parts of itself as unknown

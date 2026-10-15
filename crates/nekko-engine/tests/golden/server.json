@@ -2615,6 +2615,196 @@
       }
     },
     {
+      "name": "a LAN bind without a key is refused",
+      "settings": {
+        "bind": "lan",
+        "apiKey": ""
+      },
+      "bins": {
+        "llama": true
+      },
+      "models": [
+        {
+          "id": "qwen",
+          "name": "Qwen",
+          "path": "<root>/models/chat/qwen/qwen.gguf",
+          "sizeBytes": 4000000000,
+          "layers": 36,
+          "maxContext": 32768,
+          "addedAt": 1600000000123,
+          "architecture": "qwen3",
+          "preset": {
+            "contextTokens": 16384
+          }
+        },
+        {
+          "id": "gemma",
+          "name": "Gemma",
+          "path": "<root>/models/vision/gemma/gemma.gguf",
+          "sizeBytes": 4000000000,
+          "layers": 32,
+          "maxContext": 32768,
+          "addedAt": 1600000000123,
+          "architecture": "gemma3",
+          "modality": "vision",
+          "hasProjector": true,
+          "folderProvider": "lmstudio"
+        },
+        {
+          "id": "split",
+          "name": "Split",
+          "path": "<root>/models/chat/split/big-00001-of-00003.gguf",
+          "sizeBytes": 4000000000,
+          "layers": 32,
+          "maxContext": 32768,
+          "addedAt": 1600000000123
+        },
+        {
+          "id": "draft",
+          "name": "Draft",
+          "path": "<root>/models/chat/qwen/draft.gguf",
+          "sizeBytes": 4000000000,
+          "layers": 4,
+          "maxContext": 32768,
+          "addedAt": 1600000000123
+        },
+        {
+          "id": "sd",
+          "name": "SD3.5",
+          "path": "<root>/models/image/sd/sd3.5-medium.gguf",
+          "sizeBytes": 4000000000,
+          "maxContext": 32768,
+          "addedAt": 1600000000123,
+          "architecture": "sd3",
+          "modality": "image"
+        },
+        {
+          "id": "whisper",
+          "name": "Whisper",
+          "path": "<root>/models/whisper.gguf",
+          "sizeBytes": 4000000000,
+          "layers": 32,
+          "maxContext": 32768,
+          "addedAt": 1600000000123,
+          "modality": "audio"
+        },
+        {
+          "id": "mlx",
+          "name": "MLX",
+          "path": "<root>/models/mlx/q",
+          "sizeBytes": 4000000000,
+          "layers": 28,
+          "maxContext": 32768,
+          "addedAt": 1600000000123,
+          "format": "mlx",
+          "mlxRunnable": true
+        },
+        {
+          "id": "mlx-pc",
+          "name": "MLX PC",
+          "path": "<root>/models/mlx/q2",
+          "sizeBytes": 4000000000,
+          "layers": 32,
+          "maxContext": 32768,
+          "addedAt": 1600000000123,
+          "format": "mlx",
+          "mlxRunnable": false
+        },
+        {
+          "id": "embed",
+          "name": "Embed",
+          "path": "<root>/models/embed.gguf",
+          "sizeBytes": 4000000000,
+          "layers": 32,
+          "addedAt": 1600000000123,
+          "architecture": "bert"
+        }
+      ],
+      "ops": [
+        {
+          "op": "start"
+        },
+        {
+          "op": "status"
+        },
+        {
+          "op": "setSettings",
+          "settings": {
+            "apiKey": "   "
+          }
+        },
+        {
+          "op": "start"
+        },
+        {
+          "op": "setSettings",
+          "settings": {
+            "apiKey": "secret"
+          }
+        },
+        {
+          "op": "start"
+        },
+        {
+          "op": "setSettings",
+          "settings": {
+            "apiKey": ""
+          }
+        },
+        {
+          "op": "reconfigure"
+        },
+        {
+          "op": "setSettings",
+          "settings": {
+            "bind": "local"
+          }
+        },
+        {
+          "op": "reconfigure"
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "result": {
+        "outs": [
+          "{\"ok\":false,\"message\":\"Set an API key before making the engine reachable from your network. Without one anything on the network could use these models.\"}",
+          "{\"running\":false,\"resident\":[],\"loading\":[],\"log\":[],\"port\":11500}",
+          "null",
+          "{\"ok\":false,\"message\":\"Set an API key before making the engine reachable from your network. Without one anything on the network could use these models.\"}",
+          "null",
+          "{\"ok\":true,\"message\":\"The engine is serving on port 11500.\"}",
+          "null",
+          "{\"ok\":false,\"message\":\"Set an API key before making the engine reachable from your network. Without one anything on the network could use these models.\"}",
+          "null",
+          "{\"ok\":true,\"message\":\"Listening on 127.0.0.1:11500\"}",
+          "{\"running\":true,\"startedAt\":1700000000000,\"resident\":[],\"loading\":[],\"log\":[\"Engine listening on http://0.0.0.0:11500/v1 (served by the engine daemon)\"],\"port\":11500}"
+        ],
+        "calls": [
+          {
+            "serve": {
+              "port": 11500,
+              "host": "0.0.0.0",
+              "apiKey": "secret",
+              "corsOrigins": []
+            }
+          },
+          {
+            "serve": {
+              "port": 11500,
+              "host": "127.0.0.1",
+              "corsOrigins": []
+            }
+          },
+          {
+            "stopServing": true
+          }
+        ],
+        "templates": {}
+      }
+    },
+    {
       "name": "a backend restarted under a serving daemon",
       "settings": {
         "idleTtlSeconds": 0

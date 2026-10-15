@@ -251,6 +251,33 @@ fn folder_provider_label(id: &str) -> Option<&'static str> {
     })
 }
 
+/// Why a LAN bind is refused without a key (the UI shows this verbatim).
+pub const LAN_NEEDS_KEY: &str = "Set an API key before making the engine reachable from your network. Without one anything on the network could use these models.";
+
+/// The daemon's listen configuration (`{ port, host, apiKey?, corsOrigins }`)
+/// from the engine settings, or the reason it must not listen. `bind: "lan"`
+/// binds `0.0.0.0`, and the router only checks a Bearer token when a key is
+/// set, so a LAN bind with an empty key is refused here rather than served open.
+pub fn serve_config(s: &Value) -> Result<Value, String> {
+    let lan = s.get("bind").and_then(Value::as_str) == Some("lan");
+    let key = s.get("apiKey").and_then(Value::as_str).map(nekko_js::trim).filter(|k| !k.is_empty());
+    if lan && key.is_none() {
+        return Err(LAN_NEEDS_KEY.to_string());
+    }
+    let host = if lan { "0.0.0.0" } else { "127.0.0.1" };
+    let mut cfg = Map::new();
+    cfg.insert("port".into(), s.get("port").cloned().unwrap_or(Value::Null));
+    cfg.insert("host".into(), json!(host));
+    if let Some(k) = nekko_js::truthy_str(s.get("apiKey")) {
+        cfg.insert("apiKey".into(), json!(k));
+    }
+    let cors = s.get("corsOrigins").filter(|c| !c.is_null()).map(nekko_js::display).unwrap_or_default();
+    let origins: Vec<String> =
+        cors.split(',').map(|o| nekko_js::trim(o).to_string()).filter(|o| !o.is_empty()).collect();
+    cfg.insert("corsOrigins".into(), json!(origins));
+    Ok(Value::Object(cfg))
+}
+
 /// The model server's policy over the daemon's processes.
 pub struct ModelServer {
     env: Arc<dyn Env>,
@@ -301,20 +328,11 @@ impl ModelServer {
         nekko_js::to_number(self.env.settings().get(key))
     }
 
-    fn serve_config(&self) -> Value {
-        let s = self.env.settings();
-        let host = if s.get("bind").and_then(Value::as_str) == Some("lan") { "0.0.0.0" } else { "127.0.0.1" };
-        let mut cfg = Map::new();
-        cfg.insert("port".into(), s.get("port").cloned().unwrap_or(Value::Null));
-        cfg.insert("host".into(), json!(host));
-        if let Some(k) = nekko_js::truthy_str(s.get("apiKey")) {
-            cfg.insert("apiKey".into(), json!(k));
-        }
-        let cors = s.get("corsOrigins").filter(|c| !c.is_null()).map(nekko_js::display).unwrap_or_default();
-        let origins: Vec<String> =
-            cors.split(',').map(|o| nekko_js::trim(o).to_string()).filter(|o| !o.is_empty()).collect();
-        cfg.insert("corsOrigins".into(), json!(origins));
-        Value::Object(cfg)
+    /// The daemon's listen configuration from the settings, or the sentence
+    /// explaining why it must not listen: a LAN bind without a key would put
+    /// every route on the network for anyone to call (`serveConfig`).
+    fn serve_config(&self) -> Result<Value, String> {
+        serve_config(&self.env.settings())
     }
 
     /* ---------------------------------------------------------- lifecycle */
@@ -333,7 +351,10 @@ impl ModelServer {
         if bin.is_none() {
             return reply(false, "No engine is installed yet. Install one from the Models tab first.");
         }
-        let cfg = self.serve_config();
+        let cfg = match self.serve_config() {
+            Ok(cfg) => cfg,
+            Err(why) => return reply(false, why),
+        };
         let res = self.daemon.serve(cfg.clone()).await;
         if res.get("ok") != Some(&Value::Bool(true)) {
             return res;
@@ -475,7 +496,10 @@ impl ModelServer {
         if !self.state.lock().unwrap().serving {
             return reply(true, "Nothing to reconfigure.");
         }
-        self.daemon.serve(self.serve_config()).await
+        match self.serve_config() {
+            Ok(cfg) => self.daemon.serve(cfg).await,
+            Err(why) => reply(false, why),
+        }
     }
 
     /// Unload everything and stop listening (`stop`).
@@ -992,5 +1016,37 @@ impl ModelServer {
         m.insert("log".into(), json!(s.log[s.log.len().saturating_sub(40)..].to_vec()));
         m.insert("port".into(), self.env.settings().get("port").cloned().unwrap_or(Value::Null));
         Value::Object(m)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lan_bind_needs_a_key() {
+        for settings in [
+            json!({ "port": 11500, "bind": "lan", "apiKey": "" }),
+            json!({ "port": 11500, "bind": "lan", "apiKey": "   " }),
+            json!({ "port": 11500, "bind": "lan" }),
+        ] {
+            assert_eq!(serve_config(&settings), Err(LAN_NEEDS_KEY.to_string()), "{settings}");
+        }
+    }
+
+    #[test]
+    fn lan_bind_with_a_key_serves_every_interface() {
+        let s = json!({ "port": 11600, "bind": "lan", "apiKey": "k", "corsOrigins": "http://a.test, *, " });
+        assert_eq!(
+            serve_config(&s),
+            Ok(json!({ "port": 11600, "host": "0.0.0.0", "apiKey": "k", "corsOrigins": ["http://a.test", "*"] }))
+        );
+    }
+
+    #[test]
+    fn loopback_needs_no_key() {
+        let s = json!({ "port": 11500, "bind": "local", "apiKey": "" });
+        assert_eq!(serve_config(&s), Ok(json!({ "port": 11500, "host": "127.0.0.1", "corsOrigins": [] })));
+        assert_eq!(serve_config(&json!({ "port": 11500 })).unwrap()["host"], "127.0.0.1");
     }
 }
