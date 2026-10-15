@@ -41,6 +41,7 @@ export * from './skill-sources.js';
 export * from './vaizer.js';
 export * from './agent-types.js';
 export * from './browser-tool.js';
+export * from './tool-categories.js';
 export * from './project-detect.js';
 export * from './connectors.js';
 export * from './integrations.js';

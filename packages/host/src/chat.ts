@@ -608,7 +608,7 @@ async function prepareSubAgent(
     throw new Error('Sub-agent depth limit reached, handle this part of the task directly instead of delegating further.');
   }
   if (parent.incognito) throw new Error('Delegation is unavailable in incognito chats because child sessions are persisted. Handle this task in the current chat.');
-  if (parent.offline) throw new Error('Offline chats cannot call tools, including sub-agents.');
+  if (parent.offline) throw new Error('Offline chats cannot start sub-agents.');
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Sub-agent input must be an object.');
   const inp = input as Record<string, unknown>;
   const { task, title } = inp;
@@ -899,8 +899,9 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   }
   const abort = chainAbort ?? new AbortController();
   abortControllers.set(opts.sessionId, abort);
-  // Offline disables tool calls entirely; otherwise combine builtins + connected
-  // MCP tools, then drop any the user turned off for this chat.
+  // Offline keeps the local tools and drops the online ones (turnTools);
+  // otherwise combine builtins + connected MCP tools, then drop any the user
+  // turned off for this chat.
   // Orchestration: the strategy decides whether sub-agents are even offered.
   const orchestration = settings.orchestration ?? DEFAULT_ORCHESTRATION;
   const allowSpawn = getStrategy(orchestration.strategy).allowsSpawn;

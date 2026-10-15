@@ -824,7 +824,12 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
   const refresh = useCallback(() => {
     window.nekko.listChatWorktrees().then(setWorktrees).catch((e) => { setWorktrees([]); setMessage(String((e as Error).message ?? e)); });
   }, []);
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+    // The host removes merged worktrees in the background; re-read while this is open.
+    const t = window.setInterval(refresh, 60_000);
+    return () => window.clearInterval(t);
+  }, [refresh]);
   const remove = async (w: ChatWorktreeInfo) => {
     setBusy(w.root);
     setMessage(null);

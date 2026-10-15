@@ -44,8 +44,11 @@ describe('agent window indicators', () => {
     expect(pane).not.toContain("{session?.offline ? 'Offline' : 'Online'}");
     expect(pane).toContain('<InternetToggle session={session}');
     expect(pane).toMatch(/data-agent-footer-controls>[\s\S]{0,200}<ToolsMenu[\s\S]{0,200}<McpMenu \/>/);
-    expect(controls).toContain('Click to block internet connectivity.');
+    expect(controls).toContain('Click to block internet connectivity (local tools keep working).');
     expect(controls).toContain('Click to allow internet connectivity.');
+    // Blocking the internet keeps local tools: the Tools menu stays usable.
+    expect(controls).not.toContain('disabled={offline}');
+    expect(controls).toContain('groupToolsByCategory(shown)');
     expect(pane).toMatch(/<ChatControls[\s\S]{0,140}toolsInWindow/);
     // A cloud model needs the internet: blocking stays local-only, as Offline was.
     expect(pane).toContain('<InternetToggle session={session} cloudModel={isCloudModel}');
