@@ -4,12 +4,15 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 describe('compact board and navigation spacing', () => {
-  it('centres a subtle 60% band behind icons with 3px more separation', () => {
+  it('centres a subtle band on the destination group with equal end caps', () => {
     const css = read('./styles.css');
-    expect(css).toContain('inset: 20% 0;');
+    expect(css).toContain('& .rail-group::before');
+    expect(css).toContain('inset: -48px -6px;');
+    expect(css).not.toContain('inset: 20% 0;');
+    expect(read('./App.tsx')).toContain('className="rail-group"');
     expect(css).toContain('var(--accent) 4%, var(--paper)');
     expect(css).toContain('var(--accent) 7%, var(--paper)');
-    expect(read('./App.tsx')).toContain('flex flex-col gap-[7px] overflow-hidden');
+    expect(read('./App.tsx')).toContain('flex-col gap-[7px] overflow-y-auto overflow-x-hidden');
   });
 
   it('keeps 1px around the board and beside the agent list without shrinking grips', () => {

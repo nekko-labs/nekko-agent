@@ -256,6 +256,7 @@ export function App() {
         <nav className="relative z-40 hidden w-[52px] shrink-0 md:block">
           <div className="rail absolute inset-y-0 left-0 flex flex-col overflow-hidden px-1.5 py-4">
             <div className="rail-space-before" aria-hidden="true" />
+            <div className="rail-group">
             <div className="rail-destinations flex min-h-0 flex-col gap-[7px] overflow-y-auto overflow-x-hidden">
             {/* The brand mark heads the rail. The wordmark joins it only where
                 there is no title bar to carry it (web and phone builds), so the
@@ -289,6 +290,7 @@ export function App() {
                 <span className="rail-label text-[13px] font-medium">{t(labelKey)}</span>
               </button>
             ))}
+            </div>
             </div>
             <div className="rail-space-after" aria-hidden="true" />
           </div>

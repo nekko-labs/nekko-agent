@@ -1664,3 +1664,6 @@ Ask: rather than copying many skills into the bundled catalog, let users find sk
 - [x] Bias desktop rail destinations upward with 1:3 free-space distribution and short-window scrolling.
 - [x] Check source-derived isolated layouts at 600/1000/1400 px, dark/light: all six move upward and retain eleven full-size visible destinations.
 - [ ] Inspect matching native before/after captures, hover/focus expansion and short-window scroll recording; OS native capture currently refuses isolated windows.
+
+- [x] Center curved navigation background on the destination group rather than the window.
+- [ ] Inspect matching native rail background captures and hover/focus evidence on a capturable desktop.

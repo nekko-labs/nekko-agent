@@ -1422,3 +1422,6 @@ The plan/sub-agent/queue rail is labeled **Agent Monitor**, with a control-panel
 ### Upper-middle desktop navigation rail (2026-10-15)
 
 Implemented: desktop/tablet left-rail destinations distribute unused space 1:3 above/below the group, biasing it toward the upper-middle rather than vertically centering it. Spacers collapse on short windows and destinations scroll without shrinking button hit targets. Destination ordering, hover/focus expansion and mobile bottom navigation are unchanged. Native desktop evidence remains pending; see reports/upper-middle-navigation.md for sources, rationale and fixture scope.
+
+### Rail background alignment (2026-10-15)
+Implemented: the curved accent backdrop is anchored to the destination-group wrapper with equal 48px end caps instead of full-window percentage insets. Its center follows the button group at all window heights; destination positions, mobile navigation and hover/focus expansion are unchanged. Native visual evidence remains pending.
