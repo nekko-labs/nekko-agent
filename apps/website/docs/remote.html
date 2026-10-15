@@ -232,11 +232,16 @@ network you already own.</p>
 <code>100.x.y.z</code> address works too). Enable, <strong>Pair a device</strong>, scan the QR from the phone with
 Tailscale switched on. The relay only listens on the Tailscale interface, so
 <code>NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1</code> is safe here; never use that flag on a public bind.</p>
-<p>Plain <code>ws://</code> is fine on a tailnet: the transport is already encrypted end to end by WireGuard and
-the iOS app ships with Expo&#39;s default App Transport Security (arbitrary loads allowed). If you
-prefer <code>wss://</code>, enable <strong>HTTPS certificates</strong> in the tailnet&#39;s DNS settings and either put
-<code>tailscale serve --bg 4400</code> in front (needs Serve enabled once per tailnet) or terminate TLS with
-<code>tailscale cert</code> on your own proxy.</p>
+<p>Plain <code>ws://</code> is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
+the app&#39;s own end-to-end encryption sits on top. The iOS app ships with Expo&#39;s default App Transport
+Security (arbitrary loads allowed). <strong>The Android app allows plain <code>ws://</code> only to Tailscale
+MagicDNS names (<code>*.ts.net</code>)</strong>, so use the name the script prints (<code>ws://gomi.tailfd6474.ts.net:4400</code>),
+not the <code>100.x.y.z</code> address: Android can&#39;t allow an IP range, and blocks the bare address. If you
+use an address the phone can&#39;t reach (a bare Tailscale IP, <code>localhost</code>, or any other plain <code>ws://</code>
+host), the Android app says so on its pairing screen and in the chat list instead of spinning on
+&quot;Connecting…&quot;. If you prefer <code>wss://</code>, enable <strong>HTTPS certificates</strong> in the tailnet&#39;s DNS settings
+and either put <code>tailscale serve --bg 4400</code> in front (needs Serve enabled once per tailnet) or
+terminate TLS with <code>tailscale cert</code> on your own proxy.</p>
 <p>Trade-offs: the computer must be awake and Tailscale running; push notifications need APNs/FCM
 keys on this relay like any other; Tailscale&#39;s free plan covers up to 100 devices and 3 users.</p>
 <h3 id="self-host-free-forever-one-command"><a class="anchor" href="#self-host-free-forever-one-command" aria-hidden="true" tabindex="-1">#</a>Self-host (free forever, one command)</h3>

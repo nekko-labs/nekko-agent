@@ -661,10 +661,11 @@
   transition:
     width var(--dur-slow) var(--ease-spring, var(--ease-out));
   will-change: width;
-  &::before {
+  & .rail-group::before {
     content: '';
     position: absolute;
-    inset: 20% 0;
+    /* Equal end caps keep the wave centered on the destinations, not the window. */
+    inset: -48px -6px;
     z-index: -1;
     background: color-mix(in srgb, var(--accent) 4%, var(--paper));
     /* Concave top and bottom: full width through the middle, merging into
@@ -677,8 +678,8 @@
   &:has(:focus-visible) {
     width: 188px;
   }
-  &:hover::before,
-  &:has(:focus-visible)::before {
+  &:hover .rail-group::before,
+  &:has(:focus-visible) .rail-group::before {
     background: color-mix(in srgb, var(--accent) 7%, var(--paper));
     filter: drop-shadow(0 6px 18px rgb(0 0 0 / 0.25));
   }
@@ -707,6 +708,14 @@
 
 @utility rail-space-after {
   flex: 3 1 0;
+}
+
+@utility rail-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 @utility rail-destinations {
