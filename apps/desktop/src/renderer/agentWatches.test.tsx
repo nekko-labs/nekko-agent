@@ -64,6 +64,16 @@ describe('watch rows', () => {
   });
 });
 
+describe('subagent summaries', () => {
+  it('state the job and project, not the repo path, for waiting and unreported children', async () => {
+    const { delegationActivity, activitySentence } = await import('./subagentActivity.js');
+    const call: ToolCall = { id: 'x', name: 'spawn_agent', input: { title: 'Repo audit', task: 'Repo: C:\\Users\\phili\\code\\nekko-agent (GitHub nekko-labs/nekko-agent).\nAudit the relay pairing flow and report gaps.' } };
+    expect(activitySentence(delegationActivity(call))).toBe('Subagent waiting · Audit the relay pairing flow and report gaps · nekko-agent');
+    const quiet = { id: 'c', title: 'Repo audit', parentSessionId: 'p', stalled: false } as SessionSummary;
+    expect(activitySentence(delegationActivity(call, quiet))).toBe('Subagent waiting · Audit the relay pairing flow and report gaps · nekko-agent');
+  });
+});
+
 describe('subagent model', () => {
   const spawn: ToolCall = { id: 'c', name: 'spawn_agent', input: { title: 'Checks', task: 'Run tests' } };
   const child = { id: 'k', title: 'Checks', parentSessionId: 'p', modelId: 'claude-sonnet-4-5-20250929' } as SessionSummary;

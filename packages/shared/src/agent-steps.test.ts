@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { summarizeThought, summarizeToolCall, truncateWords } from './agent-steps.js';
+import { summarizeDelegation, summarizeThought, summarizeToolCall, truncateWords } from './agent-steps.js';
 
 describe('summarizeThought', () => {
   it('prefers a conclusion sentence over the restated question', () => {
@@ -42,6 +42,22 @@ describe('summarizeThought', () => {
   it('is empty for empty reasoning', () => {
     expect(summarizeThought('')).toBe('');
     expect(summarizeThought('   \n  ')).toBe('');
+  });
+});
+
+describe('summarizeDelegation', () => {
+  const task = 'Repo: C:\\Users\\phili\\code\\nekko-agent (GitHub nekko-labs/nekko-agent).\nWork in a fresh worktree.\n\nFix the relay reconnect backoff in crates/nekkod/src/remote.rs and add a test.';
+  it('skips context lines and paths, keeping the instruction and the project leaf', () => {
+    expect(summarizeDelegation({ task })).toEqual({ what: 'Work in a fresh worktree.', project: 'nekko-agent' });
+    expect(summarizeToolCall({ name: 'spawn_agent', input: { task } }, 90)).toBe('Work in a fresh worktree. · nekko-agent');
+  });
+  it('reduces paths inside the instruction to their last segment', () => {
+    expect(summarizeDelegation({ task: 'Repo: /home/me/code/getsu\nAudit /home/me/code/getsu/src/app.ts for leaks.' }))
+      .toEqual({ what: 'Audit app.ts for leaks.', project: 'getsu' });
+  });
+  it('falls back to the title, then the project alone', () => {
+    expect(summarizeDelegation({ title: 'Spec sweep', task: 'Repo: C:\\code\\nekko-agent' })).toEqual({ what: 'Spec sweep', project: 'nekko-agent' });
+    expect(summarizeToolCall({ name: 'spawn_agent', input: { task: 'Repo: C:\\code\\nekko-agent' } })).toBe('nekko-agent');
   });
 });
 

@@ -1,5 +1,7 @@
 import type { AgentEvent, PendingInput, SessionSummary, ToolCall, ToolResult } from '@nekko-agent/shared';
-import { summarizeToolCall } from '@nekko-agent/shared';
+import { summarizeDelegation, summarizeToolCall } from '@nekko-agent/shared';
+
+const NO_STATUS = 'No current run status recorded.';
 
 export type SubagentStatus = 'working' | 'waiting' | 'completed' | 'failed' | 'stopped';
 export interface SubagentActivity { status: SubagentStatus; detail: string; toolId?: string; text?: string }
@@ -72,7 +74,7 @@ export function childActivity(child: SessionSummary, running = false, pending?: 
   if (live) return live;
   if (child.stalled) return { status: 'stopped', detail: 'Stopped before completing the task.' };
   // A stored reply alone does not prove successful completion.
-  return { status: 'waiting', detail: 'No current run status recorded.' };
+  return { status: 'waiting', detail: NO_STATUS };
 }
 export function activitySentence(activity: SubagentActivity): string {
   return `Subagent ${activity.status} · ${activity.detail}`;
@@ -94,10 +96,18 @@ export function delegationChild(call: ToolCall, sessions: SessionSummary[]): Ses
   scope.childId = matches[0].id;
   return matches[0];
 }
+/** What the delegation is for: its first real instruction and the project, never a path. */
+export function delegationTaskSummary(call: ToolCall): string {
+  const { what, project } = summarizeDelegation(call.input);
+  const sentence = what ? compactSentence(what) : '';
+  return sentence ? (project ? `${sentence.replace(/[.!?]$/, '')} · ${project}` : sentence) : project;
+}
 export function delegationActivity(call: ToolCall, child?: SessionSummary, result?: ToolResult, running = false): SubagentActivity {
-  if (child) return childActivity(child, running);
+  if (child) {
+    const activity = childActivity(child, running);
+    // A child with nothing to report still has a job: say what it is.
+    return activity.detail === NO_STATUS ? { ...activity, detail: delegationTaskSummary(call) || activity.detail } : activity;
+  }
   if (result?.isError) return { status: 'failed', detail: compactSentence(result.output) || 'Delegation could not start.' };
-  const task = typeof call.input.task === 'string' ? compactSentence(call.input.task) : '';
-  const title = typeof call.input.title === 'string' ? compactSentence(call.input.title) : '';
-  return { status: 'waiting', detail: task || title || 'Waiting for child status.' };
+  return { status: 'waiting', detail: delegationTaskSummary(call) || 'Waiting for child status.' };
 }

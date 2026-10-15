@@ -75,6 +75,50 @@ export function summarizeThought(reasoning: string, max = 90): string {
   return truncateWords(pool[pool.length - 1].replace(/[.]+$/, ''), max);
 }
 
+/** `Repo: …`, `Working directory: …` and the like: setup for a delegation, not what it does. */
+const CONTEXT_LINE_RE = /^(?:repo(?:sitory)?|project|workspace|folder|dir(?:ectory)?|working directory|cwd|path|root|branch|base|worktree|github|context|shared instructions?)\s*:/i;
+const WINDOWS_PATH_RE = /[A-Za-z]:[\\/][^\s,;()"'`]*/g;
+const POSIX_PATH_RE = /(?:~|\.{1,2})?\/[^\s,;()"'`]*\/[^\s,;()"'`]*/g;
+
+function leaf(path: string): string {
+  return path.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean).pop() ?? '';
+}
+
+/** The project a delegation is about, as its last path segment or repository name. */
+export function delegationProject(text: string): string {
+  const repo = /\b(?:github\s+)?([\w.-]+)\/([\w.-]+)\b(?=\s*\))/i.exec(text)?.[2];
+  const path = text.match(WINDOWS_PATH_RE)?.[0] ?? text.match(POSIX_PATH_RE)?.[0];
+  const fromPath = path ? leaf(path) : '';
+  // A path to a file says less than the repository it sits in.
+  return /\.[a-z0-9]{1,5}$/i.test(fromPath) && repo ? repo : fromPath || repo || '';
+}
+
+/**
+ * What a `spawn_agent` call asks for, in one plain sentence, with the
+ * project's short name. Context lines (`Repo: C:\…`) and paths are skipped:
+ * the sentence that says what to *do* is the one worth showing.
+ */
+export function summarizeDelegation(input: unknown, max = 90): { what: string; project: string } {
+  const inp = (input ?? {}) as Record<string, unknown>;
+  const task = typeof inp.task === 'string' ? inp.task.slice(0, 4000) : '';
+  const title = typeof inp.title === 'string' ? inp.title.trim().replace(/\s+/g, ' ') : '';
+  const project = delegationProject(task);
+  // Context lines go; what remains is rejoined so a wrapped sentence stays one sentence.
+  const body = plain(task)
+    .split(/\n/)
+    .filter((line) => !CONTEXT_LINE_RE.test(line.trim()))
+    .join('\n')
+    .split(/\n\s*\n/)
+    .map((para) => para.replace(/\s*\n\s*/g, ' '));
+  const candidates = body
+    .flatMap(sentences)
+    .map((s) => s.replace(WINDOWS_PATH_RE, (p) => leaf(p)).replace(POSIX_PATH_RE, (p) => leaf(p)).trim())
+    // A sentence that is only a heading or a dangling label says nothing yet.
+    .filter((s) => s.length > 3 && !/:$/.test(s));
+  const what = candidates[0] ?? title;
+  return { what: what ? truncateWords(what, max) : '', project };
+}
+
 /**
  * The argument worth showing next to a tool's name: the file it touched, the
  * command it ran, the pattern it searched for. Falls back to the first string
@@ -95,6 +139,10 @@ export function summarizeToolCall(
     const more = questions.length - 1;
     if (!text) return '';
     return truncateWords(more > 0 ? `${text} (+${more} more)` : text, max);
+  }
+  if (call.name === 'spawn_agent') {
+    const { what, project } = summarizeDelegation(input, max);
+    return what ? truncateWords(project ? `${what} · ${project}` : what, max) : project;
   }
   const pick = (...keys: string[]): string | undefined => {
     for (const k of keys) {

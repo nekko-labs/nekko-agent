@@ -18,7 +18,8 @@ const Provide = ({ children }: { children: React.ReactNode }) => {
   if (W.WatchSessionContext) node = <W.WatchSessionContext.Provider value="fixture">{node}</W.WatchSessionContext.Provider>;
   return node;
 };
-const task = (t: string) => ({ title: t, task: `${t}. Repo: C:\\Users\\phili\\code\\nekko-agent (GitHub nekko-labs/nekko-agent).` });
+// Real delegations open with a context line; the summary must skip it.
+const task = (t: string) => ({ title: t, task: `Repo: C:\\Users\\phili\\code\\nekko-agent (GitHub nekko-labs/nekko-agent).\n${t} and open a PR.` });
 const spawns: any[] = [
   { kind: 'tool', call: { id: 's1', name: 'spawn_agent', input: { ...task('Integration checks') } }, result: { toolCallId: 's1', output: 'Done.' } },
   { kind: 'tool', call: { id: 's2', name: 'spawn_agent', input: { ...task('Review the tool result'), model_id: 'qwen3-coder-30b' } } },
