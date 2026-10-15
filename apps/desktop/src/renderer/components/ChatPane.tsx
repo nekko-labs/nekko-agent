@@ -1,7 +1,7 @@
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
 import { chatPaneSettings } from './ChatPane.settings.js';
-import { CopyIcon } from '../icons.js';
+import { CopyIcon, ControlPanelIcon } from '../icons.js';
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
 import { revealEditorCaret } from './agent-console/editorCaret.js';
@@ -61,6 +61,7 @@ import { NekkoAvatar } from './Mascot.js';
 import { Modal } from './primitives/index.js';
 import { WorktreeChip } from './WorktreeChip.js';
 import { FolderPicker } from './FolderPicker.js';
+import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
 import { PanelIcon, DownloadIcon, PlusIcon, CloseIcon, BoltIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon, QuestionIcon } from '../icons.js';
@@ -651,7 +652,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const logsOpen = useWallLogs((s) => s.sessionId === sessionId && !s.closing);
   // Right-click menu for a chat image (copy / save), placed at the pointer.
   const [imageMenu, setImageMenu] = useState<{ x: number; y: number; src: string } | null>(null);
-  const [changeCount, setChangeCount] = useState(0);
+  const [changeSummary, setChangeSummary] = useState({ files: 0, added: 0, removed: 0 });
   const [chatMenu, setChatMenu] = useState<{ x: number; y: number } | null>(null);
   const [doneSummary, setDoneSummary] = useState<string | null>(null);
   // What the model thinks the user will say next: the composer's ghost text.
@@ -774,7 +775,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Track how many files the agent changed this chat (for the Changes button).
   useEffect(() => {
     let live = true;
-    const load = () => window.nekko.listChanges(sessionId).then((c) => { if (live) setChangeCount(c.length); }).catch(() => {});
+    const load = () => window.nekko.listChanges(sessionId).then((c) => { if (live) setChangeSummary(summarizeChanges(c)); }).catch(() => {});
     const cancel = afterPaint(load);
     const off = window.nekko.onChangesUpdated((e) => { if (e.sessionId === sessionId) load(); });
     return () => { live = false; cancel(); off(); };
@@ -2152,7 +2153,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 than in the wall's title bar, where they needed an agent to be
                 selected first. On the wall they open beside the window; in
                 the Chat view, as windows of the workspace. */}
-            <AgentCompanionButtons sessionId={sessionId} changeCount={changeCount} commandCenter={commandCenter} compact={compact} />
+            <AgentCompanionButtons sessionId={sessionId} changeCount={changeSummary.files} added={changeSummary.added} removed={changeSummary.removed} commandCenter={commandCenter} compact={compact} />
             <button
               className="btn btn-ghost shrink-0 px-2 py-1 text-[11px]"
               aria-label="Open agent logs"
@@ -2171,16 +2172,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               {compact ? <TerminalIcon className="h-4 w-4" /> : 'Logs'}
             </button>
 
-            {!compact && (
-            <button
-              className={`btn btn-ghost hidden px-2 py-1 lg:inline-flex ${ctxOpen ? 'text-accent' : ''}`}
-              onClick={() => useStore.getState().toggleContextPanel()}
-              title="Toggle context panel (Ctrl/⌘+\)"
-              aria-pressed={ctxOpen}
-            >
-              <PanelIcon />
-            </button>
-            )}
         </ChatHeader>
         )}
 
@@ -2310,11 +2301,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               className={`plan-rail-toggle ${planRailOpen ? 'is-open' : ''}`}
               data-plan-toggle
               onClick={() => useStore.getState().togglePlanRail(sessionId)}
-              title={planRailOpen ? 'Hide the plan panel' : 'Show the plan, sub-agents and queue panel'}
-              aria-label={planRailOpen ? 'Hide the plan panel' : 'Show the plan panel'}
+              title={planRailOpen ? 'Hide Agent Monitor' : 'Show Agent Monitor: plan, sub-agents and queue'}
+              aria-label={planRailOpen ? 'Hide Agent Monitor' : 'Show Agent Monitor'}
               aria-pressed={planRailOpen}
             >
-              <ListIcon className="h-4 w-4" />
+              <ControlPanelIcon className="h-4 w-4" /><span>Agent Monitor</span>
               {!planRailOpen && planSteps.total > 0 && <span className="plan-rail-toggle-count tabular-nums">{planSteps.done}/{planSteps.total}</span>}
             </button>
           )}
@@ -2895,12 +2886,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {session?.executionMode === 'sandbox' ? <span className="text-[11px] text-ink-faint">MCP unavailable in Sandbox</span> : <McpMenu />}
               </>}
               <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />
-              {status && <span className="agent-footer-status ml-1 inline-flex items-center" data-agent-status><StatusIcon status={status === 'idle' ? undefined : status} /></span>}
-            </div>
+                          </div>
           </div>}
           {/* An image chat runs no agent, so no tools or internet switch: just its status. */}
-          {imageMode && surface !== 'composer' && status && <div className="flex items-center justify-end"><span className="agent-footer-status inline-flex items-center" data-agent-status><StatusIcon status={status === 'idle' ? undefined : status} /></span></div>}
-        </div>
+                  </div>
       </section>
 
       {/* The work rail, in the quarter the transcript gives back. Kept inside

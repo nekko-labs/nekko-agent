@@ -411,6 +411,12 @@ Questions or ideas? Open an issue on
 
 Drag a project group header in the agent panel onto another group to place it before that group. A quick gap opens above the hovered group (beside it in the horizontal panel) and closes when you move away. You can drop on either the header or an agent card in that group. The project order is saved. Dragging an individual agent card still reorders or moves that agent, rather than the whole group.
 
+### Agent window controls
+
+Changes is the leftmost header control. When the agent edits files it glows and shows added/deleted line totals plus the changed-file count. Click it to review the diff. Zen focuses that window; a small divider separates this action from the Files, Browser and Logs panel buttons. The activity icon is at the top left before the numbered agent icon.
+
+**Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
+
 ---
 
 <!-- https://nekkoagent.com/docs/local-models -->

@@ -1384,3 +1384,9 @@ Acceptance: one host creation per pending repository action, explicit repository
 ### Streaming wall empty-state styling
 
 Implemented candidate: wall vacancy styling is derived from wall state, not a descendant selector reconsidered as streamed content grows. Empty, filtered-no-match and creation states retain their appearance. Isolated Windows Electron fixtures pass geometry checks with byte-identical static captures at desktop/narrow widths and light/dark themes. Linux CI performance and packaged cross-platform verification remain pending; budgets are unchanged.
+
+## Agent window controls refresh (2026-10-15)
+
+Implemented, verification in progress: each wall window has one Zen action that selects that window and makes it the Focus hero, including when another window is already focused. The redundant layout, companion-fold and external-open icons are removed. Changes leads the header controls; pending changes give it a static accent glow and expand it to show added/deleted lines and the file count, even at compact density. Files, Browser and Logs remain panel openers, separated from Zen by a small divider. The header context-panel button is removed; the existing keyboard/command-palette context access remains.
+
+The plan/sub-agent/queue rail is labeled **Agent Monitor**, with a control-panel icon and visible toggle text. Each wall agent's activity glyph sits at the far top left before its numbered agent icon, no longer in the footer. No provider calls, new permissions, or user-profile changes are involved. Acceptance: exact synthetic diff totals, empty-state regression, clicked-window Focus routing, monitor toggle, and matched light/dark wide/narrow screenshots plus motion evidence. Native OS behavior is unchanged.

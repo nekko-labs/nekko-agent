@@ -1642,3 +1642,8 @@ Ask: rather than copying many skills into the bundled catalog, let users find sk
 - [ ] Screenshots are inspected in-session but not saved as files or published (native capture timed out; no PR opened, the request was a branch). Dark theme, phone width, Claude Code / Codex targets and GitHub search with a token not exercised in the UI.
 - [ ] Not built: background refresh of GitHub shelves, update notices for installed GitHub skills, installing a skill's scripts/references, `nekko-agent skills install <github-url>` (CLI/MCP), daemon-side (Rust) ownership of the new channels (they are host-served).
 
+
+## Agent window controls refresh (2026-10-15)
+
+- [x] Implement Zen-only wall actions, leftmost glowing Changes diff totals, action/panel divider, labeled Agent Monitor and top-left activity glyph. See [SPEC](SPEC.md#agent-window-controls-refresh-2026-10-15).
+- [ ] Verify regressions, inspect matched isolated renderer captures and motion, publish evidence and land the PR.

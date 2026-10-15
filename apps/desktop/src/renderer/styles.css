@@ -2091,3 +2091,16 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 }
 .wall-composer { container-type: inline-size; }
 
+
+/* Pending changes stay visible without a continuously animated glow. */
+.agent-changes-pending { background: var(--accent-soft); box-shadow: 0 0 9px -3px var(--accent); border-radius: 6px; }
+.agent-change-summary { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; animation: agent-changes-reveal .18s ease-out; }
+@keyframes agent-changes-reveal { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: translateX(0); } }
+.agent-action-separator { align-self: center; height: 14px; width: 1px; margin: 0 4px; background: var(--line); }
+@media (prefers-reduced-motion: reduce) { .agent-change-summary { animation: none; } }
+
+/* Changes leads; Zen is the action group, followed by panel openers. */
+[data-agent-companion="diff"] { order: -3; }
+.agent-zen-action { order: -2; }
+.agent-action-separator { order: -1; }
+.agent-change-summary .text-danger { color: var(--danger); }
