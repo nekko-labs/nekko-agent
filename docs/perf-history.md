@@ -704,6 +704,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 Performance-motivated changes with no recorded numbers. Measure them if they
 are ever revisited.
 
+- fix/wire-parity-ci-cache (2026-10-15) pin `Swatinem/rust-cache` in the required `build` job to the v2.9.2 commit: no behavior change to the cache itself, so no number was taken; the two `build` runs after #555 (38690470032, 38691683502) both started from an empty `ci-build` cache (`No cache found`) at 234 s and 230 s, against 187 s and 220 s uncached before it, so the warm-hit saving is still unmeasured.
 - #476 (2026-10-12) runtime control plane into nekkod: "No latency numbers".
 - #463 (2026-10-12) voice into nekkod (PF14).
 - #293 (2026-10-04) idle limits and retries: configuration only.

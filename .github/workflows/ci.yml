@@ -32,7 +32,9 @@ jobs:
       # before `npm test` / typecheck run.
       - run: npm run build:web
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      # Pinned to the v2 tag's commit (v2.9.2): the required job must not pick up
+      # a moved tag unreviewed.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # Keep this debug build separate from clippy/test and release caches.
           shared-key: ci-build
