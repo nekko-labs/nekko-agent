@@ -1,4 +1,9 @@
 ---
+
+## Chat artifact cards and session-local documents
+
+Implemented candidate, visual review pending: assistant replies expose explicit local document links as cards below the response. Cards use descriptive link labels (or a folder-based title for generic README/index names), retain the filename as secondary text, and require user activation to read files. The top of This prompt contains an Artifacts disclosure, closed by default, always showing a count including 0, with unique local documents from assistant messages in that session. Links in code samples, remote resources, images and executables do not become artifact cards. Opening a document from a chat reuses or creates its file pane in that originating chat workspace, never globally focuses another chat’s copy. Sandbox host-file access remains disabled. Existing filenames are not silently renamed; titles improve discoverability without breaking links. Desktop renderer behavior is tested; native mobile surface is unchanged and visual inspection remains unverified.
+
 status: active
 last-updated: 2026-10-12
 owner:

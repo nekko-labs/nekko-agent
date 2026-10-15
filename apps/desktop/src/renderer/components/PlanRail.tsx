@@ -1,3 +1,5 @@
+import { chatArtifacts } from '../chatArtifacts.js';
+import { ChatArtifacts } from './ChatArtifacts.js';
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { QueuedPrompt, Session } from '@nekko-agent/shared';
 import { DEFAULT_ORCHESTRATION, getStrategy, planProgress, queueItemPayload } from '@nekko-agent/shared';
@@ -47,6 +49,13 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
   const agentPlan = session?.agentPlan;
   const progress = planProgress(agentPlan);
   const queued = session?.queue ?? [];
+  const settings = useStore(s => s.settings);
+  const basePath = session?.workspaceId ? session.gitWorktrees?.[session.workspaceId]?.path ?? settings?.workspaces.find(w => w.id === session.workspaceId)?.path : undefined;
+  const artifacts = useMemo(() => {
+    const unique = new Map();
+    for (const message of session?.messages ?? []) if (message.role === 'assistant') for (const artifact of chatArtifacts(message.content, basePath)) unique.set(artifact.path.toLowerCase(), artifact);
+    return [...unique.values()];
+  }, [session?.messages, basePath]);
 
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden border-l border-line" style={{ background: 'transparent' }} aria-label="Plan and sub-agents">
@@ -56,6 +65,10 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
         <span className="min-w-0 flex-1 truncate pr-8 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Agent Monitor</span>
       </header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
+        <details key={sessionId} className="group">
+          <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Artifacts <span className="ml-1 tabular-nums">{artifacts.length}</span></summary>
+          {artifacts.length ? <ChatArtifacts artifacts={artifacts} sessionId={sessionId} /> : <p className="mt-2 text-[11px] text-ink-faint">No artifacts yet.</p>}
+        </details>
         <section>
           <div className="mb-1.5 flex items-center gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Sub-agents</span>

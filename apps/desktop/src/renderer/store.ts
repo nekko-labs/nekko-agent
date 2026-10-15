@@ -293,7 +293,7 @@ interface UiState {
   newTerminalWorkspace: (workspaceId?: string, shell?: string) => Promise<void>;
   openChatPane: (sessionId: string) => void;
   openTerminalPane: (terminalId: string) => void;
-  openFilePane: (path: string) => void;
+  openFilePane: (path: string, sessionId?: string) => void;
   openBrowserPane: (url?: string) => void;
   /** Open (or focus) the Hypergate manager as a tab in this window. */
   openHypergatePane: () => void;
@@ -882,8 +882,27 @@ export const useStore = create<UiState>((set, get) => ({
     });
   },
 
-  openFilePane: (path) => {
+  openFilePane: (path, sessionId) => {
     set((s) => {
+      if (sessionId !== undefined) {
+        // A file opened from a chat belongs there, even when another chat has
+        // the same file open or a different workspace is currently selected.
+        let state = s;
+        let chat = locatePane(state.workspaces, 'chat', sessionId);
+        if (!chat) {
+          state = { ...s, ...addWorkspace(s, { id: newPaneId(), kind: 'chat', refId: sessionId }) };
+          chat = locatePane(state.workspaces, 'chat', sessionId);
+        }
+        if (!chat) return {};
+        const workspaceId = chat.workspaceId;
+        state = { ...state, activeWorkspaceId: workspaceId, activeSessionId: sessionId };
+        const workspace = state.workspaces.find((w) => w.id === workspaceId)!;
+        const file = findPaneByRef(workspace.root, 'file', path);
+        const opened = file
+          ? focusPane(state, workspace.id, file.id)
+          : openInActive(state, { id: newPaneId(), kind: 'file', refId: path });
+        return { ...opened, activeSessionId: sessionId };
+      }
       const hit = locatePane(s.workspaces, 'file', path);
       if (hit) return focusPane(s, hit.workspaceId, hit.paneId);
       return openInActive(s, { id: newPaneId(), kind: 'file', refId: path });

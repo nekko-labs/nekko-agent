@@ -281,3 +281,9 @@ Drag a project group header in the agent panel onto another group to place it be
 Changes is the leftmost header control. When the agent edits files it glows and shows added/deleted line totals plus the changed-file count. Click it to review the diff. Zen focuses that window; a small divider separates this action from the Files, Browser and Logs panel buttons. The activity icon is at the top left before the numbered agent icon.
 
 **Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
+
+## Reports and artifacts in chat
+
+Local document links in assistant replies appear as artifact cards beneath the response. The descriptive report title appears above its filename, so a README can still be recognizable. Select a card or document link to open it in the originating chat—not another chat that happens to have the file open.
+
+At the top of **This prompt**, expand **Artifacts** to see the session’s linked documents. It starts collapsed and always displays a count, including 0. Repeated links to the same path are listed once. Documents are not read until you open them; host previews remain unavailable in Sandbox.
