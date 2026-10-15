@@ -1453,3 +1453,7 @@ Not verified: packaged desktop app and native OS chrome; the phone apps (no Arti
 
 ### Model chip name priority (2026-10-16)
 Implemented: the closed model picker reserves the selected model name before the secondary provider/account label. The name no longer uses ellipsis; unusually long names wrap within the chip, while provider/account details truncate first. Caret remains visible; full model/provider information remains in the existing title. Focused render tests and isolated CSS geometry verified; native desktop capture remains unverified.
+
+## Muted pending-change badge
+
+Implemented: the chat header's pending Changes badge uses the theme's muted surface background with no outer glow. Added/deleted line colours, file counts, hover feedback and opening the Changes panel remain unchanged. Acceptance: a readable, quiet badge in light/dark themes at wide and narrow widths; no new network, permissions or data changes.

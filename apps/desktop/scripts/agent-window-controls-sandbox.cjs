@@ -50,6 +50,36 @@ app.whenReady().then(async () => {
       agentPanel:integration.state().settings.commandWall.agentPanel };
   })()`);
   try {
+    if (process.env.NEKKO_MUTED_CHANGES) {
+      for (const theme of [process.env.NEKKO_EVIDENCE_THEME || 'dark']) for (const width of [Number(process.env.NEKKO_EVIDENCE_WIDTH || 1400)]) {
+        win.setContentSize(width, 900);
+        await win.loadFile(path.join(out, 'index.html'));
+        for (let i = 0; i < 60; i++) { if (await run("!!window.integration")) break; await sleep(100); }
+        await run('window.integration.reset(); window.__setChanges(false)');
+        for (let i = 0; i < 60; i++) { if (await run("!!document.querySelector('.agent-changes-pending')")) break; await sleep(100); }
+        await run(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+        await sleep(500);
+        const badge = await run(`(() => {
+          const b = document.querySelector('.agent-changes-pending');
+          const s = getComputedStyle(b);
+          const probe = document.createElement('span'); probe.style.background = 'var(--surface-2)'; b.append(probe);
+          const muted = getComputedStyle(probe).backgroundColor; probe.remove();
+          return { text: b.textContent, shadow: s.boxShadow, background: s.backgroundColor, muted, label: b.getAttribute('aria-label') };
+        })()`);
+        if (!badge.text.includes('+') || !badge.text.includes('−') || !badge.text.includes('files')) throw Error('Missing change summary');
+        if (!process.env.NEKKO_TEST_REVISION && (badge.shadow !== 'none' || badge.background !== badge.muted)) throw Error('Pending changes must use a muted surface without glow');
+        report.checks.push({ name: `${theme}-${width}-badge`, badge });
+        await capture(`changes-${theme}-${width}`);
+        if (!await clickControl('changes')) throw Error('Changes control missing');
+        await sleep(300);
+        if (!await run("document.querySelector('[data-agent-companion=diff]').getAttribute('aria-expanded') === 'true'")) throw Error('Changes drawer did not open');
+        report.checks.push({ name: `${theme}-${width}-opens-drawer` });
+      }
+      fs.writeFileSync(path.join(runDir, 'report.json'), JSON.stringify(report, null, 2));
+      if (report.errors.length) throw Error(report.errors.join('\n'));
+      console.log(JSON.stringify({ runDir, checks: report.checks.length, captures: report.captures.length }));
+      return;
+    }
     for (const theme of [process.env.NEKKO_EVIDENCE_THEME || 'dark']) for (const width of [Number(process.env.NEKKO_EVIDENCE_WIDTH || 1400)]) for (const empty of [process.env.NEKKO_EVIDENCE_EMPTY === '1']) {
       win.setContentSize(width, 900);
       await win.loadFile(path.join(out, 'index.html'), { search: 'multi' + (empty ? '&empty' : '') });
