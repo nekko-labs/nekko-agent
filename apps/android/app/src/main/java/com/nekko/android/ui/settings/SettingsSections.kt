@@ -28,6 +28,7 @@ val SettingsSections: List<SettingsSection> = listOf(
     { AppearanceSection(it) },
     { SecuritySection(it) },
     { NewChatsSection(it) },
+    { ConnectionSection(it) },
     { VibrationSection(it) },
     { ComputersSection(it) },
     { AboutSection(it) },

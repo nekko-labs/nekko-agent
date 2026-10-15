@@ -38,6 +38,8 @@ class NekkoApp : Application() {
     lateinit var newChatDefaults: NewChatDefaults
     /** Text shared from other apps on its way to a chat's composer; memory only. */
     val shareInbox = ShareInbox()
+    lateinit var connection: ConnectionKeeper
+        private set
     lateinit var haptics: AndroidHaptics
         private set
 
