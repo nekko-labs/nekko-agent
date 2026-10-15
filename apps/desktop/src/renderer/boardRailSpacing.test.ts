@@ -7,7 +7,10 @@ describe('compact board and navigation spacing', () => {
   it('centres a subtle band on the destination group with equal end caps', () => {
     const css = read('./styles.css');
     expect(css).toContain('& .rail-group::before');
-    expect(css).toContain('inset: -48px -6px;');
+    expect(css).toContain('--wing-height: 32px;');
+    expect(css).toContain('--wing-height: 100px;');
+    expect(css).toContain('inset: calc(-1 * var(--wing-height)) -6px;');
+    expect(css).toContain('100% var(--wing-height) no-repeat');
     expect(css).not.toContain('inset: 20% 0;');
     expect(read('./App.tsx')).toContain('className="rail-group"');
     expect(css).toContain('var(--accent) 4%, var(--paper)');
