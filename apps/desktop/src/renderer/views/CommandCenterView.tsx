@@ -1,5 +1,7 @@
 import { AgentWindowPicker, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
 import { NumberedChatIcon } from '../components/NumberedChatIcon.js';
+import { createPortal } from 'react-dom';
+import { hasAppChrome } from '../chrome.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, AutomationTask, PendingInput, SessionSummary, UsageSummary } from '@agent-nekko/shared';
 import type { AgentType } from '@agent-nekko/shared';
@@ -304,15 +306,27 @@ export function CommandCenterView() {
     />
   );
 
+  const tabsToggle = <button type="button" className="btn btn-ghost wall-tabs-toggle" aria-label={wall.tabs === 'left' ? 'Switch to horizontal agent tabs' : 'Switch to vertical agent tabs'} title={wall.tabs === 'left' ? 'Switch to horizontal agent tabs' : 'Switch to vertical agent tabs'} onContextMenu={openTabsMenu} onClick={() => setWall(w => ({ ...w, tabs: w.tabs === 'left' ? 'top' : 'left' }))}><PanelIcon className={`h-4 w-4 ${wall.tabs === 'left' ? 'rotate-90' : ''}`} /></button>;
+  const [wideHeader, setWideHeader] = useState(() => window.innerWidth >= 1100);
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1100px)');
+    const update = () => setWideHeader(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  const titleSlot = hasAppChrome ? document.getElementById('command-titlebar-title') : null;
+  const toolbarSlot = hasAppChrome ? document.getElementById('command-titlebar-slot') : null;
+  const title = <h1 className="text-gradient text-xl font-semibold">Agents</h1>;
+  const toolbar = <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen} tabsToggle={wall.tabs === 'left' || wall.tabs === 'hidden' ? tabsToggle : null} />;
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 px-4 pb-4 pt-1 xl:px-6">
-      <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen} />
-      <div className="flex items-center gap-2"><button className="btn btn-ghost text-[12px]" aria-haspopup="menu" onContextMenu={openTabsMenu} onClick={(e) => setTabsMenu({ x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().bottom })}>Agent tabs: {wall.tabs ?? 'top'}</button></div>
+      {titleSlot && toolbarSlot ? <>{createPortal(title, titleSlot)}{wideHeader ? createPortal(toolbar, toolbarSlot) : toolbar}</> : <div className="flex flex-wrap items-center gap-3">{title}{toolbar}</div>}
       {tabsMenu && <ContextMenu x={tabsMenu.x} y={tabsMenu.y} onClose={closeTabsMenu}>{(['top', 'left', 'hidden'] as const).map((tabs) => <ContextAction key={tabs} onClick={() => { setWall(w => ({ ...w, tabs })); closeTabsMenu(); }}>{(wall.tabs ?? 'top') === tabs ? '✓ ' : ''}{tabs === 'top' ? 'Top tabs' : tabs === 'left' ? 'Vertical tabs (left)' : 'Hide tab panel'}</ContextAction>)}</ContextMenu>}
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <WallDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
         <div className="wall-agent-workspace" data-tabs={wall.tabs ?? 'top'}>
       {wall.tabs !== 'hidden' && <div className="wall-focus-agents" role="toolbar" aria-label="Focus agents" onContextMenu={openTabsMenu}>
+        {(wall.tabs ?? 'top') === 'top' && tabsToggle}
         {agentList.map((agent) => <button key={agent.session.id} className="wall-focus-agent" aria-pressed={wall.hero === agent.session.id} onClick={() => selectAgent(agent.session.id)}>
           <NumberedChatIcon number={agent.n} /><span className="min-w-0 text-left"><span className="block truncate">{agent.session.title}</span><small className="block truncate text-ink-faint">{agent.session.modelId || 'Default model'} · {agent.session.transcriptTokens.toLocaleString()} context tokens</small></span>
           {agent.status && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: agent.status.tone }} />}
@@ -369,7 +383,9 @@ function WallToolbar({
   onAutoArrange,
   addOpen,
   setAddOpen,
+  tabsToggle,
 }: {
+  tabsToggle: React.ReactNode;
   wall: CommandWallState;
   setWall: (update: (s: CommandWallState) => CommandWallState) => void;
   onAutoArrange: () => void;
@@ -387,17 +403,12 @@ function WallToolbar({
     window.addEventListener('keydown', key);
     return () => { window.removeEventListener('mousedown', down); window.removeEventListener('keydown', key); };
   }, [fixedOpen]);
-  const panes = allPanes(wall.root);
-  const counts = { chat: panes.filter((p) => p.kind === 'chat').length, terminal: panes.filter((p) => p.kind === 'terminal').length };
   const canArrange = wall.layout.mode === 'grid' && !!wall.root && isSplit(wall.root);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <h1 className="text-gradient text-2xl font-semibold">Agents</h1>
-      <span className="text-[12px] text-ink-faint">
-        {counts.chat} agent{counts.chat === 1 ? '' : 's'} · {counts.terminal} terminal{counts.terminal === 1 ? '' : 's'} on the wall
-      </span>
-      <div className="ml-auto flex flex-wrap items-center gap-3">
+    <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
+      {tabsToggle}
+      <div className="ml-auto flex flex-wrap items-center gap-2">
         <div className="wall-layout-control" ref={fixedRef}>
           <div className="wall-layout-segments" role="group" aria-label="Wall layout">
             {(['focus', 'grid', 'fixed'] as const).map((mode) => (

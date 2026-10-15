@@ -1789,3 +1789,12 @@
 .wall-composer .composer-editor-wrap { flex: 1; min-height: 52px; overflow: hidden; }
 .wall-composer .composer > :not(.composer-editing-body), .wall-composer .composer-editing-body > :not(.composer-editor-wrap) { flex-shrink: 0; }
 .wall-layout-segments button { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Compact desktop wall controls keep the native caption buttons clear. */
+.titlebar-word { flex-shrink: 0; white-space: nowrap; }
+.titlebar-mark { transform: translateY(2px); }
+.titlebar-updater { margin-top: 1px; }
+#command-titlebar-title:empty { display: none; }
+#command-titlebar-slot { overflow: visible; }
+#command-titlebar-slot .wall-layout-segments button { padding: 3px 6px; }
+.wall-tabs-toggle { flex-shrink: 0; align-self: center; padding: 6px; }

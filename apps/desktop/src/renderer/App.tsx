@@ -237,10 +237,10 @@ export function App() {
             {/* The brand mark heads the rail. The wordmark joins it only where
                 there is no title bar to carry it (web and phone builds), so the
                 name is never shown twice. */}
-            <div className="mb-3 flex h-9 items-center gap-2 px-1.5" aria-hidden={hasAppChrome || undefined}>
+            {!hasAppChrome && <div className="mb-3 flex h-9 items-center gap-2 px-1.5">
               <span className="grid h-8 w-8 shrink-0 place-items-center text-ink"><BrandMark size={24} title={hasAppChrome ? undefined : 'Agent Nekko'} /></span>
               {!hasAppChrome && <span className="rail-label text-[15px] font-semibold tracking-tight">Agent Nekko</span>}
-            </div>
+            </div>}
             {visibleNav.map(({ view: v, labelKey, Icon }) => (
               <button
                 key={v}

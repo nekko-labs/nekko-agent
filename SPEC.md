@@ -790,3 +790,9 @@ Acceptance: matched main/current captures and sampled mascot/reorder motion fram
 - Below 720px, the left preference renders as a horizontal strip to preserve editor width; the saved preference remains left.
 - Acceptance: new-agent selection, all placement choices, right-click access, recovery, and setting/local/reload persistence pass isolated Electron checks. Desktop/light/dark and narrow visual evidence must be inspected before release.
 - Privacy: placement changes only UI settings; they neither send prompts nor create/delete sessions.
+
+## Compact Agents header and tab placement
+
+Implemented; visual/release verification pending: desktop Agents title sits before the version/update chip in the native top bar, with wall layout/filter/panel/add controls on that same row. Web retains a responsive in-content header. The duplicate desktop rail brand mark and wall agent/terminal count subtitle are removed; the title-bar mark is offset down 2px and the update chip has 1px top margin.
+
+An accessible icon switches top/left agent tabs directly: first in horizontal tabs, in the top toolbar for vertical or hidden tabs. Right-click placement menus still support hiding/restoring tabs. Placement remains persisted locally and via existing wall settings; no new network requests or permissions. Acceptance: no dedicated tab-settings row, both placements and hidden restoration remain keyboard-accessible, and caption buttons remain unobstructed.
