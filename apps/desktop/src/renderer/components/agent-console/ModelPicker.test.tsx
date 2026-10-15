@@ -84,3 +84,12 @@ describe('account emails in the picker', () => {
     } finally { emails.byToken = {}; }
   });
 });
+
+describe('model chip name priority', () => {
+  it('wraps the complete model name rather than ellipsizing it for the account label', () => {
+    const out = renderToStaticMarkup(<ModelPicker open={false} providers={[{id:'p',kind:'anthropic',label:'Anthropic (Claude) very long account',enabled:true,baseUrl:''}]} providerId="p" modelId="m" models={[{id:'m',providerId:'p',name:'Claude Opus 4.6'}]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+    expect(out).toContain('whitespace-normal break-words text-left');
+    expect(out).toContain('data-model-chip-name="true">Claude Opus 4.6</span>');
+    expect(out).toContain('ctl-caret shrink-0');
+  });
+});
