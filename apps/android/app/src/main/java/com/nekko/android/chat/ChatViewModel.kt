@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.ComputersState
+import com.nekko.android.data.PhonePrefs
+import com.nekko.android.voice.Dictation
+import com.nekko.android.voice.DictationController
+import com.nekko.android.voice.MicHardware
 import com.nekko.protocol.AskAnswer
 import com.nekko.protocol.RelayState
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,8 +19,31 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** Android wrapper around [ChatController]: wires it to the repository's state and events. */
-class ChatViewModel(sessionId: String, private val repo: ComputersRepository) : ViewModel() {
+class ChatViewModel(
+    sessionId: String,
+    private val repo: ComputersRepository,
+    /** The phone's microphone and its settings; null keeps dictation off (tests, previews). */
+    mic: MicHardware? = null,
+    phonePrefs: PhonePrefs? = null,
+) : ViewModel() {
     private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) })
+
+    /** Dictation into this chat's message box (Settings → Dictation). */
+    val dictation: DictationController? = if (mic == null || phonePrefs == null) null else DictationController(
+        scope = viewModelScope,
+        caller = repo.caller,
+        hardware = mic,
+        settings = { phonePrefs.get(Dictation.ENGINE) to phonePrefs.get(Dictation.LANGUAGE) },
+        computer = {
+            val s = repo.state.value
+            DictationController.computerVoice(repo.caller, s.conn == RelayState.ONLINE, s.pcSettings.voiceEnabled)
+        },
+        computerName = { repo.state.value.active?.name ?: "your computer" },
+    )
+
+    override fun onCleared() {
+        dictation?.cancel()
+    }
 
     val ui: StateFlow<ChatUi> = combine(controller.state, repo.state.map(this::env).distinctUntilChanged()) { s, e ->
         ChatController.project(s, e)

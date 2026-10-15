@@ -1,5 +1,16 @@
 package com.nekko.android.ui.screens
 
+import com.nekko.android.voice.DictationController
+import com.nekko.android.ui.chat.MicUi
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.content.pm.PackageManager
+import android.Manifest
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,9 +59,10 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, onBack: () -> Unit) {
+fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boolean = false, onBack: () -> Unit) {
     val chat by vm.ui.collectAsStateWithLifecycle()
     val p = Nekko.palette
+    val mic = rememberMic(vm.dictation.takeIf { dictationOn })
     val list = rememberLazyListState()
 
     // Stable keys: a provider that reuses a call id across turns gets a suffix.
@@ -154,7 +166,36 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, onBack: () -> Un
                 onSend = vm::send,
                 onStop = vm::stop,
                 modifier = Modifier.navigationBarsPadding(),
+                mic = mic,
             )
+        }
+    }
+}
+
+/**
+ * The composer's microphone: asks for RECORD_AUDIO the first time it is
+ * tapped (Android shows its own prompt), then starts or stops dictation.
+ */
+@Composable
+private fun rememberMic(d: DictationController?): MicUi? {
+    if (d == null) return null
+    val context = LocalContext.current
+    val state by d.state.collectAsStateWithLifecycle()
+    val error by d.error.collectAsStateWithLifecycle()
+    var pending by remember { mutableStateOf<((String) -> Unit)?>(null) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val onText = pending
+        pending = null
+        if (granted && onText != null) d.toggle(onText)
+        else if (!granted) d.denied()
+    }
+    // Leaving the chat drops a recording in progress; nothing is kept.
+    DisposableEffect(d) { onDispose { d.cancel() } }
+    return MicUi(state, error, d.computerName()) { onText ->
+        val has = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (has) d.toggle(onText) else {
+            pending = onText
+            ask.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 }

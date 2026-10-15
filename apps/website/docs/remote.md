@@ -63,6 +63,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
 > its Settings. A long-press on a chat in the list then completes or deletes it on the computer.
 >
+> **Dictation** (Android): tap the microphone in a chat's message box, speak, and tap again (or stop
+> at 30 seconds). The words go into the message box for you to check and send; nothing is sent by
+> itself. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
+> end-to-end encrypted, the audio never reaches anyone else); install and switch it on there under
+> **Settings → Nekko Voice**. When the computer can't, the phone's own speech recognizer is used,
+> which on many phones sends the audio to Google. **Settings → Dictation** on the phone lets you use
+> only the computer, only the phone, or turn the microphone off.
+>
 > The Android app is **locked by default**: every time you open it, or come back to it, it asks for
 > your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows
 > anything. While it is locked nothing can be read or approved, and the recent-apps preview stays
