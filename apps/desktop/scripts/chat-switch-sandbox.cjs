@@ -23,6 +23,7 @@ const UNSAFE_JS_CHAR_MAP = {
   '\u2028': '\\u2028',
   '\u2029': '\\u2029',
 };
+const escapeUnsafeJsChars = (str) => str.replace(/[<>/\\\b\f\n\r\t\0\u2028\u2029]/g, (ch) => UNSAFE_JS_CHAR_MAP[ch]);
 const escapeUnsafeChars = (str) => str.replace(/[<>/\\\b\f\n\r\t\0\u2028\u2029]/g, (x) => UNSAFE_JS_CHAR_MAP[x]);
 
 app.whenReady().then(async () => {
@@ -90,7 +91,7 @@ app.whenReady().then(async () => {
     await sleep(700);
     await check('drafts: real editor mounted', '!!document.querySelector("[contenteditable]")');
     const typed = 'Alpha last-keystroke';
-    await run(`(() => { const e = document.querySelector('[contenteditable]'); e.textContent = ${JSON.stringify(typed)}; e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'e' })); })()`);
+    await run(`(() => { const e = document.querySelector('[contenteditable]'); e.textContent = ${escapeUnsafeJsChars(JSON.stringify(typed))}; e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'e' })); })()`);
     await sleep(30);
     await check('drafts: not saved inside the 400 ms debounce', "loadDraft('existing').text === 'Alpha'");
     await run("switchChat('other')"); await sleep(150);
