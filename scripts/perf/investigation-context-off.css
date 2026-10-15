@@ -1,0 +1,2 @@
+/* Diagnostic only: disable only the context fill's transform transition. */
+.context-bar > [aria-hidden] { transition: none !important; }

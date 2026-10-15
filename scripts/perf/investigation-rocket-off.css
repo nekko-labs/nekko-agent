@@ -1,0 +1,2 @@
+/* Diagnostic only: disable only rocket status animations, not other decoration. */
+.status-rocket, .status-rocket svg, .status-rocket .rocket-flame, .status-rocket .rocket-streak { animation: none !important; }
