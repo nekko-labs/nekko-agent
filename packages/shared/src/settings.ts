@@ -203,7 +203,11 @@ export interface AppSettings {
   aboutUser?: string;
   /** New chats isolate Git checkouts by default; existing chats are unchanged. */
   defaultExecutionMode?: import('./chat.js').ExecutionMode;
-  gitManagement?: { mode?: 'worktree' | 'shared'; baseline?: 'head' | 'local-changes' };
+  /**
+   * `removeMerged` (on unless false): a chat worktree whose branch's PR has
+   * merged is removed in the background when it is clean and its chat is idle.
+   */
+  gitManagement?: { mode?: 'worktree' | 'shared'; baseline?: 'head' | 'local-changes'; removeMerged?: boolean };
   theme: ThemeMode;
   navOrder?: string[];
   accent: string;
