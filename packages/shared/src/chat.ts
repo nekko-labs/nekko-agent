@@ -17,6 +17,25 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+/**
+ * A durable `agent_watch` as the transcript shows it: what it watches, when it
+ * wakes and how that went. The continuation prompt is deliberately absent; the
+ * transcript already has it in the tool call that armed the watch.
+ */
+export interface AgentWatchView {
+  id: string;
+  kind: 'timer' | 'pr';
+  url?: string;
+  status: 'active' | 'done' | 'cancelled' | 'error';
+  /** Timer: when it wakes. PR: the latest it waits before waking anyway. */
+  deadlineAt: number;
+  nextPollAt: number;
+  /** A wake-up is due but the chat has not been continued yet (busy or failing). */
+  pending: boolean;
+  failures: number;
+  lastError?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: Role;

@@ -7,7 +7,8 @@ import { ToolCard } from './ToolCard.js';
 import { fmtDateTime, fmtTime } from './transcript.js';
 import { useRowState } from './rowState.js';
 import { isRecoveryNotice, RecoveryNotice } from './RecoveryNotice.js';
-import { RobotIcon } from '../../icons.js';
+import { isWatchWake } from '../../agentWatches.js';
+import { WatchWakeRow } from './WatchRow.js';
 import { DoneRow } from './TurnStatsLine.js';
 
 /**
@@ -47,6 +48,8 @@ export const MessageBubble = memo(function MessageBubble({
   const [draft, setDraft] = useRowState('edit-draft', displayText);
   if (message.role === 'tool') return null;
   if (isRecoveryNotice(message)) return <RecoveryNotice />;
+  // A watch's wake-up is the agent continuing itself: a step, not your message.
+  if (isUser && !editing && isWatchWake(message.content)) return <WatchWakeRow content={message.content} createdAt={message.createdAt} />;
   // Animate only genuinely-new content (the optimistic user bubble and the live
   // stream). Persisted messages render statically, so the optimistic→saved and
   // live→saved swaps at the end of a turn don't replay the entrance.
@@ -110,9 +113,6 @@ export const MessageBubble = memo(function MessageBubble({
   return (
     <div className={`group ${entering ? 'fade-in ' : ''}flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={isUser ? 'msg-user' : 'msg-ai'}>
-        {isUser && /^\[Agent watch [^\]\n]+\]\n/.test(message.content) && (
-          <div className="mb-2 flex items-center gap-1.5 border-l-2 border-accent/40 pl-2 text-[12px] font-medium text-accent" title="Automated watch continuation, not a subagent reply"><RobotIcon className="h-4 w-4" />Agent watch · automated wake-up</div>
-        )}
         {isUser && message.skill && (
           <span className="skill-pill mb-2 inline-flex text-[11px]">
             <span className="skill-pill-slash">/</span>{message.skill.name}

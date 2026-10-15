@@ -120,7 +120,7 @@ import { getGitStatus } from './git.js';
 import { listChanges, acceptChange, acceptAllChanges, notifyChanges, setChangeNotifier } from './changes.js';
 import { listSessionPrs, getPrDiff, prAction, fetchPrInfo } from './pr.js';
 import { continuePrStack, linkPrStack } from './pr-stacks.js';
-import { configureAgentWatches, nextAgentWatchAt } from './agent-watches.js';
+import { configureAgentWatches, listAgentWatchViews, nextAgentWatchAt } from './agent-watches.js';
 import { listComments, addComment, resolveComment } from './comments.js';
 import {
   getDesignBoard,
@@ -362,6 +362,7 @@ export interface Host {
 
   listSessions(): Session[];
   nextAgentWatchAt(sessionId: string): number | null;
+  listAgentWatches(sessionId: string): import('@nekko-agent/shared').AgentWatchView[];
   /** Every chat without its transcript, from a cache that re-reads only changed files. */
   listSessionSummaries(): Promise<SessionSummary[]>;
   configureSandbox(sessionId: string, image: string): Promise<import('@nekko-agent/shared').SandboxStatus>;
@@ -1031,6 +1032,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
 
     listSessions: sessions.listSessions,
     nextAgentWatchAt: (id) => nextAgentWatchAt(id),
+    listAgentWatches: (id) => listAgentWatchViews(id),
     listSessionSummaries: sessions.listSessionSummaries,
     configureSandbox: (id, image) => { if (isChatRunning(id) || activeChats.has(id)) throw new Error('Wait for the current reply to finish before sandbox setup.'); return configureSandbox(id, image); },
     cleanupSandbox: (id, identity) => { if (isChatRunning(id) || activeChats.has(id)) throw new Error('Wait for the current reply to finish before sandbox cleanup.'); return cleanupSandbox(id, identity); },
