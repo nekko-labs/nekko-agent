@@ -27,6 +27,9 @@ reference until this app reaches parity.
   is shown or approvable, recents stay blank (`FLAG_SECURE`), and after a restart
   the relay doesn't connect until the first unlock.
 
+- **New chat defaults:** *Settings → New chats* sets the computer to connect
+  to at start and a model per computer, on the phone only; a model the
+  computer no longer offers falls back to its default with a notice.
 - **Share to Nekko:** text or a link from another app's share menu opens New
   chat with it, editable; it lands in the new chat's message box and is never
   sent automatically. Memory only, text only (≤ 20,000 characters).

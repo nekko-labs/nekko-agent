@@ -782,6 +782,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version and the open-source licenses of the app and the libraries it ships.
 >
+> **New chat defaults** (Android): **Settings → New chats** picks the computer the app connects to
+> when it starts (default: the one used last) and, for each computer, the model New chat opens with
+> (default: the computer's own default model). They are saved on the phone; the computer's settings
+> don't change. If that model is no longer offered, New chat says so and uses the computer's default.
 > **Share to Nekko** (Android): in any app's share menu, pick **Nekko Agent** to start a new chat
 > with the shared text or link. You can edit it on the New chat screen; after you start the chat it
 > waits in the message box and you send it yourself. Nekko never sends shared text on its own, and
