@@ -130,6 +130,19 @@ export function App() {
     return () => window.clearInterval(t);
   }, []);
 
+  // Agents idle past Settings → Complete idle agents after (a month unless
+  // changed) are completed: the same reversible archive the window's X does.
+  // Waits for settings and the chat list so the user's choice is the one used.
+  const sweepReady = useStore((s) => s.settingsLoaded && !!s.settings && s.sessions.length > 0);
+  const autoCompleteSetting = useStore((s) => s.settings?.autoCompleteAfterDays);
+  useEffect(() => {
+    if (!sweepReady) return;
+    const sweep = () => void useStore.getState().autoCompleteIdle().catch(() => { /* retried next sweep */ });
+    sweep();
+    const t = window.setInterval(sweep, 6 * 60 * 60 * 1000);
+    return () => window.clearInterval(t);
+  }, [sweepReady, autoCompleteSetting]);
+
   // A background catalog check (Settings → Updates) can land a new provider
   // model list mid-session: re-list so pickers show it immediately.
   useEffect(
@@ -243,7 +256,7 @@ export function App() {
         <nav className="relative z-40 hidden w-[52px] shrink-0 md:block">
           <div className="rail absolute inset-y-0 left-0 flex flex-col overflow-hidden px-1.5 py-4">
             <div className="rail-space-before" aria-hidden="true" />
-            <div className="rail-destinations flex min-h-0 flex-col gap-1 overflow-y-auto overflow-x-hidden">
+            <div className="rail-destinations flex min-h-0 flex-col gap-[7px] overflow-y-auto overflow-x-hidden">
             {/* The brand mark heads the rail. The wordmark joins it only where
                 there is no title bar to carry it (web and phone builds), so the
                 name is never shown twice. */}

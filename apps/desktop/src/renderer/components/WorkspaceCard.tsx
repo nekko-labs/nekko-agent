@@ -5,7 +5,7 @@ import { useStore, type Workspace } from '../store.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
 import {
-  CheckIcon, BranchIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
+  BranchIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
   WarningIcon, WorktreeIcon,
 } from '../icons.js';
 import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
@@ -286,7 +286,8 @@ function WorkspaceCardImpl({
             });
           }}
         >
-          {isChat ? <CheckIcon className="h-3.5 w-3.5" /> : <CloseIcon className="h-3 w-3" />}
+          <CloseIcon className={isChat ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
+
         </button>
       </div>
 

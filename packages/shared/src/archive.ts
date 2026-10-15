@@ -33,6 +33,54 @@ export function archiveDaysLeft(archivedAt: number, now = Date.now()): number {
   return Math.max(0, Math.ceil((archiveDeletesAt(archivedAt) - now) / DAY_MS));
 }
 
+/**
+ * How long an agent may sit untouched before it is completed for you. Days, or
+ * `0` for never. Completing is the same reversible archive the X does.
+ */
+export const AUTO_COMPLETE_CHOICES = [
+  { days: 7, label: '1 week' },
+  { days: 14, label: '2 weeks' },
+  { days: 30, label: '1 month' },
+  { days: 90, label: '3 months' },
+  { days: 0, label: 'Never' },
+] as const;
+export const AUTO_COMPLETE_DEFAULT_DAYS = 30;
+
+/** The configured idle window in days; anything unrecognised falls back to the default. */
+export function autoCompleteDays(setting: unknown): number {
+  return AUTO_COMPLETE_CHOICES.some((c) => c.days === setting) ? (setting as number) : AUTO_COMPLETE_DEFAULT_DAYS;
+}
+
+/** What auto-completion needs to know about an agent. */
+export interface AutoCompleteCandidate {
+  id: string;
+  updatedAt: number;
+  archivedAt?: number | null;
+  pinned?: boolean;
+  parentSessionId?: string;
+  taskId?: string;
+  trainingRunId?: string;
+}
+
+/**
+ * Agents idle longer than `days` that nobody is relying on: not pinned, not a
+ * sub-agent (it goes with its parent), not driven by a task or training run,
+ * not running and not waiting for an answer.
+ */
+export function agentsToAutoComplete(
+  sessions: AutoCompleteCandidate[],
+  days: number,
+  now: number,
+  busy: (id: string) => boolean = () => false,
+): string[] {
+  if (!days) return [];
+  const cutoff = now - days * DAY_MS;
+  return sessions
+    .filter((s) => !isArchived(s) && !s.pinned && !s.parentSessionId && !s.taskId && !s.trainingRunId)
+    .filter((s) => typeof s.updatedAt === 'number' && s.updatedAt > 0 && s.updatedAt < cutoff && !busy(s.id))
+    .map((s) => s.id);
+}
+
 /** Whether an archived chat has outlived the retention window. */
 export function archiveExpired(s: { archivedAt?: number | null }, now = Date.now()): boolean {
   return isArchived(s) && now >= archiveDeletesAt(s.archivedAt as number);

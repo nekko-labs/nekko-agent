@@ -34,6 +34,10 @@ object Channels {
     const val SESSION_GET = "session:get"
     const val SESSION_SET_OPTIONS = "session:setOptions"
     const val SESSION_DELETE = "session:delete"
+    /** The computer's Nekko Voice: installed? (A phone may read it, never install or remove it.) */
+    const val VOICE_STATUS = "voice:status"
+    /** A mono 16 kHz 16-bit PCM WAV as a JSON array of byte values → the text. */
+    const val VOICE_TRANSCRIBE = "voice:transcribe"
     const val CHAT_SEND = "chat:send"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
@@ -44,7 +48,7 @@ object Channels {
     const val APP_INFO = "app:info"
 
     val ALL = listOf(
-        SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
+        SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO,
     )
@@ -241,6 +245,8 @@ data class PcSettings(
     val skipDeleteConfirmation: Boolean? = null,
     /** False until the computer has answered `settings:get` (or `settings:update`) on this connection. */
     val known: Boolean = false,
+    /** Nekko Voice switched on in the computer's Settings (`voice.enabled`). Read only here. */
+    val voiceEnabled: Boolean = false,
 ) {
     enum class ChatMode(val wire: String) {
         ASK("ask"), GUARDRAILS("guardrails"), YOLO("yolo");
@@ -271,6 +277,7 @@ data class PcSettings(
                 defaultChatMode = ChatMode.of(o.str("defaultChatMode")),
                 chatPaneAction = ChatAction.of(o.str("chatPaneAction")),
                 skipDeleteConfirmation = (o["skipDeleteConfirmation"] as? JsonPrimitive)?.booleanOrNull,
+                voiceEnabled = o["voice"].obj()?.bool("enabled") == true,
             )
         }
 
@@ -282,6 +289,19 @@ data class PcSettings(
         }
     }
 }
+
+/** The part of `voice:status` the phone needs: is Whisper on the computer installed. */
+data class VoiceInstall(val installed: Boolean, val installing: Boolean) {
+    companion object {
+        fun from(e: JsonElement?): VoiceInstall {
+            val o = e.obj() ?: return VoiceInstall(installed = false, installing = false)
+            return VoiceInstall(o.bool("installed"), o.bool("installing"))
+        }
+    }
+}
+
+/** `voice:transcribe`'s one argument: the WAV bytes as numbers 0..255, as the desktop sends them. */
+fun wavArg(wav: ByteArray): JsonArray = JsonArray(wav.map { JsonPrimitive(it.toInt() and 0xFF) })
 
 /**
  * The desktop's look, as `appearanceOf` (packages/shared/src/themes.ts) builds

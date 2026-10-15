@@ -25,6 +25,17 @@ const card = (status?: 'working') => renderToStaticMarkup(
   <WorkspaceCard workspace={null} session={session} terminal={null} status={status} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} />,
 );
 
+describe('workspace card completion control', () => {
+  it('shows an X for completion, keeping the Complete name and retention title', () => {
+    const html = card();
+    expect(html).toContain('aria-label="Complete Chat"');
+    expect(html).toContain('title="Complete this chat (kept for 60 days)"');
+    // CloseIcon's two crossing strokes, not CheckIcon's tick.
+    expect(html).toContain('M18 6 6 18M6 6l12 12');
+    expect(html).not.toContain('M20 6 9 17l-5-5');
+  });
+});
+
 describe('workspace card context readout', () => {
   it('shows the same total the open chat\'s composer gauge shows, idle or working', () => {
     (state.sessionCtxEstimate as Record<string, number>).s1 = 81_000;

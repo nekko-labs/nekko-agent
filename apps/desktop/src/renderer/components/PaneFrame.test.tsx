@@ -3,6 +3,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { PaneFrame, targetAt } from './PaneFrame.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { confirmDeletion } from './DeleteConfirmation.js';
+import { CloseIcon, TrashIcon } from '../icons.js';
 
 const state = vi.hoisted(() => ({
   settings: null as { chatPaneAction?: 'complete' | 'delete' } | null,
@@ -79,6 +80,8 @@ describe('pane lifecycle controls', () => {
     const { button, onClose } = frame();
     expect(button.props['aria-label']).toBe('Complete My chat');
     expect(button.props.title).toBe('Complete this chat (Ctrl+Shift+E)');
+    // The completion control wears an X now (#533); it still archives, never deletes.
+    expect(React.Children.toArray(button.props.children).some((c) => React.isValidElement(c) && c.type === CloseIcon)).toBe(true);
     button.props.onClick();
     expect(state.archiveChat).toHaveBeenCalledWith('session-1');
     expect(onClose).not.toHaveBeenCalled();
@@ -88,6 +91,7 @@ describe('pane lifecycle controls', () => {
   it('routes Delete through the shared store confirmation', () => {
     state.settings = { chatPaneAction: 'delete' };
     const { button } = frame();
+    expect(React.Children.toArray(button.props.children).some((c) => React.isValidElement(c) && c.type === TrashIcon)).toBe(true);
     button.props.onClick();
     expect(state.deleteChatForever).toHaveBeenCalledWith('session-1');
     expect(state.archiveChat).not.toHaveBeenCalled();
