@@ -17,6 +17,7 @@
  * --attempts <n> measure again (up to n runs) when a budget is missed, judging each
  *                budget on its best attempt; every attempt's p95 is reported
  * --report-only  write the report but exit 0 even when a budget is missed
+ * --invalidation include streaming style/layout invalidation events (diagnostic overhead)
  * --dump-trace   also write the streaming trace (large) to the output directory
  * --only <part>  run just 'latency' (keypress, switching), 'frames' (streaming) or
  *                'memory' (GPU tile memory and leaks, see measureMemory)
@@ -497,7 +498,7 @@ async function measureFrames({ appUrl, mock, api, bigChat }) {
     transferMode: 'ReportEvents',
     traceConfig: {
       recordMode: 'recordContinuously',
-      includedCategories: ['toplevel', 'devtools.timeline', 'disabled-by-default-devtools.timeline.frame', '__metadata'],
+      includedCategories: ['toplevel', 'devtools.timeline', 'disabled-by-default-devtools.timeline.frame', '__metadata', ...(flag('invalidation') ? ['disabled-by-default-devtools.timeline.invalidationTracking'] : [])],
     },
   });
   if (flag('profile')) await startProfile(paced.cdp);

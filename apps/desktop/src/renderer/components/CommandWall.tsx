@@ -689,7 +689,7 @@ export function CommandWall({
   return (
     <div ref={wrapRef} className="command-wall-layout" data-command-wall="windows" data-wall-layout={state.layout.mode}>
       {companionNotice && <div className="command-wall-notice" role="status">A companion opened in a narrow window. <button onClick={() => { focusWindow(companionNotice); setCompanionNotice(null); }}>Focus {titleOf(companionNotice)}</button><button aria-label="Dismiss companion notice" onClick={() => setCompanionNotice(null)}>×</button></div>}
-      <div className="command-wall-stage" style={{ height: Math.max(geometry.height, addContent ? geometry.add.y + createHeight + 64 : 0), width: size.width }}>
+      <div className="command-wall-stage" data-wall-vacant={!addContent && !state.root || undefined} style={{ height: Math.max(geometry.height, addContent ? geometry.add.y + createHeight + 64 : 0), width: size.width }}>
         <div className="command-wall-pane-stage" style={{ position: 'absolute', inset: 0, top: 0 }}>
         {/* Grid's unfilled squares, drawn under the windows as quiet hatching. */}
         {state.layout.mode === 'fixed' && geometry.panes.size > 0 && geometry.empty.map((r, i) => (
