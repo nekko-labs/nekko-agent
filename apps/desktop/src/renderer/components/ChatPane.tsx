@@ -46,6 +46,8 @@ import { ContextWarning } from './ContextWarning.js';
 import { ChatControls, MODE_LABEL } from './ChatControls.js';
 import { useElementCompact } from './agent-console/useElementWidth.js';
 import { PromptAnalyzer } from './PromptAnalyzer.js';
+import { SubagentsRunningChip } from './agent-console/SubagentsRunningChip.js';
+import { ComposerFolderChip } from './ComposerFolderChip.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
 import { PrCard, PrActionDock } from './PrCard.js';
 import { NekkoAvatar } from './Mascot.js';
@@ -2144,6 +2146,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               ↓ Jump to latest
             </button>
           )}
+          <SubagentsRunningChip
+            sessionId={sessionId}
+            onOpen={() => { if (!planRailWanted) useStore.getState().togglePlanRail(); }}
+          />
         </div>
         )}
 
@@ -2619,6 +2625,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       }}
                     />
                   </div>
+                  <ComposerFolderChip
+                    session={session}
+                    workspaces={settings?.workspaces ?? []}
+                    disabled={hasLive}
+                    onSessionChange={(s) => { setSession(s); refreshCtx(); }}
+                  />
                   </>)}
                   <div className="flex-1" />
                   {streaming && <button className="btn btn-outline h-8 px-3 py-0 text-[12px]" onClick={() => window.nekko.abortChat(sessionId)}>Stop</button>}

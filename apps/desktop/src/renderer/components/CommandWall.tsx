@@ -169,7 +169,6 @@ export function CommandWall({
   running,
   pending,
   childrenOf,
-  projects,
   flash,
   selectedId,
   onSelect,
@@ -188,7 +187,8 @@ export function CommandWall({
   running: Set<string>;
   pending: Record<string, PendingInput>;
   childrenOf: Map<string, SessionSummary[]>;
-  projects: WorkspaceFolder[];
+  /** Accepted for callers; folder access now shows on the composer's folder chip. */
+  projects?: WorkspaceFolder[];
   /** The window the ribbon just jumped to, flashed once. */
   flash: { paneId: string; at: number } | null;
   /** The agent the wall's composer is speaking for. */
@@ -362,7 +362,6 @@ export function CommandWall({
   const renderLeaf = (pane: WbPane) => {
     const session = pane.kind === 'chat' ? sessionById.get(pane.refId) : undefined;
     const terminal = pane.kind === 'terminal' ? terminalById.get(pane.refId) : undefined;
-    const project = projects.find((p) => p.id === (session?.workspaceId ?? terminal?.workspaceId));
     let status: { label: string; tone: string; live?: boolean } | null = null;
     let needsYou = false;
     if (session) {
@@ -372,7 +371,6 @@ export function CommandWall({
     } else if (terminal) {
       status = terminal.running ? { label: 'live', tone: 'var(--success)' } : { label: 'exited', tone: 'var(--ink-faint)' };
     }
-    const subAgents = session ? (childrenOf.get(session.id)?.length ?? 0) : 0;
     const title = titleOf(pane);
     const flashing = flash?.paneId === pane.id;
     const openable = pane.kind === 'chat' || pane.kind === 'terminal';
@@ -400,20 +398,19 @@ export function CommandWall({
           pane={pane}
           title={title}
           icon={pane.kind === 'chat' ? <NumberedChatIcon number={n} /> : iconOf(pane.kind)}
-          badge={
-            <>
-              {/* The project only when there is more than one to tell apart:
-                  on a one-project wall it is the same word on every strip. */}
-              {project && projects.length > 1 && !densityOf(pane.id) && <span className="chip hidden shrink-0 text-[10px] sm:inline">{project.name}</span>}
-              {status && (
-                <span className="flex min-w-0 items-center gap-1 text-[11px]" style={{ color: status.tone }} title={status.label}>
-                  {status.live && <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full" style={{ background: status.tone }} />}
-                  <span className="truncate">{status.label}</span>
-                </span>
-              )}
-              {subAgents > 0 && <span className="chip shrink-0 text-[10px]" title={`${subAgents} sub-agent${subAgents === 1 ? '' : 's'}`}>+{subAgents}</span>}
-            </>
-          }
+          // The status is a dot leading the title; its words live in the
+          // tooltip. Folder access moved to the composer's folder chip and
+          // running sub-agents to a chip floating over the transcript.
+          lead={status && (
+            <span
+              role="img"
+              aria-label={status.label}
+              title={status.label}
+              data-pane-status
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.live ? 'animate-pulse' : ''}`}
+              style={{ background: status.tone }}
+            />
+          )}
           isActive={false}
           ringColor={flashing ? 'color-mix(in srgb, var(--accent) 60%, var(--line))' : undefined}
           stripStyle={needsYou ? { background: 'color-mix(in srgb, var(--warning) 10%, transparent)' } : undefined}

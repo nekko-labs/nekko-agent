@@ -117,6 +117,7 @@ export function PaneFrame({
   pane,
   title,
   icon,
+  lead,
   badge,
   isActive,
   dragging,
@@ -138,6 +139,8 @@ export function PaneFrame({
   pane: WbPane;
   title: string;
   icon: React.ReactNode;
+  /** Optional marker drawn right before the title text (an activity dot). */
+  lead?: React.ReactNode;
   /** Optional trailing chip (the project a chat belongs to, a status dot). */
   badge?: React.ReactNode;
   isActive: boolean;
@@ -220,6 +223,7 @@ export function PaneFrame({
         title="Drag to move this window"
       >
         {icon}
+        {lead}
         <span className="min-w-0 max-w-[35%] truncate text-[12px]" style={{ fontWeight: isActive ? 500 : 400 }}>
           {title}
         </span>

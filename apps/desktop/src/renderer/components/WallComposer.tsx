@@ -84,13 +84,17 @@ export function WallComposer({
         <NumberedChatIcon number={agent?.n} />
         {agent ? (
           <>
-            <span className="min-w-0 truncate font-medium" data-composer-title>{agent.session.title}</span>
+            {/* Same as the agent window: the status is a dot leading the title. */}
             {agent.status && (
-              <span className="flex min-w-0 items-center gap-1 text-[11px]" style={{ color: agent.status.tone }}>
-                {agent.status.live && <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full" style={{ background: agent.status.tone }} />}
-                <span className="truncate">{agent.status.label}</span>
-              </span>
+              <span
+                role="img"
+                aria-label={agent.status.label}
+                title={agent.status.label}
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${agent.status.live ? 'animate-pulse' : ''}`}
+                style={{ background: agent.status.tone }}
+              />
             )}
+            <span className="min-w-0 truncate font-medium" data-composer-title>{agent.session.title}</span>
           </>
         ) : (
           <span className="text-ink-faint" data-composer-title>No agent selected</span>
