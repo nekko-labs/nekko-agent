@@ -6,6 +6,13 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Noninteractive shell recovery
+
+- [x] Close Windows fallback stdin and bound timeout/cancel close-callback cleanup to five seconds, preserving partial output and once-only settlement.
+- [x] Mock stalled callbacks and late results; run real Windows date and stdin-EOF tests (90 focused tests passed with chat routing).
+- [ ] Exact incident cause remains unconfirmed: `date /t` succeeds locally and affected-session logs are outside workspace access. Packaged reproduction remains unverified; inspect session logs if supplied.
+- [ ] Land via PR after checks. See [SPEC](SPEC.md#noninteractive-shell-input-and-bounded-stop-cleanup).
+
 ## Anthropic historical image recovery
 
 - [x] Normalize outgoing historical attachments and tool evidence in both provider implementations without modifying saved originals. See [SPEC](SPEC.md#anthropic-image-dimension-rejection-prevention-and-continuation).

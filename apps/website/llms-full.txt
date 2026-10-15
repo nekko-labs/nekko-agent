@@ -400,6 +400,14 @@ If Settings or Nekko Server cannot load, the page shows the problem and a
 then retry. In the web edition, check that the Nekko service is running.
 Existing content stays visible when a refresh fails.
 
+Agent shell commands are noninteractive: stdin closes immediately, so prompts
+receive end-of-file rather than waiting for an answer. The shell tool has a
+120-second execution limit and up to five seconds of stop cleanup; use
+`start_process` for long-running jobs. On Windows, `date /t` displays the date;
+bare `date` asks to change it. If a command appears stuck, Stop cancels its turn
+and requests process-tree termination. An unresponsive OS process may still
+need separate inspection even after the tool reports cancellation.
+
 A failed chat reply preserves completed steps. **Retry** continues from saved
 history, and you can send a new message instead. For Anthropic requests, Nekko
 bounds supported outgoing image copies to 1568 pixels per side, including old
