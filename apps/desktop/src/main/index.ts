@@ -4,7 +4,7 @@ import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, notificati
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 // Only the data-root helpers: the host itself runs in the engine process, and
 // importing the package root would load all of it (node-pty included) here.
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/host/user-data';
@@ -16,6 +16,7 @@ import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
 import { EngineProcess } from './engine-process.js';
 import { createDesktopTray } from './tray.js';
+import { createTrayCompanion } from './trayCompanion.js';
 import { startAgentBrowser } from './agentBrowser.js';
 import { registerArtifactPreview } from './artifactPreview.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
@@ -25,12 +26,15 @@ const applicationWindows = new Set<number>();
 
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
 let quitting = false;
+let mainWindow: BrowserWindow | null = null;
+let trayCompanion: ReturnType<typeof createTrayCompanion> | undefined;
 let stopNotifications: (() => void) | undefined;
 let nativeNotifications: ReturnType<typeof createNativeNotificationPoster> | undefined;
 const notificationSessions = new Map<number, string | null>();
 
 function showWindow(): void {
-  const win = BrowserWindow.getAllWindows()[0];
+  trayCompanion?.dismiss();
+  const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   if (!win) { createWindow(); return; }
   if (win.isMinimized()) win.restore();
   win.show();
@@ -99,7 +103,8 @@ function linkFromArgv(argv: string[]): string | null {
  * the result.
  */
 function deliverLink(url: string): void {
-  const win = BrowserWindow.getAllWindows()[0];
+  trayCompanion?.dismiss();
+  const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   if (!win || win.webContents.isLoading()) {
     pendingLink = url;
     if (!win) createWindow();
@@ -121,6 +126,7 @@ function resolveWindowIcon(): string | undefined {
 }
 
 function createWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) { showWindow(); return; }
   // A first launch is sized to the screen before the window exists, so it
   // appears at that size rather than visibly growing into it.
   const bounds = loadWindowBounds() ?? initialWindowBounds(screen.getPrimaryDisplay().workArea);
@@ -152,6 +158,8 @@ function createWindow(): void {
     },
   });
 
+  mainWindow = win;
+  win.once('closed', () => { if (mainWindow === win) mainWindow = null; });
   win.on('ready-to-show', () => win.show());
   const closeIntent = createCloseIntent();
   if (process.platform === 'win32') {
@@ -166,8 +174,7 @@ function createWindow(): void {
     // `nekko-agent migrate` and installers do): quit for real, through the
     // clean engine shutdown, rather than hide into the tray.
     if (external) { app.quit(); return; }
-    saveWindowBounds(win.getBounds());
-    win.hide();
+    void trayCompanion?.closeWindow(() => { saveWindowBounds(win.getBounds()); win.hide(); });
   });
 
   // A link that arrived before the page could listen (a cold launch from
@@ -310,7 +317,7 @@ function claimSingleInstance(): boolean {
     }
     // Launched again without a link: the user asked for Nekko Agent, so show the
     // window they already have rather than doing nothing at all.
-    const win = BrowserWindow.getAllWindows()[0];
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
     if (win) {
       if (win.isMinimized()) win.restore();
       win.show();
@@ -425,6 +432,19 @@ app.whenReady().then(async () => {
       quit: () => app.quit(),
       onError: message => dialog.showErrorBox('Nekko Agent', message),
     });
+    const service = engine;
+    trayCompanion = createTrayCompanion({
+      tray: desktopTray.tray,
+      // A stopped service must not prevent hiding or shutting down the UI.
+      settings: async () => service.running
+        ? service.call<AppSettings>(IpcChannels.settingsGet)
+        : JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8')) as AppSettings,
+      update: patch => service.call(IpcChannels.settingsUpdate, patch),
+      serviceRunning: () => service.running,
+      quit: () => app.quit(),
+      openSettings: () => deliverLink('nekko-agent://settings'),
+      onError: message => dialog.showErrorBox('Nekko Agent', message),
+    });
   }
 
   // Under `npm run dev`, hand the launcher what it needs for its banner.
@@ -454,6 +474,7 @@ app.on('window-all-closed', () => {
 // not serving and stops model servers it started), then quits for real.
 app.on('before-quit', (event) => {
   quitting = true;
+  trayCompanion?.dispose();
   stopNotifications?.();
   stopNotifications = undefined;
   nativeNotifications?.dispose();

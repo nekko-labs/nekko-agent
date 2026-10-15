@@ -1648,6 +1648,12 @@ Ask: rather than copying many skills into the bundled catalog, let users find sk
 - [ ] Not built: background refresh of GitHub shelves, update notices for installed GitHub skills, installing a skill's scripts/references, `nekko-agent skills install <github-url>` (CLI/MCP), daemon-side (Rust) ownership of the new channels (they are host-served).
 
 
+### Tray close guidance and notification focus (2026-10-15)
+
+- [x] Implement first-close tray companion, persistent tray/shutdown choice, independent Fun mascot/farewell switches, reduced-motion-aware two-second farewell, and explicit main-window routing. See SPEC.md: Close guidance and playful farewell.
+- [x] Route notification session links through openChatPane to focus an existing workspace pane; add focused settings and tray lifecycle tests.
+- [ ] Finish native desktop before/after captures and farewell recording; OS capture currently refuses isolated windows. Verify a real Windows notification click restores the main UI and matching pane before release.
+
 ## Agent window controls refresh (2026-10-15)
 
 - [x] Implement Zen-only wall actions, leftmost glowing Changes diff totals, action/panel divider, labeled Agent Monitor and top-left activity glyph. See [SPEC](SPEC.md#agent-window-controls-refresh-2026-10-15).
