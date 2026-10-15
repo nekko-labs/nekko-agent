@@ -1653,3 +1653,8 @@ Ask: rather than copying many skills into the bundled catalog, let users find sk
 - [x] Implement Zen-only wall actions, leftmost glowing Changes diff totals, action/panel divider, labeled Agent Monitor and top-left activity glyph. See [SPEC](SPEC.md#agent-window-controls-refresh-2026-10-15).
 - [x] Verify desktop regressions, production build/typecheck, matched isolated renderer captures and publish evidence in PR #563.
 - [ ] Land PR #563 after hosted checks and final evidence audit.
+
+### Upper-middle navigation rail (2026-10-15)
+- [x] Bias desktop rail destinations upward with 1:3 free-space distribution and short-window scrolling.
+- [x] Check source-derived isolated layouts at 600/1000/1400 px, dark/light: all six move upward and retain eleven full-size visible destinations.
+- [ ] Inspect matching native before/after captures, hover/focus expansion and short-window scroll recording; OS native capture currently refuses isolated windows.
