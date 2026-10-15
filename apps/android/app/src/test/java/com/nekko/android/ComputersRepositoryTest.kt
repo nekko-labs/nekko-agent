@@ -43,9 +43,12 @@ class ComputersRepositoryTest {
     private val link = PairingLink("wss://relay.example.dev", room, key, pair = "ABC123")
     private val derived = ByteArray(32) { it.toByte() }
 
+    private val forgotten = mutableListOf<String>()
+
     private fun TestScope.repo(store: FakeStore = FakeStore(), remotes: FakeRemotes = FakeRemotes()): ComputersRepository {
         var n = 0
         return ComputersRepository(
+            onForget = { forgotten += it },
             store = store,
             remotes = remotes,
             scope = backgroundScope,
@@ -256,6 +259,37 @@ class ComputersRepositoryTest {
         assertEquals(1, remotes.last.nudges)
         // The pair code is still pending: the second connection must offer it too.
         assertEquals("ABC123", remotes.last.config.pairCode)
+    }
+
+    @Test
+    fun `load connects to the phone's default computer when it is still paired`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val first = repo(store, remotes)
+        val a = first.pair(link)
+        val b = first.pair(link.copy(relayUrl = "wss://other.example.dev"))
+        runCurrent()
+        assertEquals(b, first.state.value.activeId) // the last one paired is the last used
+        val second = repo(store, remotes)
+        second.load(preferredId = a)
+        runCurrent()
+        assertEquals(a, second.state.value.activeId)
+        val third = repo(store, remotes)
+        third.load(preferredId = "gone")
+        runCurrent()
+        assertEquals(a, third.state.value.activeId) // an unknown default falls back to the last used
+        val fourth = repo(store, remotes)
+        fourth.load()
+        runCurrent()
+        assertEquals(a, fourth.state.value.activeId) // no default: as before
+    }
+
+    @Test
+    fun `forgetting a computer tells the phone's other settings`() = runTest {
+        val r = repo()
+        r.pair(link)
+        r.forget("id-1")
+        assertEquals(listOf("id-1"), forgotten)
     }
 
     @Test

@@ -86,9 +86,15 @@ fun NekkoNavHost(
             ChatScreen(vm = vm, initialDraft = draft, onBack = { nav.popBackStack() })
         }
         composable(Routes.NEW) {
+            // The phone's default model for the active computer (Settings → New chats).
+            val defaults = remember(phonePrefs) { NewChatDefaults(phonePrefs) }
+            val c by repo.state.collectAsStateWithLifecycle()
+            val models by defaults.modelsFlow.collectAsStateWithLifecycle()
+            val phonePick = remember(models, c.activeId) { c.activeId?.let(defaults::model) }
             val shared by shareInbox.shared.collectAsStateWithLifecycle()
             NewChatScreen(
                 repo = repo,
+                phonePick = phonePick,
                 shared = shared,
                 onEditShared = shareInbox::edit,
                 onBack = {

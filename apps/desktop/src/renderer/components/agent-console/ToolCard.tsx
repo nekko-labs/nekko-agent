@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { ToolCall } from '@nekko-agent/shared';
-import { SubagentCue, useSubagentSummary } from './SubagentCue.js';
+import { SubagentCue, SubagentModelChip, useSubagentSummary } from './SubagentCue.js';
+import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
+import { parseWatchCall, thenSummary } from '../../agentWatches.js';
 
 /**
  * One tool invocation, collapsed to a single line. Neutral coloring on
@@ -10,7 +12,10 @@ import { SubagentCue, useSubagentSummary } from './SubagentCue.js';
 export function ToolCard({ call }: { call: ToolCall }) {
   const summary = useSubagentSummary(call);
   const isSpawn = call.name === 'spawn_agent';
+  const isWatch = call.name === 'agent_watch';
   const [open, setOpen] = useState(false);
+  const headline = isSpawn ? summary : isWatch ? watchCallHeadline(call) : '';
+  const then = isWatch && parseWatchCall(call).action === 'create' ? thenSummary(parseWatchCall(call).prompt) : '';
   return (
     <div className="mt-1 font-mono text-[12px]">
       <button
@@ -20,9 +25,15 @@ export function ToolCard({ call }: { call: ToolCall }) {
       >
         <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
         {isSpawn && <SubagentCue />}
-        <span className="min-w-0 truncate font-medium" title={isSpawn ? summary : undefined}>{isSpawn ? summary : <>Used <span className="font-mono text-ink-soft">{call.name}</span> tool</>}</span>
+        {isWatch && <WatchIcon />}
+        <span className="min-w-0 truncate font-medium" title={headline || undefined}>{headline || <>Used <span className="font-mono text-ink-soft">{call.name}</span> tool</>}</span>
+        {isSpawn && <SubagentModelChip call={call} />}
+        {isWatch && <WatchClockChip call={call} />}
       </button>
-      {open && <pre className={`ml-[18px] mt-0.5 overflow-x-auto whitespace-pre-wrap text-ink-faint max-h-60 overflow-auto ${isSpawn ? '' : 'border-l border-line pl-2'}`}>{isSpawn && typeof call.input.task === 'string' ? call.input.task : JSON.stringify(call.input, null, 2)}</pre>}
+      {then && <WatchThen text={then} className="pl-[38px]" />}
+      {open && (isWatch
+        ? <div className="ml-[18px]"><WatchDetail call={call} /></div>
+        : <pre className={`ml-[18px] mt-0.5 overflow-x-auto whitespace-pre-wrap text-ink-faint max-h-60 overflow-auto ${isSpawn ? '' : 'border-l border-line pl-2'}`}>{isSpawn && typeof call.input.task === 'string' ? call.input.task : JSON.stringify(call.input, null, 2)}</pre>)}
     </div>
   );
 }

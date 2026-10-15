@@ -87,6 +87,8 @@ import kotlinx.serialization.json.put
 fun NewChatScreen(
     repo: ComputersRepository,
     onBack: () -> Unit,
+    /** The phone's default model for the active computer (Settings → New chats), if set. */
+    phonePick: ModelPick? = null,
     shared: String? = null,
     onEditShared: (String) -> Unit = {},
     onPair: () -> Unit,
@@ -119,11 +121,13 @@ fun NewChatScreen(
         }
     }
     // Open on the computer's default, else the model of its latest chat, until the user picks.
-    LaunchedEffect(groups, c.defaults, c.summaries) {
-        if (!touched && (pick == null || !ModelChoice.exists(pick!!, groups))) {
-            pick = ModelChoice.initial(c.defaults, c.summaries, groups)
-        }
+    // Open on the phone's default for this computer, else the computer's, else its latest chat's.
+    LaunchedEffect(groups, c.defaults, c.summaries, phonePick) {
+        // Until the user picks, keep following the best candidate: the lists arrive one provider
+        // at a time, so the phone's model may show up after the computer's default was chosen.
+        if (!touched) pick = ModelChoice.initial(c.defaults, c.summaries, groups, phonePick) ?: pick
     }
+    val phonePickMissing = ModelChoice.phonePickMissing(phonePick, groups)
 
     val start: () -> Unit = start@{
         val chosen = pick
@@ -195,6 +199,13 @@ fun NewChatScreen(
                     }
                     else -> NCard {
                         Label(Icons.Filled.Memory, "Model · from ${active.name}")
+                        if (phonePickMissing && !touched) {
+                            Text(
+                                "Your default model for ${active.name} (${phonePick?.modelId}) isn’t available any more, so this uses the computer’s default. Change it in Settings → New chats.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = p.warning,
+                            )
+                        }
                         ModelList(
                             groups = groups,
                             favorites = c.defaults.favoriteModels,

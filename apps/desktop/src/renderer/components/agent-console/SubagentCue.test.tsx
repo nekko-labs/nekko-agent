@@ -33,8 +33,11 @@ it('attaches only the matching delegation result, including errors, to the persi
   expect(blocks).toHaveLength(1);
   expect(blocks[0]).toMatchObject({type:'activity',items:[{kind:'tool',call,result:{output:'Test failed',isError:true}}]});
 });
-it('labels legacy watch wake-ups without treating assistant quotations as automated messages', () => {
+it('renders watch wake-ups as watch rows without treating assistant quotations as automated messages', () => {
   const message: ChatMessage = {id:'watch',role:'user',content:'[Agent watch abc]\nCheck CI',createdAt:0};
-  expect(renderToStaticMarkup(<MessageBubble message={message} />)).toContain('Agent watch · automated wake-up');
-  expect(renderToStaticMarkup(<MessageBubble message={{...message,role:'assistant'}} />)).not.toContain('automated wake-up');
+  const html = renderToStaticMarkup(<MessageBubble message={message} />);
+  expect(html).toContain('data-watch-wake');
+  expect(html).toContain('Watch triggered');
+  expect(html).not.toContain('msg-user');
+  expect(renderToStaticMarkup(<MessageBubble message={{...message,role:'assistant'}} />)).not.toContain('Watch triggered');
 });

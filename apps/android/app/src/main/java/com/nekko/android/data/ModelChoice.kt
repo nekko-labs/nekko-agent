@@ -29,13 +29,20 @@ data class ModelPick(val providerId: String, val modelId: String)
  */
 object ModelChoice {
     /**
-     * The pick a new chat opens with: the computer's default model; else the
-     * model of the most recently used chat (a computer that never set a default
-     * still opens on something sensible); else nothing, and the user picks.
-     * A candidate must still be listed by an enabled provider.
+     * The pick a new chat opens with: the phone's own default for this computer
+     * ([phonePick], Settings → New chats); else the computer's default model;
+     * else the model of the most recently used chat (a computer that never set
+     * a default still opens on something sensible); else nothing, and the user
+     * picks. A candidate must still be listed by an enabled provider.
      */
-    fun initial(defaults: RemoteDefaults, recent: List<SessionSummary>, groups: List<ModelGroup>): ModelPick? {
+    fun initial(
+        defaults: RemoteDefaults,
+        recent: List<SessionSummary>,
+        groups: List<ModelGroup>,
+        phonePick: ModelPick? = null,
+    ): ModelPick? {
         val candidates = buildList {
+            phonePick?.takeIf { it.modelId != AUTO_MODEL_ID }?.let { add(it) }
             val dp = defaults.defaultProviderId
             val dm = defaults.defaultModelId?.takeIf { it != AUTO_MODEL_ID }
             if (dp != null && dm != null) add(ModelPick(dp, dm))
@@ -48,6 +55,14 @@ object ModelChoice {
         }
         return candidates.firstOrNull { exists(it, groups) }
     }
+
+    /**
+     * The phone's default for this computer is set but that model is not
+     * offered any more (provider switched off, model removed). Only said once
+     * every provider has answered, so a slow one does not raise a false alarm.
+     */
+    fun phonePickMissing(phonePick: ModelPick?, groups: List<ModelGroup>): Boolean =
+        phonePick != null && !loading(groups) && !exists(phonePick, groups)
 
     fun exists(pick: ModelPick, groups: List<ModelGroup>): Boolean =
         groups.any { g -> g.provider.id == pick.providerId && g.models?.any { it.id == pick.modelId } == true }
