@@ -112,7 +112,6 @@ impl Policy for Loader {
     }
 }
 
-
 #[tokio::test(flavor = "multi_thread")]
 async fn waits_for_ready_and_reports_the_process() {
     let sup = Arc::new(Supervisor::new());
