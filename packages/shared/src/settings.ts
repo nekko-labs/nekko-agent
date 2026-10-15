@@ -251,6 +251,11 @@ export interface AppSettings {
   skipDeleteConfirmation?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';
+  /**
+   * Complete agents untouched for this many days (7, 14, 30, 90), or 0 for
+   * never. Undefined means the default, 30 (`AUTO_COMPLETE_DEFAULT_DAYS`).
+   */
+  autoCompleteAfterDays?: number;
   /** Path to the shell new terminals launch by default (undefined = auto-detect). */
   defaultShellPath?: string;
   /** How terminals draw. Undefined means the default (`xterm`). */

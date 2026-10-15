@@ -12,8 +12,17 @@
     <!-- KeepAliveService: stays connected only while a chat on the computer is running. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <!-- Dictation: asked the first time the composer's microphone is tapped. Audio stays in memory. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Settings → Vibration: a short buzz when the agent needs you (install-time, no prompt). -->
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Android 11+: see the phone's speech recognizer (the "This phone" dictation engine). -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         android:name=".NekkoApp"

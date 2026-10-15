@@ -4,7 +4,7 @@ import { DEFAULT_ORCHESTRATION, getStrategy, planProgress, queueItemPayload } fr
 import { useLiveRunsVersion, getLiveRun, runningSessionIds } from '../liveRuns.js';
 import { childActivity, activitySentence } from '../subagentActivity.js';
 import { useStore } from '../store.js';
-import { CheckIcon, ChatIcon, ListIcon, PencilIcon, RobotIcon } from '../icons.js';
+import { CheckIcon, ChatIcon, ControlPanelIcon, PencilIcon, RobotIcon } from '../icons.js';
 
 /** The agent's published plan, active delegates and queued follow-ups. */
 function queueLabel(item: QueuedPrompt): string {
@@ -51,9 +51,9 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden border-l border-line" style={{ background: 'transparent' }} aria-label="Plan and sub-agents">
       <header className="flex shrink-0 items-center gap-1.5 border-b border-line px-3 py-2">
-        <ListIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+        <ControlPanelIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
         {/* The chat area's floating plan toggle opens and closes this panel. */}
-        <span className="min-w-0 flex-1 truncate pr-8 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">This prompt</span>
+        <span className="min-w-0 flex-1 truncate pr-8 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Agent Monitor</span>
       </header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
         <section>

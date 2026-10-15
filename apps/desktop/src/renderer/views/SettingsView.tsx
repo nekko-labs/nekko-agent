@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { DEFAULT_GUARDRAILS, promptCachingEnabled } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, promptCachingEnabled } from '@nekko-agent/shared';
 import type { AppSettings, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
@@ -102,7 +102,7 @@ export function SettingsView() {
           <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
             <div className="min-w-0">
               <label htmlFor="chat-pane-action" className="text-[13px]">Chat pane top-right action</label>
-              <p className="text-[11px] text-ink-faint">Complete keeps chats under Completed for 60 days. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
+              <p className="text-[11px] text-ink-faint">The X completes a chat and keeps it under Completed for 60 days. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
             </div>
             <select
               id="chat-pane-action"
@@ -112,6 +112,22 @@ export function SettingsView() {
             >
               <option value="complete">Complete (default)</option>
               <option value="delete">Delete</option>
+            </select>
+          </div>
+          <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
+            <div className="min-w-0">
+              <label htmlFor="auto-complete-after" className="text-[13px]">Complete idle agents after</label>
+              <p className="text-[11px] text-ink-faint">Agents with no activity for this long are completed, like pressing their X. Pinned, running, waiting and sub-agent chats are skipped. Restore any from Show completed.</p>
+            </div>
+            <select
+              id="auto-complete-after"
+              className="input max-w-[180px] py-1.5"
+              value={autoCompleteDays(settings.autoCompleteAfterDays)}
+              onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}
+            >
+              {AUTO_COMPLETE_CHOICES.map((c) => (
+                <option key={c.days} value={c.days}>{c.label}{c.days === AUTO_COMPLETE_DEFAULT_DAYS ? ' (default)' : ''}</option>
+              ))}
             </select>
           </div>
           <div className="mt-2 flex min-h-[40px] items-center justify-between">

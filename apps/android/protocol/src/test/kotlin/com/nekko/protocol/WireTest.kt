@@ -110,4 +110,16 @@ class WireTest {
         assertEquals("""{"defaultChatMode":"yolo"}""", PcSettings.patch(mode = PcSettings.ChatMode.YOLO).toString())
         assertEquals("""{"skipDeleteConfirmation":false}""", PcSettings.patch(skipConfirm = false).toString())
     }
+
+    @Test fun `voice reads only whether Whisper is installed and switched on`() {
+        assertTrue(VoiceInstall.from(json("""{"installed":true,"installing":false,"progress":1,"modelPath":"/Users/me/x.bin"}""")).installed)
+        assertFalse(VoiceInstall.from(json("""{"installing":true}""")).installed)
+        assertTrue(PcSettings.from(json("""{"voice":{"enabled":true,"language":"it"}}""")).voiceEnabled)
+        assertFalse(PcSettings.from(json("""{"voice":{}}""")).voiceEnabled)
+        assertFalse(PcSettings.from(json("""{}""")).voiceEnabled)
+    }
+
+    @Test fun `the wav goes as unsigned byte values, like the desktop`() {
+        assertEquals("[82,73,255,0,128]", wavArg(byteArrayOf(82, 73, -1, 0, -128)).toString())
+    }
 }

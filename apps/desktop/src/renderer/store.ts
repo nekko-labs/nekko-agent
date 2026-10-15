@@ -2,7 +2,7 @@ import { confirmDeletion } from './components/DeleteConfirmation.js';
 import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
 import type { AppSettings, Session, SessionSummary, ProviderConfig, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
-import { DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
 import { syncTitleBarOverlay } from './chrome.js';
 import { putCachedSession } from './sessionCache.js';
@@ -328,6 +328,11 @@ interface UiState {
   archiveWorkspace: (id: string) => Promise<void>;
   /** Archive one chat by id (and close any workspace showing it). */
   archiveChat: (sessionId: string) => Promise<void>;
+  /**
+   * Complete agents idle past Settings → Complete idle agents after (default
+   * a month). Returns how many it completed. Quiet: one toast for the batch.
+   */
+  autoCompleteIdle: (now?: number) => Promise<number>;
   /** Bring an archived chat back to the workspace list and open it. */
   restoreChat: (sessionId: string) => Promise<void>;
   /** Delete an archived chat for good. */
@@ -1098,6 +1103,47 @@ export const useStore = create<UiState>((set, get) => ({
       get().pushToast('error', `Could not complete the chat: ${(e as Error).message}`);
     }
     await get().refreshSessions();
+  },
+
+  autoCompleteIdle: async (now = Date.now()) => {
+    const days = autoCompleteDays(get().settings?.autoCompleteAfterDays);
+    if (!days) return 0;
+    const [running, pending] = await Promise.all([
+      window.nekko.runningSessions().catch(() => null),
+      window.nekko.pendingInput().catch(() => null),
+    ]);
+    // Without knowing what is running, completing anything could stop live work.
+    if (!running || !pending) return 0;
+    const busy = new Set([...running, ...Object.keys(pending)]);
+    const ids = agentsToAutoComplete(get().sessions, days, now, (id) => busy.has(id));
+    const done: string[] = [];
+    for (const id of ids) {
+      try {
+        const saved = await window.nekko.setSessionOptions(id, { archivedAt: now });
+        if (saved && isArchived(saved)) done.push(id);
+      } catch { /* left for the next sweep */ }
+    }
+    if (!done.length) return 0;
+    const gone = new Set(done);
+    set((s) => {
+      const workspaces = s.workspaces
+        .filter((w) => !(w.anchor.kind === 'chat' && gone.has(w.anchor.refId)))
+        .map((w) => {
+          let root = w.root;
+          for (const id of gone) { const pane = root && findPaneByRef(root, 'chat', id); if (pane) root = removePane(root, pane.id); }
+          return root === w.root ? w : { ...w, root, activePaneId: root ? allPanes(root)[0]?.id ?? null : null };
+        })
+        .filter((w) => w.root !== null);
+      return {
+        workspaces,
+        activeWorkspaceId: workspaces.some((w) => w.id === s.activeWorkspaceId) ? s.activeWorkspaceId : workspaces[workspaces.length - 1]?.id ?? null,
+        activeSessionId: s.activeSessionId && gone.has(s.activeSessionId) ? null : s.activeSessionId,
+      };
+    });
+    const label = AUTO_COMPLETE_CHOICES.find((c) => c.days === days)?.label ?? `${days} days`;
+    get().pushToast('info', `Completed ${done.length} agent${done.length === 1 ? '' : 's'} idle for over ${label}. Find ${done.length === 1 ? 'it' : 'them'} under Show completed.`);
+    await get().refreshSessions();
+    return done.length;
   },
 
   archiveWorkspace: async (id) => {
