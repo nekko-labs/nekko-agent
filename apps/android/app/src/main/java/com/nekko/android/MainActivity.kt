@@ -64,6 +64,7 @@ class MainActivity : FragmentActivity() {
                             themePrefs = app.themePrefs,
                             phonePrefs = app.phonePrefs,
                             shareInbox = app.shareInbox,
+                            haptics = app.haptics,
                             incomingLink = incomingLink,
                             onLinkHandled = { incomingLink.value = null },
                         )

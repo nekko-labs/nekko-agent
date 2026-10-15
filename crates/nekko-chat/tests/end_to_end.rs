@@ -79,6 +79,7 @@ fn options<'a>(history: &'a mut Vec<Value>, cancel: Cancel) -> RunOptions<'a> {
         think: None,
         prompt_caching: None,
         max_history_turns: None,
+        context_window: None,
         max_output_tokens: None,
         resume: false,
         cancel,

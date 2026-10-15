@@ -59,9 +59,10 @@ describe('wall chrome fixes', () => {
     expect(styles).toContain('.wall-composer-side[data-edge="right"] { right: -14px; }');
     expect(styles).toContain('.wall-composer[data-dock^="bottom"] > .wall-composer-split { top: -14px; }');
   });
-  it('reveals Auto-arrange by its own width instead of a fixed 38px that overran the filter', () => {
+  it('reserves Auto-arrange space so revealing it never shifts the controls beside it', () => {
     expect(styles).not.toContain("[data-visible='true'] { width: 38px;");
-    expect(styles).toMatch(/\.wall-auto-arrange \{[^}]*grid-template-columns: 0fr;/);
-    expect(styles).toMatch(/\.wall-auto-arrange\[data-visible='true'\] \{[^}]*grid-template-columns: 1fr;/);
+    expect(styles).toMatch(/\.wall-auto-arrange \{[^}]*grid-template-columns: 1fr;[^}]*margin-left: 6px;[^}]*visibility: hidden;/);
+    expect(styles).not.toMatch(/\.wall-auto-arrange[^{]*\{[^}]*grid-template-columns: 0fr/);
+    expect(styles).not.toMatch(/\.wall-auto-arrange\[data-visible='true'\] \{[^}]*(margin|grid-template-columns|width)/);
   });
 });

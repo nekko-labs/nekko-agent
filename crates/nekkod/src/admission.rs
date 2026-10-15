@@ -489,6 +489,8 @@ async fn admit(
         );
     }
     facts.insert("promptCaching".into(), json!(settings.get("promptCaching") != Some(&json!(false))));
+    // The loaded window, for the loop to keep a long run inside (nekko-loop fit.rs).
+    facts.insert("contextWindow".into(), json!(crate::providers::context_window_for(ctx, &provider, model_id).await));
     if let Some(p) = &resolved {
         facts.insert("provider".into(), p.clone());
     }

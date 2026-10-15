@@ -48,6 +48,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > with the shared text or link. You can edit it on the New chat screen; after you start the chat it
 > waits in the message box and you send it yourself. Nekko never sends shared text on its own, and
 > it is kept only in memory until then. Text and links only for now, up to 20,000 characters.
+> **Vibration** (Android): while the app is open, the phone vibrates when the agent needs your
+> approval (two pulses) or asks you a question (one long pulse). In **Settings → Vibration** you can
+> also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them
+> off. It never vibrates in silent mode or Do Not Disturb, or while the app is in the background.
 >
 > The Android app is **locked by default**: every time you open it, or come back to it, it asks for
 > your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows

@@ -30,6 +30,9 @@ reference until this app reaches parity.
 - **Share to Nekko:** text or a link from another app's share menu opens New
   chat with it, editable; it lands in the new chat's message box and is never
   sent automatically. Memory only, text only (≤ 20,000 characters).
+- **Vibration:** a distinct buzz while the app is open when the agent needs an
+  approval or asks a question (on by default), and optionally when a reply
+  finishes or fails; never in silent mode or Do Not Disturb.
 
 **Not yet:** models on the phone, push notifications, Markdown rendering,
 attachments, Play Store release. See `TASKS.md` → *Native Android app*.

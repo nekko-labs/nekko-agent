@@ -141,6 +141,33 @@ export interface EngineServerDeps {
 /** How often residency (last use, requests in flight) is read back from the daemon. */
 const DAEMON_SYNC_MS = 3000;
 
+/** Why a LAN bind is refused without a key (the UI shows this verbatim). */
+export const LAN_NEEDS_KEY =
+  'Set an API key before making the engine reachable from your network. Without one anything on the network could use these models.';
+
+/**
+ * The listen configuration from the engine settings, or the reason the engine
+ * must not listen. `bind: 'lan'` binds `0.0.0.0`, and the router only checks a
+ * Bearer token when a key is set, so a LAN bind with an empty key is refused
+ * here rather than served open (#549). Mirrored by `serve_config` in
+ * crates/nekko-engine/src/server.rs.
+ */
+export function serveConfig(
+  settings: EngineSettings,
+): { ok: true; config: { port: number; host: string; apiKey?: string; corsOrigins: string[] } } | { ok: false; message: string } {
+  const lan = settings.bind === 'lan';
+  if (lan && !(settings.apiKey ?? '').trim()) return { ok: false, message: LAN_NEEDS_KEY };
+  return {
+    ok: true,
+    config: {
+      port: settings.port,
+      host: lan ? '0.0.0.0' : '127.0.0.1',
+      apiKey: settings.apiKey || undefined,
+      corsOrigins: (settings.corsOrigins ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+    },
+  };
+}
+
 export function createEngineServer(deps: EngineServerDeps) {
   const spawnFn = deps.spawnFn ?? spawn;
   const children = new Map<string, Child>();
@@ -188,15 +215,12 @@ export function createEngineServer(deps: EngineServerDeps) {
       return { ok: false, message: 'No engine is installed yet. Install one from the Models tab first.' };
     }
     const settings = deps.settings();
-    const host = settings.bind === 'lan' ? '0.0.0.0' : '127.0.0.1';
+    const cfg = serveConfig(settings);
+    if (!cfg.ok) return cfg;
+    const { host } = cfg.config;
 
     if (deps.daemon) {
-      const res = await deps.daemon.serve({
-        port: settings.port,
-        host,
-        apiKey: settings.apiKey || undefined,
-        corsOrigins: (settings.corsOrigins ?? '').split(',').map((s) => s.trim()).filter(Boolean),
-      });
+      const res = await deps.daemon.serve(cfg.config);
       if (!res.ok) return res;
       beginServing();
       push(`Engine listening on http://${host}:${settings.port}/v1 (served by the engine daemon)`);
@@ -338,13 +362,9 @@ export function createEngineServer(deps: EngineServerDeps) {
    */
   async function reconfigure(): Promise<{ ok: boolean; message: string }> {
     if (!deps.daemon || !serving) return { ok: true, message: 'Nothing to reconfigure.' };
-    const settings = deps.settings();
-    return deps.daemon.serve({
-      port: settings.port,
-      host: settings.bind === 'lan' ? '0.0.0.0' : '127.0.0.1',
-      apiKey: settings.apiKey || undefined,
-      corsOrigins: (settings.corsOrigins ?? '').split(',').map((s) => s.trim()).filter(Boolean),
-    });
+    const cfg = serveConfig(deps.settings());
+    if (!cfg.ok) return cfg;
+    return deps.daemon.serve(cfg.config);
   }
 
   async function stop(): Promise<StopResult> {

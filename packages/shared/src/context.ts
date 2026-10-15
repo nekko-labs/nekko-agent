@@ -104,6 +104,44 @@ export function sinceCompaction<T extends { compaction?: unknown }>(messages: T[
 /** How a compaction summary opens when it is sent to a model. */
 export const COMPACTION_PREAMBLE = 'Summary of the earlier conversation, compacted to save context:';
 
+/**
+ * Wordings providers use when a request does not fit the model's context
+ * window: OpenAI's "maximum context length", Anthropic's "prompt is too long",
+ * llama.cpp's "exceeds the available context size", LM Studio's "context
+ * length", the ChatGPT backend's "exceeds the context window". Plain substrings
+ * (lower-cased) so the engine daemon's port (crates/nekko-loop) matches the
+ * same set without a regex engine.
+ */
+export const CONTEXT_OVERFLOW_NEEDLES: readonly string[] = [
+  'context length',
+  'context_length',
+  'context window',
+  'context size',
+  'maximum context',
+  'max context',
+  'prompt is too long',
+  'prompt too long',
+  'too many tokens',
+  'exceeds the context',
+  'exceed the context',
+  'exceeds the maximum',
+  'exceed_context_size',
+  'input is too long',
+  'input too long',
+  'reduce the length of the messages',
+  'n_ctx',
+];
+
+/**
+ * Whether a model-call failure says the prompt no longer fits the context
+ * window. A rate-limit message that happens to mention tokens is not one.
+ */
+export function isContextOverflowError(error: unknown): boolean {
+  const lower = (error instanceof Error ? error.message : String(error ?? '')).toLowerCase();
+  if (lower.includes('rate limit') || lower.includes('rate_limit') || lower.includes('per min')) return false;
+  return CONTEXT_OVERFLOW_NEEDLES.some((needle) => lower.includes(needle));
+}
+
 /** Estimated tokens a transcript occupies when replayed to the model. */
 export function estimateTranscriptTokens(messages: HistoryMessage[]): number {
   const sent = sinceCompaction(messages);

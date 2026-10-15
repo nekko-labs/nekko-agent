@@ -104,7 +104,10 @@ state, so moving one moves the other, and either can be saved as that model&#39;
 computer, an API key, allowed browser origins, how many models may be resident, the idle
 timeout, load-on-demand, start-with-the-app, and the models folder. The defaults are
 loopback-only with no key, which is safe; binding to the network is a deliberate act and
-the app says what it means next to the setting.</p>
+the app says what it means next to the setting. <strong>A network bind requires a key</strong>: the
+engine refuses to listen on your network with the key empty, and picking <strong>This computer
+and my network</strong> with no key set fills one in for you (a key you already typed is kept).
+Send it as a Bearer token from the apps you point at the engine.</p>
 <p>Because the engine holds the file, it reads the GGUF header directly, so the projection
 below is <strong>exact</strong> for its own models where it has to report parts of itself as unknown
 for somebody else&#39;s.</p>
@@ -298,6 +301,28 @@ else&#39;s process: stopping that one asks first and names what it would end, be
 thing holding port 11434 might be a service you depend on.</p>
 <p>LM Studio is the exception that needs no such warning, since it has a real shutdown
 command rather than a process to kill.</p>
+<h2 id="long-tasks-on-a-small-context-window"><a class="anchor" href="#long-tasks-on-a-small-context-window" aria-hidden="true" tabindex="-1">#</a>Long tasks on a small context window</h2>
+<p>A local model is often loaded with an 8k or 32k context, and an agent fills that in a few
+steps: one large file read or one noisy build log is most of it. Nekko Agent keeps the work
+going rather than stopping when the window fills:</p>
+<ul>
+<li><strong>It uses the window the model was loaded with</strong>, not the model&#39;s advertised maximum.
+LM Studio and the Nekko engine report it in their model list, and Ollama reports it for a
+loaded model. For anything that reports nothing, it falls back to a guess from the name.</li>
+<li><strong>Older tool output is left out of the request</strong> once the conversation nears 80% of that
+window. The oldest large results (file reads, command output) are replaced, in what is sent,
+by a one-line note saying how much was there; the chat itself keeps everything, and the model
+can simply run the tool again if it needs that output back.</li>
+<li><strong>If the server still says the prompt is too long</strong>, the request is sent once more with all
+of the older tool output left out.</li>
+<li><strong>If that is not enough, the chat compacts and carries on by itself.</strong> The older part of the
+conversation is summarized, and the agent is asked to continue from the summary. This happens
+at most twice in a row before the chat waits for you, so a model that cannot make progress
+does not loop.</li>
+</ul>
+<p>Giving the model more room is still the best fix. Raise its context when you load it (the
+Models page shows what that costs in memory), and <code>OLLAMA_KV_CACHE_TYPE=q8_0</code> roughly halves
+the memory a longer context needs.</p>
 <h2 id="what-is-not-here-yet"><a class="anchor" href="#what-is-not-here-yet" aria-hidden="true" tabindex="-1">#</a>What is not here yet</h2>
 <p>Browsing and downloading models from inside the app, and a bundled inference engine so a
 fresh install can run a model with nothing else present, are both planned as separate
@@ -309,7 +334,7 @@ pieces of work. Today Nekko Agent manages the runtimes you already have.</p>
           </footer>
         </article>
       </main>
-      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Running models locally</a></li><li class="d2"><a href="#the-nekko-engine">The Nekko engine</a></li><li class="d2"><a href="#servers-you-already-run">Servers you already run</a></li><li class="d3"><a href="#what-each-one-can-do">What each one can do</a></li><li class="d2"><a href="#reading-the-fit-bar">Reading the fit bar</a></li><li class="d2"><a href="#the-verdicts">The verdicts</a></li><li class="d2"><a href="#why-a-model-spills-to-the-cpu">Why a model spills to the CPU</a></li><li class="d2"><a href="#apple-silicon">Apple Silicon</a></li><li class="d2"><a href="#multiple-gpus">Multiple GPUs</a></li><li class="d2"><a href="#settings-that-need-a-restart">Settings that need a restart</a></li><li class="d2"><a href="#stopping-a-server">Stopping a server</a></li><li class="d2"><a href="#what-is-not-here-yet">What is not here yet</a></li></ul></nav></aside>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Running models locally</a></li><li class="d2"><a href="#the-nekko-engine">The Nekko engine</a></li><li class="d2"><a href="#servers-you-already-run">Servers you already run</a></li><li class="d3"><a href="#what-each-one-can-do">What each one can do</a></li><li class="d2"><a href="#reading-the-fit-bar">Reading the fit bar</a></li><li class="d2"><a href="#the-verdicts">The verdicts</a></li><li class="d2"><a href="#why-a-model-spills-to-the-cpu">Why a model spills to the CPU</a></li><li class="d2"><a href="#apple-silicon">Apple Silicon</a></li><li class="d2"><a href="#multiple-gpus">Multiple GPUs</a></li><li class="d2"><a href="#settings-that-need-a-restart">Settings that need a restart</a></li><li class="d2"><a href="#stopping-a-server">Stopping a server</a></li><li class="d2"><a href="#long-tasks-on-a-small-context-window">Long tasks on a small context window</a></li><li class="d2"><a href="#what-is-not-here-yet">What is not here yet</a></li></ul></nav></aside>
     </div>
     <dialog class="search-dialog" aria-label="Search the docs">
       <form method="dialog" class="search-box">
