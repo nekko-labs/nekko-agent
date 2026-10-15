@@ -18,6 +18,7 @@ import com.nekko.android.DeepLink
 import com.nekko.android.share.ShareInbox
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
+import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.data.ThemePrefs

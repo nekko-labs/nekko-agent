@@ -35,6 +35,8 @@ class NekkoApp : Application() {
         private set
     lateinit var appLock: AppLock
         private set
+    lateinit var connection: ConnectionKeeper
+        private set
     lateinit var newChatDefaults: NewChatDefaults
     /** Text shared from other apps on its way to a chat's composer; memory only. */
     val shareInbox = ShareInbox()

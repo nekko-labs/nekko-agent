@@ -11,9 +11,8 @@ class SettingsSectionsTest {
     private fun pc(id: String, name: String) = Computer(id, name, "wss://r.dev", 0)
 
     @Test
-    fun `settings render appearance, security, new chats, computers, about`() {
-    fun `settings render appearance, security, vibration, computers, about`() {
-        assertEquals(5, SettingsSections.size)
+    fun `settings render appearance, security, new chats, vibration, computers, about`() {
+        assertEquals(6, SettingsSections.size)
     }
 
     @Test
