@@ -25,12 +25,15 @@ import kotlinx.serialization.json.put
  */
 object Channels {
     const val SETTINGS_GET = "settings:get"
+    /** Only the phone-settable keys (the computer's PHONE_SETTINGS_KEYS); anything else is refused. */
+    const val SETTINGS_UPDATE = "settings:update"
     const val PROVIDERS_LIST = "providers:list"
     const val MODELS_LIST = "models:list"
     const val SESSIONS_SUMMARIES = "sessions:summaries"
     const val SESSION_CREATE = "session:create"
     const val SESSION_GET = "session:get"
     const val SESSION_SET_OPTIONS = "session:setOptions"
+    const val SESSION_DELETE = "session:delete"
     const val CHAT_SEND = "chat:send"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
@@ -41,7 +44,7 @@ object Channels {
     const val APP_INFO = "app:info"
 
     val ALL = listOf(
-        SETTINGS_GET, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
+        SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO,
     )
@@ -220,6 +223,62 @@ data class RemoteDefaults(
             val o = e.obj() ?: return RemoteDefaults()
             val favorites = o["favoriteModels"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList()
             return RemoteDefaults(o.str("defaultProviderId"), o.str("defaultModelId"), favorites)
+        }
+    }
+}
+
+/**
+ * The computer's settings a phone may see and change (`settings:update` takes
+ * exactly these keys from a phone; see packages/shared/src/phone-access.ts).
+ * Each is null until the computer has answered.
+ */
+data class PcSettings(
+    /** Tool policy for new chats: `ask`, `guardrails` or `yolo` (shared/chat.ts ChatMode). */
+    val defaultChatMode: ChatMode? = null,
+    /** The chat's main action: complete (archive) or delete. Unset on the computer means complete. */
+    val chatPaneAction: ChatAction? = null,
+    /** True when the computer deletes chats without asking first. Unset means it asks. */
+    val skipDeleteConfirmation: Boolean? = null,
+    /** False until the computer has answered `settings:get` (or `settings:update`) on this connection. */
+    val known: Boolean = false,
+) {
+    enum class ChatMode(val wire: String) {
+        ASK("ask"), GUARDRAILS("guardrails"), YOLO("yolo");
+
+        companion object {
+            fun of(s: String?) = entries.firstOrNull { it.wire == s }
+        }
+    }
+
+    enum class ChatAction(val wire: String) {
+        COMPLETE("complete"), DELETE("delete");
+
+        companion object {
+            fun of(s: String?) = entries.firstOrNull { it.wire == s }
+        }
+    }
+
+    /** What the computer actually does when a key is unset (shared/settings.ts defaults). */
+    val effectiveMode: ChatMode get() = defaultChatMode ?: ChatMode.GUARDRAILS
+    val effectiveAction: ChatAction get() = chatPaneAction ?: ChatAction.COMPLETE
+    val confirmDelete: Boolean get() = skipDeleteConfirmation != true
+
+    companion object {
+        fun from(e: JsonElement?): PcSettings {
+            val o = e.obj() ?: return PcSettings()
+            return PcSettings(
+                known = true,
+                defaultChatMode = ChatMode.of(o.str("defaultChatMode")),
+                chatPaneAction = ChatAction.of(o.str("chatPaneAction")),
+                skipDeleteConfirmation = (o["skipDeleteConfirmation"] as? JsonPrimitive)?.booleanOrNull,
+            )
+        }
+
+        /** The `settings:update` patch for one change: never more than the phone-settable keys. */
+        fun patch(mode: ChatMode? = null, action: ChatAction? = null, skipConfirm: Boolean? = null) = buildJsonObject {
+            mode?.let { put("defaultChatMode", it.wire) }
+            action?.let { put("chatPaneAction", it.wire) }
+            skipConfirm?.let { put("skipDeleteConfirmation", it) }
         }
     }
 }

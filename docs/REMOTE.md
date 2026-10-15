@@ -57,6 +57,12 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them
 > off. It never vibrates in silent mode or Do Not Disturb, or while the app is in the background.
 >
+> **Your computer's settings from the phone** (Android): **Settings → On <computer>** changes three
+> of the computer's own settings: the chat mode for new chats (Ask, Guardrails or YOLO; YOLO asks once
+> before switching), what a long-press on a chat does (Complete, which moves it to Completed, or
+> Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
+> its Settings. A long-press on a chat in the list then completes or deletes it on the computer.
+>
 > The Android app is **locked by default**: every time you open it, or come back to it, it asks for
 > your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows
 > anything. While it is locked nothing can be read or approved, and the recent-apps preview stays
