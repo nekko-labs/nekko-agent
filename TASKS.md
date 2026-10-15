@@ -6,6 +6,12 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Anthropic historical image recovery
+
+- [x] Normalize outgoing historical attachments and tool evidence in both provider implementations without modifying saved originals. See [SPEC](SPEC.md#anthropic-image-dimension-rejection-prevention-and-continuation).
+- [x] Regress 21-image histories, retry/new-message wire copies, portrait/landscape scaling, unchanged small/invalid inputs, and failed-turn gate cleanup. Core/host focused tests and typechecks pass; Rust provider tests pass.
+- [ ] Live-provider and packaged cross-platform verification remains untested; no visual change. Landing pending PR checks.
+
 ## Composer skill picker after existing text (added 2026-10-14)
 
 - [ ] Fix [#535: skill menu does not open for `/` after existing composer text](https://github.com/nekko-labs/nekko-agent/issues/535). User reports that `/` opens the skill picker in an empty fresh-chat composer, but not after other draft text. Open the picker after existing text (for example `Help me with this /`), preserve surrounding text when selecting a skill, and retain the empty-composer behavior. Add regression coverage for both draft states. Reported behavior has not been independently reproduced; implementation and verification remain pending.

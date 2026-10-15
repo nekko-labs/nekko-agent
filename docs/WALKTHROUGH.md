@@ -265,6 +265,17 @@ If Settings or Nekko Server cannot load, the page shows the problem and a
 then retry. In the web edition, check that the Nekko service is running.
 Existing content stays visible when a refresh fails.
 
+A failed chat reply preserves completed steps. **Retry** continues from saved
+history, and you can send a new message instead. For Anthropic requests, Nekko
+bounds supported outgoing image copies to 1568 pixels per side, including old
+attachments and screenshot evidence. This prevents the stricter image-dimension
+limit in requests with more than 20 images from trapping subsequent replies.
+Saved originals are not resized or removed. Oversized animated images may be
+sent as a static PNG. Corrupt or unsupported files, image-count limits, payload
+size and context limits can still cause rejection; retrying those unchanged
+inputs is not a guaranteed recovery. If such an error persists, use a new chat
+with valid, smaller attachments and include the exact error in a bug report.
+
 If a page or section cannot be displayed, use its **Try again** button to
 reopen it. Navigation stays available so you can move to another page. If the
 problem persists, include the displayed error and your app version and OS in
