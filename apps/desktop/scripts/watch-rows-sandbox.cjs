@@ -15,7 +15,11 @@ app.whenReady().then(async () => {
   try {
     await win.loadFile(path.join(dir, 'index.html')); await sleep(700);
     // Open the subagent group, as in the reported screenshot.
-    await run("(() => { const b = document.querySelector('#subagents button[aria-expanded]'); if (b && b.getAttribute('aria-expanded') === 'false') b.click(); })()");
+    for (let i = 0; i < 5 && !(await run("document.querySelector('#subagents button[aria-expanded]')?.getAttribute('aria-expanded') === 'true'")); i++) {
+      await run("document.querySelector('#subagents button[aria-expanded]')?.click()");
+      await sleep(250);
+    }
+    if (!(await run("document.querySelectorAll('#subagents li').length === 4"))) report.errors.push('Subagent group did not expand');
     await shot('dark');
     // Measure the text after the dots across a full animation cycle: it must not move.
     for (let i = 0; i < 8; i++) {
@@ -26,6 +30,10 @@ app.whenReady().then(async () => {
     await shot('light');
     win.setContentSize(440, 900);
     await shot('light-narrow');
+    // The first frame can race the expand; take the dark view again once settled.
+    win.setContentSize(960, 900);
+    await run("document.documentElement.dataset.theme='dark'");
+    await shot('dark');
   } catch (e) { report.errors.push(String(e)); }
   fs.writeFileSync(path.join(dir, 'status.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
