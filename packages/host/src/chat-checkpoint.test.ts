@@ -141,6 +141,23 @@ describe('a run that is cut off part-way', () => {
 });
 
 describe('resuming a cut-off run', () => {
+  it.each([true, false])('releases all reply gates after an image 400 and accepts resume=%s', async (resume) => {
+    const session = createSession('w1');
+    session.titleAuto = false;
+    saveSession(session);
+    rounds = [new Error('anthropic 400: image dimensions exceed max allowed size for many-image requests')];
+    const failed = await run(session);
+    expect(failed.at(-1)?.type).toBe('error');
+    expect(getRunningSessionIds()).not.toContain(session.id);
+    expect(getSession(session.id)?.activeRun).toBeUndefined();
+    round = 0;
+    rounds = [[{ type: 'text', delta: 'Recovered' }, { type: 'done' }]];
+    const recovered = await run(getSession(session.id)!, { resume, text: resume ? '' : 'continue' });
+    expect(recovered.some(e => e.type === 'done')).toBe(true);
+    expect(getSession(session.id)?.messages.at(-1)?.content).toBe('Recovered');
+    expect(getRunningSessionIds()).not.toContain(session.id);
+    expect(getSession(session.id)?.activeRun).toBeUndefined();
+  });
   it('saves typed continue and announces it before the next assistant reply', async () => {
     const session = createSession('w1');
     rounds = [[{ type: 'text', delta: "I'll resume directly." }, { type: 'done' }]];
