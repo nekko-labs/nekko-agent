@@ -3253,6 +3253,453 @@
         },
         "removed": []
       }
+    },
+    {
+      "name": "links",
+      "fixture": {
+        "ws/app/readme.md": "# App\n\nMain docs.\n",
+        "ws/app/escape": {
+          "link": "ws/outside-dir"
+        },
+        "ws/app/sibling": {
+          "link": "ws/lib"
+        },
+        "ws/lib/index.ts": "lib main\n",
+        "ws/outside-dir/secret.txt": "outside main\n",
+        "ws/outside-dir/nested/deep.txt": "deep main\n"
+      },
+      "policy": {
+        "setup": "two",
+        "mode": "guardrails",
+        "sandboxMode": "workspace-jail",
+        "rules": "default",
+        "sessionId": "s_links"
+      },
+      "steps": [
+        {
+          "call": {
+            "name": "read_file",
+            "input": {
+              "path": "escape/secret.txt"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "read_file",
+            "input": {
+              "path": "escape/nested/deep.txt"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "read_file",
+            "input": {
+              "path": "<ROOT>/ws/app/escape/secret.txt"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "read_file",
+            "input": {
+              "path": "escape"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "write_file",
+            "input": {
+              "path": "escape/new.txt",
+              "content": "through the link"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "write_file",
+            "input": {
+              "path": "escape/nested/new/dir/file.txt",
+              "content": "deeper"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "write_file",
+            "input": {
+              "path": "escape/secret.txt",
+              "content": "overwrite"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "edit_file",
+            "input": {
+              "path": "escape/secret.txt",
+              "old_string": "main",
+              "new_string": "MAIN"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "list_dir",
+            "input": {
+              "path": "escape"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "list_dir",
+            "input": {
+              "path": "escape/nested"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "glob",
+            "input": {
+              "pattern": "*.txt",
+              "path": "escape"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "glob",
+            "input": {
+              "pattern": "**/*.txt",
+              "path": "escape/nested"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "grep",
+            "input": {
+              "pattern": "main",
+              "path": "escape"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "grep",
+            "input": {
+              "pattern": "main",
+              "path": "escape/secret.txt"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "list_dir",
+            "input": {
+              "path": "."
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "glob",
+            "input": {
+              "pattern": "**"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "grep",
+            "input": {
+              "pattern": "main"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "read_file",
+            "input": {
+              "path": "sibling/index.ts"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "write_file",
+            "input": {
+              "path": "sibling/from-app.txt",
+              "content": "via the link"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "list_dir",
+            "input": {
+              "path": "sibling"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "grep",
+            "input": {
+              "pattern": "lib",
+              "path": "sibling"
+            }
+          }
+        },
+        {
+          "changes": true
+        }
+      ],
+      "results": [
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape/secret.txt is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape/nested/deep.txt is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape/secret.txt is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape/new.txt is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape/nested/new/dir/file.txt is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape/secret.txt is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape/secret.txt is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape/nested is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape/nested is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Sandbox: <ROOT>/ws/app/escape/secret.txt is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
+            "isError": true
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "escape\nreadme.md\nsibling",
+            "isError": false
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "escape\nreadme.md\nsibling",
+            "isError": false
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "readme.md:3: Main docs.",
+            "isError": false
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "lib main\n",
+            "isError": false
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "Wrote <ROOT>/ws/app/sibling/from-app.txt (12 bytes)",
+            "isError": false
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "from-app.txt\nindex.ts",
+            "isError": false
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "index.ts:1: lib main",
+            "isError": false
+          },
+          "approvals": []
+        },
+        {
+          "changes": [
+            {
+              "path": "<ROOT>/ws/app/sibling/from-app.txt",
+              "original": "",
+              "current": "via the link"
+            }
+          ]
+        }
+      ],
+      "tree": {
+        "changed": {
+          "ws/lib/from-app.txt": {
+            "text": "via the link"
+          }
+        },
+        "removed": []
+      }
+    },
+    {
+      "name": "links-unjailed",
+      "fixture": {
+        "ws/app/readme.md": "# App\n\nMain docs.\n",
+        "ws/app/escape": {
+          "link": "ws/outside-dir"
+        },
+        "ws/app/sibling": {
+          "link": "ws/lib"
+        },
+        "ws/lib/index.ts": "lib main\n",
+        "ws/outside-dir/secret.txt": "outside main\n",
+        "ws/outside-dir/nested/deep.txt": "deep main\n"
+      },
+      "policy": {
+        "setup": "two",
+        "mode": "guardrails",
+        "sandboxMode": "off",
+        "rules": "default"
+      },
+      "steps": [
+        {
+          "call": {
+            "name": "read_file",
+            "input": {
+              "path": "escape/secret.txt"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "list_dir",
+            "input": {
+              "path": "escape"
+            }
+          }
+        },
+        {
+          "call": {
+            "name": "grep",
+            "input": {
+              "pattern": "main",
+              "path": "escape"
+            }
+          }
+        }
+      ],
+      "results": [
+        {
+          "result": {
+            "output": "outside main\n",
+            "isError": false
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "nested/\nsecret.txt",
+            "isError": false
+          },
+          "approvals": []
+        },
+        {
+          "result": {
+            "output": "nested/deep.txt:1: deep main\nsecret.txt:1: outside main",
+            "isError": false
+          },
+          "approvals": []
+        }
+      ],
+      "tree": {
+        "changed": {},
+        "removed": []
+      }
     }
   ]
 }
