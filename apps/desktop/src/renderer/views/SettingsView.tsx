@@ -864,6 +864,13 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
         </select>
       </label>
       <p className="mt-2 text-[11px] text-ink-faint">Committed HEAD excludes local edits and shows a notice at startup. Copying local edits includes tracked changes only, not untracked files, secrets, or build artifacts.</p>
+      <label className="mt-3 flex items-center justify-between gap-3 text-[13px]">
+        <span>
+          Remove worktrees after their PR merges
+          <span className="mt-0.5 block text-[11px] text-ink-faint">Checked hourly. A worktree with uncommitted or untracked files, or whose chat is running, is kept. Continuing the chat later restores its checkout.</span>
+        </span>
+        <input type="checkbox" className="h-4 w-4 shrink-0" checked={settings.gitManagement?.removeMerged !== false} onChange={(e) => update({ gitManagement: { ...settings.gitManagement, removeMerged: e.target.checked } })} />
+      </label>
 
       {settings.workspaces.length > 0 && (
         <div className="mt-4 border-t border-line pt-3">
