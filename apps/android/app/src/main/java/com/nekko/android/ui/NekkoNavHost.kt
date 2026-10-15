@@ -91,13 +91,10 @@ fun NekkoNavHost(
             val c by repo.state.collectAsStateWithLifecycle()
             val models by defaults.modelsFlow.collectAsStateWithLifecycle()
             val phonePick = remember(models, c.activeId) { c.activeId?.let(defaults::model) }
-            NewChatScreen(
-                repo = repo,
-                phonePick = phonePick,
-                onBack = { nav.popBackStack() },
             val shared by shareInbox.shared.collectAsStateWithLifecycle()
             NewChatScreen(
                 repo = repo,
+                phonePick = phonePick,
                 shared = shared,
                 onEditShared = shareInbox::edit,
                 onBack = {
