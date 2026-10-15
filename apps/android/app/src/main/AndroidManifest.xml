@@ -5,6 +5,13 @@
     <!-- INTERNET only: the Google code scanner runs its own camera UI inside Play
          services, so this app never asks for the CAMERA permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Reconnect to the relay as soon as the phone changes network. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Local notifications when a chat on the computer finishes or needs you (asked from Settings). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- KeepAliveService: stays connected only while a chat on the computer is running. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <!-- Settings → Vibration: a short buzz when the agent needs you (install-time, no prompt). -->
     <uses-permission android:name="android.permission.VIBRATE" />
 

@@ -18,6 +18,7 @@ import com.nekko.android.DeepLink
 import com.nekko.android.share.ShareInbox
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
+import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.data.ThemePrefs
@@ -91,6 +92,7 @@ fun NekkoNavHost(
             val c by repo.state.collectAsStateWithLifecycle()
             val models by defaults.modelsFlow.collectAsStateWithLifecycle()
             val phonePick = remember(models, c.activeId) { c.activeId?.let(defaults::model) }
+            // Text shared from another app (Share to Nekko), editable here, never sent by itself.
             val shared by shareInbox.shared.collectAsStateWithLifecycle()
             NewChatScreen(
                 repo = repo,
