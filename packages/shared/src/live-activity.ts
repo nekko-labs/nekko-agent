@@ -273,6 +273,8 @@ export function shortLiveStatus(a: LiveActivity | undefined): string {
   const last = a.steps[a.steps.length - 1];
   if (last?.kind === 'tool' && last.status === 'running') {
     const verb = TOOL_VERBS[last.label] ?? last.label;
+    // A delegation's detail is already a plain sentence; its first word alone says nothing.
+    if (last.label === 'spawn_agent') return last.detail ? firstWords(`${verb} ${last.detail.split(' · ')[0]}`, SHORT_STATUS_WORDS) : verb;
     const target = shortTarget(last.detail ?? '');
     // The verb is one word, so the target gets the rest of the budget.
     return target ? firstWords(`${verb} ${target}`, SHORT_STATUS_WORDS) : verb;
