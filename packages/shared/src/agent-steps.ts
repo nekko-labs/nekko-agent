@@ -77,17 +77,33 @@ export function summarizeThought(reasoning: string, max = 90): string {
 
 /** `Repo: …`, `Working directory: …` and the like: setup for a delegation, not what it does. */
 const CONTEXT_LINE_RE = /^(?:repo(?:sitory)?|project|workspace|folder|dir(?:ectory)?|working directory|cwd|path|root|branch|base|worktree|github|context|shared instructions?)\s*:/i;
+// Paths are found by one linear scan of path-ish tokens, never by patterns
+// with overlapping greedy runs: task text comes from the model and a run of
+// slashes must not make the summary slow (CodeQL js/polynomial-redos).
 const WINDOWS_PATH_RE = /[A-Za-z]:[\\/][^\s,;()"'`]*/g;
-const POSIX_PATH_RE = /(?:~|\.{1,2})?\/[^\s,;()"'`]*\/[^\s,;()"'`]*/g;
+const PATH_TOKEN_RE = /[^\s,;()"'`]+/g;
+/** A token with at least two `/` separators reads as a POSIX path. */
+function isPosixPath(token: string): boolean {
+  const first = token.indexOf('/');
+  return first >= 0 && token.indexOf('/', first + 1) > first && /^(?:~|\.{1,2})?\//.test(token.slice(0, first + 1));
+}
+function firstPosixPath(text: string): string | undefined {
+  return text.match(PATH_TOKEN_RE)?.find(isPosixPath);
+}
+function replacePosixPaths(text: string, fn: (path: string) => string): string {
+  return text.replace(PATH_TOKEN_RE, (token) => (isPosixPath(token) ? fn(token) : token));
+}
 
 function leaf(path: string): string {
-  return path.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean).pop() ?? '';
+  let end = path.length;
+  while (end > 0 && (path[end - 1] === '/' || path[end - 1] === '\\')) end--;
+  return path.slice(0, end).split(/[\\/]/).filter(Boolean).pop() ?? '';
 }
 
 /** The project a delegation is about, as its last path segment or repository name. */
 export function delegationProject(text: string): string {
   const repo = /\b(?:github\s+)?([\w.-]+)\/([\w.-]+)\b(?=\s*\))/i.exec(text)?.[2];
-  const path = text.match(WINDOWS_PATH_RE)?.[0] ?? text.match(POSIX_PATH_RE)?.[0];
+  const path = text.match(WINDOWS_PATH_RE)?.[0] ?? firstPosixPath(text);
   const fromPath = path ? leaf(path) : '';
   // A path to a file says less than the repository it sits in.
   return /\.[a-z0-9]{1,5}$/i.test(fromPath) && repo ? repo : fromPath || repo || '';
@@ -112,7 +128,7 @@ export function summarizeDelegation(input: unknown, max = 90): { what: string; p
     .map((para) => para.replace(/\s*\n\s*/g, ' '));
   const candidates = body
     .flatMap(sentences)
-    .map((s) => s.replace(WINDOWS_PATH_RE, (p) => leaf(p)).replace(POSIX_PATH_RE, (p) => leaf(p)).trim())
+    .map((s) => replacePosixPaths(s.replace(WINDOWS_PATH_RE, (p) => leaf(p)), leaf).trim())
     // A sentence that is only a heading or a dangling label says nothing yet.
     .filter((s) => s.length > 3 && !/:$/.test(s));
   const what = candidates[0] ?? title;

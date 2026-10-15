@@ -55,6 +55,12 @@ describe('summarizeDelegation', () => {
     expect(summarizeDelegation({ task: 'Repo: /home/me/code/getsu\nAudit /home/me/code/getsu/src/app.ts for leaks.' }))
       .toEqual({ what: 'Audit app.ts for leaks.', project: 'getsu' });
   });
+  it('stays fast on adversarial runs of slashes', () => {
+    const nasty = `Repo: x\nFix ${'/'.repeat(50_000)}a and ${'a/'.repeat(20_000)} now.`;
+    const start = performance.now();
+    summarizeDelegation({ task: nasty });
+    expect(performance.now() - start).toBeLessThan(200);
+  });
   it('falls back to the title, then the project alone', () => {
     expect(summarizeDelegation({ title: 'Spec sweep', task: 'Repo: C:\\code\\nekko-agent' })).toEqual({ what: 'Spec sweep', project: 'nekko-agent' });
     expect(summarizeToolCall({ name: 'spawn_agent', input: { task: 'Repo: C:\\code\\nekko-agent' } })).toBe('nekko-agent');
