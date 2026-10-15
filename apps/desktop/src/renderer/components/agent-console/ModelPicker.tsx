@@ -348,8 +348,11 @@ export function ModelPicker({
         aria-expanded={open}
         title={unavailableModel ? `${unavailableModel} is not available right now. Pick a model again.` : needsChoice ? 'This chat has no model yet - pick one' : `Model: ${currentName} · ${providerLabel}`}
       >
-        <span className="min-w-0 shrink-0 max-w-[calc(100%-20px)] whitespace-normal break-words text-left" data-model-chip-name>{unavailableModel ? <><s className="opacity-80">{unavailableModel}</s> · unavailable</> : needsChoice ? 'Choose a model' : currentName}</span>
-        <span className="ctl-menu-label hidden min-w-0 shrink truncate md:inline">· {providerLabel}</span>
+        <span className="max-w-[calc(100%-20px)] shrink-0 whitespace-normal break-words text-left" data-model-chip-name>{unavailableModel ? <><s className="opacity-80">{unavailableModel}</s> · unavailable</> : needsChoice ? 'Choose a model' : currentName}</span>
+        {/* The name never shrinks; it wraps only when the whole chip cannot
+            fit it (its max width). The provider takes what is left and
+            truncates, down to nothing. */}
+        <span className="ctl-menu-label hidden min-w-0 flex-1 basis-0 truncate md:inline">· {providerLabel}</span>
         <span className="ctl-caret shrink-0">▾</span>
       </button>}
       {/* Portalled out of the pane's overflow clipping and clamped to the viewport. */}
