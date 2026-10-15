@@ -103,6 +103,7 @@ jobs:
         if: always()
         with:
           name: capture-${{ runner.os }}
+          retention-days: 14
           path: |
             capture-results/
             .shots/wall-controls-integration/
@@ -162,5 +163,6 @@ jobs:
         if: always()
         with:
           name: perf-report
+          retention-days: 14
           path: perf-results/
           if-no-files-found: ignore
