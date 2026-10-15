@@ -222,6 +222,11 @@ export interface AppSettings {
   defaultModelId?: string;
   /** Show the mascot. */
   mascotEnabled: boolean;
+  /** Desktop close button defaults to keeping work alive in the tray. */
+  desktopCloseBehavior?: 'tray' | 'shutdown';
+  trayCloseHintSeen?: boolean;
+  /** A two-second tray mascot farewell, enabled by default. */
+  trayFarewellEnabled?: boolean;
   /** How hard the model works per turn (an effort rung or a temperature). */
   effort?: EffortLevel;
   /** Cloud comparison for unpriced local models; unset uses the default, empty opts out. */

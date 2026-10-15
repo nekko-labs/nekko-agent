@@ -16,6 +16,7 @@ import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
 import { hasAppChrome } from '../chrome.js';
 import { ServiceLoadState } from '../components/ServiceLoadState.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
+import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
   { value: 'workspace-jail', label: 'Workspace jail', desc: 'File access is confined to your added folders.' },
@@ -81,10 +82,7 @@ export function SettingsView() {
         <section className="card mt-6 p-5">
           <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2></div>
           <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
-          <div className="mt-2 flex min-h-[40px] items-center justify-between">
-            <span className="text-[13px]">{tr('settings.mascot')}</span>
-            <Toggle on={settings.mascotEnabled} onChange={(v) => update({ mascotEnabled: v })} />
-          </div>
+
           <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
             <div className="min-w-0">
               <span className="text-[13px]">{tr('settings.language')}</span>
@@ -135,6 +133,8 @@ export function SettingsView() {
           </div>
         </section>
 
+        <DesktopBehaviorSection settings={settings} update={update} />
+        <FunSection settings={settings} update={update} />
         <section className="card mt-5 p-5">
           <h2 className="font-semibold">Command Center</h2>
           <label className="mt-3 flex items-center justify-between gap-3 text-[13px]">Auto-add new agents

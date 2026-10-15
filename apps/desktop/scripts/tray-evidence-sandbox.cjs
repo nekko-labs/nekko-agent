@@ -1,0 +1,20 @@
+const { app, BrowserWindow, session } = require('electron');
+const fs = require('node:fs'); const path = require('node:path');
+const dir = process.env.NEKKO_TRAY_EVIDENCE_DIR;
+if (!dir || !dir.includes('.shots')) throw Error('Scratch profile required');
+app.setPath('userData', path.join(dir, 'profile'));
+app.on('window-all-closed', () => {});
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+app.whenReady().then(async () => {
+  session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:)/.test(d.url) }));
+  const win = new BrowserWindow({ width: 1000, height: 920, show: false, title: 'Nekko tray settings (isolated)', webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('console-message', e => { if (e.level === 'error') console.log(e.message); });
+  await win.loadFile(path.join(dir, 'index.html')); await sleep(1000);
+  await win.webContents.executeJavaScript("document.querySelector('#desktop-behavior')?.scrollIntoView({block:'center'})");
+  win.showInactive();
+  fs.writeFileSync(path.join(dir, 'settings-dark.png'), (await win.webContents.capturePage()).toPNG());
+  console.log('READY native capture', dir);
+  await sleep(300000);
+  win.destroy(); app.exit();
+}).catch(e => { console.error(e); app.exit(1); });

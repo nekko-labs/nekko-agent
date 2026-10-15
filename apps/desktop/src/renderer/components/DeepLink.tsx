@@ -31,6 +31,10 @@ export function DeepLinkListener() {
 
   useEffect(() => {
     const off = window.nekko.onDeepLink((url) => {
+      if (url === 'nekko-agent://settings') {
+        useStore.getState().setView('settings');
+        return;
+      }
       if (url === 'nekko-agent://chat/new') {
         void useStore.getState().newChat().catch(e => useStore.getState().pushToast('error', e.message));
         return;
