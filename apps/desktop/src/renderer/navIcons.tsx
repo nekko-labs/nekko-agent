@@ -66,6 +66,17 @@ export const DesignColorIcon = (p: P) => (
   </Svg>
 );
 
+/** Artifacts: a stack of produced pages, a document in front of a diagram card. */
+export const ArtifactsColorIcon = (p: P) => (
+  <Svg {...p}>
+    <rect x="8.2" y="2.8" width="12" height="14.6" rx="2.2" fill="#38bdf8" opacity="0.55" />
+    <path d="M11.6 7.4h5.2M11.6 10.4h3.6" stroke="#e0f2fe" strokeWidth="1.3" strokeLinecap="round" />
+    <rect x="3.8" y="6.6" width="12" height="14.6" rx="2.2" fill="#0ea5e9" />
+    <path d="M6.8 11h6M6.8 14h6M6.8 17h3.6" stroke="#e0f2fe" strokeWidth="1.4" strokeLinecap="round" />
+    <circle cx="17.6" cy="18.4" r="2.6" fill="#fbbf24" />
+  </Svg>
+);
+
 /** Models — a purple CPU / chip with pins. */
 export const ModelsColorIcon = (p: P) => (
   <Svg {...p}>

@@ -49,13 +49,36 @@ describe('default model in the picker', () => {
   });
 });
 
+describe('local models and provider headings', () => {
+  it('shows a local model by its short name with the file path beneath, under an ink provider heading', () => {
+    const providers = [{ id: 'eng', kind: 'llamacpp' as const, label: 'Nekko Agent engine', enabled: true, baseUrl: 'http://127.0.0.1:11500/v1' }];
+    const models = [
+      { id: 'lmstudio/lmstudio-community/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M', providerId: 'eng', name: 'Qwen3 8B', details: { path: 'D:/models/Qwen3-8B-Q4_K_M.gguf' } },
+      // An older engine that sent no name: the id's last segment is the name.
+      { id: 'lmstudio/lmstudio-community/Muse-Glimmer-30B', providerId: 'eng', name: 'lmstudio/lmstudio-community/Muse-Glimmer-30B' },
+    ];
+    const out = renderToStaticMarkup(<ModelPicker expanded open providers={providers} providerId="eng" modelId={null} models={models} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+    expect(out).toContain('data-model-name="true">Qwen3 8B<');
+    expect(out).toContain('D:/models/Qwen3-8B-Q4_K_M.gguf');
+    expect(out).toContain('data-model-name="true">Muse-Glimmer-30B<');
+    expect(out).toContain('>lmstudio/lmstudio-community</span>');
+    expect(out).not.toContain('data-model-name="true">lmstudio/');
+    expect(out).toMatch(/text-\[12px\] font-semibold text-ink" data-provider-heading="true">Nekko Agent engine/);
+  });
+  it('keeps a cloud id with a slash as its name and price line', () => {
+    const providers = [{ id: 'or', kind: 'openrouter' as const, label: 'OpenRouter', enabled: true, baseUrl: 'https://openrouter.ai/api/v1' }];
+    const out = renderToStaticMarkup(<ModelPicker expanded open providers={providers} providerId="or" modelId={null} models={[{ id: 'meta/llama', providerId: 'or', name: 'meta/llama' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+    expect(out).toContain('data-model-name="true">meta/llama<');
+  });
+});
+
 describe('account emails in the picker', () => {
   it('names the signed-in account next to the provider, in its own case', () => {
     emails.byToken = { 'claude:a': 'Davide@Example.com' };
     try {
       const providers = [{ id: 'a', kind: 'anthropic' as const, label: 'Anthropic (Claude)', enabled: true, baseUrl: '', auth: 'subscription' as const, tokenKey: 'claude:a' }];
       const out = renderToStaticMarkup(<ModelPicker expanded open providers={providers} providerId="a" modelId="m" models={[{ id: 'm', providerId: 'a', name: 'Claude Opus' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
-      expect(out).toContain('Anthropic (Claude)<span class="font-normal normal-case tracking-normal" data-account-email="true"> · Davide@Example.com</span>');
+      expect(out).toContain('Anthropic (Claude)<span class="font-normal normal-case tracking-normal text-ink-faint" data-account-email="true"> · Davide@Example.com</span>');
       const chip = renderToStaticMarkup(<ModelPicker open={false} providers={providers} providerId="a" modelId="m" models={[{ id: 'm', providerId: 'a', name: 'Claude Opus' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
       expect(chip).toContain('Model: Claude Opus · Anthropic (Claude) · Davide@Example.com');
     } finally { emails.byToken = {}; }

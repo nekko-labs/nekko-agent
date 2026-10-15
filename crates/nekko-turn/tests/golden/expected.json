@@ -3562,6 +3562,11 @@
    "input": {
     "session": {},
     "offline": true,
+    "orchestration": {
+     "strategy": "solo",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
     "allowBrowserControl": true,
     "mcpTools": [
      {
@@ -3586,7 +3591,384 @@
     ],
     "decide": true
    },
-   "output": []
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "capture",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {},
+    "offline": true,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "capture",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledTools": [
+      "bash",
+      "grep"
+     ]
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "solo",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "list_dir",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "capture",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledTools": [
+      "bash",
+      "grep"
+     ]
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "list_dir",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "capture",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "parentSessionId": "s_parent"
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "solo",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "update_plan"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "parentSessionId": "s_parent"
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "update_plan"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "incognito": true
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "solo",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "capture",
+    "update_plan",
+    "set_chat_title",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "incognito": true
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "capture",
+    "update_plan",
+    "set_chat_title",
+    "ask_user"
+   ]
   }
  ],
  "prompts": [

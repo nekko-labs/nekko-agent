@@ -265,6 +265,20 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   const newTerminalWorkspace = (projectId?: string, shell?: string) => sidebarOnly && onCreate ? onCreate('terminal', projectId ?? activeProjectId(), shell) : storeNewTerminalWorkspace(projectId, shell);
   const newImageChat = () => sidebarOnly && onCreate ? onCreate('image', activeProjectId()) : useStore.getState().newImageChat('');
   const pendingProjectActions = useRef(new Set<string>());
+  // Set while a group header's + or terminal button is pressed, so the row's
+  // project drag does not start under it and eat the click.
+  const pressingGroupAction = useRef(false);
+  useEffect(() => {
+    const release = () => { pressingGroupAction.current = false; };
+    window.addEventListener('pointerup', release, true);
+    window.addEventListener('pointercancel', release, true);
+    window.addEventListener('dragend', release, true);
+    return () => {
+      window.removeEventListener('pointerup', release, true);
+      window.removeEventListener('pointercancel', release, true);
+      window.removeEventListener('dragend', release, true);
+    };
+  }, []);
   const [pendingProjects, setPendingProjects] = useState<string[]>([]);
   const createInProject = async (kind: 'chat' | 'terminal', projectId: string | undefined, name: string) => {
     const key = projectId ?? '__none';
@@ -712,7 +726,10 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
               <div
                 className="group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
                 draggable={!!b.ws}
-                onDragStart={b.ws ? (e) => startDrag(e, { kind: 'project', id: b.ws!.id, ws: b.ws!.id }) : undefined}
+                onDragStart={b.ws ? (e) => {
+                  if (pressingGroupAction.current) { e.preventDefault(); return; }
+                  startDrag(e, { kind: 'project', id: b.ws!.id, ws: b.ws!.id });
+                } : undefined}
                 onDragEnd={endDrag}
                 title={b.ws ? 'Drag to reorder project' : undefined}
               >
@@ -728,7 +745,11 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                     </span>
                   )}
                 </button>
-                <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                {/* Not part of the row's project drag: a press that wanders a few
+                    pixels would otherwise start dragging the project, and the
+                    click on + never lands. */}
+                <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100" data-group-actions
+                  onPointerDown={() => { pressingGroupAction.current = true; }}>
                   <button className="rounded-md p-1 text-ink-faint hover:bg-paper hover:text-ink" title="New agent in this project"
                     disabled={pendingProjects.includes(b.key)} aria-label={`New agent in ${b.name}`}
                     onClick={() => { void createInProject('chat', b.ws?.id, b.name); }}><PlusIcon className="h-3.5 w-3.5" /></button>
