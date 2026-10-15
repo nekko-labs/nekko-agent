@@ -295,6 +295,26 @@ export async function branchPr(cwd: string, branch: string): Promise<PrInfo | nu
   return promise;
 }
 
+/**
+ * The state and head commit of the PR gh resolves for `branch` in `cwd`, for
+ * the merged-worktree sweep. Separate from `branchPr` because the head commit
+ * is what proves the local branch is the one that merged (a reused branch name
+ * resolves to an older PR), and `PrInfo` is held to the daemon's golden set.
+ * Null when gh is missing, paused, unauthenticated, or finds no PR.
+ */
+export async function branchPrHead(cwd: string, branch: string): Promise<{ state: PrInfo['state']; headOid: string } | null> {
+  if (ghMissing || Date.now() < ghReadCooldownUntil) return null;
+  const res = await runGhRead(['pr', 'view', branch, '--json', 'state,mergedAt,headRefOid'], 10_000, cwd);
+  if (res.missing) { ghMissing = true; return null; }
+  if (!res.ok) return null;
+  try {
+    const j = JSON.parse(res.stdout) as { state?: string; mergedAt?: string | null; headRefOid?: string };
+    return j.headRefOid ? { state: ghState(String(j.state ?? ''), j.mergedAt), headOid: j.headRefOid } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Live PR state for every PR URL referenced in a session's transcript. */
 export async function listSessionPrs(sessionId: string, force = false): Promise<PrInfo[]> {
   const session = getSession(sessionId);
