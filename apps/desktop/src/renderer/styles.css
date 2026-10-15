@@ -1432,6 +1432,16 @@
 @media (prefers-reduced-motion: reduce) {
   .pixel-nekko, .pixel-nekko * { animation: none !important; }
 }
+/* Live reply status icons: a bobbing thought bubble, and terminal lines scrolling up. */
+.reply-thought-bubble { animation: reply-thought-bob 2.4s ease-in-out infinite; }
+.reply-thought-dot { animation: reply-thought-pulse 1.8s ease-in-out infinite; }
+.reply-terminal-lines { animation: reply-terminal-scroll 1.8s linear infinite; }
+@keyframes reply-thought-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+@keyframes reply-thought-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+@keyframes reply-terminal-scroll { from { transform: translateY(0); } to { transform: translateY(-15px); } }
+@media (prefers-reduced-motion: reduce) {
+  .reply-activity-icon, .reply-activity-icon * { animation: none !important; }
+}
 @keyframes dots {
   0% { content: ''; }
   25% { content: '.'; }
