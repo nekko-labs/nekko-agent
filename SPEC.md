@@ -1429,6 +1429,9 @@ The plan/sub-agent/queue rail is labeled **Agent Monitor**, with a control-panel
 
 Implemented: desktop/tablet left-rail destinations distribute unused space 1:3 above/below the group, biasing it toward the upper-middle rather than vertically centering it. Spacers collapse on short windows and destinations scroll without shrinking button hit targets. Destination ordering, hover/focus expansion and mobile bottom navigation are unchanged. Native desktop evidence remains pending; see reports/upper-middle-navigation.md for sources, rationale and fixture scope.
 
+### Rail background alignment (2026-10-15)
+Implemented: the curved accent backdrop is anchored to the destination-group wrapper with equal 48px end caps instead of full-window percentage insets. Its center follows the button group at all window heights; destination positions, mobile navigation and hover/focus expansion are unchanged. Native visual evidence remains pending.
+
 ## Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)
 
 User intent (Philip): local models in the picker should read as a name with the file path beneath; provider headings should stand out; the internet switch should turn off internet tools but not local ones, with tools grouped by category; "Focus" should read "Focused"; the wall's three add icons should be in the accent; the agent panel's group **+** must work; and a left-rail **Artifacts** tab should collect what agents produce, grouped by kind, opening the source chat in Focused view.

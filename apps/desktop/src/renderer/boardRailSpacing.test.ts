@@ -4,9 +4,12 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 describe('compact board and navigation spacing', () => {
-  it('centres a subtle 60% band behind icons with 3px more separation', () => {
+  it('centres a subtle band on the destination group with equal end caps', () => {
     const css = read('./styles.css');
-    expect(css).toContain('inset: 20% 0;');
+    expect(css).toContain('& .rail-group::before');
+    expect(css).toContain('inset: -48px -6px;');
+    expect(css).not.toContain('inset: 20% 0;');
+    expect(read('./App.tsx')).toContain('className="rail-group"');
     expect(css).toContain('var(--accent) 4%, var(--paper)');
     expect(css).toContain('var(--accent) 7%, var(--paper)');
     // The destinations keep their 7px separation (#572 made the column scroll on short windows).
