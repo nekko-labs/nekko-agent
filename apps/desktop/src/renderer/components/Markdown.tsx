@@ -31,6 +31,8 @@ import { useStore } from '../store.js';
  * on every frame. The output is the same as parsing the text in one go.
  */
 /** True inside a Sandbox chat, where host file and image previews are unavailable. */
+export const MarkdownSession = React.createContext<string | undefined>(undefined);
+
 export const MarkdownSandbox = React.createContext(false);
 
 export function Markdown({ text, doc = false, basePath }: MarkdownProps) {
@@ -500,6 +502,7 @@ function resolveRef(basePath: string, target: string): string {
  * otherwise it reads as plain emphasis instead of a dead link.
  */
 function Ref({ href, basePath, children }: { href: string; basePath?: string; children: React.ReactNode }) {
+  const sessionId = React.useContext(MarkdownSession);
   const sandbox = React.useContext(MarkdownSandbox);
   if (sandbox && !/^https?:\/\//i.test(href)) return <span title="Host file previews are unavailable in Sandbox">{children} (preview unavailable)</span>;
   if (/^https?:\/\//i.test(href)) return <Link href={href}>{children}</Link>;
@@ -512,7 +515,7 @@ function Ref({ href, basePath, children }: { href: string; basePath?: string; ch
       className="wrap-break-word underline"
       style={{ color: 'var(--accent)' }}
       title={`Open ${target}`}
-      onClick={() => { useStore.getState().openFilePane(target); }}
+      onClick={() => { useStore.getState().openFilePane(target, sessionId); }}
     >
       {children}
     </button>
@@ -525,6 +528,7 @@ function Ref({ href, basePath, children }: { href: string; basePath?: string; ch
  * labelled chip that opens the real file instead of a broken image box.
  */
 function ImageRef({ alt, src, basePath }: { alt: string; src: string; basePath?: string }) {
+  const sessionId = React.useContext(MarkdownSession);
   const [image, setImage] = useState('');
   const [error, setError] = useState('');
   const remote = /^https?:\/\//i.test(src);
@@ -552,7 +556,7 @@ function ImageRef({ alt, src, basePath }: { alt: string; src: string; basePath?:
           const file = await window.nekko.readFile(target);
           if (file.imageDataUrl) setImage(file.imageDataUrl);
           else if (/\.svg$/i.test(target) && !file.binary && !file.truncated) {
-             useStore.getState().openFilePane(target);
+             useStore.getState().openFilePane(target, sessionId);
            } else setError('Preview unavailable');
         } catch { setError('Could not read image'); }
       }}

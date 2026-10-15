@@ -411,6 +411,13 @@ Questions or ideas? Open an issue on
 
 Drag a project group header in the agent panel onto another group to place it before that group. A quick gap opens above the hovered group (beside it in the horizontal panel) and closes when you move away. You can drop on either the header or an agent card in that group. The project order is saved. Dragging an individual agent card still reorders or moves that agent, rather than the whole group.
 
+
+## Reports and artifacts in chat
+
+Local document links in assistant replies appear as artifact cards beneath the response. The descriptive report title appears above its filename, so a README can still be recognizable. Select a card or document link to open it in the originating chat—not another chat that happens to have the file open.
+
+At the top of **This prompt**, expand **Artifacts** to see the session’s linked documents. It starts collapsed and always displays a count, including 0. Repeated links to the same path are listed once. Documents are not read until you open them; host previews remain unavailable in Sandbox.
+
 ---
 
 <!-- https://nekkoagent.com/docs/local-models -->

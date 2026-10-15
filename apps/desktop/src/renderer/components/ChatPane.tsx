@@ -1,3 +1,6 @@
+import { chatArtifacts } from '../chatArtifacts.js';
+import { ChatArtifacts } from './ChatArtifacts.js';
+import { MarkdownSession } from './Markdown.js';
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
 import { chatPaneSettings } from './ChatPane.settings.js';
@@ -378,6 +381,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
   const editable = !readOnly && !streaming && row.message.role === 'user' && persisted;
   return (
     <>
+      <MarkdownSession.Provider value={sessionId}>
       <MessageBubble
         message={row.message}
         basePath={basePath}
@@ -389,6 +393,8 @@ const TranscriptRowView = memo(function TranscriptRowView({
         onImageContextMenu={onImageContextMenu}
         chronological
       />
+      </MarkdownSession.Provider>
+      {row.message.role === 'assistant' && <ChatArtifacts artifacts={chatArtifacts(row.message.content, basePath)} sessionId={sessionId} />}
       {/* A PR card right after the message that first names it. */}
       {row.prUrls.map((u) => <PrCard key={u} url={u} info={prByUrl.get(u)} event="created" />)}
     </>
