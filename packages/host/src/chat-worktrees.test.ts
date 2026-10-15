@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import type { AppSettings, Session } from '@nekko-agent/shared';
-import { chatWorkspaces, listChatWorktrees, prepareChatWorktrees, removeChatWorktree, runWorktreeSetup, slugifyTitle, worktreeName } from './chat-worktrees.js';
+import { chatWorkspaces, listChatWorktrees, prepareChatWorktrees, removeChatWorktree, removeMergedChatWorktrees, runWorktreeSetup, slugifyTitle, worktreeName } from './chat-worktrees.js';
 
 let root: string;
 let settings: AppSettings;
@@ -130,6 +130,42 @@ it('lists, removes, and restores chat worktrees without losing work', () => {
   git('merge', '--ff-only', branch!);
   expect(removeChatWorktree(settings, wt, owner)).toEqual({ branchDeleted: true });
   expect(() => removeChatWorktree(settings, root, owner)).toThrow(/not a chat worktree/);
+});
+it('removes the worktree and branch of a merged PR, and leaves everything else', async () => {
+  const merged = session('s_merged'), open = session('s_open'), dirty = session('s_dirty'), busy = session('s_busy');
+  for (const s of [merged, open, dirty, busy]) prepareChatWorktrees(s, settings);
+  const at = (s: Session) => s.gitWorktrees!.repo;
+  // Squash-merged work: Git still sees the branch as unmerged.
+  for (const s of [merged, open, dirty, busy]) {
+    writeFileSync(join(at(s).root, `${s.id}.txt`), 'work\n');
+    execFileSync('git', ['add', '.'], { cwd: at(s).root });
+    execFileSync('git', ['commit', '-m', s.id], { cwd: at(s).root });
+  }
+  writeFileSync(join(at(dirty).root, 'file.txt'), 'not committed\n');
+  const owner = (wt: string) => {
+    const s = [merged, open, dirty, busy].find((x) => at(x).root === wt);
+    return s ? { id: s.id, title: s.id, running: s === busy } : null;
+  };
+  const asked: string[] = [];
+  const state = async (_cwd: string, branch: string) => {
+    asked.push(branch);
+    return branch === at(open).branch ? 'open' as const : 'merged' as const;
+  };
+
+  const removed = await removeMergedChatWorktrees(settings, owner, state);
+  expect(removed.map((r) => r.sessionId)).toEqual(['s_merged']);
+  expect(existsSync(at(merged).root)).toBe(false);
+  expect(git('branch', '--list', at(merged).branch!).trim()).toBe('');
+  // Kept: an open PR, uncommitted edits, a running chat (the last two are not even asked about).
+  for (const s of [open, dirty, busy]) expect(existsSync(at(s).root)).toBe(true);
+  expect(asked).not.toContain(at(dirty).branch);
+  expect(asked).not.toContain(at(busy).branch);
+
+  // Off in Settings, or a lookup that fails: nothing is removed.
+  const all = async () => 'merged' as const;
+  expect(await removeMergedChatWorktrees({ ...settings, gitManagement: { removeMerged: false } }, owner, all)).toEqual([]);
+  expect(await removeMergedChatWorktrees(settings, owner, async () => { throw new Error('offline'); })).toEqual([]);
+  expect(existsSync(at(open).root)).toBe(true);
 });
 it('runs setup commands and reports failures without throwing', async () => {
   let out = '';

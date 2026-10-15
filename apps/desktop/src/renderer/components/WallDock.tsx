@@ -150,7 +150,10 @@ export function WallDock(props: WallDockProps) {
         onPointerDown={(e) => { drag.current = { x: e.clientX, width }; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={(e) => { if (drag.current) size(Math.min((e.currentTarget.parentElement?.parentElement?.clientWidth ?? 1000) - 240, drag.current.width + (e.clientX - drag.current.x) * (dock.side === 'left' ? 1 : -1))); }}
         onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onDoubleClick={() => setWidth(DEFAULT_DOCK_WIDTH)}
-        onKeyDown={(e) => { if (e.key === 'Home') { e.preventDefault(); setWidth(DEFAULT_DOCK_WIDTH); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); size(width + (e.key === 'ArrowRight' ? 24 : -24) * (dock.side === 'left' ? 1 : -1)); } }} />}
+        onKeyDown={(e) => { if (e.key === 'Home') { e.preventDefault(); setWidth(DEFAULT_DOCK_WIDTH); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); size(width + (e.key === 'ArrowRight' ? 24 : -24) * (dock.side === 'left' ? 1 : -1)); } }}>
+        {/* The agent list's grip: a thin line that shows on hover and focus. */}
+        <span aria-hidden className="pane-grip wall-dock__grip" />
+      </div>}
       <header className="wall-dock__toolbar">
         <strong>Panels</strong>
         <span className="wall-dock__count">{selectedPanels.length} of {DOCK_PANELS.length}</span>

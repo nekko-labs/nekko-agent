@@ -1723,13 +1723,13 @@
   animation-name: stardust-twinkle;
 }
 @keyframes stardust-drift {
-  0% { opacity: 0; transform: translate(var(--dust-x0), 0) scale(.4); }
-  20% { opacity: 1; transform: translate(calc(var(--dust-x0) + 4px), calc(var(--dust-y) * .3)) scale(1); }
+  0% { opacity: 0; transform: translate(var(--dust-x0), var(--dust-y0, 0px)) scale(.4); }
+  20% { opacity: 1; transform: translate(calc(var(--dust-x0) + var(--dust-step-x, 4px)), calc(var(--dust-y0, 0px) + (var(--dust-y) - var(--dust-y0, 0px)) * .3)) scale(1); }
   100% { opacity: 0; transform: translate(var(--dust-x), var(--dust-y)) scale(.3); }
 }
 @keyframes stardust-twinkle {
-  0% { opacity: 0; transform: translate(var(--dust-x0), 0) scale(.2) rotate(0deg); }
-  30% { opacity: 1; transform: translate(calc(var(--dust-x0) + 4px), calc(var(--dust-y) * .3)) scale(1) rotate(45deg); }
+  0% { opacity: 0; transform: translate(var(--dust-x0), var(--dust-y0, 0px)) scale(.2) rotate(0deg); }
+  30% { opacity: 1; transform: translate(calc(var(--dust-x0) + var(--dust-step-x, 4px)), calc(var(--dust-y0, 0px) + (var(--dust-y) - var(--dust-y0, 0px)) * .3)) scale(1) rotate(45deg); }
   100% { opacity: 0; transform: translate(var(--dust-x), var(--dust-y)) scale(.2) rotate(90deg); }
 }
 @media (prefers-reduced-motion: reduce) {
