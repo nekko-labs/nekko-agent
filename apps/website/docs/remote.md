@@ -63,6 +63,15 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
 > its Settings. A long-press on a chat in the list then completes or deletes it on the computer.
 >
+> **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
+> computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
+> first, then one group per project folder. Tap a group's name to fold it. Each group lists its
+> active chats, then **Show completed (N)**, which opens the chats completed there (struck through,
+> newest first). Tap a completed chat to read it; its message box is replaced by **Restore**, and a
+> long-press on it offers Restore or Delete. Completing or restoring a chat on the computer shows up
+> on the phone the next time the list refreshes: when a reply finishes, when you pull down, or when
+> you come back to the app.
+>
 > **Dictation** (Android): tap the microphone in a chat's message box, speak, and tap again (or stop
 > at 30 seconds). The words go into the message box for you to check and send; nothing is sent by
 > itself. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
