@@ -128,3 +128,9 @@ export function saveDraft(sessionId: string, draft: { text: string; images: stri
 export function clearDraft(sessionId: string): void {
   saveDraft(sessionId, { text: '', images: [] });
 }
+
+/** Keep the mounted attachment state when restoration has identical contents. */
+export function restoredDraftImages(current: string[], restored?: string[]): string[] {
+  if (!restored) return current.length === 0 ? current : [];
+  return current.length === restored.length && current.every((image, i) => image === restored[i]) ? current : restored;
+}

@@ -24,7 +24,7 @@ import { allPanes, isSplit, type PaneKind } from '../layout.js';
 import {
   DEFAULT_ASPECT,
   addPane,
-  hasPane,
+  openWallPane,
   loadWallState,
   nextAgent,
   reconcileWall,
@@ -272,7 +272,7 @@ export function CommandCenterView() {
   /** A window from the toolbar, with no side pointed at: beside the biggest window. */
   const addFromToolbar = async (kind: PaneKind, refId?: string) => {
     const ref = refId ?? (kind === 'chat' ? await newChat() : kind === 'terminal' ? await newTerminal() : kind);
-    setWall((w) => ({ ...w, root: hasPane(w.root, kind, ref) ? w.root : addPane(w.root, wallPane(kind, ref), aspectRef.current), ...(kind === 'chat' ? { hero: ref } : {}) }));
+    setWall((w) => openWallPane(w, kind, ref, aspectRef.current));
     if (kind === 'chat') setSelected(ref);
   };
   const autoArrange = () => setWall((w) => w.layout.mode === 'grid' ? { ...w, root: tileTree(allPanes(w.root), aspectRef.current) } : w);
@@ -394,8 +394,6 @@ export function CommandCenterView() {
           // Focus shows the chosen chat. Every other layout keeps its windows
           // and marks the chat's window active, adding one when it has none.
           void addFromToolbar('chat', id);
-          selectAgent(id);
-          if (wall.layout.mode === 'focus') setWall((w) => ({ ...w, hero: id }));
         }
       }} onOpenTerminal={(id) => { setCompletedId(null); void addFromToolbar('terminal', id); }}
         orientation={panel.orientation}

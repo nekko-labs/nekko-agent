@@ -1318,3 +1318,11 @@ Add window sits to the right of the shared composer in the same row, including t
 - [x] Nebula and Terminal desaturated; saved old preset accents upgrade, custom colors untouched. Nebula/Terminal/Nord get their own --win. Plan panel, wall composer and dock share the chat-window surface; Add window and selected-window glows softened. Done: 2026-10-08 · [spec](SPEC.md#calmer-tinted-presets-and-one-window-surface-2026-10-08)
 - [x] Before/after Nebula/Terminal/Nord/Dark wall screenshots published in PR #384; Nebula 1400 before/after and Terminal 600 after inspected. Done: 2026-10-08
 
+
+## Guarded chat-switch updates
+
+- [x] Implement one guarded toolbar/sidebar wall update with root identity preservation and no-op reselect; retain archived routing. Focused tests cover Focus, Dynamic and Grid, missing windows and terminals.
+- [x] Reuse equal restored attachment arrays without changing text restoration, draft debounce or layout-cleanup flush ordering. Focused identity, storage and source-wiring regressions pass. Desktop typecheck passes.
+- [x] Mounted synthetic full ChatPane session-prop switching verifies pre-debounce last-keystroke flush, distinct per-chat image restoration and duplicate images; wall picker repeated entry retains one pane on base b2ae7a9a and head. Done: 2026-10-08. Reusable scripts: apps/desktop/scripts/chat-switch-{integration,sandbox}.cjs. Focused draft/guard tests: 16 passed; browser ownership tests: 4 passed.
+- [ ] Parent: verify sidebar-specific selection, archived/read-only and shared-composer transitions. Full ChatPane session-prop checks do not prove these other mounted paths. Matching base/head light/dark desktop/narrow PNGs and 3-second MP4s exist under .shots/chat-switch-perf/before-2026-10-08T18-31-35-488Z and after-2026-10-08T18-31-52-565Z; pixels not inspected and native OS chrome not captured.
+- [ ] Parent: run paired unchanged-base/head warm/cold and streaming benchmarks with unchanged thresholds, then capture and inspect matching screenshots and short timing recordings in a hidden or off-screen non-focusable isolated fixture. Baseline source archive preserved before edits at .shots/chat-switch-perf/base/b2ae7a9a.zip; no measurements or visual evidence claimed. Publish evidence and limitations in the parent PR before landing.

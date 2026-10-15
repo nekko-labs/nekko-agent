@@ -15,6 +15,8 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { assertPortFree, selectPage, windowsOwner, wrapperFailed } from './browser-identity.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -58,25 +60,19 @@ export function findBrowser() {
 
 export async function launchBrowser({ port, width, height, vsync = false, gpu = true }) {
   const bin = findBrowser();
-  // A cold Chrome on a shared runner sometimes never opens its DevTools page
-  // (the 2026-10-08 perf failures). That was reported as a bare "no page
-  // target" with the browser's own output thrown away. Keep the output, give
-  // it longer, and try once more on a fresh port and profile before failing.
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await launchOnce(bin, { port: port + (attempt - 1) * 7, width, height, vsync, gpu });
-    } catch (error) {
-      if (attempt >= 2) throw error;
-      console.warn(`[perf] browser launch attempt ${attempt} failed, retrying: ${error.message.split('\n')[0]}`);
-    }
-  }
+  // A successful Windows wrapper exit can leave a live browser child. Never
+  // blindly retry and orphan that child or attach to a previous run's listener.
+  return launchOnce(bin, { port, width, height, vsync, gpu });
 }
 
 async function launchOnce(bin, { port, width, height, vsync, gpu }) {
+  await assertPortFree(port);
+  const profile = mkdtempSync(join(tmpdir(), 'nekko-perf-browser-'));
+  const marker = `about:blank#nekko-perf-${randomUUID()}`;
   const args = [
     '--headless=new',
     `--remote-debugging-port=${port}`,
-    `--user-data-dir=${mkdtempSync(join(tmpdir(), 'nekko-perf-browser-'))}`,
+    `--user-data-dir=${profile}`,
     `--window-size=${width},${height}`,
     '--no-first-run',
     '--no-default-browser-check',
@@ -88,7 +84,7 @@ async function launchOnce(bin, { port, width, height, vsync, gpu }) {
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--disable-backgrounding-occluded-windows',
-    'about:blank',
+    marker,
   ];
   if (!vsync) args.unshift('--disable-frame-rate-limit', '--disable-gpu-vsync');
   // On a machine with no GPU, Chrome otherwise emulates one in software
@@ -99,34 +95,46 @@ async function launchOnce(bin, { port, width, height, vsync, gpu }) {
   // CI containers run as root without the user namespaces the sandbox needs.
   // /dev/shm on a container runner is small enough to crash Chrome's renderer.
   if (process.platform === 'linux') args.unshift('--no-sandbox', '--disable-dev-shm-usage');
-  const proc = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+  const proc = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
   let stderr = '';
   proc.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-4000); });
   let exited = null;
   proc.on('exit', (code, signal) => { exited = { code, signal }; });
 
-  let targets = null;
-  for (let i = 0; i < 120 && !exited; i++) {
+  let spawnError;
+  proc.on('error', (error) => { spawnError = error; });
+  let lastError;
+  for (let i = 0; i < 120 && !wrapperFailed(exited); i++) {
+    if (spawnError) throw spawnError;
     try {
-      const r = await fetch(`http://127.0.0.1:${port}/json`);
-      targets = await r.json();
-      if (targets.some((t) => t.type === 'page')) break;
-    } catch {
-      /* not up yet */
+      const get = async (path) => {
+        const r = await fetch(`http://127.0.0.1:${port}${path}`, { signal: AbortSignal.timeout(1000) });
+        if (!r.ok) throw new Error(`CDP HTTP ${r.status}`);
+        return r.json();
+      };
+      const targets = await get('/json');
+      // Windows de-elevation can replace the startup URL with chrome://newtab/.
+      // Validate the listener's OS identity before accepting any of its pages.
+      if (process.platform === 'win32') windowsOwner(bin, profile, port);
+      const pageMarker = process.platform === 'win32' ? targets.find((t) => t.type === 'page')?.url : marker;
+      const page = selectPage(targets, pageMarker, port);
+      const version = (await get('/json/version')).Browser;
+      if (!version) throw new Error('Missing browser version');
+      const ownerPid = process.platform === 'win32' ? windowsOwner(bin, profile, port) : proc.pid;
+      const ownedProc = { pid: ownerPid, kill: () => {
+        if (process.platform !== 'win32') return proc.kill();
+        if (windowsOwner(bin, profile, port) !== ownerPid) throw new Error('Browser owner changed; refusing cleanup');
+        process.kill(ownerPid);
+        return true;
+      } };
+      return { proc: ownedProc, bin, version, profile, port, wsUrl: page.webSocketDebuggerUrl };
+    } catch (error) {
+      lastError = error;
     }
     await sleep(250);
   }
-  const page = targets?.find((t) => t.type === 'page');
-  if (!page) {
-    proc.kill();
-    const how = exited ? `exited (code ${exited.code}, signal ${exited.signal})` : 'still running after 30 s';
-    throw new Error(`${bin} did not expose a page target on port ${port}: ${how}${stderr.trim() ? `\n--- browser stderr (tail) ---\n${stderr.trim()}` : ''}`);
-  }
-  let version = '';
-  try {
-    version = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).Browser ?? '';
-  } catch {
-    /* informational only */
-  }
-  return { proc, bin, version, wsUrl: page.webSocketDebuggerUrl };
+  // Ownership was not established: leave processes intact and report the exact
+  // profile for investigation instead of killing a stale/reused PID or retrying.
+  const how = exited ? `wrapper exited (code ${exited.code}, signal ${exited.signal})` : 'launch timed out';
+  throw new Error(`${bin} did not expose an owned page on port ${port}: ${how}; profile=${profile}; ${lastError?.message ?? spawnError?.message ?? ''}\n${stderr.trim()}`);
 }

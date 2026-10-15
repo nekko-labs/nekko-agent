@@ -267,6 +267,13 @@ export function addPane(root: WbNode | null, pane: WbPane, aspect = DEFAULT_ASPE
   return root;
 }
 
+/** Add or select a toolbar window without replacing an unchanged wall/tree. */
+export function openWallPane(state: CommandWallState, kind: PaneKind, refId: string, aspect = DEFAULT_ASPECT): CommandWallState {
+  const root = hasPane(state.root, kind, refId) ? state.root : addPane(state.root, wallPane(kind, refId), aspect);
+  const hero = kind === 'chat' ? refId : state.hero;
+  return root === state.root && hero === state.hero ? state : { ...state, root, hero };
+}
+
 export function addPanes(root: WbNode | null, panes: WbPane[], aspect = DEFAULT_ASPECT): WbNode | null {
   return panes.reduce<WbNode | null>((tree, p) => addPane(tree, p, aspect), root);
 }
