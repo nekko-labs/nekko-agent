@@ -40,6 +40,16 @@
     }
   },
   {
+    "name": "llamacpp-engine-rows",
+    "provider": "llamacpp",
+    "responses": {
+      "http://127.0.0.1:11500/v1/models": {
+        "status": 200,
+        "body": "{\"data\":[{\"id\":\"lmstudio/lmstudio-community/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M\",\"name\":\"Qwen3 8B\",\"path\":\"D:/models/lmstudio-community/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf\",\"location\":\"LM Studio\",\"state\":\"loaded\",\"max_context_length\":40960},{\"id\":\"gemma\",\"name\":\"Gemma\",\"path\":\"/m/gemma.gguf\",\"state\":\"not-loaded\"},{\"id\":\"bare\"}]}"
+      }
+    }
+  },
+  {
     "name": "openai-compat-no-data",
     "provider": "openai-compat",
     "responses": {

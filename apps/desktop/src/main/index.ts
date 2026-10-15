@@ -442,7 +442,6 @@ app.whenReady().then(async () => {
       update: patch => service.call(IpcChannels.settingsUpdate, patch),
       serviceRunning: () => service.running,
       quit: () => app.quit(),
-      openSettings: () => deliverLink('nekko-agent://settings'),
       onError: message => dialog.showErrorBox('Nekko Agent', message),
     });
   }

@@ -118,6 +118,46 @@
       }
     ]
   },
+  "llamacpp-engine-rows": {
+    "requests": [
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:11500/v1/models",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer engine-token"
+        },
+        "body": null
+      }
+    ],
+    "models": [
+      {
+        "id": "lmstudio/lmstudio-community/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M",
+        "providerId": "llamacpp",
+        "name": "Qwen3 8B",
+        "contextLength": 40960,
+        "details": {
+          "path": "D:/models/lmstudio-community/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+          "location": "LM Studio"
+        },
+        "loaded": true
+      },
+      {
+        "id": "gemma",
+        "providerId": "llamacpp",
+        "name": "Gemma",
+        "details": {
+          "path": "/m/gemma.gguf"
+        },
+        "loaded": false
+      },
+      {
+        "id": "bare",
+        "providerId": "llamacpp",
+        "name": "bare"
+      }
+    ]
+  },
   "openai-compat-no-data": {
     "requests": [
       {

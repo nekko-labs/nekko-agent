@@ -118,7 +118,7 @@ import { indexWorkspace, getIndexStatus, searchWorkspace, listIndexedFiles } fro
 import { readFile, writeFile, listDir } from './files.js';
 import { getGitStatus } from './git.js';
 import { listChanges, acceptChange, acceptAllChanges, notifyChanges, setChangeNotifier } from './changes.js';
-import { listSessionPrs, getPrDiff, prAction, fetchPrInfo } from './pr.js';
+import { listSessionPrs, getPrDiff, prAction, fetchPrInfo, branchPrHead } from './pr.js';
 import { continuePrStack, linkPrStack } from './pr-stacks.js';
 import { configureAgentWatches, listAgentWatchViews, nextAgentWatchAt } from './agent-watches.js';
 import { listComments, addComment, resolveComment } from './comments.js';
@@ -175,7 +175,7 @@ import {
   reconcileWorkflowRuns,
   WebhookUnauthorizedError,
 } from './workflows.js';
-import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
+import { listChatWorktrees, removeChatWorktree, removeMergedChatWorktrees } from './chat-worktrees.js';
 import { adoptAdmittedTurn, connectorSnippetsFor, indexSnippetsForAdmission, isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
 import { daemonOwns as daemonServes, loopLog } from './daemon-caps.js';
@@ -732,6 +732,22 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     startWorkflowScheduler();
     startWorkflowListeners();
   });
+  // A chat's worktree is removed once its branch's PR has merged (Settings >
+  // Git management, on by default). Clean, idle checkouts only; see
+  // removeMergedChatWorktrees. First pass a minute after launch, then hourly.
+  {
+    let sweeping = false;
+    const sweep = async () => {
+      if (sweeping) return;
+      sweeping = true;
+      try {
+        const removed = await removeMergedChatWorktrees(getSettings(), chatOwner, branchPrHead);
+        for (const r of removed) console.log(`[worktrees] removed ${r.root} (${r.branch}): its PR merged`);
+      } catch { /* retried on the next pass */ } finally { sweeping = false; }
+    };
+    setTimeout(() => void sweep(), 60_000).unref?.();
+    setInterval(() => void sweep(), 60 * 60_000).unref?.();
+  }
 
   const findProvider = (id: string) => getSettings().providers.find((p) => p.id === id);
   /** A provider switched off on the Models page is never contacted or launched. */

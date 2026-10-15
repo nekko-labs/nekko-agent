@@ -31,6 +31,7 @@ import {
   type CommandWallState,
 } from '../commandWall.js';
 import { useStore, type Workspace } from '../store.js';
+import { foldWindow, growWindow, mostOverlapping, outerSide, type Box } from '../wallMotion.js';
 import { ChatPane } from './ChatPane.js';
 import { FilePane } from './FilePane.js';
 import { ExplorerPane } from './ExplorerPane.js';
@@ -500,6 +501,44 @@ export function CommandWall({
     return () => { cancelAnimationFrame(id); setUnparked(undefined); };
   }, [state.layout.mode]);
 
+  // Opening and closing a window is one push (wallMotion.ts): the windows
+  // beside it slide on their transition while it opens out of, or folds into,
+  // its outer edge in step. Only for windows that joined or left the wall
+  // itself, never for a filter, a layout switch or the first paint.
+  const pushStageRef = useRef<HTMLDivElement>(null);
+  const leavingRef = useRef<HTMLDivElement>(null);
+  const lastPush = useRef<{ ids: Set<string>; boxes: ReadonlyMap<string, Box>; els: Map<string, HTMLElement>; mode: string } | null>(null);
+  useLayoutEffect(() => {
+    const stage = pushStageRef.current;
+    if (!stage) return;
+    const ids = new Set(allPanes(state.root).map((p) => p.id));
+    const els = new Map<string, HTMLElement>();
+    stage.querySelectorAll<HTMLElement>(':scope > [data-wall-pane]').forEach((el) => els.set(el.dataset.wallPane!, el));
+    const before = lastPush.current;
+    lastPush.current = size.width > 0 ? { ids, boxes: new Map(shownPanes), els, mode: state.layout.mode } : null;
+    if (!before || before.mode !== state.layout.mode || state.layout.mode === 'focus' || snapping) return;
+    for (const id of ids) {
+      if (before.ids.has(id)) continue;
+      const box = shownPanes.get(id);
+      const el = els.get(id);
+      if (!box || !el) continue;
+      // The window whose room it took was pushed away from it.
+      const from = mostOverlapping(box, [...before.boxes].filter(([other]) => ids.has(other)));
+      void growWindow(el, outerSide(box, from ? shownPanes.get(from) : undefined));
+    }
+    const layer = leavingRef.current;
+    if (!layer) return;
+    for (const id of before.ids) {
+      if (ids.has(id)) continue;
+      const box = before.boxes.get(id);
+      const el = before.els.get(id);
+      if (!box || !el) continue;
+      // The window that fills its room grows in from the other side.
+      const into = mostOverlapping(box, [...shownPanes].filter(([other]) => before.ids.has(other)));
+      foldWindow(el, layer, outerSide(box, into ? before.boxes.get(into) : undefined));
+    }
+  });
+
   const titleOf = (pane: WbPane): string => {
     if (pane.kind === 'chat') return sessionById.get(pane.refId)?.title ?? 'Chat';
     if (pane.kind === 'terminal') return terminalById.get(pane.refId)?.title || 'Terminal';
@@ -682,7 +721,9 @@ export function CommandWall({
     <div ref={wrapRef} className="command-wall-layout" data-command-wall="windows" data-wall-layout={state.layout.mode}>
       {companionNotice && <div className="command-wall-notice" role="status">A companion opened in a narrow window. <button onClick={() => { focusWindow(companionNotice); setCompanionNotice(null); }}>Focus {titleOf(companionNotice)}</button><button aria-label="Dismiss companion notice" onClick={() => setCompanionNotice(null)}>×</button></div>}
       <div className="command-wall-stage" data-wall-vacant={!addContent && !state.root || undefined} style={{ height: Math.max(geometry.height, addContent ? geometry.add.y + createHeight + 64 : 0), width: size.width }}>
-        <div className="command-wall-pane-stage" style={{ position: 'absolute', inset: 0, top: 0 }}>
+        <div ref={pushStageRef} className="command-wall-pane-stage" style={{ position: 'absolute', inset: 0, top: 0 }}>
+        {/* Closing windows fold away here, under the live ones; React never renders into it. */}
+        <div ref={leavingRef} className="command-wall-leaving" aria-hidden />
         {/* Grid's unfilled squares, drawn under the windows as quiet hatching. */}
         {state.layout.mode === 'fixed' && geometry.panes.size > 0 && geometry.empty.map((r, i) => (
           <div key={`empty-${i}`} className="command-wall-empty-cell" aria-hidden data-wall-empty-cell style={{ left: r.x, top: r.y, width: r.width, height: r.height }} />

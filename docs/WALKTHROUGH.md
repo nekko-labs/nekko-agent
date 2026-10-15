@@ -87,6 +87,9 @@ list dirs, run shell commands).
 - Assistant messages render **markdown and code**; every **tool call** the model
   makes shows up as a card so you can see exactly what it did.
 - Streaming is live; hit **Stop** to abort a turn.
+- **Tools** (in the agent window's footer) lists the agent's tools by category: File system, Shell & processes, Desktop, Online, Agent and MCP servers. Turn single tools or a whole group on or off for this chat.
+- The **globe** beside it blocks the internet for this chat (local models only). Online tools (fetching pages, the browser), MCP servers, connectors and sub-agents are turned off; file, shell and desktop tools keep working. Shell commands are not network-sandboxed, so a command can still reach the network.
+- In the model picker, a local model shows its short name with the file it lives in beneath.
 - Answers to the agent's clarification questions stay visible in the chat as Q/A replies, including when reopening an existing conversation. Selected choices and your typed note remain visible; skipped questions say they were not answered. These reply rows do not create another prompt or offer edit/rewind actions.
 
 **Keyboard shortcuts**: Nekko Agent has a command palette (think Cmd-K everywhere):
@@ -108,7 +111,7 @@ list dirs, run shell commands).
 
 The Agents toolbar provides direct **New agent**, **New image session** and **New terminal** actions, with no ellipsis or overflow button. The empty wall can still open the full window picker. Its Chat, Media and Terminal categories remain horizontal; opening it does not change the wall layout.
 
-Each repository heading in the Agent panel also has a **plus** button for a new agent chat and a **terminal** button for a new shell in that repository. These actions use the repository you clicked, not another selected or default folder. In Focus, the new window becomes visible; other layout modes stay unchanged. On narrow screens, the agent list closes after successful creation so it does not cover the result. If a wall filter would hide the window, it switches to All. The controls wait for creation to finish before accepting another click for the same repository, and failures show an error you can act on and retry.
+Each repository heading in the Agent panel also has a **plus** button for a new agent chat and a **terminal** button for a new shell in that repository. These actions use the repository you clicked, not another selected or default folder. In Focused view, the new window becomes visible; other layout modes stay unchanged. On narrow screens, the agent list closes after successful creation so it does not cover the result. If a wall filter would hide the window, it switches to All. The controls wait for creation to finish before accepting another click for the same repository, and failures show an error you can act on and retry.
 
 Utilization shows a Claude subscription account once when provider entries share the same token key, preferring the Anthropic entry. Independent accounts and API entries remain separate. In Budget, choose today, 1wk, 1m, 6m, 1y or all-time; the active range is tinted. Spend, tokens, top agent, local tokens, savings and compared model membership all follow that UTC range, not lifetime totals. See [usage limits and prices](/docs/usage-limits).
 
@@ -285,5 +288,7 @@ Changes is the leftmost header control. When the agent edits files it glows and 
 ## Reports and artifacts in chat
 
 Local document links in assistant replies appear as artifact cards beneath the response. The descriptive report title appears above its filename, so a README can still be recognizable. Select a card or document link to open it in the originating chat—not another chat that happens to have the file open.
+
+The **Artifacts** tab on the left rail collects what agents made across all your chats: documents, web pages, designs, diagrams, data and office files, grouped by kind. Pick one to preview it, **Open file** to hand it to its usual app, or **Open chat** to see the chat it came from on the Agents wall in Focused view. Source code the agent edits is not listed.
 
 At the top of **This prompt**, expand **Artifacts** to see the session’s linked documents. It starts collapsed and always displays a count, including 0. Repeated links to the same path are listed once. Documents are not read until you open them; host previews remain unavailable in Sandbox.

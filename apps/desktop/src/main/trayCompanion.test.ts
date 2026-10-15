@@ -9,23 +9,33 @@ vi.mock('electron', () => ({
     constructor(public options: unknown) { mock.windows.push(this); }
   },
 }));
-import { companionBounds, companionHtml, createTrayCompanion } from './trayCompanion.js';
+import { GUIDANCE_MS, companionBounds, companionHtml, createTrayCompanion } from './trayCompanion.js';
 import type { AppSettings } from '@nekko-agent/shared';
 import type { Tray } from 'electron';
 const setup = (settings: Partial<AppSettings> = {}) => {
-  const options = { tray: { setToolTip: vi.fn(), getBounds: () => ({ x: 1700, y: 1040, width: 20, height: 20 }), displayBalloon: vi.fn() } as unknown as Tray, settings: vi.fn().mockResolvedValue(settings), update: vi.fn().mockResolvedValue({}), quit: vi.fn(), openSettings: vi.fn(), serviceRunning: () => true, onError: vi.fn() };
+  const options = { tray: { setToolTip: vi.fn(), getBounds: () => ({ x: 1700, y: 1040, width: 20, height: 20 }), displayBalloon: vi.fn() } as unknown as Tray, settings: vi.fn().mockResolvedValue(settings), update: vi.fn().mockResolvedValue({}), quit: vi.fn(), serviceRunning: () => true, onError: vi.fn() };
   return { options, companion: createTrayCompanion(options), hide: vi.fn() };
 };
 afterEach(() => { mock.windows.length = 0; vi.useRealTimers(); });
 describe('tray companion', () => {
-  it('persists the first-close hint and offers a shutdown shortcut without auto-dismissing guidance', async () => {
+  it('persists the first-close hint, offers a shutdown shortcut and an X, and dismisses itself after 15 s', async () => {
     vi.useFakeTimers(); const { options, companion, hide } = setup();
     await companion.closeWindow(hide);
     expect(options.update).toHaveBeenCalledWith({ trayCloseHintSeen: true });
     expect(hide).toHaveBeenCalledOnce();
     const win = mock.windows[0];
-    expect(decodeURIComponent(win.loadURL.mock.calls[0][0])).toContain('Shut down on close instead');
-    vi.advanceTimersByTime(2100); expect(win.destroy).not.toHaveBeenCalled();
+    const html = decodeURIComponent(win.loadURL.mock.calls[0][0]);
+    expect(html).toContain('Shut down on close instead');
+    expect(html).toContain('aria-label="Dismiss"');
+    expect(html).not.toContain('Settings');
+    vi.advanceTimersByTime(GUIDANCE_MS - 1); expect(win.destroy).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1); expect(win.destroy).toHaveBeenCalledOnce();
+    companion.dispose();
+  });
+  it('offers the shutdown shortcut from the guidance', async () => {
+    const { options, companion, hide } = setup();
+    await companion.closeWindow(hide);
+    const win = mock.windows[0];
     const navigate = win.webContents.on.mock.calls.find((c: any[]) => c[0] === 'will-navigate')[1];
     navigate({ preventDefault: vi.fn() }, 'https://nekko.invalid/shutdown');
     await Promise.resolve();
@@ -59,5 +69,7 @@ describe('tray companion', () => {
     expect(companionHtml(true, false, false)).not.toContain('<svg');
     expect(companionHtml(true, true, false)).toContain('service is currently stopped');
     expect(companionHtml(false, true, true)).toContain('prefers-reduced-motion');
+    // Clipped rather than scrolled: the window is sized to fit its content.
+    expect(companionHtml(true, true, true)).toContain('html,body{height:100%;overflow:hidden}');
   });
 });

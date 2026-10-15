@@ -1,4 +1,12 @@
 import { BrowserWindow, desktopCapturer } from 'electron';
+import { hwndFromSourceId, printWindowCapture, type PrintWindowResult } from './printWindowCapture.js';
+
+/** Raised inside the recorder page when WGC refuses the window, so the fallback can tell it apart. */
+const REFUSED_MARKER = 'NEKKO_CAPTURE_REFUSED';
+const REFUSED_MESSAGE = 'The OS refused to capture the selected window; it may be elevated, protected or closed';
+let printWindow: (hwnd: string) => Promise<PrintWindowResult> = (hwnd) => printWindowCapture(hwnd);
+/** Tests only. */
+export function __setPrintWindow(fn: (hwnd: string) => Promise<PrintWindowResult>): void { printWindow = fn; }
 
 const selections = new Map<string, Map<string, string>>();
 let recording = false;
@@ -86,8 +94,19 @@ export async function captureWindow(sessionId: string, input: Record<string, unk
         const { width, height } = track.getSettings();
         return { data, width, height };
       } finally { stream.getTracks().forEach(t => t.stop()); }
-    })().catch(e => { throw new Error(e && e.name === 'NotReadableError' ? 'The OS refused to capture the selected window; it may be elevated, protected or closed' : String(e && e.message || e)); })`, true);
-    return { ...result, title, window_id: id, capturedAt: Date.now(), ...(action === 'screenshot' ? { mime: 'image/png', source: 'native-window', background: true } : { seconds, mime: 'video/webm' }) };
+    })().catch(e => { throw new Error(e && e.name === 'NotReadableError' ? '${REFUSED_MARKER}' : String(e && e.message || e)); })`, true).catch(async (e: Error) => {
+      // Windows Graphics Capture refuses some ordinary windows (Windows
+      // Terminal among them). For a screenshot, GDI PrintWindow can still
+      // render them in the background; it keeps every deliberate refusal.
+      if (!String(e?.message).includes(REFUSED_MARKER)) throw e;
+      const hwnd = action === 'screenshot' && process.platform === 'win32' ? hwndFromSourceId(id) : null;
+      if (!hwnd) throw new Error(action === 'record' ? `${REFUSED_MESSAGE}. Recording has no background fallback; a screenshot may still work` : REFUSED_MESSAGE);
+      const fallback = await printWindow(hwnd);
+      if (!fallback.ok) throw new Error(fallback.message);
+      return { data: fallback.data, width: fallback.width, height: fallback.height, fallback: true };
+    });
+    const { fallback, ...frame } = result as { fallback?: boolean; data: string; width: number; height: number };
+    return { ...frame, title, window_id: id, capturedAt: Date.now(), ...(action === 'screenshot' ? { mime: 'image/png', source: fallback ? 'native-window-printwindow' : 'native-window', background: true } : { seconds, mime: 'video/webm' }) };
   } finally {
     try {
       if (win && !win.isDestroyed()) {

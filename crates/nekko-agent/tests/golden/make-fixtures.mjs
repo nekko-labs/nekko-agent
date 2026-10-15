@@ -698,6 +698,21 @@ const models = [
   },
   { name: 'vllm', provider: 'vllm', responses: { 'http://localhost:8000/v1/models': json({ object: 'list', data: [{ id: 'Qwen/Qwen3-8B', max_model_len: 32768 }] }) } },
   { name: 'llamacpp-bare-url', provider: 'llamacpp', responses: { 'http://127.0.0.1:11500/v1/models': json({ data: [{ id: 'gemma-4-12b' }] }) } },
+  // The Nekko engine's rows: a friendly name, the file it lives in, the folder
+  // provider it came from, and its load state.
+  {
+    name: 'llamacpp-engine-rows',
+    provider: 'llamacpp',
+    responses: {
+      'http://127.0.0.1:11500/v1/models': json({
+        data: [
+          { id: 'lmstudio/lmstudio-community/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M', name: 'Qwen3 8B', path: 'D:/models/lmstudio-community/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf', location: 'LM Studio', state: 'loaded', max_context_length: 40960 },
+          { id: 'gemma', name: 'Gemma', path: '/m/gemma.gguf', state: 'not-loaded' },
+          { id: 'bare' },
+        ],
+      }),
+    },
+  },
   { name: 'openai-compat-no-data', provider: 'openai-compat', responses: { 'http://10.5.0.2:1338/v1/models': json({ object: 'list' }) } },
   {
     name: 'lmstudio-native',

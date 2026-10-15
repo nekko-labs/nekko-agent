@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import type { AppSettings, Session } from '@nekko-agent/shared';
-import { chatWorkspaces, listChatWorktrees, prepareChatWorktrees, removeChatWorktree, runWorktreeSetup, slugifyTitle, worktreeName } from './chat-worktrees.js';
+import { chatWorkspaces, listChatWorktrees, prepareChatWorktrees, removeChatWorktree, removeMergedChatWorktrees, runWorktreeSetup, slugifyTitle, worktreeName } from './chat-worktrees.js';
 
 let root: string;
 let settings: AppSettings;
@@ -130,6 +130,55 @@ it('lists, removes, and restores chat worktrees without losing work', () => {
   git('merge', '--ff-only', branch!);
   expect(removeChatWorktree(settings, wt, owner)).toEqual({ branchDeleted: true });
   expect(() => removeChatWorktree(settings, root, owner)).toThrow(/not a chat worktree/);
+});
+it('removes the worktree and branch of a merged PR, and leaves everything else', async () => {
+  const merged = session('s_merged'), open = session('s_open'), dirty = session('s_dirty'), busy = session('s_busy');
+  const reused = session('s_reused'), after = session('s_after');
+  const all4 = [merged, open, dirty, busy, reused, after];
+  for (const s of all4) prepareChatWorktrees(s, settings);
+  const at = (s: Session) => s.gitWorktrees!.repo;
+  const commit = (s: Session, name: string) => {
+    writeFileSync(join(at(s).root, name), 'work\n');
+    execFileSync('git', ['add', '.'], { cwd: at(s).root });
+    execFileSync('git', ['commit', '-m', name], { cwd: at(s).root });
+    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: at(s).root, encoding: 'utf8' }).trim();
+  };
+  // Squash-merged work: Git still sees the branch as unmerged. GitHub reports
+  // the head commit each PR merged with.
+  const heads = new Map<Session, string>();
+  for (const s of all4) heads.set(s, commit(s, `${s.id}.txt`));
+  // The merged PR was an older one of the same name: its head is not this tip.
+  heads.set(reused, 'a'.repeat(40));
+  // Work committed after the PR merged.
+  commit(after, 'after-merge.txt');
+  writeFileSync(join(at(dirty).root, 'file.txt'), 'not committed\n');
+  const owner = (wt: string) => {
+    const s = all4.find((x) => at(x).root === wt);
+    return s ? { id: s.id, title: s.id, running: s === busy } : null;
+  };
+  const asked: string[] = [];
+  const pr = async (_cwd: string, branch: string) => {
+    asked.push(branch);
+    const s = all4.find((x) => at(x).branch === branch)!;
+    return { state: s === open ? 'open' as const : 'merged' as const, headOid: heads.get(s)! };
+  };
+
+  const removed = await removeMergedChatWorktrees(settings, owner, pr);
+  expect(removed.map((r) => r.sessionId)).toEqual(['s_merged']);
+  expect(existsSync(at(merged).root)).toBe(false);
+  expect(git('branch', '--list', at(merged).branch!).trim()).toBe('');
+  // Kept: an open PR, uncommitted edits, a running chat (the last two are not
+  // even asked about), a reused branch name and work committed after the merge.
+  for (const s of [open, dirty, busy, reused, after]) expect(existsSync(at(s).root)).toBe(true);
+  for (const s of [reused, after]) expect(git('branch', '--list', at(s).branch!).trim()).not.toBe('');
+  expect(asked).not.toContain(at(dirty).branch);
+  expect(asked).not.toContain(at(busy).branch);
+
+  // Off in Settings, or a lookup that fails: nothing is removed.
+  const all = async (cwd: string) => ({ state: 'merged' as const, headOid: execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim() });
+  expect(await removeMergedChatWorktrees({ ...settings, gitManagement: { removeMerged: false } }, owner, all)).toEqual([]);
+  expect(await removeMergedChatWorktrees(settings, owner, async () => { throw new Error('offline'); })).toEqual([]);
+  expect(existsSync(at(open).root)).toBe(true);
 });
 it('runs setup commands and reports failures without throwing', async () => {
   let out = '';

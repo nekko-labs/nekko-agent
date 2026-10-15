@@ -249,7 +249,8 @@ describe('workspace companions and stable bodies', () => {
     expect(source).toContain("surface={fullSurface ? 'full' : 'transcript'}");
     expect(source).toContain('useStore.getState().closePane(companion.id)');
     expect(source).not.toContain('inert={folded');
-    expect(css).toContain('transition: left 260ms ease');
+    expect(css).toContain('transition: left var(--wall-push-ms) var(--wall-push-ease)');
+    expect(css).toContain('--wall-push-ms: 280ms; --wall-push-ease: cubic-bezier(.22, 1, .36, 1);');
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
     expect(css).toContain('.command-wall-window, .command-wall-add { transition: none; }');
     expect(source).toContain("matches ? 'auto' : 'smooth'");
