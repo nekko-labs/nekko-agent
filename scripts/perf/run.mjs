@@ -346,7 +346,10 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
     const a = await shown();
     await sleep(400);
     const b = await shown();
-    if (!(b > a)) throw new Error(`the reply is not streaming onto the screen (${a} -> ${b} chars)`);
+    if (!(b > a)) {
+      writeFileSync(join(OUT, 'stream-growth-failure.json'), JSON.stringify(await cdp.evaluate(`(() => ({ panels: [...document.querySelectorAll('.panel')].map(p => ({ visible: p.checkVisibility(), composer: !!p.querySelector('textarea, .composer [contenteditable]')?.checkVisibility(), replies: [...p.querySelectorAll('.msg-ai')].map(e => ({ length: e.textContent.length, tail: e.textContent.slice(-100), visible: e.checkVisibility() })), scrollers: [...p.querySelectorAll('.overflow-y-auto')].map(e => ({ top: e.scrollTop, height: e.scrollHeight, client: e.clientHeight })) })) }))()`), null, 2));
+      throw new Error(`the reply is not streaming onto the screen (${a} -> ${b} chars)`);
+    }
   };
 
   return { cdp, browser, close, waitFor, clickEl, openChat, switchTo, startStream, framePump };
@@ -491,6 +494,17 @@ async function measureFrames({ appUrl, mock, api, bigChat }) {
   // The latency phase left a reply of its own at the end of this chat.
   await paced.openChat(0, '');
   await paced.startStream(mock);
+  if (flag('scheduling')) {
+    const categories = await paced.cdp.send('Tracing.getCategories');
+    const targets = await paced.cdp.call(() => {
+      const inspect = (selector) => [...document.querySelectorAll(selector)].map(el => {
+        const s = getComputedStyle(el), r = el.getBoundingClientRect();
+        return { tag: el.tagName, animation: s.animationName, transition: s.transitionProperty, duration: s.transitionDuration, visible: r.width > 0 && r.height > 0 };
+      });
+      return { context: inspect('.context-bar > [aria-hidden]'), rocket: inspect('.status-rocket, .status-rocket svg, .status-rocket .rocket-flame, .status-rocket .rocket-streak') };
+    });
+    writeFileSync(join(OUT, 'diagnostic-targets.json'), JSON.stringify({ categories, targets }, null, 2));
+  }
   const traceEvents = [];
   const offData = paced.cdp.on('Tracing.dataCollected', (p) => { for (const e of p.value) traceEvents.push(e); });
   const traced = new Promise((r) => { const off = paced.cdp.on('Tracing.tracingComplete', () => { off(); r(); }); });
@@ -498,7 +512,7 @@ async function measureFrames({ appUrl, mock, api, bigChat }) {
     transferMode: 'ReportEvents',
     traceConfig: {
       recordMode: 'recordContinuously',
-      includedCategories: ['toplevel', 'devtools.timeline', 'disabled-by-default-devtools.timeline.frame', '__metadata', ...(flag('invalidation') ? ['disabled-by-default-devtools.timeline.invalidationTracking'] : [])],
+      includedCategories: ['toplevel', 'devtools.timeline', 'disabled-by-default-devtools.timeline.frame', '__metadata', ...(flag('scheduling') ? ['cc', 'viz', 'gpu', 'benchmark', 'disabled-by-default-cc.debug.scheduler'] : []), ...(flag('invalidation') ? ['disabled-by-default-devtools.timeline.invalidationTracking'] : [])],
     },
   });
   if (flag('profile')) await startProfile(paced.cdp);

@@ -111,6 +111,8 @@ export async function launchBrowser({ port, width, height, vsync = false, gpu = 
 async function launchOnce(bin, { port, width, height, vsync, gpu }) {
   const profile = mkdtempSync(join(tmpdir(), 'nekko-perf-browser-'));
   const args = [
+    // Prevent Windows Chrome from re-launching outside the owned process tree.
+    ...(process.platform === 'win32' ? ['--do-not-de-elevate'] : []),
     '--headless=new',
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${profile}`,
