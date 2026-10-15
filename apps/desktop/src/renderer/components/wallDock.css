@@ -114,7 +114,12 @@
 .wall-dock__reading { color: var(--ink-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
 .wall-dock__resize { position: absolute; top: 0; bottom: 0; left: -9px; width: 10px; cursor: col-resize; touch-action: none; }
 .wall-dock[data-dock-side='left'] .wall-dock__resize { left: auto; right: -9px; }
-.wall-dock__resize:hover, .wall-dock__resize:focus-visible { background: var(--accent-soft); outline: none; border-radius: 4px; }
+/* The same grip as the agent list's resize handle (WorkspacesView): a 3px
+   rounded line centred in the gap, hidden until hover or focus. */
+.wall-dock__resize:focus-visible { outline: none; }
+.wall-dock__grip { position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; transform: translateX(-50%); border-radius: 999px; opacity: 0; transition: opacity 150ms ease; pointer-events: none; }
+.wall-dock__resize:hover > .wall-dock__grip, .wall-dock__resize:focus-visible > .wall-dock__grip, .wall-dock__resize:active > .wall-dock__grip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .wall-dock__grip { transition: none; } }
 @media (max-width: 767px) { .wall-dock__resize { display: none; } }
 @media (prefers-reduced-motion: reduce) { .wall-dock__minimized button { animation: none; } }
 
