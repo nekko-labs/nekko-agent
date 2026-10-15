@@ -1,5 +1,6 @@
 import { anthropicCachePrefix, tokenCount } from './prompt-caching.js';
 import { withToolImages } from './tool-images.js';
+import { normalizeAnthropicImages } from './anthropic-images.js';
 import type { ModelAvailability, ModelInfo, ProviderConfig, ToolCall } from '@nekko-agent/shared';
 import { claudeContextWindow, claudeMaxOutputTokens, effectiveEffort, modelEffortLevels, parseClaudeModel } from '@nekko-agent/shared';
 import type { Provider, ChatRequest, ProviderChunk } from './types.js';
@@ -316,6 +317,7 @@ export class AnthropicProvider implements Provider {
         : shape === 'temperature'
           ? { temperature: req.temperature ?? 0.7 }
           : {};
+    const messages = await normalizeAnthropicImages(this.toAnthropicMessages(req));
     const send = (shape: SamplingShape) =>
       fetch(`${this.config.baseUrl}/v1/messages`, {
         method: 'POST',
@@ -329,7 +331,7 @@ export class AnthropicProvider implements Provider {
           stream: true,
           ...knob(shape),
           system: this.systemParam(req.system),
-          messages: this.toAnthropicMessages(req),
+          messages,
           tools: req.tools?.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })),
         }, req.promptCaching)),
         signal: req.signal,
