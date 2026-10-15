@@ -109,7 +109,7 @@ export function routingPrompt(providers: Array<Pick<ProviderConfig, 'id' | 'labe
   ].join('\n');
 }
 
-export const AGENT_WATCH_INSTRUCTIONS = 'When work must wait for PR checks or another background task, register agent_watch before ending the turn. State its id and wake condition; do not claim to be watching unless registration succeeded. Use a deadline so waiting cannot silently last forever. On wake, verify current status and re-arm if necessary. Do not register automatic continuations when waiting for a user decision, missing permission, credentials, or visual evidence that requires human action.';
+export const AGENT_WATCH_INSTRUCTIONS = 'Do not wait on PR checks to verify: run tests, visual checks and evidence while CI runs, and use the wait to finish remaining work (docs, spec, evidence, cleanup, the next independent task). When something still depends on a check or another background task, register agent_watch before ending the turn. State its id and wake condition; do not claim to be watching unless registration succeeded. Use a deadline so waiting cannot silently last forever. On wake, verify current status and re-arm if necessary. Do not register automatic continuations when waiting for a user decision, missing permission, credentials, or visual evidence that requires human action.';
 
 export const SANDBOX_INSTRUCTIONS = 'Sandbox: only folder-N copied paths are accessible. All tool actions require approval. No host controls, networking, MCP, delegation or host fallback.';
 
