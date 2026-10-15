@@ -1670,3 +1670,7 @@ Ask: rather than copying many skills into the bundled catalog, let users find sk
 - [x] Bias desktop rail destinations upward with 1:3 free-space distribution and short-window scrolling.
 - [x] Check source-derived isolated layouts at 600/1000/1400 px, dark/light: all six move upward and retain eleven full-size visible destinations.
 - [ ] Inspect matching native before/after captures, hover/focus expansion and short-window scroll recording; OS native capture currently refuses isolated windows.
+
+### Effort default on its own rung (2026-10-16)
+- [x] Native-effort Claude models show Default on the rung it resolves to instead of a separate stop left of Low (ported from the stale gentle-sage-wren WIP; its window title, sub-agent chip and folder chip parts were superseded on main). See SPEC.md: Effort that follows the model.
+- [ ] Matched before/after desktop captures of the composer and Add window effort slider for Opus 5.5 and Opus 5.
