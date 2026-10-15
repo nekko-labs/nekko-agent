@@ -9,6 +9,21 @@ const base = !!process.env.NEKKO_TEST_REVISION;
 app.setPath('userData', path.join(out, 'profile'));
 app.setPath('sessionData', path.join(out, 'profile'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const UNSAFE_JS_CHAR_MAP = {
+  '<': '\\u003C',
+  '>': '\\u003E',
+  '/': '\\u002F',
+  '\\': '\\\\',
+  '\b': '\\b',
+  '\f': '\\f',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t',
+  '\0': '\\0',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029',
+};
+const escapeUnsafeChars = (str) => str.replace(/[<>/\\\b\f\n\r\t\0\u2028\u2029]/g, (x) => UNSAFE_JS_CHAR_MAP[x]);
 
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((request, done) => done({ cancel: !/^(file:|data:|blob:)/.test(request.url) }));
@@ -33,7 +48,7 @@ app.whenReady().then(async () => {
     report.captures.push(file);
   };
   const settingsCalls = "integration.calls.filter((c) => c.method === 'settings' && c.patch && 'commandWall' in c.patch).length";
-  const card = (title) => `[...document.querySelectorAll('div[role=button]')].find((c) => c.getAttribute('title')?.includes(${JSON.stringify(title)}))`;
+  const card = (title) => `[...document.querySelectorAll('div[role=button]')].find((c) => c.getAttribute('title')?.includes(${escapeUnsafeChars(JSON.stringify(title))}))`;
   const clickCard = async (title) => { await run(`${card(title)}.click()`); await sleep(100); };
   /** Wall saves the host saw within the 600 ms settle delay after `action`. */
   const savesAfter = async (action) => { const before = await run(settingsCalls); await action(); await sleep(1100); return (await run(settingsCalls)) - before; };
