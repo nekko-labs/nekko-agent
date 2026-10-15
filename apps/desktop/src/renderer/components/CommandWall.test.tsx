@@ -222,7 +222,8 @@ describe('workspace companions and stable bodies', () => {
     fixture.workspaces = [workspace];
     try {
       const html = renderToStaticMarkup(wall(state({ folded: { 'chat-a': true }, filter: 'chat' })));
-      expect(html).toContain('aria-label="Expand companions for Chat (4)"');
+      expect(html).not.toContain('Expand companions');
+    expect(html).toContain('title="Zen: focus this window (Ctrl+Shift+1)"');
       expect(html).not.toContain('Collapse Chat');
       expect(html).not.toContain('command-wall-folded');
       expect(html).toContain('draft:chat-a');
@@ -235,7 +236,7 @@ describe('workspace companions and stable bodies', () => {
       expect(html).not.toContain('command-wall-add-rail');
       expect(html).not.toContain('aria-label="Add window"');
       expect(html).toContain('aria-label="Focus Chat"');
-      expect(html).toContain('aria-label="Open Chat in the Agent tab"');
+      expect(html).not.toContain('aria-label="Open Chat in the Agent tab"');
     } finally { fixture.workspaces = []; }
   });
 

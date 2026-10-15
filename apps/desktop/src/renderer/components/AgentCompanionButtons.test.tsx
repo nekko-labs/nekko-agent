@@ -12,7 +12,9 @@ describe('agent companion buttons', () => {
     expect(html).toContain('aria-label="Changes (3)"');
     expect(html).toContain('aria-label="Files"');
     expect(html).toContain('aria-label="Browser"');
-    expect(html).toContain('>3<');
+    expect(html).toContain('>3 files<');
+    expect(html).toContain('agent-changes-pending');
+    expect(html).toContain('+0');
     const none = renderToStaticMarkup(<AgentCompanionButtons sessionId="s" changeCount={0} commandCenter compact={false} />);
     expect(none).toContain('aria-label="Changes"');
   });
