@@ -54,6 +54,10 @@ import com.nekko.android.lock.LocalAppLock
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Pairing
+import com.nekko.android.ui.components.Tone
+import com.nekko.android.ui.components.Notice
+import com.nekko.android.BuildConfig
+import com.nekko.protocol.RelayHint
 import com.nekko.protocol.PairingLink
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -189,6 +193,10 @@ fun PairScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = p.inkSoft,
                     )
+                    // Say now if this relay can't work from a phone, rather than spinning after pairing.
+                    RelayHint.problem(offer.relayUrl, BuildConfig.DEBUG)?.let { problem ->
+                        Notice(RelayHint.message(problem, "your computer"), Tone.DANGER)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = { proposed = null },
