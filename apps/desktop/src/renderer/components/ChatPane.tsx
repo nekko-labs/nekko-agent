@@ -24,7 +24,7 @@ import { usePaneVisible } from '../paneVisibility.js';
 import { afterPaint } from '../afterPaint.js';
 import { chatWelcomeState } from './agent-console/chatWelcome.js';
 import { useAllProviderLimits, useProviderLimits } from '../useLimits.js';
-import { clearDraft, loadDraft, saveDraft } from '../composerDrafts.js';
+import { clearDraft, loadDraft, restoredDraftImages, saveDraft } from '../composerDrafts.js';
 import { indentListSelection } from '../composerLists.js';
 import { draftAfterSkillSelection } from '../composerSkills.js';
 import {
@@ -1262,7 +1262,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     draftLoadedFor.current = sessionId;
     const parked = loadDraft(sessionId);
     setDraft(parked?.text ?? '');
-    setPendingImages(parked?.images ?? []);
+    setPendingImages((current) => restoredDraftImages(current, parked?.images));
   }, [sessionId]);
 
   // Text and images handed over from another chat (Split here) land in this
@@ -1302,7 +1302,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     // Layout cleanup flushes the outgoing composer before the incoming surface restores.
     const parked = loadDraft(sessionId);
     setDraft(parked?.text ?? '');
-    setPendingImages(parked?.images ?? []);
+    setPendingImages((current) => restoredDraftImages(current, parked?.images));
     const flush = () => saveDraft(sessionId, latestDraft.current);
     window.addEventListener('beforeunload', flush);
     return () => { window.removeEventListener('beforeunload', flush); flush(); };
