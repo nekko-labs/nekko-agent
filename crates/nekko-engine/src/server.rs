@@ -252,8 +252,7 @@ fn folder_provider_label(id: &str) -> Option<&'static str> {
 }
 
 /// Why a LAN bind is refused without a key (the UI shows this verbatim).
-pub const LAN_NEEDS_KEY: &str =
-    "Set an API key before making the engine reachable from your network. Without one anything on the network could use these models.";
+pub const LAN_NEEDS_KEY: &str = "Set an API key before making the engine reachable from your network. Without one anything on the network could use these models.";
 
 /// The daemon's listen configuration (`{ port, host, apiKey?, corsOrigins }`)
 /// from the engine settings, or the reason it must not listen. `bind: "lan"`
