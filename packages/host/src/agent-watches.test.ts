@@ -122,6 +122,14 @@ describe('durable agent watches', () => {
     await service.tick();
     expect(service.list().map((w) => w.status)).toEqual(['done', 'active']);
   });
+  it('exposes watch views without continuation prompts', async () => {
+    await service.tool('s', pr);
+    await service.tool('other', { action: 'create', kind: 'timer', prompt: 'Elsewhere', delay_seconds: 60 });
+    const views = service.views('s');
+    expect(views).toHaveLength(1);
+    expect(views[0]).toMatchObject({ kind: 'pr', url: pr.url, status: 'active', deadlineAt: now + 600000, pending: false, failures: 0 });
+    expect(JSON.stringify(views)).not.toContain('Check CI and continue');
+  });
   it('refuses corrupt state instead of overwriting it', async () => {
     writeFileSync(join(dir, 'watches.json'), 'invalid');
     await expect(service.tick()).rejects.toThrow();

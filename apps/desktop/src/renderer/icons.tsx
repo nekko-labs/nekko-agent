@@ -81,6 +81,7 @@ export const BranchIcon = (p: P) => (<S {...p}><circle cx="6" cy="6" r="2.4" /><
 export const WorktreeIcon = (p: P) => (<S {...p}><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h4.5A1.5 1.5 0 0 1 17 8.5V10" /><rect x="7" y="12" width="14" height="8" rx="1.5" /><path d="M5 5v9.5a1.5 1.5 0 0 0 1.5 1.5H7" /></S>);
 export const CloseIcon = (p: P) => (<S {...p}><path d="M18 6 6 18M6 6l12 12" /></S>);
 export const ArchiveIcon = (p: P) => (<S {...p}><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></S>);
+export const BinocularsIcon = (p: P) => (<S {...p}><circle cx="6.5" cy="15.5" r="3.5" /><circle cx="17.5" cy="15.5" r="3.5" /><path d="M10 15.5h4M3 15.5 5 6.5a1.5 1.5 0 0 1 3 0v5.5M21 15.5l-2-9a1.5 1.5 0 0 0-3 0v5.5M8 9h8" /></S>);
 export const RobotIcon = (p: P) => (<S {...p}><rect x="4" y="8" width="16" height="11" rx="2" /><path d="M12 8V4M9 13h.01M15 13h.01M2 13h2M20 13h2" /></S>);
 export const WandIcon = (p: P) => (<S {...p}><path d="m15 4 1 2 2 1-2 1-1 2-1-2-2-1 2-1zM6 13l1.5 3L11 17.5 7.5 19 6 22l-1.5-3L1 17.5 4.5 16zM20 14l.8 1.6L22.5 16l-1.7.4L20 18l-.8-1.6L17.5 16l1.7-.4z" /></S>);
 export const BoltIcon = (p: P) => (<S {...p}><path d="M13 2 4 14h6l-1 8 9-12h-6z" /></S>);
