@@ -53,7 +53,7 @@ export function wallLayoutShortcut(e: Pick<KeyboardEvent, 'code' | 'key' | 'ctrl
  * Dynamic; the even rows and columns read as Grid. Saved values keep their
  * original keys so existing walls load unchanged.
  */
-export const LAYOUT_LABEL: Record<'focus' | 'grid' | 'fixed', string> = { focus: 'Focus', grid: 'Dynamic', fixed: 'Grid' };
+export const LAYOUT_LABEL: Record<'focus' | 'grid' | 'fixed', string> = { focus: 'Focused', grid: 'Dynamic', fixed: 'Grid' };
 
 function layoutShortcutLabel(mode: 'focus' | 'grid' | 'fixed') {
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -312,6 +312,26 @@ export function CommandCenterView() {
     setSelected(id);
     setWall((w) => w.hero === id ? w : { ...w, hero: id });
   }, [setWall]);
+  // Another tab (Artifacts) asked to show a chat here, Focused. Waits for the
+  // lists so the chat is known; a completed chat opens read-only, as the
+  // agent panel opens one.
+  const focusRequest = useStore((s) => s.focusRequest);
+  useEffect(() => {
+    if (!focusRequest || !listsReady) return;
+    useStore.setState({ focusRequest: null });
+    const chat = sessions.find((s) => s.id === focusRequest);
+    if (!chat) { useStore.getState().pushToast('error', 'That chat no longer exists.'); return; }
+    if (chat.archivedAt) { setCompletedId(chat.id); return; }
+    setCompletedId(null);
+    setWall((w) => ({
+      ...w,
+      root: hasPane(w.root, 'chat', chat.id) ? w.root : addPane(w.root, wallPane('chat', chat.id), aspectRef.current),
+      hero: chat.id,
+      filter: w.filter === 'terminal' ? 'all' : w.filter,
+      layout: { ...w.layout, mode: 'focus' },
+    }));
+    setSelected(chat.id);
+  }, [focusRequest, listsReady, sessions, setWall]);
   const agentsOnWall = useMemo(() => wallAgents(wall.root), [wall.root]);
   const panel = readAgentPanel(wall.agentPanel);
   useEffect(() => {

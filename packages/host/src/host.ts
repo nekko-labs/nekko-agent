@@ -118,7 +118,7 @@ import { indexWorkspace, getIndexStatus, searchWorkspace, listIndexedFiles } fro
 import { readFile, writeFile, listDir } from './files.js';
 import { getGitStatus } from './git.js';
 import { listChanges, acceptChange, acceptAllChanges, notifyChanges, setChangeNotifier } from './changes.js';
-import { listSessionPrs, getPrDiff, prAction, fetchPrInfo, branchPr } from './pr.js';
+import { listSessionPrs, getPrDiff, prAction, fetchPrInfo, branchPrHead } from './pr.js';
 import { continuePrStack, linkPrStack } from './pr-stacks.js';
 import { configureAgentWatches, listAgentWatchViews, nextAgentWatchAt } from './agent-watches.js';
 import { listComments, addComment, resolveComment } from './comments.js';
@@ -741,8 +741,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       if (sweeping) return;
       sweeping = true;
       try {
-        const removed = await removeMergedChatWorktrees(getSettings(), chatOwner, async (cwd, branch) => (await branchPr(cwd, branch))?.state ?? null);
-        if (removed.length) events.emit('chatWorktreesRemoved', removed);
+        const removed = await removeMergedChatWorktrees(getSettings(), chatOwner, branchPrHead);
+        for (const r of removed) console.log(`[worktrees] removed ${r.root} (${r.branch}): its PR merged`);
       } catch { /* retried on the next pass */ } finally { sweeping = false; }
     };
     setTimeout(() => void sweep(), 60_000).unref?.();

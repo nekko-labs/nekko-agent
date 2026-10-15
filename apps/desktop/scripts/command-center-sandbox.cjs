@@ -57,7 +57,7 @@ app.whenReady().then(async () => {
     await check('cleanup failure reports reusable session', "document.querySelector('[role=alert]').textContent.includes('Retry will reuse') && integration.records().length===2");
     await run('integration.failures.options=false'); await run("[...document.querySelectorAll('.agent-window-picker button')].find(b=>b.textContent.includes('Create image session')).click()");
     await check('cleanup-failure retry does not duplicate', "!document.querySelector('.agent-window-picker') && integration.calls.filter(c=>c.method==='create').length===1 && integration.state().sessions.filter(s=>s.id==='new-1').length===1");
-    await click('Focus'); await check('Grid to Focus', "document.querySelector('[data-wall-layout]').dataset.wallLayout==='focus'");
+    await click('Focused'); await check('Grid to Focus', "document.querySelector('[data-wall-layout]').dataset.wallLayout==='focus'");
     await click('Dynamic'); await check('Focus to Grid', "document.querySelector('[data-wall-layout]').dataset.wallLayout==='grid'");
     await reset(); await open('Chat');
     await check('long catalog scrolls inside fieldset without covering Create chat', "(()=>{const list=document.querySelector('.agent-window-picker [role=listbox]');const field=document.querySelector('.agent-window-picker__models');const create=document.querySelector('.agent-window-picker__primary');return list.scrollHeight>list.clientHeight&&list.getBoundingClientRect().bottom<=field.getBoundingClientRect().bottom+1&&field.getBoundingClientRect().bottom<=create.getBoundingClientRect().top;})()");
@@ -87,7 +87,7 @@ app.whenReady().then(async () => {
           await run("(document.querySelector('.command-wall-add-tile') || document.querySelector('#wall-window-picker'))?.scrollIntoView({block:'start'})"); await capture(`create-${mode}-${theme}-${label}`);
           await run("document.querySelector('.agent-window-picker__primary')?.scrollIntoView({block:'end'})"); await capture(`create-${mode}-actions-${theme}-${label}`);
         }
-        await run("document.querySelector('[data-wall-add-button]').click()");await sleep(180); await click('Focus'); await capture(`full-focus-${theme}-${label}`);
+        await run("document.querySelector('[data-wall-add-button]').click()");await sleep(180); await click('Focused'); await capture(`full-focus-${theme}-${label}`);
         await run("integration.route('workspace')"); await sleep(500);
         await run("(()=>{const b=document.querySelector('[title=\"New agent with a terminal\"]'); b.focus(); b.dispatchEvent(new FocusEvent('focusin',{bubbles:true}));})()"); await capture(`workspace-image-menu-${theme}-${label}`);
       }
@@ -125,7 +125,7 @@ app.whenReady().then(async () => {
     const motion = path.join(runDir, 'motion'); fs.mkdirSync(motion);
     for (let frame = 0; frame < 36; frame++) {
       if (frame === 4 || frame === 16) await run("document.querySelector('[data-wall-add-button]').click()");await sleep(180);
-      if (frame === 22) await click('Focus');
+      if (frame === 22) await click('Focused');
       if (frame === 29) await click('Dynamic');
       fs.writeFileSync(path.join(motion, `${String(frame).padStart(3, '0')}.png`), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());
       await sleep(100);

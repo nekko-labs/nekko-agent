@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pickerPlacement } from './pickerPlacement.js';
-import { filteredModelGroups, isModelPickerEscape, nextFavoriteModels, shouldDismissModelPickerPointer } from './modelPickerInteractions.js';
+import { filteredModelGroups, isModelPickerEscape, modelRowLabel, nextFavoriteModels, shouldDismissModelPickerPointer } from './modelPickerInteractions.js';
 import type { AutoQuality, ModelInfo, ProviderConfig } from '@nekko-agent/shared';
 import {
   AUTO_MODEL_ID, AUTO_QUALITIES, AUTO_QUALITY_META, blockLabel, formatModelPriceLabel,
@@ -162,8 +162,9 @@ export function ModelPicker({
   if (defaultKey) pinnedKeys.add(defaultKey);
   const currentProvider = providers.find((p) => p.id === providerId);
   const providerLabel = currentProvider ? nameOf(currentProvider) : 'No provider';
+  const currentModel = models.find((m) => m.id === modelId);
   const currentName =
-    modelId === AUTO_MODEL_ID ? '✨ Auto' : models.find((m) => m.id === modelId)?.name ?? 'No model';
+    modelId === AUTO_MODEL_ID ? '✨ Auto' : currentModel ? modelRowLabel(currentModel, !!currentProvider && isLocalProvider(currentProvider.kind)).name : 'No model';
 
   const pick = (pid: string, mid: string) => {
     if (pid !== providerId) onProvider(pid);
@@ -190,8 +191,10 @@ export function ModelPicker({
     const blocked = availability.status === 'blocked';
     const why = availability.detail ?? blockLabel(availability);
     // The engine sends the file's path as a detail, so a local model's subtext
-    // is where it lives rather than a price it does not have.
-    const sub = m.details?.path;
+    // is where it lives rather than a price it does not have; a path-like id
+    // is split into a short name and its folder.
+    const label = modelRowLabel(m, isLocalProvider(p.kind));
+    const sub = label.sub;
     return (
       <div
         key={key}
@@ -205,7 +208,7 @@ export function ModelPicker({
           disabled={blocked}
           className={`flex min-w-0 flex-1 flex-col px-2.5 py-1.5 text-left ${blocked ? 'cursor-not-allowed' : ''}`}
           onClick={() => pick(p.id, m.id)}
-          title={blocked ? `${m.name} · ${why}` : sub ? `${m.name} · ${sub}` : m.name}
+          title={blocked ? `${label.name} · ${why}` : sub ? `${label.name} · ${sub}` : m.id === label.name ? label.name : `${label.name} · ${m.id}`}
         >
           <div className="flex w-full items-center gap-2">
             {key === defaultKey && <span className="text-[10px] text-accent">Default</span>}
@@ -216,7 +219,7 @@ export function ModelPicker({
                 title="Loaded in memory"
               />
             )}
-            <span className={`min-w-0 truncate text-[12.5px] font-medium leading-tight ${blocked ? 'text-ink-faint' : ''}`}>{m.name}</span>
+            <span className={`min-w-0 truncate text-[12.5px] font-medium leading-tight ${blocked ? 'text-ink-faint' : ''}`} data-model-name>{label.name}</span>
             {blocked && (
               <span
                 className="shrink-0 rounded-sm px-1 py-0.5 text-[10px] font-semibold leading-none"
@@ -250,10 +253,18 @@ export function ModelPicker({
     );
   };
 
-  const header = (label: string, email?: string) => (
-    <p className="truncate px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint" title={email ? `${label} · ${email}` : undefined}>
+  // Section labels (Recent, Starred) stay small and faint; a provider heading is
+  // the thing you scan for, so it reads in the ink colour a size up.
+  const header = (label: string, email?: string, provider = false) => (
+    <p
+      className={provider
+        ? 'truncate px-2.5 pb-0.5 pt-2 text-[12px] font-semibold text-ink'
+        : 'truncate px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint'}
+      data-provider-heading={provider || undefined}
+      title={email ? `${label} · ${email}` : undefined}
+    >
       {label}
-      {email && <span className="font-normal normal-case tracking-normal" data-account-email> · {email}</span>}
+      {email && <span className="font-normal normal-case tracking-normal text-ink-faint" data-account-email> · {email}</span>}
     </p>
   );
 
@@ -307,7 +318,7 @@ export function ModelPicker({
                   : [{ loc: '', models: remaining }];
               return (
                 <React.Fragment key={g.provider.id}>
-                  {header(g.provider.label, accountEmailOf(g.provider, accountEmails))}
+                  {header(g.provider.label, accountEmailOf(g.provider, accountEmails), true)}
                   {byLoc.map(({ loc, models: ms }) => (
                     <React.Fragment key={loc || '_'}>
                       {loc && (

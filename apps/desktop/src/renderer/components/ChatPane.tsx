@@ -48,7 +48,8 @@ import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, describeInterr
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
-import { PlanRail, appendPlanChangeRequest } from './PlanRail.js';
+import { PlanRail } from './PlanRail.js';
+import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
 import { ComposerQuestion } from './ComposerQuestion.js';
 import { QuestionCard } from './QuestionCard.js';
@@ -604,6 +605,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * closed is still there when it opens.
    */
   const [question, setQuestion] = useState<AskRequest | null>(null);
+  /** "Change plan" pops this up where the agent's questions appear. */
+  const [planChangeOpen, setPlanChangeOpen] = useState(false);
   const [ctx, setCtx] = useState<ContextBundle | null>(null);
   // Tokens this turn has produced that the last context bundle doesn't include
   // yet. Everything the agent writes (its reply, its tool calls, their results)
@@ -1713,6 +1716,28 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     await window.nekko.answerQuestion(sessionId, pending.callId, answers);
   };
 
+  /**
+   * The plan change the user typed. A running agent takes it at its next step
+   * (the same steer as Ctrl+Enter), so it changes course instead of finishing
+   * the old plan first; an idle one gets it as a new turn. The draft is left
+   * alone either way.
+   */
+  const sendPlanChange = async (change: string) => {
+    setPlanChangeOpen(false);
+    const text = planChangeMessage(change);
+    try {
+      if (streamingRef.current) {
+        const updated = await window.nekko.steerChat(sessionId, text);
+        if (updated) setSession(updated);
+        refreshSessions();
+      } else {
+        await send(text);
+      }
+    } catch (e) {
+      useStore.getState().pushToast('error', `Could not send the plan change: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   const hasProvider = !needsProviderSetup(providers, modelId ?? models[0]?.id);
   // An image chat runs on the engine's image model, not a chat provider, so it
   // can compose with no provider configured at all.
@@ -2195,6 +2220,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <div className="agent-question-pin-body"><QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" /></div>
           </div>
         )}
+        {/* A wall window has no composer of its own, so the plan change pops up
+            where its questions do: pinned at the top. An open question wins. */}
+        {surface === 'transcript' && planChangeOpen && !question && (
+          <div className="agent-question-pin shrink-0" role="region" aria-label="Change the agent's plan">
+            <div className="agent-question-pin-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => setPlanChangeOpen(false)} /></div>
+          </div>
+        )}
         {surface !== 'composer' && (
         <div className="relative flex min-h-0 w-full flex-1">
           <SubagentParentContext.Provider value={subagentChildren}><SubagentInheritedModelContext.Provider value={delegationDefaultModel ?? (modelId && modelId !== AUTO_MODEL_ID ? modelId : undefined)}><WatchSessionContext.Provider value={sessionId}><VirtualTranscript
@@ -2353,6 +2385,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           </div>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={commandCenter ? { width: '98%' } : undefined}>
             {surface !== 'composer' && <ComposerQuestion request={question} onAnswer={(answers) => { void answerQuestion(answers); }} />}
+            {surface !== 'composer' && planChangeOpen && !question && (
+              <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
+            )}
 
             <div className="composer relative">
             {/* While the agent works, a violet→cyan beam laps the border. The
@@ -2911,10 +2946,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             sessionId={sessionId}
             session={session}
             streaming={streaming}
-            onChangePlan={readOnly ? undefined : () => {
-              setDraft(appendPlanChangeRequest);
-              composerRef.current?.focus();
-            }}
+            onChangePlan={readOnly ? undefined : () => setPlanChangeOpen(true)}
           />
         </div>
       )}

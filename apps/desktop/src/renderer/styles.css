@@ -2097,11 +2097,12 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    (agent, terminal, then the selected agent's Changes, Browser and Files, then
    More), in place of the Add window button that used to sit by the composer. */
 .wall-add-bar { display: inline-flex; align-items: center; gap: 2px; }
+/* In the accent, so the three ways to open a window stand out in the toolbar. */
 .wall-add-icon {
   display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px;
-  color: var(--ink-faint); transition: color 0.12s ease, background-color 0.12s ease;
+  color: var(--accent); transition: color 0.12s ease, background-color 0.12s ease;
 }
-.wall-add-icon:hover:not(:disabled), .wall-add-icon[aria-expanded='true'] { color: var(--ink); background: var(--surface-2); }
+.wall-add-icon:hover:not(:disabled), .wall-add-icon[aria-expanded='true'] { color: var(--accent); background: var(--accent-soft); }
 .wall-add-icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .wall-add-icon:disabled { opacity: 0.4; cursor: default; }
 /* The agent cat as a line icon like its neighbours: its dark fill and light

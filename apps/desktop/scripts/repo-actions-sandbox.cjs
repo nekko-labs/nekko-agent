@@ -84,6 +84,20 @@ app.whenReady().then(async () => {
       await run("(()=>{const b=document.querySelector('[data-agent-group=\"repo-b\"] [title=\"New agent in this project\"]');b.click();b.click()})()");
       await sleep(900);
       await check('rapid clicks create once', "integration.calls.filter(c=>c.method==='create').length===1");
+      // A real press that drifts a few pixels while held. The header row is a
+      // project drag source, and before the fix that drift began a drag and the
+      // + never created anything. Renderer input events only, no OS input.
+      for (const kind of ['chat', 'terminal']) {
+        await setup('grid');
+        const sel = `[data-agent-group="repo-b"] [title="New ${kind === 'chat' ? 'agent in this project' : 'terminal in project'}"]`;
+        const r = await run(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }; })()`);
+        win.webContents.sendInputEvent({ type: 'mouseMove', x: r.x, y: r.y }); await sleep(150);
+        win.webContents.sendInputEvent({ type: 'mouseDown', x: r.x, y: r.y, button: 'left', clickCount: 1 });
+        for (let i = 1; i <= 6; i++) { win.webContents.sendInputEvent({ type: 'mouseMove', x: r.x + i, y: r.y, button: 'left', modifiers: ['leftButtonDown'] }); await sleep(16); }
+        win.webContents.sendInputEvent({ type: 'mouseUp', x: r.x + 6, y: r.y, button: 'left', clickCount: 1 });
+        await sleep(600);
+        await check(`${kind} press that drifts still creates in the repository`, kind === 'chat' ? "integration.calls.some(c=>c.method==='create'&&c.workspaceId==='repo-b')" : "integration.calls.some(c=>c.method==='terminal'&&c.options.workspaceId==='repo-b')");
+      }
       for (const kind of ['chat', 'terminal']) {
         await setup('focus'); await run("document.querySelector('[data-agent-group=\"repo-b\"] [data-sidebar-group]').click()");
         await click(kind);
