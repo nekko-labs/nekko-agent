@@ -32,6 +32,7 @@ import {
   ReplyStatus, useElementWidth,
 } from './agent-console/index.js';
 import type { PendingApproval } from './agent-console/index.js';
+import { replyIconState } from './agent-console/ReplyStatus.js';
 import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/LiveTurn.js';
 import { liveTokenRate } from './agent-console/liveTokenRate.js';
 import { ImageModeControls } from './agent-console/ImageModeControls.js';
@@ -485,7 +486,7 @@ const LiveReplyStatus = memo(function LiveReplyStatus({
   }, [status.streaming, startedAt]);
   const liveRate = status.streaming ? liveTokenRate(run) : null;
   const label = status.streaming ? shortLiveStatus(run?.activity) || 'Working' : '';
-  return <ReplyStatus {...status} tps={liveRate?.rate ?? status.tps} estimatedRate={!!liveRate} status={label} elapsed={status.streaming ? elapsed : 0} nextWakeAt={nextWakeAt} now={now} />;
+  return <ReplyStatus {...status} tps={liveRate?.rate ?? status.tps} estimatedRate={!!liveRate} status={label} iconState={status.streaming ? replyIconState(run?.activity) : 'idle'} elapsed={status.streaming ? elapsed : 0} nextWakeAt={nextWakeAt} now={now} />;
 });
 
 /**
