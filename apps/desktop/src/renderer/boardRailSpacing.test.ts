@@ -9,13 +9,14 @@ describe('compact board and navigation spacing', () => {
     expect(css).toContain('inset: 20% 0;');
     expect(css).toContain('var(--accent) 4%, var(--paper)');
     expect(css).toContain('var(--accent) 7%, var(--paper)');
-    expect(read('./App.tsx')).toContain('flex flex-col gap-[7px] overflow-hidden');
+    // The destinations keep their 7px separation (#572 made the column scroll on short windows).
+    expect(read('./App.tsx')).toContain('rail-destinations flex min-h-0 flex-col gap-[7px]');
   });
 
-  it('keeps 1px around the board and beside the agent list without shrinking grips', () => {
+  it('keeps 1px around the board and 8px beside the agent list without shrinking grips', () => {
     const css = read('./components/commandWallLayouts.css');
     expect(css).toContain('padding: 14px 1px;');
-    expect(css).toContain("[data-tabs='left'] { flex-direction: row; gap: 1px; }");
+    expect(css).toContain("[data-tabs='left'] { flex-direction: row; gap: 8px; }");
     const styles = read('./styles.css');
     expect(styles).toContain('padding-inline: 15px calc(15px + var(--wall-gutter));');
     expect(styles).toContain('width: 14px; z-index: 2; cursor: col-resize;');
