@@ -128,6 +128,7 @@ export function PaneFrame({
   onAddWindow,
   onClose,
   onMinimize,
+  focusAction,
   onFocus,
   onDragStart,
   onDragEnd,
@@ -165,6 +166,8 @@ export function PaneFrame({
   onClose: () => void;
   /** Remove only the wall window, without completing or deleting its chat. */
   onMinimize?: () => void;
+  /** Wall Focus action immediately beside Minimize. */
+  focusAction?: React.ReactNode;
   onFocus: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -260,6 +263,7 @@ export function PaneFrame({
             rather than the frame's and the pane's stacked on each other. */}
         <div ref={setActionSlot} className="flex shrink-0 items-center gap-0.5" />
         {!hideSplit && <SplitCompass kind={pane.kind} canSplit={canSplit} onSplit={onSplit} onOpen={onAddWindow} addable={addable} />}
+        {focusAction}
         {onMinimize && <button
           type="button"
           className="rounded-sm p-1 text-ink-faint hover:text-ink"

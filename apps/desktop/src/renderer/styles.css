@@ -664,14 +664,15 @@
   & .rail-group::before {
     content: '';
     position: absolute;
-    /* Equal end caps keep the wave centered on the destinations, not the window. */
-    inset: -48px -6px;
+    /* Curved wings each measure half the band width, independent of its height. */
+    --wing-height: 32px;
+    inset: calc(-1 * var(--wing-height)) -6px;
     z-index: -1;
     background: color-mix(in srgb, var(--accent) 4%, var(--paper));
-    /* Concave top and bottom: full width through the middle, merging into
-       the left edge early (by ~14% from each end). */
-        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 1000' preserveAspectRatio='none'%3E%3Cpath d='M0 0 C0 90 100 60 100 180 L100 820 C100 940 0 910 0 1000 Z'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 1000' preserveAspectRatio='none'%3E%3Cpath d='M0 0 C0 90 100 60 100 180 L100 820 C100 940 0 910 0 1000 Z'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
+    mask:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 50' preserveAspectRatio='none'%3E%3Cpath d='M0 0 C0 25 100 15 100 50 H0 Z'/%3E%3C/svg%3E") top / 100% var(--wing-height) no-repeat,
+      linear-gradient(#000 0 0) center / 100% calc(100% - 2 * var(--wing-height) + 2px) no-repeat,
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 50' preserveAspectRatio='none'%3E%3Cpath d='M0 50 C0 25 100 35 100 0 H0 Z'/%3E%3C/svg%3E") bottom / 100% var(--wing-height) no-repeat;
     transition: background var(--dur-slow) ease;
   }
   &:hover,
@@ -680,6 +681,7 @@
   }
   &:hover .rail-group::before,
   &:has(:focus-visible) .rail-group::before {
+    --wing-height: 100px;
     background: color-mix(in srgb, var(--accent) 7%, var(--paper));
     filter: drop-shadow(0 6px 18px rgb(0 0 0 / 0.25));
   }
@@ -2105,7 +2107,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Adding to the wall: a row of quiet icon buttons at the toolbar's right end
    (agent, terminal, then the selected agent's Changes, Browser and Files, then
    More), in place of the Add window button that used to sit by the composer. */
-.wall-add-bar { display: inline-flex; align-items: center; gap: 2px; }
+.wall-add-bar { display: inline-flex; align-items: center; gap: 10px; margin-right: 8px; padding-right: 20px; border-right: 1px solid var(--line); }
 /* In the accent, so the three ways to open a window stand out in the toolbar. */
 .wall-add-icon {
   display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px;
@@ -2148,6 +2150,8 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 
 /* Changes leads; Zen is the action group, followed by panel openers. */
 [data-agent-companion="diff"] { order: -3; }
-.agent-zen-action { order: -2; }
+.agent-zen-action { color: var(--accent); background: var(--accent-soft); border-radius: 5px; padding: 3px; }
+.wall-add-icon { position: relative; }
+.wall-add-icon::after { content: '+'; position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: 10px; height: 10px; border-radius: 50%; background: var(--paper); color: var(--accent); font: 700 11px/1 sans-serif; pointer-events: none; }
 .agent-action-separator { order: -1; }
 .agent-change-summary .text-danger { color: var(--danger); }

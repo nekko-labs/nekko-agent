@@ -15,7 +15,7 @@ vi.mock('./ExplorerPane.js', () => ({ ExplorerPane: ({ paneId }: { paneId: strin
 vi.mock('./BrowserPane.js', () => ({ BrowserPane: ({ url }: { url: string }) => <div data-browser={url} /> }));
 vi.mock('./DiffPane.js', () => ({ DiffPane: ({ sessionId }: { sessionId: string }) => <div data-diff={sessionId} /> }));
 vi.mock('./PaneFrame.js', () => ({
-  PaneFrame: ({ title, children }: { title: string; children: React.ReactNode }) => <section data-title={title}>{children}</section>,
+  PaneFrame: ({ title, children, focusAction }: { title: string; children: React.ReactNode; focusAction?: React.ReactNode }) => <section data-title={title}>{focusAction}{children}</section>,
   PaneActions: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 import { CommandWall, boardEdgePreview, commandWallGeometry, companionTree, resizeCompanionSplit, sameDeps, WARM_COMPOSERS, warmFront, workspaceCompanions } from './CommandWall.js';

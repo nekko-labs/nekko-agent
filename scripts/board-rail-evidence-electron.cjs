@@ -49,6 +49,17 @@ app.whenReady().then(async () => {
       await capture(label+'-resize-focus');await key('Home');
     }
     await configure(1440,'dark');
+    if(kind === 'after') {
+      await check('Focus immediately precedes Minimize', `(()=>{const b=document.querySelector('.agent-zen-action');return b?.nextElementSibling?.getAttribute('aria-label')?.startsWith('Minimize ')})()`);
+      await check('Focus is 20px and accent colored', `(()=>{const b=document.querySelector('.agent-zen-action');return b.querySelector('svg').getBoundingClientRect().width===20 && getComputedStyle(b).color===getComputedStyle(document.querySelector('.wall-add-icon')).color})()`);
+      await check('Creation controls have plus indicators and divider', `getComputedStyle(document.querySelector('.wall-add-icon'),'::after').content.includes('+') && getComputedStyle(document.querySelector('.wall-add-bar')).borderRightWidth==='1px'`);
+      await run(`document.querySelector('.agent-zen-action').click()`);await stable();
+      await check('Focus selects focused layout', `document.querySelector('[data-wall-layout]').dataset.wallLayout==='focus'`);
+      await run(`evidence.reset()`);await stable();
+      await run(`document.querySelector('button[aria-label^="Minimize Review"]').click()`);await stable();
+      await check('Minimize removes window but retains agent card', `!document.querySelector('[data-wall-pane="pane0"]') && document.body.innerText.includes('Review rail spacing')`);
+      await configure(1440,'dark');
+    }
     const frames=path.join(dir,'motion');fs.mkdirSync(frames,{recursive:true});const start=Date.now();
     const listener=(_e,method,p)=>{if(method!=='Page.screencastFrame')return;const i=report.motion.length;fs.writeFileSync(path.join(frames,String(i).padStart(4,'0')+'.png'),Buffer.from(p.data,'base64'));report.motion.push({frame:i,elapsedMs:Date.now()-start,timestamp:p.metadata.timestamp});void cdp('Page.screencastFrameAck',{sessionId:p.sessionId});};
     win.webContents.debugger.on('message',listener);
