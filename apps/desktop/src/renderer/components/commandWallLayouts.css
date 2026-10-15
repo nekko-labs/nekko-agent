@@ -10,13 +10,19 @@
   padding: 14px 1px;
 }
 .command-wall-stage { position: relative; min-height: 304px; }
+/* Keep in step with WALL_PUSH_MS and WALL_PUSH_EASE in wallMotion.ts. */
+.command-wall-layout { --wall-push-ms: 280ms; --wall-push-ease: cubic-bezier(.22, 1, .36, 1); }
+/* A closing window's last picture folds away here, under the live windows. */
+.command-wall-leaving { position: absolute; inset: 0; pointer-events: none; }
+.command-wall-leaving > .command-wall-window { transition: none; }
 .command-wall-window {
   position: absolute;
   display: flex;
   min-width: 0;
   min-height: 0;
   border-radius: var(--pane-radius);
-  transition: left 260ms ease, top 260ms ease, width 260ms ease, height 260ms ease;
+  /* One push with the window opening or closing beside it (wallMotion.ts). */
+  transition: left var(--wall-push-ms) var(--wall-push-ease), top var(--wall-push-ms) var(--wall-push-ease), width var(--wall-push-ms) var(--wall-push-ease), height var(--wall-push-ms) var(--wall-push-ease);
 }
 .command-wall-window > .panel { min-width: 0; min-height: 0; overflow: hidden; }
 /* A Focus window that is not the hero: kept laid out under it, never drawn. */
