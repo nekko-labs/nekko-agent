@@ -1412,11 +1412,21 @@
   50% { content: '..'; }
   75%, 100% { content: '...'; }
 }
+/* A fixed box that never shrinks in a flex row: the dots appear inside it, so
+   neither the dots nor the text beside them move as the third one lands. */
 .dots {
   display: inline-block;
-  width: 1.2em;
+  flex: none;
+  /* Three dots in the monospace transcript are 1.8em wide. */
+  width: 2em;
+  min-width: 2em;
+  overflow: hidden;
+  white-space: pre;
   text-align: left;
+  font-variant-numeric: tabular-nums;
 }
+/* Leading dots grow toward the text they announce. */
+.dots-lead { text-align: right; }
 .dots::after {
   content: '';
   animation: dots 1.4s steps(1, end) infinite;

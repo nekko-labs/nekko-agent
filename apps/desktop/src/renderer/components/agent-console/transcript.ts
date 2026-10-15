@@ -105,7 +105,8 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
       // Narration is written out in full as part of the conversation, and it
       // splits the run in two: what led up to it, and what it went on to do.
       if (m.content.trim() && !isFinalAnswer) say(m, i);
-      m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, ...(c.name === 'spawn_agent' && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
+      // Delegations and watches show their outcome on the step itself.
+      m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, ...((c.name === 'spawn_agent' || c.name === 'agent_watch') && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
       if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: m }); }
     } else {
       flush();

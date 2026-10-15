@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { parsePrUrl } from '@nekko-agent/shared';
+import { parsePrUrl, type AgentWatchView } from '@nekko-agent/shared';
 import type { ToolSpec } from '@nekko-agent/core';
 import { dataDir } from './paths.js';
 import { writeJsonAtomic } from './secure-file.js';
@@ -71,6 +71,10 @@ export class AgentWatchService {
       .filter((w) => w.status === 'active')
       .map((w) => w.deadlineAt);
     return deadlines.length ? Math.min(...deadlines) : null;
+  }
+  /** What the transcript shows of each watch: newest last, prompts left out. */
+  views(sessionId: string): AgentWatchView[] {
+    return this.list(sessionId).map(watchView);
   }
   private save(watches: AgentWatch[]): void { writeJsonAtomic(this.path(), watches); }
   private patch(id: string, patch: Partial<AgentWatch>): void {
@@ -188,4 +192,28 @@ export async function watchResume(sessionId: string, text: string): Promise<{ er
 }
 export function nextAgentWatchAt(sessionId: string): number | null {
   return service?.nextWakeAt(sessionId) ?? null;
+}
+/**
+ * `session:watches`. Reads the file whichever process schedules it: the daemon
+ * writes the same `agent-watches.json`, and this channel is not one it serves.
+ */
+export function listAgentWatchViews(sessionId: string): AgentWatchView[] {
+  try {
+    return service?.views(sessionId) ?? [];
+  } catch {
+    return [];
+  }
+}
+export function watchView(w: AgentWatch): AgentWatchView {
+  return {
+    id: w.id,
+    kind: w.kind,
+    ...(w.url ? { url: w.url } : {}),
+    status: w.status,
+    deadlineAt: w.deadlineAt,
+    nextPollAt: w.nextPollAt,
+    pending: !!w.pending,
+    failures: w.failures ?? 0,
+    ...(w.lastError ? { lastError: w.lastError.slice(0, 300) } : {}),
+  };
 }

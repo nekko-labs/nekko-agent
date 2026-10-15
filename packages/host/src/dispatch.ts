@@ -214,6 +214,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
 
     [C.sessionsList]: () => host.listSessions(),
     [C.sessionNextWatch]: ([id]) => host.nextAgentWatchAt(id),
+    [C.sessionWatches]: ([id]) => host.listAgentWatches(id),
     [C.sessionsSummaries]: () => host.listSessionSummaries(),
     [C.sandboxConfigure]: ([id, image]) => host.configureSandbox(id, image),
     [C.sandboxCleanup]: ([id, identity]) => host.cleanupSandbox(id, identity),
