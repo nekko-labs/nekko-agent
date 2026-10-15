@@ -426,10 +426,33 @@ export async function executeTool(call: ToolCall, opts: ToolHostOptions): Promis
           const { stdout, stderr } = await new Promise<{ stdout: string; stderr: string }>((resolveP, reject) => {
             let stopped: 'cancelled' | 'timed out' | null = null;
             let timer: ReturnType<typeof setTimeout>;
-            const onAbort = () => {
-              stopped = 'cancelled';
+            let grace: ReturnType<typeof setTimeout> | undefined;
+            let settled = false;
+            let capturedOut = '', capturedErr = '';
+            const finish = (error: Error | null, stdout: string, stderr: string) => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              clearTimeout(grace);
+              opts.signal?.removeEventListener('abort', onAbort);
+              if (stopped) reject(Object.assign(new Error(`Command ${stopped}.`), { stdout, stderr }));
+              else if (error) reject(Object.assign(error, { stdout, stderr }));
+              else resolveP({ stdout, stderr });
+            };
+            const stop = (reason: 'cancelled' | 'timed out') => {
+              if (settled || stopped) return;
+              stopped = reason;
+              // Killing a process is not proof that its inherited pipes close.
+              // Bound cleanup too, matching the daemon's five-second kill grace.
+              grace = setTimeout(() => {
+                finish(null, capturedOut, capturedErr);
+                child.stdin?.destroy();
+                child.stdout?.destroy();
+                child.stderr?.destroy();
+              }, 5_000);
               stopCommandTree(child);
             };
+            const onAbort = () => stop('cancelled');
             // A separate process group on Unix lets Stop and timeout kill all
             // descendants. On Windows taskkill /T does the same for cmd.exe.
             const options: ExecFileOptions & { detached: boolean; encoding: 'utf8' } = { cwd, maxBuffer: 10 * 1024 * 1024, detached: process.platform !== 'win32', windowsHide: true, windowsVerbatimArguments: process.platform === 'win32', encoding: 'utf8' };
@@ -437,17 +460,21 @@ export async function executeTool(call: ToolCall, opts: ToolHostOptions): Promis
             const child = runShell(process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : '/bin/sh', process.platform === 'win32' ? ['/d', '/s', '/c', a.command] : ['-c', a.command], options, (error: Error | null, stdout: string, stderr: string) => {
               // Keep the previous exec error format (without the explicit shell).
               if (error) error.message = error.message.replace(/^Command failed: .*?\r?\n/, `Command failed: ${a.command}\n`);
-              clearTimeout(timer);
-              opts.signal?.removeEventListener('abort', onAbort);
-              if (stopped) reject(Object.assign(new Error(`Command ${stopped}.`), { stdout, stderr }));
-              else if (error) reject(Object.assign(error, { stdout, stderr }));
-              else resolveP({ stdout, stderr });
+              finish(error, stdout, stderr);
             });
-            timer = setTimeout(() => { stopped = 'timed out'; stopCommandTree(child); }, 120_000);
+            // A noninteractive tool has nobody to answer stdin prompts.
+            child.stdin?.end();
+            timer = setTimeout(() => stop('timed out'), 120_000);
             opts.signal?.addEventListener('abort', onAbort, { once: true });
             if (opts.signal?.aborted) onAbort();
-            child.stdout?.on('data', (chunk: Buffer | string) => mirror(String(chunk)));
-            child.stderr?.on('data', (chunk: Buffer | string) => mirror(String(chunk)));
+            child.stdout?.on('data', (chunk: Buffer | string) => {
+              capturedOut = (capturedOut + String(chunk)).slice(0, 60000);
+              if (!settled) mirror(String(chunk));
+            });
+            child.stderr?.on('data', (chunk: Buffer | string) => {
+              capturedErr = (capturedErr + String(chunk)).slice(0, 60000);
+              if (!settled) mirror(String(chunk));
+            });
           });
           const output = (stdout + (stderr ? `\n[stderr]\n${stderr}` : '')).slice(0, 60000) || '(no output)';
           if (!stdout && !stderr) mirror('(no output)\n');

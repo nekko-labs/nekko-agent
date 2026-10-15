@@ -315,6 +315,13 @@ bar stays the same as you move between pages; the heading names the page.</p>
 <strong>Try again</strong> button. On desktop, start a stopped service from the tray menu,
 then retry. In the web edition, check that the Nekko service is running.
 Existing content stays visible when a refresh fails.</p>
+<p>Agent shell commands are noninteractive: stdin closes immediately, so prompts
+receive end-of-file rather than waiting for an answer. The shell tool has a
+120-second execution limit and up to five seconds of stop cleanup; use
+<code>start_process</code> for long-running jobs. On Windows, <code>date /t</code> displays the date;
+bare <code>date</code> asks to change it. If a command appears stuck, Stop cancels its turn
+and requests process-tree termination. An unresponsive OS process may still
+need separate inspection even after the tool reports cancellation.</p>
 <p>A failed chat reply preserves completed steps. <strong>Retry</strong> continues from saved
 history, and you can send a new message instead. For Anthropic requests, Nekko
 bounds supported outgoing image copies to 1568 pixels per side, including old
