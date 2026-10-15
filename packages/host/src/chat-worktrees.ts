@@ -306,3 +306,34 @@ export function removeChatWorktree(settings: AppSettings, root: string, lookup: 
   const branchDeleted = !!entry.branch && gitOk(entry.sourceRoot, ['branch', '-d', entry.branch]);
   return { branchDeleted };
 }
+
+/**
+ * Remove the chat worktrees whose branch's PR has merged. Squash merges leave
+ * the branch "unmerged" to Git, so the PR's state (from GitHub) is what says
+ * the work landed; that is also why the branch is force-deleted here, once its
+ * PR is known merged. Anything with uncommitted or untracked files, a running
+ * chat, or a PR that is not merged is left alone, as is any lookup that fails.
+ * Never throws: one stuck worktree does not stop the others.
+ */
+export async function removeMergedChatWorktrees(
+  settings: AppSettings,
+  lookup: (worktreeRoot: string) => { id: string; title: string; running: boolean } | null,
+  prState: (cwd: string, branch: string) => Promise<'open' | 'closed' | 'merged' | null>,
+): Promise<Array<{ root: string; branch: string; sessionId: string }>> {
+  if (settings.gitManagement?.removeMerged === false) return [];
+  const removed: Array<{ root: string; branch: string; sessionId: string }> = [];
+  for (const w of listChatWorktrees(settings, lookup)) {
+    if (!w.branch || w.running || w.dirtyCount) continue;
+    let state: 'open' | 'closed' | 'merged' | null = null;
+    try { state = await prState(w.root, w.branch); } catch { continue; }
+    if (state !== 'merged') continue;
+    // Re-check right before removing: the chat may have started a turn or
+    // edited a file while GitHub was being asked.
+    if (lookup(w.root)?.running) continue;
+    try { if (git(w.root, ['status', '--porcelain'])) continue; } catch { continue; }
+    try { removeChatWorktree(settings, w.root, lookup); } catch { continue; }
+    gitOk(w.sourceRoot, ['branch', '-D', w.branch]);
+    removed.push({ root: w.root, branch: w.branch, sessionId: w.sessionId });
+  }
+  return removed;
+}
