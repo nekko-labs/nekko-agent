@@ -140,6 +140,17 @@ app.whenReady().then(async () => {
       await resize(width); await reset(); await themeFor(theme); await sleep(300);
       const label = `${width === 1440 ? 'wide' : 'narrow'}-${theme}`;
       await capture(label + '-panes');
+      // The completion controls themselves, cropped from their real rectangles
+      // (a full-window capture makes a 12 px icon impossible to judge).
+      for (const [part, selector] of [['header', 'button[aria-label="Complete Review lifecycle shortcuts"][title*="Shift+E"]'], ['card', 'button[aria-label="Complete Review lifecycle shortcuts"][title*="60 days"]']]) {
+        const rect = await run(`(() => { const b = document.querySelector(${JSON.stringify(selector)}); if (!b) return null; b.closest('.group')?.classList.add('force-hover'); b.style.opacity = '1'; const r = b.parentElement.getBoundingClientRect(); return { x: Math.max(0, Math.floor(r.right - 120)), y: Math.floor(r.top - 4), width: 124, height: Math.ceil(r.height + 8) }; })()`);
+        if (!rect) { report.errors.push(`${label}: missing ${part} completion control`); continue; }
+        await sleep(120);
+        const img = await win.capturePage(rect, { stayHidden: true, stayAwake: false });
+        const file = path.join(dir, `${evidencePrefix}-${label}-${part}-control.png`);
+        fs.writeFileSync(file, img.resize({ width: rect.width * 5, quality: 'best' }).toPNG());
+        report.captures.push({ file, rect });
+      }
       report[label] = await run(`({titles:[...document.querySelectorAll('button[title]')].map(e=>({label:e.getAttribute('aria-label'),title:e.title})),missingLabel:document.body.innerText.includes('No project attached')})`);
       if (!base) {
         await check(label + ': complete/minimize action chord titles', `(()=>{const b=[...document.querySelectorAll('button[title]')];return b.some(e=>e.title.includes('Complete this chat')&&e.title.includes('Shift+E'))&&b.some(e=>e.title.includes('Minimize this window')&&e.title.includes('Shift+M'))})()`);
