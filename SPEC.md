@@ -783,6 +783,10 @@ On the desktop, Nekko Agent runs as three processes:
 
 ### Nekko Agent
 
+## Nav wings and wall action clarity
+
+Implemented; 49 focused tests and desktop typecheck passed, isolated Electron Focus/Minimize and rail keyboard checks passed, matched wide/narrow light/dark captures inspected: the left rail retains its destination positioning and existing rest/hover tint. Its curved top and bottom wings each have a height about half the band width (32px at rest, 100px expanded), independent of destination count. Wall creation icons have bottom-right plus indicators, increased spacing, and a subtle divider separating creation from layout modes. Window Focus is a 20px accent-colored action immediately before Minimize, outside the pane's portalled action group. Existing creation, focus and minimize behavior and privacy boundaries are unchanged. Acceptance: wide/narrow light/dark matched captures, keyboard rail expansion, Focus adjacency and Focus/Minimize behavior; native OS chrome is outside this renderer-only change.
+
 ## Build storage maintenance
 
 Implemented maintenance command (Windows cleanup validation in progress): `npm run clean:builds` previews reproducible outputs across registered worktrees and known shared Rust pools; `-- --apply` explicitly deletes eligible outputs older than 14 days by default. `--older-than=0` permits an immediate approved cleanup. `--global` includes known download caches, not model downloads, user app data, toolchain installations, source, branches or evidence. Tracked files, junction targets and primary development app dependencies/runtime/output/dev-daemon are protected. Git ownership/access failures skip the affected checkout rather than changing trust settings. Windows checks active build/install processes and runtime executable paths; Unix apply requires explicit idle confirmation because automatic ownership detection is not implemented. Extra active paths can be protected with `--protect=<path>`. No automatic worktree removal or background deletion. Transient capture/performance CI artifacts now expire after 14 days; durable PR evidence follows the existing publication policy.

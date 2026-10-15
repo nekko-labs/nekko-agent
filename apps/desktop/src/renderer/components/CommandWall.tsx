@@ -644,6 +644,7 @@ export function CommandWall({
           onAddWindow={() => live.current.setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
           onSplit={(dir, kind) => { void live.current.addWindow(kind, { paneId: pane.id, dir }); }}
           onClose={() => live.current.update((root) => removePane(root, pane.id))}
+          focusAction={openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><ZenIcon className="h-5 w-5" /></button>}
           onMinimize={() => live.current.update((root) => removePane(root, pane.id))}
           onFocus={() => { if (pane.kind === 'chat') live.current.onSelect(pane.refId); }}
           onDragStart={() => setDragging(pane.id)}
@@ -657,12 +658,6 @@ export function CommandWall({
           {/* What it is waiting on is said inside the window (ChatPane pins the
               question or approval at the top). A banner here sat under the
               absolutely positioned content and could not be seen. */}
-          {openable && (
-            <PaneActions>
-              <span className="agent-action-separator" aria-hidden="true" />
-              <button className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><ZenIcon className="h-3.5 w-3.5" /></button>
-            </PaneActions>
-          )}
           {deckCard && <button className="command-wall-card" onClick={() => live.current.focusWindow(pane)} aria-label={`Focus ${title}`}>{terminal ? <TerminalExcerpt terminalId={terminal.id} /> : <span>{session?.lastReplyText || 'No reply yet'}</span>}<small>{session ? `${session.modelId || 'Default model'} · ${session.transcriptTokens.toLocaleString()} context tokens` : status?.label}</small></button>}
           <div className="command-wall-content" inert={!box || deckCard} aria-hidden={!box || deckCard || undefined} data-companions-visible={showCompanions && companions.length > 0 || undefined} data-focus-chat={(focusedChat || parked) || undefined}>
 

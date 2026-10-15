@@ -21,7 +21,7 @@ vi.mock('react', async (original) => {
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); state.settings = null; });
 
 /** Inspect frame elements and invoke their actual event handlers without a DOM. */
-function frame(kind: 'chat' | 'terminal' = 'chat', menu = false, refId = 'session-1', onMinimize?: () => void) {
+function frame(kind: 'chat' | 'terminal' = 'chat', menu = false, refId = 'session-1', onMinimize?: () => void, focusAction?: React.ReactNode) {
   vi.mocked(useState).mockImplementation((initial?: unknown) => [initial, vi.fn()] as never);
   vi.mocked(useState).mockReturnValueOnce([null, vi.fn()]);
   vi.mocked(useState).mockReturnValueOnce([menu ? { x: 10, y: 20 } : null, vi.fn()]);
@@ -29,7 +29,7 @@ function frame(kind: 'chat' | 'terminal' = 'chat', menu = false, refId = 'sessio
   const tree = PaneFrame({
     pane: { id: 'pane-1', kind, refId }, title: 'My chat', icon: null,
     isActive: true, dragging: null, canSplit: () => true, onSplit: vi.fn(),
-    onClose, onMinimize, onFocus: vi.fn(), onDragStart: vi.fn(), onDragEnd: vi.fn(), onDrop: vi.fn(), children: null,
+    onClose, onMinimize, focusAction, onFocus: vi.fn(), onDragStart: vi.fn(), onDragEnd: vi.fn(), onDrop: vi.fn(), children: null,
   });
   const elements: React.ReactElement<Record<string, any>>[] = [];
   const walk = (node: React.ReactNode) => {
@@ -44,6 +44,10 @@ function frame(kind: 'chat' | 'terminal' = 'chat', menu = false, refId = 'sessio
 }
 
 describe('pane lifecycle controls', () => {
+  it('keeps Focus immediately beside Minimize', () => {
+    const { elements } = frame('chat', false, 'session-1', vi.fn(), <button aria-label="Focus My chat" />);
+    expect(elements.filter(e => e.type === 'button').map(e => e.props['aria-label'])).toEqual(['Focus My chat', 'Minimize My chat', 'Complete My chat']);
+  });
   it.each([false, true])('only closes a terminal process after confirmation (%s)', async (approved) => {
     vi.mocked(confirmDeletion).mockResolvedValueOnce(approved);
     const closeTerminal = vi.fn().mockResolvedValue(undefined);
