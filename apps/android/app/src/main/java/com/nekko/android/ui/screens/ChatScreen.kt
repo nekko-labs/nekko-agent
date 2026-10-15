@@ -11,6 +11,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.content.pm.PackageManager
 import android.Manifest
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Button
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +67,10 @@ import java.util.Locale
 @Composable
 fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boolean = false, onBack: () -> Unit) {
     val chat by vm.ui.collectAsStateWithLifecycle()
+    val completedAt by vm.completedAt.collectAsStateWithLifecycle()
+    var restoring by remember { mutableStateOf(false) }
+    var restoreError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     val p = Nekko.palette
     val mic = rememberMic(vm.dictation.takeIf { dictationOn })
     val list = rememberLazyListState()
@@ -158,7 +168,27 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
             }
             chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
             chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
-            Composer(
+            // A completed chat reads like the desktop's: no message box until it is restored.
+            if (completedAt != null && !chat.running) CompletedBar(
+                restoring = restoring,
+                error = restoreError,
+                onRestore = {
+                    restoring = true
+                    restoreError = null
+                    scope.launch {
+                        try {
+                            vm.restore()
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            restoreError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t restore this chat."
+                        } finally {
+                            restoring = false
+                        }
+                    }
+                },
+                modifier = Modifier.navigationBarsPadding(),
+            ) else Composer(
                 initialText = initialDraft,
                 running = chat.running,
                 blocked = chat.blocked,
@@ -168,6 +198,28 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                 modifier = Modifier.navigationBarsPadding(),
                 mic = mic,
             )
+        }
+    }
+}
+
+/** In place of the message box for a completed chat: say so, and offer Restore. */
+@Composable
+private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Unit, modifier: Modifier = Modifier) {
+    val p = Nekko.palette
+    Column(
+        modifier.fillMaxWidth().background(p.surface).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        error?.let { Notice(it, Tone.DANGER) }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Filled.Check, contentDescription = null, tint = p.success, modifier = Modifier.size(16.dp))
+            Text(
+                "This chat is completed. Restore it to keep going.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = p.inkSoft,
+                modifier = Modifier.weight(1f),
+            )
+            Button(onClick = onRestore, enabled = !restoring) { Text(if (restoring) "Restoring…" else "Restore") }
         }
     }
 }

@@ -178,13 +178,20 @@ data class SessionSummary(
     val taskId: String?,
     val trainingRunId: String?,
     val providerId: String? = null,
+    /** The project folder the chat belongs to (`workspace:list` id); null for General. */
+    val workspaceId: String? = null,
+    /** When the chat was completed (the desktop's archive); null while it is active. */
+    val archivedAt: Long? = null,
+    /** Manual position from the desktop sidebar's drag order; null when never dragged. */
+    val order: Double? = null,
 ) {
-    /** Real, top-level, unarchived chats: what the phone's list shows. */
-    val isVisible: Boolean get() = !archived && parentSessionId == null && taskId == null && trainingRunId == null
+    /** Real, top-level chats, active or completed: what the phone's list shows. */
+    val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
 
     companion object {
         fun from(e: JsonElement?): SessionSummary? {
             val o = e.obj() ?: return null
+            val archivedAt = o.long("archivedAt")?.takeIf { it != 0L }
             return SessionSummary(
                 id = o.str("id") ?: return null,
                 title = o.str("title") ?: "",
@@ -192,16 +199,64 @@ data class SessionSummary(
                 modelId = o.str("modelId"),
                 lastReplyText = o.str("lastReplyText"),
                 firstUserText = o.str("firstUserText"),
-                archived = o.isSet("archivedAt") && o.long("archivedAt") != 0L,
+                archived = archivedAt != null,
                 parentSessionId = o.str("parentSessionId"),
                 taskId = o.str("taskId"),
                 trainingRunId = o.str("trainingRunId"),
                 providerId = o.str("providerId"),
+                workspaceId = o.str("workspaceId"),
+                archivedAt = archivedAt,
+                order = o.dbl("order"),
             )
         }
 
+        /** Every top-level chat, completed ones included, newest first. */
         fun visible(list: JsonElement?): List<SessionSummary> =
             list.arr()?.mapNotNull { from(it) }?.filter { it.isVisible }?.sortedByDescending { it.updatedAt } ?: emptyList()
+    }
+}
+
+/**
+ * One group of the chat list, as the desktop's agent sidebar draws it
+ * (apps/desktop/src/renderer/views/WorkspacesView.tsx): General for chats in
+ * no known folder, then one per project folder in the computer's order.
+ */
+data class ChatGroup(
+    /** [GENERAL] or the folder's id. */
+    val key: String,
+    val name: String,
+    /** Active chats: dragged ones in their manual order first, then most recent. */
+    val active: List<SessionSummary>,
+    /** Completed chats, most recently completed first. */
+    val completed: List<SessionSummary>,
+) {
+    companion object {
+        const val GENERAL = "__none"
+
+        /**
+         * Split [chats] into the desktop's groups. General comes first and is
+         * left out when it has nothing in it; a folder is listed even when empty,
+         * as the desktop lists it ("No active agents").
+         */
+        fun of(chats: List<SessionSummary>, folders: List<WorkspaceFolder>): List<ChatGroup> {
+            val known = folders.map { it.id }.toSet()
+            val byGroup = chats.groupBy { s -> s.workspaceId?.takeIf { it in known } ?: GENERAL }
+            fun group(key: String, name: String): ChatGroup {
+                val all = byGroup[key].orEmpty()
+                val active = all.filter { !it.archived }.sortedWith(
+                    compareBy<SessionSummary> { it.order == null }
+                        .thenBy { it.order ?: 0.0 }
+                        .thenByDescending { it.updatedAt },
+                )
+                val completed = all.filter { it.archived }.sortedByDescending { it.archivedAt ?: 0L }
+                return ChatGroup(key, name, active, completed)
+            }
+            val general = group(GENERAL, "General")
+            return buildList {
+                if (general.active.isNotEmpty() || general.completed.isNotEmpty()) add(general)
+                folders.forEach { add(group(it.id, it.name)) }
+            }
+        }
     }
 }
 

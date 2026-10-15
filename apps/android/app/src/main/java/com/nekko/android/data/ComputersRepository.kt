@@ -20,6 +20,7 @@ import com.nekko.protocol.SessionSummary
 import com.nekko.protocol.WorkspaceFolder
 import kotlinx.coroutines.CancellationException
 import com.nekko.protocol.PcSettings
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -249,6 +250,8 @@ class ComputersRepository(
     /** App came to the foreground: reconnect now rather than after the backoff. */
     fun nudge() {
         client?.nudge()
+        // Chats completed, restored or started on the computer meanwhile send no event: re-read the list.
+        if (_state.value.conn == RelayState.ONLINE) scheduleSummaries()
     }
 
     /**
@@ -261,10 +264,23 @@ class ComputersRepository(
         _state.update { it.copy(pcSettings = PcSettings.from(reply)) }
     }
 
-    /** Complete a chat (the desktop's archive): it leaves the list, nothing is deleted. */
+    /** Complete a chat (the desktop's archive): it moves under its group's Completed, nothing is deleted. */
     suspend fun completeChat(sessionId: String) {
-        remote().call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), buildJsonObject { put("archivedAt", now()) })
-        dropFromList(sessionId)
+        val at = now()
+        remote().call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), buildJsonObject { put("archivedAt", at) })
+        setArchived(sessionId, at)
+    }
+
+    /** Bring a completed chat back to the active list, like the desktop's Restore. */
+    suspend fun restoreChat(sessionId: String) {
+        remote().call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), buildJsonObject { put("archivedAt", JsonNull) })
+        setArchived(sessionId, null)
+    }
+
+    private fun setArchived(sessionId: String, at: Long?) {
+        _state.update { s ->
+            s.copy(summaries = s.summaries.map { if (it.id == sessionId) it.copy(archived = at != null, archivedAt = at) else it })
+        }
     }
 
     /** Delete a chat on the computer for good. */

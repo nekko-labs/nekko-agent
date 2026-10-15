@@ -24,17 +24,50 @@ class WireTest {
         assertFalse(list.toString().contains("sk-"))
     }
 
-    @Test fun `summaries keep real top-level unarchived chats newest first`() {
+    @Test fun `summaries keep real top-level chats, completed ones too, newest first`() {
         val list = SessionSummary.visible(json("""[
           {"id":"a","title":"A","updatedAt":1},
-          {"id":"b","title":"B","updatedAt":3},
+          {"id":"b","title":"B","updatedAt":3,"workspaceId":"w1","order":2.5},
           {"id":"c","title":"C","updatedAt":5,"archivedAt":4},
           {"id":"d","title":"D","updatedAt":6,"parentSessionId":"a"},
           {"id":"e","title":"E","updatedAt":7,"taskId":"t"},
           {"id":"f","title":"F","updatedAt":8,"trainingRunId":"r"},
           {"id":"g","title":"G","updatedAt":2,"archivedAt":null}
         ]"""))
-        assertEquals(listOf("b", "g", "a"), list.map { it.id })
+        assertEquals(listOf("c", "b", "g", "a"), list.map { it.id })
+        val c = list.first { it.id == "c" }
+        assertTrue(c.archived)
+        assertEquals(4L, c.archivedAt)
+        assertFalse(list.first { it.id == "g" }.archived)
+        assertNull(list.first { it.id == "g" }.archivedAt)
+        assertEquals("w1", list.first { it.id == "b" }.workspaceId)
+        assertEquals(2.5, list.first { it.id == "b" }.order!!, 0.0)
+    }
+
+    @Test fun `chat groups follow the desktop sidebar - General, then each folder, active and completed apart`() {
+        val chats = SessionSummary.visible(json("""[
+          {"id":"g1","title":"G1","updatedAt":10},
+          {"id":"g2","title":"G2","updatedAt":20,"archivedAt":30},
+          {"id":"lost","title":"Lost","updatedAt":5,"workspaceId":"gone"},
+          {"id":"p1","title":"P1","updatedAt":40,"workspaceId":"w1"},
+          {"id":"p2","title":"P2","updatedAt":50,"workspaceId":"w1"},
+          {"id":"p3","title":"P3","updatedAt":1,"workspaceId":"w1","order":1},
+          {"id":"p4","title":"P4","updatedAt":60,"workspaceId":"w1","archivedAt":70},
+          {"id":"p5","title":"P5","updatedAt":61,"workspaceId":"w1","archivedAt":90}
+        ]"""))
+        val folders = listOf(WorkspaceFolder("w1", "app"), WorkspaceFolder("w2", "site"))
+        val groups = ChatGroup.of(chats, folders)
+        assertEquals(listOf(ChatGroup.GENERAL, "w1", "w2"), groups.map { it.key })
+        assertEquals(listOf("General", "app", "site"), groups.map { it.name })
+        // A chat filed under a folder the computer no longer has falls back to General, like the desktop.
+        assertEquals(listOf("g1", "lost"), groups[0].active.map { it.id })
+        assertEquals(listOf("g2"), groups[0].completed.map { it.id })
+        // Dragged order first, then the most recent; completed by when they were completed.
+        assertEquals(listOf("p3", "p2", "p1"), groups[1].active.map { it.id })
+        assertEquals(listOf("p5", "p4"), groups[1].completed.map { it.id })
+        // An empty folder is still listed; an empty General is not.
+        assertTrue(groups[2].active.isEmpty() && groups[2].completed.isEmpty())
+        assertEquals(listOf("w1"), ChatGroup.of(chats.filter { it.workspaceId == "w1" }, folders.take(1)).map { it.key })
     }
 
     @Test fun `session decodes messages, tool calls and mixed queue entries`() {

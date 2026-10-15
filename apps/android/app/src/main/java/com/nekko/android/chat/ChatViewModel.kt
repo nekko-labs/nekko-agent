@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 
 /** Android wrapper around [ChatController]: wires it to the repository's state and events. */
 class ChatViewModel(
-    sessionId: String,
+    private val sessionId: String,
     private val repo: ComputersRepository,
     /** The phone's microphone and its settings; null keeps dictation off (tests, previews). */
     mic: MicHardware? = null,
@@ -58,6 +58,14 @@ class ChatViewModel(
             repo.events.collect { e -> if (controller.onEvent(e)) launch { controller.reload() } }
         }
     }
+
+    /** When this chat was completed on the computer; null while it is active. */
+    val completedAt: StateFlow<Long?> = repo.state.map { s -> s.summaries.firstOrNull { it.id == sessionId }?.archivedAt }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.summaries.firstOrNull { it.id == sessionId }?.archivedAt)
+
+    /** Bring this completed chat back to the active list. */
+    suspend fun restore() = repo.restoreChat(sessionId)
 
     suspend fun send(text: String) = controller.send(text)
     fun stop() = controller.stop()

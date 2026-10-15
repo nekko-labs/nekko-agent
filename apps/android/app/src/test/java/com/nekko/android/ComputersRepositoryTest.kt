@@ -371,18 +371,52 @@ class ComputersRepositoryTest {
     }
 
     @Test
-    fun `complete archives on the computer, delete deletes, both leave the list`() = runTest {
+    fun `complete archives and keeps the chat as completed, restore brings it back, delete removes it`() = runTest {
+        val remotes = FakeRemotes { c ->
+            if (c.channel == Channels.SESSIONS_SUMMARIES) buildJsonArray {
+                add(buildJsonObject { put("id", "s1"); put("title", "One"); put("updatedAt", 5) })
+                add(buildJsonObject { put("id", "s2"); put("title", "Two"); put("updatedAt", 6); put("archivedAt", 7) })
+            } else FakeRemotes.defaultAnswer(c)
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        // Completed chats come down with the active ones.
+        assertEquals(listOf("s2", "s1"), repo.state.value.summaries.map { it.id })
+        assertTrue(repo.state.value.summaries.first { it.id == "s2" }.archived)
+
+        repo.completeChat("s1")
+        val complete = remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }
+        assertEquals("\"s1\"", complete.args[0].toString())
+        assertEquals("""{"archivedAt":1000}""", complete.args[1].toString())
+        val s1 = repo.state.value.summaries.first { it.id == "s1" }
+        assertTrue(s1.archived)
+        assertEquals(1000L, s1.archivedAt)
+
+        repo.restoreChat("s2")
+        val restore = remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }
+        assertEquals("\"s2\"", restore.args[0].toString())
+        assertEquals("""{"archivedAt":null}""", restore.args[1].toString())
+        assertFalse(repo.state.value.summaries.first { it.id == "s2" }.archived)
+
+        repo.deleteChat("s2")
+        assertEquals("\"s2\"", remotes.last.calls.last { it.channel == Channels.SESSION_DELETE }.args.single().toString())
+        assertEquals(listOf("s1"), repo.state.value.summaries.map { it.id })
+    }
+
+    @Test
+    fun `coming back to the app re-reads the chat list`() = runTest {
         val remotes = FakeRemotes()
         val repo = repo(remotes = remotes)
         repo.pair(link)
         remotes.last.goOnline()
         runCurrent()
-        repo.completeChat("s1")
-        val complete = remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }
-        assertEquals("\"s1\"", complete.args[0].toString())
-        assertEquals("""{"archivedAt":1000}""", complete.args[1].toString())
-        repo.deleteChat("s2")
-        assertEquals("\"s2\"", remotes.last.calls.last { it.channel == Channels.SESSION_DELETE }.args.single().toString())
+        val before = remotes.last.channels().count { it == Channels.SESSIONS_SUMMARIES }
+        repo.nudge()
+        advanceTimeBy(601)
+        runCurrent()
+        assertEquals(before + 1, remotes.last.channels().count { it == Channels.SESSIONS_SUMMARIES })
     }
 
     @Test
