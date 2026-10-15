@@ -15,6 +15,7 @@ import com.nekko.android.data.ThemePrefs
 import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.haptics.EventHaptics
 import com.nekko.android.lock.AppLock
+import com.nekko.android.share.ShareInbox
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +34,8 @@ class NekkoApp : Application() {
         private set
     lateinit var appLock: AppLock
         private set
+    /** Text shared from other apps on its way to a chat's composer; memory only. */
+    val shareInbox = ShareInbox()
     lateinit var haptics: AndroidHaptics
         private set
 

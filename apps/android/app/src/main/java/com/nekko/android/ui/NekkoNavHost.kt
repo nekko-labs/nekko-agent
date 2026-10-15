@@ -15,7 +15,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nekko.android.DeepLink
-import com.nekko.android.NekkoApp
+import com.nekko.android.share.ShareInbox
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
@@ -49,6 +49,7 @@ fun NekkoNavHost(
     repo: ComputersRepository,
     themePrefs: ThemePrefs,
     phonePrefs: PhonePrefs,
+    shareInbox: ShareInbox,
     haptics: AndroidHaptics? = null,
     incomingLink: StateFlow<DeepLink?>,
     onLinkHandled: () -> Unit,
@@ -59,6 +60,8 @@ fun NekkoNavHost(
         when (val l = link) {
             is DeepLink.Pair -> nav.navigate(Routes.pair(l.raw)) { launchSingleTop = true }
             is DeepLink.Chat -> nav.navigate(Routes.chat(l.id)) { launchSingleTop = true }
+            // Over whatever is open; Back from New chat returns there.
+            DeepLink.Share -> nav.navigate(Routes.NEW) { launchSingleTop = true }
             null -> return@LaunchedEffect
         }
         onLinkHandled()
@@ -78,17 +81,23 @@ fun NekkoNavHost(
         composable(Routes.CHAT, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("id").orEmpty()
             val vm = viewModel(key = "chat:$id") { ChatViewModel(id, repo) }
-            // Opening the chat answers its notification, if one is up.
-            val app = LocalContext.current.applicationContext as? NekkoApp
-            LaunchedEffect(id) { app?.connection?.notices?.clear(id) }
-            ChatScreen(vm = vm, onBack = { nav.popBackStack() })
+            // Text shared into a chat that was just created; taken once, never sent by itself.
+            val draft = remember(id) { shareInbox.takeDraft(id) }
+            ChatScreen(vm = vm, initialDraft = draft, onBack = { nav.popBackStack() })
         }
         composable(Routes.NEW) {
+            val shared by shareInbox.shared.collectAsStateWithLifecycle()
             NewChatScreen(
                 repo = repo,
-                onBack = { nav.popBackStack() },
+                shared = shared,
+                onEditShared = shareInbox::edit,
+                onBack = {
+                    shareInbox.clear()
+                    nav.popBackStack()
+                },
                 onPair = { nav.navigate(Routes.pair()) },
                 onCreated = { id ->
+                    shareInbox.handOff(id)
                     nav.navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } }
                 },
             )

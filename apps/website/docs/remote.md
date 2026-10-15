@@ -44,6 +44,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version and the open-source licenses of the app and the libraries it ships.
 >
+> **Share to Nekko** (Android): in any app's share menu, pick **Nekko Agent** to start a new chat
+> with the shared text or link. You can edit it on the New chat screen; after you start the chat it
+> waits in the message box and you send it yourself. Nekko never sends shared text on its own, and
+> it is kept only in memory until then. Text and links only for now, up to 20,000 characters.
 > **Vibration** (Android): while the app is open, the phone vibrates when the agent needs your
 > approval (two pulses) or asks you a question (one long pulse). In **Settings → Vibration** you can
 > also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them

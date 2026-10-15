@@ -8,6 +8,9 @@ sealed interface DeepLink {
     /** `nekko-agent://chat/<id>`: open one of the active computer's chats. */
     data class Chat(val id: String) : DeepLink
 
+    /** Text shared from another app (the text itself waits in ShareInbox): open New chat. */
+    data object Share : DeepLink
+
     companion object {
         /** Pure so it can be unit-tested; MainActivity feeds it the parts of an android.net.Uri. */
         fun from(raw: String, scheme: String?, host: String?, path: List<String>): DeepLink? {
