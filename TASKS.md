@@ -125,6 +125,7 @@ Layout: `apps/android` is a standalone Gradle build (wrapper 9.8.1, AGP 9.4.1 wi
 - [x] **AN-11, Share to Nekko.** `ACTION_SEND text/plain` → New chat with the shared text editable (`share/SharedText.kt` parsing, `share/ShareInbox.kt` memory-only hand-off, 15 JVM tests), then pre-filled in the new chat's composer, never sent automatically; behind the app lock. Verified on an API 37 emulator against a sandbox agent. Still open: physical device; images/files (AN-8).
 - [x] **AN-13, Vibration.** *Settings → Vibration*, one switch per `PhoneEvent` (approval and question on by default), foreground only, never silent/DND, sub-agent finish ignored, 1.5 s gap (`haptics/EventHaptics.kt` with 7 JVM tests, `haptics/AndroidHaptics.kt`). Verified on an API 37 emulator via `dumpsys vibrator_manager`. Still open: feel the patterns on a physical phone.
 - [x] **AN-14, The computer's settings from the phone.** *Settings → On <computer>*: default chat mode (YOLO allowed, with a one-time confirmation), long-press action (Complete/Delete), confirm before deleting; long-press on a chat runs that action (`PcSettings` in Wire.kt, `updatePcSettings` / `completeChat` / `deleteChat`, `PcSettingsSection.kt`). Policy parity test against `phone-access.json`. Verified on an API 37 emulator against a sandbox agent. Still open: physical device, desktop daemon edition.
+- [x] **AN-15, Dictation.** Microphone in the message box; text inserted, never sent. Whisper on the computer via `voice:transcribe` (30 s cap for the relay's 10 MB frame), else Android's recognizer; *Settings → Dictation* (`voice/Wav.kt`, `Dictation.kt`, `DictationController.kt`, `Recorder.kt`, `PhoneRecognizer.kt`; 24 new JVM tests). Verified end to end on an API 37 emulator with real Whisper and injected speech. Still open: physical device (speech quality, the phone recognizer end to end, Bluetooth headsets).
 - [ ] **AN-6, Push.** FCM token → relay `register-push` after pairing; needs a Firebase project (`google-services.json`) and the relay's FCM service account.
 - [ ] **AN-7, Phone models.** llama.cpp via JNI/NDK (or a maintained binding), memory-fit catalog, resumable downloads with integrity checks, no backup of model files, one loaded model, thermal handling. Parity with the Expo "On this phone" tab.
 - [ ] **AN-8, Markdown + attachments** in transcripts (no remote image fetches).
@@ -890,14 +891,14 @@ Verification: `npm run typecheck` across workspaces, host tests (`oauth`, `downl
 
 ### Chat completion X icons ([#533](https://github.com/nekko-labs/nekko-agent/issues/533))
 
-Planned, not implemented: multiple users did not recognize the checkmark as a way to close chats. Replace the completion-action checkmark with the existing X (`CloseIcon`) in chat pane headers and active chat cards/saved-chat rows, preserving completion/archive semantics, 60-day retention, restoration, shortcuts and existing exit timing. Delete remains a separate trash-icon action; unrelated status checkmarks are unchanged. See the [detailed implementation plan](reports/chat-close-icon-implementation-plan.md) and [planned specification](SPEC.md#chat-completion-x-icons-planned).
+Implemented 2026-10-15 ([SPEC.md](SPEC.md#chat-completion-x-icons-and-idle-auto-completion-2026-10-15)): `CloseIcon` replaces the completion checkmark in `PaneFrame.tsx` and `WorkspaceCard.tsx`; Delete keeps `TrashIcon`; handlers, labels, sizes and exit timing are unchanged. Idle auto-completion: `AUTO_COMPLETE_CHOICES`/`autoCompleteDays`/`agentsToAutoComplete` in `packages/shared/src/archive.ts`, setting `autoCompleteAfterDays`, store `autoCompleteIdle` (refuses when `runningSessions`/`pendingInput` fail; completes via `setSessionOptions({archivedAt})`, closes windows, one toast), swept from `App.tsx` at launch and every 6 h, Settings → General select.
 
-- [ ] Audit current completion controls and arrange isolated unchanged-base wide/narrow light/dark evidence.
-- [ ] Substitute `CloseIcon` in `PaneFrame.tsx` and `WorkspaceCard.tsx`, preserving icon sizes, handlers, accurate labels and configured Delete behavior.
-- [ ] Add focused icon/lifecycle regressions; run desktop tests, typecheck and build.
-- [ ] Inspect matched visual evidence and completion recording; verify archive/restore, failure recovery, keyboard activation, reduced motion and no click propagation.
-- [ ] Update the implemented SPEC.md description and walkthrough; regenerate docs.
-- [ ] Publish evidence in the implementation PR, pass required checks/reviews, then land and close #533. Do not close the issue with the planning-only PR.
+- [x] Audit current completion controls and arrange isolated unchanged-base wide/narrow light/dark evidence (2026-10-15).
+- [x] Substitute `CloseIcon` in `PaneFrame.tsx` and `WorkspaceCard.tsx`, preserving icon sizes, handlers, accurate labels and configured Delete behavior (2026-10-15).
+- [x] Add focused icon/lifecycle regressions; run desktop tests, typecheck and build (2026-10-15: `PaneFrame.test.tsx`, `WorkspaceCardContext.test.tsx`, `store-autocomplete.test.ts`, `archive.test.ts`; 1049 desktop tests).
+- [x] Inspect matched visual evidence; the lifecycle harness now also crops the header and card controls from their real rectangles at 5x (2026-10-15). The existing completion motion recording covers the unchanged exit.
+- [x] Update the implemented SPEC.md description and walkthrough; regenerate docs (2026-10-15).
+- [ ] Publish evidence in the implementation PR, pass required checks, then land and close #533.
 
 ### Later: native shell and the phone as its own product (added 2026-09-30)
 
@@ -1646,3 +1647,9 @@ Ask: rather than copying many skills into the bundled catalog, let users find sk
 - [ ] Screenshots are inspected in-session but not saved as files or published (native capture timed out; no PR opened, the request was a branch). Dark theme, phone width, Claude Code / Codex targets and GitHub search with a token not exercised in the UI.
 - [ ] Not built: background refresh of GitHub shelves, update notices for installed GitHub skills, installing a skill's scripts/references, `nekko-agent skills install <github-url>` (CLI/MCP), daemon-side (Rust) ownership of the new channels (they are host-served).
 
+
+## Agent window controls refresh (2026-10-15)
+
+- [x] Implement Zen-only wall actions, leftmost glowing Changes diff totals, action/panel divider, labeled Agent Monitor and top-left activity glyph. See [SPEC](SPEC.md#agent-window-controls-refresh-2026-10-15).
+- [x] Verify desktop regressions, production build/typecheck, matched isolated renderer captures and publish evidence in PR #563.
+- [ ] Land PR #563 after hosted checks and final evidence audit.

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Direction, DropTarget, PaneKind, WbPane } from '../layout.js';
-import { CheckIcon, CloseIcon, TrashIcon, MinimizeIcon } from '../icons.js';
+import { CloseIcon, TrashIcon, MinimizeIcon } from '../icons.js';
 import { useStore } from '../store.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { confirmDeletion } from './DeleteConfirmation.js';
@@ -275,7 +275,8 @@ export function PaneFrame({
           aria-label={`${action === 'complete' ? 'Complete' : action === 'delete' ? 'Delete' : 'Close'} ${title}`}
           onClick={action === 'complete' ? complete : action === 'delete' || pane.kind === 'terminal' ? deleteWindow : onClose}
         >
-          {action === 'complete' ? <CheckIcon className="h-3 w-3" /> : action === 'delete' ? <TrashIcon className="h-3 w-3" /> : <CloseIcon className="h-3 w-3" />}
+          {/* An X reads as "close" to everyone; for a chat it completes (kept, restorable), never deletes. */}
+          {action === 'delete' ? <TrashIcon className="h-3 w-3" /> : <CloseIcon className="h-3 w-3" />}
         </button>
       </div>
 

@@ -30,7 +30,8 @@ describe('agent status glyphs', () => {
   it('uses the glyphs in wall window strips and the wall composer', () => {
     // The wall passes the status as a value (memo-friendly); ChatPane draws the glyph.
     expect(source('./CommandWall.tsx')).toContain("status={agentStatus ?? 'idle'}");
-    expect(source('./ChatPane.tsx')).toContain("<StatusIcon status={status === 'idle' ? undefined : status} />");
+    expect(source('./CommandWall.tsx')).toContain('<span data-agent-status><StatusIcon status={agentStatus} /></span><NumberedAgentIcon');
+    expect(source('./ChatPane.tsx')).not.toContain('agent-footer-status');
     expect(source('./WallComposer.tsx')).toContain('<StatusIcon status={agent.glyph} />');
     expect(source('./WallComposer.tsx')).not.toContain('animate-pulse rounded-full');
   });

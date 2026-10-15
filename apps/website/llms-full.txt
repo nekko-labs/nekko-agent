@@ -251,7 +251,7 @@ These 2026-10-13 changes are implemented and unit/fixture interaction tested. Ma
 
 ### Complete, minimize, and delete
 
-Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts target the window you are using, not every chat. **Complete** keeps the chat under its group's **Show completed** control in the left Agent panel for 60 days. **Minimize** removes only the board window: the item remains in the Agent panel, and a terminal keeps running. Terminals do not have completed history; **Close** ends their process.
+Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts target the window you are using, not every chat. The **X** in a chat window's top-right corner (and on its card) is **Complete**: it closes the window and keeps the chat under its group's **Show completed** control in the left Agent panel for 60 days, where you can read or restore it. It never deletes; **Delete** is a separate trash action. Agents you have not touched for a month are completed for you the same way; change or turn this off under Settings → **Complete idle agents after** (1 week, 2 weeks, 1 month, 3 months or Never). Pinned, running, waiting and sub-agent chats are never completed automatically. **Minimize** removes only the board window: the item remains in the Agent panel, and a terminal keeps running. Terminals do not have completed history; **Close** ends their process.
 
 Settings has **Show tips**, enabled by default. Your first successful completion highlights Show completed with a dismissible explanation. On a narrow screen, the existing agent list drawer opens automatically to reveal Show completed without taking focus. If you close it, the highlighted Agents button lets you return to the destination. Opening or closing the drawer does not dismiss the tip. Turning tips off does not disable deletion warnings. The in-app delete dialog offers **Skip future deletion confirmations**; only choose it if you want permanent deletions without another prompt. Re-enable **Confirm deletions** in Settings at any time. General chats no longer display a redundant missing-project label.
 
@@ -411,6 +411,11 @@ Questions or ideas? Open an issue on
 
 Drag a project group header in the agent panel onto another group to place it before that group. A quick gap opens above the hovered group (beside it in the horizontal panel) and closes when you move away. You can drop on either the header or an agent card in that group. The project order is saved. Dragging an individual agent card still reorders or moves that agent, rather than the whole group.
 
+### Agent window controls
+
+Changes is the leftmost header control. When the agent edits files it glows and shows added/deleted line totals plus the changed-file count. Click it to review the diff. Zen focuses that window; a small divider separates this action from the Files, Browser and Logs panel buttons. The activity icon is at the top left before the numbered agent icon.
+
+**Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
 
 ## Reports and artifacts in chat
 
@@ -807,6 +812,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > before switching), what a long-press on a chat does (Complete, which moves it to Completed, or
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
 > its Settings. A long-press on a chat in the list then completes or deletes it on the computer.
+>
+> **Dictation** (Android): tap the microphone in a chat's message box, speak, and tap again (or stop
+> at 30 seconds). The words go into the message box for you to check and send; nothing is sent by
+> itself. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
+> end-to-end encrypted, the audio never reaches anyone else); install and switch it on there under
+> **Settings → Nekko Voice**. When the computer can't, the phone's own speech recognizer is used,
+> which on many phones sends the audio to Google. **Settings → Dictation** on the phone lets you use
+> only the computer, only the phone, or turn the microphone off.
 >
 > The Android app is **locked by default**: every time you open it, or come back to it, it asks for
 > your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows

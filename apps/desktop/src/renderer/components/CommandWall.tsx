@@ -36,6 +36,7 @@ import { FilePane } from './FilePane.js';
 import { ExplorerPane } from './ExplorerPane.js';
 import { WorkingSubagents } from './WorkingSubagents.js';
 import { NumberedAgentIcon } from './NumberedChatIcon.js';
+import { ZenIcon } from '../icons.js';
 import { StatusIcon, agentStatusOfLane, type AgentStatus } from './WorkspaceCard.js';
 import { BrowserPane } from './BrowserPane.js';
 import { DiffPane } from './DiffPane.js';
@@ -584,9 +585,8 @@ export function CommandWall({
         <PaneFrame
           pane={pane}
           title={title}
-          icon={pane.kind === 'chat' ? <NumberedAgentIcon number={n} /> : iconOf(pane.kind)}
-          // A chat's status glyph (rocket, Zz, ?) sits in its footer's far
-          // bottom-right corner (ChatPane). A terminal keeps its strip dot.
+          icon={pane.kind === 'chat' ? <><span data-agent-status><StatusIcon status={agentStatus} /></span><NumberedAgentIcon number={n} /></> : iconOf(pane.kind)}
+          // Activity precedes the numbered agent icon; terminals keep their strip dot.
           statusIndicator={session ? undefined : status && <span role="img" aria-label={status.label} title={status.label} className="h-2 w-2 shrink-0 rounded-full" style={{ background: status.live ? 'var(--success)' : 'var(--ink-faint)' }} />}
           badge={
             <>
@@ -620,16 +620,8 @@ export function CommandWall({
               absolutely positioned content and could not be seen. */}
           {openable && (
             <PaneActions>
-               {state.layout.mode !== 'focus' && <button className="command-wall-action" title="Switch to Focus mode (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><LayoutIcon className="h-3.5 w-3.5" /></button>}
-               {companions.length > 0 && <button className="command-wall-action" title={`${folded ? 'Expand' : 'Fold'} companions (${companions.length})`} aria-label={`${folded ? 'Expand' : 'Fold'} companions for ${title} (${companions.length})`} aria-expanded={showCompanions} onClick={() => live.current.setState((s) => ({ ...s, folded: { ...s.folded, [pane.refId]: !folded } }))}>⧉ {companions.length}</button>}
-              <button
-                className="rounded-sm p-1 text-ink-faint hover:text-ink"
-                title={`Open ${title}`}
-                aria-label={`Open ${title} in the Agent tab`}
-                onClick={() => (pane.kind === 'chat' ? live.current.onOpenChat(pane.refId) : live.current.onOpenTerminal(pane.refId))}
-              >
-                <ExternalIcon className="h-3 w-3" />
-              </button>
+              <span className="agent-action-separator" aria-hidden="true" />
+              <button className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><ZenIcon className="h-3.5 w-3.5" /></button>
             </PaneActions>
           )}
           {deckCard && <button className="command-wall-card" onClick={() => live.current.focusWindow(pane)} aria-label={`Focus ${title}`}>{terminal ? <TerminalExcerpt terminalId={terminal.id} /> : <span>{session?.lastReplyText || 'No reply yet'}</span>}<small>{session ? `${session.modelId || 'Default model'} · ${session.transcriptTokens.toLocaleString()} context tokens` : status?.label}</small></button>}
