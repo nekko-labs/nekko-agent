@@ -1649,4 +1649,5 @@ Ask: rather than copying many skills into the bundled catalog, let users find sk
 ## Agent window controls refresh (2026-10-15)
 
 - [x] Implement Zen-only wall actions, leftmost glowing Changes diff totals, action/panel divider, labeled Agent Monitor and top-left activity glyph. See [SPEC](SPEC.md#agent-window-controls-refresh-2026-10-15).
-- [ ] Verify regressions, inspect matched isolated renderer captures and motion, publish evidence and land the PR.
+- [x] Verify desktop regressions, production build/typecheck, matched isolated renderer captures and publish evidence in PR #563.
+- [ ] Land PR #563 after hosted checks and final evidence audit.

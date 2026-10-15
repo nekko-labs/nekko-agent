@@ -75,6 +75,7 @@ app.whenReady().then(async () => {
     await sleep(500);
     await run("document.documentElement.dataset.theme='dark'");
     const frames = path.join(runDir, 'motion'); fs.mkdirSync(frames);
+    await run('window.__setChanges(true)'); await sleep(300);
     const times = [];
     for (let i=0; i<36; i++) {
       if (i===6) await run("window.__setChanges(false)");
