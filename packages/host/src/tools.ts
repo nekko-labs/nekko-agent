@@ -89,19 +89,46 @@ function resolvePath(p: string, opts: ToolHostOptions): string {
   return isAbsolute(p) ? resolve(p) : resolve(base, p);
 }
 
+/** The string rule: relative(root, target) is empty, or neither starts with `..` nor is absolute. */
+function within(root: string, target: string): boolean {
+  const rel = relative(root, target);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+/**
+ * Where a path really is: its deepest existing ancestor with links followed,
+ * plus the part that does not exist yet as given. A path with no existing
+ * ancestor at all comes back as is.
+ */
+function realLocation(p: string): string {
+  let existing = p;
+  const rest: string[] = [];
+  for (;;) {
+    try {
+      return resolve(realpathSync.native(existing), ...[...rest].reverse());
+    } catch {
+      const parent = dirname(existing);
+      if (parent === existing) return resolve(p);
+      rest.push(basename(existing));
+      existing = parent;
+    }
+  }
+}
+
+/**
+ * The jail checks the resolved strings first, then the filesystem: a symlink
+ * or junction inside a workspace that points outside it is refused (#550).
+ */
 function assertInJail(target: string, opts: ToolHostOptions): void {
   if (opts.settings.sandboxMode !== 'workspace-jail') return;
   const roots = jailRoots(opts.settings);
   if (roots.length === 0) return; // nothing to jail against yet
-  const ok = roots.some((root) => {
-    const rel = relative(root, target);
-    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-  });
-  if (!ok) {
-    throw new Error(
-      `Sandbox: ${target} is outside the workspace folders. Add the folder or switch sandbox mode in Settings.`,
-    );
-  }
+  const outside = () => new Error(
+    `Sandbox: ${target} is outside the workspace folders. Add the folder or switch sandbox mode in Settings.`,
+  );
+  if (!roots.some((root) => within(root, target))) throw outside();
+  const realTarget = realLocation(target);
+  if (!roots.some((root) => within(realLocation(root), realTarget))) throw outside();
 }
 
 const ok = (call: ToolCall, output: string): ToolResult => ({ toolCallId: call.id, output });

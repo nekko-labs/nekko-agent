@@ -34,6 +34,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.ui.components.ConnectionBanner
+import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
@@ -58,6 +62,7 @@ import com.nekko.android.util.ago
 import com.nekko.android.util.plainText
 import com.nekko.protocol.Activity
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.PcSettings
 import com.nekko.protocol.SessionSummary
 import kotlinx.coroutines.launch
 
@@ -76,6 +81,46 @@ fun ChatsScreen(
     val scope = rememberCoroutineScope()
     var pulling by remember { mutableStateOf(false) }
     val active = s.active
+    // Long-press on a chat: the computer's own action (Complete or Delete) for it.
+    var pressed by remember { mutableStateOf<SessionSummary?>(null) }
+    var confirmDelete by remember { mutableStateOf<SessionSummary?>(null) }
+    var actionError by remember { mutableStateOf<String?>(null) }
+    val run: (SessionSummary, Boolean) -> Unit = { chat, delete ->
+        actionError = null
+        scope.launch {
+            try {
+                if (delete) repo.deleteChat(chat.id) else repo.completeChat(chat.id)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                actionError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t change that chat."
+            }
+        }
+    }
+    pressed?.let { chat ->
+        val delete = s.pcSettings.effectiveAction == PcSettings.ChatAction.DELETE
+        ChatActionDialog(
+            title = plainText(chat.title).ifEmpty { "New chat" },
+            delete = delete,
+            computer = active?.name ?: "your computer",
+            onDismiss = { pressed = null },
+            onConfirm = {
+                pressed = null
+                if (delete && s.pcSettings.confirmDelete) confirmDelete = chat else run(chat, delete)
+            },
+        )
+    }
+    confirmDelete?.let { chat ->
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            title = { Text("Delete this chat?") },
+            text = { Text("“${plainText(chat.title).ifEmpty { "New chat" }}” will be deleted from ${active?.name ?: "your computer"} for good. This can’t be undone.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = null; run(chat, true) }) { Text("Delete", color = p.danger) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } },
+        )
+    }
 
     Scaffold(
         containerColor = p.paper,
@@ -124,6 +169,7 @@ fun ChatsScreen(
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                     item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers) }
                     item(key = "header") { SectionHeader("On ${active.name}") }
+                    actionError?.let { msg -> item(key = "action-error") { Notice(msg, Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) } }
                     if (s.summaries.isEmpty()) {
                         item(key = "empty") {
                             Text(
@@ -139,7 +185,7 @@ fun ChatsScreen(
                         }
                     }
                     items(s.summaries, key = { it.id }) { summary ->
-                        ChatRow(summary, s.activity[summary.id]) { onOpenChat(summary.id) }
+                        ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
                     }
                 }
             }
@@ -147,14 +193,36 @@ fun ChatsScreen(
     }
 }
 
+/** What a long-press offers: the one action the computer is set to (Settings → On <computer>). */
 @Composable
-private fun ChatRow(s: SessionSummary, activity: Activity?, onClick: () -> Unit) {
+private fun ChatActionDialog(title: String, delete: Boolean, computer: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val p = Nekko.palette
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            Text(
+                if (delete) "Delete it from $computer. You can change this action in Settings."
+                else "Move it to Completed on $computer. Nothing is deleted; you can change this action in Settings.",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(if (delete) "Delete" else "Complete", color = if (delete) p.danger else p.accent)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onClick)
+            .combinedClickable(role = Role.Button, onLongClickLabel = "Chat actions", onLongClick = onLongClick, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

@@ -43,9 +43,12 @@ class ComputersRepositoryTest {
     private val link = PairingLink("wss://relay.example.dev", room, key, pair = "ABC123")
     private val derived = ByteArray(32) { it.toByte() }
 
+    private val forgotten = mutableListOf<String>()
+
     private fun TestScope.repo(store: FakeStore = FakeStore(), remotes: FakeRemotes = FakeRemotes()): ComputersRepository {
         var n = 0
         return ComputersRepository(
+            onForget = { forgotten += it },
             store = store,
             remotes = remotes,
             scope = backgroundScope,
@@ -259,6 +262,37 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `load connects to the phone's default computer when it is still paired`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val first = repo(store, remotes)
+        val a = first.pair(link)
+        val b = first.pair(link.copy(relayUrl = "wss://other.example.dev"))
+        runCurrent()
+        assertEquals(b, first.state.value.activeId) // the last one paired is the last used
+        val second = repo(store, remotes)
+        second.load(preferredId = a)
+        runCurrent()
+        assertEquals(a, second.state.value.activeId)
+        val third = repo(store, remotes)
+        third.load(preferredId = "gone")
+        runCurrent()
+        assertEquals(a, third.state.value.activeId) // an unknown default falls back to the last used
+        val fourth = repo(store, remotes)
+        fourth.load()
+        runCurrent()
+        assertEquals(a, fourth.state.value.activeId) // no default: as before
+    }
+
+    @Test
+    fun `forgetting a computer tells the phone's other settings`() = runTest {
+        val r = repo()
+        r.pair(link)
+        r.forget("id-1")
+        assertEquals(listOf("id-1"), forgotten)
+    }
+
+    @Test
     fun `loadModels caches per provider`() = runTest {
         val remotes = FakeRemotes { c ->
             if (c.channel == Channels.MODELS_LIST) {
@@ -313,6 +347,42 @@ class ComputersRepositoryTest {
         val again = repo.loadAllModels(force = true)
         assertEquals(listOf("opus"), again[1].models?.map { it.id })
         assertNull(again[1].error)
+    }
+
+    @Test
+    fun `the computer's phone-settable settings are read, changed, and the reply is what shows`() = runTest {
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.SETTINGS_GET -> buildJsonObject { put("defaultChatMode", "ask"); put("chatPaneAction", "complete") }
+                // The computer answers with its reduced view after saving.
+                Channels.SETTINGS_UPDATE -> buildJsonObject { put("defaultChatMode", "yolo"); put("chatPaneAction", "complete") }
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.ASK, repo.state.value.pcSettings.defaultChatMode)
+        repo.updatePcSettings(com.nekko.protocol.PcSettings.patch(mode = com.nekko.protocol.PcSettings.ChatMode.YOLO))
+        val sent = remotes.last.calls.last { it.channel == Channels.SETTINGS_UPDATE }
+        assertEquals("""{"defaultChatMode":"yolo"}""", sent.args.single().toString())
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.YOLO, repo.state.value.pcSettings.defaultChatMode)
+    }
+
+    @Test
+    fun `complete archives on the computer, delete deletes, both leave the list`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        repo.completeChat("s1")
+        val complete = remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }
+        assertEquals("\"s1\"", complete.args[0].toString())
+        assertEquals("""{"archivedAt":1000}""", complete.args[1].toString())
+        repo.deleteChat("s2")
+        assertEquals("\"s2\"", remotes.last.calls.last { it.channel == Channels.SESSION_DELETE }.args.single().toString())
     }
 
     @Test

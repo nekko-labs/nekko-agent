@@ -1,0 +1,208 @@
+package com.nekko.android.ui.settings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nekko.android.ui.components.NCard
+import com.nekko.android.ui.components.Notice
+import com.nekko.android.ui.components.SectionHeader
+import com.nekko.android.ui.components.Tone
+import com.nekko.android.ui.theme.Nekko
+import com.nekko.protocol.PcSettings
+import com.nekko.protocol.PcSettings.ChatAction
+import com.nekko.protocol.PcSettings.ChatMode
+import com.nekko.protocol.RelayState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+
+/**
+ * Settings → On <computer>: the computer's own settings that a paired phone may
+ * change (the computer refuses any other key). Changes are saved on the
+ * computer and show in its Settings too. Read-only while offline.
+ */
+@Composable
+fun PcSettingsSection(deps: SettingsDeps) {
+    val p = Nekko.palette
+    val scope = rememberCoroutineScope()
+    val c by deps.repo.state.collectAsStateWithLifecycle()
+    val active = c.active ?: return
+    val online = c.conn == RelayState.ONLINE
+    val pc = c.pcSettings
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var askYolo by rememberSaveable { mutableStateOf(false) }
+
+    val save: (JsonObject) -> Unit = { patch ->
+        error = null
+        busy = true
+        scope.launch {
+            try {
+                deps.repo.updatePcSettings(patch)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e.message?.takeIf { it.isNotBlank() } ?: "${active.name} didn’t save that."
+            } finally {
+                busy = false
+            }
+        }
+    }
+    // Never show the computer's settings before it has told us what they are:
+    // defaults drawn as if they were its values would be wrong (YOLO shown as Guardrails).
+    val enabled = online && !busy && pc.known
+
+    if (!pc.known) {
+        SectionHeader("On ${active.name}")
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            Text(
+                if (online) "Reading ${active.name}’s settings…"
+                else "${active.name} is offline. Its chat mode, chat action and delete confirmation show here once it’s connected.",
+                style = MaterialTheme.typography.bodySmall,
+                color = p.inkFaint,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
+            )
+        }
+        return
+    }
+
+    SectionHeader("On ${active.name}")
+    Column(Modifier.padding(horizontal = 16.dp)) {
+        NCard {
+            Text("Chat mode for new chats", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
+            Column(Modifier.selectableGroup()) {
+                ChatMode.entries.forEach { m ->
+                    Choice(
+                        title = modeTitle(m),
+                        detail = modeDetail(m),
+                        selected = pc.effectiveMode == m,
+                        enabled = enabled,
+                        danger = m == ChatMode.YOLO,
+                    ) {
+                        // YOLO runs everything without asking: say so once before switching.
+                        if (m == ChatMode.YOLO && pc.effectiveMode != ChatMode.YOLO) askYolo = true
+                        else if (m != pc.effectiveMode) save(PcSettings.patch(mode = m))
+                    }
+                }
+            }
+            HorizontalDivider(color = p.line, modifier = Modifier.padding(vertical = 4.dp))
+            Text("Long-press a chat to", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
+            Column(Modifier.selectableGroup()) {
+                Choice("Complete it", "Moves it to Completed on ${active.name}; nothing is deleted", pc.effectiveAction == ChatAction.COMPLETE, enabled) {
+                    if (pc.effectiveAction != ChatAction.COMPLETE) save(PcSettings.patch(action = ChatAction.COMPLETE))
+                }
+                Choice("Delete it", "Removes it from ${active.name} for good", pc.effectiveAction == ChatAction.DELETE, enabled) {
+                    if (pc.effectiveAction != ChatAction.DELETE) save(PcSettings.patch(action = ChatAction.DELETE))
+                }
+            }
+            HorizontalDivider(color = p.line, modifier = Modifier.padding(vertical = 4.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(value = pc.confirmDelete, enabled = enabled, role = Role.Switch) { want -> save(PcSettings.patch(skipConfirm = !want)) }
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Confirm before deleting", style = MaterialTheme.typography.bodyLarge, color = p.ink)
+                    Text("Ask first, here and on ${active.name}", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                }
+                Switch(checked = pc.confirmDelete, onCheckedChange = null, enabled = enabled)
+            }
+        }
+        error?.let { Notice(it, Tone.DANGER, Modifier.padding(top = 10.dp)) }
+        Text(
+            if (online) "Saved on ${active.name}, the same settings as in Nekko Agent there. Each chat can still change its own mode."
+            else "${active.name} is offline. Connect to change its settings.",
+            style = MaterialTheme.typography.bodySmall,
+            color = p.inkFaint,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
+        )
+    }
+
+    if (askYolo) {
+        AlertDialog(
+            onDismissRequest = { askYolo = false },
+            title = { Text("Use YOLO for new chats?") },
+            text = {
+                Text("New chats on ${active.name} will run commands and edit files without asking you first. Your deny rules still block. You can switch back here or on ${active.name} at any time.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    askYolo = false
+                    save(PcSettings.patch(mode = ChatMode.YOLO))
+                }) { Text("Use YOLO", color = p.danger) }
+            },
+            dismissButton = { TextButton(onClick = { askYolo = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+private fun modeTitle(m: ChatMode) = when (m) {
+    ChatMode.ASK -> "Ask"
+    ChatMode.GUARDRAILS -> "Guardrails"
+    ChatMode.YOLO -> "YOLO"
+}
+
+/** The desktop's own descriptions (SettingsView CHAT_MODES). */
+private fun modeDetail(m: ChatMode) = when (m) {
+    ChatMode.ASK -> "Confirm every file write and command before it runs"
+    ChatMode.GUARDRAILS -> "Run freely, but ask or deny per your guardrail rules"
+    ChatMode.YOLO -> "Run everything without confirming; deny rules still block"
+}
+
+@Composable
+private fun Choice(title: String, detail: String, selected: Boolean, enabled: Boolean, danger: Boolean = false, onClick: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) p.accentSoft else Color.Transparent)
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = if (danger) p.danger else p.ink)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        }
+        if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = p.accent, modifier = Modifier.size(20.dp))
+    }
+}

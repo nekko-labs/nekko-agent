@@ -19,6 +19,10 @@ import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.SessionSummary
 import com.nekko.protocol.WorkspaceFolder
 import kotlinx.coroutines.CancellationException
+import com.nekko.protocol.PcSettings
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -76,6 +80,8 @@ class ComputersRepository(
     private val summariesDebounceMs: Long = 600,
     /** One provider's model list may take this long, like the desktop picker (MODEL_LIST_TIMEOUT_MS). */
     private val modelListTimeoutMs: Long = 6_000,
+    /** A computer was forgotten: drop what the phone kept about it elsewhere (New chat defaults). */
+    private val onForget: (id: String) -> Unit = {},
 ) {
     private val _state = MutableStateFlow(ComputersState())
     val state: StateFlow<ComputersState> = _state.asStateFlow()
@@ -105,10 +111,14 @@ class ComputersRepository(
 
     fun remote(): Remote = client ?: throw RelayException("Not connected to a computer.")
 
-    suspend fun load() {
+    /**
+     * Read the paired computers and connect to one: [preferredId] (the phone's
+     * default computer, Settings → New chats) when it is still paired, else the
+     * one used last, else the first.
+     */
+    suspend fun load(preferredId: String? = null) {
         val list = StoredJson.decodeIndex(store.get(INDEX_KEY))
-        val saved = store.get(ACTIVE_KEY)
-        val activeId = if (list.any { it.id == saved }) saved else list.firstOrNull()?.id
+        val activeId = NewChatDefaults.startComputer(preferredId, store.get(ACTIVE_KEY), list.map { it.id })
         _state.update { it.copy(ready = true, computers = list, activeId = activeId) }
         activeId?.let { connect(it) }
     }
@@ -146,6 +156,7 @@ class ComputersRepository(
             val wasActive = _state.value.activeId == id
             if (wasActive) disconnect()
             store.set(secretKey(id), null)
+            onForget(id)
             val next = _state.value.computers.filter { it.id != id }
             saveIndex(next)
             val activeId = if (wasActive) next.firstOrNull()?.id else _state.value.activeId
@@ -172,6 +183,8 @@ class ComputersRepository(
             it.copy(
                 activeId = id, conn = RelayState.CONNECTING, denied = null, connDetail = null,
                 summaries = emptyList(), providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(),
+                // Another computer, or the same one later: its settings are unknown until it answers.
+                pcSettings = PcSettings(),
                 lastError = null,
             )
         }
@@ -238,6 +251,32 @@ class ComputersRepository(
         client?.nudge()
     }
 
+    /**
+     * Change the computer's settings from the phone (Settings → On <computer>).
+     * Only the keys the computer lets a phone set; the reply is the computer's
+     * reduced view, so the screen shows what was actually saved there.
+     */
+    suspend fun updatePcSettings(patch: JsonObject) {
+        val reply = remote().call(Channels.SETTINGS_UPDATE, patch)
+        _state.update { it.copy(pcSettings = PcSettings.from(reply)) }
+    }
+
+    /** Complete a chat (the desktop's archive): it leaves the list, nothing is deleted. */
+    suspend fun completeChat(sessionId: String) {
+        remote().call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), buildJsonObject { put("archivedAt", now()) })
+        dropFromList(sessionId)
+    }
+
+    /** Delete a chat on the computer for good. */
+    suspend fun deleteChat(sessionId: String) {
+        remote().call(Channels.SESSION_DELETE, JsonPrimitive(sessionId))
+        dropFromList(sessionId)
+    }
+
+    private fun dropFromList(sessionId: String) {
+        _state.update { s -> s.copy(summaries = s.summaries.filter { it.id != sessionId }, activity = s.activity - sessionId) }
+    }
+
     /** The phone changed network, or the socket may have died while frozen: dial a fresh one now. */
     fun reconnect() {
         client?.reconnect()
@@ -252,12 +291,12 @@ class ComputersRepository(
                 // Only the public projections: providers and settings carry secrets.
                 val providers = async { PublicProvider.list(c.call(Channels.PROVIDERS_LIST)) }
                 // Only public projections leave this block: settings carry secrets.
-                val settings = async { c.call(Channels.SETTINGS_GET).let { RemoteDefaults.from(it) to Appearance.from(it) } }
+                val settings = async { c.call(Channels.SETTINGS_GET).let { Triple(RemoteDefaults.from(it), Appearance.from(it), PcSettings.from(it)) } }
                 val workspaces = async { orNull { WorkspaceFolder.list(c.call(Channels.WORKSPACE_LIST)) } ?: emptyList() }
                 val info = async { orNull { AppInfo.from(c.call(Channels.APP_INFO)) } }
                 val pending = async { orNull { PendingInput.map(c.call(Channels.CHAT_PENDING)) } ?: emptyMap() }
-                val (defaults, appearance) = settings.await()
-                Refresh(summaries.await(), providers.await(), defaults, appearance, workspaces.await(), info.await(), pending.await())
+                val (defaults, appearance, pcSettings) = settings.await()
+                Refresh(summaries.await(), providers.await(), defaults, appearance, pcSettings, workspaces.await(), info.await(), pending.await())
             }
             if (client !== c) return
             _state.update { s ->
@@ -265,7 +304,7 @@ class ComputersRepository(
                 val activity = s.activity.toMutableMap()
                 r.pending.forEach { (sid, p) -> if (p.approval != null || p.question != null) activity[sid] = Activity.NEEDS_YOU }
                 s.copy(
-                    summaries = r.summaries, providers = r.providers, defaults = r.defaults, appearance = r.appearance,
+                    summaries = r.summaries, providers = r.providers, defaults = r.defaults, appearance = r.appearance, pcSettings = r.pcSettings,
                     workspaces = r.workspaces, activity = activity, summariesLoading = false,
                 )
             }
@@ -370,6 +409,7 @@ class ComputersRepository(
         val providers: List<PublicProvider>,
         val defaults: RemoteDefaults,
         val appearance: Appearance,
+        val pcSettings: PcSettings,
         val workspaces: List<WorkspaceFolder>,
         val info: AppInfo?,
         val pending: Map<String, PendingInput>,

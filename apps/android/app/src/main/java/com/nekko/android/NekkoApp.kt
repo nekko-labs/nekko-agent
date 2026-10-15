@@ -8,6 +8,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.nekko.android.connection.ConnectionKeeper
 import com.nekko.android.data.AndroidSecureStore
+import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.RelayRemoteFactory
@@ -34,8 +35,11 @@ class NekkoApp : Application() {
         private set
     lateinit var appLock: AppLock
         private set
+    lateinit var newChatDefaults: NewChatDefaults
     /** Text shared from other apps on its way to a chat's composer; memory only. */
     val shareInbox = ShareInbox()
+    lateinit var connection: ConnectionKeeper
+        private set
     lateinit var haptics: AndroidHaptics
         private set
 
@@ -43,11 +47,13 @@ class NekkoApp : Application() {
         super.onCreate()
         themePrefs = ThemePrefs(this)
         phonePrefs = PhonePrefs(this)
+        newChatDefaults = NewChatDefaults(phonePrefs)
         computers = ComputersRepository(
             store = AndroidSecureStore(this),
             remotes = RelayRemoteFactory(),
             scope = appScope,
             deviceName = ::deviceName,
+            onForget = newChatDefaults::forget,
         )
         appLock = AppLock(enabled = phonePrefs.get(AppLock.ENABLED), persist = { phonePrefs.set(AppLock.ENABLED, it) })
         connection = ConnectionKeeper(this, computers, phonePrefs, appLock, appScope)
@@ -56,7 +62,8 @@ class NekkoApp : Application() {
         // relay connection, no chat list, no approvals behind the lock screen.
         appScope.launch {
             appLock.status.first { !it.locked }
-            computers.load()
+            // The phone's default computer (Settings → New chats), else the one used last.
+            computers.load(preferredId = newChatDefaults.computerId())
         }
         haptics = AndroidHaptics(this, EventHaptics(phonePrefs), computers)
         // Vibrate for the active computer's agent events, per Settings → Vibration.

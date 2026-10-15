@@ -146,6 +146,7 @@
  "session:setSupportingWorkspaces",
  "session:setWorkspace",
  "session:truncate",
+ "session:watches",
  "sessions:clear",
  "sessions:list",
  "sessions:purgeArchived",

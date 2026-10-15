@@ -330,7 +330,7 @@ Open **Settings**. Two layers keep Nekko Agent from doing something you didn't i
 
 | Mode | Behavior |
 | --- | --- |
-| Workspace jail *(default)* | File access confined to your added folders |
+| Workspace jail *(default)* | File access confined to your added folders; symlinks and junctions that point outside them are refused |
 | Ask everything | Every write or command requires approval |
 | Docker | Run shell commands inside a container if Docker is present |
 | Off | No restrictions (power users) |
@@ -789,6 +789,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version and the open-source licenses of the app and the libraries it ships.
 >
+> **New chat defaults** (Android): **Settings → New chats** picks the computer the app connects to
+> when it starts (default: the one used last) and, for each computer, the model New chat opens with
+> (default: the computer's own default model). They are saved on the phone; the computer's settings
+> don't change. If that model is no longer offered, New chat says so and uses the computer's default.
 > **Share to Nekko** (Android): in any app's share menu, pick **Nekko Agent** to start a new chat
 > with the shared text or link. You can edit it on the New chat screen; after you start the chat it
 > waits in the message box and you send it yourself. Nekko never sends shared text on its own, and
@@ -797,6 +801,12 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > approval (two pulses) or asks you a question (one long pulse). In **Settings → Vibration** you can
 > also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them
 > off. It never vibrates in silent mode or Do Not Disturb, or while the app is in the background.
+>
+> **Your computer's settings from the phone** (Android): **Settings → On <computer>** changes three
+> of the computer's own settings: the chat mode for new chats (Ask, Guardrails or YOLO; YOLO asks once
+> before switching), what a long-press on a chat does (Complete, which moves it to Completed, or
+> Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
+> its Settings. A long-press on a chat in the list then completes or deletes it on the computer.
 >
 > The Android app is **locked by default**: every time you open it, or come back to it, it asks for
 > your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows

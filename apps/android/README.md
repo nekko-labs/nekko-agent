@@ -27,12 +27,19 @@ reference until this app reaches parity.
   is shown or approvable, recents stay blank (`FLAG_SECURE`), and after a restart
   the relay doesn't connect until the first unlock.
 
+- **New chat defaults:** *Settings → New chats* sets the computer to connect
+  to at start and a model per computer, on the phone only; a model the
+  computer no longer offers falls back to its default with a notice.
 - **Share to Nekko:** text or a link from another app's share menu opens New
   chat with it, editable; it lands in the new chat's message box and is never
   sent automatically. Memory only, text only (≤ 20,000 characters).
 - **Vibration:** a distinct buzz while the app is open when the agent needs an
   approval or asks a question (on by default), and optionally when a reply
   finishes or fails; never in silent mode or Do Not Disturb.
+
+- **The computer's settings:** *Settings → On <computer>* sets its default chat
+  mode (YOLO allowed after a confirmation), the long-press action (Complete or
+  Delete) and delete confirmation; a long-press on a chat runs that action.
 
 **Not yet:** models on the phone, push notifications, Markdown rendering,
 attachments, Play Store release. See `TASKS.md` → *Native Android app*.

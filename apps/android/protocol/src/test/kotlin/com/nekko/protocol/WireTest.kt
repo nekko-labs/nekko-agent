@@ -77,4 +77,37 @@ class WireTest {
         assertEquals("""{"questionId":"q1","labels":["A"],"note":"more"}""", AskAnswer("q1", listOf("A"), "more").toJson().toString())
         assertEquals("""{"questionId":"q1","labels":[]}""", AskAnswer("q1", emptyList(), " ").toJson().toString())
     }
+
+    /** Every channel the phone calls must be one the computer lets a phone call (#529's allowlist). */
+    @Test fun `the computer allows every channel and setting the phone uses`() {
+        val f = File(System.getenv("NEKKO_REPO_ROOT") ?: "../../..", "crates/nekko-remote/src/phone-access.json")
+        if (!f.exists()) return
+        val policy = json(f.readText()).obj()!!
+        val channels = policy["channels"].arr()!!.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toSet()
+        for (ch in Channels.ALL) assertTrue("the computer refuses $ch from a phone", ch in channels)
+        val keys = policy["settingsKeys"].arr()!!.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toSet()
+        val patch = PcSettings.patch(PcSettings.ChatMode.YOLO, PcSettings.ChatAction.DELETE, skipConfirm = true)
+        for (k in patch.keys) assertTrue("the computer refuses setting $k from a phone", k in keys)
+        val modes = policy["chatModes"].arr()!!.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toSet()
+        for (m in PcSettings.ChatMode.entries) assertTrue("the computer refuses chat mode ${m.wire} from a phone", m.wire in modes)
+    }
+
+    @Test fun `pc settings read only the phone-visible keys, unset keys use the computer's defaults`() {
+        val full = PcSettings.from(json("""{"defaultChatMode":"yolo","chatPaneAction":"delete","skipDeleteConfirmation":true,"providers":[{"apiKey":"sk-x"}]}"""))
+        assertEquals(PcSettings.ChatMode.YOLO, full.defaultChatMode)
+        assertEquals(PcSettings.ChatAction.DELETE, full.effectiveAction)
+        assertFalse(full.confirmDelete)
+        assertFalse("nothing heard yet", PcSettings().known)
+        assertTrue(full.known)
+        val empty = PcSettings.from(json("""{"defaultChatMode":"sideways","skipDeleteConfirmation":"yes"}"""))
+        assertNull(empty.defaultChatMode)
+        assertEquals(PcSettings.ChatMode.GUARDRAILS, empty.effectiveMode)
+        assertEquals(PcSettings.ChatAction.COMPLETE, empty.effectiveAction)
+        assertTrue(empty.confirmDelete)
+    }
+
+    @Test fun `a settings patch carries only what changed`() {
+        assertEquals("""{"defaultChatMode":"yolo"}""", PcSettings.patch(mode = PcSettings.ChatMode.YOLO).toString())
+        assertEquals("""{"skipDeleteConfirmation":false}""", PcSettings.patch(skipConfirm = false).toString())
+    }
 }
