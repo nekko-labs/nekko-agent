@@ -51,6 +51,18 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### CI gates for streaming frame and cold-switch frame raised ~4% (2026-10-15)
+Area: perf harness
+Result: measurement fix (budget decision, no code speed change)
+Conditions: GitHub `perf` job (Ubuntu, 4 vCPU, no GPU), the runs quoted below
+
+| Metric | Before | After |
+|---|---|---|
+| Streaming frame-work CI gate (p95) | 10 ms | 10.4 ms |
+| Cold-switch frame CI gate (p95) | 25 ms | 26 ms |
+
+Why: Philip's decision. The streaming row failed on unchanged `main` at random: run 38710979506 (1dfe0e60) measured p50 7.6 / p95 10.1 / max 11.8 ms over 175 frames, while run 38706570615 (a88c1f9b) passed (#544 lists more). The cold-switch row: PR #578's run 38719225639 measured p95 per attempt 26.3 / 25.4 / 25.7 ms, while main runs 38704916823 and 38710979506 measured 23.1 / 23.5 / 23.2 and 22.7 / 22.8 / 23.4 ms. So the new gate admits #578's change without resolving whether it slows a cold switch by 2-3 ms; that comparison is still open on #578. Product targets (4 ms, 8.3 ms) are unchanged. Source: this PR.
+
 ### CI cache and stale-run optimization (2026-10-15)
 Area: CI build. Result: baseline measured; post-change savings unverified.
 Conditions: GitHub-hosted runners, one successful CI run [38608506782](https://github.com/nekko-labs/nekko-agent/actions/runs/38608506782), step timestamps from the Jobs API.
