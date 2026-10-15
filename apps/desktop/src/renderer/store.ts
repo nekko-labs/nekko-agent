@@ -28,7 +28,7 @@ import {
 
 export type { Direction, PaneKind, WbNode, WbPane } from './layout.js';
 
-export type View = 'command' | 'chat' | 'models' | 'modelserver' | 'connectors' | 'memory' | 'settings' | 'design' | 'skills' | 'training' | 'workflows';
+export type View = 'command' | 'chat' | 'artifacts' | 'models' | 'modelserver' | 'connectors' | 'memory' | 'settings' | 'design' | 'skills' | 'training' | 'workflows';
 
 /**
  * Nav destinations that live behind a Settings → Experimental toggle. The flag
@@ -344,6 +344,13 @@ interface UiState {
   archivedViewId: string | null;
   setArchivedView: (sessionId: string | null) => void;
   /**
+   * A chat the Agents wall should show in its Focused layout the next time it
+   * mounts (the Artifacts tab's "Open chat"). Consumed once by the wall.
+   */
+  focusRequest: string | null;
+  /** Go to the Agents wall with this chat as the Focused window. */
+  focusChatOnWall: (sessionId: string) => void;
+  /**
    * Text and images to drop into a chat's composer when it next mounts (Copy
    * to composer, Split to a new chat). Consumed once by that chat's pane.
    */
@@ -585,7 +592,10 @@ export const useStore = create<UiState>((set, get) => ({
   composerInbox: null,
   archiveOpen: false,
   archivedViewId: null,
+  focusRequest: null,
   composerSeed: null,
+
+  focusChatOnWall: (sessionId) => set({ focusRequest: sessionId, view: 'command' }),
 
   setActiveProject: (id) => {
     try { localStorage.setItem(LAST_FOLDER_KEY, JSON.stringify(id)); } catch { /* private mode */ }

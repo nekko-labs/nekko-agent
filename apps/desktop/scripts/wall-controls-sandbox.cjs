@@ -205,7 +205,7 @@ app.whenReady().then(async () => {
         win.setContentSize(width, 900); await reset();
         await run(`document.documentElement.dataset.theme='${theme}'`);
         await capture(`controls-${theme}-${width}-dynamic`);
-        await click('Focus');
+        await click('Focused');
         await run("document.querySelector('.command-wall-window:not(.command-wall-deck-window) [contenteditable]')?.focus()");
         await capture(`controls-${theme}-${width}-focus`);
         await run("document.querySelector('[aria-label=\"Show agents in a row\"]')?.click()");
@@ -220,11 +220,11 @@ app.whenReady().then(async () => {
         }
       }
       if (process.env.NEKKO_VIEW_AFTER) {
-        win.setContentSize(1200, 900); await reset(); await click('Focus');
+        win.setContentSize(1200, 900); await reset(); await click('Focused');
         const frames = path.join(runDir, 'motion'); fs.mkdirSync(frames);
         for (let i = 0; i < 40; i++) {
           if (i === 5 || i === 23) await run("[...document.querySelectorAll('.wall-layout-segments button')].find(b=>b.textContent==='Dynamic').click()");
-          if (i === 15 || i === 33) await run("[...document.querySelectorAll('.wall-layout-segments button')].find(b=>b.textContent==='Focus').click()");
+          if (i === 15 || i === 33) await run("[...document.querySelectorAll('.wall-layout-segments button')].find(b=>b.textContent==='Focused').click()");
           fs.writeFileSync(path.join(frames, String(i).padStart(3, '0') + '.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG()); await sleep(60);
         }
         await click('Dynamic');
@@ -282,7 +282,7 @@ app.whenReady().then(async () => {
       for (const theme of ['light', 'dark']) for (const width of [1200, 400]) {
         win.setContentSize(width, 900); await reset();
         await run(`document.documentElement.dataset.theme='${theme}'`);
-        await click('Focus'); await sleep(400);
+        await click('Focused'); await sleep(400);
         await capture(`focus-${theme}-${width}-rest`);
         if (fixed) await check('heading precedes version', "(()=>{const h=document.querySelector('.titlebar h1'),v=document.querySelector('.titlebar .update-version');return !!h && !!v && !!(h.compareDocumentPosition(v)&Node.DOCUMENT_POSITION_FOLLOWING)})()");
         await run("document.querySelector('.command-wall-window:not([aria-hidden=true]) button[aria-label=\"Add a window beside this one\"]').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}))");
@@ -293,13 +293,13 @@ app.whenReady().then(async () => {
         if (fixed) await check('compass directions enabled', "[...document.querySelectorAll('[role=dialog][aria-label=\"Add a window\"] button[aria-disabled]')].every(b=>b.getAttribute('aria-disabled')==='false')");
         await capture(`focus-${theme}-${width}-compass`);
         await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
-        await click('Focus'); await sleep(300); await run("document.querySelector('[data-wall-add-button]').click()");await sleep(180); await sleep(500);
+        await click('Focused'); await sleep(300); await run("document.querySelector('[data-wall-add-button]').click()");await sleep(180); await sleep(500);
         if (await mode() !== (fixed ? 'grid' : 'focus')) throw Error('Wrong toolbar mode');
         await check('picker opens', "!!document.querySelector('.agent-window-picker')");
         await capture(`focus-${theme}-${width}-picker`);
         report.checks.push(`Focus add routes ${theme} ${width}`);
       }
-      win.setContentSize(1200,900); await reset(); await click('Focus'); await sleep(400);
+      win.setContentSize(1200,900); await reset(); await click('Focused'); await sleep(400);
       const frames=path.join(runDir,'motion');fs.mkdirSync(frames);
       for(let i=0;i<30;i++) {
         if(i===5)await run("document.querySelector('.command-wall-window:not([aria-hidden=true]) button[aria-label=\"Add a window beside this one\"]').click()");
@@ -440,7 +440,7 @@ app.whenReady().then(async () => {
           await check('mode saves owning session',"integration.calls.some(c=>c.method==='options'&&c.id==='existing'&&c.options.mode==='ask')");
           if(assertFixed) await check('mode selection returns focus',"document.activeElement?.textContent.includes('Mode')");
         }
-        await run("sessionStorage.removeItem('fixture-record')"); await clearEditor(); await reset(); if(width<720)win.setContentSize(width,1400); await click('Focus');
+        await run("sessionStorage.removeItem('fixture-record')"); await clearEditor(); await reset(); if(width<720)win.setContentSize(width,1400); await click('Focused');
         await run("document.querySelector('.composer-summary-chip')?.click()");
         if(width<720) {
           await run("document.querySelector('button[title=\"Run freely; ask/deny per guardrail rules.\"]').focus()");
@@ -610,7 +610,7 @@ app.whenReady().then(async () => {
         await run("document.querySelector('[aria-label=\"Close checkout notice\"]')?.click()");
         await run('integration.ask()'); await sleep(350); await run("document.querySelector('.composer-question')?.scrollIntoView({block:'nearest'})"); await capture(`question-${theme}-${label}`); await reset();
         await run("document.querySelector('.command-wall-window button[aria-haspopup=listbox]').click()"); await capture(`full-picker-${theme}-${label}`);
-        await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))"); await click('Focus'); await capture(`full-focus-${theme}-${label}`);
+        await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))"); await click('Focused'); await capture(`full-focus-${theme}-${label}`);
         await run("integration.route('workspace')"); await sleep(500);
         await run("(()=>{const b=document.querySelector('[title=\"New agent with a terminal\"]'); b.focus(); b.dispatchEvent(new FocusEvent('focusin',{bubbles:true}));})()"); await capture(`workspace-image-menu-${theme}-${label}`);
       }
@@ -648,7 +648,7 @@ app.whenReady().then(async () => {
     const motion = path.join(runDir, 'motion'); fs.mkdirSync(motion);
     for (let frame = 0; frame < 36; frame++) {
       if (frame === 4 || frame === 16) await run("document.querySelector('[aria-label=\"Resize composer versus wall\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true}))");
-      if (frame === 22) await click('Focus');
+      if (frame === 22) await click('Focused');
       if (frame === 29) await click('Dynamic');
       fs.writeFileSync(path.join(motion, `${String(frame).padStart(3, '0')}.png`), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());
       await sleep(100);

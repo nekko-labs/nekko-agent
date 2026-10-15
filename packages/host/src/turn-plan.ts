@@ -1,5 +1,5 @@
 import type { ChatMessage, ExecutionMode, OrchestrationSettings, ProviderConfig, QueuedPrompt, SendOptions, Session, WorkspaceFolder } from '@nekko-agent/shared';
-import { DEFAULT_ORCHESTRATION, DEFAULT_TURN_WRAPPER, getStrategy, orchestrationPromptHint, queueItemPayload } from '@nekko-agent/shared';
+import { DEFAULT_ORCHESTRATION, DEFAULT_TURN_WRAPPER, getStrategy, orchestrationPromptHint, queueItemPayload, toolAllowedOffline } from '@nekko-agent/shared';
 import {
   ASK_USER_TOOL,
   BUILTIN_TOOLS,
@@ -68,14 +68,17 @@ export function turnCanAsk(session: Pick<Session, 'parentSessionId' | 'taskId' |
 /** The tools a (non-sandbox) turn offers, in the order the model sees them. */
 export function turnTools(input: TurnToolInput): ToolSpec[] {
   const { session } = input;
-  if (input.offline) return [];
   const allowSpawn = getStrategy((input.orchestration ?? DEFAULT_ORCHESTRATION).strategy).allowsSpawn;
   const canAsk = turnCanAsk(session);
   const disabled = new Set(session.disabledTools ?? []);
   if (!allowSpawn || disabled.has('spawn_agent') || session.incognito) disabled.add('delegation_targets');
   if (!allowSpawn) disabled.add('spawn_agent');
   if (!input.allowBrowserControl || !canAsk) { disabled.add('browser'); disabled.add('capture'); }
-  const tools = [...BUILTIN_TOOLS, ...input.mcpTools, ...(!session.incognito && !session.trainingRunId ? [AGENT_WATCH_TOOL] : [])].filter((t) => !disabled.has(t.name));
+  const all = [...BUILTIN_TOOLS, ...input.mcpTools, ...(!session.incognito && !session.trainingRunId ? [AGENT_WATCH_TOOL] : [])].filter((t) => !disabled.has(t.name));
+  // Blocking the internet keeps the local tools (files, shell, desktop) and
+  // drops those that reach a network: fetch, the browser, MCP servers, and the
+  // agent tools that can route to a cloud provider.
+  const tools = input.offline ? all.filter((t) => toolAllowedOffline(t.name)) : all;
   // update_plan goes to every session: goal runs treat it as the execution
   // contract; ordinary chats publish it to the plan rail so the user sees the
   // plan the agent derived, not a re-listing of their own prompt.
@@ -87,7 +90,7 @@ export function turnTools(input: TurnToolInput): ToolSpec[] {
   if (session.trainingRunId) tools.push(REPORT_EXPERIMENT_TOOL, REPORT_ARTIFACT_TOOL);
   // Asking is only offered where somebody is there to answer.
   if (canAsk && !disabled.has(ASK_USER_TOOL.name)) tools.push(ASK_USER_TOOL);
-  if (input.decide && !disabled.has(DECIDE_TOOL.name)) tools.push(DECIDE_TOOL);
+  if (input.decide && !input.offline && !disabled.has(DECIDE_TOOL.name)) tools.push(DECIDE_TOOL);
   return tools;
 }
 

@@ -23,6 +23,7 @@ import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
 import { WorkspacesView } from './views/WorkspacesView.js';
 import { DesignBoardView } from './views/DesignBoardView.js';
+import { ArtifactsView } from './views/ArtifactsView.js';
 import { SkillsView } from './views/SkillsView.js';
 import { TrainingView } from './views/TrainingView.js';
 import { WorkflowsView } from './views/WorkflowsView.js';
@@ -34,6 +35,7 @@ import { MemoryView } from './views/MemoryView.js';
 import { SettingsView } from './views/SettingsView.js';
 import { OnboardingView } from './views/OnboardingView.js';
 import {
+  ArtifactsColorIcon,
   CommandHudIcon,
   SkillsColorIcon,
   TrainingColorIcon,
@@ -53,6 +55,7 @@ const AgentCatIcon = (_p: { className?: string }) => <NekkoAvatar size={22} stat
 const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string }) => React.JSX.Element }> = [
   { view: 'command', labelKey: 'nav.command', Icon: AgentCatIcon },
   { view: 'chat', labelKey: 'nav.chat', Icon: CommandHudIcon },
+  { view: 'artifacts', labelKey: 'nav.artifacts', Icon: ArtifactsColorIcon },
   { view: 'skills', labelKey: 'nav.skills', Icon: SkillsColorIcon },
   { view: 'training', labelKey: 'nav.training', Icon: TrainingColorIcon },
   { view: 'workflows', labelKey: 'nav.workflows', Icon: WorkflowsColorIcon },
@@ -308,6 +311,7 @@ export function App() {
           <ErrorBoundary key={view} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
           {view === 'chat' && <WorkspacesView />}
+          {view === 'artifacts' && <ArtifactsView />}
           {view === 'skills' && <SkillsView />}
           {view === 'training' && <TrainingView />}
           {view === 'workflows' && <WorkflowsView />}

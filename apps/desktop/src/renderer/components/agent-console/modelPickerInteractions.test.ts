@@ -4,6 +4,7 @@ import {
   filteredModelGroups,
   isModelPickerEscape,
   matchesModelQuery,
+  modelRowLabel,
   nextFavoriteModels,
   shouldDismissModelPickerPointer,
 } from './modelPickerInteractions.js';
@@ -33,6 +34,13 @@ describe('model picker focused interactions', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].provider.id).toBe('local');
     expect(groups[0].models.map((model) => model.id)).toEqual(['qwen3-coder']);
+  });
+
+  it('splits a local path-like id into a short name and its folder, and matches the file path', () => {
+    expect(modelRowLabel({ id: 'lmstudio/pub/Qwen3-8B.gguf', name: 'lmstudio/pub/Qwen3-8B.gguf' }, true)).toEqual({ name: 'Qwen3-8B', sub: 'lmstudio/pub' });
+    expect(modelRowLabel({ id: 'a/b', name: 'Friendly', details: { path: 'C:/m/b.gguf' } }, true)).toEqual({ name: 'Friendly', sub: 'C:/m/b.gguf' });
+    expect(modelRowLabel({ id: 'meta/llama', name: 'meta/llama' }, false)).toEqual({ name: 'meta/llama', sub: undefined });
+    expect(matchesModelQuery({ id: 'x', name: 'X', details: { path: 'D:/models/community/x.gguf' } }, 'community')).toBe(true);
   });
 
   it('adds and removes favorites without mutating the current settings list', () => {
