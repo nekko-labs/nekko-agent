@@ -651,7 +651,7 @@
 
 @utility rail {
   /* The collapsible left rail: a slim strip of icons at rest, centred
-     vertically on a faded-accent band whose top and bottom curve back into
+     vertically on a subtle middle-60% band whose top and bottom curve back into
      the left edge (a wave, like a tab pulled out of the window side).
      Hovering (or keyboard focus inside) expands it over the content to
      reveal the labels; the band swells with it. */
@@ -664,9 +664,9 @@
   &::before {
     content: '';
     position: absolute;
-    inset: 0;
+    inset: 20% 0;
     z-index: -1;
-    background: color-mix(in srgb, var(--accent) 14%, var(--paper));
+    background: color-mix(in srgb, var(--accent) 4%, var(--paper));
     /* Concave top and bottom: full width through the middle, merging into
        the left edge early (by ~14% from each end). */
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 1000' preserveAspectRatio='none'%3E%3Cpath d='M0 0 C0 90 100 60 100 180 L100 820 C100 940 0 910 0 1000 Z'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
@@ -679,7 +679,7 @@
   }
   &:hover::before,
   &:has(:focus-visible)::before {
-    background: color-mix(in srgb, var(--accent) 20%, var(--paper));
+    background: color-mix(in srgb, var(--accent) 7%, var(--paper));
     filter: drop-shadow(0 6px 18px rgb(0 0 0 / 0.25));
   }
   &:hover .rail-label,
@@ -2051,7 +2051,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    reserves on the right: --wall-gutter, the 10px of ::-webkit-scrollbar), so a
    composer stretched to the limit lines up with the windows edge to edge, and
    a centred one is centred under them. */
-.wall-composer-row { --wall-gutter: 10px; position: relative; display: flex; align-items: stretch; gap: 20px; flex-shrink: 0; min-width: 0; padding-inline: 14px calc(14px + var(--wall-gutter)); }
+.wall-composer-row { --wall-gutter: 10px; position: relative; display: flex; align-items: stretch; gap: 20px; flex-shrink: 0; min-width: 0; padding-inline: 15px calc(15px + var(--wall-gutter)); }
 .wall-composer-row[data-dock$='-left'] { justify-content: flex-start; }
 .wall-composer-row[data-dock$='-center'] { justify-content: center; }
 .wall-composer-row[data-dock$='-right'] { justify-content: flex-end; }
