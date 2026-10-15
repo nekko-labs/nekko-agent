@@ -12,6 +12,7 @@ class SettingsSectionsTest {
 
     @Test
     fun `settings render appearance, security, new chats, computers, about`() {
+    fun `settings render appearance, security, vibration, computers, about`() {
         assertEquals(5, SettingsSections.size)
     }
 

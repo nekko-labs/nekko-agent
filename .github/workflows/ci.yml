@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# Cancel stale PR revisions, but preserve each main-branch verification run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,6 +32,10 @@ jobs:
       # before `npm test` / typecheck run.
       - run: npm run build:web
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Keep this debug build separate from clippy/test and release caches.
+          shared-key: ci-build
       - run: cargo build -p nekkod --locked
       - run: npm test
       - run: npm run test:cli-package
@@ -94,6 +103,7 @@ jobs:
         if: always()
         with:
           name: capture-${{ runner.os }}
+          retention-days: 14
           path: |
             capture-results/
             .shots/wall-controls-integration/
@@ -153,5 +163,6 @@ jobs:
         if: always()
         with:
           name: perf-report
+          retention-days: 14
           path: perf-results/
           if-no-files-found: ignore

@@ -297,6 +297,28 @@ const SCENARIOS: ServerScenario[] = [
     ops: [{ op: 'start' }, { op: 'status' }],
   },
   {
+    // A LAN bind without a key never reaches the daemon (#549): start refuses,
+    // a key lets it through, and clearing the key again is refused on
+    // reconfigure while the listener keeps its last good configuration.
+    name: 'a LAN bind without a key is refused',
+    settings: { bind: 'lan', apiKey: '' },
+    bins: { llama: true },
+    models: MODELS(),
+    ops: [
+      { op: 'start' },
+      { op: 'status' },
+      { op: 'setSettings', settings: { apiKey: '   ' } },
+      { op: 'start' },
+      { op: 'setSettings', settings: { apiKey: 'secret' } },
+      { op: 'start' },
+      { op: 'setSettings', settings: { apiKey: '' } },
+      { op: 'reconfigure' },
+      { op: 'setSettings', settings: { bind: 'local' } },
+      { op: 'reconfigure' },
+      { op: 'status' },
+    ],
+  },
+  {
     name: 'a backend restarted under a serving daemon',
     settings: { idleTtlSeconds: 0 },
     bins: { llama: true },

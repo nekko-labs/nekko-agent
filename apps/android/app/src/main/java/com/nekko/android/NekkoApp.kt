@@ -13,7 +13,10 @@ import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.RelayRemoteFactory
 import com.nekko.android.data.ThemePrefs
+import com.nekko.android.haptics.AndroidHaptics
+import com.nekko.android.haptics.EventHaptics
 import com.nekko.android.lock.AppLock
+import com.nekko.android.share.ShareInbox
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +36,9 @@ class NekkoApp : Application() {
     lateinit var appLock: AppLock
         private set
     lateinit var newChatDefaults: NewChatDefaults
+    /** Text shared from other apps on its way to a chat's composer; memory only. */
+    val shareInbox = ShareInbox()
+    lateinit var haptics: AndroidHaptics
         private set
 
     override fun onCreate() {
@@ -57,6 +63,9 @@ class NekkoApp : Application() {
             // The phone's default computer (Settings → New chats), else the one used last.
             computers.load(preferredId = newChatDefaults.computerId())
         }
+        haptics = AndroidHaptics(this, EventHaptics(phonePrefs), computers)
+        // Vibrate for the active computer's agent events, per Settings → Vibration.
+        appScope.launch { computers.events.collect(haptics::onEvent) }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 appLock.onForeground()

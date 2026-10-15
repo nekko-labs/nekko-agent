@@ -48,7 +48,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit) {
+fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, onBack: () -> Unit) {
     val chat by vm.ui.collectAsStateWithLifecycle()
     val p = Nekko.palette
     val list = rememberLazyListState()
@@ -147,6 +147,7 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit) {
             chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
             chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
             Composer(
+                initialText = initialDraft,
                 running = chat.running,
                 blocked = chat.blocked,
                 queued = chat.queued,

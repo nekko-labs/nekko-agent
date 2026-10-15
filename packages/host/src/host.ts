@@ -4,6 +4,7 @@ import { resourceQueue } from './resource-queue.js';
 import { EventEmitter } from 'events';
 import { basename, resolve } from 'path';
 import type {
+  AgentEvent,
   AppSettings,
   AskAnswer,
   PendingInput,
@@ -180,6 +181,8 @@ import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.j
 import { daemonOwns as daemonServes, loopLog } from './daemon-caps.js';
 import { setTurnNotifier, turnCallback } from './daemon-turn.js';
 import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
+import { startAutoContinue } from './auto-continue.js';
+import { knownContextWindow } from './context-window.js';
 import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemon as notifyLimits } from './limits.js';
 import { startWorkflowListeners } from './listeners.js';
 import {
@@ -647,6 +650,28 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // What the daemon says after a turn it drove has ended (its generated title).
   setTurnNotifier((e) => events.emit('agentEvent', e));
   setCompactionSender((e) => events.emit('agentEvent', e));
+  // A chat that runs out of context is compacted and carried on, not parked on
+  // a Retry banner; one that finishes near the window is compacted ahead of
+  // its next turn even with no chat pane open (auto-continue.ts).
+  startAutoContinue({
+    onEvent: (fn) => {
+      const listener = (e: AgentEvent) => { if (!(e as { relayOnly?: boolean }).relayOnly) fn(e); };
+      events.on('agentEvent', listener);
+      return () => events.off('agentEvent', listener);
+    },
+    getSession: (id) => sessions.getSession(id),
+    isRunning: (id) => isChatRunning(id) || isSessionCompacting(id),
+    contextWindow: knownContextWindow,
+    compact: (id) => compactSession(id),
+    send: async (s, text) => {
+      if (interrupting.has(s.id) || isChatRunning(s.id)) return;
+      const run = sendChat({ sessionId: s.id, providerId: s.providerId!, modelId: s.modelId!, text }, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl);
+      activeChats.set(s.id, run);
+      void run.finally(() => { if (activeChats.get(s.id) === run) activeChats.delete(s.id); }).catch(() => {});
+      await run;
+    },
+    notify: (e) => events.emit('agentEvent', e),
+  });
   setDecisionRunner({
     available: async () => {
       const s = await engine.decisions.status();

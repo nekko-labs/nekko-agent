@@ -57,11 +57,38 @@ fn unhex(s: &str) -> Vec<u8> {
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
 }
 
+/// A directory link, as `fs.symlinkSync(target, path, 'junction')` makes it:
+/// a junction on Windows, a symlink elsewhere.
+fn link_dir(target: &Path, path: &Path) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // raw_arg: Command's own quoting would wrap the whole line in quotes.
+        let output = std::process::Command::new("cmd")
+            .raw_arg(format!("/d /s /c \"mklink /J \"{}\" \"{}\"\"", path.display(), target.display()))
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "mklink /J {} -> {}: {}",
+            path.display(),
+            target.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    #[cfg(not(windows))]
+    std::os::unix::fs::symlink(target, path).unwrap();
+}
+
 fn materialize(root: &Path, tree: &Value) {
     let _ = std::fs::remove_dir_all(root);
     std::fs::create_dir_all(root).unwrap();
+    let under = |rel: &str| rel.split('/').fold(root.to_path_buf(), |p, part| p.join(part));
     for (rel, e) in tree.as_object().unwrap() {
-        let p = rel.split('/').fold(root.to_path_buf(), |p, part| p.join(part));
+        if e.get("link").is_some() {
+            continue;
+        }
+        let p = under(rel);
         if e.get("dir").is_some() {
             std::fs::create_dir_all(&p).unwrap();
             continue;
@@ -73,6 +100,14 @@ fn materialize(root: &Path, tree: &Value) {
             _ => e["repeat"].as_str().unwrap().repeat(e["times"].as_u64().unwrap() as usize).into_bytes(),
         };
         std::fs::write(&p, bytes).unwrap();
+    }
+    // Links last, so their targets exist.
+    for (rel, e) in tree.as_object().unwrap() {
+        if let Some(target) = e.get("link").and_then(Value::as_str) {
+            let p = under(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            link_dir(&under(target), &p);
+        }
     }
 }
 
@@ -94,7 +129,20 @@ fn describe(b: &[u8]) -> Value {
     }
 }
 
+/// `lstatSync(p).isSymbolicLink()`: libuv calls any Windows reparse point a link.
+fn is_link(p: &Path) -> bool {
+    let Ok(meta) = std::fs::symlink_metadata(p) else { return false };
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        meta.file_attributes() & 0x400 != 0
+    }
+    #[cfg(not(windows))]
+    meta.file_type().is_symlink()
+}
+
 /// Every file and directory under root; names in JS `sort()` (UTF-16) order.
+/// Links are recorded, not followed.
 fn snapshot(root: &Path) -> Map<String, Value> {
     fn walk(dir: &Path, rel: &str, out: &mut Map<String, Value>) {
         let mut names: Vec<String> =
@@ -103,7 +151,9 @@ fn snapshot(root: &Path) -> Map<String, Value> {
         for name in names {
             let full = dir.join(&name);
             let r = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
-            if full.is_dir() {
+            if is_link(&full) {
+                out.insert(r, json!({ "link": true }));
+            } else if full.is_dir() {
                 out.insert(format!("{r}/"), Value::Null);
                 walk(&full, &r, out);
             } else {
@@ -308,7 +358,7 @@ async fn file_tools_leave_the_same_results_trees_and_changes() {
     for seq in g["sequences"].as_array().unwrap() {
         let name = seq["name"].as_str().unwrap();
         let root = TempRoot::new();
-        materialize(&root.0, &g["tree"]);
+        materialize(&root.0, seq.get("fixture").unwrap_or(&g["tree"]));
         let before = snapshot(&root.0);
         let tracker = Arc::new(ChangeTracker::new());
         let env = Env { root: &root.path(), changes: Some(tracker.clone()), log: None, stub: false };

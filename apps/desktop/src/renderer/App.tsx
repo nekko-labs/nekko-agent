@@ -240,8 +240,8 @@ export function App() {
             {/* Left rail: icon-only at rest, expands over the content on hover to
             reveal each destination's label. Hidden on phones (hover is useless on
             touch), where the bottom tab bar below takes over. */}
-        <nav className="relative z-40 hidden w-16 shrink-0 md:block">
-          <div className="rail absolute inset-y-0 left-0 flex flex-col gap-1 overflow-hidden bg-paper px-2.5 py-4">
+        <nav className="relative z-40 hidden w-[52px] shrink-0 md:block">
+          <div className="rail absolute inset-y-0 left-0 flex flex-col gap-1 overflow-hidden px-1.5 py-4">
             {/* The brand mark heads the rail. The wordmark joins it only where
                 there is no title bar to carry it (web and phone builds), so the
                 name is never shown twice. */}
@@ -270,7 +270,7 @@ export function App() {
                 }}
                 onClick={() => setView(v)}
               >
-                <span className="grid h-11 w-11 shrink-0 place-items-center"><Icon /></span>
+                <span className="grid h-10 w-10 shrink-0 place-items-center"><Icon /></span>
                 <span className="rail-label text-[13px] font-medium">{t(labelKey)}</span>
               </button>
             ))}

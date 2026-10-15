@@ -85,7 +85,9 @@ export function Mascot({ mood, enabled, wizardHat = false }: { mood: MascotMood;
   if (!enabled) return null;
   const pose = mood === 'thinking' ? 'working' : greeting || mood === 'waving' ? 'happy' : sleeping ? 'sleeping' : 'idle';
   return (
-    <button type="button" className={`pixel-mascot pixel-${pose} fixed bottom-2 left-0 z-40 flex w-16 select-none items-end justify-center`}
+    // left-[11px]: the drawing's ink starts ~6px into its box and its feet sit
+    // ~17px above the window edge, so this evens the gap on both sides.
+    <button type="button" className={`pixel-mascot pixel-${pose} fixed bottom-2 left-[11px] z-40 flex w-16 select-none items-end justify-center`}
       data-mascot-pose={pose} aria-label={pose === 'working' ? 'Nekko is working' : 'Say hello to Nekko'}
       title={pose === 'sleeping' ? 'Nekko is sleeping' : 'Say hello to Nekko'}
       onClick={() => { setSleeping(false); setGreeting(true); }}>

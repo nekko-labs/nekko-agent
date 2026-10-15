@@ -17,7 +17,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Memory
@@ -74,7 +77,11 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Start a chat on the active computer: pick a model (and optionally a folder). */
+/**
+ * Start a chat on the active computer: pick a model (and optionally a folder).
+ * [shared] is text from another app's share sheet: shown here, editable, and put
+ * in the new chat's composer; Nekko never sends it by itself.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewChatScreen(
@@ -82,6 +89,8 @@ fun NewChatScreen(
     onBack: () -> Unit,
     /** The phone's default model for the active computer (Settings → New chats), if set. */
     phonePick: ModelPick? = null,
+    shared: String? = null,
+    onEditShared: (String) -> Unit = {},
     onPair: () -> Unit,
     onCreated: (String) -> Unit,
 ) {
@@ -149,6 +158,9 @@ fun NewChatScreen(
         }
     }
 
+    // The system Back gesture drops the share too, like the top-bar arrow.
+    BackHandler(onBack = onBack)
+
     Scaffold(
         containerColor = p.paper,
         topBar = {
@@ -162,6 +174,7 @@ fun NewChatScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+            if (shared != null) SharedTextCard(shared, onEditShared)
             SectionHeader(if (active != null) "On ${active.name}" else "On your computer")
             Column(Modifier.padding(horizontal = 16.dp)) {
                 when {
@@ -241,6 +254,30 @@ fun NewChatScreen(
                 }
             }
             Spacer(Modifier.size(32.dp))
+        }
+    }
+}
+
+/** The shared text, editable before the chat starts. Nothing is sent from here. */
+@Composable
+private fun SharedTextCard(text: String, onEdit: (String) -> Unit) {
+    val p = Nekko.palette
+    SectionHeader("Shared with Nekko")
+    Column(Modifier.padding(horizontal = 16.dp)) {
+        NCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f)) { Label(Icons.AutoMirrored.Filled.Notes, "Goes into the chat’s message box. You send it.") }
+                IconButton(onClick = { onEdit("") }) {
+                    Icon(Icons.Filled.Close, contentDescription = "Remove shared text", tint = p.inkFaint)
+                }
+            }
+            OutlinedTextField(
+                value = text,
+                onValueChange = onEdit,
+                minLines = 2,
+                maxLines = 8,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

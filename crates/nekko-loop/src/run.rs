@@ -10,6 +10,7 @@
 //! responses the TS test replays. Events and the transcript it appends are the
 //! TS shapes (`AgentEvent`, `ChatMessage`), as JSON.
 
+use crate::fit::{ELIDE_ALL, apply_elision, elidable, elision_for, is_context_overflow};
 use crate::history::{as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history};
 use crate::progress::{LOOP_WRAP_UP_PROMPT, LoopDetector, loop_note, loop_nudge};
 use crate::resume::{INTERRUPTED_NOTE, RESUME_PROMPT, repair_interrupted_history};
@@ -137,6 +138,9 @@ pub struct RunOptions<'a> {
     /// None enables caching; Some(false) explicitly disables request caching.
     pub prompt_caching: Option<bool>,
     pub max_history_turns: Option<f64>,
+    /// The model's context window in tokens (`contextWindow`): older tool
+    /// outputs are elided from what is sent once the prompt nears it (fit.rs).
+    pub context_window: Option<f64>,
     pub max_output_tokens: Option<u64>,
     pub resume: bool,
     pub cancel: Cancel,
@@ -301,6 +305,12 @@ struct Loop<'o, 'a, C, T, E> {
     client: &'o C,
     tools: &'o T,
     emit: &'o mut E,
+    /// Oldest bulky tool outputs this run elides from what it sends (`elided`).
+    elided: usize,
+    /// A context-overflow error has had its one squeeze retry (`squeezed`).
+    squeezed: bool,
+    /// Elidable tool outputs in the last request (`sentEligible`).
+    sent_eligible: usize,
 }
 
 impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '_, C, T, E> {
@@ -325,11 +335,15 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
         let mut messages: Vec<Value> =
             window_history(sent, self.opts.max_history_turns).iter().map(as_seen_by_chat_model).collect();
         messages.extend(extra);
+        let tools = if send_tools { self.opts.tools.clone() } else { Vec::new() };
+        self.elided = elision_for(&self.opts.system, &tools, &messages, self.opts.context_window, self.elided);
+        self.sent_eligible = elidable(&messages).len();
+        let messages = apply_elision(messages, self.elided);
         let req = ChatRequest {
             model: self.opts.model.clone(),
             messages,
             system: self.opts.system.clone(),
-            tools: if send_tools { self.opts.tools.clone() } else { Vec::new() },
+            tools,
             temperature: self.opts.temperature,
             effort: self.opts.effort.clone(),
             think: self.opts.think,
@@ -419,6 +433,28 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             match self.stream(turn, extra.clone(), send_tools).await {
                 Ok(()) => return Ok(()),
                 Err(e) => {
+                    // The prompt no longer fits: send it once more with every
+                    // older tool output elided before giving up on the reply.
+                    if !self.opts.cancel.is_cancelled()
+                        && !self.squeezed
+                        && is_context_overflow(&e)
+                        && self.elided < self.sent_eligible
+                    {
+                        self.squeezed = true;
+                        self.elided = ELIDE_ALL;
+                        *turn = before;
+                        self.event(
+                            "retry",
+                            json!({
+                                "attempt": attempt,
+                                "maxAttempts": MAX_STREAM_ATTEMPTS,
+                                "delayMs": 0,
+                                "reason": "The conversation no longer fits the context window: retrying with older tool output left out",
+                            }),
+                        );
+                        attempt = 1;
+                        continue;
+                    }
                     if self.opts.cancel.is_cancelled() || attempt >= MAX_STREAM_ATTEMPTS || !is_transient_error(&e) {
                         return Err(e);
                     }
@@ -629,7 +665,7 @@ pub async fn run_agent<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) 
     tools: &T,
     emit: &mut E,
 ) {
-    Loop { opts: &mut opts, client, tools, emit }.run().await;
+    Loop { opts: &mut opts, client, tools, emit, elided: 0, squeezed: false, sent_eligible: 0 }.run().await;
 }
 
 #[cfg(test)]

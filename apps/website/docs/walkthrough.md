@@ -133,6 +133,11 @@ scrolls; the header, send controls, queued prompts, images and skill rows stay
 inside the composer ring. A saved manual height remains a preferred minimum,
 not a ceiling that prevents a longer draft from growing.
 
+Drag the line above the composer to resize it. It snaps to two points: its
+default size and full size. Release near either one and it lands exactly there.
+Snapping back to the default clears the saved height. Double-click the line to
+reset it any time.
+
 ### Follow delegated work without opening every detail
 
 Delegation cards start collapsed, including while a child is working or returning
@@ -190,7 +195,7 @@ Open **Settings**. Two layers keep Nekko Agent from doing something you didn't i
 
 | Mode | Behavior |
 | --- | --- |
-| Workspace jail *(default)* | File access confined to your added folders |
+| Workspace jail *(default)* | File access confined to your added folders; symlinks and junctions that point outside them are refused |
 | Ask everything | Every write or command requires approval |
 | Docker | Run shell commands inside a container if Docker is present |
 | Off | No restrictions (power users) |

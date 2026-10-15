@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { withBind } from './lanKey.js';
 import { SettingsAutosave } from './settingsAutosave.js';
 import type { EngineInstall, EngineSettings } from '@nekko-agent/shared';
 import { ENGINE_BACKEND_LABELS, ENGINE_PORT_DEFAULT, engineBaseUrl } from '@nekko-agent/shared';
@@ -74,21 +75,21 @@ export function EngineServerSettings({
           label="Reachable from"
           hint={
             draft.bind === 'lan'
-              ? 'Anything on your network can use these models. Set a key below before you do this.'
+              ? 'Anything on your network with the key below can use these models. The engine will not listen without one.'
               : 'Only this computer. The safe default.'
           }
         >
           <select
             className="input w-64 py-1 text-[12px]"
             value={draft.bind}
-            onChange={(e) => setDraft({ ...draft, bind: e.target.value as EngineSettings['bind'] })}
+            onChange={(e) => setDraft(withBind(draft, e.target.value as EngineSettings['bind']))}
           >
             <option value="local">This computer only</option>
             <option value="lan">This computer and my network</option>
           </select>
         </Field>
 
-        <Field label="API key" hint="Required as a Bearer token when set. Leave empty on a loopback-only server.">
+        <Field label="API key" hint="Required as a Bearer token when set. Leave empty on a loopback-only server; one is generated when you pick your network.">
           <input
             type="password"
             className="input w-64 py-1 font-mono text-[12px]"

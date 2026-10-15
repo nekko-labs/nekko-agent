@@ -198,6 +198,10 @@ it in its own scroll area. Once the draft reaches the height cap, only the edito
 scrolls; the header, send controls, queued prompts, images and skill rows stay
 inside the composer ring. A saved manual height remains a preferred minimum,
 not a ceiling that prevents a longer draft from growing.</p>
+<p>Drag the line above the composer to resize it. It snaps to two points: its
+default size and full size. Release near either one and it lands exactly there.
+Snapping back to the default clears the saved height. Double-click the line to
+reset it any time.</p>
 <h3 id="follow-delegated-work-without-opening-every-detail"><a class="anchor" href="#follow-delegated-work-without-opening-every-detail" aria-hidden="true" tabindex="-1">#</a>Follow delegated work without opening every detail</h3>
 <p>Delegation cards start collapsed, including while a child is working or returning
 a large result. Their compact, plain-text activity sentence shares its status
@@ -248,7 +252,7 @@ and shape it.</p>
 </thead>
 <tbody><tr>
 <td>Workspace jail <em>(default)</em></td>
-<td>File access confined to your added folders</td>
+<td>File access confined to your added folders; symlinks and junctions that point outside them are refused</td>
 </tr>
 <tr>
 <td>Ask everything</td>

@@ -50,7 +50,8 @@ export const MessageBubble = memo(function MessageBubble({
   // Animate only genuinely-new content (the optimistic user bubble and the live
   // stream). Persisted messages render statically, so the optimistic→saved and
   // live→saved swaps at the end of a turn don't replay the entrance.
-  const entering = message.id === 'tmp' || message.id === 'live';
+  // LiveTurn keys its text blocks `live_<n>`, one per narration block of the run.
+  const entering = message.id === 'tmp' || message.id === 'live' || message.id.startsWith('live_');
   const copy = () => {
     navigator.clipboard?.writeText(message.content).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); });
   };

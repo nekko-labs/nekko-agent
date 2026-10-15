@@ -11,6 +11,13 @@ describe('describeInterruption', () => {
     expect(describeInterruption('Stopped', true).detail).toContain('Retry picks up from here');
   });
 
+  it('names a context overflow as out of context, in the paused colour, and says it carries on', () => {
+    const result = describeInterruption("openai 400: This model's maximum context length is 8192 tokens", true);
+    expect(result).toMatchObject({ paused: true, title: 'Out of context' });
+    expect(result.reason).toContain('compacts it and carries on');
+    expect(describeInterruption('429 rate limit: too many tokens per min', true).title).toBe('Reply failed');
+  });
+
   it('explains terminated without inventing a cause or calling it a pause', () => {
     const result = describeInterruption('terminated', true);
     expect(result.paused).toBe(false);

@@ -277,7 +277,10 @@ describe('delegation discovery and defaults', () => {
     delegate({ task: 'child task' });
     const { session } = await run();
     expect(children(session)[0]).toMatchObject({ providerId: 'local', modelId: 'local-exact' });
-    expect(listings).toEqual(['local']);
+    // The default is validated against its own provider only; the child's turn
+    // may list that provider again to learn the loaded context window.
+    expect(listings.length).toBeGreaterThan(0);
+    expect(new Set(listings)).toEqual(new Set(['local']));
   });
 
   it('rejects a stale default without creating a child or trying another provider', async () => {

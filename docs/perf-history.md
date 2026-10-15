@@ -51,6 +51,15 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### CI cache and stale-run optimization (2026-10-15)
+Area: CI build. Result: baseline measured; post-change savings unverified.
+Conditions: GitHub-hosted runners, one successful CI run [38608506782](https://github.com/nekko-labs/nekko-agent/actions/runs/38608506782), step timestamps from the Jobs API.
+
+Baseline: required Linux build job 220 s, uncached debug daemon build 86 s; perf job 388 s, release daemon build 89 s, speed contract 250 s; Windows daemon job 450 s, cargo tests 232 s. These are observations from one run, not controlled before/after measurements.
+
+Changes: cache the required debug Rust build; cancel superseded PR runs only; give the app and relay Docker builds distinct BuildKit cache scopes. Keep every test, platform and performance budget unchanged. npm caching and current Action major versions are already present. Cache-miss versus warm-cache timing and actual runner-minute savings remain to be measured after hosted runs. No visual or application behavior change.
+
+
 ### Android reconnect on network change (2026-10-14)
 Area: mobile app
 Result: improvement
@@ -726,3 +735,10 @@ PR #516 follow-up: run 38378954525 attempt 2 passed Ubuntu daemon tests but stre
 PR #516 padding candidate (a6c8d43f), run 38385871207, Linux EPYC7763/Chrome154: full-head streaming p95 **10.20 ms**, attempts **10.20 / 11.11 / 10.95 ms** (198 frames, p50 7.84 ms). Matched profiled 3-second streaming diagnostics: head p95 **11.54 ms**, base **13.02 ms** (93/96 frames, p50 9.05/9.01 ms). Both fail the unchanged 10 ms gate. CPU profiles are dominated by unattributed/native program time (987.761/990.768 ms); named/anonymous JS self time is99.475/103.749 ms. These diagnostics do not establish causality or a fix. Add --dump-trace to existing head/base diagnostics because CPU profiles alone cannot attribute style/layout/paint; --timeline did not save a streaming trace. No budgets changed.
 
 PR #516 trace follow-up, CI38388615665: profiled head/base streaming p95 11.6/12.4 ms,93/95frames,3seconds300tok/s, Intel Xeon Platinum8573C/Linux/Chrome154. Saved traces show document-root non-partial layout with1203 objects on both. Head/base trace duration sums: Paint152.724/151.262 ms, UpdateLayoutTree116.003/118.212 ms, Layout77.419/76.672 ms. Nested trace sums are not disjoint CPU totals. Shared baseline rendering work confirmed; invalidation cause and corrective optimization remain unverified. Gate unchanged.
+
+### Explicit wall vacancy marker (2026-10-14)
+Area: renderer. Result: removed observed unnecessary selector invalidation; overall performance inconclusive.
+Conditions: Ryzen9 9950X3D32threads,Windows,HeadlessChrome151.0.7922.34,release nekkod,1000-message chat,300tok/s,6seconds,no GPU. Current-main a4d0039b plus experimental build. Unprofiled disabled/enabled transcript size-layout containment p95 5.9/6.5ms (342/321frames); rejected. Disable beam attribution probe4.9ms,ring paint containment5.7ms,transcript layer promotion5.1ms: single runs,not retained,not demonstrated optimizations.
+Matched invalidation-tracked base/explicit vacancy-marker p95 6.8/6.1ms (341/357frames),p50 4.5/4.4ms,max19.5/20.2ms. Affected-by-:has invalidations134/0. Instrumentation adds overhead; single samples do not prove Linux-gate improvement. Marker replaces the exact empty-wall descendant selectors while retaining state semantics. No containment or beam change retained. Saved reports/traces .shots/stream-containment/{invalidation,explicit-empty}; expected static appearance unchanged,20matching Electron capture pairs byte-identical. Full gate pending.
+
+Full local candidate gate (same hardware/browser/release daemon,no GPU): all budgets pass. Composer p95 7.8ms,terminal18.9ms,streaming5.4ms347frames,warm8.0ms,cold10.9ms. Layer ratio0.15x,tile memory206.61MB,heap slope0.06MB/lap,DOM/listener slopes0.00. This build predates the latest unrelated main visual refinements; final Linux CI remains the release criterion.

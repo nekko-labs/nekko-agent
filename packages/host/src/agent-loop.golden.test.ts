@@ -20,6 +20,7 @@ interface Scenario {
   tools?: Record<string, { output?: string; isError?: boolean; throw?: string }>;
   history?: ChatMessage[];
   maxHistoryTurns?: number;
+  contextWindow?: number;
   resume?: boolean;
   abortBefore?: boolean;
   abortAfter?: [number, number];
@@ -80,6 +81,7 @@ async function play(s: Scenario, defaults: { defaultHistory: ChatMessage[]; tool
     // Backoffs are instant here; the Rust side runs on a paused clock.
     retryBaseDelayMs: 0,
     maxHistoryTurns: s.maxHistoryTurns,
+    contextWindow: s.contextWindow,
     resume: s.resume,
   })) events.push(e);
   return normalize({ name: s.name, events, history, requests });

@@ -61,6 +61,7 @@ import { killSessionProcesses } from './processes.js';
 import { DAEMON_HOOKS, hasToolHooks, postToolHooks, preToolHooks, turnEndHooks } from './hooks.js';
 import { completeText } from './sideband.js';
 import { createHostProvider as createProvider, promptCachingForHost } from './prompt-caching.js';
+import { contextWindowFor, knownContextWindow } from './context-window.js';
 import { appendAgentTerminal, finishAgentTerminal } from './terminal.js';
 
 /** The chat's index snippets, from the engine daemon when it holds the index. */
@@ -467,8 +468,8 @@ async function collectConnectorSnippets(
   return Array.isArray(settled) ? settled.flat() : [];
 }
 
-/** Context window for the headroom bar, from the model id (see guessContextWindow). */
-const modelContextWindow = guessContextWindow;
+/** Context window for the headroom bar: the loaded window a turn last found, else the id's guess. */
+const modelContextWindow = (session: Session | null | undefined) => knownContextWindow(session?.providerId, session?.modelId);
 
 /** Build the context bundle for the Context Inspector preview (no model call). */
 export async function previewContext(sessionId: string, attachedPaths: string[]): Promise<ContextBundle> {
@@ -498,7 +499,7 @@ export async function previewContext(sessionId: string, attachedPaths: string[])
     // replayed to the model too, and on a long run they are most of the window.
     history: sinceCompaction(session?.messages ?? []),
     systemText,
-    contextWindow: modelContextWindow(session?.modelId),
+    contextWindow: modelContextWindow(session),
     excluded: new Set(session?.contextPrefs?.excluded ?? []),
     pinned: new Set(session?.contextPrefs?.pinned ?? []),
   });
@@ -1008,6 +1009,9 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
     send({ type: 'error', sessionId: opts.sessionId, message: (e as Error).message });
     return;
   }
+  // The window the model was actually loaded with, so the loop can keep a long
+  // run inside it (fit.ts) rather than assume the id's nominal size.
+  const contextWindow = await contextWindowFor(provider, opts.modelId, () => createProvider(resolvedProvider).listModels());
   let attempts = 0;
   let eventsSeen = false;
   let lastError: Error | undefined;
@@ -1099,6 +1103,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
         maxOutputTokens: isLocalProvider(provider.kind) ? clampMaxOutputTokens(settings.maxOutputTokens) : undefined,
         think: session.thinking,
         maxHistoryTurns: opts.maxHistoryTurns,
+        contextWindow,
         resume: opts.resume,
         pullSteering: () => steering.get(opts.sessionId)?.splice(0) ?? [],
         signal: abort.signal,
@@ -1336,6 +1341,8 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
       statsEffort: effectiveEffort(settings.effort, opts.modelId),
       maxOutputTokens: isLocalProvider(provider.kind) ? clampMaxOutputTokens(settings.maxOutputTokens) : undefined,
       promptCaching: promptCachingForHost(),
+      // The loaded window, for the daemon's loop to keep the run inside (fit.rs).
+      contextWindow: await contextWindowFor(provider, opts.modelId, () => createProvider(resolvedProvider ?? provider).listModels()),
       ...(resolvedProvider ? { provider: config(resolvedProvider) } : {}),
       ...(providerError !== undefined ? { providerError } : {}),
       headers: provider.kind === 'anthropic' && provider.auth === 'subscription' && !!provider.tokenKey,
