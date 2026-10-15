@@ -1,5 +1,14 @@
-import { formatRate } from '@agent-nekko/shared';
-import { MiniNekko } from '../Mascot.js';
+import { formatRate, shortLiveStatus, type LiveActivity } from '@agent-nekko/shared';
+import { MiniNekko, type MiniNekkoState } from '../Mascot.js';
+
+export function replyIconState(activity: LiveActivity | undefined): MiniNekkoState {
+  const last = activity?.steps[activity.steps.length - 1];
+  if (last?.kind === 'tool' && last.status === 'running') {
+    const tool = last.label.replace(/^functions\./, '');
+    return ['bash', 'start_process', 'read_process', 'kill_process'].includes(tool) ? 'terminal' : 'idle';
+  }
+  return shortLiveStatus(activity) === 'Thinking' ? 'thinking' : 'idle';
+}
 import { fmtTok } from './transcript.js';
 
 /**
@@ -10,7 +19,7 @@ import { fmtTok } from './transcript.js';
  * changes height.
  */
 export function ReplyStatus({
-  streaming, status, elapsed, tps, out, last, done,
+  streaming, status, elapsed, tps, out, last, done, iconState = 'idle',
 }: {
   // `elapsed` is how long the reply has been running; `tps` is the model's decode
   // rate over the time it spent generating, so the two deliberately don't divide
@@ -19,11 +28,12 @@ export function ReplyStatus({
   streaming: boolean; status: string; elapsed: number; tps: number; out: number;
   last: { out: number; tps: number; secs: number } | null;
   done?: string | null;
+  iconState?: MiniNekkoState;
 }) {
   if (streaming) {
     return (
       <div className="fade-in flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-1 text-[12px] text-ink-faint">
-        <span className="flex items-center gap-2 text-ink-soft"><MiniNekko size={16} /> {status || 'Working'}<span className="dots" /></span>
+        <span className="flex items-center gap-2 text-ink-soft"><MiniNekko size={16} state={iconState} /> {status || 'Working'}<span className="dots" /></span>
         {elapsed > 0 && <span>· {elapsed}s</span>}
         {tps > 0 && <span title="Output tokens per second while the model was generating">· {formatRate(tps)} tok/s</span>}
         {out > 0 && <span>· {fmtTok(out)} tokens</span>}

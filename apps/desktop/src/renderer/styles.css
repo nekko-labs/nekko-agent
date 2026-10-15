@@ -1308,7 +1308,31 @@
 .nekko-puff { animation: nekko-puff-k 0.7s ease-out forwards; transform-box: fill-box; transform-origin: center; }
 .nekko-float { animation: nekko-float 3.4s ease-in-out infinite; }
 .nekko-drift { animation: nekko-drift 4s ease-in-out infinite; }
-.nekko-mini-float { animation: nekko-float 2.2s ease-in-out infinite; display: inline-block; }
+/* The mini face is empty except for a brief closed-eye blink. */
+@keyframes nekko-mini-blink {
+  0%, 92%, 96%, 100% { opacity: 0; }
+  93%, 95% { opacity: 1; }
+}
+.nekko-mini-blink { opacity: 0; animation: nekko-mini-blink 7s linear infinite; }
+@keyframes nekko-mini-thought {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+@keyframes nekko-mini-dot {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+.nekko-mini-thought-bubble { animation: nekko-mini-thought 2.4s ease-in-out infinite; }
+.nekko-mini-thought-dot, .nekko-mini-thought-trail { animation: nekko-mini-dot 1.8s ease-in-out infinite; }
+@keyframes nekko-mini-lines {
+  from { transform: translateY(0); }
+  to { transform: translateY(-15px); }
+}
+.nekko-mini-lines { animation: nekko-mini-lines 1.8s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .nekko-mini-blink, .nekko-mini-thought-bubble, .nekko-mini-thought-dot,
+  .nekko-mini-thought-trail, .nekko-mini-lines { animation: none; }
+}
 .nekko-wave { animation: nekko-wave 0.9s ease-in-out infinite; }
 .nekko-peek { animation: nekko-peek 0.5s ease-out; }
 /* interactive: lean right while animating; a hover wiggle and a click hop */

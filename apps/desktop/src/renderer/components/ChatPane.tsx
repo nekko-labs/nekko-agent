@@ -19,6 +19,7 @@ import {
   ReplyStatus, useElementWidth,
 } from './agent-console/index.js';
 import type { PendingApproval } from './agent-console/index.js';
+import { replyIconState } from './agent-console/ReplyStatus.js';
 import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/LiveTurn.js';
 import { ChatTypeToggle, ImageModeControls } from './agent-console/ImageModeControls.js';
 import { ImageLiveTurn } from './agent-console/ImageLiveTurn.js';
@@ -427,7 +428,7 @@ const LiveReplyStatus = memo(function LiveReplyStatus({
     return () => clearInterval(t);
   }, [status.streaming, startedAt]);
   const label = status.streaming ? shortLiveStatus(run?.activity) || 'Working' : '';
-  return <ReplyStatus {...status} status={label} elapsed={status.streaming ? elapsed : 0} />;
+  return <ReplyStatus {...status} status={label} iconState={replyIconState(run?.activity)} elapsed={status.streaming ? elapsed : 0} />;
 });
 
 /**

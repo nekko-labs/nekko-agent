@@ -296,15 +296,37 @@ function StandPose() {
   );
 }
 
-export function MiniNekko({ size = 18 }: { size?: number }) {
+export type MiniNekkoState = 'idle' | 'thinking' | 'terminal';
+
+export function MiniNekko({ size = 18, state = 'idle' }: { size?: number; state?: MiniNekkoState }) {
   return (
-    <span className="nekko-mini-float inline-block shrink-0 align-middle" style={{ lineHeight: 0 }}>
-      <svg viewBox="0 0 32 32" width={size} height={size} shapeRendering="crispEdges" aria-hidden="true" focusable="false">
-        <g data-part="pixel-head" strokeLinejoin="miter">
-          <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#101714" stroke="#f2f1e9" strokeWidth="2" />
-          <path d="M11 15H13V18H11Z M20 15H22V18H20Z" fill="#f2f1e9" />
-          <path d="M15 20H17V21H15Z" fill="#a7c8ac" />
-        </g>
+    <span className="inline-block shrink-0 align-middle" data-mini-state={state} style={{ lineHeight: 0 }}>
+      <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {state === 'terminal' ? (
+          <g data-part="mini-terminal">
+            <rect x="3" y="5" width="26" height="23" rx="2" />
+            <path d="M3 11H29 M7 8H8 M11 8H12" />
+            <svg x="6" y="14" width="20" height="11" viewBox="0 0 20 11" overflow="hidden">
+              <g className="nekko-mini-lines" strokeWidth="1.5">
+                <path d="M0 2L2 3.5L0 5 M5 4H13 M0 9H17 M0 14H10 M0 19H15 M0 24H13" />
+              </g>
+            </svg>
+          </g>
+        ) : state === 'thinking' ? (
+          <g data-part="mini-thought">
+            <circle className="nekko-mini-thought-trail" cx="5" cy="27" r="1" fill="currentColor" stroke="none" />
+            <circle className="nekko-mini-thought-trail" cx="9" cy="23" r="1.8" style={{ animationDelay: '180ms' }} />
+            <g className="nekko-mini-thought-bubble">
+              <path d="M10 18C3 18 3 9 9 8C9 2 18 1 21 6C29 4 32 14 26 17C24 23 14 23 10 18Z" />
+              {[13, 18, 23].map((x, i) => <circle key={x} className="nekko-mini-thought-dot" cx={x} cy="13" r="1" fill="currentColor" stroke="none" style={{ animationDelay: `${i * 180}ms` }} />)}
+            </g>
+          </g>
+        ) : (
+          <g data-part="pixel-head" strokeLinejoin="miter">
+            <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" />
+            <path data-part="blink-marks" className="nekko-mini-blink" d="M10 17H13 M19 17H22" />
+          </g>
+        )}
       </svg>
     </span>
   );
