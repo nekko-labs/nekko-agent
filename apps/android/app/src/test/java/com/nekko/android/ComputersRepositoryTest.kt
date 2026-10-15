@@ -350,6 +350,42 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `the computer's phone-settable settings are read, changed, and the reply is what shows`() = runTest {
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.SETTINGS_GET -> buildJsonObject { put("defaultChatMode", "ask"); put("chatPaneAction", "complete") }
+                // The computer answers with its reduced view after saving.
+                Channels.SETTINGS_UPDATE -> buildJsonObject { put("defaultChatMode", "yolo"); put("chatPaneAction", "complete") }
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.ASK, repo.state.value.pcSettings.defaultChatMode)
+        repo.updatePcSettings(com.nekko.protocol.PcSettings.patch(mode = com.nekko.protocol.PcSettings.ChatMode.YOLO))
+        val sent = remotes.last.calls.last { it.channel == Channels.SETTINGS_UPDATE }
+        assertEquals("""{"defaultChatMode":"yolo"}""", sent.args.single().toString())
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.YOLO, repo.state.value.pcSettings.defaultChatMode)
+    }
+
+    @Test
+    fun `complete archives on the computer, delete deletes, both leave the list`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        repo.completeChat("s1")
+        val complete = remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }
+        assertEquals("\"s1\"", complete.args[0].toString())
+        assertEquals("""{"archivedAt":1000}""", complete.args[1].toString())
+        repo.deleteChat("s2")
+        assertEquals("\"s2\"", remotes.last.calls.last { it.channel == Channels.SESSION_DELETE }.args.single().toString())
+    }
+
+    @Test
     fun `the computer's theme comes from settings and then follows the live event`() = runTest {
         val remotes = FakeRemotes { c ->
             when (c.channel) {

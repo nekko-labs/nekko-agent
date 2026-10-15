@@ -37,6 +37,10 @@ reference until this app reaches parity.
   approval or asks a question (on by default), and optionally when a reply
   finishes or fails; never in silent mode or Do Not Disturb.
 
+- **The computer's settings:** *Settings → On <computer>* sets its default chat
+  mode (YOLO allowed after a confirmation), the long-press action (Complete or
+  Delete) and delete confirmation; a long-press on a chat runs that action.
+
 **Not yet:** models on the phone, push notifications, Markdown rendering,
 attachments, Play Store release. See `TASKS.md` → *Native Android app*.
 
