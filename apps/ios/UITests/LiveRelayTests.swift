@@ -13,7 +13,7 @@ final class LiveRelayTests: XCTestCase {
         }
         let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
         let app = XCUIApplication()
-        app.launchArguments = ["-uiTestReset", "-appLock", "NO", "-theme", theme == "dark" ? "dark" : "light"]
+        app.launchArguments = ["-appLock", "NO", "-theme", theme == "dark" ? "dark" : "light", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
 
