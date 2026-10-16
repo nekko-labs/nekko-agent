@@ -37,19 +37,19 @@ struct NewChatView: View {
                 SectionHeader("Model")
             }
             Section {
-                Picker("Folder", selection: $folder) {
+                Picker(selection: $folder) {
                     Text("General").tag(String?.none)
                     ForEach(store.workspaces) { w in Text(w.name).tag(Optional(w.id)) }
-                }
+                } label: { Text("Folder").foregroundStyle(palette.ink) }
                 .pickerStyle(.navigationLink)
             } header: {
                 SectionHeader("Project")
             }
             Section {
-                Picker("Tools", selection: $mode) {
+                Picker(selection: $mode) {
                     Text("Computer default").tag(PcSettings.ChatMode?.none)
                     ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in Text(modeName(m)).tag(Optional(m)) }
-                }
+                } label: { Text("Tools").foregroundStyle(palette.ink) }
                 .pickerStyle(.navigationLink)
             } footer: {
                 Text("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Its default is \(modeName(store.pcSettings.effectiveMode)).")
@@ -111,13 +111,11 @@ struct NewChatView: View {
         Task {
             do {
                 let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: mode)
-                opened(id)
+                // The chat's own model sends the first message, so a failure shows
+                // there and the text comes back in its composer.
                 let first = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !first.isEmpty {
-                    let chat = ChatModel(sessionId: id, store: store)
-                    await chat.reload()
-                    try? await chat.send(first)
-                }
+                if !first.isEmpty { app.firstMessages[id] = first }
+                opened(id)
             } catch {
                 self.error = error.localizedDescription
             }
@@ -191,5 +189,6 @@ struct ModelPicker: View {
                 if selected.0 == p && selected.1 == m { Image(systemName: "checkmark").foregroundStyle(palette.accent) }
             }
         }
+        .accessibilityAddTraits(selected.0 == p && selected.1 == m ? .isSelected : [])
     }
 }

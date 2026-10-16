@@ -40,6 +40,7 @@ struct WelcomeView: View {
 struct TailscaleGuide: View {
     @Environment(\.palette) private var palette
     @State private var tailnet = Tailnet.isConnected
+    @Environment(\.scenePhase) private var phase
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -66,6 +67,8 @@ struct TailscaleGuide: View {
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(palette.line))
         .onAppear { tailnet = Tailnet.isConnected }
+        // Back from the Tailscale app: show the new state.
+        .onChange(of: phase) { _, p in if p == .active { tailnet = Tailnet.isConnected } }
     }
 
     private func step(_ n: Int, _ text: LocalizedStringKey) -> some View {
@@ -92,8 +95,13 @@ struct PairView: View {
             Section {
                 ZStack {
                     if cameraDenied {
-                        Text("Camera access is off. Allow it in Settings → Nekko Agent, or paste the link below.")
-                            .font(.footnote).multilineTextAlignment(.center).padding()
+                        VStack(spacing: 10) {
+                            Text("Camera access is off. Allow it in Settings → Nekko Agent, or paste the link below.")
+                                .font(.footnote).multilineTextAlignment(.center)
+                            Link("Open Settings", destination: URL(string: UIApplication.openSettingsURLString)!)
+                                .font(.footnote.weight(.semibold))
+                        }
+                        .padding()
                     } else {
                         QRScanner { code in submit(code) }
                     }
@@ -215,6 +223,7 @@ struct QRScanner: UIViewControllerRepresentable {
         private let session = AVCaptureSession()
         private var preview: AVCaptureVideoPreviewLayer?
         private var lastCode: String?
+        private var lastAt = Date.distantPast
 
         override func viewDidLoad() {
             super.viewDidLoad()
@@ -254,8 +263,11 @@ struct QRScanner: UIViewControllerRepresentable {
             guard let code = (objects.first as? AVMetadataMachineReadableCodeObject)?.stringValue, Pairing.parse(code) != nil else { return }
             // Delivered on the main queue (setMetadataObjectsDelegate above).
             MainActor.assumeIsolated {
-                guard code != lastCode else { return }
+                // The same code again after a pause is a retry (say, after turning
+                // Tailscale on); without the pause one scan would fire many times.
+                guard code != lastCode || Date().timeIntervalSince(lastAt) > 3 else { return }
                 lastCode = code
+                lastAt = Date()
                 onCode?(code)
             }
         }

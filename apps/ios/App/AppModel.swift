@@ -28,6 +28,8 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A chat to open (notification tap, Live Activity tap, `nekko-agent://chat/<id>`).
     var openChat: String?
+    /// The first message typed on New chat, sent by that chat's screen once it opens.
+    var firstMessages: [String: String] = [:]
     /// Text shared from another app (the share extension), waiting for New chat to take it.
     var sharedText: String?
     private let shareInbox = ShareInbox(defaults: UserDefaults(suiteName: StatusSnapshot.appGroup) ?? .standard)

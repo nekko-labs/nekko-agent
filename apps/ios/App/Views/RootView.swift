@@ -22,13 +22,22 @@ struct RootView: View {
     var body: some View {
         ZStack {
             content
+                // Under the cover the chats must not be readable by VoiceOver either.
+                .accessibilityHidden(covered)
             // The app switcher snapshot shows a cover while the lock is on.
-            if app.prefs.appLock && (app.lock.locked || phase != .active) {
+            if covered {
                 LockView().transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.15), value: app.lock.locked)
         .onChange(of: app.lock.locked) { _, locked in if !locked { app.start() } }
+        // iPad: a new sidebar pick starts a fresh detail stack (Settings pushed
+        // earlier no longer covers it), and another computer drops this one's chat.
+        .onChange(of: selected) { _, _ in if size == .regular { path = [] } }
+        .onChange(of: store.activeId) { _, _ in
+            selected = nil
+            path = []
+        }
         // Shared from another app: New chat opens with the text, nothing is sent.
         .onChange(of: app.sharedText, initial: true) { _, text in
             if text != nil { open(.newChat) }
@@ -39,10 +48,13 @@ struct RootView: View {
             open(.chat(id))
             app.openChat = nil
         }
-        .sheet(item: Binding(get: { app.pendingLink.map(LinkBox.init) }, set: { app.pendingLink = $0?.link })) { box in
+        // A pairing link opened while locked waits until the app is unlocked.
+        .sheet(item: Binding(get: { covered ? nil : app.pendingLink.map(LinkBox.init) }, set: { app.pendingLink = $0?.link })) { box in
             ConfirmPairSheet(link: box.link) { path = [] }
         }
     }
+
+    private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }
 
     @ViewBuilder private var content: some View {
         if !store.ready && !(app.prefs.appLock && app.lock.locked) {
@@ -104,6 +116,7 @@ struct LockView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var palette
     @Environment(\.scenePhase) private var phase
+    @State private var prompted = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -123,7 +136,14 @@ struct LockView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.paper)
-        .task(id: phase) { if phase == .active { await app.lock.unlock() } }
+        // Ask once per return to the app: the Face ID sheet itself makes the
+        // scene inactive and active again, which used to ask again after Cancel.
+        .task(id: phase) {
+            if phase == .background { prompted = false }
+            guard phase == .active, !prompted else { return }
+            prompted = true
+            await app.lock.unlock()
+        }
     }
 }
 
@@ -165,7 +185,8 @@ struct ConnectionBanner: View {
             }
             .padding(12)
             .background(l.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
-            .accessibilityElement(children: .combine)
+            // Retry stays its own button for VoiceOver.
+            .accessibilityElement(children: .contain)
         }
     }
 

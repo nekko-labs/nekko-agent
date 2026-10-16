@@ -48,7 +48,7 @@ struct StatusProvider: TimelineProvider {
 
 /// A chat running on the computer: what it's doing, how long, and — when it
 /// waits on you — Allow / Deny right there. The buttons run
-/// `AnswerApprovalIntent` in the app's process, which holds the relay.
+/// `AllowToolIntent` / `AnswerApprovalIntent` in the app's process, which holds the relay.
 struct AgentRunLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: AgentRunAttributes.self) { context in
@@ -107,7 +107,7 @@ private struct LockScreenView: View {
             }
             Text(context.state.displayStep).font(.subheadline.monospaced()).lineLimit(2)
             HStack {
-                Text("\(context.attributes.computerName) · \(context.state.steps) steps").font(.caption2).foregroundStyle(.secondary)
+                Text("\(context.attributes.computerName) · ^[\(context.state.steps) step](inflect: true)").font(.caption2).foregroundStyle(.secondary)
                 Spacer()
             }
             Buttons(context: context)
@@ -128,7 +128,7 @@ private struct Buttons: View {
                     Button(intent: AnswerApprovalIntent(sessionId: context.attributes.sessionId, callId: callId, allow: false)) {
                         Text("Deny").frame(maxWidth: .infinity)
                     }.tint(.red)
-                    Button(intent: AnswerApprovalIntent(sessionId: context.attributes.sessionId, callId: callId, allow: true)) {
+                    Button(intent: AllowToolIntent(sessionId: context.attributes.sessionId, callId: callId)) {
                         Text("Allow").frame(maxWidth: .infinity)
                     }.tint(.green)
                 }
@@ -150,7 +150,17 @@ private struct PhaseIcon: View {
     let phase: AgentRunAttributes.Phase
 
     var body: some View {
-        Image(systemName: symbol).foregroundStyle(color(phase))
+        Image(systemName: symbol).foregroundStyle(color(phase)).accessibilityLabel(label)
+    }
+
+    private var label: String {
+        switch phase {
+        case .running: return "Working"
+        case .approval: return "Waiting for your approval"
+        case .question: return "Waiting for your answer"
+        case .done: return "Finished"
+        case .failed: return "Failed"
+        }
     }
 
     private var symbol: String {

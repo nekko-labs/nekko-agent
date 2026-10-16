@@ -105,6 +105,9 @@ public final class ComputersStore {
     public private(set) var denied: DenyReason?
     public private(set) var summaries: [SessionSummary] = []
     public private(set) var summariesLoading = false
+    /// The list has been read (or failed to) since connecting: before that an
+    /// empty list means "not loaded yet", not "no chats".
+    public private(set) var summariesLoaded = false
     public private(set) var providers: [PublicProvider] = []
     public private(set) var defaults = RemoteDefaults()
     public private(set) var appearance: Appearance?
@@ -369,9 +372,11 @@ public final class ComputersStore {
             hostVersion = appInfo.version
             learnPlatform(appInfo.platform)
             summariesLoading = false
+            summariesLoaded = true
         } catch {
             if client === c {
                 summariesLoading = false
+                summariesLoaded = true
                 lastError = error.localizedDescription
             }
         }
@@ -468,6 +473,7 @@ public final class ComputersStore {
     }
 
     private func clearComputerState() {
+        summariesLoaded = false
         summaries = []
         providers = []
         models = [:]
