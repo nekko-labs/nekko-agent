@@ -650,40 +650,39 @@
 }
 
 @utility rail {
-  /* The collapsible left rail: a slim strip of icons at rest, biased toward
-     the upper-middle on a subtle middle-60% band whose top and bottom curve back into
-     the left edge (a wave, like a tab pulled out of the window side).
-     Hovering (or keyboard focus inside) expands it over the content to
-     reveal the labels; the band swells with it. */
+  /* Only the button column receives input. The mirrored tails are decoration. */
   width: 52px;
+  padding-inline: 6px;
   justify-content: flex-start;
   isolation: isolate;
-  transition:
-    width var(--dur-slow) var(--ease-spring, var(--ease-out));
+  pointer-events: none;
+  transition: width var(--dur-slow) var(--ease-spring, var(--ease-out));
   will-change: width;
-  & .rail-group::before {
-    content: '';
+  & .rail-backdrop {
     position: absolute;
-    /* Curved wings each measure half the band width, independent of its height. */
-    --wing-height: 32px;
-    inset: calc(-1 * var(--wing-height)) -6px;
+    left: -6px;
+    width: calc(100% + 12px);
     z-index: -1;
-    background: color-mix(in srgb, var(--accent) 4%, var(--paper));
-    mask:
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 50' preserveAspectRatio='none'%3E%3Cpath d='M0 0 C0 25 100 15 100 50 H0 Z'/%3E%3C/svg%3E") top / 100% var(--wing-height) no-repeat,
-      linear-gradient(#000 0 0) center / 100% calc(100% - 2 * var(--wing-height) + 2px) no-repeat,
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 50' preserveAspectRatio='none'%3E%3Cpath d='M0 50 C0 25 100 35 100 0 H0 Z'/%3E%3C/svg%3E") bottom / 100% var(--wing-height) no-repeat;
-    transition: background var(--dur-slow) ease;
+    pointer-events: none;
+    overflow: visible;
+    fill: color-mix(in srgb, var(--accent) 4%, var(--paper));
+    transition: fill var(--dur-slow) ease;
+    /* Keep 40/30/20px tail widths literal when expanded, not SVG-scaled. */
+    min-width: 198px;
+    transform-origin: left center;
+    transform: scaleX(calc(52 / 198));
+    transition: fill var(--dur-slow) ease, transform var(--dur-slow) var(--ease-spring, var(--ease-out));
   }
   &:hover,
   &:has(:focus-visible) {
-    width: 188px;
+    width: 198px;
+    padding-right: 16px;
   }
-  &:hover .rail-group::before,
-  &:has(:focus-visible) .rail-group::before {
-    --wing-height: 100px;
-    background: color-mix(in srgb, var(--accent) 7%, var(--paper));
-    filter: drop-shadow(0 6px 18px rgb(0 0 0 / 0.25));
+  &:hover .rail-backdrop,
+  &:has(:focus-visible) .rail-backdrop {
+    width: 198px;
+    transform: none;
+    fill: color-mix(in srgb, var(--accent) 7%, var(--paper));
   }
   &:hover .rail-label,
   &:has(:focus-visible) .rail-label {
@@ -721,6 +720,7 @@
 }
 
 @utility rail-destinations {
+  pointer-events: auto;
   flex: 0 1 auto;
   scrollbar-width: thin;
   & > .nav-item { flex-shrink: 0; }
