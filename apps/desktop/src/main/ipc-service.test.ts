@@ -11,18 +11,18 @@ describe('shell service controls', () => {
   it('logs stopped requests with their window and operation, without invoking a throwing endpoint', async () => {
     const log = vi.spyOn(console, 'info').mockImplementation(() => {});
     const engine = { running: false, endpoint: vi.fn() };
-    registerIpc(engine as unknown as EngineProcess, 'unused');
+    registerIpc(engine as unknown as EngineProcess);
     expect(await handlers.get(ENGINE_ENDPOINT_CHANNEL)!(event, 'settings:get')).toBeNull();
     expect(engine.endpoint).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith(expect.stringContaining('renderer 42 (http://localhost:5173): settings:get'));
   });
   it('preserves real startup failures', async () => {
-    registerIpc({ running: true, endpoint: vi.fn().mockRejectedValue(new Error('startup failed')) } as unknown as EngineProcess, 'unused');
+    registerIpc({ running: true, endpoint: vi.fn().mockRejectedValue(new Error('startup failed')) } as unknown as EngineProcess);
     await expect(handlers.get(ENGINE_ENDPOINT_CHANNEL)!(event)).rejects.toThrow('startup failed');
   });
   it('can start and restart the stopped agent through shell IPC', async () => {
     const engine = { running: false, stop: vi.fn(async () => { engine.running = false; }), start: vi.fn(() => { engine.running = true; }), endpoint: vi.fn().mockResolvedValue({}), call: vi.fn().mockResolvedValue({ running: false, install: { binPath: '/model' } }) };
-    registerIpc(engine as unknown as EngineProcess, 'unused');
+    registerIpc(engine as unknown as EngineProcess);
     const control = handlers.get(SERVICE_CONTROL_CHANNEL)!;
     expect(await control(event, 'status')).toEqual({ agentRunning: false, modelRunning: false, modelAvailable: false });
     expect(engine.call).not.toHaveBeenCalled();

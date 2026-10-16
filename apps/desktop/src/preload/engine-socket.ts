@@ -32,6 +32,8 @@ const OP_ACK = 2;
 
 export interface EngineSocket {
   call(channel: string, args: unknown[]): Promise<unknown>;
+  /** Which engine answers: nekkod, or the TS backend alone (`backend`, no daemon build). */
+  mode(): Promise<EngineEndpoint['mode'] | null>;
   on(channel: string, listener: Listener): void;
   off(channel: string, listener: Listener): void;
   openTerminal(id: string, handlers: TerminalStreamHandlers): Promise<TerminalStream | null>;
@@ -150,6 +152,10 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
         pending.set(id, { channel, resolve, reject });
         send(JSON.stringify({ id, channel, args }));
       });
+    },
+    async mode() {
+      const e = endpoint ?? (await getEndpoint('engine mode').catch(() => null));
+      return e?.mode ?? null;
     },
     on(channel, listener) {
       let set = listeners.get(channel);

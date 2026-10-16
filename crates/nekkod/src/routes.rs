@@ -69,6 +69,8 @@ pub struct Ctx {
     pub update_checks: Arc<crate::small_services::UpdateChecks>,
     /// The messaging bridges (`messaging:status`), with a data directory.
     pub messaging: Option<Arc<crate::messaging::Messaging>>,
+    /// What Electron main used to answer (dialogs, shell, microphone, updater), for the desktop app.
+    pub native: Option<Arc<crate::native::Native>>,
 }
 
 /// The app around the daemon: its facts and the desktop bridge.
@@ -358,6 +360,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "session:watches" if ctx.turns.watches.is_some() => {
             Ok(ctx.turns.watches.as_ref().expect("checked").views(str_arg(&args, 0).unwrap_or_default()))
         }
+        c if crate::native::CHANNELS.contains(&c) && ctx.native.is_some() => {
+            ctx.native.clone().expect("checked").route(ctx, c, &args).await
+        }
         c if crate::small_services::CHANNELS.contains(&c) && owns_small_services(ctx) => {
             crate::small_services::route(ctx, c, &args).await
         }
@@ -553,6 +558,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if owns_small_services(ctx) {
         all.extend_from_slice(crate::small_services::CHANNELS);
+    }
+    if ctx.native.is_some() {
+        all.extend_from_slice(crate::native::CHANNELS);
     }
     if ctx.runtimes.is_some() {
         all.extend_from_slice(crate::runtimes::CHANNELS);

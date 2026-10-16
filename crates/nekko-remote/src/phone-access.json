@@ -34,16 +34,20 @@
    "settings:reset",
    "voice:cancel",
    "voice:install",
+   "voice:permission",
    "voice:uninstall",
    "workspace:addByPath",
    "workspace:remove"
   ],
   "prefixes": [
+   "dialog:",
    "mcp:",
    "oauth:",
    "remote:",
+   "shell:",
    "terminal:",
-   "terminals:"
+   "terminals:",
+   "update:"
   ],
   "except": [
    "remote:status"
