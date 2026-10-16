@@ -46,7 +46,7 @@ final class RelayIntegrationTests: XCTestCase {
             .filter { $0.0 == Events.agentEvent }.compactMap { AgentEvent.from($0.1) }.filter { $0.sessionId == session }
     }
 
-    func waitFor(_ timeout: TimeInterval, _ what: String, _ cond: () -> Bool) async {
+    func waitFor(_ timeout: TimeInterval, _ what: String, _ cond: @escaping () -> Bool) async {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if cond() { return }
@@ -85,7 +85,7 @@ final class RelayIntegrationTests: XCTestCase {
         let created = try await c.call(Channels.sessionCreate)
         let session = try XCTUnwrap(Session.from(created))
         _ = try await c.call(Channels.chatSend, [sendOptions(sessionId: session.id, providerId: "fake", modelId: "fake-model", text: "Say hello")], timeout: 60)
-        await waitFor(10, "done") { events(r, session: session.id).contains { if case .done = $0 { return true } else { return false } } }
+        await waitFor(10, "done") { self.events(r, session: session.id).contains { if case .done = $0 { return true } else { return false } } }
         let mine = events(r, session: session.id)
         let text = mine.compactMap { if case .text(_, let d) = $0 { return d } else { return nil } }.joined()
         XCTAssertEqual(text, "Hello from your computer.")
@@ -107,7 +107,7 @@ final class RelayIntegrationTests: XCTestCase {
         let send = Task { try? await c.call(Channels.chatSend, [sendOptions(sessionId: s2.id, providerId: "fake", modelId: "fake-model", text: "please approve a cleanup")], timeout: 60) }
         var approval: Approval?
         await waitFor(30, "approval") {
-            approval = events(r, session: s2.id, from: mark).lazy.compactMap { if case .approvalRequired(_, let a) = $0 { return a } else { return nil } }.first
+            approval = self.events(r, session: s2.id, from: mark).lazy.compactMap { if case .approvalRequired(_, let a) = $0 { return a } else { return nil } }.first
             return approval != nil
         }
         let a = try XCTUnwrap(approval)
@@ -116,7 +116,7 @@ final class RelayIntegrationTests: XCTestCase {
         let pending = PendingInput.map(try await c.call(Channels.chatPending))
         XCTAssertEqual(pending[s2.id]?.approval?.call.id, a.call.id)
         _ = try await c.call(Channels.toolApprove, [.string(s2.id), .string(a.call.id), false])
-        await waitFor(60, "turn end") { events(r, session: s2.id, from: mark).contains(where: \.endsTurn) }
+        await waitFor(60, "turn end") { self.events(r, session: s2.id, from: mark).contains(where: \.endsTurn) }
         _ = await send.value
         let rawAfter = try await c.call(Channels.sessionGet, [.string(s2.id)])
         let afterDeny = try XCTUnwrap(Session.from(rawAfter))
