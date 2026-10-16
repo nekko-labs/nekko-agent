@@ -1658,3 +1658,14 @@ Not verified: packaged app and native window chrome.
 - **Implemented — Agent Monitor Tasks.** The Tasks section only appears once at least one task connector is connected, with one tab per connected source. It lists open items, has Refresh, and clicking an item drops a prompt (title, link and details) into that chat's composer; nothing is sent until the user sends it.
 - **Implemented — focus-mode clean start.** In Focused layout, an empty chat shows only a centered greeting and composer: no header, transcript, footer controls or monitor. The first send (or a question, approval or model choice) ends it, and the window becomes the full chat.
 - **Planned / not done.** Completing or updating tasks from the panel; one-click OAuth for these services; a file picker for the Tasks file path; a transition animation between clean start and full chat.
+
+## Chat finder in the Agents panel (2026-10-16)
+
+User intent: a search button beside the Agents panel's +, in the same accent and size, opening a popup that lists the latest chats and filters them; rows open their chat; each row shows its age at the far right (days up to 30, then months); searching waits until typing pauses; light and snappy; an X closes it and the search button is the Nekko mark, like the composer's send.
+
+- **Button** `[implemented; renderer-verified in an isolated fixture]`: a magnifier left of + in the panel header, sharing the + button's class (accent colour, 22px icon, accent-tinted hover/open state).
+- **Popup** `[implemented; renderer-verified in an isolated fixture, light and dark]`: portalled under the button so the wall cannot clip it. Opens with **Latest** chats newest first (up to 50), active and completed alike (completed rows say so); incognito chats never appear. Typing filters once input pauses for 1.5 s (a thin accent line fills during the wait); Enter or the Nekko button searches at once. Every word must match the title, first prompt or latest reply; title matches list first, body matches show the matching snippet. Clicking a row, or Enter on settled results, opens the chat and closes the popup; arrow keys move the highlight. X, Esc or an outside click close it.
+- **Age label**: Today under a day, then 1 day … 30 days, then 1 month, 2 months … (whole 30-day months).
+- **Cost**: the search filters the chat summaries already in the renderer store; no IPC, no host work, no network. Beyond the title it matches only the first prompt and latest reply, which the summaries carry, not full transcripts.
+
+Not verified: packaged app, native window chrome, row-orientation panel, and very large chat histories (thousands of chats) for frame timing.
