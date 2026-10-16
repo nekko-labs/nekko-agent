@@ -594,6 +594,10 @@ async fn admit(
     let mut account = pick(&provider, &["auth", "kind", "tokenKey"]);
     account["incognito"] = json!(incognito);
     facts.insert("account".into(), account);
+    // The phone relay, messaging and accounting are this daemon's wherever it
+    // admits turns, so the host is sent only how a turn ends (an agent watch's
+    // resume reads the error; turns.rs `host_events`).
+    facts.insert("hostEvents".into(), json!(crate::turns::HOST_END_EVENTS));
 
     let providers: Vec<Value> = settings
         .get("providers")

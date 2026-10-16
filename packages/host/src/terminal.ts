@@ -75,6 +75,10 @@ async function daemonCall<T>(channel: string, ...args: unknown[]): Promise<T> {
 export function useTerminalDaemon(link: DaemonLink | null): void {
   daemon = link;
   if (!link) return;
+  // The mirror only feeds this host's phone relay. A daemon that runs remote
+  // access itself (crates/nekko-remote) relays its terminals from its own hub,
+  // and nothing else here reads them, so the output is not sent here at all.
+  if ((process.env.NEKKOD_OWNS ?? '').split(',').includes('remote')) return;
   const connect = () => {
     if (daemon !== link) return;
     const ws = new WebSocket(`${link.url.replace(/^http/, 'ws')}/api/events?only=terminal:event&token=${encodeURIComponent(link.token)}`);

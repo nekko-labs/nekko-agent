@@ -2,17 +2,22 @@
 //!
 //! - `POST /api/{channel}` with `{ "args": [...] }`: the web edition's request
 //!   shape, for the CLI, the TS backend and anything else that speaks it.
-//! - `GET /api/events`: every event as a `{ channel, payload }` text frame.
+//! - `GET /api/events`: every event as a `{ channel, payload }` text frame
+//!   (`?only=<channel>` for one channel, `?sessions=a,b` for those chats'
+//!   agent event stream only).
 //! - `GET /api/ws`: the desktop UI's socket. Requests are
 //!   `{ id, channel, args }`, replies `{ id, result }` or `{ id, error }`, and
 //!   events arrive on the same socket without an `id`. One socket, no per-call
-//!   HTTP, and no CORS: the renderer's CSP already allows `ws:`.
+//!   HTTP, and no CORS: the renderer's CSP already allows `ws:`. A
+//!   `daemon:subscribe` request narrows its agent events to the chats a
+//!   window shows (see `Subscription`).
 //! - `GET /api/term/{id}`: one terminal's raw byte stream (see `term_socket`).
 //!
 //! Every route but `/health` needs the bearer token, from the `Authorization`
 //! header or (sockets cannot set headers from a page) a `token` query
 //! parameter. A request carrying an `Origin` must come from an allowed one.
 
+use crate::hub::Scope;
 use crate::routes::{Ctx, route};
 use axum::Router;
 use axum::body::to_bytes;
@@ -25,8 +30,11 @@ use futures_util::{SinkExt, StreamExt};
 use nekko_term::StreamMsg;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+
+/// The socket's own request: which chats' agent events it takes (`Subscription`).
+pub const SUBSCRIBE: &str = "daemon:subscribe";
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 
@@ -148,14 +156,21 @@ async fn events(
     // it to take the daemon's terminal events without receiving its own
     // events back. Frames always start with the channel key (see `Hub`).
     let only = query.get("only").map(|c| format!("{{\"channel\":\"{c}\""));
+    // `?sessions=a,b` takes the stream of those chats only (summary events of
+    // every chat still come); `?sessions=` (empty) takes no chat's stream.
+    let mut subs = query.get("sessions").map_or_else(Subscription::default, |list| Subscription::of(list));
     ws.on_upgrade(move |socket| async move {
         let (mut sink, mut stream) = socket.split();
         let mut rx = app.ctx.hub.subscribe();
+        if !send_opening(&mut sink, &mut subs, &app.ctx.hub).await {
+            return;
+        }
         loop {
             tokio::select! {
                 ev = rx.recv() => match ev {
                     Ok(ev) => {
                         if only.as_ref().is_some_and(|p| !ev.text.starts_with(p.as_str())) { continue }
+                        if !subs.wants(&ev) { continue }
                         if sink.send(Message::Text(ev.text.as_ref().into())).await.is_err() { break }
                     }
                     Err(RecvError::Lagged(_)) => {
@@ -166,6 +181,20 @@ async fn events(
                 },
                 msg = stream.next() => match msg {
                     Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    // The one request this read-only socket takes: `daemon:subscribe`
+                    // (the web edition's page narrows its stream this way).
+                    Some(Ok(Message::Text(text))) => {
+                        let Ok(req) = serde_json::from_str::<Value>(text.as_str()) else { continue };
+                        if req.get("channel").and_then(Value::as_str) != Some(SUBSCRIBE) { continue }
+                        let args = req.get("args").and_then(Value::as_array).cloned().unwrap_or_default();
+                        let Some((ids, all)) = subscribe_request(&args) else { continue };
+                        subs.set(ids, all);
+                        let mut gone = false;
+                        for frame in subs.replays(&app.ctx.hub) {
+                            if sink.send(Message::Text(frame.into())).await.is_err() { gone = true; break }
+                        }
+                        if gone { break }
+                    }
                     _ => {}
                 },
             }
@@ -183,25 +212,155 @@ async fn rpc(
         return code.into_response();
     }
     let term_data = query.get("termData").is_some_and(|v| v == "1");
-    ws.on_upgrade(move |socket| rpc_socket(socket, app, term_data))
+    let subs = query.get("sessions").map_or_else(Subscription::default, |list| Subscription::of(list));
+    ws.on_upgrade(move |socket| rpc_socket(socket, app, term_data, subs))
 }
 
-async fn rpc_socket(socket: WebSocket, app: App, term_data: bool) {
+/// What a socket narrowed at connect (`?sessions=`) is sent first: the running
+/// turns of the chats it leaves out, as their first event and the wait they
+/// are in (so a window that connects mid-turn still marks them running), and
+/// the replays of the chats it named. Sent after the socket subscribed to the
+/// hub, so nothing falls between them. False once the socket is gone.
+async fn send_opening<S>(sink: &mut S, subs: &mut Subscription, hub: &crate::hub::Hub) -> bool
+where
+    S: futures_util::Sink<Message> + Unpin,
+{
+    let mut frames: Vec<String> = subs.status(hub).iter().map(|t| t.to_string()).collect();
+    frames.extend(subs.replays(hub));
+    for frame in frames {
+        if sink.send(Message::Text(frame.into())).await.is_err() {
+            return false;
+        }
+    }
+    true
+}
+
+/// Which chats' agent event stream a socket takes.
+///
+/// Every chat's by default, as before. Once narrowed (`daemon:subscribe` on
+/// `/api/ws`, `?sessions=` on `/api/events`) the socket still gets every
+/// global event and every chat's summary events (see `hub.rs`), and the
+/// stream events of the chats it named only.
+#[derive(Default)]
+struct Subscription {
+    /// `None`: every chat.
+    ids: Option<HashSet<Arc<str>>>,
+    /// Live events at or below this sequence number were in a replay.
+    skip: HashMap<Arc<str>, u64>,
+    /// Chats just added, whose running turn this socket has not been sent yet.
+    added: Vec<Arc<str>>,
+}
+
+impl Subscription {
+    fn of(list: &str) -> Self {
+        let mut s = Self { ids: Some(HashSet::new()), ..Self::default() };
+        s.set(list.split(',').map(str::trim).filter(|id| !id.is_empty()).map(Arc::from).collect(), false);
+        s
+    }
+
+    /// Narrow to `ids`, or widen back to every chat (`all`).
+    fn set(&mut self, ids: Vec<Arc<str>>, all: bool) {
+        if all {
+            self.ids = None;
+            self.added.clear();
+            return;
+        }
+        let before = self.ids.take().unwrap_or_default();
+        self.added = ids.iter().filter(|id| !before.contains(*id)).cloned().collect();
+        self.skip.retain(|id, _| ids.contains(id));
+        self.ids = Some(ids.into_iter().collect());
+    }
+
+    /// `agent:replay` frames for the chats just added, noting what they cover.
+    fn replays(&mut self, hub: &crate::hub::Hub) -> Vec<String> {
+        let added = std::mem::take(&mut self.added);
+        hub.replay(&added)
+            .into_iter()
+            .map(|(id, seq, frame)| {
+                self.skip.insert(id, seq);
+                frame
+            })
+            .collect()
+    }
+
+    /// For a socket narrowed at connect: the running turns of the chats it
+    /// does not show (see `send_opening`).
+    fn status(&self, hub: &crate::hub::Hub) -> Vec<Arc<str>> {
+        let Some(ids) = &self.ids else { return Vec::new() };
+        hub.status(&|id| ids.contains(id))
+    }
+
+    fn wants(&mut self, ev: &crate::hub::Event) -> bool {
+        let Scope::Session { id, seq, summary } = &ev.scope else { return true };
+        let Some(ids) = &self.ids else { return true };
+        if !ids.contains(id) {
+            return *summary;
+        }
+        match self.skip.get(id) {
+            Some(upto) if seq <= upto => false,
+            Some(_) => {
+                self.skip.remove(id);
+                true
+            }
+            None => true,
+        }
+    }
+}
+
+/// `daemon:subscribe`: `[ids]` narrows the socket to those chats' streams,
+/// `[null]` or `["all"]` widens it back. Answered by the socket itself.
+fn subscribe_request(args: &[Value]) -> Option<(Vec<Arc<str>>, bool)> {
+    match args.first() {
+        None | Some(Value::Null) => Some((Vec::new(), true)),
+        Some(Value::String(s)) if s == "all" => Some((Vec::new(), true)),
+        Some(Value::Array(ids)) => Some((ids.iter().filter_map(Value::as_str).map(Arc::from).collect(), false)),
+        _ => None,
+    }
+}
+
+enum Out {
+    Reply(String),
+    /// A `daemon:subscribe` request: applied by the writer, in order with the
+    /// events, then answered.
+    Subscribe(Value, Vec<Arc<str>>, bool),
+}
+
+async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subscription) {
     let (mut sink, mut stream) = socket.split();
-    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Out>();
     let mut events = app.ctx.hub.subscribe();
+    let hub = app.ctx.hub.clone();
     let writer = tokio::spawn(async move {
+        if !send_opening(&mut sink, &mut subs, &hub).await {
+            return;
+        }
         loop {
             tokio::select! {
                 // Replies first: a caller waiting on a result beats a busy event stream.
                 biased;
                 reply = out_rx.recv() => match reply {
-                    Some(text) => if sink.send(Message::Text(text.into())).await.is_err() { break },
+                    Some(Out::Reply(text)) => if sink.send(Message::Text(text.into())).await.is_err() { break },
+                    Some(Out::Subscribe(id, ids, all)) => {
+                        // Narrowing a socket that took every chat: the turns it
+                        // leaves out are named once (as when connecting
+                        // narrowed), since one that started before this window
+                        // connected would otherwise only show at its end.
+                        let widened = subs.ids.is_none();
+                        subs.set(ids, all);
+                        let status = if widened { subs.status(&hub) } else { Vec::new() };
+                        let mut failed = false;
+                        for frame in status.iter().map(|t| t.to_string()).chain(subs.replays(&hub)) {
+                            if sink.send(Message::Text(frame.into())).await.is_err() { failed = true; break }
+                        }
+                        let reply = json!({ "id": id, "result": true }).to_string();
+                        if failed || sink.send(Message::Text(reply.into())).await.is_err() { break }
+                    }
                     None => break,
                 },
                 ev = events.recv() => match ev {
                     Ok(ev) => {
                         if ev.term_data && !term_data { continue }
+                        if !subs.wants(&ev) { continue }
                         if sink.send(Message::Text(ev.text.as_ref().into())).await.is_err() { break }
                     }
                     Err(RecvError::Lagged(_)) => {
@@ -229,6 +388,19 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool) {
             Some(Value::Array(a)) => a.clone(),
             _ => Vec::new(),
         };
+        if channel == SUBSCRIBE {
+            match subscribe_request(&args) {
+                Some((ids, all)) => {
+                    let _ = out_tx.send(Out::Subscribe(id, ids, all));
+                }
+                None => {
+                    let error =
+                        json!({ "id": id, "error": "daemon:subscribe takes a list of chat ids, or null for all" });
+                    let _ = out_tx.send(Out::Reply(error.to_string()));
+                }
+            }
+            continue;
+        }
         let ctx = app.ctx.clone();
         let tx = out_tx.clone();
         // Each call runs on its own task, so one slow channel never holds up
@@ -238,7 +410,7 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool) {
                 Ok(result) => json!({ "id": id, "result": result }),
                 Err(error) => json!({ "id": id, "error": error }),
             };
-            let _ = tx.send(reply.to_string());
+            let _ = tx.send(Out::Reply(reply.to_string()));
         });
     }
     drop(out_tx);
