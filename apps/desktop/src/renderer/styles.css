@@ -2234,3 +2234,13 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 }
 @keyframes about-purr { 0% { opacity: 0; transform: translateY(4px); } 15% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) { .about-nekko-purr { animation: none; } }
+
+/* Focus mode, new chat: one centered composer on a quiet page. The first send
+   drops data-clean-start and the window becomes the full chat. */
+[data-clean-start] .clean-start { align-items: center; padding: 0 24px 12vh; background: radial-gradient(60% 50% at 50% 42%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%); }
+[data-clean-start] .clean-start .composer-section { width: min(720px, 100%); padding: 0; }
+[data-clean-start] .clean-start .composer-column { width: 100% !important; }
+[data-clean-start] .clean-start .composer { border-radius: 18px; box-shadow: 0 12px 40px -18px color-mix(in srgb, var(--ink) 35%, transparent); }
+.clean-start-greeting { margin: 0 auto 18px; text-align: center; }
+.clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }

@@ -662,7 +662,7 @@ export function CommandWall({
           <div className="command-wall-content" inert={!box || deckCard} aria-hidden={!box || deckCard || undefined} data-companions-visible={showCompanions && companions.length > 0 || undefined} data-focus-chat={(focusedChat || parked) || undefined}>
 
             <div className="command-wall-primary">
-           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} status={agentStatus ?? 'idle'} selected={fullSurface ? undefined : selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
+           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat} status={agentStatus ?? 'idle'} selected={fullSurface ? undefined : selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : null}
            </div>

@@ -97,6 +97,21 @@ const FETCHES: FetchCase[] = [
   { kind: 'gdrive', token: 'g', query: "q's", replies: [{ json: { files: [{ id: 'f1', name: 'Doc', mimeType: 'text/plain' }] } }] },
   { kind: 'gdrive', token: 'g', replies: [{ status: 403 }] },
   { kind: 'github', token: 'gh', replies: [] },
+  { kind: 'trello', token: 'tt', settings: { key: ' k&1 ' }, replies: [{ json: [{ id: 'c1', name: 'Ship it', desc: null, shortUrl: 'https://trello.com/c/1', due: '2026-05-01T00:00:00.000Z' }, { id: 2, name: 'Other' }] }] },
+  { kind: 'trello', token: 'tt', query: 'SHIP', settings: { key: 'k' }, replies: [{ json: [{ id: 'c1', name: 'Ship it' }, { id: 'c2', name: 'x', desc: 'ship later' }, { id: 'c3', name: 'no' }] }] },
+  { kind: 'trello', token: 'tt', settings: {}, replies: [] },
+  { kind: 'trello', token: 'tt', settings: { key: 'k' }, replies: [{ status: 401, text: 'invalid key' }] },
+  { kind: 'asana', token: 'pat', replies: [{ json: { data: { workspaces: [{ gid: 'w 1' }] } } }, { json: { data: [{ gid: 1, name: 'Write spec', notes: 'n', permalink_url: 'u', due_on: '2026-06-01' }, { gid: '2', name: null }] } }] },
+  { kind: 'asana', token: 'pat', settings: { workspace: 'w9' }, replies: [{ json: { data: [] } }] },
+  { kind: 'asana', token: 'pat', replies: [{ json: { data: { workspaces: [] } } }] },
+  { kind: 'asana', token: 'pat', replies: [{ status: 403, json: {} }] },
+  { kind: 'todoist', token: 'td', replies: [{ json: { results: [{ id: '9', content: 'Buy milk', description: 'x', due: { date: '2026-01-02' } }, { id: 10, content: 'Call', url: 'https://todoist/10', due: null }] } }] },
+  { kind: 'todoist', token: 'td', query: 'call', replies: [{ json: [{ id: '1', content: 'Call mum' }, { id: '2', content: 'Other' }] }] },
+  { kind: 'todoist', token: 'td', replies: [{ status: 500, text: 'x' }] },
+  { kind: 'clickup', token: 'pk_1', replies: [{ json: { teams: [{ id: 42 }] } }, { json: { tasks: [{ id: 'a', name: 'Fix', status: { status: 'open' }, url: 'u', description: 'd' }, { id: 'b', name: 'Nostatus' }] } }] },
+  { kind: 'clickup', token: 'pk_1', settings: { team: '7' }, replies: [{ json: { tasks: [] } }] },
+  { kind: 'clickup', token: 'pk_1', replies: [{ json: { teams: [] } }] },
+  { kind: 'tasksfile', token: '', settings: {}, replies: [] },
 ];
 
 const POLLS: PollCase[] = [
