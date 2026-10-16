@@ -16,6 +16,15 @@ public enum Block: Equatable, Sendable, Identifiable {
         }
     }
 
+    /// The same block under another id (the one a view already knows it by).
+    public func withId(_ id: String) -> Block {
+        switch self {
+        case .user(_, let text, let at, let images): return .user(id: id, text: text, at: at, images: images)
+        case .assistant(_, let text, let r, let s, let i): return .assistant(id: id, text: text, reasoning: r, streaming: s, interrupted: i)
+        case .tool(_, let name, let label, let status, let output): return .tool(id: id, name: name, label: label, status: status, output: output)
+        }
+    }
+
     var isAssistant: Bool { if case .assistant = self { return true } else { return false } }
     var isUser: Bool { if case .user = self { return true } else { return false } }
 }
@@ -135,7 +144,9 @@ public enum Transcript {
             t.blocks[t.blocks.count - 1] = .assistant(id: id, text: nt, reasoning: nr, streaming: true, interrupted: interrupted)
         } else {
             let (nt, nr) = change("", nil)
-            t.blocks.append(.assistant(id: "live-\(t.blocks.count)", text: nt, reasoning: nr, streaming: true, interrupted: false))
+            // Unique per turn (its start time), so a reply kept under its live id
+            // after the turn (`carriedIds`) can't collide with the next turn's.
+            t.blocks.append(.assistant(id: "live-\(t.startedAt ?? 0)-\(t.blocks.count)", text: nt, reasoning: nr, streaming: true, interrupted: false))
         }
         t.running = true
         return t
@@ -194,6 +205,34 @@ public enum Transcript {
             return b
         }
         return head + mergedTurn + extra
+    }
+
+    /// When a turn ends its live blocks (`pending-…`, `live-…`) are replaced by
+    /// the saved ones, which have the computer's ids. A list keyed by id would
+    /// rebuild those rows: an open "Thought" folds up and the scroll jumps. This
+    /// maps each new saved block to the live block it replaces (same kind, same
+    /// text, in order) so the view can keep the id it already has.
+    public static func carriedIds(shown old: [Block], next new: [Block]) -> [String: String] {
+        func key(_ b: Block) -> String? {
+            switch b {
+            case .user(_, let text, _, _): return "u:" + text.trimmingCharacters(in: .whitespacesAndNewlines)
+            case .assistant(_, let text, _, _, _): return "a:" + text.trimmingCharacters(in: .whitespacesAndNewlines)
+            case .tool: return nil // tool calls keep the computer's id throughout
+            }
+        }
+        let newIds = Set(new.map(\.id))
+        var waiting: [String: [String]] = [:]
+        for b in old where !newIds.contains(b.id) && (b.id.hasPrefix("live-") || b.id.hasPrefix("pending-")) {
+            if let k = key(b) { waiting[k, default: []].append(b.id) }
+        }
+        let oldIds = Set(old.map(\.id))
+        var out: [String: String] = [:]
+        for b in new where !oldIds.contains(b.id) {
+            guard let k = key(b), var ids = waiting[k], !ids.isEmpty else { continue }
+            out[b.id] = ids.removeFirst()
+            waiting[k] = ids
+        }
+        return out
     }
 
     /// Short human label for a tool call: the file, command or query it acts on.

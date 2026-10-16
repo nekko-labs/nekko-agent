@@ -97,3 +97,40 @@ final class ShareInboxTests: XCTestCase {
         XCTAssertEqual(inbox.take(now: t0.addingTimeInterval(2)), "second")
     }
 }
+
+final class CarriedIdsTests: XCTestCase {
+    func testTheSavedTurnTakesTheIdsItWasShownUnder() {
+        let shown: [Block] = [
+            .user(id: "u1", text: "earlier", at: nil, images: 0),
+            .user(id: "pending-7", text: "go", at: 7, images: 0),
+            .tool(id: "call-1", name: "bash", label: "ls", status: .ok, output: nil),
+            .assistant(id: "live-7-2", text: "Done. ", reasoning: "think", streaming: false, interrupted: false),
+        ]
+        let saved: [Block] = [
+            .user(id: "u1", text: "earlier", at: nil, images: 0),
+            .user(id: "m2", text: "go", at: 7, images: 0),
+            .tool(id: "call-1", name: "bash", label: "ls", status: .ok, output: nil),
+            .assistant(id: "m3", text: "Done.", reasoning: "think", streaming: false, interrupted: false),
+        ]
+        XCTAssertEqual(Transcript.carriedIds(shown: shown, next: saved), ["m2": "pending-7", "m3": "live-7-2"])
+    }
+
+    func testOnlyLiveIdsAreCarriedAndEachOnce() {
+        let shown: [Block] = [
+            .assistant(id: "a-old", text: "same", reasoning: nil, streaming: false, interrupted: false),
+            .assistant(id: "live-9-0", text: "same", reasoning: nil, streaming: false, interrupted: false),
+        ]
+        let saved: [Block] = [
+            .assistant(id: "a-old", text: "same", reasoning: nil, streaming: false, interrupted: false),
+            .assistant(id: "m1", text: "same", reasoning: nil, streaming: false, interrupted: false),
+            .assistant(id: "m2", text: "same", reasoning: nil, streaming: false, interrupted: false),
+        ]
+        XCTAssertEqual(Transcript.carriedIds(shown: shown, next: saved), ["m1": "live-9-0"])
+    }
+
+    func testDifferentTextIsNotCarried() {
+        let shown: [Block] = [.assistant(id: "live-1-0", text: "partial", reasoning: nil, streaming: true, interrupted: false)]
+        let saved: [Block] = [.assistant(id: "m1", text: "something else", reasoning: nil, streaming: false, interrupted: false)]
+        XCTAssertEqual(Transcript.carriedIds(shown: shown, next: saved), [:])
+    }
+}

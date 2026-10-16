@@ -283,7 +283,7 @@ final class ChatModelTests: XCTestCase {
         c.event(["type": "text", "sessionId": "s", "delta": "Hi"])
         c.event(["type": "text", "sessionId": "other", "delta": "not mine"])
         await settle()
-        XCTAssertEqual(chat.blocks.map(\.id), ["u", "pending-42", "live-1"])
+        XCTAssertEqual(chat.blocks.map(\.id), ["u", "pending-42", "live-42-1"])
 
         // Mid-run prompts queue instead of starting a turn.
         c.replies[Channels.chatQueue] = { _ in ["id": "s", "title": "T", "messages": [], "queue": ["later"]] }
@@ -297,7 +297,9 @@ final class ChatModelTests: XCTestCase {
         c.event(["type": "done", "sessionId": "s"])
         await settle()
         XCTAssertFalse(chat.turn.running)
-        XCTAssertEqual(chat.blocks.map(\.id), ["u", "u2", "a2"])
+        // The saved prompt and reply keep the ids they were shown under, so their rows aren't rebuilt.
+        XCTAssertEqual(chat.blocks.map(\.id), ["u", "pending-42", "live-42-1"])
+        XCTAssertEqual(chat.blocks.map { if case .assistant(_, let t, _, _, _) = $0 { return t } else { return nil } }.compactMap { $0 }, ["Hi"])
         chat.stop()
     }
 
