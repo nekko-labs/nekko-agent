@@ -110,6 +110,30 @@ app.whenReady().then(async () => {
         await check('complete targets owning chat', "integration.calls.some(call => call.method === 'abort' && call.id === 'active') && integration.calls.some(call => call.method === 'options' && call.id === 'active' && call.options.archivedAt)");
         await check('complete saved summary stays discoverable', "integration.state().sessions.some(session => session.id === 'active' && session.archivedAt)");
       }
+      // Completed rows' right-click menu: Restore chat / Delete forever.
+      await openList(width);
+      await run("document.querySelectorAll('[data-completed-toggle][aria-expanded=false]').forEach(button => button.click())");
+      await sleep(200);
+      const rightClick = id => run(`(() => { const row = document.querySelector('[data-completed-row=${id}]'); const r = row.getBoundingClientRect(); row.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true, clientX:r.left+40, clientY:r.top+r.height/2})); })()`);
+      await rightClick('project-completed');
+      await capture(`completed-menu-${theme}-${width}`);
+      if (!base) {
+        await check('completed menu offers restore and delete', "(() => { const items = [...document.querySelectorAll('[role=menu] [role=menuitem]')].map(b => b.textContent.trim()); return items.length === 2 && items[0] === 'Restore chat' && items[1] === 'Delete forever'; })()");
+        await run("[...document.querySelectorAll('[role=menuitem]')].find(b => b.textContent.includes('Restore chat')).click()");
+        await check('menu restore un-completes the chat', "integration.calls.some(call => call.method === 'options' && call.id === 'project-completed' && call.options.archivedAt === null) && integration.state().sessions.some(s => s.id === 'project-completed' && !s.archivedAt) && !document.querySelector('[role=menu]')");
+        await openList(width);
+        await run("document.querySelector('[data-completed-row=completed]').click()");
+        await check('reader open before delete', "document.body.textContent.includes('Back to active agents')");
+        await openList(width);
+        await run("document.querySelectorAll('[data-completed-toggle][aria-expanded=false]').forEach(button => button.click())");
+        await sleep(200);
+        await rightClick('completed');
+        await run("[...document.querySelectorAll('[role=menuitem]')].find(b => b.textContent.includes('Delete forever')).click()");
+        await check('menu delete asks first', "document.body.textContent.includes('Confirm deletion') && !integration.calls.some(call => call.method === 'cleanup' && call.id === 'completed')");
+        await capture(`completed-delete-confirm-${theme}-${width}`);
+        await run("[...document.querySelectorAll('button')].find(b => b.textContent === 'Delete').click()");
+        await check('menu delete removes the chat and closes its reader', "integration.calls.some(call => call.method === 'cleanup' && call.id === 'completed') && !integration.state().sessions.some(s => s.id === 'completed') && !document.body.textContent.includes('Back to active agents')");
+      }
       await run("integration.route('workspace')");
       await sleep(400);
       await capture(`chat-${theme}-${width}`);
