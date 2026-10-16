@@ -5,7 +5,7 @@ final class FirstRunTests: XCTestCase {
     /// and makes no connection before a computer is paired.
     func testWelcomeLeadsToPairing() {
         let app = XCUIApplication()
-        app.launchArguments = ["-uiTestReset", "-appLock", "NO"]
+        app.launchArguments = ["-appLock", "NO", "-uiTestReset", "YES"]
         app.launch()
         let pair = app.buttons["Pair with your computer"]
         XCTAssertTrue(pair.waitForExistence(timeout: 10))
@@ -24,7 +24,7 @@ final class FirstRunTests: XCTestCase {
     /// A plain ws:// relay on the open internet is refused before anything is dialed.
     func testRefusesAPublicCleartextRelay() {
         let app = XCUIApplication()
-        app.launchArguments = ["-uiTestReset", "-appLock", "NO"]
+        app.launchArguments = ["-appLock", "NO", "-uiTestReset", "YES"]
         app.launch()
         app.buttons["Pair with your computer"].tap()
         let field = app.input("nekko-agent-pair:?relay=…")
