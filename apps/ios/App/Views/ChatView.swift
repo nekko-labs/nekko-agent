@@ -520,13 +520,15 @@ struct Composer: View {
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
-                if dictation.available && text.isEmpty && !dictation.recording {
+                if dictation.transcribing {
+                    ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
+                } else if dictation.available && text.isEmpty && !dictation.recording {
                     Button { Task { await dictation.start(store: store) } } label: {
                         Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
                             .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Dictate")
                 } else if dictation.recording {
-                    Button { Task { if let t = await dictation.stop(store: store) { text += (text.isEmpty ? "" : " ") + t } } } label: {
+                    Button { Task { await dictation.finish(store: store) } } label: {
                         Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
                             .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Stop dictation")
@@ -549,7 +551,7 @@ struct Composer: View {
                     .accessibilityLabel(chat.running ? "Queue" : "Send")
                 }
             }
-            if dictation.recording { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
+            if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
         }
         // Send waits for the photos (it used to send without them, and they came back later).
         .task(id: photos) {
@@ -560,6 +562,8 @@ struct Composer: View {
             loadingPhotos = false
         }
         .onChange(of: dictation.error) { _, e in if let e { error = e } }
+        // Tapped stop or hit the 30-second limit: the words go into the message, never sent.
+        .onChange(of: dictation.result) { _, r in if let r { text += (text.isEmpty ? "" : " ") + r.text } }
         // A prompt that never reached the computer comes back, with its skill and photos.
         .onChange(of: chat.unsent) { _, u in
             guard u != nil, let back = chat.takeUnsent() else { return }
