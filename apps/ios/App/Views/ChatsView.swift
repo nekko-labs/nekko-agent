@@ -59,13 +59,20 @@ struct ChatsView: View {
     @ViewBuilder private var rows: some View {
             ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
             if store.conn == .online && store.summaries.isEmpty && !store.summariesLoading {
-                ContentUnavailableView {
-                    Label("No chats yet", systemImage: "bubble.left.and.bubble.right")
-                } description: {
+                // Not ContentUnavailableView: its fixed layout clips at large text sizes.
+                VStack(spacing: 10) {
+                    Image(systemName: "bubble.left.and.bubble.right").font(.largeTitle).foregroundStyle(palette.inkSoft)
+                        .accessibilityHidden(true)
+                    Text("No chats yet").font(.title3.weight(.semibold)).foregroundStyle(palette.ink)
                     Text("Start one here, or on \(store.active?.name ?? "your computer").")
-                } actions: {
-                    Button("New chat") { open(.newChat) }.buttonStyle(.borderedProminent)
+                        .font(.subheadline).foregroundStyle(palette.inkSoft)
+                    Button { open(.newChat) } label: { Text("New chat").foregroundStyle(palette.onAccent) }
+                        .buttonStyle(.borderedProminent).padding(.top, 4)
                 }
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 32)
                 .listRowBackground(Color.clear)
             }
             if !needsYou.isEmpty && query.isEmpty {

@@ -24,7 +24,7 @@ struct NewChatView: View {
             Section {
                 TextField("What should your computer do?", text: $text, axis: .vertical).lineLimit(3...10)
             }
-            Section("Model") {
+            Section {
                 Button { showModels = true } label: {
                     HStack {
                         Text(model.map { modelName($0) } ?? "Choose a model").foregroundStyle(model == nil ? palette.inkFaint : palette.ink)
@@ -32,24 +32,32 @@ struct NewChatView: View {
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(palette.inkFaint)
                     }
                 }
+            } header: {
+                Text("Model").foregroundStyle(palette.inkSoft)
             }
-            Section("Project") {
+            Section {
                 Picker("Folder", selection: $folder) {
                     Text("General").tag(String?.none)
                     ForEach(store.workspaces) { w in Text(w.name).tag(Optional(w.id)) }
                 }
+                .pickerStyle(.navigationLink)
+            } header: {
+                Text("Project").foregroundStyle(palette.inkSoft)
             }
             Section {
                 Picker("Tools", selection: $mode) {
-                    Text("Computer default (\(modeName(store.pcSettings.effectiveMode)))").tag(PcSettings.ChatMode?.none)
+                    Text("Computer default").tag(PcSettings.ChatMode?.none)
                     ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in Text(modeName(m)).tag(Optional(m)) }
                 }
+                .pickerStyle(.navigationLink)
             } footer: {
-                Text("How the agent asks before it runs tools on \(store.active?.name ?? "your computer").")
+                Text("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Its default is \(modeName(store.pcSettings.effectiveMode)).")
+                    .foregroundStyle(palette.inkSoft)
             }
             if let error { Section { Text(error).foregroundStyle(palette.danger) } }
         }
         .navigationTitle("New chat")
+        .keyboardDoneButton()
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Start", action: start).disabled(busy || model == nil || store.conn != .online)

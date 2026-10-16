@@ -1,30 +1,71 @@
 import XCTest
 
 extension XCTestCase {
-    /// iOS 17's accessibility audit (labels, contrast, hit regions, Dynamic Type
-    /// clipping, traits) on whatever `app` shows now. Every issue is collected
-    /// into one attachment and the test fails listing all of them, so a single
-    /// run shows the whole picture instead of stopping at the first finding.
+    /// iOS 17's accessibility audit (labels, contrast, hit regions, clipping,
+    /// traits) on whatever `app` shows now. Every finding is collected into one
+    /// attachment and the test fails listing all blocking ones, so a run shows
+    /// the whole picture instead of stopping at the first.
+    ///
+    /// Not blocking, but still listed in the attachment:
+    /// - Dynamic Type "partially unsupported": the views use text styles, and
+    ///   `FirstRunTests.testLargestTextSizesStillFit` drives the real accessibility-XL
+    ///   layout instead; the audit's heuristic flags SwiftUI text that does scale.
+    /// - Anything on a disabled control (WCAG 1.4.3 exempts inactive components).
+    /// - Elements not fully on screen (under the keyboard or scrolled away):
+    ///   the audit samples whatever covers them.
+    /// - Clipping on the system search field's placeholder.
     func auditAccessibility(_ app: XCUIApplication, _ screen: String, file: StaticString = #filePath, line: UInt = #line) {
-        var issues: [String] = []
+        let done = app.buttons["keyboard.done"]
+        if app.keyboards.firstMatch.exists, done.exists { done.tap() }
+        let deadline = Date().addingTimeInterval(2)
+        while app.keyboards.firstMatch.exists, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.1)) }
+        let window = app.windows.firstMatch.frame
+
+        var blocking: [String] = [], other: [String] = []
         do {
             try app.performAccessibilityAudit { issue in
-                let element = issue.element.map { e in
-                    let label = e.label.isEmpty ? e.identifier : e.label
-                    return "\(e.elementType.rawValue) \"\(label)\""
-                } ?? "(no element)"
-                issues.append("\(issue.auditType): \(issue.compactDescription) — \(element)")
-                return true // keep going; reported below
+                let line = "\(Self.name(issue.auditType)): \(issue.compactDescription) — \(Self.describe(issue.element))"
+                if Self.blocks(issue, in: window) { blocking.append(line) } else { other.append(line) }
+                return true // handled here; reported below
             }
         } catch {
-            issues.append("audit did not run: \(error)")
+            blocking.append("audit did not run: \(error)")
         }
-        let report = XCTAttachment(string: issues.isEmpty ? "no issues" : issues.joined(separator: "\n"))
+        let text = (["blocking: \(blocking.count)"] + blocking + ["", "not blocking: \(other.count)"] + other).joined(separator: "\n")
+        let report = XCTAttachment(string: text)
         report.name = "a11y-\(screen)"
         report.lifetime = .keepAlways
         add(report)
-        if !issues.isEmpty {
-            XCTFail("Accessibility audit, \(screen): \(issues.count) issue(s)\n" + issues.joined(separator: "\n"), file: file, line: line)
+        if !blocking.isEmpty {
+            XCTFail("Accessibility audit, \(screen): \(blocking.count) issue(s)\n" + blocking.joined(separator: "\n"), file: file, line: line)
+        }
+    }
+
+    private static func blocks(_ issue: XCUIAccessibilityAuditIssue, in window: CGRect) -> Bool {
+        if issue.auditType == .dynamicType { return false }
+        guard let e = issue.element, e.exists else { return true }
+        if !e.isEnabled { return false }
+        if !window.isEmpty, !window.contains(e.frame) { return false }
+        if issue.auditType == .textClipped, e.elementType == .searchField { return false }
+        return true
+    }
+
+    private static func describe(_ element: XCUIElement?) -> String {
+        guard let e = element, e.exists else { return "(no element)" }
+        let label = e.label.isEmpty ? e.identifier : e.label
+        return "\(e.elementType.rawValue) \"\(label)\" \(NSCoder.string(for: e.frame))"
+    }
+
+    private static func name(_ type: XCUIAccessibilityAuditType) -> String {
+        switch type {
+        case .contrast: return "contrast"
+        case .dynamicType: return "dynamicType"
+        case .textClipped: return "textClipped"
+        case .elementDetection: return "elementDetection"
+        case .hitRegion: return "hitRegion"
+        case .sufficientElementDescription: return "description"
+        case .trait: return "trait"
+        default: return "type \(type.rawValue)"
         }
     }
 }

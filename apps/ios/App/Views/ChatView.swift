@@ -26,6 +26,7 @@ struct ChatView: View {
         }
         .background(palette.paper)
         .navigationBarTitleDisplayMode(.inline)
+        .keyboardDoneButton()
         .task(id: sessionId) {
             let c = ChatModel(sessionId: sessionId, store: store)
             chat = c
@@ -223,16 +224,18 @@ struct ApprovalCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("Approve this tool?", systemImage: "hand.raised").font(.subheadline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Text(approval.severity.rawValue.capitalized).font(.caption2.weight(.bold)).padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(color.opacity(0.18), in: Capsule()).foregroundStyle(color)
+                    .background(color.opacity(0.12), in: Capsule()).foregroundStyle(color)
             }
             Text(Transcript.toolLabel(approval.call)).font(.footnote.monospaced()).foregroundStyle(palette.ink).lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
             if let detail { ScrollView { Text(detail).font(.caption.monospaced()).foregroundStyle(palette.inkSoft).textSelection(.enabled) }.frame(maxHeight: 120) }
-            if !approval.reason.isEmpty { Text(approval.reason).font(.footnote).foregroundStyle(palette.inkSoft) }
+            if !approval.reason.isEmpty { Text(approval.reason).font(.footnote).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true) }
             HStack {
                 Button(role: .destructive) { answer(false) } label: { Text("Deny").frame(maxWidth: .infinity) }.buttonStyle(.bordered)
-                Button { answer(true) } label: { Text("Allow").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent)
+                Button { answer(true) } label: { Text("Allow").frame(maxWidth: .infinity).foregroundStyle(palette.onAccent) }.buttonStyle(.borderedProminent)
             }
         }
         .padding(14)
@@ -271,7 +274,7 @@ struct QuestionCard: View {
             ForEach(request.questions) { q in
                 VStack(alignment: .leading, spacing: 6) {
                     if !q.header.isEmpty { Text(q.header).font(.caption.weight(.semibold)).foregroundStyle(palette.accent) }
-                    Text(q.question).font(.subheadline).foregroundStyle(palette.ink)
+                    Text(q.question).font(.subheadline).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
                     FlowOptions(options: q.options.map(\.label) + [askOtherLabel], selected: picked[q.id] ?? []) { label in
                         var s = picked[q.id] ?? []
                         if q.multiSelect { if s.contains(label) { s.remove(label) } else { s.insert(label) } } else { s = [label] }
@@ -285,14 +288,16 @@ struct QuestionCard: View {
             }
             Button {
                 submit(request.questions.map { q in AskAnswer(questionId: q.id, labels: Array(picked[q.id] ?? []), note: notes[q.id]) })
-            } label: { Text("Answer").frame(maxWidth: .infinity) }
+            } label: { Text("Answer").frame(maxWidth: .infinity).foregroundStyle(ready ? palette.onAccent : palette.inkFaint) }
                 .buttonStyle(.borderedProminent)
-                .disabled(request.questions.contains { (picked[$0.id] ?? []).isEmpty })
+                .disabled(!ready)
         }
         .padding(14)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(palette.accent.opacity(0.4)))
     }
+
+    private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }
 }
 
 struct FlowOptions: View {
