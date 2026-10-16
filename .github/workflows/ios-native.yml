@@ -104,6 +104,15 @@ jobs:
             xcrun xcresulttool export attachments --path "$r" --output-path "evidence/shots/$(basename "$r" .xcresult)" || true
           done
           find evidence/shots -name '*.png' | head -n 40
+          # Small JPEG copies in the log, for reviewers who can't download artifacts.
+          i=0
+          find evidence/shots -name '*.png' | sort | while read -r f; do
+            i=$((i+1)); [ "$i" -gt 24 ] && break
+            sips -s format jpeg -s formatOptions 60 -Z 900 "$f" --out /tmp/shot.jpg >/dev/null 2>&1 || continue
+            echo "SHOT-BEGIN $(basename "$(dirname "$f")")/$(basename "$f" .png)"
+            base64 -i /tmp/shot.jpg | tr -d '\n'; echo
+            echo "SHOT-END"
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:

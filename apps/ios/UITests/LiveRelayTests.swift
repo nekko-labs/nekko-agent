@@ -18,8 +18,17 @@ final class LiveRelayTests: XCTestCase {
         allowSystemAlerts()
 
         app.open(link)
+        // iOS may ask "Open in …?" for a custom scheme before handing it over.
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let openButton = springboard.buttons["Open"]
+        if openButton.waitForExistence(timeout: 3) { openButton.tap() }
         let pair = app.navigationBars["Pair with a computer?"].buttons["Pair"]
-        XCTAssertTrue(pair.waitForExistence(timeout: 10))
+        if !pair.waitForExistence(timeout: 10) {
+            attach(app, "\(theme)-0-no-confirm-sheet")
+            print("UI hierarchy:\n\(app.debugDescription)\nSpringboard:\n\(springboard.debugDescription)")
+            XCTFail("the pairing link did not open the confirmation sheet")
+            return
+        }
         attach(app, "\(theme)-1-confirm-pair")
         pair.tap()
         tapSystemAlertIfShown()
