@@ -57,6 +57,7 @@ import { daemonOwns } from './daemon-caps.js';
 import { adoptTurn, answerInDaemon, chainOf, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
 import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
 import { applyTurnInput, cleanFill, cleanTitle, fillPrompt, hostToolApproval, sendOptionsForQueuedItem, suggestPrompt, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
+import { sandboxAdmissionRefusal } from './turn-variants.js';
 import { killSessionProcesses } from './processes.js';
 import { DAEMON_HOOKS, hasToolHooks, postToolHooks, preToolHooks, turnEndHooks } from './hooks.js';
 import { completeText } from './sideband.js';
@@ -853,8 +854,9 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   }
 
   const sandbox = getExecutionMode(session) === 'sandbox';
-  if (sandbox && (!session.sandbox || session.chatType === 'image' || opts.skill)) {
-    send({ type: 'error', sessionId: session.id, message: 'Sandbox requires explicit setup and supports text chat without host skills only.' }); return null;
+  const sandboxRefusal = sandbox ? sandboxAdmissionRefusal(session, opts) : null;
+  if (sandboxRefusal) {
+    send({ type: 'error', sessionId: session.id, message: sandboxRefusal }); return null;
   }
   if (!sandbox && getExecutionMode(session) === 'worktree' && !session.incognito && !session.offline) {
     let created: ReturnType<typeof prepareChatWorktrees>;
@@ -1380,7 +1382,8 @@ function hostTurnFor(t: DaemonTurnInput, turnId: string, resolvedProvider: Provi
   // change on it travels back to the daemon, which owns the transcript.
   const snapshot: Session = structuredClone(session);
   const hostTools: HostToolContext = {
-    opts, session: snapshot, mode: t.mode, tools: t.tools, settings, toolSettings: t.toolSettings, defaultCwd, sandbox: false,
+    // A sandbox chat's call, should one ever reach this host, still goes to its container.
+    opts, session: snapshot, mode: t.mode, tools: t.tools, settings, toolSettings: t.toolSettings, defaultCwd, sandbox: t.sandbox,
     allowBrowserControl: t.allowBrowserControl, allowSpawn: t.allowSpawn, decideWith: t.decideWith,
     signal: abort.signal, send, persist: () => {}, requestApproval,
     askUser: async () => ASK_CANCELLED,
@@ -1450,7 +1453,8 @@ function hostTurnFor(t: DaemonTurnInput, turnId: string, resolvedProvider: Provi
       if (summary.lost) send({ type: 'error', sessionId: opts.sessionId, message: summary.lost });
       const aborted = abort.signal.aborted || summary.aborted === true;
       afterTurnHooks({
-        opts, sandbox: false, incognito, offline, workspaces: t.workspaces,
+        // A sandbox turn runs no host TurnEnd hooks and builds no linked spec.
+        opts, sandbox: t.sandbox, incognito, offline, workspaces: t.workspaces,
         session: getSession(opts.sessionId) ?? session, resolvedProvider,
         stop: aborted ? 'stopped' : summary.lost ? 'error' : summary.stop ?? 'complete',
         error: summary.lost,
@@ -1509,9 +1513,11 @@ export async function adoptAdmittedTurn(
   if (payload.chained && !joined) return;
   const abort = joined?.abort ?? new AbortController();
   if (!joined) abortControllers.set(session.id, abort);
-  const tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl: payload.allowBrowserControl, mcpTools: offline ? [] : mcpToolSpecs(), decide: !!payload.decideWith });
+  const sandbox = getExecutionMode(session) === 'sandbox';
+  let tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl: payload.allowBrowserControl, mcpTools: offline || sandbox ? [] : mcpToolSpecs(), decide: !!payload.decideWith });
+  if (sandbox) tools = tools.filter((t) => SANDBOX_TOOLS.has(t.name));
   const t: DaemonTurnInput = {
-    settings, provider, session, sandbox: false, workspaces: payload.workspaces,
+    settings, provider, session, sandbox, workspaces: payload.workspaces,
     toolSettings: { ...settings, workspaces: payload.workspaces }, mode: payload.mode, offline, incognito: !!session.incognito,
     abort, allowSpawn: getStrategy(orchestration.strategy).allowsSpawn, decideWith: payload.decideWith, tools,
     connectorSnippets: [], indexSnippets: [], daemonMcp: true,

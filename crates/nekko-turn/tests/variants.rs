@@ -193,6 +193,54 @@ fn image_turns_match() {
 }
 
 #[test]
+fn sandbox_turns_compose_alike() {
+    let all = golden();
+    for (i, c) in cases(&all, "sandboxTurns").iter().enumerate() {
+        let (session, settings) = (&c["input"]["session"], &c["input"]["settings"]);
+        // As nekkod composes a sandbox turn (turns.rs): the turn's tools kept
+        // to the container's, the copied folders, and no host context.
+        let tools: Vec<Value> = nekko_turn::turn_tools(&json!({
+            "session": session,
+            "offline": nekko_js::truthy(session.get("offline")),
+            "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
+            "allowBrowserControl": true,
+            "mcpTools": [],
+            "decide": false,
+        }))
+        .into_iter()
+        .filter(|t| SANDBOX_TOOLS.contains(&nekko_turn::catalog::name(t)))
+        .collect();
+        let workspaces = sandbox_workspaces(session);
+        let block = nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput::default()));
+        let system = nekko_turn::turn_system_prompt(&json!({
+            "workspaces": workspaces,
+            "tools": tools,
+            "settings": settings,
+            "sandbox": true,
+            "executionMode": "sandbox",
+            "worktreeNotices": [],
+            "contextBlock": block,
+            "platform": "linux",
+        }));
+        let names: Vec<&str> = tools.iter().map(nekko_turn::catalog::name).collect();
+        assert_eq!(json!(names), c["output"]["tools"], "sandbox tools {i}");
+        assert_eq!(text(&json!(workspaces)), text(&c["output"]["workspaces"]), "sandbox folders {i}");
+        assert_eq!(json!(system), c["output"]["system"], "sandbox prompt {i}");
+    }
+    for (i, c) in cases(&all, "sandboxRefusals").iter().enumerate() {
+        let got = sandbox_admission_refusal(&c["input"]["session"], &c["input"]["opts"]);
+        assert_eq!(got.map_or(Value::Null, |s| json!(s)), c["output"], "sandbox refusal {i}");
+    }
+    for (i, c) in cases(&all, "sandboxTools").iter().enumerate() {
+        let got = match sandbox_tool_check(c["input"].as_str().unwrap()) {
+            Ok((reason, severity)) => json!({ "reason": reason, "severity": severity }),
+            Err(e) => err(e),
+        };
+        assert_eq!(text(&got), text(&c["output"]), "sandbox tool {i}");
+    }
+}
+
+#[test]
 fn starting_a_queued_prompt_matches() {
     let all = golden();
     let chats = list(&all["queuedChats"]);

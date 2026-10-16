@@ -145,6 +145,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
     });
     let compactions = compaction::Compactions::new();
+    let sandboxes = cfg.data_dir.clone().filter(|_| sessions.is_some()).map(|d| sandbox::Sandboxes::new(d.into()));
     let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
         .then(|| admission::Admission::new(compactions.clone(), cfg.allow_browser_control, ts_loop));
     let catalog = settings.as_deref().map(|s| catalog::new(s, cfg.hugging_face_url.clone()));
@@ -216,7 +217,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             .with_settings(settings.as_ref().map(|s| s.store.clone()))
             .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token)))
             .with_watches(agent_watches.clone())
-            .with_training(automation.training.clone()),
+            .with_training(automation.training.clone())
+            .with_sandboxes(sandboxes.clone()),
         ),
         mcp: mcp.clone(),
         accounts: accounts.clone(),
@@ -254,7 +256,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         workspace: Arc::new(workspace::Workspace::new(cfg.data_dir.clone().map(std::path::PathBuf::from))),
         automation: automation.clone(),
         remote: remote.clone(),
-        sandboxes: cfg.data_dir.clone().filter(|_| sessions.is_some()).map(|d| sandbox::Sandboxes::new(d.into())),
+        sandboxes,
         compactions,
         image_turns: image_turns::ImageTurns::new(),
     };

@@ -479,6 +479,58 @@ pub fn image_failure(stopped: bool, message: &str, now: u64) -> Value {
     Value::Object(m)
 }
 
+/* ----------------------------------------------------- sandbox chat turns */
+
+/// `SANDBOX_TOOLS`: the only tools a sandbox chat offers, all run in its container.
+pub const SANDBOX_TOOLS: &[&str] = &["read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "bash"];
+
+/// `sandboxWorkspaces(s)`: the copied folders as the model sees them
+/// (`folder-N`), never the host paths.
+pub fn sandbox_workspaces(session: &Value) -> Vec<Value> {
+    let count = match session.pointer("/sandbox/sourceWorkspaceIds").filter(|v| !v.is_null()) {
+        Some(ids) => ids.as_array().map_or(0, Vec::len),
+        None => {
+            // `getSessionWorkspaceIds`: the primary, then each supporting folder once.
+            let mut ids: Vec<Value> = Vec::new();
+            if let Some(w) = session.get("workspaceId").filter(|w| js::truthy(Some(w))) {
+                ids.push(w.clone());
+            }
+            for w in session.get("supportingWorkspaceIds").and_then(Value::as_array).into_iter().flatten() {
+                if js::truthy(Some(w)) && !ids.contains(w) {
+                    ids.push(w.clone());
+                }
+            }
+            ids.len()
+        }
+    };
+    (0..count)
+        .map(|i| json!({ "id": format!("sandbox-{i}"), "name": format!("folder-{i}"), "path": format!("folder-{i}"), "addedAt": 0 }))
+        .collect()
+}
+
+/// `sandboxAdmissionRefusal(session, opts)`: why a sandbox chat's turn cannot start.
+pub fn sandbox_admission_refusal(session: &Value, opts: &Value) -> Option<&'static str> {
+    let refused = !js::truthy(session.get("sandbox"))
+        || session.get("chatType").and_then(Value::as_str) == Some("image")
+        || js::truthy(opts.get("skill"));
+    refused.then_some("Sandbox requires explicit setup and supports text chat without host skills only.")
+}
+
+/// `sandboxToolCheck(name)`: refused outright, or the (reason, severity) its approval asks with.
+pub fn sandbox_tool_check(name: &str) -> Result<(String, &'static str), String> {
+    if !SANDBOX_TOOLS.contains(&name) {
+        return Err(format!(
+            "Unsupported sandbox tool: {name}. Host controls, network, connectors, MCP and delegation are denied. No host fallback."
+        ));
+    }
+    let severity = match name {
+        "bash" => "high",
+        "write_file" | "edit_file" => "medium",
+        _ => "low",
+    };
+    Ok((format!("Sandbox {name}: access only the copied workspace"), severity))
+}
+
 /* ------------------------------------------------ starting a queued prompt */
 
 /// `queuedIndexValid(session, index)`: a safe integer naming a queued prompt.
