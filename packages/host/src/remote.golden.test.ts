@@ -242,12 +242,29 @@ it('decides phone requests the way the daemon must', async () => {
     ['session:setOptions', ['s1']],
     ['chat:send', [{ sessionId: 's1', providerId: 'p1', modelId: 'm1', text: 'hi' }]],
     ['chat:send', [{ sessionId: 's1', text: 'hi', attachedPaths: ['/etc/passwd'] }]],
+    ['skills:runnable', []],
+    ['chat:send', [{ sessionId: 's1', providerId: 'p1', modelId: 'm1', text: 'x', skill: { name: 'review', input: ' this ' } }]],
+    ['chat:send', [{ sessionId: 's1', text: '', skill: { name: 'tidy' } }]],
+    ['chat:send', [{ sessionId: 's1', text: 'x', skill: { name: 'goal', input: 'x' } }]],
+    ['chat:send', [{ sessionId: 's1', text: 'x', skill: 'review' }]],
+    ['chat:send', [{ sessionId: 's1', text: 'x', skill: { name: 'review', input: 3 } }]],
+    ['chat:send', [{ sessionId: 's1', text: 'x', skill: { name: 'review', template: 't' } }]],
+    ['chat:queue', ['s1', 'plain']],
+    ['chat:queue', ['s1', { text: '', skill: { name: 'review', input: 'later' } }]],
+    ['chat:queue', ['s1', { text: 'x', attachedPaths: ['/etc'] }]],
+    ['chat:queue', ['s1', 7]],
+  ];
+  // What the computer can run: the phone sees names, never templates or folders.
+  const skills = [
+    { name: 'review', description: 'Review the code', category: 'Code quality', source: 'builtin', template: 'Review carefully.\n' },
+    { name: 'tidy', description: 'Tidy up', category: 'Imported', source: 'claude', template: 'Use the "tidy" skill. Files in /Users/me/.claude/skills/tidy.' },
   ];
   const cases = [];
   for (const [channel, args] of requests) {
     const calls: unknown[] = [];
     const dispatch = (ch: string, a: unknown[]) => {
       calls.push([ch, a]);
+      if (ch === 'skills:runnable') return skills;
       return ch.startsWith('settings:') || ch === 'providers:list' ? (ch === 'providers:list' ? settings.providers : settings) : { ok: ch };
     };
     const outcome = await callFromPhone(dispatch, channel, Array.isArray(args) ? args : []).then(
@@ -256,7 +273,7 @@ it('decides phone requests the way the daemon must', async () => {
     );
     cases.push({ channel, args, calls, ...outcome });
   }
-  check(join(crate, 'tests', 'golden', 'phone.json'), { settings, cases });
+  check(join(crate, 'tests', 'golden', 'phone.json'), { settings, skills, cases });
 });
 
 /** A relay socket the agent dials, recording what it sends. */

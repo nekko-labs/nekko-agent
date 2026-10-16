@@ -199,6 +199,7 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                 onStop = vm::stop,
                 modifier = Modifier.navigationBarsPadding(),
                 mic = mic,
+                skills = chat.skills,
             )
         }
     }

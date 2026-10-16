@@ -111,6 +111,23 @@ class WireTest {
         assertEquals("""{"questionId":"q1","labels":[]}""", AskAnswer("q1", emptyList(), " ").toJson().toString())
     }
 
+    @Test fun `skills decode from the computer's phone view, skipping nameless entries`() {
+        val list = SkillSummary.list(json("""[{"name":"review","description":"Review","category":"Code quality","source":"builtin"},{"description":"x"},{"name":"tidy"}]"""))
+        assertEquals(listOf(SkillSummary("review", "Review", "Code quality", "builtin"), SkillSummary("tidy", "", "", "")), list)
+        assertEquals(emptyList<SkillSummary>(), SkillSummary.list(json("null")))
+    }
+
+    @Test fun `a skill turn sends the name and the input, never a template`() {
+        val review = SkillSummary("review", "", "", "builtin")
+        assertEquals(
+            """{"sessionId":"s","providerId":"p","modelId":"m","text":"this file","skill":{"name":"review","input":"this file"}}""",
+            sendOptions("s", "p", "m", "this file", review).toString(),
+        )
+        assertEquals("""{"sessionId":"s","providerId":"p","modelId":"m","text":"hi"}""", sendOptions("s", "p", "m", "hi").toString())
+        assertEquals("""{"text":"","skill":{"name":"review","input":""}}""", queuePrompt("", review).toString())
+        assertEquals("\"plain\"", queuePrompt("plain").toString())
+    }
+
     /** Every channel the phone calls must be one the computer lets a phone call (#529's allowlist). */
     @Test fun `the computer allows every channel and setting the phone uses`() {
         val f = File(System.getenv("NEKKO_REPO_ROOT") ?: "../../..", "crates/nekko-remote/src/phone-access.json")
@@ -123,6 +140,11 @@ class WireTest {
         for (k in patch.keys) assertTrue("the computer refuses setting $k from a phone", k in keys)
         val modes = policy["chatModes"].arr()!!.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toSet()
         for (m in PcSettings.ChatMode.entries) assertTrue("the computer refuses chat mode ${m.wire} from a phone", m.wire in modes)
+        val skill = SkillSummary("r", "", "", "")
+        val sendKeys = policy["chatSendKeys"].arr()!!.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toSet()
+        for (k in sendOptions("s", "p", "m", "x", skill).keys) assertTrue("the computer refuses chat:send $k", k in sendKeys)
+        val queueKeys = policy["queueKeys"].arr()!!.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toSet()
+        for (k in queuePrompt("x", skill).obj()!!.keys) assertTrue("the computer refuses chat:queue $k", k in queueKeys)
     }
 
     @Test fun `pc settings read only the phone-visible keys, unset keys use the computer's defaults`() {

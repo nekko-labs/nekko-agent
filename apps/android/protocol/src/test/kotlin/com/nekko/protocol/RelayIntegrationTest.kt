@@ -170,7 +170,22 @@ class RelayIntegrationTest {
         assertTrue(PendingInput.map(c.call(Channels.CHAT_PENDING))[s2.id]?.approval == null)
         println("itest: approval for `${a.call.input["command"]}` (${a.severity}) denied from the phone; tool ${tool.status}")
 
-        // 3. Reconnecting as the same device works without a code.
+        // 3. The computer's skills: names only reach the phone, and a skill turn is expanded there.
+        val rawSkills = c.call(Channels.SKILLS_RUNNABLE)
+        val skills = SkillSummary.list(rawSkills)
+        assertTrue("built-in skills are listed", skills.any { it.source == "builtin" })
+        assertFalse("goal starts a background task, not a chat turn", skills.any { it.name == "goal" })
+        assertFalse("no templates reach the phone", rawSkills.toString().contains("\"template\""))
+        val skill = skills.first()
+        val s3 = Session.from(c.call(Channels.SESSION_CREATE))!!
+        c.callWithTimeout(60_000, Channels.CHAT_SEND, sendOptions(s3.id, "fake", "fake-model", "the README", skill))
+        val user = Session.from(c.call(Channels.SESSION_GET, JsonPrimitive(s3.id)))!!.messages.first { it.role == "user" }
+        assertEquals(skill.name to "the README", user.skill)
+        assertTrue("the computer sent the skill's instructions, not just the input", user.content.length > "the README".length && user.content.endsWith("the README"))
+        assertEquals("/${skill.name} the README", (Transcript.fromMessages(listOf(user)).single() as Block.User).text)
+        println("itest: ${skills.size} skills listed; /${skill.name} expanded on the computer to ${user.content.length} chars")
+
+        // 4. Reconnecting as the same device works without a code.
         c.close()
         val again = client(null, deviceId)
         again.connect()
@@ -178,7 +193,7 @@ class RelayIntegrationTest {
         again.close()
         println("itest: reconnected as the same device without a code")
 
-        // 4. The one-time code is spent: another phone presenting it is refused.
+        // 5. The one-time code is spent: another phone presenting it is refused.
         val replay = client(pairCode)
         replay.connect()
         val s = replay.awaitState(RelayState.DENIED)

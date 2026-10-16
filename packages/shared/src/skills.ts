@@ -375,6 +375,45 @@ export function matchSkills(query: string, extra: SkillDef[] = []): SkillDef[] {
   );
 }
 
+/** Where a runnable skill comes from: built in, the marketplace, or another agent tool's folder. */
+export type RunnableSkillSource = 'builtin' | 'marketplace' | ExternalSkillTool;
+
+/** A skill a chat can run by name (`skills:runnable`), with the template the computer expands. */
+export interface RunnableSkill {
+  name: string;
+  description: string;
+  category: SkillCategory;
+  source: RunnableSkillSource;
+  template: string;
+}
+
+/**
+ * Every skill a chat on this computer can run by name, in the `/` menu's
+ * order of precedence: built-ins first, then marketplace installs, then skills
+ * imported from other tools; the first of a name wins. `goal` skills are left
+ * out: they start a background task, not a chat turn.
+ */
+export function runnableSkills(builtin: SkillDef[], market: SkillDef[], external: SkillDef[]): RunnableSkill[] {
+  const out: RunnableSkill[] = [];
+  const seen = new Set<string>();
+  const add = (list: SkillDef[], source: (s: SkillDef) => RunnableSkillSource) => {
+    for (const s of list) {
+      if (s.kind === 'goal' || seen.has(s.name)) continue;
+      seen.add(s.name);
+      out.push({ name: s.name, description: s.description, category: s.category, source: source(s), template: s.template });
+    }
+  };
+  add(builtin, () => 'builtin');
+  add(market, () => 'marketplace');
+  add(external, (s) => s.origin?.tool ?? 'agents');
+  return out;
+}
+
+/** The text a skill turn sends: its template, then the user's input (as the desktop composer joins them). */
+export function skillTurnText(template: string, input: string): string {
+  return [template.trimEnd(), input.trim()].filter(Boolean).join('\n\n');
+}
+
 export const SKILL_CATEGORIES: SkillCategory[] = [
   'Research & planning',
   'Code quality',

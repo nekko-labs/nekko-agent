@@ -45,6 +45,11 @@ reference until this app reaches parity.
   you press Send. Whisper on the computer (encrypted, up to 30 s) when its Nekko
   Voice is on, else the phone's recognizer; *Settings → Dictation*.
 
+- **The computer's skills:** type `/` in the message box for the skills on the
+  computer (built-in, Marketplace, imported from Claude Code / Codex / Gemini),
+  re-read every time a chat opens. The computer adds each skill's instructions
+  itself; the phone only ever sees names and descriptions. No `/goal`.
+
 **Not yet:** models on the phone, push notifications, Markdown rendering,
 attachments, Play Store release. See `TASKS.md` → *Native Android app*.
 

@@ -42,6 +42,22 @@
    "sensitivity": 50
   }
  },
+ "skills": [
+  {
+   "name": "review",
+   "description": "Review the code",
+   "category": "Code quality",
+   "source": "builtin",
+   "template": "Review carefully.\n"
+  },
+  {
+   "name": "tidy",
+   "description": "Tidy up",
+   "category": "Imported",
+   "source": "claude",
+   "template": "Use the \"tidy\" skill. Files in /Users/me/.claude/skills/tidy."
+  }
+ ],
  "cases": [
   {
    "channel": "data:wipe",
@@ -620,6 +636,242 @@
    ],
    "calls": [],
    "error": "Not allowed from a paired phone (option-denied): attachedPaths"
+  },
+  {
+   "channel": "skills:runnable",
+   "args": [],
+   "calls": [
+    [
+     "skills:runnable",
+     []
+    ]
+   ],
+   "result": [
+    {
+     "category": "Code quality",
+     "description": "Review the code",
+     "name": "review",
+     "source": "builtin"
+    },
+    {
+     "category": "Imported",
+     "description": "Tidy up",
+     "name": "tidy",
+     "source": "claude"
+    }
+   ]
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "providerId": "p1",
+     "modelId": "m1",
+     "text": "x",
+     "skill": {
+      "name": "review",
+      "input": " this "
+     }
+    }
+   ],
+   "calls": [
+    [
+     "skills:runnable",
+     []
+    ],
+    [
+     "chat:send",
+     [
+      {
+       "sessionId": "s1",
+       "providerId": "p1",
+       "modelId": "m1",
+       "text": "Review carefully.\n\nthis",
+       "skill": {
+        "name": "review",
+        "input": " this "
+       }
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:send"
+   }
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "",
+     "skill": {
+      "name": "tidy"
+     }
+    }
+   ],
+   "calls": [
+    [
+     "skills:runnable",
+     []
+    ],
+    [
+     "chat:send",
+     [
+      {
+       "sessionId": "s1",
+       "text": "Use the \"tidy\" skill. Files in /Users/me/.claude/skills/tidy.",
+       "skill": {
+        "name": "tidy",
+        "input": ""
+       }
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:send"
+   }
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "x",
+     "skill": {
+      "name": "goal",
+      "input": "x"
+     }
+    }
+   ],
+   "calls": [
+    [
+     "skills:runnable",
+     []
+    ]
+   ],
+   "error": "Not allowed from a paired phone (skill-unknown): goal"
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "x",
+     "skill": "review"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): skill"
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "x",
+     "skill": {
+      "name": "review",
+      "input": 3
+     }
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): skill"
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "x",
+     "skill": {
+      "name": "review",
+      "template": "t"
+     }
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): skill"
+  },
+  {
+   "channel": "chat:queue",
+   "args": [
+    "s1",
+    "plain"
+   ],
+   "calls": [
+    [
+     "chat:queue",
+     [
+      "s1",
+      "plain"
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:queue"
+   }
+  },
+  {
+   "channel": "chat:queue",
+   "args": [
+    "s1",
+    {
+     "text": "",
+     "skill": {
+      "name": "review",
+      "input": "later"
+     }
+    }
+   ],
+   "calls": [
+    [
+     "skills:runnable",
+     []
+    ],
+    [
+     "chat:queue",
+     [
+      "s1",
+      {
+       "text": "Review carefully.\n\nlater",
+       "skill": {
+        "name": "review",
+        "input": "later"
+       }
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:queue"
+   }
+  },
+  {
+   "channel": "chat:queue",
+   "args": [
+    "s1",
+    {
+     "text": "x",
+     "attachedPaths": [
+      "/etc"
+     ]
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (option-denied): attachedPaths"
+  },
+  {
+   "channel": "chat:queue",
+   "args": [
+    "s1",
+    7
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): chat:queue prompt"
   }
  ]
 }

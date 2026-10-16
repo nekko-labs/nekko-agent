@@ -10,6 +10,7 @@ import com.nekko.android.voice.DictationController
 import com.nekko.android.voice.MicHardware
 import com.nekko.protocol.AskAnswer
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.SkillSummary
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -67,7 +68,7 @@ class ChatViewModel(
     /** Bring this completed chat back to the active list. */
     suspend fun restore() = repo.restoreChat(sessionId)
 
-    suspend fun send(text: String) = controller.send(text)
+    suspend fun send(text: String, skill: SkillSummary? = null) = controller.send(text, skill)
     fun stop() = controller.stop()
     suspend fun approve(ok: Boolean) = controller.approve(ok)
     suspend fun answer(answers: List<AskAnswer>) = controller.answer(answers)

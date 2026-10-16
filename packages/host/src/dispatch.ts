@@ -334,6 +334,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
 
     [C.skillsInstalled]: () => host.listInstalledSkills(),
     [C.skillsExternal]: ()=> host.listExternalSkills(),
+    [C.skillsRunnable]: () => host.listRunnableSkills(),
     [C.skillsTargets]: () => host.skillTargets(),
     [C.skillInstall]: ([id, target, payload]) => host.installSkill(id, target, payload),
     [C.skillUninstall]: ([id, target]) => host.uninstallSkill(id, target),
