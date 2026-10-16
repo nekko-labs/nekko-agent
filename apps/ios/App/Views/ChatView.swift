@@ -197,7 +197,9 @@ struct BlockView: View {
                 } label: {
                     HStack(spacing: 8) {
                         statusIcon(status)
-                        Text(label).font(.footnote.monospaced()).foregroundStyle(palette.inkSoft).lineLimit(expanded ? nil : 1)
+                        // Two lines collapsed: one line truncated even short commands by a fraction of a point.
+                        Text(label).font(.footnote.monospaced()).foregroundStyle(palette.inkSoft).lineLimit(expanded ? nil : 2)
+                            .multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                         if output != nil { Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(palette.inkFaint) }
                     }
