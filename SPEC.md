@@ -783,6 +783,10 @@ On the desktop, Nekko Agent runs as three processes:
 
 ### Nekko Agent
 
+## Completion and interruption reconciliation
+
+Implemented and verified with 1,124 desktop tests, typecheck, and 80 isolated renderer assertions plus matched completion screenshots: an explicit successful terminal record (`turnStats.stop: complete`) takes precedence over unmatched historical tool bookkeeping when inferring a persisted interruption. An explicit interrupted marker still wins, and unresolved tool calls without successful terminal evidence remain recoverable. A transient inferred interruption banner clears when the completed transcript arrives; provider errors and user-requested stops are not silently cleared. No transcript or private app data is rewritten. Acceptance: completed and genuinely interrupted fixture cases, delayed transcript reconciliation, and isolated light/dark wide/narrow evidence. The exact triggering transcript in the reported screenshot was not accessible in the workspace sandbox.
+
 ## Nav wings and wall action clarity
 
 Implemented; 49 focused tests and desktop typecheck passed, isolated Electron Focus/Minimize and rail keyboard checks passed, matched wide/narrow light/dark captures inspected: the left rail retains its destination positioning and existing rest/hover tint. Its curved top and bottom wings each have a height about half the band width (32px at rest, 100px expanded), independent of destination count. Wall creation icons have bottom-right plus indicators, increased spacing, and a subtle divider separating creation from layout modes. Window Focus is a 20px accent-colored action immediately before Minimize, outside the pane's portalled action group. Existing creation, focus and minimize behavior and privacy boundaries are unchanged. Acceptance: wide/narrow light/dark matched captures, keyboard rail expansion, Focus adjacency and Focus/Minimize behavior; native OS chrome is outside this renderer-only change.
