@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { LocalImageCard } from './LocalImageCard.js';
+import { localImagePath } from '../localImages.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
 
 import { ContextAction, ContextMenu } from './ContextMenu.js';
@@ -522,48 +524,12 @@ function Ref({ href, basePath, children }: { href: string; basePath?: string; ch
   );
 }
 
-/**
- * An image reference. The renderer's CSP allows only same-origin and `data:`
- * images, so a remote or on-disk one can't be shown inline: it renders as a
- * labelled chip that opens the real file instead of a broken image box.
- */
+/** Local images load as inert data URLs; remote references remain user-activated links. */
 function ImageRef({ alt, src, basePath }: { alt: string; src: string; basePath?: string }) {
-  const sessionId = React.useContext(MarkdownSession);
-  const [image, setImage] = useState('');
-  const [error, setError] = useState('');
-  const remote = /^https?:\/\//i.test(src);
-  const unsafe = src.startsWith('//') || src.startsWith('\\\\') || (/^[a-z][a-z0-9+.-]*:/i.test(src) && !/^[a-z]:[\\/]/i.test(src) && !remote);
-  const target = unsafe ? null : remote ? src : basePath ? resolveRef(basePath, src) : /^(?:[A-Za-z]:[\\/]|\/)/.test(src) ? src : null;
   const label = alt || src.split(/[\\/]/).pop() || 'image';
-  const sandbox = React.useContext(MarkdownSandbox);
-  if (sandbox && !remote) return <span title="Host image previews are unavailable in Sandbox">{label} (preview unavailable)</span>;
-  if (image) return <img src={image} alt={label} className="my-2 max-h-96 max-w-full rounded-lg border border-line object-contain" />;
-  const body = (
-    <>
-      <span aria-hidden>🖼</span>
-      <span className="min-w-0 truncate">{label}{error ? ` · ${error}` : target && !remote ? ' · Load image' : ''}</span>
-    </>
-  );
-  const className = 'my-1 inline-flex max-w-full items-center gap-1.5 rounded-lg border border-line px-2 py-0.5 align-middle text-[12px] text-ink-soft';
-  if (!target) return <span className={className} title={src}>{body}</span>;
-  return (
-    <button
-      className={`${className} hover:bg-surface-2 hover:text-ink`}
-      title={`Open ${target}`}
-      onClick={async () => {
-        if (remote) { window.nekko.openPath(target); return; }
-        try {
-          const file = await window.nekko.readFile(target);
-          if (file.imageDataUrl) setImage(file.imageDataUrl);
-          else if (/\.svg$/i.test(target) && !file.binary && !file.truncated) {
-             useStore.getState().openFilePane(target, sessionId);
-           } else setError('Preview unavailable');
-        } catch { setError('Could not read image'); }
-      }}
-    >
-      {body}
-    </button>
-  );
+  if (localImagePath(src, basePath)) return <LocalImageCard src={src} title={label} basePath={basePath} />;
+  if (/^https?:\/\//i.test(src)) return <Link href={src}>{label} (remote image)</Link>;
+  return <span className="text-xs text-ink-soft">{label} (preview unavailable)</span>;
 }
 
 /**
