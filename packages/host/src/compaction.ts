@@ -75,6 +75,7 @@ export function transcriptText(messages: ChatMessage[]): string {
     for (const call of message.toolCalls ?? []) parts.push(`Tool call ${call.name}: ${clip(JSON.stringify(call.input) ?? '', TOOL_INPUT_CHARS)}`);
     if (message.toolResult) parts.push(`Tool result${message.toolResult.isError ? ' (error)' : ''}: ${clip(message.toolResult.output, TOOL_OUTPUT_CHARS)}`);
     if (message.images?.length) parts.push(`[${message.images.length} image attachment(s)]`);
+    if (message.videos?.length) parts.push(`[${message.videos.length} video attachment(s)]`);
     return parts.join('\n');
   }).join('\n\n');
 }

@@ -294,6 +294,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.fileRead]: ([p]) => host.readFile(p),
     [C.fileWrite]: ([p, content]) => host.writeFile(p, content),
     [C.dirList]: ([p]) => host.listDir(p),
+    [C.attachmentImport]: ([sid, name, dataUrl]) => host.importAttachment(sid, name, dataUrl),
 
     [C.changesList]: ([sid]) => host.listChanges(sid),
     [C.changeAccept]: ([sid, p]) => host.acceptChange(sid, p),

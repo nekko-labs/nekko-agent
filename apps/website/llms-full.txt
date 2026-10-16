@@ -319,6 +319,38 @@ time. There is no authoritative spawn-call child ID yet. Ambiguous matches and
 historical calls without observed events do not borrow another child's status;
 they retain a task summary or report that no current run status is recorded.
 
+### Attach photos, videos and any file
+
+The **+** button beside the message box opens a menu with an icon per row:
+**Photo / Video**, **File**, **Folder** and **Skill**. Photo / Video follows the
+model you picked: a model that takes images (Claude, GPT-4o and later, Gemini,
+Llama vision, LLaVA, Qwen-VL and friends) gets the row enabled; a text-only model
+greys it out and the menu says why, so a picture is never attached to a model that
+cannot see it. Video input is rarer (Gemini, and OpenRouter models that list it);
+when only photos are accepted the row says *photos only*. For a local model the
+app cannot classify, the row stays enabled and the first send tells you.
+
+You can also **paste** (Ctrl/⌘+V or right-click → Paste) or **drop** anything
+onto the message box: a screenshot, a clip, a PDF, a Markdown file, a
+spreadsheet, a file copied from Explorer or Finder. Photos and videos the model
+can see travel with your message. Everything else becomes a file attachment: a
+file copied from disk is attached in place, a pasted blob with no home (an image
+copied from a browser, a PDF from an email) is saved under the app's data folder
+first. Files whose bytes the model will not read (PDFs, Office documents,
+archives, or a photo for a text-only model) still appear in the strip above the
+message box, marked **name only**, so nothing disappears silently. Videos are
+capped at 40 MB in the message; larger ones can still be attached as files.
+
+### Diagrams, tables and code in replies
+
+Replies render Markdown: tables, code blocks with a copy button, images, and
+fenced ```` ```mermaid ```` diagrams drawn inline. Hover a diagram for **Copy**
+(the Mermaid source) and **Expand**, which opens it in a full window where the
+mouse wheel zooms, dragging pans, and a double-click resets; Escape or Close
+returns to the chat. The assistant is asked to reach for a diagram when it
+explains a flow or a structure, a table when it compares, and a code block for
+anything you might copy.
+
 ### Plan and capacity at a glance
 
 The plan icon in an agent window opens or closes only that chat's plan, sub-agents and queue panel. Each chat remembers its own choice locally. Narrow windows fold the panel automatically without changing that choice.

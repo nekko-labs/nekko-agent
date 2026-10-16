@@ -35,6 +35,7 @@ pub fn apply_turn_input(session: &mut Value, opts: &Value, now: u64) {
     let resume = truthy(opts, "resume");
     let text = opts.get("text").and_then(Value::as_str).unwrap_or_default();
     let images = opts.get("images").and_then(Value::as_array).filter(|a| !a.is_empty());
+    let videos = opts.get("videos").and_then(Value::as_array).filter(|a| !a.is_empty());
     {
         let Some(Value::Array(messages)) = s.get_mut("messages") else { return };
         if resume {
@@ -49,7 +50,7 @@ pub fn apply_turn_input(session: &mut Value, opts: &Value, now: u64) {
             }
             messages.pop();
         }
-    } else if !resume || !js::trim(text).is_empty() || images.is_some() {
+    } else if !resume || !js::trim(text).is_empty() || images.is_some() || videos.is_some() {
         let mut msg = Map::new();
         msg.insert("id".into(), json!(format!("msg_{}", base36(now))));
         msg.insert("role".into(), json!("user"));
@@ -59,6 +60,9 @@ pub fn apply_turn_input(session: &mut Value, opts: &Value, now: u64) {
         msg.insert("createdAt".into(), json!(now));
         if let Some(images) = images {
             msg.insert("images".into(), Value::Array(images.clone()));
+        }
+        if let Some(videos) = videos {
+            msg.insert("videos".into(), Value::Array(videos.clone()));
         }
         if let Some(skill) = opts.get("skill").filter(|v| js::truthy(Some(v))) {
             msg.insert("skill".into(), skill.clone());
@@ -106,19 +110,20 @@ pub fn clean_title(out: &str) -> String {
     js::slice16(js::trim(trimmed), 64).to_string()
 }
 
-/// `sendOptionsForQueuedItem(base, item)`: `{ ...base, text, images, skill }` from a queued prompt.
+/// `sendOptionsForQueuedItem(base, item)`: `{ ...base, text, images, videos, skill }` from a queued prompt.
 pub fn send_options_for_queued_item(base: &Value, item: &Value) -> Value {
     let mut out = base.as_object().cloned().unwrap_or_default();
-    let (text, images, skill) = match item {
-        Value::String(s) => (json!(s), None, None),
+    let (text, images, videos, skill) = match item {
+        Value::String(s) => (json!(s), None, None, None),
         other => (
             other.get("text").cloned().unwrap_or(Value::Null),
             other.get("images").filter(|v| !v.is_null()).cloned(),
+            other.get("videos").filter(|v| !v.is_null()).cloned(),
             other.get("skill").filter(|v| !v.is_null()).cloned(),
         ),
     };
     out.insert("text".into(), text);
-    for (key, value) in [("images", images), ("skill", skill)] {
+    for (key, value) in [("images", images), ("videos", videos), ("skill", skill)] {
         match value {
             Some(v) => {
                 out.insert(key.into(), v);

@@ -118,6 +118,21 @@ export const MessageBubble = memo(function MessageBubble({
             <span className="skill-pill-slash">/</span>{message.skill.name}
           </span>
         )}
+        {isUser && message.videos?.length ? (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {message.videos.map((video, i) => (
+              <video
+                key={`${video.slice(0, 24)}-${i}`}
+                src={video}
+                controls
+                playsInline
+                preload="metadata"
+                className="max-h-[220px] max-w-full rounded-lg bg-black"
+                title={`Attached video ${i + 1}`}
+              />
+            ))}
+          </div>
+        ) : null}
         {isUser && message.images?.length ? (
           <div className="mb-2 flex flex-wrap gap-1.5">
             {message.images.map((image, i) => (
@@ -141,7 +156,7 @@ export const MessageBubble = memo(function MessageBubble({
         {displayText && <Markdown basePath={basePath} text={isUser ? displayText : message.content} />}
         {message.toolCalls?.map((c) => <ToolCard key={c.id} call={c} />)}
         {!isUser && !entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
-        {(displayText && message.content || (isUser && message.images?.length)) && (
+        {(displayText && message.content || (isUser && (message.images?.length || message.videos?.length))) && (
           <div className={`mt-1.5 flex items-center gap-3 text-[11px] text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 ${isUser ? 'justify-end' : ''}`}>
             {isUser && message.createdAt > 0 && (
               <span className="text-ink-faint/70" title={fmtDateTime(message.createdAt)}>{fmtTime(message.createdAt)}</span>

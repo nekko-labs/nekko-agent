@@ -1,5 +1,6 @@
 import { cacheUsage } from './prompt-caching.js';
 import { withToolImages } from './tool-images.js';
+import { withVideoNote } from './media.js';
 import type { ModelInfo, ProviderConfig, ToolCall } from '@nekko-agent/shared';
 import { effectiveEffort } from '@nekko-agent/shared';
 import type { Provider, ChatRequest, ProviderChunk } from './types.js';
@@ -338,7 +339,7 @@ function toResponseItems(req: ChatRequest) {
         });
       }
     } else if (m.role === 'user') {
-      const content: any[] = [{ type: 'input_text', text: m.content }];
+      const content: any[] = [{ type: 'input_text', text: withVideoNote(m) }];
       for (const url of m.images ?? []) {
         content.push({ type: 'input_image', image_url: url });
       }

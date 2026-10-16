@@ -1,5 +1,6 @@
 import { anthropicCachePrefix, tokenCount } from './prompt-caching.js';
 import { withToolImages } from './tool-images.js';
+import { withVideoNote } from './media.js';
 import { normalizeAnthropicImages } from './anthropic-images.js';
 import type { ModelAvailability, ModelInfo, ProviderConfig, ToolCall } from '@nekko-agent/shared';
 import { claudeContextWindow, claudeMaxOutputTokens, effectiveEffort, modelEffortLevels, parseClaudeModel } from '@nekko-agent/shared';
@@ -470,7 +471,7 @@ export class AnthropicProvider implements Provider {
           role: m.role,
           content: m.role === 'user' && m.images?.length
             ? [
-                { type: 'text', text: m.content },
+                { type: 'text', text: withVideoNote(m) },
                 ...m.images.map((url) => {
                   const match = url.match(/^data:([^;]+);base64,(.+)$/);
                   return {
@@ -483,7 +484,7 @@ export class AnthropicProvider implements Provider {
                   };
                 }),
               ]
-            : m.content,
+            : m.role === 'user' ? withVideoNote(m) : m.content,
         });
       }
     }

@@ -22,6 +22,7 @@
  ],
  "alwaysDenied": {
   "channels": [
+   "attachment:import",
    "connector:connect",
    "connector:disconnect",
    "data:wipe",

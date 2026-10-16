@@ -4,7 +4,8 @@ import { MarkdownSession } from './Markdown.js';
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
 import { chatPaneSettings, initialChatBrain } from './ChatPane.settings.js';
-import { CopyIcon, ControlPanelIcon } from '../icons.js';
+import { CopyIcon, ControlPanelIcon, PhotoIcon, FileIcon, FolderIcon, WandIcon } from '../icons.js';
+import { attachmentName, pastedFileName, planAttachment, unreadableNote } from '../composerAttachments.js';
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
 import { revealEditorCaret } from './agent-console/editorCaret.js';
@@ -13,7 +14,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { archiveDaysLeft, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { archiveDaysLeft, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
@@ -82,10 +83,10 @@ const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't c
  */
 const DRAFT_MIRROR_MS = 150;
 
-function queuedPayloadFor(text: string, images: string[], skill: SkillDef | null): QueuePayload | string {
+function queuedPayloadFor(text: string, images: string[], skill: SkillDef | null, videos: string[] = []): QueuePayload | string {
   const trimmed = text.trim();
-  return images.length || skill
-    ? { text: [skill ? skill.template.trimEnd() : '', trimmed].filter(Boolean).join('\n\n'), ...(images.length ? { images } : {}), ...(skill ? { skill: { name: skill.name, input: trimmed } } : {}) }
+  return images.length || videos.length || skill
+    ? { text: [skill ? skill.template.trimEnd() : '', trimmed].filter(Boolean).join('\n\n'), ...(images.length ? { images } : {}), ...(videos.length ? { videos } : {}), ...(skill ? { skill: { name: skill.name, input: trimmed } } : {}) }
     : trimmed;
 }
 
@@ -94,8 +95,12 @@ function queuedTitle(item: QueuedPrompt): string {
   const bits = [payload.text || '(no text)'];
   if (payload.skill) bits.push(`/${payload.skill.name}`);
   if (payload.images?.length) bits.push(`${payload.images.length} image${payload.images.length === 1 ? '' : 's'}`);
+  if (payload.videos?.length) bits.push(`${payload.videos.length} video${payload.videos.length === 1 ? '' : 's'}`);
   return bits.join(' · ');
 }
+
+/** Videos ride in the request as data URLs; past this they stall local servers and blow cloud limits. */
+const MAX_VIDEO_BYTES = 40_000_000;
 
 /**
  * How often a running turn re-reads its context bundle. Each completed step is
@@ -626,6 +631,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const [skillsHover, setSkillsHover] = useState(false);
   const skillsFlyTimer = useRef<number | null>(null);
   const [pendingImages, setPendingImages] = useState<string[]>(() => loadDraft(sessionId)?.images ?? []);
+  const [pendingVideos, setPendingVideos] = useState<string[]>(() => loadDraft(sessionId)?.videos ?? []);
+  // Files pasted or picked whose bytes the model will not read (a PDF, a photo
+  // for a text-only model) still show in the strip, with the reason.
+  const [attachmentNotes, setAttachmentNotes] = useState<Record<string, string>>({});
   // The context panel toggle lives in the store so the ⌘\ shortcut and the
   // command palette's "Toggle context panel" act on this pane too.
   const ctxOpen = useStore((s) => s.contextPanelOpen);
@@ -1246,8 +1255,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // --- Draft persistence ---
   // The workbench only mounts the pane you're looking at, so a tab switch (or
   // quitting) tears this composer down. Park what's unsent and restore it.
-  const latestDraft = useRef({ text: draft, images: pendingImages });
-  latestDraft.current = { text: draft, images: pendingImages };
+  const latestDraft = useRef({ text: draft, images: pendingImages, videos: pendingVideos });
+  latestDraft.current = { text: draft, images: pendingImages, videos: pendingVideos };
 
   // The pane is keyed by session today, so this only matters if the component is
   // ever reused for another chat. Without it, the save below would write one
@@ -1259,6 +1268,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const parked = loadDraft(sessionId);
     setDraft(parked?.text ?? '');
     setPendingImages((current) => restoredDraftImages(current, parked?.images));
+    setPendingVideos((current) => restoredDraftImages(current, parked?.videos));
   }, [sessionId]);
 
   // Text and images handed over from another chat (Split here) land in this
@@ -1275,7 +1285,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (readOnly || surface === 'transcript') return;
     const t = setTimeout(() => saveDraft(sessionId, latestDraft.current), 400);
     return () => clearTimeout(t);
-  }, [sessionId, draft, pendingImages, readOnly, surface]);
+  }, [sessionId, draft, pendingImages, pendingVideos, readOnly, surface]);
 
   // Mirror the draft into the store so the Context Inspector on the right
   // counts what you're typing. Trailing by DRAFT_MIRROR_MS, so a keystroke
@@ -1299,6 +1309,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const parked = loadDraft(sessionId);
     setDraft(parked?.text ?? '');
     setPendingImages((current) => restoredDraftImages(current, parked?.images));
+    setPendingVideos((current) => restoredDraftImages(current, parked?.videos));
     const flush = () => saveDraft(sessionId, latestDraft.current);
     window.addEventListener('beforeunload', flush);
     return () => { window.removeEventListener('beforeunload', flush); flush(); };
@@ -1444,13 +1455,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const skill = activeSkill;
     const text = [skill ? skill.template.trimEnd() : '', input.trim()].filter(Boolean).join('\n\n');
     const images = pendingImages;
-    if (!text.trim() && images.length === 0 && !skill) return;
+    const videos = pendingVideos;
+    if (!text.trim() && images.length === 0 && videos.length === 0 && !skill) return;
     // A follow-up never interrupts work by accident. Queue the same payload the
     // turn would have sent so attachments and skills run when their turn arrives.
     if (streamingRef.current && !imageMode) {
       if (override === undefined) await queueDraft();
       else {
-        const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(input, images, skill));
+        const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(input, images, skill, videos));
         if (updated) { setSession(updated); refreshSessions(); }
       }
       return;
@@ -1490,7 +1502,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       // the reason is shown once per turn that actually moves providers.
       useStore.getState().pushToast('info', pick.reason);
     }
-    if (override === undefined) { setDraft(''); setPendingImages([]); clearDraft(sessionId); }
+    if (override === undefined) { setDraft(''); setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); clearDraft(sessionId); }
     setActiveSkill(null);
     beginTurn();
     setSession((prev) =>
@@ -1501,6 +1513,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           role: 'user',
           content: text,
           ...(images.length ? { images } : {}),
+          ...(videos.length ? { videos } : {}),
           ...(skill ? { skill: { name: skill.name, input } } : {}),
           createdAt: Date.now(),
         }],
@@ -1512,6 +1525,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       modelId: brain.modelId,
       text,
       ...(images.length ? { images } : {}),
+      ...(videos.length ? { videos } : {}),
       ...(skill ? { skill: { name: skill.name, input } } : {}),
     });
 
@@ -1536,12 +1550,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const queueDraft = async () => {
     const text = draft.trim();
     const images = pendingImages;
+    const videos = pendingVideos;
     const skill = activeSkill;
-    if (!text && images.length === 0 && !skill) return;
-    const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(text, images, skill));
+    if (!text && images.length === 0 && videos.length === 0 && !skill) return;
+    const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(text, images, skill, videos));
     if (!updated) return;
     setDraft('');
     setPendingImages([]);
+    setPendingVideos([]);
+    setAttachmentNotes({});
     setActiveSkill(null);
     clearDraft(sessionId);
     setSession(updated);
@@ -1906,33 +1923,116 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     setImageMenu({ x: e.clientX, y: e.clientY, src });
   }, []);
 
-  const addImages = async (files: File[]) => {
-    const images = await Promise.all(files.map((file) => readImage(file).catch(() => null)));
-    setPendingImages((current) => [...current, ...images.filter((image): image is string => !!image)]);
+  const providerKind = providers.find((p) => p.id === providerId)?.kind;
+  const activeProvider = providers.find((p) => p.id === providerId);
+
+  // What the picked model can look at. Drives the Photo / Video menu row and
+  // the note under it; Auto is treated as sighted, since the pick happens at
+  // send time and the common cloud picks all take images.
+  const activeModel = models.find((m) => m.id === modelId) ?? null;
+  const mediaSupport = useMemo(
+    () => modelId === AUTO_MODEL_ID
+      ? { image: 'yes' as const, video: 'unknown' as const }
+      : modelMediaSupport({ modelId: modelId ?? undefined, providerKind, model: activeModel }),
+    [modelId, providerKind, activeModel],
+  );
+  const modelLabel = activeModel?.name ?? modelId ?? 'This model';
+  const photoNotice = mediaSupportNotice('image', mediaSupport.image, modelLabel);
+  const videoNotice = mediaSupportNotice('video', mediaSupport.video, modelLabel);
+  const mediaDisabled = mediaSupport.image === 'no' && mediaSupport.video === 'no';
+
+  /** Attach paths to the chat (files on disk), remembering any notes about them. */
+  const attachPaths = async (paths: Array<{ path: string; note?: string }>) => {
+    if (!session || !paths.length) return;
+    const chat = useStore.getState().sessions.find((x) => x.id === sessionId) ?? session;
+    const next = Array.from(new Set([...(chat.attachedPaths ?? []), ...paths.map((p) => p.path)]));
+    await window.nekko.setSessionAttachments(session.id, next);
+    setAttachmentNotes((cur) => {
+      const out = { ...cur };
+      for (const p of paths) if (p.note) out[p.path] = p.note;
+      return out;
+    });
+    setSession(await window.nekko.getSession(session.id));
+    refreshCtx();
+  };
+
+  /**
+   * Every file the user hands the composer, from a paste, a drop, or the
+   * picker, goes through here. Photos and videos the model can see travel with
+   * the message; everything else is attached as a file, imported first when it
+   * has no home on disk. Nothing is dropped without a word.
+   */
+  const addAttachments = async (files: File[]) => {
+    const images: string[] = [];
+    const videos: string[] = [];
+    const paths: Array<{ path: string; note?: string }> = [];
+    const toast = useStore.getState().pushToast;
+    for (const file of files) {
+      const plan = planAttachment(file, window.nekko.pathForFile(file), mediaSupport);
+      try {
+        if (plan.kind === 'image') { images.push(await readImage(file)); continue; }
+        if (plan.kind === 'video') {
+          if (file.size > MAX_VIDEO_BYTES) { toast('error', `${file.name || 'Video'} is over 40 MB. Trim it or attach it as a file.`); continue; }
+          videos.push(await readImage(file));
+          continue;
+        }
+        if (plan.kind === 'path') { paths.push({ path: plan.path, note: plan.note }); continue; }
+        const dataUrl = await readImage(file);
+        const saved = await window.nekko.importAttachment(sessionId, pastedFileName(file), dataUrl);
+        paths.push({ path: saved, note: plan.note });
+      } catch (e) {
+        toast('error', `Couldn't attach ${file.name || 'file'}: ${(e as Error).message}`);
+      }
+    }
+    if (images.length) setPendingImages((current) => [...current, ...images]);
+    if (videos.length) setPendingVideos((current) => [...current, ...videos]);
+    if (paths.length) await attachPaths(paths);
+    if ((images.length || videos.length) && mediaSupport.image === 'unknown') {
+      toast('info', `${modelLabel} hasn't said whether it accepts photos or videos. They'll be sent; the reply will tell.`);
+    }
   };
 
   const onPaste = (e: React.ClipboardEvent<MarkdownEditorElement>) => {
-    const files = Array.from(e.clipboardData.items)
-      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
-      .map((item) => item.getAsFile())
-      .filter((file): file is File => !!file);
+    // Files first: a copied file in Explorer or Finder also puts its name on the
+    // clipboard as text, and the file is what was meant.
+    const files = Array.from(e.clipboardData.files);
     if (files.length) {
       e.preventDefault();
-      void addImages(files);
+      void addAttachments(files);
+      return;
     }
+    const blobs = Array.from(e.clipboardData.items)
+      .filter((item) => item.kind === 'file')
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => !!file);
+    if (blobs.length) {
+      e.preventDefault();
+      void addAttachments(blobs);
+    }
+  };
+
+  const onDropFiles = (e: React.DragEvent) => {
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    if (!files.length || imageMode || !canCompose) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void addAttachments(files);
   };
 
   const addFiles = async () => {
     const picked = await window.nekko.openFilesDialog();
     if (!session || !picked.length) return;
-    const next = Array.from(new Set([...(session.attachedPaths ?? []), ...picked]));
-    await window.nekko.setSessionAttachments(session.id, next);
+    await attachPaths(picked.map((path) => ({ path, note: unreadableNote(attachmentName(path)) ?? undefined })));
+  };
+
+  const removeAttachedPath = async (path: string) => {
+    if (!session) return;
+    const chat = useStore.getState().sessions.find((x) => x.id === sessionId) ?? session;
+    await window.nekko.setSessionAttachments(session.id, (chat.attachedPaths ?? []).filter((p) => p !== path));
+    setAttachmentNotes((cur) => { const out = { ...cur }; delete out[path]; return out; });
     setSession(await window.nekko.getSession(session.id));
     refreshCtx();
   };
-
-  const providerKind = providers.find((p) => p.id === providerId)?.kind;
-  const activeProvider = providers.find((p) => p.id === providerId);
   // This provider's live usage windows, and the models they still leave usable.
   const providerLimits = useProviderLimits(activeProvider);
   const runnableModels = models.filter(
@@ -2255,7 +2355,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       ? 'Connect an AI account or a local model. We’ll walk you through it — no technical experience needed.'
                       : needsModel
                         ? 'Choose a model here, or let Auto pick per message.'
-                        : 'Ask a question or hand over a task. Use / for skills and prompts, @ to attach files, + for photos and folders.'}
+                        : 'Ask a question or hand over a task. Use / for skills and prompts, @ to attach files, + for photos, videos and folders. Paste or drop any file.'}
                   </p>
                 </div>
                 {!hasProvider ? (
@@ -2650,8 +2750,33 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {/* Attachments ride inside the composer, at the top, separated by
                     a hairline. Floated above it they covered the instrument
                     strip. */}
-                {pendingImages.length > 0 && (
-                  <div className="flex shrink-0 gap-2 overflow-x-auto border-b border-line px-3 py-2.5" data-composer-attachments>
+                {(pendingImages.length > 0 || pendingVideos.length > 0 || (session?.attachedPaths?.length ?? 0) > 0) && (
+                  <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line px-3 py-2.5" data-composer-attachments>
+                    {pendingVideos.map((video, i) => (
+                      <div key={`v-${video.slice(0, 24)}-${i}`} className="group relative shrink-0">
+                        <video
+                          src={video}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="h-16 w-24 rounded-lg border border-line bg-black object-cover"
+                          title="Pending video attachment"
+                          onMouseEnter={(e) => { void e.currentTarget.play().catch(() => {}); }}
+                          onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
+                        />
+                        <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[9px] uppercase tracking-wide text-white">video</span>
+                        <button
+                          className="absolute -right-1 -top-1 hidden h-4 w-4 rounded-full bg-ink text-[10px] leading-4 text-paper group-hover:block"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPendingVideos((current) => current.filter((_, index) => index !== i));
+                          }}
+                          title="Remove video"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
                     {pendingImages.map((image, i) => (
                       <div key={`${image.slice(0, 24)}-${i}`} className="group relative shrink-0">
                         <img
@@ -2674,6 +2799,31 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         </button>
                       </div>
                     ))}
+                    {/* Files attached to the chat: readable ones plain, the rest
+                        with the reason the model only sees their name. */}
+                    {(session?.attachedPaths ?? []).map((path) => {
+                      const note = attachmentNotes[path] ?? unreadableNote(attachmentName(path));
+                      return (
+                        <span
+                          key={path}
+                          className={`group inline-flex h-7 max-w-[220px] shrink-0 items-center gap-1.5 rounded-lg border px-2 text-[12px] ${note ? 'border-dashed border-line text-ink-faint' : 'border-line text-ink-soft'}`}
+                          title={note ? `${path}\n${note}` : path}
+                          data-composer-file
+                        >
+                          <FileIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{attachmentName(path)}</span>
+                          {note && <span className="shrink-0 text-[10px] uppercase tracking-wide">name only</span>}
+                          <button
+                            className="ml-0.5 shrink-0 rounded opacity-60 hover:opacity-100"
+                            onClick={() => { void removeAttachedPath(path); }}
+                            title="Remove file"
+                            aria-label={`Remove ${attachmentName(path)}`}
+                          >
+                            <CloseIcon className="h-3 w-3" />
+                          </button>
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
                 {activeSkill && (
@@ -2693,7 +2843,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </span>
                   </div>
                 )}
-                <div className="composer-editor-wrap relative">
+                <div
+                  className="composer-editor-wrap relative"
+                  onDragOver={(e) => { if (!imageMode && e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+                  onDrop={onDropFiles}
+                >
                   {/* The → badge announces the ghost-accept key, top-right in the
                       textarea's padding so it never overlaps the text. */}
                   {ghostSuggestion && (
@@ -2735,34 +2889,48 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       ref={attachButtonRef}
                       className="grid h-8 w-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
                       onClick={() => (attachMenuOpen ? closeAttachMenu() : setAttachMenuOpen(true))}
-                      title="Add a photo, file, folder, or skill"
-                      aria-label="Add a photo, file, folder, or skill"
+                      title="Add a photo, video, file, folder, or skill"
+                      aria-label="Add a photo, video, file, folder, or skill"
                       aria-haspopup="menu"
                       aria-expanded={attachMenuOpen}
                     >
                       <PlusIcon className="h-4 w-4" />
                     </button>
                     {attachMenuOpen && (
-                      <div className="card absolute bottom-full left-0 z-40 mb-2 w-48 p-1.5 shadow-lg" role="menu">
+                      <div className="card absolute bottom-full left-0 z-40 mb-2 w-60 p-1.5 shadow-lg" role="menu">
+                        {/* Photo / Video follows the picked model: a text-only
+                            model greys the row and says why, instead of taking
+                            a picture it will never see. */}
                         <button
                           role="menuitem"
-                          className="flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2"
-                          onClick={() => { closeAttachMenu(); imageInputRef.current?.click(); }}
+                          className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] ${mediaDisabled ? 'cursor-not-allowed text-ink-faint' : 'hover:bg-surface-2'}`}
+                          onClick={() => { if (mediaDisabled) return; closeAttachMenu(); imageInputRef.current?.click(); }}
                           onMouseEnter={closeSkillsFly}
+                          aria-disabled={mediaDisabled}
+                          title={mediaDisabled ? photoNotice ?? undefined : videoNotice ?? undefined}
+                          data-composer-media
                         >
-                          Photo
+                          <PhotoIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="flex-1">Photo / Video</span>
+                          {!mediaDisabled && mediaSupport.video === 'no' && <span className="text-[10px] text-ink-faint">photos only</span>}
                         </button>
+                        {(mediaDisabled || (mediaSupport.image !== 'yes' || mediaSupport.video !== 'yes')) && (
+                          <p className="px-2.5 pb-1.5 text-[11px] leading-snug text-ink-faint" role="note" data-composer-media-note>
+                            {mediaDisabled ? photoNotice : mediaSupport.image !== 'yes' ? photoNotice : videoNotice}
+                          </p>
+                        )}
                         <button
                           role="menuitem"
-                          className="flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2"
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2"
                           onClick={() => { closeAttachMenu(); void addFiles(); }}
                           onMouseEnter={closeSkillsFly}
                         >
-                          File
+                          <FileIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="flex-1">File</span>
                         </button>
                         <button
                           role="menuitem"
-                          className="flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2"
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2"
                           onClick={() => {
                             closeAttachMenu();
                             const chat = useStore.getState().sessions.find((x) => x.id === sessionId) ?? session;
@@ -2772,7 +2940,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           }}
                           onMouseEnter={closeSkillsFly}
                         >
-                          Folder
+                          <FolderIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="flex-1">Folder</span>
                         </button>
                         {/* Skills expand as a side flyout on hover, so someone new
                             finds them without knowing to type `/` or to click. */}
@@ -2786,6 +2955,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                             aria-haspopup="menu"
                             aria-expanded={skillsHover}
                           >
+                            <WandIcon className="h-3.5 w-3.5 shrink-0" />
                             <span className="flex-1">Skill</span>
                             {allSkills.length > 0 && (
                               <span className="tabular-nums text-[11px] text-ink-faint">{allSkills.length}</span>
@@ -2839,11 +3009,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       ref={imageInputRef}
                       className="hidden"
                       type="file"
-                      accept="image/*"
+                      accept={mediaSupport.video === 'no' ? 'image/*' : 'image/*,video/*'}
                       multiple
                       onChange={(e) => {
                         const files = Array.from(e.target.files ?? []);
-                        if (files.length) void addImages(files);
+                        if (files.length) void addAttachments(files);
                         e.target.value = '';
                       }}
                     />
@@ -2880,7 +3050,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     <button
                       className="send-avatar grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-all duration-150 disabled:opacity-40"
                       onClick={() => void send()}
-                      disabled={imageMode ? streaming || !draft.trim() : (!draft.trim() && pendingImages.length === 0 && !activeSkill) || !hasProvider}
+                      disabled={imageMode ? streaming || !draft.trim() : (!draft.trim() && pendingImages.length === 0 && pendingVideos.length === 0 && !activeSkill) || !hasProvider}
                       title={streaming ? 'Add to queue after this reply' : 'Send'}
                       aria-label={streaming ? 'Add to queue' : 'Send'}
                     >

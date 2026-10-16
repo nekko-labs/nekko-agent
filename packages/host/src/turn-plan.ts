@@ -174,7 +174,7 @@ export function applyTurnInput(session: Session, opts: SendOptions, now = Date.n
     ) {
       session.messages.pop();
     }
-  } else if (!opts.resume || opts.text.trim() || opts.images?.length) {
+  } else if (!opts.resume || opts.text.trim() || opts.images?.length || opts.videos?.length) {
     // Empty resume clicks add no synthetic user message, but explicit input is never discarded.
     const userMsg: ChatMessage = {
       id: `msg_${now.toString(36)}`,
@@ -182,6 +182,7 @@ export function applyTurnInput(session: Session, opts: SendOptions, now = Date.n
       content: opts.text,
       createdAt: now,
       ...(opts.images?.length ? { images: opts.images } : {}),
+      ...(opts.videos?.length ? { videos: opts.videos } : {}),
       ...(opts.skill ? { skill: opts.skill } : {}),
     };
     session.messages.push(userMsg);
@@ -297,5 +298,5 @@ export function hostToolApproval(name: string, mode: string | undefined, sandbox
 /** The send options that run a queued prompt next. */
 export function sendOptionsForQueuedItem(base: SendOptions, item: QueuedPrompt): SendOptions {
   const payload = queueItemPayload(item);
-  return { ...base, text: payload.text, images: payload.images, skill: payload.skill };
+  return { ...base, text: payload.text, images: payload.images, videos: payload.videos, skill: payload.skill };
 }

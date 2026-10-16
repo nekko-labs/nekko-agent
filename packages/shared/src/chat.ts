@@ -47,6 +47,12 @@ export interface ChatMessage {
    * image model on an assistant message in an image-generation chat.
    */
   images?: string[];
+  /**
+   * Video data URLs attached by the user. Only models with video input receive
+   * them; for every other model they are dropped from the request and a note
+   * stands in, so the model knows what it was not shown.
+   */
+  videos?: string[];
   /** How an assistant message's images were made, so they can be reproduced. */
   generated?: GeneratedImageMeta;
   /** Model chain-of-thought text, when the provider streams it. */
@@ -473,6 +479,8 @@ export interface QueuePayload {
   text: string;
   /** Image data URLs attached to this queued user turn. */
   images?: string[];
+  /** Video data URLs attached to this queued user turn. */
+  videos?: string[];
   /** Skill invoked for this queued user turn and the user's own input. */
   skill?: { name: string; input: string };
 }
@@ -499,6 +507,8 @@ export interface SendOptions {
   text: string;
   /** Image data URLs attached to this user turn. */
   images?: string[];
+  /** Video data URLs attached to this user turn. */
+  videos?: string[];
   /** Skill invoked for this user turn and the user's own input. */
   skill?: { name: string; input: string };
   /** File paths the user explicitly attached as context. */

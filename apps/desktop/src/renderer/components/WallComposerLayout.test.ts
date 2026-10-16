@@ -25,7 +25,7 @@ describe('wall composer layout', () => {
     const foot = pane.slice(pane.indexOf('data-composer-foot') - 200, pane.indexOf('data-composer-foot') + 400);
     expect(foot).toContain('only="mode"');
     expect(foot).toContain('only="privacy"');
-    expect(pane.indexOf('aria-label="Add a photo, file, folder, or skill"')).toBeLessThan(pane.indexOf('data-composer-foot'));
+    expect(pane.indexOf('aria-label="Add a photo, video, file, folder, or skill"')).toBeLessThan(pane.indexOf('data-composer-foot'));
   });
   it('lets ChatControls render just the mode menu or just the privacy switch', () => {
     expect(controls).toContain("only?: 'mode' | 'privacy';");
