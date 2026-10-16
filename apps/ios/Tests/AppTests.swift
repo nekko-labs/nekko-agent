@@ -63,3 +63,21 @@ final class PaletteTests: XCTestCase {
         XCTAssertLessThan(Palette.luminance(0x6D5EFC), 0.45)
     }
 }
+
+@MainActor
+final class DeepLinkTests: XCTestCase {
+    func testPairingAndChatLinksAreRouted() {
+        let app = AppModel.shared
+        app.pendingLink = nil
+        app.handle(url: URL(string: "nekko-agent-pair:?relay=wss%3A%2F%2Frelay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff&pair=ABCD2345")!)
+        XCTAssertEqual(app.pendingLink?.relayUrl, "wss://relay.example.com")
+        XCTAssertEqual(app.pendingLink?.pair, "ABCD2345")
+        app.pendingLink = nil
+        app.handle(url: URL(string: "nekko-agent://chat/s_123")!)
+        XCTAssertEqual(app.openChat, "s_123")
+        XCTAssertNil(app.pendingLink)
+        app.openChat = nil
+        app.handle(url: URL(string: "nekko-agent-pair:?nothing=here")!)
+        XCTAssertNil(app.pendingLink)
+    }
+}
