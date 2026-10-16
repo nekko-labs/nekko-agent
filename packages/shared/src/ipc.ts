@@ -285,6 +285,10 @@ export const IpcChannels = {
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
   remoteRotate: 'remote:rotate',
+  // Desktop only: the relay this computer can run on its Tailscale address.
+  localRelayStatus: 'localRelay:status',
+  localRelayStart: 'localRelay:start',
+  localRelayStop: 'localRelay:stop',
 
   appInfo: 'app:info',
   mcpStatus: 'mcp:status',
@@ -825,6 +829,14 @@ export interface NekkoApi {
   renameRemoteDevice(deviceId: string, name: string): Promise<import('./remote.js').RemoteDevice[]>;
   /** Rotate the pairing secret: re-keys the room; every device must re-pair. */
   rotateRemoteSecret(): Promise<import('./remote.js').RemoteStatus>;
+  /**
+   * The relay this computer runs itself, bound to its Tailscale address, so
+   * phones on the tailnet reach it with nothing in between. Desktop only.
+   */
+  localRelayStatus(): Promise<import('./relay-route.js').LocalRelayStatus>;
+  /** Switch it on (and keep it on across restarts); reports why if it can't start. */
+  localRelayStart(): Promise<import('./relay-route.js').LocalRelayStatus>;
+  localRelayStop(): Promise<import('./relay-route.js').LocalRelayStatus>;
 
   /** Running version + edition. */
   getAppInfo(): Promise<AppInfo>;

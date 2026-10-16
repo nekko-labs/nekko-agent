@@ -3,6 +3,7 @@ import { listAgentTerminals, type Host } from '@nekko-agent/host';
 import { apiServerStatus, newApiToken, syncApiServer } from '../main/api-server.js';
 import { cliInstallStatus, installCli } from '../main/cli-install.js';
 import { refreshLocalAccess, subagentTarget, type AppLike } from '../main/local-access.js';
+import type { LocalRelay } from './local-relay.js';
 import type { ChannelOverrides } from './wire.js';
 
 /**
@@ -11,7 +12,7 @@ import type { ChannelOverrides } from './wire.js';
  * main process; none of them needs Electron (the app paths arrive as plain
  * values, see `index.ts`), so they run here beside the host they drive.
  */
-export function desktopChannels(app: AppLike, host: Host): ChannelOverrides {
+export function desktopChannels(app: AppLike, host: Host, localRelay?: LocalRelay): ChannelOverrides {
   const C = IpcChannels;
   return {
     // The local API server. Transport-local by nature: the web and self-hosted
@@ -55,6 +56,16 @@ export function desktopChannels(app: AppLike, host: Host): ChannelOverrides {
       host.installSubagent(tool as AgentToolId, (target as SubagentTarget | undefined) ?? subagentTarget(app, host)),
     [C.integrationsSnippet]: ([tool, target]) =>
       host.subagentSnippet(tool as AgentToolId, (target as SubagentTarget | undefined) ?? subagentTarget(app, host)),
+
+    // The relay this computer runs on its Tailscale address (Remote access card).
+    // Not `remote:*`: those are nekkod's, and phones never reach these.
+    ...(localRelay
+      ? {
+          [C.localRelayStatus]: () => localRelay.status(),
+          [C.localRelayStart]: () => localRelay.start(),
+          [C.localRelayStop]: () => localRelay.stop(),
+        }
+      : {}),
 
     // For nekkod: the terminals it does not own (the agent command logs).
     'terminals:list:agent': () => listAgentTerminals(),
