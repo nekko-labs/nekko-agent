@@ -11,7 +11,8 @@ extension XCTestCase {
     ///   `FirstRunTests.testLargestTextSizesStillFit` drives the real accessibility-XL
     ///   layout instead; the audit's heuristic flags SwiftUI text that does scale.
     /// - Anything on a disabled control (WCAG 1.4.3 exempts inactive components).
-    /// - Elements not fully on screen (under the keyboard or scrolled away):
+    /// - Elements not fully on screen (under the keyboard or scrolled away),
+    ///   or covered by other UI (not hittable), for contrast and clipping:
     ///   the audit samples whatever covers them.
     /// - Clipping on the system search field's placeholder.
     /// - Findings the audit can't attach to an element.
@@ -48,6 +49,9 @@ extension XCTestCase {
         guard let e = issue.element, e.exists else { return false }
         if !e.isEnabled { return false }
         if !window.isEmpty, !window.contains(e.frame) { return false }
+        // Covered by other UI (a pinned bar, a card over the transcript): the
+        // audit samples whatever is on top, not the element's own colours.
+        if issue.auditType == .contrast || issue.auditType == .textClipped, !e.isHittable { return false }
         if issue.auditType == .textClipped, e.elementType == .searchField { return false }
         return true
     }

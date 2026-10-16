@@ -65,8 +65,9 @@ struct ChatView: View {
             .defaultScrollAnchor(.bottom)
             .onChange(of: chat.blocks.last) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
             // An approval or question card grows the bottom bar: keep the latest step above it.
-            .onChange(of: chat.turn.approval?.call.id) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
-            .onChange(of: chat.turn.question != nil) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+            // After the card has been laid out: scrolling in the same update used the old inset.
+            .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
+            .onChange(of: chat.turn.question != nil) { _, _ in scrollAfterLayout(proxy) }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
                     if let a = chat.turn.approval {
@@ -127,6 +128,13 @@ struct ChatView: View {
         .alert("Couldn’t do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(actionError ?? "") }
+    }
+
+    private func scrollAfterLayout(_ proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+        }
     }
 
     private func act(_ body: @escaping () async throws -> Void) {
@@ -239,7 +247,14 @@ struct ApprovalCard: View {
             HStack {
                 Button(role: .destructive) { answer(false) } label: { Text("Deny").frame(maxWidth: .infinity).foregroundStyle(palette.ink) }
                     .buttonStyle(.bordered).tint(palette.inkSoft)
-                Button { answer(true) } label: { Text("Allow").frame(maxWidth: .infinity).foregroundStyle(palette.onAccent) }.buttonStyle(.borderedProminent)
+                // Drawn rather than .borderedProminent, which the audit reports as clipping its label.
+                Button { answer(true) } label: {
+                    Text("Allow").font(.body.weight(.semibold)).foregroundStyle(palette.onAccent)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(palette.accent, in: RoundedRectangle(cornerRadius: 12))
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
             }
             .controlSize(.large)
         }
