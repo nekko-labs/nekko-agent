@@ -36,6 +36,7 @@ mod sandbox;
 mod settings;
 mod side;
 mod sideband;
+mod small_services;
 mod tooling;
 mod turns;
 mod voice;
@@ -107,6 +108,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                     downloads::OWNS,
                     installs::OWNS,
                     model_server::OWNS,
+                    small_services::OWNS,
                 ];
                 // Compactions are the daemon's wherever it admits turns.
                 if !ts_loop {
@@ -253,12 +255,20 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }),
         voice: voice.clone(),
         catalog,
-        workspace: Arc::new(workspace::Workspace::new(cfg.data_dir.clone().map(std::path::PathBuf::from))),
+        workspace: Arc::new(workspace::Workspace::new(
+            cfg.data_dir.clone().map(std::path::PathBuf::from),
+            cfg.github_api_url.as_deref(),
+        )),
         automation: automation.clone(),
         remote: remote.clone(),
         sandboxes,
         compactions,
         image_turns: image_turns::ImageTurns::new(),
+        app: Arc::new(routes::AppCtx {
+            facts: small_services::AppFacts { version: cfg.app_version.clone(), edition: cfg.edition.clone() },
+            bridge: cfg.browser_bridge.clone().map(|b| (b.url, b.token)),
+        }),
+        update_checks: small_services::UpdateChecks::new(),
     };
     routes::forward_terminal_events(&ctx);
     if let Some(adm) = ctx.admission.clone() {
@@ -279,6 +289,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     automation.start();
     if let Some(w) = &agent_watches {
         w.start(ctx.turns.clone());
+    }
+    // The catalog refresh checks, where the daemon serves `updates:check`.
+    if ctx.sessions.is_some() && ctx.settings.is_some() {
+        ctx.update_checks.start(ctx.clone());
     }
     let processes = ctx.turns.processes.clone();
     {

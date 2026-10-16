@@ -14,6 +14,9 @@ import { refreshVaizerCatalog } from './vaizer.js';
  * first diff lands as an event and the renderer re-lists.
  */
 
+/** The engine daemon runs these checks and their schedule (`NEKKOD_OWNS`, crates/nekkod/src/small_services.rs). */
+export const DAEMON_UPDATE_CHECKS = 'update-checks';
+
 /** How often scheduled checks run. Catalogs move slowly; six hours is plenty. */
 const INTERVAL_MS = 6 * 60 * 60 * 1000;
 /** Let startup settle (providers resolving, engine coming up) before checking. */
@@ -22,6 +25,8 @@ const START_DELAY_MS = 8_000;
 export interface UpdateChecksService {
   /** Run every check once, ignoring the toggles (Settings → "Check now"). */
   runNow(): Promise<void>;
+  /** What the timer runs: the checks the toggles leave on. */
+  tickScheduled(): Promise<void>;
   stop(): void;
 }
 
@@ -33,6 +38,8 @@ export function startUpdateChecks(deps: {
   fetchSkillsCatalog?: () => Promise<VaizerCatalog>;
   intervalMs?: number;
   startDelayMs?: number;
+  /** Run on a schedule (default); off when the engine daemon schedules them. */
+  scheduled?: boolean;
 }): UpdateChecksService {
   // Last-seen model ids per provider and the skills shelf signature. The first
   // observation seeds without an event, so app start is not a change storm.
@@ -72,13 +79,15 @@ export function startUpdateChecks(deps: {
     await Promise.allSettled(jobs);
   }
 
-  const boot = setTimeout(() => void tick(false), deps.startDelayMs ?? START_DELAY_MS);
-  const timer = setInterval(() => void tick(false), deps.intervalMs ?? INTERVAL_MS);
-  boot.unref?.();
-  timer.unref?.();
+  const scheduled = deps.scheduled ?? true;
+  const boot = scheduled ? setTimeout(() => void tick(false), deps.startDelayMs ?? START_DELAY_MS) : undefined;
+  const timer = scheduled ? setInterval(() => void tick(false), deps.intervalMs ?? INTERVAL_MS) : undefined;
+  boot?.unref?.();
+  timer?.unref?.();
 
   return {
     runNow: () => tick(true),
+    tickScheduled: () => tick(false),
     stop: () => {
       clearTimeout(boot);
       clearInterval(timer);

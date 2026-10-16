@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'fs';
 // importing the package root would load all of it (node-pty included) here.
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/host/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
-import { registerIpc } from './ipc.js';
+import { pickFolderDialog, registerIpc } from './ipc.js';
 import { checkForUpdates } from './update.js';
 import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
@@ -383,7 +383,7 @@ app.whenReady().then(async () => {
   // The engine runs in its own processes (see engine-process.ts); the window
   // only needs to know where it listens.
   const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
-  const agentBrowser = await startAgentBrowser();
+  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog });
   app.once('will-quit', () => agentBrowser.close());
   engine = new EngineProcess({
     browserBridge: { url: agentBrowser.url, token: agentBrowser.token },

@@ -1,0 +1,746 @@
+{
+  "watchViews": [
+    {
+      "name": "no file",
+      "file": null,
+      "sessionId": "s1",
+      "views": []
+    },
+    {
+      "name": "corrupt file",
+      "file": "{not json",
+      "sessionId": "s1",
+      "views": []
+    },
+    {
+      "name": "not a list",
+      "file": "{\"w\":1}",
+      "sessionId": "s1",
+      "views": []
+    },
+    {
+      "name": "every field, prompts left out, newest last",
+      "file": "[{\"id\":\"w1\",\"sessionId\":\"s1\",\"kind\":\"timer\",\"prompt\":\"secret continuation\",\"nextPollAt\":1000,\"intervalMs\":60000,\"deadlineAt\":2000,\"status\":\"active\",\"failures\":0},{\"id\":\"w2\",\"sessionId\":\"s1\",\"kind\":\"pr\",\"prompt\":\"secret continuation\",\"nextPollAt\":1000,\"intervalMs\":60000,\"deadlineAt\":2000,\"status\":\"done\",\"failures\":2,\"url\":\"https://github.com/o/r/pull/1\",\"fingerprint\":\"abc\",\"pending\":\"PR changed\",\"lastError\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"},{\"id\":\"w3\",\"sessionId\":\"s2\",\"kind\":\"timer\",\"prompt\":\"secret continuation\",\"nextPollAt\":1000,\"intervalMs\":60000,\"deadlineAt\":2000,\"status\":\"active\",\"failures\":0},{\"id\":\"w4\",\"sessionId\":\"s1\",\"kind\":\"timer\",\"prompt\":\"secret continuation\",\"nextPollAt\":1000,\"intervalMs\":60000,\"deadlineAt\":2000,\"status\":\"active\",\"failures\":0,\"url\":\"\",\"lastError\":\"\",\"pending\":\"\"},{\"id\":\"w5\",\"sessionId\":\"s1\",\"kind\":\"timer\",\"prompt\":\"secret continuation\",\"nextPollAt\":1000,\"intervalMs\":60000,\"deadlineAt\":2000,\"status\":\"error\",\"lastError\":\"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé😀tail\"}]",
+      "sessionId": "s1",
+      "views": [
+        {
+          "id": "w1",
+          "kind": "timer",
+          "status": "active",
+          "deadlineAt": 2000,
+          "nextPollAt": 1000,
+          "pending": false,
+          "failures": 0
+        },
+        {
+          "id": "w2",
+          "kind": "pr",
+          "url": "https://github.com/o/r/pull/1",
+          "status": "done",
+          "deadlineAt": 2000,
+          "nextPollAt": 1000,
+          "pending": true,
+          "failures": 2,
+          "lastError": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        {
+          "id": "w4",
+          "kind": "timer",
+          "status": "active",
+          "deadlineAt": 2000,
+          "nextPollAt": 1000,
+          "pending": false,
+          "failures": 0
+        },
+        {
+          "id": "w5",
+          "kind": "timer",
+          "status": "error",
+          "deadlineAt": 2000,
+          "nextPollAt": 1000,
+          "pending": false,
+          "failures": 0,
+          "lastError": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé😀"
+        }
+      ]
+    },
+    {
+      "name": "another chat",
+      "file": "[{\"id\":\"w1\",\"sessionId\":\"s1\",\"kind\":\"timer\",\"prompt\":\"secret continuation\",\"nextPollAt\":1000,\"intervalMs\":60000,\"deadlineAt\":2000,\"status\":\"active\",\"failures\":0},{\"id\":\"w3\",\"sessionId\":\"s2\",\"kind\":\"timer\",\"prompt\":\"secret continuation\",\"nextPollAt\":1000,\"intervalMs\":60000,\"deadlineAt\":2000,\"status\":\"active\",\"failures\":0}]",
+      "sessionId": "s2",
+      "views": [
+        {
+          "id": "w3",
+          "kind": "timer",
+          "status": "active",
+          "deadlineAt": 2000,
+          "nextPollAt": 1000,
+          "pending": false,
+          "failures": 0
+        }
+      ]
+    },
+    {
+      "name": "odd values pass through",
+      "file": "[{\"id\":\"w1\",\"sessionId\":\"s1\",\"kind\":\"timer\",\"prompt\":\"secret continuation\",\"nextPollAt\":null,\"intervalMs\":60000,\"deadlineAt\":1.5,\"status\":\"active\",\"failures\":null,\"url\":null,\"extra\":true}]",
+      "sessionId": "s1",
+      "views": [
+        {
+          "id": "w1",
+          "kind": "timer",
+          "status": "active",
+          "deadlineAt": 1.5,
+          "nextPollAt": null,
+          "pending": false,
+          "failures": 0
+        }
+      ]
+    }
+  ],
+  "wipes": [
+    {
+      "name": "an empty data directory",
+      "files": {},
+      "after": {
+        "memory/": "",
+        "sessions/": "",
+        "settings.json": "<settings>"
+      },
+      "settingsReset": true,
+      "returnsDefaults": true
+    },
+    {
+      "name": "a used data directory",
+      "files": {
+        "settings.json": "{\"theme\":\"dark\",\"providers\":[{\"id\":\"p\"}]}",
+        "sessions/s_a.json": "{\"id\":\"s_a\",\"title\":\"A\",\"messages\":[],\"createdAt\":1,\"updatedAt\":1}",
+        "sessions/s_b.json": "{\"id\":\"s_b\",\"title\":\"B\",\"messages\":[],\"createdAt\":1,\"updatedAt\":2}",
+        "sessions/s_a.commands.log": "ran ls\n",
+        "sessions/broken.json": "{nope",
+        "sessions/notes.txt": "kept",
+        "memory/m1.md": "---\nscope: global\n---\nnote",
+        "memory/m2.md": "note two",
+        "memory/readme.txt": "kept",
+        "usage.jsonl": "{\"tokens\":1}\n",
+        "replies.jsonl": "{\"ms\":1}\n",
+        "tokens.json": "{\"secret\":true}",
+        "tasks.json": "[]",
+        "agent-watches.json": "[]",
+        "remote.json": "{}",
+        "workflows.json": "[]"
+      },
+      "after": {
+        "agent-watches.json": "[]",
+        "memory/": "",
+        "memory/readme.txt": "kept",
+        "remote.json": "{}",
+        "sessions/": "",
+        "sessions/broken.json": "{nope",
+        "sessions/notes.txt": "kept",
+        "settings.json": "<settings>",
+        "tasks.json": "[]",
+        "tokens.json": "{\"secret\":true}",
+        "workflows.json": "[]"
+      },
+      "settingsReset": true,
+      "returnsDefaults": true
+    },
+    {
+      "name": "only usage",
+      "files": {
+        "usage.jsonl": "x\n"
+      },
+      "after": {
+        "memory/": "",
+        "sessions/": "",
+        "settings.json": "<settings>"
+      },
+      "settingsReset": true,
+      "returnsDefaults": true
+    }
+  ],
+  "updateChecks": [
+    {
+      "name": "seeds silently, then a new model and a removed one",
+      "steps": [
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a",
+              "b"
+            ],
+            "lm": [
+              "x"
+            ]
+          },
+          "skills": [
+            "s1"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": []
+        },
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "b",
+              "a"
+            ],
+            "lm": [
+              "x"
+            ]
+          },
+          "skills": [
+            "s1"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": []
+        },
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a",
+              "b",
+              "c"
+            ],
+            "lm": []
+          },
+          "skills": [
+            "s1"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": [
+            {
+              "channel": "modelsUpdated",
+              "payload": {
+                "providerId": "cg"
+              }
+            }
+          ]
+        },
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a",
+              "b",
+              "c"
+            ],
+            "lm": [
+              "x",
+              "y"
+            ]
+          },
+          "skills": [
+            "s1"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": [
+            {
+              "channel": "modelsUpdated",
+              "payload": {
+                "providerId": "lm"
+              }
+            }
+          ]
+        },
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a"
+            ],
+            "lm": null
+          },
+          "skills": [
+            "s1",
+            "s2"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": [
+            {
+              "channel": "skillsUpdated",
+              "payload": {
+                "marketplace": "vaizer",
+                "skills": [
+                  {
+                    "id": "s1",
+                    "name": "s1",
+                    "slug": "s1",
+                    "category": "c",
+                    "description": "s1",
+                    "tier": "community",
+                    "author": "a"
+                  },
+                  {
+                    "id": "s2",
+                    "name": "s2",
+                    "slug": "s2",
+                    "category": "c",
+                    "description": "s2",
+                    "tier": "community",
+                    "author": "a"
+                  }
+                ],
+                "source": "live"
+              }
+            },
+            {
+              "channel": "modelsUpdated",
+              "payload": {
+                "providerId": "cg"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "scheduled ticks follow the toggles",
+      "steps": [
+        {
+          "run": "tick",
+          "models": {
+            "cg": [
+              "a"
+            ],
+            "lm": [
+              "x"
+            ]
+          },
+          "skills": [
+            "s1"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": []
+        },
+        {
+          "run": "tick",
+          "models": {
+            "cg": [
+              "a",
+              "b"
+            ],
+            "lm": [
+              "x"
+            ]
+          },
+          "skills": [
+            "s2"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": [
+            {
+              "channel": "modelsUpdated",
+              "payload": {
+                "providerId": "cg"
+              }
+            }
+          ]
+        },
+        {
+          "run": "tick",
+          "settings": {
+            "updates": {
+              "modelLists": false,
+              "skills": true
+            }
+          },
+          "models": {
+            "cg": [
+              "a"
+            ],
+            "lm": [
+              "x"
+            ]
+          },
+          "skills": [
+            "s2"
+          ],
+          "listed": [],
+          "emitted": []
+        },
+        {
+          "run": "tick",
+          "settings": {
+            "updates": {
+              "modelLists": false,
+              "skills": true
+            }
+          },
+          "models": {
+            "cg": [
+              "a"
+            ]
+          },
+          "skills": [
+            "s3"
+          ],
+          "listed": [],
+          "emitted": [
+            {
+              "channel": "skillsUpdated",
+              "payload": {
+                "marketplace": "vaizer",
+                "skills": [
+                  {
+                    "id": "s3",
+                    "name": "s3",
+                    "slug": "s3",
+                    "category": "c",
+                    "description": "s3",
+                    "tier": "community",
+                    "author": "a"
+                  }
+                ],
+                "source": "live"
+              }
+            }
+          ]
+        },
+        {
+          "run": "tick",
+          "settings": {
+            "updates": {
+              "modelLists": true
+            }
+          },
+          "models": {
+            "cg": [
+              "a",
+              "z"
+            ],
+            "lm": [
+              "x"
+            ]
+          },
+          "skills": [
+            "s9"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": [
+            {
+              "channel": "modelsUpdated",
+              "payload": {
+                "providerId": "cg"
+              }
+            }
+          ]
+        },
+        {
+          "run": "now",
+          "settings": {
+            "updates": {
+              "modelLists": false,
+              "skills": false
+            }
+          },
+          "models": {
+            "cg": [
+              "a",
+              "z",
+              "q"
+            ],
+            "lm": [
+              "x"
+            ]
+          },
+          "skills": [
+            "s3",
+            "s4"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": [
+            {
+              "channel": "skillsUpdated",
+              "payload": {
+                "marketplace": "vaizer",
+                "skills": [
+                  {
+                    "id": "s3",
+                    "name": "s3",
+                    "slug": "s3",
+                    "category": "c",
+                    "description": "s3",
+                    "tier": "community",
+                    "author": "a"
+                  },
+                  {
+                    "id": "s4",
+                    "name": "s4",
+                    "slug": "s4",
+                    "category": "c",
+                    "description": "s4",
+                    "tier": "community",
+                    "author": "a"
+                  }
+                ],
+                "source": "live"
+              }
+            },
+            {
+              "channel": "modelsUpdated",
+              "payload": {
+                "providerId": "cg"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "a failing skills catalog and duplicate ids",
+      "steps": [
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a",
+              "a"
+            ]
+          },
+          "skills": null,
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": []
+        },
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a"
+            ]
+          },
+          "skills": [
+            "s1",
+            "s1"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": [
+            {
+              "channel": "modelsUpdated",
+              "payload": {
+                "providerId": "cg"
+              }
+            }
+          ]
+        },
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a",
+              "a"
+            ]
+          },
+          "skills": [
+            "s1"
+          ],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": [
+            {
+              "channel": "skillsUpdated",
+              "payload": {
+                "marketplace": "vaizer",
+                "skills": [
+                  {
+                    "id": "s1",
+                    "name": "s1",
+                    "slug": "s1",
+                    "category": "c",
+                    "description": "s1",
+                    "tier": "community",
+                    "author": "a"
+                  }
+                ],
+                "source": "live"
+              }
+            },
+            {
+              "channel": "modelsUpdated",
+              "payload": {
+                "providerId": "cg"
+              }
+            }
+          ]
+        },
+        {
+          "run": "now",
+          "models": {
+            "cg": null
+          },
+          "skills": null,
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": []
+        },
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a"
+            ]
+          },
+          "skills": [],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": [
+            {
+              "channel": "skillsUpdated",
+              "payload": {
+                "marketplace": "vaizer",
+                "skills": [],
+                "source": "live"
+              }
+            },
+            {
+              "channel": "modelsUpdated",
+              "payload": {
+                "providerId": "cg"
+              }
+            }
+          ]
+        },
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a"
+            ]
+          },
+          "skills": [],
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": []
+        }
+      ]
+    },
+    {
+      "name": "a provider turned off and on again",
+      "steps": [
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a"
+            ],
+            "lm": [
+              "x"
+            ]
+          },
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": []
+        },
+        {
+          "run": "now",
+          "settings": {
+            "providers": [
+              {
+                "id": "cg",
+                "kind": "chatgpt",
+                "label": "ChatGPT",
+                "baseUrl": "https://chatgpt.com/backend-api",
+                "enabled": true
+              },
+              {
+                "id": "off",
+                "kind": "openai",
+                "label": "Off",
+                "baseUrl": "https://api.openai.com/v1",
+                "enabled": false
+              },
+              {
+                "id": "lm",
+                "kind": "lmstudio",
+                "label": "LM",
+                "baseUrl": "http://127.0.0.1:1234/v1",
+                "enabled": false
+              }
+            ]
+          },
+          "models": {
+            "cg": [
+              "a"
+            ],
+            "lm": [
+              "y"
+            ]
+          },
+          "listed": [
+            "cg"
+          ],
+          "emitted": []
+        },
+        {
+          "run": "now",
+          "models": {
+            "cg": [
+              "a"
+            ],
+            "lm": [
+              "y"
+            ]
+          },
+          "listed": [
+            "cg",
+            "lm"
+          ],
+          "emitted": [
+            {
+              "channel": "modelsUpdated",
+              "payload": {
+                "providerId": "lm"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
