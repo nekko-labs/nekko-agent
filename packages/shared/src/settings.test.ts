@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_WALL_DOCK, DEFAULT_WALL_LAYOUT, sanitizeMonthlyBudgetUsd, type AppSettings, type CommandWallSetting } from './settings.js';
+import { DEFAULT_MONITORS_DOCK, DEFAULT_WALL_LAYOUT, sanitizeMonthlyBudgetUsd, type AppSettings, type CommandWallSetting } from './settings.js';
 
 describe('monthlyBudgetUsd', () => {
   it('preserves finite non-negative USD amounts, including zero', () => {
@@ -21,13 +21,13 @@ describe('command wall settings schema', () => {
   });
   it('exports reusable layout and dock defaults', () => {
     expect(DEFAULT_WALL_LAYOUT).toEqual({ mode: 'grid', cols: 3, rows: 2 });
-    expect(DEFAULT_WALL_DOCK.side).toBe('right');
-    expect(DEFAULT_WALL_DOCK.show).toBe(true);
-    expect(DEFAULT_WALL_DOCK.minimized).toEqual({
+    expect(DEFAULT_MONITORS_DOCK.side).toBe('right');
+    expect(DEFAULT_MONITORS_DOCK.show).toBe(true);
+    expect(DEFAULT_MONITORS_DOCK.minimized).toEqual({
       automations: false, utilization: false, budget: false, insights: false, hardware: false,
     });
-    expect(DEFAULT_WALL_DOCK.panelOrder?.[0]).toBe('hardware');
-    expect(Object.keys(DEFAULT_WALL_DOCK.minimized)).toEqual(Object.keys(DEFAULT_WALL_DOCK.panels));
-    expect(Object.entries(DEFAULT_WALL_DOCK.panels).filter(([, enabled]) => !enabled)).toEqual([['insights', false]]);
+    expect(DEFAULT_MONITORS_DOCK.monitorOrder?.[0]).toBe('hardware');
+    expect(Object.keys(DEFAULT_MONITORS_DOCK.minimized)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
+    expect(Object.entries(DEFAULT_MONITORS_DOCK.monitors).filter(([, enabled]) => !enabled)).toEqual([['insights', false]]);
   });
 });

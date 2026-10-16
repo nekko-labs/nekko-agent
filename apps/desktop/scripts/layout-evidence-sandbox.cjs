@@ -22,7 +22,7 @@ app.whenReady().then(async () => {
     await shot('agents-1440x900');
     report.metrics = JSON.parse(await run(`JSON.stringify((() => {
       const r = s => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height), r: Math.round(b.right) }; };
-      return { rail: r('.rail'), mark: r('.titlebar-mark'), firstNav: r('.nav-item'), panel: r('[data-agent-panel]'), column: r('.wall-column'), window: r('.command-wall-layout'), dock: r('.wall-dock'), viewport: innerWidth };
+      return { rail: r('.rail'), mark: r('.titlebar-mark'), firstNav: r('.nav-item'), panel: r('[data-agent-panel]'), column: r('.wall-column'), window: r('.command-wall-layout'), dock: r('.monitors-dock'), viewport: innerWidth };
     })())`));
     // Expanded rail: CDP hover is avoided, so an injected class mirrors :hover.
     await run("document.querySelector('.rail').classList.add('rail-force-open')");
@@ -34,10 +34,10 @@ app.whenReady().then(async () => {
     fs.mkdirSync(path.join(out, 'motion'), { recursive: true });
     await run("document.querySelector('.rail').classList.add('rail-force-open')");
     for (let i = 0; i < 14; i++) { fs.writeFileSync(path.join(out, 'motion', String(i).padStart(3, '0') + '.png'), (await win.capturePage({ x: 0, y: 0, width: 420, height: 900 }, { stayHidden: true })).toPNG()); await sleep(30); }
-    // Dashboard dock open.
+    // Monitors dock open.
     await run("(()=>{const s=layoutFixture.store.getState();layoutFixture.store.setState({settings:{...s.settings,commandWall:{...(s.settings.commandWall||{}),dock:{...((s.settings.commandWall||{}).dock||{}),show:true,side:'right'}}}})})()");
     await sleep(800);
-    report.metrics.dockOpen = JSON.parse(await run("JSON.stringify((()=>{const e=document.querySelector('.wall-dock');return e?Math.round(e.getBoundingClientRect().width):null})())"));
+    report.metrics.dockOpen = JSON.parse(await run("JSON.stringify((()=>{const e=document.querySelector('.monitors-dock');return e?Math.round(e.getBoundingClientRect().width):null})())"));
     await shot('agents-dock-open');
   } catch (e) { report.errors.push(String(e && e.stack || e)); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));

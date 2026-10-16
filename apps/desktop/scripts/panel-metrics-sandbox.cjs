@@ -47,12 +47,12 @@ app.whenReady().then(async () => {
       const label = `${width === 1920 ? 'wide' : 'narrow'}-${theme}`;
       await capture(label + '-closed');
       await check(label + ': two real chat panes', "document.querySelectorAll('[data-grid-cell^=\"chat:\"]').length===2");
-      await check(label + ': named GPU utilization', "(()=>{const h=document.querySelector('.wall-dock__hardware');return !!h&&h.querySelector('[aria-label=\"GPU 1: Fixture RTX 5090\"]')?.getAttribute('aria-valuenow')==='37'&&h.querySelector('[aria-label=\"GPU 2: Fixture Intel Arc\"]')?.getAttribute('aria-valuenow')==='81'})()");
+      await check(label + ': named GPU utilization', "(()=>{const h=document.querySelector('.monitors-dock__hardware');return !!h&&h.querySelector('[aria-label=\"GPU 1: Fixture RTX 5090\"]')?.getAttribute('aria-valuenow')==='37'&&h.querySelector('[aria-label=\"GPU 2: Fixture Intel Arc\"]')?.getAttribute('aria-valuenow')==='81'})()");
       for (const pct of [59,60,84,85,100]) {
         const tone = pct < 60 ? 'success' : pct < 85 ? 'warning' : 'danger';
         await check(`${label}: gauge ${pct}% uses ${tone} full background`, `(()=>{const e=document.querySelector('[data-gauge-pct="${pct}"] .context-bar');return !!e&&e.style.background.includes('var(--${tone})')&&e.style.background.includes('12%')&&e.querySelector('[aria-hidden]')?.style.background.includes('var(--${tone})')})()`);
       }
-      report[label] = await run("({buttons:[...document.querySelectorAll('[data-plan-toggle]')].map(e=>({pressed:e.getAttribute('aria-pressed'),rect:e.getBoundingClientRect().toJSON()})),gauges:[...document.querySelectorAll('[data-gauge-pct]')].map(e=>({pct:e.dataset.gaugePct,background:getComputedStyle(e.querySelector('.context-bar')).backgroundColor})),hardware:document.querySelector('.wall-dock__hardware')?.innerText})");
+      report[label] = await run("({buttons:[...document.querySelectorAll('[data-plan-toggle]')].map(e=>({pressed:e.getAttribute('aria-pressed'),rect:e.getBoundingClientRect().toJSON()})),gauges:[...document.querySelectorAll('[data-gauge-pct]')].map(e=>({pct:e.dataset.gaugePct,background:getComputedStyle(e.querySelector('.context-bar')).backgroundColor})),hardware:document.querySelector('.monitors-dock__hardware')?.innerText})");
       if (width === 1920) {
         await check(label + ': two plan buttons', "document.querySelectorAll('[data-plan-toggle]').length===2");
         await click('alpha'); await sleep(500);

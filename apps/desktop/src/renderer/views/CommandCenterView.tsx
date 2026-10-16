@@ -18,7 +18,7 @@ import { agentStatusOfLane } from '../components/WorkspaceCard.js';
 import { BLOCKED_META, LANE_META, sessionLane } from '@nekko-agent/shared';
 import { type Vitals } from '../components/InsightsBox.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
-import { WallDock } from '../components/WallDock.js';
+import { MonitorsDock } from '../components/MonitorsDock.js';
 import { hasAppChrome } from '../chrome.js';
 
 import { allPanes, isSplit, type PaneKind } from '../layout.js';
@@ -441,7 +441,7 @@ export function CommandCenterView() {
           setAddOpen(false);
         }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
-        <WallDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
+        <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
         <div className="wall-agent-workspace" data-tabs={panel.show && panel.orientation === 'horizontal' ? 'top' : 'left'}>
       {!panel.show && <div className="agent-panel-collapsed" data-orientation={panel.orientation}>
         <AgentPanelControls show={false} orientation={panel.orientation}
@@ -616,7 +616,7 @@ export function WallToolbar({
             </button>
           ))}
         </div>
-        <button type="button" className="btn btn-outline gap-1.5 py-1 text-[12px]" aria-pressed={wall.dock.show} onClick={() => setWall((w) => ({ ...w, dock: { ...w.dock, show: !w.dock.show } }))}><PanelIcon className="h-4 w-4" />Panels</button>
+        <button type="button" className="btn btn-outline gap-1.5 py-1 text-[12px]" aria-pressed={wall.dock.show} onClick={() => setWall((w) => ({ ...w, dock: { ...w.dock, show: !w.dock.show } }))}><PanelIcon className="h-4 w-4" />Monitors</button>
       </div>
     </div>
   );

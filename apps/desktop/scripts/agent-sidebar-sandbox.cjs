@@ -86,7 +86,7 @@ app.whenReady().then(async () => {
           await check('keyboard resize persists', "localStorage.getItem('nekko.wsSidebarWidth') === '272'");
         }
         await create('Agent', "integration.calls.some(call => call.method === 'create')");
-        await create('Media gen', "integration.calls.some(call => call.method === 'options' && call.options.chatType === 'image')");
+        await create('Create or Edit Photos and Videos', "integration.calls.some(call => call.method === 'options' && call.options.chatType === 'image')");
         await create('Terminal', "integration.calls.some(call => call.method === 'terminal') && integration.state().terminals.length === 1");
         await run("[...document.querySelectorAll('div[role=button]')].find(card => card.getAttribute('title')?.includes('Active conversation')).dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, clientX:60, clientY:100}))");
         await check('existing card context actions retained', "document.body.textContent.includes('Mark as completed') && document.body.textContent.includes('Change model')");

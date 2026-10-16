@@ -151,7 +151,7 @@ app.whenReady().then(async () => {
           const text = (el) => el ? el.textContent.replace(/\\s+/g, ' ').trim() : null;
           const wins = [...document.querySelectorAll('.command-wall-window')];
           return {
-            utilization: text(document.querySelector('.wall-dock__utilization')),
+            utilization: text(document.querySelector('.monitors-dock__utilization')),
             limitsProblem: document.querySelector('[data-limits-problem]')?.getAttribute('data-limits-problem') ?? null,
             tooltips: document.querySelectorAll('[role="tooltip"]').length,
             unavailableChips: document.querySelectorAll('[data-model-unavailable]').length,

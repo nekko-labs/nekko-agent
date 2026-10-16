@@ -89,25 +89,25 @@ export const ONBOARDING_VERSION = 1;
 
 export type WallLayoutMode = 'grid' | 'focus' | 'fixed';
 export interface WallLayout { mode: WallLayoutMode; cols: number; rows: number }
-export type WallDockSide = 'right' | 'left' | 'top' | 'bottom';
-export type WallDockPanel = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware';
-export interface WallDock {
-  side: WallDockSide;
+export type MonitorsSide = 'right' | 'left' | 'top' | 'bottom';
+export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware';
+export interface MonitorsDock {
+  side: MonitorsSide;
   show: boolean;
-  panels: Record<WallDockPanel, boolean>;
-  /** Saved reading order; older settings omit it and use the default order. */
-  panelOrder?: WallDockPanel[];
-  /** Independent minimization state for each dock panel. */
-  minimized: Record<WallDockPanel, boolean>;
+  monitors: Record<MonitorKey, boolean>;
+  /** Saved reading order; older settings omit it (or call it panelOrder) and use the default order. */
+  monitorOrder?: MonitorKey[];
+  /** Independent minimization state for each monitor. */
+  minimized: Record<MonitorKey, boolean>;
 }
 export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2 };
-export const DEFAULT_WALL_DOCK: WallDock = {
+export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
   side: 'right', show: true,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13
-  // (sanitizeWallDock drops it from saved docks).
-  panelOrder: ['hardware', 'utilization', 'budget', 'automations', 'insights'],
+  // (sanitizeMonitorsDock drops it from saved docks).
+  monitorOrder: ['hardware', 'utilization', 'budget', 'automations', 'insights'],
   minimized: { hardware: false, utilization: false, budget: false, automations: false, insights: false },
-  panels: { hardware: true, utilization: true, budget: true, automations: true, insights: false },
+  monitors: { hardware: true, utilization: true, budget: true, automations: true, insights: false },
 };
 
 /** Advisory USD budget only, not an enforced spending limit. Invalid/unset means no budget. */
@@ -122,7 +122,7 @@ export interface CommandWallSetting {
   /** The Agents tab's panel of agent cards: shown or closed, a column or a row. */
   agentPanel?: { show: boolean; orientation: 'vertical' | 'horizontal' };
   layout?: WallLayout;
-  dock?: WallDock;
+  dock?: MonitorsDock;
   hero?: string | null;
   /** Fold companions for each session ID; never fold the chat itself. */
   folded?: Record<string, boolean>;
