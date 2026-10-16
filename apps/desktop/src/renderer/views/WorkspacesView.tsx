@@ -22,7 +22,7 @@ import { PaneFrame } from '../components/PaneFrame.js';
 import { Divider } from '../components/Divider.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { StatusIcon, WorkspaceCard, type AgentStatus } from '../components/WorkspaceCard.js';
-import { CheckIcon, ChatIcon, PhotoIcon, TerminalIcon, PlusIcon, FileIcon, FolderIcon, ExternalIcon, PanelIcon, ShieldIcon, PanelLeftIcon, PanelSwapIcon, TrashIcon, UndoIcon } from '../icons.js';
+import { CheckIcon, ChatIcon, PhotoIcon, TerminalIcon, PlusIcon, FileIcon, FolderIcon, ExternalIcon, PanelIcon, ShieldIcon, PanelLeftIcon, PanelSwapIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../completionExit.js';
@@ -893,10 +893,10 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
           Delete still asks first, as it does from the reader. */}
       {doneMenu && <ContextMenu x={doneMenu.x} y={doneMenu.y} onClose={() => setDoneMenu(null)}>
         <ContextAction onClick={() => { const id = doneMenu.id; setDoneMenu(null); void useStore.getState().restoreChat(id); }}>
-          <span className="flex items-center gap-2"><UndoIcon className="h-3.5 w-3.5" /> Restore chat</span>
+          Restore chat
         </ContextAction>
         <ContextAction onClick={() => { const id = doneMenu.id; setDoneMenu(null); void useStore.getState().deleteChatForever(id); }}>
-          <span className="flex items-center gap-2 text-(--danger)"><TrashIcon className="h-3.5 w-3.5" /> Delete forever</span>
+          <span className="text-(--danger)">Delete forever</span>
         </ContextAction>
       </ContextMenu>}
       {sidebarOnly && mobileNav && <div className="absolute inset-0 z-20 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} />}
