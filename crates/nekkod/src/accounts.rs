@@ -203,6 +203,11 @@ impl Accounts {
     }
 
     /// The usage of a turn's side call (the title), as `sideUsage` wrote it.
+    /// A usage line made elsewhere (a compaction's summary calls, `compactionUsageRecord`).
+    pub fn usage_line(&self, record: &Value) {
+        self.append_line("usage.jsonl", &nekko_js::stringify(record), false);
+    }
+
     pub fn side_usage(&self, provider: &Value, model_id: Option<&Value>, session_id: &str, usage: &[Value]) {
         for item in usage {
             let rec =

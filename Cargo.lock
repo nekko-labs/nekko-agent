@@ -1662,11 +1662,13 @@ dependencies = [
 name = "nekko-turn"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "nekko-context",
  "nekko-js",
  "nekko-loop",
  "nekko-tools",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

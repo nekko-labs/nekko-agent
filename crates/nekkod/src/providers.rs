@@ -278,6 +278,19 @@ pub async fn context_window_for(ctx: &Ctx, provider: &Value, model_id: &str) -> 
     windows.iter().rev().find(|(m, _)| m == model_id).map(|(_, w)| *w).unwrap_or(guess)
 }
 
+/// `knownContextWindow` (context-window.ts): the window a turn last found for
+/// `model_id` on this provider, without asking anyone; else the id's guess.
+pub fn known_context_window(provider: &Value, model_id: &str) -> u64 {
+    let guess = crate::context::guess_context_window(Some(model_id));
+    let id = provider.get("id").and_then(Value::as_str).unwrap_or("");
+    let cache = window_cache().lock().unwrap_or_else(|e| e.into_inner());
+    cache
+        .iter()
+        .find(|(p, _, _)| p == id)
+        .and_then(|(_, _, w)| w.iter().rev().find(|(m, _)| m == model_id).map(|(_, w)| *w))
+        .unwrap_or(guess)
+}
+
 /// `discoverLocalProviders()`: each well-known server that answers, IPv4
 /// first (on Windows `localhost` often resolves to `::1` while the servers
 /// bind only IPv4), in the order they answer.

@@ -3484,3 +3484,416 @@ async fn runs_the_model_server_itself() {
     drop(d);
     std::fs::remove_dir_all(root).ok();
 }
+
+/* ------------------------------------------------- turn variants (PF14 A2) */
+
+/// A chat with three turns on the scripted provider, for compaction.
+fn compaction_chat(id: &str) -> Value {
+    let long = |s: &str| format!("{s} {}", "background detail ".repeat(30));
+    json!({
+        "id": id, "title": "Long chat", "workspaceId": "w1", "providerId": "p1", "modelId": "synthetic",
+        "messages": [
+            { "id": "u1", "role": "user", "content": long("First request:"), "createdAt": 1 },
+            { "id": "a1", "role": "assistant", "content": long("First answer:"), "createdAt": 2 },
+            { "id": "u2", "role": "user", "content": "Second request", "createdAt": 3 },
+            { "id": "a2", "role": "assistant", "content": "Second answer", "createdAt": 4 },
+            { "id": "u3", "role": "user", "content": "Third request", "createdAt": 5 },
+            { "id": "a3", "role": "assistant", "content": "Third answer", "createdAt": 6 },
+        ],
+        "createdAt": 1, "updatedAt": 1,
+    })
+}
+
+fn scripted_settings(rig: &TurnRig, model: &ScriptedModel) -> Value {
+    json!({
+        "providers": [{
+            "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+            "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+        }],
+        "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+    })
+}
+
+/// The `compaction` progress the host heard (`turn:notify`), in order.
+async fn compaction_progress(port: u16, session_id: &str) -> Vec<Value> {
+    let (_, calls) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
+    calls
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c[0] == "turn:notify" && c[1][0]["type"] == "compaction" && c[1][0]["sessionId"] == session_id)
+        .map(|c| c[1][0]["progress"].clone())
+        .collect()
+}
+
+async fn wait_progress(port: u16, session_id: &str, state: &str) -> Vec<Value> {
+    tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            let all = compaction_progress(port, session_id).await;
+            if all.last().is_some_and(|p| p["state"] == state) {
+                return all;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("compaction never reached {state}"))
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_compacts_a_chat_and_owns_its_state() {
+    let rig = turn_rig("compact", compaction_chat("s_compact"));
+    let model = scripted_model(vec![sse(&[json!({
+        "choices": [{ "delta": { "content": "  Summary of decisions and next steps.  " }, "finish_reason": "stop" }],
+        "usage": { "prompt_tokens": 200, "completion_tokens": 20 }
+    })])])
+    .await;
+    // A second provider for the new-chat case, so settings are written once.
+    let model2 = scripted_model(vec![say_text("A fresh summary.")]).await;
+    let mut settings = scripted_settings(&rig, &model);
+    settings["providers"].as_array_mut().unwrap().push(json!({
+        "id": "p2", "kind": "openai-compat", "label": "Second", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model2.port),
+    }));
+    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in ["chat:compact", "chat:cancelCompaction", "chat:interruptQueued"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
+    }
+    let original = saved_session(&rig, "s_compact")["messages"].clone();
+
+    // An omitted options argument can cross IPC as null.
+    let (status, landed) = post(rig.d.port, "chat:compact", json!(["s_compact", null]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{landed}");
+    assert_eq!(landed["id"], "s_compact");
+    let messages = saved_session(&rig, "s_compact")["messages"].as_array().unwrap().clone();
+    assert_eq!(messages.len(), 7, "nothing is deleted: the summary goes in after what it replaces");
+    assert_eq!(json!(messages[..2]), json!(original.as_array().unwrap()[..2]));
+    assert_eq!(messages[2]["role"], "assistant");
+    assert_eq!(messages[2]["content"], "Summary of decisions and next steps.");
+    assert_eq!(messages[2]["compaction"], json!({ "summarized": 2 }));
+    assert_eq!(messages[2]["createdAt"], 2);
+    assert!(messages[2]["id"].as_str().unwrap().starts_with("compact_"));
+    assert_eq!(json!(messages[3..]), json!(original.as_array().unwrap()[2..]));
+
+    // The summary call carried the ported prompt, and only what was summarized.
+    let requests = model.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 1);
+    let sent = requests[0]["messages"].to_string();
+    assert!(sent.contains("Summarize conversation history for the same assistant"), "{sent}");
+    assert!(sent.contains("Summarize this transcript segment:\\n\\nUSER: First request:"), "{sent}");
+    assert!(!sent.contains("Third request"), "the recent turns stay verbatim: {sent}");
+
+    // Progress from start to done, told to the host, and its usage in the log.
+    let progress = wait_progress(rig.d.port, "s_compact", "done").await;
+    assert_eq!(progress[0], json!({ "state": "running", "done": 0, "total": 0, "target": "here" }));
+    assert_eq!(progress.last().unwrap(), &json!({ "state": "done", "done": 1, "total": 1, "target": "here" }));
+    let usage = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap();
+    let line: Value = serde_json::from_str(usage.lines().next().unwrap()).unwrap();
+    assert_eq!((line["providerId"].clone(), line["inputTokens"].clone()), (json!("p1"), json!(200)));
+    assert_eq!(line["sessionId"], "s_compact");
+
+    // Nothing new since that summary: refused, the history kept.
+    let (status, again) = post(rig.d.port, "chat:compact", json!(["s_compact"]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "{again}");
+    assert_eq!(again["error"], "Nothing new to compact since the last summary.");
+
+    // To a new chat: this one is left as it was.
+    let mut fresh = compaction_chat("s_fresh");
+    fresh["providerId"] = json!("p2");
+    std::fs::write(rig.data.join("sessions/s_fresh.json"), fresh.to_string()).unwrap();
+    let before = saved_session(&rig, "s_fresh")["messages"].clone();
+    let (status, next) = post(rig.d.port, "chat:compact", json!(["s_fresh", { "newChat": true }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{next}");
+    let new_id = next["id"].as_str().unwrap().to_string();
+    assert_ne!(new_id, "s_fresh");
+    assert_eq!(next["title"], "Long chat (continued)");
+    assert_eq!(next["workspaceId"], "w1");
+    assert_eq!(next["messages"][0]["compaction"], json!({ "summarized": 2 }));
+    assert_eq!(saved_session(&rig, &new_id)["messages"], next["messages"]);
+    assert_eq!(saved_session(&rig, "s_fresh")["messages"], before);
+    let progress = wait_progress(rig.d.port, "s_fresh", "done").await;
+    assert_eq!(progress.last().unwrap()["newSessionId"], json!(new_id));
+    assert_eq!(progress.last().unwrap()["target"], "new");
+
+    // Refusals, with the host's words.
+    std::fs::write(
+        rig.data.join("sessions/s_secret.json"),
+        json!({ "id": "s_secret", "title": "x", "incognito": true, "providerId": "p1", "modelId": "m", "messages": [{ "id": "u", "role": "user", "content": "hi", "createdAt": 1 }], "createdAt": 1, "updatedAt": 1 }).to_string(),
+    )
+    .unwrap();
+    let (_, refused) = post(rig.d.port, "chat:compact", json!(["s_secret"]), Some(TOKEN)).await;
+    assert_eq!(refused["error"], "Incognito conversations cannot be compacted.");
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!calls.as_array().unwrap().iter().any(|c| c[0] == "chat:compact"), "the host compacted nothing");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cancelling_a_compaction_keeps_the_history_and_refuses_turns_meanwhile() {
+    let rig = turn_rig("compact-cancel", compaction_chat("s_cancel"));
+    let model = scripted_model(vec![HANG.into()]).await;
+    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    let original = saved_session(&rig, "s_cancel")["messages"].clone();
+    let port = rig.d.port;
+    let compacting = tokio::spawn(async move { post(port, "chat:compact", json!(["s_cancel"]), Some(TOKEN)).await });
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while model.requests.lock().unwrap().is_empty() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the summary call started");
+
+    // Admission reads the daemon's own compaction state.
+    let opts = json!({ "sessionId": "s_cancel", "providerId": "p1", "modelId": "synthetic", "text": "hello" });
+    let (status, _) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(
+        calls.as_array().unwrap().iter().any(|c| c[0] == "turn:notify"
+            && c[1][0]["type"] == "error"
+            && c[1][0]["message"] == "This chat is being compacted. Wait or move to a new chat."),
+        "{calls}"
+    );
+    let progress = compaction_progress(rig.d.port, "s_cancel").await;
+    assert_eq!(progress.last().unwrap()["state"], "running", "{progress:?}");
+
+    let started = Instant::now();
+    let (status, _) = post(rig.d.port, "chat:cancelCompaction", json!(["s_cancel"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (status, body) = compacting.await.unwrap();
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["error"], "Compaction cancelled.");
+    assert!(started.elapsed() < Duration::from_secs(5), "the held call was cut, not waited out");
+    let progress = wait_progress(rig.d.port, "s_cancel", "cancelled").await;
+    assert_eq!(progress.last().unwrap()["state"], "cancelled");
+    assert_eq!(saved_session(&rig, "s_cancel")["messages"], original);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn interrupting_starts_the_chosen_queued_prompt_and_keeps_the_others() {
+    let session = json!({
+        "id": "s_jump", "title": "Jump", "workspaceId": "w1", "providerId": "p1", "modelId": "synthetic",
+        "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("interrupt", session);
+    // The first reply hangs until stopped; the rest answer at once.
+    let model = scripted_model(vec![
+        HANG.into(),
+        say_text("selected answer"),
+        say_text("first answer"),
+        say_text("last answer"),
+    ])
+    .await;
+    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+
+    // Validation, before anything is stopped.
+    for bad in [json!(-1), json!(0), json!(1.5), json!("0")] {
+        let (status, body) = post(rig.d.port, "chat:interruptQueued", json!(["s_jump", bad]), Some(TOKEN)).await;
+        assert_eq!((status, body["error"].clone()), (400, json!("Queued prompt not found.")), "{bad}");
+    }
+
+    let port = rig.d.port;
+    let opts = json!({ "sessionId": "s_jump", "providerId": "p1", "modelId": "synthetic", "text": "old" });
+    let old = tokio::spawn(async move { post(port, "chat:send", json!([opts]), Some(TOKEN)).await });
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while model.requests.lock().unwrap().is_empty() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the first reply started");
+    for text in ["first", "selected", "last"] {
+        post(rig.d.port, "chat:queue", json!(["s_jump", text]), Some(TOKEN)).await;
+    }
+    let (_, refused) = post(
+        rig.d.port,
+        "chat:interruptQueued",
+        json!(["s_jump", 1, { "providerId": "p1", "modelId": "__auto__" }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(refused["error"], "Choose a provider and model before starting the queued prompt.");
+
+    let (status, body) = post(rig.d.port, "chat:interruptQueued", json!(["s_jump", 1]), Some(TOKEN)).await;
+    assert_eq!((status, body.clone()), (200, Value::Null), "{body}");
+    let (status, _) = old.await.unwrap();
+    assert_eq!(status, 200);
+    let saved = saved_session(&rig, "s_jump");
+    let users: Vec<&str> = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["role"] == "user")
+        .filter_map(|m| m["content"].as_str())
+        .collect();
+    // The stopped reply, then the selected prompt, then the rest of the queue in order.
+    assert_eq!(users, ["old", "selected", "first", "last"], "{saved}");
+    assert_eq!(saved["queue"], json!([]));
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(!calls.iter().any(|c| c[0] == "chat:interruptQueued"), "the host started nothing");
+    let adopts: Vec<&Value> = calls.iter().filter(|c| c[0] == "turn:adopt").collect();
+    assert_eq!(adopts.len(), 4, "{adopts:?}");
+    assert_eq!(adopts[1][1][0]["opts"]["text"], "selected");
+    assert_eq!(adopts[1][1][0]["chained"], false, "a new chain, which the host adopts as its own");
+}
+
+/// The stand-in `sd-server`, built beside this test if `cargo test` did not build examples.
+fn fake_sd() -> std::path::PathBuf {
+    let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
+    let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    let path = deps.parent().unwrap().join("examples").join(exe);
+    if !path.is_file() {
+        let target = deps.parent().unwrap().parent().unwrap();
+        let ok = Command::new(env!("CARGO"))
+            .args(["build", "-p", "nekkod", "--example", "fake_sd_server"])
+            .env("CARGO_TARGET_DIR", target)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "the fake sd-server builds");
+    }
+    path
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_runs_an_image_turn_on_its_model_server() {
+    let root = std::env::temp_dir().join(format!("nekkod-image-turn-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // An image model the library reads as one (its architecture), and the stand-in runtime.
+    let model = data.join("models/image/acme_sd/tiny-sd.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("sd1", "Tiny SD")).unwrap();
+    let sd_dir = data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    std::fs::write(
+        sd_dir.join("engine.json"),
+        json!({ "buildId": "fake", "binPath": fake_sd(), "version": "fake" }).to_string(),
+    )
+    .unwrap();
+    let port = free_port();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": port, "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let session = json!({ "id": "s_img", "title": "New chat", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_img.json"), session.to_string()).unwrap();
+    let d = start_with_env(true, Some(&data), json!({}), &[]);
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("chat:generateImage")), "{info}");
+    let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
+    let row = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").cloned().expect("an image row");
+    let id = row["id"].as_str().unwrap().to_string();
+    let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), Some("null")).await.unwrap();
+
+    let params = json!({ "modelId": id, "width": 512, "height": 768, "steps": 20, "cfgScale": 4.5, "seed": 42 });
+    let opts = json!({ "sessionId": "s_img", "prompt": "  a calico cat  ", "params": params });
+    let (status, body) = post(d.port, "chat:generateImage", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, body.clone()), (200, Value::Null), "{body}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img.json")).unwrap()).unwrap();
+    assert_eq!(saved["title"], "a calico cat");
+    assert_eq!((saved["chatType"].clone(), saved["modelId"].clone()), (json!("image"), json!(id)));
+    assert_eq!(saved["imageParams"], params);
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0]["content"], "a calico cat");
+    let reply = &messages[1];
+    let image = reply["images"][0].as_str().unwrap();
+    // The stand-in drew the request it was sent: the trimmed prompt with the
+    // steps, guidance and seed, and the size (`imageGenerationBody`).
+    let drawn = image.strip_prefix("data:image/png;base64,").unwrap();
+    let expected = "a calico cat\n<sd_cpp_extra_args>{\"sample_params\":{\"sample_steps\":20,\"guidance\":{\"txt_cfg\":4.5}},\"seed\":42}</sd_cpp_extra_args>|512x768";
+    assert_eq!(drawn, fake_base64(expected.as_bytes()), "{reply}");
+    assert_eq!(reply["generated"]["seed"], 42);
+    assert_eq!(reply["generated"]["modelId"], json!(id));
+
+    // The stages, then done: loading (the model was cold), generating.
+    let mut stages = Vec::new();
+    while let Some(ev) = next_json(&mut events, Duration::from_secs(2)).await {
+        let p = &ev["payload"];
+        if ev["channel"] == "agent:event" && p["sessionId"] == "s_img" {
+            stages.push(format!("{}:{}", p["type"].as_str().unwrap(), p["label"].as_str().unwrap_or("")));
+            if p["type"] == "done" {
+                break;
+            }
+        }
+    }
+    assert_eq!(
+        stages,
+        [
+            "image_status:Generating a 512×768 image",
+            "image_status:Loading the image model",
+            "image_status:Generating a 512×768 image",
+            "done:",
+        ],
+        "{stages:?}"
+    );
+
+    // A seed of -1 records the one used; a stop while it draws ends the turn as stopped.
+    let port2 = d.port;
+    let slow = json!({ "sessionId": "s_img", "prompt": "slow fox", "params": { "modelId": id, "width": 256, "height": 256, "steps": 1, "cfgScale": 1, "seed": -1 } });
+    let running = tokio::spawn(async move { post(port2, "chat:generateImage", json!([slow]), Some(TOKEN)).await });
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let (_, running) = post(port2, "chat:running", json!([]), Some(TOKEN)).await;
+            if running.as_array().is_some_and(|r| r.contains(&json!("s_img"))) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the image turn is listed as running");
+    let started = Instant::now();
+    post(d.port, "chat:abort", json!(["s_img"]), Some(TOKEN)).await;
+    let (status, _) = running.await.unwrap();
+    assert_eq!(status, 200);
+    assert!(started.elapsed() < Duration::from_secs(5));
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img.json")).unwrap()).unwrap();
+    let last = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!(
+        (last["content"].clone(), last["interrupted"].clone()),
+        (json!("Stopped before the image finished."), json!(true))
+    );
+    let seed = saved["imageParams"]["seed"].clone();
+    assert_eq!(seed, -1, "the chat keeps asking for a fresh seed");
+
+    // A missing prompt is refused with the host's words; the host ran none of it.
+    let (_, _) = post(
+        d.port,
+        "chat:generateImage",
+        json!([{ "sessionId": "s_img", "prompt": " ", "params": params }]),
+        Some(TOKEN),
+    )
+    .await;
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(
+        calls.iter().any(|c| c[0] == "turn:notify" && c[1][0]["message"] == "Describe the image you want first."),
+        "{calls:?}"
+    );
+    assert!(!calls.iter().any(|c| c[0] == "chat:generateImage"), "the host generated nothing");
+    post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+    drop(d);
+    std::fs::remove_dir_all(root).ok();
+}
+
+fn fake_base64(bytes: &[u8]) -> String {
+    const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+        let n = (b[0] as u32) << 16 | (b[1] as u32) << 8 | b[2] as u32;
+        for i in 0..4 {
+            out.push(if i <= chunk.len() { T[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
+}

@@ -59,6 +59,20 @@ pub struct Ctx {
     pub installs: Option<Arc<crate::installs::Installs>>,
     /// The model server's policy (`engine:status`...), with the installers.
     pub server: Option<Arc<crate::model_server::Server>>,
+    /// Chats being compacted (`chat:compact`), the daemon's when it admits turns.
+    pub compactions: Arc<crate::compaction::Compactions>,
+    /// Image-generation turns (`chat:generateImage`), with the model server.
+    pub image_turns: Arc<crate::image_turns::ImageTurns>,
+}
+
+/// `chat:compact` and `chat:cancelCompaction` are the daemon's when it admits turns.
+fn owns_compaction(ctx: &Ctx) -> bool {
+    ctx.sessions.is_some() && ctx.settings.is_some() && ctx.admission.as_ref().is_some_and(|a| !a.ts_loop)
+}
+
+/// `chat:generateImage` is the daemon's when it runs the model server and admits turns.
+fn owns_image_turns(ctx: &Ctx) -> bool {
+    ctx.server.is_some() && owns_compaction(ctx)
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -214,15 +228,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         }
         // Stop the daemon's turn at once, then the host's part of stopping
         // (its own turns, image turns, the chat's dev servers).
-        "chat:abort" => {
-            if let Some(admission) = &ctx.admission {
-                admission.abort(str_arg(&args, 0).unwrap_or_default());
-            }
-            ctx.turns.abort_session(str_arg(&args, 0).unwrap_or_default());
-            // A dev server the agent started belongs to the work it was doing.
-            ctx.turns.processes.kill_session(str_arg(&args, 0).unwrap_or_default());
-            ctx.backend.call(channel, Value::Array(args)).await
-        }
+        "chat:abort" => stop_chat(ctx, str_arg(&args, 0).unwrap_or_default()).await,
         "changes:list" => {
             let (changes, id) = (ctx.changes.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
             let list =
@@ -285,6 +291,13 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "chat:send" if ctx.admission.is_some() => {
             crate::admission::send(ctx, ctx.admission.as_ref().expect("checked"), args).await
         }
+        "chat:interruptQueued" if ctx.admission.is_some() => {
+            crate::admission::interrupt_queued(ctx, ctx.admission.as_ref().expect("checked"), args).await
+        }
+        c if crate::compaction::CHANNELS.contains(&c) && owns_compaction(ctx) => {
+            ctx.compactions.clone().route(ctx, c, &args).await
+        }
+        "chat:generateImage" if owns_image_turns(ctx) => ctx.image_turns.generate(ctx, arg(&args, 0)).await,
         c if crate::worktrees::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
             crate::worktrees::route(ctx, c, &args).await
         }
@@ -365,8 +378,20 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
     }
 }
 
-/// Merge the host's pending input with the daemon's, the daemon's winning
-/// field by field (`mergePending` in daemon-turn.ts).
+/// `chat:abort`: stop the daemon's turn at once (and its image turn and its
+/// admission), then the host's part of stopping (its own turns, the chat's
+/// dev servers).
+pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
+    if let Some(admission) = &ctx.admission {
+        admission.abort(session_id);
+    }
+    ctx.image_turns.abort(session_id);
+    ctx.turns.abort_session(session_id);
+    // A dev server the agent started belongs to the work it was doing.
+    ctx.turns.processes.kill_session(session_id);
+    ctx.backend.call("chat:abort", json!([session_id])).await
+}
+
 /// The chats with a turn running, the host's and the daemon's.
 pub async fn running_chats(ctx: &Ctx) -> Vec<String> {
     let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:running", json!([]))).await;
@@ -374,7 +399,7 @@ pub async fn running_chats(ctx: &Ctx) -> Vec<String> {
         Ok(Ok(Value::Array(a))) => a.into_iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
         _ => Vec::new(),
     };
-    for id in ctx.turns.running_sessions() {
+    for id in ctx.turns.running_sessions().into_iter().chain(ctx.image_turns.running_sessions()) {
         if !ids.contains(&id) {
             ids.push(id);
         }
@@ -382,6 +407,8 @@ pub async fn running_chats(ctx: &Ctx) -> Vec<String> {
     ids
 }
 
+/// Merge the host's pending input with the daemon's, the daemon's winning
+/// field by field (`mergePending` in daemon-turn.ts).
 fn merge_pending(host: Value, daemon: Value) -> Value {
     let mut out = host.as_object().cloned().unwrap_or_default();
     for (id, p) in daemon.as_object().cloned().unwrap_or_default() {
@@ -456,6 +483,12 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if crate::side::owned(ctx) {
         all.extend_from_slice(crate::side::CHANNELS);
+    }
+    if owns_compaction(ctx) {
+        all.extend_from_slice(crate::compaction::CHANNELS);
+    }
+    if owns_image_turns(ctx) {
+        all.extend_from_slice(crate::image_turns::CHANNELS);
     }
     if ctx.settings.is_some() && ctx.sessions.is_some() {
         all.extend_from_slice(crate::context::CHANNELS);

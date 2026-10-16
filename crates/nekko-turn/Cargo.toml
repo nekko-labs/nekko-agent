@@ -12,4 +12,8 @@ nekko-context = { path = "../nekko-context" }
 nekko-js = { path = "../nekko-js" }
 nekko-loop = { path = "../nekko-loop" }
 nekko-tools = { path = "../nekko-tools" }
+futures-util.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

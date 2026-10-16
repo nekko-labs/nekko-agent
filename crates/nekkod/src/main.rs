@@ -9,6 +9,7 @@ mod admission;
 mod automation;
 mod backend;
 mod catalog;
+mod compaction;
 mod config;
 mod connectors;
 mod context;
@@ -18,6 +19,7 @@ mod downloads;
 mod engine;
 mod hub;
 mod hypergate;
+mod image_turns;
 mod installs;
 mod library;
 mod machine;
@@ -86,27 +88,31 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
 
     let hub = Hub::new();
     let terminals = Arc::new(Registry::new());
+    // `NEKKO_AGENT_LOOP=ts` (here or set for the backend) keeps every turn in the host.
+    let ts_loop = std::env::var("NEKKO_AGENT_LOOP").is_ok_and(|v| v == "ts")
+        || cfg.backend.as_ref().is_some_and(|b| b.env.get("NEKKO_AGENT_LOOP").is_some_and(|v| v == "ts"));
     let backend = match cfg.backend.clone() {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                cmd.env.insert(
-                    "NEKKOD_OWNS".into(),
-                    [
-                        settings::OWNS,
-                        voice::OWNS,
-                        oauth::OWNS,
-                        automation::OWNS,
-                        remote::OWNS,
-                        watches::OWNS,
-                        sandbox::OWNS,
-                        library::OWNS,
-                        downloads::OWNS,
-                        installs::OWNS,
-                        model_server::OWNS,
-                    ]
-                    .join(","),
-                );
+                let mut owns = vec![
+                    settings::OWNS,
+                    voice::OWNS,
+                    oauth::OWNS,
+                    automation::OWNS,
+                    remote::OWNS,
+                    watches::OWNS,
+                    sandbox::OWNS,
+                    library::OWNS,
+                    downloads::OWNS,
+                    installs::OWNS,
+                    model_server::OWNS,
+                ];
+                // Compactions are the daemon's wherever it admits turns.
+                if !ts_loop {
+                    owns.push(compaction::OWNS);
+                }
+                cmd.env.insert("NEKKOD_OWNS".into(), owns.join(","));
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
         }
@@ -138,11 +144,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let read: Arc<dyn Fn() -> serde_json::Value + Send + Sync> = Arc::new(move || store.get());
         voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
     });
-    // `NEKKO_AGENT_LOOP=ts` (here or set for the backend) keeps every turn in the host.
-    let ts_loop = std::env::var("NEKKO_AGENT_LOOP").is_ok_and(|v| v == "ts")
-        || cfg.backend.as_ref().is_some_and(|b| b.env.get("NEKKO_AGENT_LOOP").is_some_and(|v| v == "ts"));
+    let compactions = compaction::Compactions::new();
     let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
-        .then(|| admission::Admission::new(&hub, cfg.allow_browser_control, ts_loop));
+        .then(|| admission::Admission::new(compactions.clone(), cfg.allow_browser_control, ts_loop));
     let catalog = settings.as_deref().map(|s| catalog::new(s, cfg.hugging_face_url.clone()));
     let automation =
         Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), backend.clone(), hub.clone()));
@@ -250,6 +254,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         automation: automation.clone(),
         remote: remote.clone(),
         sandboxes: cfg.data_dir.clone().filter(|_| sessions.is_some()).map(|d| sandbox::Sandboxes::new(d.into())),
+        compactions,
+        image_turns: image_turns::ImageTurns::new(),
     };
     routes::forward_terminal_events(&ctx);
     if let Some(adm) = ctx.admission.clone() {

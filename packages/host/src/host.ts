@@ -90,7 +90,7 @@ import type {
   ModelFolderReport,
   SkillDef,
 } from '@nekko-agent/shared';
-import { appearanceOf, AUTO_MODEL_ID, touchesAppearance, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, queueItemPayload, SKILLS, sameFolderPath } from '@nekko-agent/shared';
+import { appearanceOf, touchesAppearance, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, SKILLS, sameFolderPath } from '@nekko-agent/shared';
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
@@ -180,7 +180,8 @@ import { adoptAdmittedTurn, connectorSnippetsFor, indexSnippetsForAdmission, isC
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
 import { daemonOwns as daemonServes, loopLog } from './daemon-caps.js';
 import { setTurnNotifier, turnCallback } from './daemon-turn.js';
-import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
+import { compactSession, cancelSessionCompaction, isSessionCompacting, observeCompaction, setCompactionSender } from './compaction.js';
+import { interruptQueuedPlan, queuedIndexValid } from './turn-variants.js';
 import { startAutoContinue } from './auto-continue.js';
 import { knownContextWindow } from './context-window.js';
 import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemon as notifyLimits } from './limits.js';
@@ -653,6 +654,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // What the daemon says after a turn it drove has ended (its generated title).
   setTurnNotifier((e) => events.emit('agentEvent', e));
   setCompactionSender((e) => events.emit('agentEvent', e));
+  // A daemon that runs compactions tells this host through `turn:notify`.
+  events.on('agentEvent', observeCompaction);
   // A chat that runs out of context is compacted and carried on, not parked on
   // a Retry banner; one that finishes near the window is compacted ahead of
   // its next turn even with no chat pane open (auto-continue.ts).
@@ -1139,15 +1142,11 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     interruptQueuedPrompt: async (sessionId, index, brain) => {
       const session = sessions.getSession(sessionId);
       if (!session) throw new Error('Session not found.');
-      if (!Number.isSafeInteger(index) || index < 0 || index >= (session.queue?.length ?? 0)) throw new Error('Queued prompt not found.');
+      if (!queuedIndexValid(session, index)) throw new Error('Queued prompt not found.');
       if (interrupting.has(sessionId)) throw new Error('A queued prompt is already starting.');
       if (isSessionCompacting(sessionId)) throw new Error('This chat is being compacted.');
-      const providerId = brain?.providerId ?? session.providerId ?? getSettings().defaultProviderId;
-      const modelId = brain?.modelId ?? session.modelId ?? getSettings().defaultModelId;
-      if (!providerId || !modelId || modelId === AUTO_MODEL_ID) throw new Error('Choose a provider and model before starting the queued prompt.');
-      const item = session.queue![index];
-      const payload = queueItemPayload(item);
-      const text = payload.text;
+      const plan = interruptQueuedPlan(session, index, brain, getSettings());
+      if ('error' in plan) throw new Error(plan.error);
       interrupting.add(sessionId);
       try {
         const active = activeChats.get(sessionId);
@@ -1158,7 +1157,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
           throw new Error('Image turn is still stopping. Try again when it finishes.');
         }
         if (isSessionCompacting(sessionId)) throw new Error('This chat is being compacted.');
-        await sendChat({ sessionId, providerId, modelId, text, ...(payload.images?.length ? { images: payload.images } : {}), ...(payload.videos?.length ? { videos: payload.videos } : {}), ...(payload.skill ? { skill: payload.skill } : {}) }, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl, { index, item });
+        await sendChat(plan.opts, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl, { index, item: plan.item });
       } finally {
         interrupting.delete(sessionId);
       }

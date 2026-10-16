@@ -284,6 +284,36 @@ impl SessionStore {
         })
     }
 
+    /// Read, check and change, then save, under the store's write lock, so
+    /// nothing lands between the check and the write: `change` refuses with
+    /// an error, or says whether it changed anything. `None` when there is
+    /// no such chat.
+    pub fn update_if(
+        &self,
+        id: &str,
+        change: impl FnOnce(&mut Map<String, Value>) -> Result<bool, String>,
+    ) -> Result<Option<Value>, String> {
+        let mut refused = None;
+        let out = self.patch(id, |s| match change(s) {
+            Ok(changed) => changed,
+            Err(e) => {
+                refused = Some(e);
+                false
+            }
+        })?;
+        match refused {
+            Some(e) => Err(e),
+            None => Ok(out),
+        }
+    }
+
+    /// `saveSession(s)`: write the chat as it is (no merge with the disk), `s` updated to what was written.
+    pub fn save_whole(&self, s: &mut Value) -> Result<(), String> {
+        let Value::Object(target) = s else { return Err("a session that is not an object".into()) };
+        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        self.save(target)
+    }
+
     /// `deleteSession`.
     pub fn delete(&self, id: &str) -> Result<(), String> {
         if !valid_id(id) {

@@ -77,6 +77,12 @@ export const DAEMON_SERVED = new Set<string>([
   IpcChannels.engineSettingsSave,
   IpcChannels.engineSetResidentTtl,
   IpcChannels.engineGenerateImage,
+  // Turn variants (crates/nekkod/src/compaction.rs, image_turns.rs). Not
+  // `chat:interruptQueued`: like `chat:send`, the daemon hands a sandbox chat's
+  // back here.
+  IpcChannels.chatCompact,
+  IpcChannels.chatCancelCompaction,
+  IpcChannels.chatGenerateImage,
 ]);
 import { listInstalledSkillDefs } from './skills.js';
 import { watchResume, watchSnapshot } from './agent-watches.js';
