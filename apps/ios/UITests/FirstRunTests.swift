@@ -11,7 +11,10 @@ final class FirstRunTests: XCTestCase {
         XCTAssertTrue(pair.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Connect over Tailscale (recommended)"].exists)
         attach(app, "Welcome")
-        auditAccessibility(app, "welcome")
+        // At first launch the guide's last link sits under the pinned, translucent
+        // Pair bar, so the audit measures it against the bar. The same guide is
+        // audited fully visible on the pairing screen below.
+        auditAccessibility(app, "welcome", ignoring: ["Get Tailscale for iPhone"])
         pair.tap()
         let field = app.input("nekko-agent-pair:?relay=…")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
