@@ -1,0 +1,92 @@
+import XCTest
+
+/// The app in the simulator against a real relay + headless agent + fake model
+/// (apps/ios/scripts/itest-stack.sh): pair from a deep link, start a chat,
+/// watch the reply stream in, get an approval card for a guarded tool and deny
+/// it. Each step is a screenshot attachment (the PR's visual evidence).
+///
+/// Opt-in: the CI passes `TEST_RUNNER_NEKKO_ITEST_LINK`; without it this skips.
+final class LiveRelayTests: XCTestCase {
+    func testPairStreamAndApproveFromThePhone() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
+        let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-theme", theme == "dark" ? "dark" : "light"]
+        app.launch()
+        allowSystemAlerts()
+
+        app.open(link)
+        let pair = app.navigationBars["Pair with a computer?"].buttons["Pair"]
+        XCTAssertTrue(pair.waitForExistence(timeout: 10))
+        attach(app, "\(theme)-1-confirm-pair")
+        pair.tap()
+        tapSystemAlertIfShown()
+
+        let newChat = app.buttons["New chat"]
+        XCTAssertTrue(newChat.waitForExistence(timeout: 20))
+        XCTAssertTrue(waitEnabled(newChat, 20), "connected to the computer")
+        attach(app, "\(theme)-2-chats")
+
+        newChat.tap()
+        let prompt = app.textFields["What should your computer do?"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        prompt.typeText("Say hello")
+        attach(app, "\(theme)-3-new-chat")
+        app.buttons["Start"].tap()
+
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the reply streamed in")
+        attach(app, "\(theme)-4-reply")
+
+        let message = app.textFields["Message"]
+        XCTAssertTrue(message.waitForExistence(timeout: 10))
+        message.tap()
+        message.typeText("please approve a cleanup")
+        app.buttons["Send"].tap()
+        let card = app.staticTexts["Approve this tool?"]
+        XCTAssertTrue(card.waitForExistence(timeout: 30), "the guarded tool asks the phone")
+        attach(app, "\(theme)-5-approval")
+        app.buttons["Deny"].tap()
+        XCTAssertTrue(waitGone(card, 15))
+        attach(app, "\(theme)-6-denied")
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        attach(app, "\(theme)-7-chats-after")
+    }
+
+    private func allowSystemAlerts() {
+        addUIInterruptionMonitor(withDescription: "system alerts") { alert in
+            for label in ["Allow", "OK", "Allow While Using App"] where alert.buttons[label].exists {
+                alert.buttons[label].tap()
+                return true
+            }
+            return false
+        }
+    }
+
+    /// Notification permission is asked right after pairing.
+    private func tapSystemAlertIfShown() {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let allow = springboard.buttons["Allow"]
+        if allow.waitForExistence(timeout: 4) { allow.tap() }
+    }
+
+    private func waitEnabled(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
+        let p = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: e)
+        return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
+    }
+
+    private func waitGone(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
+        let p = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: e)
+        return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
+    }
+
+    private func attach(_ app: XCUIApplication, _ name: String) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+}
