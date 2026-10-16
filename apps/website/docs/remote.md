@@ -202,15 +202,36 @@ Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts
 tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
 network you already own.
 
+**In the desktop app:** Settings → Remote access → **Relay on this computer** → **Start relay**.
+The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
+bundled relay bound to that address only, and shows the URL phones use. That is the MagicDNS name
+(for example `ws://gomi.tailfd6474.ts.net:4400`) when the Tailscale CLI reports one, else the
+`100.x.y.z` address. **Use this relay** fills it in; then Enable, **Pair a device**, and scan the QR
+from the phone with Tailscale switched on.
+
+- **It stays on:** once started it comes back with the app.
+- **It waits for Tailscale:** with Tailscale off it binds nowhere and waits, and starts when
+  Tailscale connects.
+- **It follows address changes:** it moves when the tailnet address changes.
+- **It says why it isn't running:** for example Tailscale off, or the port (4400) already in use.
+
+It runs as its own process (`out/main/relay.js`, under the app's own runtime) and exits with the
+app. It has no push keys, so phones get no "finished" notifications through it; the in-app
+connection and Live Activities while the app is open work as usual.
+
+**Headless or without the desktop app**, the scripts do the same by hand:
+
 ```bash
 npm run relay:tailscale        # Windows (PowerShell); or scripts/private-relay.sh on macOS/Linux
 ```
 
-The script prints the URL to paste into **Settings → Remote access** (for example
-`ws://gomi.tailfd6474.ts.net:4400`; the MagicDNS name resolves on any device in the tailnet, the
-`100.x.y.z` address works too). Enable, **Pair a device**, scan the QR from the phone with
-Tailscale switched on. The relay only listens on the Tailscale interface, so
-`NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` is safe here; never use that flag on a public bind.
+The script prints the URL to paste into **Settings → Remote access**. Either way the relay only
+listens on the Tailscale interface, so agent enrollment without an access token
+(`NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` in the script) is safe here; never use that flag on a public
+bind.
+
+The desktop refuses a plain `ws://` relay on the open internet when you press Enable. It uses the
+same rule as the phones, below.
 
 Plain `ws://` is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
 the app's own end-to-end encryption sits on top. The Expo iOS app ships with Expo's default App

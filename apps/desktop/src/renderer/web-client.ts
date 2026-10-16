@@ -1,5 +1,5 @@
-import { IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL } from '@nekko-agent/shared';
-import type { AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
+import { IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
+import type { LocalRelayStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
 
@@ -14,6 +14,9 @@ import { openTerminalSocket } from './terminal-socket.js';
  * and it is the one serving this page. `available: false` is what stops the
  * Models tab offering a start button with nothing behind it.
  */
+/** No "relay on this computer" in a browser tab; the Remote access card hides it on `available === false`. */
+const webLocalRelay: LocalRelayStatus = { running: false, enabled: false, port: LOCAL_RELAY_PORT, available: false };
+
 function webApiServerStatus() {
   return {
     settings: withApiServerDefaults(undefined),
@@ -556,6 +559,11 @@ function makeWebClient(): NekkoApi {
     revokeRemoteDevice: (deviceId) => call(IpcChannels.remoteRevoke, deviceId),
     renameRemoteDevice: (deviceId, name) => call(IpcChannels.remoteRename, deviceId, name),
     rotateRemoteSecret: () => call(IpcChannels.remoteRotate),
+    // The web and self-hosted editions run on a server: the relay that ships beside
+    // them is apps/relay itself, so there is nothing for this page to start.
+    localRelayStatus: async () => webLocalRelay,
+    localRelayStart: async () => webLocalRelay,
+    localRelayStop: async () => webLocalRelay,
 
     // Web edition: "update" = the server got a newer build since this tab
     // loaded; we just suggest a refresh (no installer to run in the browser).
