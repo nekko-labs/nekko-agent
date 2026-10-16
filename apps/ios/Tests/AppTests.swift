@@ -53,6 +53,14 @@ final class MarkdownTests: XCTestCase {
         ])
     }
 
+    func testInlineMarkdownIsParsedOnceAndStaysTheSame() {
+        let first = InlineMarkdown.attributed("Some **bold** and `code`")
+        XCTAssertNotNil(first)
+        XCTAssertEqual(String(first!.characters), "Some bold and code")
+        XCTAssertEqual(InlineMarkdown.attributed("Some **bold** and `code`"), first, "a cache hit gives the same text")
+        XCTAssertEqual(String(InlineMarkdown.attributed("plain")!.characters), "plain")
+    }
+
     func testAnUnclosedFenceStillShowsItsCode() {
         XCTAssertEqual(MarkdownText.parse("```\nstreaming…"), [.code("", "streaming…")])
     }
