@@ -2055,6 +2055,58 @@
      }
     ]
    ]
+  },
+  {
+   "name": "normal follow-up repairs interrupted delegation and delayed results",
+   "history": [
+    {
+     "id": "u0",
+     "role": "user",
+     "content": "delegate",
+     "createdAt": 1
+    },
+    {
+     "id": "a1",
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "child",
+       "name": "spawn_agent",
+       "input": {}
+      },
+      {
+       "id": "missing",
+       "name": "bash",
+       "input": {}
+      }
+     ],
+     "createdAt": 2
+    },
+    {
+     "id": "u1",
+     "role": "user",
+     "content": "continue directly",
+     "createdAt": 3
+    },
+    {
+     "id": "t1",
+     "role": "tool",
+     "content": "",
+     "toolResult": {
+      "toolCallId": "child",
+      "output": "Files saved"
+     },
+     "createdAt": 4
+    }
+   ],
+   "responses": [
+    [
+     {
+      "text": "Continuing."
+     }
+    ]
+   ]
   }
  ]
 }

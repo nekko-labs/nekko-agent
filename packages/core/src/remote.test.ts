@@ -35,9 +35,31 @@ describe('verifyHello', () => {
     if (v.action === 'welcome') expect(v.device.lastSeenAt).toBe(NOW);
   });
 
-  it('denies a revoked device even with a valid pairing code', () => {
-    const v = verifyHello([dev({ revoked: true })], { type: 'hello', deviceId: 'dev-1', pair: 'ABCD2345' }, grant(), NOW);
+  it('denies a revoked device that has no pairing code', () => {
+    const v = verifyHello([dev({ revoked: true })], { type: 'hello', deviceId: 'dev-1' }, grant(), NOW);
     expect(v).toEqual({ action: 'deny', reason: 'revoked' });
+    // Not even a stale welcome while no pairing is open.
+    expect(verifyHello([dev({ revoked: true })], { type: 'hello', deviceId: 'dev-1' }, null, NOW)).toEqual({ action: 'deny', reason: 'revoked' });
+  });
+
+  it('re-admits a revoked device that pairs again with a fresh code, as a new device', () => {
+    // A phone keeps its id across "forget this computer"; scanning a new QR must work.
+    const hello = { type: 'hello', deviceId: 'dev-1', pair: 'ABCD2345', name: 'A55 di Davide', platform: 'android' };
+    const v = verifyHello([dev({ revoked: true })], hello, grant(), NOW);
+    expect(v).toEqual({
+      action: 'welcome',
+      enrolled: true,
+      device: { id: 'dev-1', name: 'A55 di Davide', platform: 'android', createdAt: NOW, lastSeenAt: NOW },
+    });
+    if (v.action === 'welcome') expect(v.device.revoked).toBeUndefined();
+  });
+
+  it('keeps a revoked device out with a wrong, expired or spent code', () => {
+    const revoked = [dev({ revoked: true })];
+    const hello = { type: 'hello', deviceId: 'dev-1', pair: 'ABCD2345' };
+    expect(verifyHello(revoked, { ...hello, pair: 'WRONG' }, grant(), NOW)).toEqual({ action: 'deny', reason: 'bad-code' });
+    expect(verifyHello(revoked, hello, grant({ expiresAt: NOW }), NOW)).toEqual({ action: 'deny', reason: 'bad-code' });
+    expect(verifyHello(revoked, hello, null, NOW)).toEqual({ action: 'deny', reason: 'bad-code' });
   });
 
   it('denies an unknown device with no pairing code', () => {

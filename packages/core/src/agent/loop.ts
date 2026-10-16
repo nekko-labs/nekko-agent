@@ -377,11 +377,10 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
   // model one transient turn to push against when the last thing in it is its own
   // cut-off reply (a transcript ending on a tool result already has its opening).
   let resumeExtra: ChatMessage[] = [];
-  if (opts.resume) {
-    repairInterruptedHistory(opts.history);
-    if (opts.history[opts.history.length - 1]?.role === 'assistant') {
-      resumeExtra = [{ id: id('nudge'), role: 'user', content: RESUME_PROMPT, createdAt: Date.now() }];
-    }
+  // A normal follow-up after Stop needs the same valid history as Resume.
+  repairInterruptedHistory(opts.history);
+  if (opts.resume && opts.history[opts.history.length - 1]?.role === 'assistant') {
+    resumeExtra = [{ id: id('nudge'), role: 'user', content: RESUME_PROMPT, createdAt: Date.now() }];
   }
 
   // A transient nudge used to recover from an empty response (not persisted).

@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,18 +58,49 @@ val LocalAppLock = staticCompositionLocalOf<AppLock?> { null }
  * where the user left it after unlocking. While locked the content is hidden
  * from accessibility services, gets no touches, and loses keyboard focus.
  * Deep links are still routed underneath and appear once unlocked.
+ *
+ * With the lock on, the plain [PrivacyCover] also hides the content while the
+ * activity is paused (see [AppLock.covered]), for the recent-apps overview.
  */
 @Composable
 fun LockGate(lock: AppLock, authenticator: Authenticator, content: @Composable () -> Unit) {
     val status by lock.status.collectAsStateWithLifecycle()
+    // Not collectAsStateWithLifecycle: the cover must be drawn while the activity is paused.
+    val covered by lock.covered.collectAsState()
+    val hidden = status.locked || covered
     val focus = LocalFocusManager.current
     LaunchedEffect(status.locked) { if (status.locked) focus.clearFocus(force = true) }
 
     Box(Modifier.fillMaxSize()) {
-        Box(if (status.locked) Modifier.fillMaxSize().clearAndSetSemantics { } else Modifier.fillMaxSize()) {
+        Box(if (hidden) Modifier.fillMaxSize().clearAndSetSemantics { } else Modifier.fillMaxSize()) {
             content()
         }
-        if (status.locked) LockScreen(status.epoch, lock, authenticator)
+        if (status.locked) {
+            LockScreen(status.epoch, lock, authenticator)
+        } else if (covered) {
+            PrivacyCover()
+        }
+    }
+}
+
+/**
+ * What the recent-apps overview shows while the lock is on: the app's colours
+ * and its lock mark, no content. Drawn only while the activity is not in front,
+ * so screenshots taken in the app are never affected.
+ */
+@Composable
+private fun PrivacyCover() {
+    val p = Nekko.palette
+    Box(
+        Modifier.fillMaxSize().background(p.paper).clearAndSetSemantics { },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier.size(72.dp).clip(RoundedCornerShape(20.dp)).background(p.accentSoft),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Lock, contentDescription = null, tint = p.accent, modifier = Modifier.size(36.dp))
+        }
     }
 }
 

@@ -1108,6 +1108,9 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     listTools: () => [...BUILTIN_TOOLS.map((t) => ({ name: t.name, description: t.description })), ...mcpToolList()],
     sendChat: (o) => {
       if (interrupting.has(o.sessionId)) throw new Error('A queued prompt is already starting.');
+      if (activeChats.has(o.sessionId) || isChatRunning(o.sessionId)) {
+        throw new Error('This chat is already running. Queue the follow-up or interrupt the current reply first.');
+      }
       if (isSessionCompacting(o.sessionId)) {
         events.emit('agentEvent', { type: 'error', sessionId: o.sessionId, message: 'This chat is being compacted. Wait or move to a new chat.' });
         return Promise.resolve();

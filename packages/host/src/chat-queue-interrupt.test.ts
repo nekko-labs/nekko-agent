@@ -62,6 +62,28 @@ describe('session options', () => {
 });
 
 describe('interrupt queued prompt', () => {
+  it('rejects overlapping sends even during admission, without losing queued follow-ups', async () => {
+    const host = createHost({ dataDir: mkdtempSync(join(tmpdir(), 'nekko-busy-')) });
+    host.saveProvider({ id: 'p', kind: 'openai-compat', label: 'Test', baseUrl: 'http://localhost:1/v1', enabled: true });
+    const s = host.createSession();
+    host.setSessionOptions(s.id, { providerId: 'p', modelId: 'm' });
+    let ready!: () => void;
+    const entered = new Promise<void>((resolve) => { ready = resolve; });
+    started = ready;
+    const options = { sessionId: s.id, providerId: 'p', modelId: 'm', text: 'first' };
+    const running = host.sendChat(options);
+    expect(() => host.sendChat({ ...options, text: 'overlap' })).toThrow(/already running/);
+    await entered;
+    expect(() => host.sendChat({ ...options, text: 'overlap' })).toThrow(/already running/);
+    host.queuePrompt(s.id, 'queued follow-up');
+    host.abortChat(s.id);
+    await running;
+    expect(getSession(s.id)?.queue).toEqual(['queued follow-up']);
+    await host.interruptQueuedPrompt(s.id, 0);
+    expect(getSession(s.id)?.queue).toEqual([]);
+    expect(getSession(s.id)?.messages.filter((m) => m.role === 'user').map((m) => m.content)).toEqual(['first', 'queued follow-up']);
+  });
+
   it('rejects invalid indices without stopping the active turn', async () => {
     const host = createHost({ dataDir: mkdtempSync(join(tmpdir(), 'nekko-queue-')) });
     const s = host.createSession();

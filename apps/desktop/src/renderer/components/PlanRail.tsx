@@ -1,5 +1,5 @@
 import { chatArtifacts } from '../chatArtifacts.js';
-import { ChatArtifacts } from './ChatArtifacts.js';
+import { MonitorArtifacts } from './MonitorArtifacts.js';
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { QueuedPrompt, Session } from '@nekko-agent/shared';
 import { DEFAULT_ORCHESTRATION, getStrategy, planProgress, queueItemPayload } from '@nekko-agent/shared';
@@ -62,10 +62,7 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
         <span className="min-w-0 flex-1 truncate pr-8 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Agent Monitor</span>
       </header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
-        <details key={sessionId} className="group">
-          <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Artifacts <span className="ml-1 tabular-nums">{artifacts.length}</span></summary>
-          {artifacts.length ? <ChatArtifacts artifacts={artifacts} sessionId={sessionId} /> : <p className="mt-2 text-[11px] text-ink-faint">No artifacts yet.</p>}
-        </details>
+        <MonitorArtifacts key={sessionId} sessionId={sessionId} artifacts={artifacts} hydrated={!!session && session.id === sessionId && Array.isArray(session.messages)} />
         <section>
           <div className="mb-1.5 flex items-center gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Sub-agents</span>

@@ -8,8 +8,8 @@ describe('chat artifacts', () => {
   it('gives generic names a useful folder-based title', () => {
     expect(chatArtifacts('[README.md](/reports/disk-audit/README.md)')[0].title).toBe('Disk audit');
   });
-  it('ignores remote resources, executable files, code and images', () => {
-    expect(chatArtifacts('[Remote](https://example.com/a.md) [Run](/a.exe) ![Image](/image.svg) ` [Code](/a.md)`\n```\n[Code](/b.md)\n```')).toEqual([]);
+  it('ignores remote resources, executable files and code', () => {
+    expect(chatArtifacts('[Remote](https://example.com/a.md) [Run](/a.exe) ![Image](https://example.com/image.svg) ` [Code](/a.md)`\n```\n[Code](/b.md)\n```')).toEqual([]);
     expect(chatArtifacts('[Relative](report.md)')).toEqual([]);
   });
 });

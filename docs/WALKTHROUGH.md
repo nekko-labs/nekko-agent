@@ -98,7 +98,7 @@ list dirs, run shell commands).
 - Assistant messages render **markdown and code**; every **tool call** the model
   makes shows up as a card so you can see exactly what it did.
 - Streaming is live; hit **Stop** to abort a turn.
-- **Tools** (in the agent window's footer) lists the agent's tools by category: File system, Shell & processes, Desktop, Online, Agent and MCP servers. Turn single tools or a whole group on or off for this chat.
+- **Tools** shows a friendly action label, the literal tool name and a full wrapping description. Search matches labels, names and descriptions. Use the checkboxes to enable tools; keyboard focus and Space activation are supported. The menu (in the agent window's footer) lists the agent's tools by category: File system, Shell & processes, Desktop, Online, Agent and MCP servers. Turn single tools or a whole group on or off for this chat.
 - The **globe** beside it blocks the internet for this chat (local models only). Online tools (fetching pages, the browser), MCP servers, connectors and sub-agents are turned off; file, shell and desktop tools keep working. Shell commands are not network-sandboxed, so a command can still reach the network.
 - In the model picker, a local model shows its short name with the file it lives in beneath.
 - Answers to the agent's clarification questions stay visible in the chat as Q/A replies, including when reopening an existing conversation. Selected choices and your typed note remain visible; skipped questions say they were not answered. These reply rows do not create another prompt or offer edit/rewind actions.
@@ -151,6 +151,18 @@ Drag the line above the composer to resize it. It snaps to two points: its
 default size and full size. Release near either one and it lands exactly there.
 Snapping back to the default clears the saved height. Double-click the line to
 reset it any time.
+
+### Continue after an interrupted tool
+
+After Stop or an interrupted delegation, either type a follow-up or use Resume.
+Both paths repair incomplete tool-result history before the next model request.
+Saved real results are retained; missing results are marked interrupted rather
+than silently rerunning the tool. A typed follow-up stays your own saved message.
+While a reply is running, queue your follow-up or interrupt the current reply;
+a second direct send is rejected without discarding the queue.
+
+Delegation still waits synchronously for the child. Parent-callable child status
+and cancellation while waiting are planned, not available through this repair.
 
 ### Follow delegated work without opening every detail
 
@@ -351,6 +363,8 @@ Changes is the leftmost header control. When the agent edits files it uses a mut
 
 Local document links in assistant replies appear as artifact cards beneath the response. The descriptive report title appears above its filename, so a README can still be recognizable. Select a card or document link to open it in the originating chat—not another chat that happens to have the file open.
 
-The **Artifacts** tab on the left rail collects what agents made across all your chats: documents, web pages, designs, diagrams, data and office files, grouped by kind. Pick one to preview it, **Open file** to hand it to its usual app, or **Open chat** to see the chat it came from on the Agents wall in Focused view. Source code the agent edits is not listed.
+Local SVG, PNG, JPEG, GIF and WebP image markdown and image links also count as artifacts. Image markdown previews in the message; ordinary image links get a preview card below it. The same image does not get a second response card if it is already shown in image markdown. Cards fill the available width up to 768 px, contain images within 640 px height, and retain **Open source** to open the file in the originating chat. Local images load automatically outside Sandbox; unreadable, oversized or unsupported images show a fallback. SVG runs only as an inert image, with no scripts or external subresource requests. Remote images remain links and never auto-load, and network shares and unsafe URL schemes are not previewed.
 
-At the top of **This prompt**, expand **Artifacts** to see the session’s linked documents. It starts collapsed and always displays a count, including 0. Repeated links to the same path are listed once. Documents are not read until you open them; host previews remain unavailable in Sandbox.
+The **Artifacts** tab on the left rail collects what agents made across all your chats: documents, web pages, designs, diagrams, images, data and office files, grouped by kind. Pick one to preview it, **Open file** to hand it to its usual app, or **Open chat** to see the chat it came from on the Agents wall in Focused view. Source code the agent edits is not listed.
+
+At the top of **Agent Monitor**, expand **Artifacts** to see the session’s linked documents. It starts collapsed and always displays a count, including 0. A newly discovered artifact path expands just this section and highlights it with an accent border/background and a visible, screen-reader-announced **New artifact** status for ten seconds. Another new path restarts that deadline, including when one path replaces another without changing the count. The whole monitor never opens automatically. Initial history, switching chats and history loaded after a missing session do not trigger the highlight. Repeated links and previously seen paths do not retrigger it. You can collapse the section during the highlight; it stays collapsed until another new path arrives. When the highlight expires, the section keeps its current open or closed state. Non-image documents are not read until you open them; image cards load automatically when rendered. Host previews remain unavailable in Sandbox.
