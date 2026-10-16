@@ -38,6 +38,11 @@ struct RootView: View {
             selected = nil
             path = []
         }
+        // Shared from another app: New chat opens with the text, nothing is sent.
+        .onChange(of: app.sharedText, initial: true) { _, text in
+            if text != nil { open(.newChat) }
+        }
+        .onChange(of: store.ready, initial: true) { _, _ in app.takeShare() }
         .onChange(of: app.openChat) { _, id in
             guard let id else { return }
             open(.chat(id))

@@ -1550,6 +1550,37 @@
   line-height: 1.6;
 }
 
+/* Find in this chat (ChatSearchBar): a small bar floating at the top right of
+   the transcript, and the highlights it draws with the CSS Custom Highlight
+   API. Every match gets a soft warning wash; the current one is solid, so it
+   reads as "you are here" in both themes. */
+.chat-search {
+  position: absolute; top: 8px; right: 14px; z-index: 16;
+  display: flex; align-items: center; gap: 2px;
+  padding: 3px 4px 3px 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); box-shadow: var(--shadow-md);
+}
+.chat-search-input {
+  width: 180px; min-width: 0; border: 0; border-bottom: 1px solid var(--ink-faint); border-radius: 0;
+  padding: 2px 0; outline: none; background: transparent;
+  font-size: 12.5px; color: var(--ink);
+}
+.chat-search-input::placeholder { color: var(--ink-faint); }
+.chat-search-count { min-width: 64px; padding: 0 6px; text-align: right; font-size: 11.5px; color: var(--ink-faint); white-space: nowrap; }
+.chat-search-btn {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px;
+  color: var(--ink-soft); transition: background-color .12s ease, color .12s ease;
+}
+.chat-search-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.chat-search-btn:disabled { opacity: .4; cursor: default; }
+.chat-search-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* No focus ring or tint on the field: only a line under it shows where to type. */
+.chat-search-input, .chat-search-input:focus, .chat-search-input:focus-visible { outline: none; box-shadow: none; }
+::highlight(nekko-chat-search) { background-color: color-mix(in srgb, var(--highlight) 32%, transparent); color: inherit; }
+::highlight(nekko-chat-search-current) { background-color: var(--highlight); color: #1b1304; }
+/* Beside the open Agent Monitor toggle, the bar moves left of it. */
+.plan-rail-toggle ~ .chat-search { right: 150px; }
+
 /* One windowed transcript row (VirtualTranscript). It contains its children's
    margins, so its measured height is exactly the space it takes; the gap to
    the next row is the row's own padding. Before rows were wrapped, the outer
@@ -2208,6 +2239,8 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 
 /* Changes leads; Zen is the action group, followed by panel openers. */
 [data-agent-companion="diff"] { order: -3; }
+/* Find in chat leads the header icons, just left of Changes. */
+[data-chat-search-toggle] { order: -4; }
 .agent-zen-action { color: var(--accent); background: var(--accent-soft); border-radius: 5px; padding: 3px; }
 .wall-add-icon { position: relative; }
 .wall-add-icon::after { content: '+'; position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: 10px; height: 10px; border-radius: 50%; background: var(--paper); color: var(--accent); font: 700 11px/1 sans-serif; pointer-events: none; }
