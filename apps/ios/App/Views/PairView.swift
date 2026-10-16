@@ -115,7 +115,19 @@ struct PairView: View {
             Section {
                 TextField("nekko-agent-pair:?relay=…", text: $pasted, axis: .vertical)
                     .textInputAutocapitalization(.never).autocorrectionDisabled().font(.footnote.monospaced())
-                Button("Pair") { submit(pasted) }.disabled(pasted.trimmingCharacters(in: .whitespaces).isEmpty || busy)
+                HStack(spacing: 12) {
+                    // The system Paste button reads the clipboard without the
+                    // "allow paste" prompt (Android has the same button).
+                    PasteButton(payloadType: String.self) { strings in
+                        if let s = strings.first { pasted = s.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    }
+                    .labelStyle(.titleAndIcon)
+                    .buttonBorderShape(.capsule)
+                    Spacer()
+                    Button("Pair") { submit(pasted) }.disabled(pasted.trimmingCharacters(in: .whitespaces).isEmpty || busy)
+                }
+                // Two buttons in one list row: each takes only its own taps.
+                .buttonStyle(.borderless)
             } header: {
                 SectionHeader("Or paste the pairing link")
             }
