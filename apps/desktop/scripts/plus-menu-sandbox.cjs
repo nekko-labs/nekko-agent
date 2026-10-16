@@ -28,7 +28,7 @@ app.whenReady().then(async () => {
         await check('hover opens '+theme+width,"!!document.querySelector('[data-new-agent-menu]')");
         await capture(`menu-${theme}-${width}`);
         if (version==='after') {
-          await check('exactly three choices',"(()=>{const b=[...document.querySelectorAll('[data-new-agent-menu] button')];return b.length===3&&b[0].textContent.includes('Agent')&&b[1].textContent==='Media gen'&&b[2].textContent==='Terminal'})()");
+          await check('exactly three choices',"(()=>{const b=[...document.querySelectorAll('[data-new-agent-menu] button')];return b.length===3&&b[0].textContent.includes('Agent')&&b[1].textContent==='Create or Edit Photos and Videos'&&b[2].textContent==='Terminal'})()");
           const r = await run("(()=>{const r=document.querySelector('[data-new-agent-menu]').getBoundingClientRect();return {x:r.x+20,y:r.y+20}})()");
           await move(r.x,r.y); await sleep(300);
           await check('crossing gap retains menu',"!!document.querySelector('[data-new-agent-menu]')");
@@ -40,7 +40,7 @@ app.whenReady().then(async () => {
       }
     }
     if(version==='after') {
-      await open(); await run("[...document.querySelectorAll('[data-new-agent-menu] button')].find(b=>b.textContent==='Media gen').click()"); await sleep(350);
+      await open(); await run("[...document.querySelectorAll('[data-new-agent-menu] button')].find(b=>b.textContent==='Create or Edit Photos and Videos').click()"); await sleep(350);
       await check('media entry configures image chat',"integration.calls.some(c=>c.method==='options'&&c.options.chatType==='image')");
       win.setContentSize(1200,900); await run('integration.reset()'); await run("integration.route('workspace')"); await sleep(400); await open();
       await run("[...document.querySelectorAll('[data-new-agent-menu] button')].find(b=>b.textContent==='Terminal').click()"); await sleep(400);

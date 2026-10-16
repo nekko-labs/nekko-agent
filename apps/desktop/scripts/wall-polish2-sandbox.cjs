@@ -39,7 +39,7 @@ app.whenReady().then(async () => {
   };
   // Only fixed, known selectors and reset presets reach the page: they are
   // looked up by name there, never interpolated into the evaluated source.
-  const SELECTORS = { panel: '[data-agent-panel]', budget: '.wall-dock__budget', empty: '[data-wall-empty]' };
+  const SELECTORS = { panel: '[data-agent-panel]', budget: '.monitors-dock__budget', empty: '[data-wall-empty]' };
   const PRESETS = { plain: {}, empty: { empty: true }, horizontal: { horizontal: true }, dock: { dock: true }, spooky: { empty: true, preset: 'autumn' } };
   const rectOf = async (key, pad = 16) => {
     if (!(key in SELECTORS) || !Number.isInteger(pad)) throw Error('unknown selector');
@@ -90,7 +90,7 @@ app.whenReady().then(async () => {
       await check(`budget has the Insights range filter (${t})`, "(()=>{const g=document.querySelector('[aria-label=\"Budget time range\"]');return !!g&&[...g.querySelectorAll('button')].map(b=>b.textContent).join()==='today,1wk,1m,6m,1y,all-time'})()");
       await capture(`budget-1m-${t}`, await rectOf('budget', 12));
       await run("[...document.querySelectorAll('[aria-label=\"Budget time range\"] button')].find(b=>b.textContent==='all-time')?.click()"); await sleep(300);
-      await check(`budget all-time includes older usage (${t})`, "document.querySelector('.wall-dock__budget').textContent.includes('492,000 in')");
+      await check(`budget all-time includes older usage (${t})`, "document.querySelector('.monitors-dock__budget').textContent.includes('492,000 in')");
       await capture(`budget-all-${t}`, await rectOf('budget', 12));
     }
     // Spooky empty wall.

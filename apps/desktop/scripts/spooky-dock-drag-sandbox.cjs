@@ -37,7 +37,7 @@ app.whenReady().then(async () => {
   const capture = async (name, rect) => { await sleep(350); await shot(name + '.png', rect); };
   // Only fixed, known selectors, themes and presets reach the page: the page
   // looks them up by index from tables set once, never from evaluated source.
-  const SELECTORS = { gallery: '[data-mascot-gallery]', mascot: '.pixel-mascot', composer: '[data-wall-composer]', dock: '.wall-dock' };
+  const SELECTORS = { gallery: '[data-mascot-gallery]', mascot: '.pixel-mascot', composer: '[data-wall-composer]', dock: '.monitors-dock' };
   const THEMES = ['dark', 'light'];
   const PRESETS = ['autumn'];
   const tables = () => run(`window.__sel=${JSON.stringify(Object.values(SELECTORS))};window.__themes=${JSON.stringify(THEMES)};window.__presets=${JSON.stringify(PRESETS)};true`);
@@ -85,14 +85,14 @@ app.whenReady().then(async () => {
     await capture('dock-rest-dark', dockRect);
     await run(`window.__dt = new DataTransfer();
       window.__fire = (type, el, x, y) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: window.__dt, clientX: x, clientY: y }));
-      window.__head = document.querySelector('[data-dock-panel="vitals"] > header') || document.querySelectorAll('.wall-dock__panel-header')[0];
-      window.__panels = document.querySelector('.wall-dock__panels');
+      window.__head = document.querySelector('[data-monitor="vitals"] > header') || document.querySelectorAll('.monitors-dock__monitor-header')[0];
+      window.__panels = document.querySelector('.monitors-dock__monitors');
       const r = window.__head.closest('section').getBoundingClientRect();
       window.__grab = { x: 60, y: 18, r };
       const g = window.__head.closest('section').cloneNode(true);
       g.id = 'fixture-ghost';
       Object.assign(g.style, { position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', margin: 0, zIndex: 999, opacity: .85, pointerEvents: 'none', boxShadow: '0 16px 32px -12px rgb(0 0 0 / .6)', display: 'block' });
-      g.removeAttribute('data-dock-lifted'); g.removeAttribute('data-dock-panel');
+      g.removeAttribute('data-monitor-lifted'); g.removeAttribute('data-monitor');
       window.__ghost = g;
       true`);
     let frame = 0;
@@ -101,10 +101,10 @@ app.whenReady().then(async () => {
     const start = await run("({ x: __grab.r.left + __grab.x, y: __grab.r.top + __grab.y })");
     await run(`__fire('dragstart', __head, ${start.x}, ${start.y}); document.body.append(__ghost); true`);
     await record(6);
-    await check('lifting opens a zone in the panel\'s own place', base ? 'true' : "document.querySelectorAll('.wall-dock__landing[data-open]').length===1 && !!document.querySelector('[data-dock-lifted]')");
+    await check('lifting opens a zone in the panel\'s own place', base ? 'true' : "document.querySelectorAll('.monitors-dock__landing[data-open]').length===1 && !!document.querySelector('[data-monitor-lifted]')");
     await capture(base ? 'dock-dragging-dark' : 'dock-lifted-dark', dockRect);
     // Walk the pointer down over the next two panels.
-    const target = await run("(()=>{const s=[...document.querySelectorAll('.wall-dock__panel:not([data-dock-lifted])')];const r=s[1].getBoundingClientRect();return {x:r.left+60,y:r.top+r.height*0.7}})()");
+    const target = await run("(()=>{const s=[...document.querySelectorAll('.monitors-dock__monitor:not([data-monitor-lifted])')];const r=s[1].getBoundingClientRect();return {x:r.left+60,y:r.top+r.height*0.7}})()");
     const steps = 24;
     for (let i = 1; i <= steps; i++) {
       const x = start.x + (target.x - start.x) * i / steps;
@@ -113,12 +113,12 @@ app.whenReady().then(async () => {
       await record(1, 8);
     }
     await record(14);
-    await check('the zone moved under the pointer', base ? 'true' : "(()=>{const z=document.querySelector('.wall-dock__landing[data-open]');const s=[...document.querySelector('.wall-dock__panels').children];return !!z && s.indexOf(z) > 2})()");
+    await check('the zone moved under the pointer', base ? 'true' : "(()=>{const z=document.querySelector('.monitors-dock__landing[data-open]');const s=[...document.querySelector('.monitors-dock__monitors').children];return !!z && s.indexOf(z) > 2})()");
     await capture(base ? 'dock-over-dark' : 'dock-zone-open-dark', dockRect);
     await run(`__ghost.remove(); __fire('drop', document.elementFromPoint(${target.x}, ${target.y}) || __panels, ${target.x}, ${target.y}); __fire('dragend', __head, ${target.x}, ${target.y}); true`);
     await record(22, 8);
-    await check('vitals landed third', "(()=>{const s=[...document.querySelectorAll('.wall-dock__panel')].map(e=>e.getAttribute('aria-label'));return s[2]==='Vitals dock panel'})()");
-    await check('no zones after drop', "!document.querySelector('.wall-dock__landing')");
+    await check('vitals landed third', "(()=>{const s=[...document.querySelectorAll('.monitors-dock__monitor')].map(e=>e.getAttribute('aria-label'));return s[2]==='Vitals monitor'})()");
+    await check('no zones after drop', "!document.querySelector('.monitors-dock__landing')");
     await capture('dock-dropped-dark', dockRect);
     if (win.isFocused()) throw Error('Fixture focus invariant failed');
     report.background = { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds() };

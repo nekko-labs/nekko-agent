@@ -5,12 +5,12 @@ import {
   DEFAULT_AGENT_PANEL,
   readAgentPanel,
   DEFAULT_WALL_STATE,
-  DEFAULT_WALL_DOCK,
+  DEFAULT_MONITORS_DOCK,
   DEFAULT_WALL_LAYOUT,
-  DOCK_PANELS,
+  MONITORS,
   WALL_KINDS,
   sanitizeWallLayout,
-  sanitizeWallDock,
+  sanitizeMonitorsDock,
   LEGACY_GRID_KEY,
   WALL_STATE_KEY,
   addPane,
@@ -164,13 +164,13 @@ describe('persistence', () => {
     const fresh = wallPane('chat', 'z');
     expect(allPanes(loaded.root).some((p) => p.id === fresh.id)).toBe(false);
   });
-  it('carries the previous grid over as a tiled wall with dock panels', () => {
+  it('carries the previous grid over as a tiled wall with monitors', () => {
     const storage = memory();
     storage.setItem(LEGACY_GRID_KEY, JSON.stringify({ cells: [{ kind: 'chat', refId: 'a' }, { kind: 'terminal', refId: 't' }], autoAdd: false, filter: 'chat', insights: { show: true, panels: { models: true } }, watermark: 77 }));
     const loaded = loadWallState(storage);
     expect(allPanes(loaded.root).map((p) => `${p.kind}:${p.refId}`)).toEqual(['chat:a', 'terminal:t']);
-    expect(loaded.dock.panels.automations).toBe(true);
-    expect(loaded.dock.panels.insights).toBe(true);
+    expect(loaded.dock.monitors.automations).toBe(true);
+    expect(loaded.dock.monitors.insights).toBe(true);
     expect(loaded.autoAdd).toBe(false);
     expect(loaded.filter).toBe('chat');
     expect(loaded.insights.panels.models).toBe(true);
@@ -179,8 +179,8 @@ describe('persistence', () => {
   it('leaves the panels out when the grid had hidden its insights box', () => {
     const migrated = migrateGridState({ cells: [{ kind: 'chat', refId: 'a' }], insights: { show: false } });
     expect(allPanes(migrated!.root).map((p) => p.kind)).toEqual(['chat']);
-    expect(migrated!.dock.panels.automations).toBe(false);
-    expect(migrated!.dock.panels.insights).toBe(false);
+    expect(migrated!.dock.monitors.automations).toBe(false);
+    expect(migrated!.dock.monitors.insights).toBe(false);
   });
   it('tolerates a damaged entry and an unknown kind', () => {
     const storage = memory();
@@ -237,11 +237,11 @@ describe('wall preferences and panel migration', () => {
   const b = { id: 'pane_b', kind: 'terminal', refId: 'b' };
   it('exports the dock descriptors and fresh defaults without tree panels', () => {
     expect(WALL_KINDS).toEqual(['chat', 'terminal']);
-    expect(DOCK_PANELS.map(p => p.key)).toEqual(Object.keys(DEFAULT_WALL_DOCK.panels));
-    expect(DEFAULT_WALL_DOCK).toEqual({ side: 'right', show: true,
-      panelOrder: DOCK_PANELS.map(p => p.key),
+    expect(MONITORS.map(p => p.key)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
+    expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true,
+      monitorOrder: MONITORS.map(p => p.key),
       minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false },
-      panels: { automations: true, utilization: true, budget: true, insights: false, hardware: true } });
+      monitors: { automations: true, utilization: true, budget: true, insights: false, hardware: true } });
     expect(seedWall(DEFAULT_WALL_STATE, [], [], 9).root).toBeNull();
     expect(DEFAULT_WALL_STATE.hero).toBeNull();
     expect(DEFAULT_WALL_STATE.folded).toEqual({});
@@ -250,28 +250,37 @@ describe('wall preferences and panel migration', () => {
     expect(sanitizeWallLayout({ mode: 'fixed', cols: 99, rows: -2 })).toEqual({ mode: 'fixed', cols: 6, rows: 1 });
     expect(sanitizeWallLayout({ mode: 'focus', cols: 2.6, rows: 1.2 })).toEqual({ mode: 'focus', cols: 3, rows: 1 });
     expect(sanitizeWallLayout({ mode: 'other', cols: Infinity, rows: '4' })).toEqual(DEFAULT_WALL_LAYOUT);
-    expect(sanitizeWallDock({ side: 'other', show: 0, minimized: 'yes', panels: { insights: true, budget: false, vitals: true, hardware: 0, alien: true } }))
-      .toEqual({ ...DEFAULT_WALL_DOCK, panels: { ...DEFAULT_WALL_DOCK.panels, insights: true, budget: false } });
-    for (const side of ['right', 'left', 'top', 'bottom']) expect(sanitizeWallDock({ side }).side).toBe(side);
+    expect(sanitizeMonitorsDock({ side: 'other', show: 0, minimized: 'yes', panels: { insights: true, budget: false, vitals: true, hardware: 0, alien: true } }))
+      .toEqual({ ...DEFAULT_MONITORS_DOCK, monitors: { ...DEFAULT_MONITORS_DOCK.monitors, insights: true, budget: false } });
+    for (const side of ['right', 'left', 'top', 'bottom']) expect(sanitizeMonitorsDock({ side }).side).toBe(side);
     for (const watermark of [-1, '10', null]) expect(restore({ watermark }).watermark).toBe(0);
     const state = restore({ autoAdd: 'false', hero: 42, folded: { a: true, b: false, c: 1, '': true } });
     expect(state.autoAdd).toBe(true);
     expect(state.hero).toBeNull();
     expect(state.folded).toEqual({ a: true, b: false });
     expect(restore(null)).toEqual(DEFAULT_WALL_STATE);
-    expect(sanitizeWallDock([])).toEqual(DEFAULT_WALL_DOCK);
+    expect(sanitizeMonitorsDock([])).toEqual(DEFAULT_MONITORS_DOCK);
   });
-  it('sanitizes minimization independently for known dock panels without mutating defaults', () => {
+  it('reads docks saved before monitors were renamed from panels', () => {
+    const legacy = sanitizeMonitorsDock({ panels: { insights: true, budget: false }, panelOrder: ['budget', 'hardware'] });
+    expect(legacy.monitors).toEqual({ ...DEFAULT_MONITORS_DOCK.monitors, insights: true, budget: false });
+    expect(legacy.monitorOrder?.slice(0, 2)).toEqual(['budget', 'hardware']);
+    expect(legacy).not.toHaveProperty('panels');
+    expect(legacy).not.toHaveProperty('panelOrder');
+    // The new names win when both are present.
+    expect(sanitizeMonitorsDock({ monitors: { budget: true }, panels: { budget: false } }).monitors.budget).toBe(true);
+  });
+  it('sanitizes minimization independently for known monitors without mutating defaults', () => {
     const minimized = { utilization: true, budget: false, insights: true, hardware: 1, alien: true };
-    const dock = sanitizeWallDock({ panels: { utilization: false }, minimized });
-    expect(dock.minimized).toEqual({ ...DEFAULT_WALL_DOCK.minimized, utilization: true, insights: true });
-    expect(dock.panels.utilization).toBe(false);
-    expect(dock.minimized).not.toBe(DEFAULT_WALL_DOCK.minimized);
+    const dock = sanitizeMonitorsDock({ panels: { utilization: false }, minimized });
+    expect(dock.minimized).toEqual({ ...DEFAULT_MONITORS_DOCK.minimized, utilization: true, insights: true });
+    expect(dock.monitors.utilization).toBe(false);
+    expect(dock.minimized).not.toBe(DEFAULT_MONITORS_DOCK.minimized);
     dock.minimized.automations = true;
-    expect(DEFAULT_WALL_DOCK.minimized.automations).toBe(false);
+    expect(DEFAULT_MONITORS_DOCK.minimized.automations).toBe(false);
     expect(minimized).toEqual({ utilization: true, budget: false, insights: true, hardware: 1, alien: true });
     for (const invalid of [true, false, null, 'yes', [], { utilization: 'yes' }]) {
-      expect(sanitizeWallDock({ minimized: invalid }).minimized).toEqual(DEFAULT_WALL_DOCK.minimized);
+      expect(sanitizeMonitorsDock({ minimized: invalid }).minimized).toEqual(DEFAULT_MONITORS_DOCK.minimized);
     }
   });
   it('persists companion folding per session without removing or folding chat panes', () => {
@@ -286,18 +295,18 @@ describe('wall preferences and panel migration', () => {
     const saved = { root: { id: 'split_c', dir: 'row', children: [a,
       { id: 'pane_d', kind: 'automations', refId: 'automations' }, b,
       { id: 'pane_e', kind: 'insights', refId: 'insights' }], sizes: [0.2, 0.3, 0.4, 0.1] },
-      dock: { show: false, panels: { automations: false, insights: false } } };
+      dock: { show: false, monitors: { automations: false, insights: false } } };
     const state = restore(saved);
     expect(state.root).toMatchObject({ id: 'split_c', dir: 'row', children: [a, b] });
     if (!state.root || !isSplit(state.root)) throw new Error('Expected split');
     expect(state.root.sizes[0]).toBeCloseTo(1 / 3);
     expect(state.root.sizes[1]).toBeCloseTo(2 / 3);
-    expect(state.dock.panels.automations).toBe(true);
-    expect(state.dock.panels.insights).toBe(true);
+    expect(state.dock.monitors.automations).toBe(true);
+    expect(state.dock.monitors.insights).toBe(true);
     expect(state.dock.show).toBe(false);
-    expect(saved.dock.panels.insights).toBe(false);
+    expect(saved.dock.monitors.insights).toBe(false);
     expect(loadWallState(undefined, toWallSetting(state))).toEqual(state);
-    expect(DEFAULT_WALL_DOCK.panels.insights).toBe(false);
+    expect(DEFAULT_MONITORS_DOCK.monitors.insights).toBe(false);
   });
   it('collapses panel-only branches without changing intact nested trees', () => {
     const nested = { id: 'split_f', dir: 'col', children: [a, b], sizes: [0.25, 0.75] };
@@ -308,8 +317,8 @@ describe('wall preferences and panel migration', () => {
   });
   it('round-trips every new preference through local and shared persistence', () => {
     const state = { ...DEFAULT_WALL_STATE, layout: { mode: 'focus' as const, cols: 6, rows: 1 },
-      dock: { ...DEFAULT_WALL_DOCK, side: 'bottom' as const, show: false,
-        minimized: { ...DEFAULT_WALL_DOCK.minimized, utilization: true, budget: true } },
+      dock: { ...DEFAULT_MONITORS_DOCK, side: 'bottom' as const, show: false,
+        minimized: { ...DEFAULT_MONITORS_DOCK.minimized, utilization: true, budget: true } },
       hero: 'session-a', folded: { 'session-a': true, 'session-b': false } };
     let raw = '';
     saveWallState({ setItem: (_, value) => { raw = value; } }, state);
