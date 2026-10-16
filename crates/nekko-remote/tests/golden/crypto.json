@@ -1307,6 +1307,206 @@
     "action": "deny",
     "reason": "bad-code"
    }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": "ABCD2345"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "dev-2",
+     "name": "Device",
+     "platform": "unknown",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": true
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": "ABCD2345"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": "ABCD2345"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": "ABCD2345",
+    "name": "A55 di Davide",
+    "platform": "android"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "welcome",
+    "device": {
+     "id": "dev-2",
+     "name": "A55 di Davide",
+     "platform": "android",
+     "createdAt": 1760000000000,
+     "lastSeenAt": 1760000000000
+    },
+    "enrolled": true
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": "ABCD2345",
+    "name": "A55 di Davide",
+    "platform": "android"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": "ABCD2345",
+    "name": "A55 di Davide",
+    "platform": "android"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": "WRONG"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": "WRONG"
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": "WRONG"
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "bad-code"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": ""
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000600000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "revoked"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": ""
+   },
+   "pairing": null,
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "revoked"
+   }
+  },
+  {
+   "hello": {
+    "type": "hello",
+    "deviceId": "dev-2",
+    "pair": ""
+   },
+   "pairing": {
+    "code": "ABCD2345",
+    "expiresAt": 1760000000000
+   },
+   "now": 1760000000000,
+   "verdict": {
+    "action": "deny",
+    "reason": "revoked"
+   }
   }
  ],
  "platforms": [

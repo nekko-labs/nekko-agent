@@ -157,7 +157,9 @@ Keystore. The app drops any provider API keys your computer sends with its setti
 stores them.</p>
 <p>Manage devices from the same card: <strong>rename</strong> them, <strong>revoke</strong> one instantly (it&#39;s kicked live and
 denied from then on), or <strong>Rotate secret</strong> to cryptographically reset the room, which unpairs
-everything at once.</p>
+everything at once. A revoked phone can come back only the way a new one does: choose <strong>Pair a
+device</strong> on the computer and scan the new QR from the phone (the one-time code is the proof). Older
+computers refused a revoked phone even then; on those, <strong>Rotate secret</strong> first.</p>
 <p>Remote access survives restarts: if it was enabled, the agent reconnects when Nekko Agent starts.</p>
 <h2 id="what-a-paired-phone-can-do"><a class="anchor" href="#what-a-paired-phone-can-do" aria-hidden="true" tabindex="-1">#</a>What a paired phone can do</h2>
 <p>Your computer decides what a paired phone may ask for, whatever the phone app does: locking the
@@ -208,7 +210,7 @@ offline/incognito switches. Messages cannot attach files from the computer.</li>
 </tr>
 <tr>
 <td>Revoked device replays old creds</td>
-<td>The agent refuses its handshake and unicasts nothing to it; rotate the secret for a full cryptographic reset</td>
+<td>The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer&#39;s owner; rotate the secret for a full cryptographic reset</td>
 </tr>
 <tr>
 <td>Malicious relay withholding/reordering</td>

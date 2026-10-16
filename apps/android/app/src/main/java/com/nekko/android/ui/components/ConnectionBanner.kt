@@ -32,8 +32,13 @@ import com.nekko.protocol.RelayHint
 import com.nekko.android.BuildConfig
 import com.nekko.protocol.RelayState
 
+/**
+ * What a refused phone should do. REVOKED names the steps on the computer: a
+ * fresh QR re-admits a removed phone; a computer from before that change only
+ * lets it back after Rotate secret, so that is the fallback.
+ */
 fun deniedCopy(reason: DenyReason?): String = when (reason) {
-    DenyReason.REVOKED -> "This phone was removed on your computer. Pair it again."
+    DenyReason.REVOKED -> "This phone was removed on your computer. There: Settings → Remote access → Pair a device, then scan the new QR here. If it still refuses, use Rotate secret there first."
     DenyReason.BAD_CODE -> "That pairing code expired or was already used. Scan a fresh QR."
     DenyReason.UNKNOWN_DEVICE -> "Your computer doesn’t know this phone yet. Scan a pairing QR."
     DenyReason.KICKED -> "Your computer disconnected this phone. Pair it again."
@@ -73,7 +78,7 @@ fun ConnectionBanner(s: ComputersState, onPair: () -> Unit, onComputers: () -> U
     ) {
         Dot(tone)
         Column(Modifier.weight(1f)) {
-            Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null) 5 else 2, overflow = TextOverflow.Ellipsis)
+            Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null || denied) 5 else 2, overflow = TextOverflow.Ellipsis)
             if (s.conn == RelayState.ONLINE && !denied) {
                 Text(
                     "End-to-end encrypted via ${Pairing.relayHost(active.relayUrl)}",

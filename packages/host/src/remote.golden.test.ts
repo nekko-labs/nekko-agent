@@ -138,6 +138,11 @@ it('seals, opens and derives keys as WebCrypto does', async () => {
     { type: 'hello', deviceId: 'new', pair: 'ABCD2345', name: 12, platform: 3 },
     { type: 'hello', deviceId: 'new', pair: '' },
     { type: 'hello', deviceId: 'new', pair: 'ABCD2345', platform: null },
+    // A revoked device pairing again: with the live code it is re-admitted as new.
+    { type: 'hello', deviceId: 'dev-2', pair: 'ABCD2345' },
+    { type: 'hello', deviceId: 'dev-2', pair: 'ABCD2345', name: 'A55 di Davide', platform: 'android' },
+    { type: 'hello', deviceId: 'dev-2', pair: 'WRONG' },
+    { type: 'hello', deviceId: 'dev-2', pair: '' },
   ];
   const verdicts = [];
   for (const hello of hellos) {
@@ -469,6 +474,12 @@ it('keeps remote.json and its replies across a run of operations', async () => {
       { op: 'hello', args: [{ type: 'hello', deviceId: 'phone-3', pair: '@code' }], at: NOW + PAIRING_TTL_MS + 1 },
       { op: 'revoke', args: ['phone-2'] },
       { op: 'hello', args: [{ type: 'hello', deviceId: 'phone-2' }] },
+      // The revoked phone pairs again with a fresh code: re-admitted, the code is spent.
+      { op: 'pair' },
+      { op: 'hello', args: [{ type: 'hello', deviceId: 'phone-2', name: 'Pixel again', platform: 'android', pair: '@code' }] },
+      { op: 'hello', args: [{ type: 'hello', deviceId: 'phone-2' }] },
+      { op: 'hello', args: [{ type: 'hello', deviceId: 'phone-4', pair: '@code' }] },
+      { op: 'revoke', args: ['phone-2'] },
       { op: 'revoke', args: ['nobody'] },
       { op: 'status' },
       { op: 'disable' },
