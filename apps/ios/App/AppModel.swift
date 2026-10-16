@@ -30,6 +30,10 @@ final class AppModel {
 
     init() {
         let keychain = KeychainStore()
+        #if DEBUG
+        // UI tests start from a fresh install; the Keychain outlives uninstalling the app.
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { keychain.wipe() }
+        #endif
         let prefs = Prefs()
         let deviceName = UIDevice.current.name
         self.keychain = keychain

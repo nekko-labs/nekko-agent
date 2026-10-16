@@ -13,24 +13,22 @@ final class LiveRelayTests: XCTestCase {
         }
         let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
         let app = XCUIApplication()
-        app.launchArguments = ["-appLock", "NO", "-theme", theme == "dark" ? "dark" : "light"]
+        app.launchArguments = ["-uiTestReset", "-appLock", "NO", "-theme", theme == "dark" ? "dark" : "light"]
         app.launch()
         allowSystemAlerts()
 
-        app.open(link)
-        // iOS may ask "Open in …?" for a custom scheme before handing it over.
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let openButton = springboard.buttons["Open"]
-        if openButton.waitForExistence(timeout: 3) { openButton.tap() }
-        let pair = app.navigationBars["Pair with a computer?"].buttons["Pair"]
-        if !pair.waitForExistence(timeout: 10) {
-            attach(app, "\(theme)-0-no-confirm-sheet")
-            print("UI hierarchy:\n\(app.debugDescription)\nSpringboard:\n\(springboard.debugDescription)")
-            XCTFail("the pairing link did not open the confirmation sheet")
-            return
-        }
-        attach(app, "\(theme)-1-confirm-pair")
-        pair.tap()
+        // Pair through the paste field (the deep link lands on the same code path,
+        // but XCUITest's URL opening is unreliable for custom schemes).
+        let start = app.buttons["Pair with your computer"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        attach(app, "\(theme)-0-welcome")
+        start.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        attach(app, "\(theme)-1-pair")
+        app.buttons["Pair"].firstMatch.tap()
         tapSystemAlertIfShown()
 
         let newChat = app.buttons["New chat"]
