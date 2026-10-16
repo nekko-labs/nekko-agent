@@ -1938,9 +1938,33 @@
 .agent-logs-drawer[data-overlay] .agent-logs-drawer-inner { border-left: 1px solid var(--logs-ring); border-radius: var(--pane-radius, 12px); box-shadow: 0 18px 48px -18px rgb(0 0 0 / .55); }
 .agent-logs-drawer-head { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 500; }
 .agent-logs-drawer-body { position: relative; flex: 1; min-height: 0; }
-/* The window gives up its right-hand rounding where the drawer joins it. */
-.command-wall-window[data-wall-logs-open] > .panel { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.command-wall-window[data-wall-logs-open] > .panel::after { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* Beside its window, the drawer flows out of it: the window keeps its rounded
+   corners, the drawer starts LOGS_DRAWER_INSET (wallLogs.ts: corner radius +
+   fillet) in from its top and bottom, and a concave fillet above and below
+   curves the window's right edge into the drawer's top and bottom edges. The
+   box grows by the fillet on both ends (content-box padding) so the slide-out
+   clip-path reveals the fillets with the drawer instead of cutting them off. */
+.agent-logs-drawer:not([data-overlay]) {
+  --logs-fillet: 12px;
+  box-sizing: content-box;
+  margin-top: calc(-1 * var(--logs-fillet));
+  padding-block: var(--logs-fillet);
+}
+.agent-logs-drawer:not([data-overlay])::before,
+.agent-logs-drawer:not([data-overlay])::after {
+  content: ''; position: absolute; left: 0; z-index: 1; pointer-events: none;
+  width: var(--logs-fillet); height: var(--logs-fillet);
+}
+/* Fill everything in the corner square outside a circle centred on its far
+   corner; the ring traces the arc and meets the window and drawer borders. */
+.agent-logs-drawer:not([data-overlay])::before {
+  top: 0;
+  background: radial-gradient(circle at 100% 0, transparent calc(var(--logs-fillet) - 1px), var(--logs-ring) calc(var(--logs-fillet) - 1px), var(--logs-ring) var(--logs-fillet), var(--win, var(--surface)) calc(var(--logs-fillet) + .5px));
+}
+.agent-logs-drawer:not([data-overlay])::after {
+  bottom: 0;
+  background: radial-gradient(circle at 100% 100%, transparent calc(var(--logs-fillet) - 1px), var(--logs-ring) calc(var(--logs-fillet) - 1px), var(--logs-ring) var(--logs-fillet), var(--win, var(--surface)) calc(var(--logs-fillet) + .5px));
+}
 @keyframes agent-logs-drawer-out {
   from { clip-path: inset(0 100% 0 0); opacity: .4; }
   to { clip-path: inset(0 0 0 0); opacity: 1; }
