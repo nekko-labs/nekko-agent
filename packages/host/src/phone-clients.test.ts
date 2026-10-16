@@ -13,7 +13,7 @@ it('allows every channel the phone clients call', () => {
   const sources = [
     'apps/mobile/src/lib/protocol.ts',
     'apps/android/protocol/src/main/kotlin/com/nekko/protocol/Wire.kt',
-    'apps/ios/Protocol/Sources/NekkoProtocol/HostProtocol.swift',
+    'apps/ios/Protocol/Sources/NekkoProtocol/Wire.swift',
   ];
   const ipc = new Set<string>(Object.values(IpcChannels));
   const used = new Map<string, string>();

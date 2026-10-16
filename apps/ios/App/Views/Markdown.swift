@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Enough Markdown for agent replies, without a dependency: fenced code
 /// blocks (scrollable, monospaced, copyable), headings, bullet and numbered
