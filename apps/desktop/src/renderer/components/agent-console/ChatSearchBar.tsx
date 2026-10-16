@@ -91,18 +91,9 @@ export function ChatSearchBar({ rows, scrollRoot, transcript, onClose }: {
 
   useLayoutEffect(() => { input.current?.focus(); input.current?.select(); }, []);
 
-  // A new query starts where the reader is.
+  // A new query always starts at the first match in the chat: 1 of N.
   useEffect(() => {
-    const sc = scrollRoot();
-    const visible = new Set<string>();
-    if (sc) {
-      const box = sc.getBoundingClientRect();
-      for (const el of sc.querySelectorAll<HTMLElement>('[data-vt-key]')) {
-        const r = el.getBoundingClientRect();
-        if (r.bottom > box.top && r.top < box.bottom) visible.add(el.dataset.vtKey!);
-      }
-    }
-    setCurrent(startMatch(matches, visible));
+    setCurrent(startMatch(matches));
     // Only when the query changes, not when rows stream in.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);

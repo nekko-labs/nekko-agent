@@ -85,10 +85,8 @@ describe('ordering and stepping', () => {
     expect(stepMatch(0, 0, 1)).toBe(-1);
   });
 
-  it('starts at the first match on screen, else the latest', () => {
-    const matches = findChatMatches(rows, 'scroll');
-    expect(startMatch(matches, new Set(['c']))).toBe(1);
-    expect(startMatch(matches, new Set(['zzz']))).toBe(2);
-    expect(startMatch([], new Set(['a']))).toBe(-1);
+  it('always starts at the first match (1 of N), or none', () => {
+    expect(startMatch(findChatMatches(rows, 'scroll'))).toBe(0);
+    expect(startMatch([])).toBe(-1);
   });
 });

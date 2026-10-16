@@ -79,6 +79,9 @@ app.whenReady().then(async () => {
       await key('F', ['control']); await sleep(250);
       let s = await state();
       check(`Ctrl+F opens the search bar with the input focused (${t})`, s.open && s.focused === 'Find in chat');
+      const field = await run(`(()=>{const i=document.querySelector('[aria-label="Find in chat"]');const bar=document.querySelector('[data-chat-search]');const c=getComputedStyle(i),b=getComputedStyle(bar);return {outline:c.outlineStyle,shadow:c.boxShadow,underline:c.borderBottomStyle+' '+c.borderBottomWidth,top:c.borderTopWidth,left:c.borderLeftWidth,right:c.borderRightWidth,bg:c.backgroundColor,barBorder:b.borderTopColor,lineColor:getComputedStyle(document.documentElement).getPropertyValue('--line').trim()}})()`);
+      report.measures[`field-${t}`] = field;
+      check(`focused search field has no ring or fill, only a line under it (${t})`, field.outline === 'none' && field.shadow === 'none' && /^solid (0\.\d+|1)px$/.test(field.underline) && field.top === '0px' && field.left === '0px' && field.right === '0px' && field.bg === 'rgba(0, 0, 0, 0)');
       check(`Ctrl+K still opens the command palette, not search (${t})`, true);
 
       // Whole word, any case: typed in mixed case.
@@ -87,6 +90,7 @@ app.whenReady().then(async () => {
       report.measures[`typed-${t}`] = s;
       const m = /^(\d+) of (\d+)$/.exec(s.count || '');
       check(`count is the whole-word case-insensitive total, ${expected} (${t})`, m && Number(m[2]) === expected);
+      check(`a new search always starts at 1 of ${expected} (${t})`, s.count === `1 of ${expected}`);
       check(`every highlight is exactly the word, ignoring case (${t})`, s.all > 0 && s.allWords.length === 1 && s.allWords[0] === 'scroll');
       check(`partial words (scroller, autoscroll, scrolled) are not highlighted (${t})`, s.allWords.every(w => w === 'scroll'));
       check(`one current match, shown in view (${t})`, s.current.length === 1 && s.currentInView === true);

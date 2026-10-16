@@ -81,12 +81,7 @@ export function stepMatch(current: number, total: number, dir: 1 | -1): number {
   return (current + dir + total) % total;
 }
 
-/**
- * Where to start when a query is typed: the first match in a row that is on
- * screen, so the search begins where the reader is; otherwise the latest one.
- */
-export function startMatch(matches: readonly ChatMatch[], visibleRowKeys: ReadonlySet<string>): number {
-  if (!matches.length) return -1;
-  const i = matches.findIndex((m) => visibleRowKeys.has(m.rowKey));
-  return i >= 0 ? i : matches.length - 1;
+/** Where a new query starts: always the first match in the chat (1 of N), or none. */
+export function startMatch(matches: readonly ChatMatch[]): number {
+  return matches.length ? 0 : -1;
 }

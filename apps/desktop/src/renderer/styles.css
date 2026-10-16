@@ -1555,7 +1555,8 @@
   background: var(--surface); box-shadow: var(--shadow-md);
 }
 .chat-search-input {
-  width: 180px; min-width: 0; border: 0; outline: none; background: transparent;
+  width: 180px; min-width: 0; border: 0; border-bottom: 1px solid var(--ink-faint); border-radius: 0;
+  padding: 2px 0; outline: none; background: transparent;
   font-size: 12.5px; color: var(--ink);
 }
 .chat-search-input::placeholder { color: var(--ink-faint); }
@@ -1566,8 +1567,9 @@
 }
 .chat-search-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
 .chat-search-btn:disabled { opacity: .4; cursor: default; }
-.chat-search-btn:focus-visible, .chat-search-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.chat-search:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.chat-search-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* No focus ring or tint on the field: only a line under it shows where to type. */
+.chat-search-input, .chat-search-input:focus, .chat-search-input:focus-visible { outline: none; box-shadow: none; }
 ::highlight(nekko-chat-search) { background-color: color-mix(in srgb, var(--highlight) 32%, transparent); color: inherit; }
 ::highlight(nekko-chat-search-current) { background-color: var(--highlight); color: #1b1304; }
 /* Beside the open Agent Monitor toggle, the bar moves left of it. */
