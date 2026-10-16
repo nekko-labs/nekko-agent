@@ -956,6 +956,16 @@ It also runs **models on the phone itself** (llama.cpp, curated small GGUF model
 sized to the phone's memory), so you can keep chatting when the computer is off. Those chats never
 leave the phone and don't use the relay.
 
+**The native iPhone app** (`apps/ios`, SwiftUI) does the same over the same encrypted relay, and
+adds what only iOS can: a **Live Activity** for each running chat on the Lock Screen and in the
+Dynamic Island, with **Allow / Deny** for a waiting tool and **Stop**; notifications with Allow /
+Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
+and dictation (Whisper on your computer when Nekko Voice is installed, else the iPhone's own
+speech recognition). Its pairing screen leads with Tailscale and shows whether Tailscale is on on
+the iPhone. If a Tailscale relay can't be reached, the app says which side is the problem:
+Tailscale is off on the phone, or the computer isn't answering. With the app lock on (Face ID or
+passcode, on by default), the Lock Screen and notifications never show chat titles or commands.
+
 On the phone, the pairing key and the derived encryption key live in the iOS Keychain / Android
 Keystore. The app drops any provider API keys your computer sends with its settings and never
 stores them.
@@ -1036,8 +1046,10 @@ Tailscale switched on. The relay only listens on the Tailscale interface, so
 `NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` is safe here; never use that flag on a public bind.
 
 Plain `ws://` is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
-the app's own end-to-end encryption sits on top. The iOS app ships with Expo's default App Transport
-Security (arbitrary loads allowed). **The Android app allows plain `ws://` only to Tailscale
+the app's own end-to-end encryption sits on top. The Expo iOS app ships with Expo's default App
+Transport Security (arbitrary loads allowed). **The native iPhone app allows plain `ws://` only toward
+private networks**: Tailscale (`*.ts.net` names and `100.x.y.z` addresses) and your local network.
+It refuses a `ws://` link to anything on the open internet before dialing; use `wss://` there. **The Android app allows plain `ws://` only to Tailscale
 MagicDNS names (`*.ts.net`)**, so use the name the script prints (`ws://gomi.tailfd6474.ts.net:4400`),
 not the `100.x.y.z` address: Android can't allow an IP range, and blocks the bare address. If you
 use an address the phone can't reach (a bare Tailscale IP, `localhost`, or any other plain `ws://`
