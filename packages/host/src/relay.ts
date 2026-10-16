@@ -1,4 +1,4 @@
-import { IpcEvents, callFromPhone, deriveKey, seal, open, type RemoteHelloReply } from '@nekko-agent/shared';
+import { IpcEvents, PHONE_MAX_FRAME_BYTES, callFromPhone, deriveKey, open, phoneFrameTooLarge, seal, type RemoteHelloReply } from '@nekko-agent/shared';
 import { createDispatcher } from './dispatch.js';
 import type { Host } from './host.js';
 
@@ -78,6 +78,20 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
   const sealFrame = async (frame: unknown) => JSON.stringify({ enc: await seal(await keyP, frame) });
   const sendTo = (cid: string, frame: unknown) =>
     enqueue(sealFrame(frame), (data) => sendRaw({ type: 'd', cid, data }));
+  /**
+   * A reply to one request. The relay silently drops a frame over its limit,
+   * which left the phone waiting for its timeout, so a reply that seals larger
+   * than PHONE_MAX_FRAME_BYTES goes out as an error the phone shows at once.
+   */
+  const reply = (cid: string, id: unknown, result: unknown) =>
+    enqueue(
+      sealFrame({ type: 'res', id, result }).then(async (data) =>
+        data.length <= PHONE_MAX_FRAME_BYTES
+          ? data
+          : sealFrame({ type: 'res', id, error: phoneFrameTooLarge(data.length) }),
+      ),
+      (data) => sendRaw({ type: 'd', cid, data }),
+    );
   /** Fan an event out to every welcomed connection (one seal per event). */
   const broadcast = (frame: unknown) => {
     if (![...conns.values()].some((c) => c.deviceId)) return Promise.resolve();
@@ -152,7 +166,7 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
       // checked here on the computer, with secrets stripped from replies.
       const args = Array.isArray(frame.args) ? frame.args : [];
       const result = await callFromPhone(dispatch, String(frame.channel), args);
-      await sendTo(cid, { type: 'res', id: frame.id, result: result ?? null });
+      await reply(cid, frame.id, result ?? null);
     } catch (e) {
       await sendTo(cid, { type: 'res', id: frame.id, error: (e as Error).message });
     }

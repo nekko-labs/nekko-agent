@@ -99,5 +99,10 @@
   "ask",
   "guardrails",
   "yolo"
- ]
+ ],
+ "sessionView": {
+  "messages": 300,
+  "textChars": 4000
+ },
+ "maxFrameBytes": 9437184
 }

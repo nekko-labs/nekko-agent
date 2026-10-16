@@ -60,6 +60,8 @@ data class ChatUi(
     val blocked: String?,
     val queued: List<String>,
     val rate: Double?,
+    /** Older messages the computer kept back from the phone; they stay on the computer. */
+    val omittedMessages: Int = 0,
 )
 
 /**
@@ -213,6 +215,7 @@ class ChatController(
                 blocked = blocked,
                 queued = state.session?.queue ?: emptyList(),
                 rate = turn.rate,
+                omittedMessages = state.session?.omittedMessages ?: 0,
             )
         }
     }

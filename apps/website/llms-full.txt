@@ -913,6 +913,11 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > which on many phones sends the audio to Google. **Settings → Dictation** on the phone lets you use
 > only the computer, only the phone, or turn the microphone off.
 >
+> **Long chats on the phone**: the phone gets the newest 300 messages of a chat, without the
+> screenshots inside tool results and with long tool output shortened to 4,000 characters, so even
+> a very long agent run opens in seconds. The chat says how many earlier messages, characters and
+> images stayed on the computer; open it there for the full detail.
+>
 > The Android app is **locked by default**: every time you open it, or come back to it, it asks for
 > your fingerprint, face or the phone's screen lock (PIN, pattern or password) before it shows
 > anything. While it is locked nothing can be read or approved, and the recent-apps preview shows a

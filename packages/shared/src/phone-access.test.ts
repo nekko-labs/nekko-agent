@@ -11,6 +11,8 @@ import {
   phoneChannelAllowed,
   phoneSettingsUpdate,
   redactPhoneResult,
+  phoneSessionView,
+  PHONE_SESSION_VIEW,
   screenPhoneCall,
 } from './phone-access.js';
 
@@ -159,5 +161,71 @@ describe('chat options from a phone', () => {
     const dispatch = vi.fn(() => ({ id: 's1' }));
     await expect(callFromPhone(dispatch, 'session:get', ['s1'])).resolves.toEqual({ id: 's1' });
     expect(dispatch).toHaveBeenCalledWith('session:get', ['s1']);
+  });
+});
+
+describe('a chat as a phone receives it (session:get)', () => {
+  const msg = (i: number, extra: Record<string, unknown> = {}) => ({ id: `m${i}`, role: 'assistant', content: `reply ${i}`, ...extra });
+
+  it('keeps a small chat whole', () => {
+    const s = { id: 's1', title: 'Hi', messages: [msg(1), msg(2)] };
+    expect(phoneSessionView(s)).toEqual(s);
+  });
+
+  it('sends the newest messages and counts the rest', () => {
+    const n = PHONE_SESSION_VIEW.messages;
+    const s = { id: 's1', messages: Array.from({ length: n + 25 }, (_, i) => msg(i)) };
+    const v = phoneSessionView(s) as { messages: { id: string }[]; omittedMessages: number };
+    expect(v.messages).toHaveLength(n);
+    expect(v.messages[0].id).toBe('m25');
+    expect(v.messages.at(-1)?.id).toBe(`m${n + 24}`);
+    expect(v.omittedMessages).toBe(25);
+    expect(s.messages).toHaveLength(n + 25); // the computer's copy is untouched
+  });
+
+  it('drops tool images and cuts long tool output, saying so', () => {
+    const big = 'x'.repeat(PHONE_SESSION_VIEW.textChars + 500);
+    const s = {
+      id: 's1',
+      messages: [
+        { id: 't1', role: 'tool', content: '', toolResult: { toolCallId: 'c1', output: big, images: [{ data: 'AAAA' }, { data: 'BBBB' }] } },
+        { id: 't2', role: 'tool', content: '', toolResult: { toolCallId: 'c2', output: 'short', images: [] } },
+      ],
+    };
+    const [a, b] = (phoneSessionView(s) as { messages: { toolResult: Record<string, unknown> }[] }).messages;
+    expect(a.toolResult).toEqual({
+      toolCallId: 'c1',
+      output: 'x'.repeat(PHONE_SESSION_VIEW.textChars),
+      outputChars: PHONE_SESSION_VIEW.textChars + 500,
+      truncated: true,
+      omittedImages: 2,
+    });
+    expect(b.toolResult).toEqual({ toolCallId: 'c2', output: 'short' });
+  });
+
+  it('cuts long string tool arguments, keeps the rest', () => {
+    const big = 'y'.repeat(PHONE_SESSION_VIEW.textChars + 1);
+    const s = { id: 's1', messages: [msg(1, { toolCalls: [{ id: 'c1', name: 'write_file', input: { path: 'a.txt', content: big, mode: 1 } }, { id: 'c2', name: 'bash', input: { command: 'ls' } }] })] };
+    const [m] = (phoneSessionView(s) as { messages: { toolCalls: Record<string, unknown>[] }[] }).messages;
+    expect(m.toolCalls[0]).toEqual({ id: 'c1', name: 'write_file', input: { path: 'a.txt', content: 'y'.repeat(PHONE_SESSION_VIEW.textChars), mode: 1 }, truncated: true });
+    expect(m.toolCalls[1]).toEqual({ id: 'c2', name: 'bash', input: { command: 'ls' } });
+  });
+
+  it('never splits an emoji when cutting', () => {
+    const n = PHONE_SESSION_VIEW.textChars;
+    const out = 'z'.repeat(n - 1) + '😀' + 'tail';
+    const s = { id: 's1', messages: [{ id: 't', role: 'tool', content: '', toolResult: { toolCallId: 'c', output: out } }] };
+    const r = (phoneSessionView(s) as { messages: { toolResult: { output: string } }[] }).messages[0].toolResult.output;
+    expect(r).toBe('z'.repeat(n - 1));
+  });
+
+  it('is what callFromPhone returns for session:get; other values pass through', async () => {
+    const session = { id: 's1', messages: [{ id: 't', role: 'tool', content: '', toolResult: { toolCallId: 'c', output: 'ok', images: [{ data: 'A' }] } }] };
+    await expect(callFromPhone(() => session, 'session:get', ['s1'])).resolves.toEqual({
+      id: 's1',
+      messages: [{ id: 't', role: 'tool', content: '', toolResult: { toolCallId: 'c', output: 'ok', omittedImages: 1 } }],
+    });
+    expect(phoneSessionView(null)).toBeNull();
+    expect(phoneSessionView({ id: 's1' })).toEqual({ id: 's1' });
   });
 });

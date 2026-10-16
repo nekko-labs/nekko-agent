@@ -24,6 +24,11 @@ pub struct Policy {
     pub session_option_keys: Vec<String>,
     pub chat_send_keys: Vec<String>,
     pub chat_modes: Vec<String>,
+    /// `PHONE_SESSION_VIEW`: newest messages kept, tool text cut to this many UTF-16 units.
+    pub session_messages: usize,
+    pub session_text_chars: usize,
+    /// `PHONE_MAX_FRAME_BYTES`: the largest sealed reply frame sent to a phone.
+    pub max_frame_bytes: usize,
 }
 
 fn strings(v: &Value) -> Vec<String> {
@@ -47,6 +52,10 @@ pub fn policy() -> &'static Policy {
             session_option_keys: strings(&v["sessionOptionKeys"]),
             chat_send_keys: strings(&v["chatSendKeys"]),
             chat_modes: strings(&v["chatModes"]),
+            // Missing numbers keep nothing rather than send a frame too large to arrive.
+            session_messages: v["sessionView"]["messages"].as_u64().unwrap_or(0) as usize,
+            session_text_chars: v["sessionView"]["textChars"].as_u64().unwrap_or(0) as usize,
+            max_frame_bytes: v["maxFrameBytes"].as_u64().unwrap_or(9 * 1024 * 1024) as usize,
         }
     })
 }
@@ -219,8 +228,111 @@ pub fn redact(channel: &str, result: Value) -> Value {
             Value::Array(list) => Value::Array(list.iter().map(|p| pick(p, &policy().provider_view)).collect()),
             _ => json!([]),
         },
+        "session:get" => session_view(result),
         _ => result,
     }
+}
+
+/// `phoneFrameTooLarge`: the error a phone gets instead of a reply too large for the relay.
+pub fn frame_too_large(bytes: usize) -> String {
+    let mb = bytes as f64 / (1024.0 * 1024.0);
+    format!("This reply is too large to send to a phone ({mb:.1} MB). Open it on the computer.")
+}
+
+/// `cutText`: `s` cut to `n` UTF-16 units, dropping a surrogate pair cut in half.
+fn cut_text(s: &str, n: usize) -> String {
+    crate::hello::cut16(s, n).to_string()
+}
+
+/// Length in UTF-16 units, as JavaScript's `s.length`.
+fn len16(s: &str) -> usize {
+    s.encode_utf16().count()
+}
+
+/// `cutInput`: a tool call's input with long string values cut.
+fn cut_input(input: &Value, n: usize) -> (Value, bool) {
+    match input {
+        Value::String(s) if len16(s) > n => (json!(cut_text(s, n)), true),
+        Value::Object(m) => {
+            let mut cut = false;
+            let mut out = Map::new();
+            for (k, v) in m {
+                match v {
+                    Value::String(s) if len16(s) > n => {
+                        out.insert(k.clone(), json!(cut_text(s, n)));
+                        cut = true;
+                    }
+                    v => {
+                        out.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+            (Value::Object(out), cut)
+        }
+        v => (v.clone(), false),
+    }
+}
+
+/// `phoneMessage`: one message as the phone receives it.
+fn phone_message(m: &Value, n: usize) -> Value {
+    let Value::Object(m) = m else { return m.clone() };
+    let mut out = m.clone();
+    if let Some(Value::Object(r)) = m.get("toolResult") {
+        let mut r = r.clone();
+        if let Some(Value::Array(images)) = r.get("images") {
+            let count = images.len();
+            r.remove("images");
+            if count > 0 {
+                r.insert("omittedImages".into(), json!(count));
+            }
+        }
+        if let Some(Value::String(o)) = r.get("output")
+            && len16(o) > n
+        {
+            let full = len16(o);
+            let cut = cut_text(o, n);
+            r.insert("outputChars".into(), json!(full));
+            r.insert("output".into(), json!(cut));
+            r.insert("truncated".into(), json!(true));
+        }
+        out.insert("toolResult".into(), Value::Object(r));
+    }
+    if let Some(Value::Array(calls)) = m.get("toolCalls") {
+        let calls = calls
+            .iter()
+            .map(|c| match c {
+                Value::Object(cm) if cm.contains_key("input") => {
+                    let (input, cut) = cut_input(&cm["input"], n);
+                    if !cut {
+                        return c.clone();
+                    }
+                    let mut cm = cm.clone();
+                    cm.insert("input".into(), input);
+                    cm.insert("truncated".into(), json!(true));
+                    Value::Object(cm)
+                }
+                c => c.clone(),
+            })
+            .collect();
+        out.insert("toolCalls".into(), Value::Array(calls));
+    }
+    Value::Object(out)
+}
+
+/// `phoneSessionView`: the newest messages, tool images dropped, long tool
+/// text cut (`PHONE_SESSION_VIEW`). Not a session object: unchanged.
+pub fn session_view(session: Value) -> Value {
+    let Value::Object(mut s) = session else { return session };
+    let Some(Value::Array(all)) = s.get("messages") else { return Value::Object(s) };
+    let (keep_n, n) = (policy().session_messages, policy().session_text_chars);
+    let start = all.len().saturating_sub(keep_n);
+    let omitted = start;
+    let kept: Vec<Value> = all[start..].iter().map(|m| phone_message(m, n)).collect();
+    s.insert("messages".into(), Value::Array(kept));
+    if omitted > 0 {
+        s.insert("omittedMessages".into(), json!(omitted));
+    }
+    Value::Object(s)
 }
 
 /// Run a phone's request through the policy: refuse it, or call `run` with

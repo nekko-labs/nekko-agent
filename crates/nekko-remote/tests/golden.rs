@@ -273,15 +273,17 @@ fn the_phone_gate_decides_as_the_ts_does() {
     // packages/shared/src/phone-access.ts by the TS golden test.
     let g = golden("phone.json");
     let settings = g["settings"].clone();
+    let sessions = g["sessions"].clone();
     let cases = g["cases"].as_array().unwrap();
     assert!(cases.len() >= 30);
     let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
     for case in cases {
         let calls: Arc<Mutex<Vec<Value>>> = Arc::default();
-        let (seen, settings) = (calls.clone(), settings.clone());
+        let (seen, settings, sessions) = (calls.clone(), settings.clone(), sessions.clone());
         let host: nekko_remote::Dispatcher = Arc::new(move |channel: String, args: Value| {
             seen.lock().unwrap().push(json!([channel, args]));
             let out = match channel.as_str() {
+                "session:get" => sessions.get(args[0].as_str().unwrap_or("")).cloned().unwrap_or(Value::Null),
                 "providers:list" => settings["providers"].clone(),
                 c if c.starts_with("settings:") => settings.clone(),
                 c => json!({ "ok": c }),
@@ -298,4 +300,33 @@ fn the_phone_gate_decides_as_the_ts_does() {
         }
         same(&json!(*calls.lock().unwrap()), &case["calls"], &format!("{what}: host calls"));
     }
+}
+
+#[test]
+fn a_reply_too_large_for_the_relay_becomes_an_error() {
+    // relay.ts does the same: the relay drops frames over its limit without a word.
+    // Nothing here is compared byte for byte, so fresh random IVs as in real use.
+    let key = e2e::derive_key("00112233445566778899aabbccddeeff", "room-1");
+    let mut core = AgentCore::new(key.clone(), Box::new(e2e::random_iv));
+    let hello = json!({ "type": "hello", "deviceId": "p1" });
+    let data = json!({ "enc": e2e::seal_with_iv(&key, &hello, e2e::random_iv()) }).to_string();
+    let verify = |_: &Value| json!({ "type": "welcome", "device": { "id": "p1" } });
+    let relay = json!({ "type": "c", "cid": "c1", "data": data }).to_string();
+    core.on_relay(&relay, &verify);
+    let open_reply = |frame: &str| -> Value {
+        let f: Value = serde_json::from_str(frame).unwrap();
+        let d: Value = serde_json::from_str(s(&f["data"])).unwrap();
+        e2e::open(&key, s(&d["enc"])).unwrap()
+    };
+    // Small: the result as is.
+    let small = open_reply(&core.reply("c1", Some(json!(1)), Ok(json!({ "ok": true }))));
+    assert_eq!(small, json!({ "type": "res", "id": 1, "result": { "ok": true } }));
+    // ~9.6 MB of JSON: sealed and base64'd it is over the phone limit.
+    let big = Value::Array((0..1200).map(|i| json!({ "id": format!("s{i}"), "title": "x".repeat(8000) })).collect());
+    let reply = open_reply(&core.reply("c1", Some(json!(2)), Ok(big)));
+    assert_eq!(reply["id"], json!(2));
+    assert!(reply.get("result").is_none());
+    let e = s(&reply["error"]);
+    assert!(e.starts_with("This reply is too large to send to a phone ("), "{e}");
+    assert!(e.ends_with(" MB). Open it on the computer."), "{e}");
 }
