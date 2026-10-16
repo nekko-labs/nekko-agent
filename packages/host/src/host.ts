@@ -157,6 +157,7 @@ import {
   setTrainingSender,
   setTrainingNotifier,
   startTrainingScheduler,
+  DAEMON_TRAINING,
 } from './training.js';
 import {
   listWorkflowRuns,
@@ -521,14 +522,14 @@ export interface Host {
   runTaskNow(id: string): Promise<void>;
 
   /** Training/goal runs: the data-scientist agent + experiment-tree engine. */
-  listTrainingRuns(): TrainingRun[];
-  createTrainingRun(input: NewTrainingRun): TrainingRun;
-  updateTrainingRun(id: string, patch: Partial<TrainingRun>): TrainingRun[];
-  deleteTrainingRun(id: string): TrainingRun[];
-  startTrainingRun(id: string): TrainingRun[];
-  pauseTrainingRun(id: string): TrainingRun[];
-  stopTrainingRun(id: string): TrainingRun[];
-  addTrainingHint(id: string, text: string): TrainingRun[];
+  listTrainingRuns(): Promise<TrainingRun[]>;
+  createTrainingRun(input: NewTrainingRun): Promise<TrainingRun>;
+  updateTrainingRun(id: string, patch: Partial<TrainingRun>): Promise<TrainingRun[]>;
+  deleteTrainingRun(id: string): Promise<TrainingRun[]>;
+  startTrainingRun(id: string): Promise<TrainingRun[]>;
+  pauseTrainingRun(id: string): Promise<TrainingRun[]>;
+  stopTrainingRun(id: string): Promise<TrainingRun[]>;
+  addTrainingHint(id: string, text: string): Promise<TrainingRun[]>;
 
   listWorkflows(): Promise<WorkflowsSnapshot>;
   createWorkflow(input: NewWorkflow): Promise<Workflow>;
@@ -706,9 +707,10 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   });
   // Training/goal runs: agent events ride the shared bus; run changes get their
   // own event. Resume any runs that were mid-flight when the host went down.
+  // A daemon that owns training (crates/nekko-automation) resumes and drives them.
   setTrainingSender((e) => events.emit('agentEvent', e));
   setTrainingNotifier((runs) => events.emit('trainingUpdated', runs));
-  startTrainingScheduler();
+  unlessDaemonOwns(DAEMON_TRAINING, startTrainingScheduler);
   // Workflows: a run's agent steps stream on the shared bus, definition and run
   // changes get their own event. Any run the last shutdown interrupted is
   // written off before the scheduler starts, so it can't look stuck forever.
@@ -1288,14 +1290,15 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     deleteTask: (id) => viaDaemon('tasks', 'task:delete', [id], () => deleteTask(id)),
     runTaskNow: (id) => viaDaemon('tasks', 'task:runNow', [id], () => runTaskNow(id)),
 
-    listTrainingRuns,
-    createTrainingRun,
-    updateTrainingRun,
-    deleteTrainingRun,
-    startTrainingRun,
-    pauseTrainingRun,
-    stopTrainingRun,
-    addTrainingHint,
+    // The daemon runs training and goal runs when it owns them (crates/nekko-automation).
+    listTrainingRuns: () => viaDaemon(DAEMON_TRAINING, 'training:list', [], listTrainingRuns),
+    createTrainingRun: (input) => viaDaemon(DAEMON_TRAINING, 'training:create', [input], () => createTrainingRun(input)),
+    updateTrainingRun: (id, patch) => viaDaemon(DAEMON_TRAINING, 'training:update', [id, patch], () => updateTrainingRun(id, patch)),
+    deleteTrainingRun: (id) => viaDaemon(DAEMON_TRAINING, 'training:delete', [id], () => deleteTrainingRun(id)),
+    startTrainingRun: (id) => viaDaemon(DAEMON_TRAINING, 'training:start', [id], () => startTrainingRun(id)),
+    pauseTrainingRun: (id) => viaDaemon(DAEMON_TRAINING, 'training:pause', [id], () => pauseTrainingRun(id)),
+    stopTrainingRun: (id) => viaDaemon(DAEMON_TRAINING, 'training:stop', [id], () => stopTrainingRun(id)),
+    addTrainingHint: (id, text) => viaDaemon(DAEMON_TRAINING, 'training:hint', [id, text], () => addTrainingHint(id, text)),
 
     // The daemon runs workflows when it owns them (crates/nekko-automation).
     listWorkflows: () => viaDaemon('workflows', 'workflows:list', [], workflowsSnapshot),

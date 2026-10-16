@@ -22,9 +22,11 @@
 //!
 //! It runs `fetch_url`, the browser and window capture (`nekko-web`, the
 //! in-app browser through the desktop app's bridge) and the background-process
-//! tools (`nekko-tools`) and `agent_watch` (watches.rs) itself, and calls back for what has not moved:
-//! `turn:tool` (delegation targets, training reports, and MCP,
-//! sub-agents or `decide` for a host that keeps them), `turn:hook` (tool
+//! tools (`nekko-tools`), `agent_watch` (watches.rs) and a training or goal
+//! run's `report_experiment`, `report_artifact` and `update_plan`
+//! (nekko-automation `training`) itself, and calls back for what has not moved:
+//! `turn:tool` (delegation targets, and MCP, sub-agents, `decide` or the run
+//! tools for a host that keeps them), `turn:hook` (tool
 //! hooks, for a host that keeps them; given `facts.hookRules` they run here),
 //! `turn:headers` (Anthropic subscription rate
 //! limits), `loop:log` (the agent terminal); and it sends the host every
@@ -300,6 +302,10 @@ pub struct Turns {
     pub browsers: Arc<nekko_web::browser::Browsers>,
     /// `agent_watch` and its scheduler (watches.rs), with a data directory.
     pub watches: Option<Arc<crate::watches::Watches>>,
+    /// Training and goal runs (nekko-automation `training`), with a data
+    /// directory: a run chat's `report_experiment`, `report_artifact` and
+    /// `update_plan` are handled here.
+    pub training: Option<Arc<nekko_automation::Training>>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
     /// How each queued turn the daemon started as the next of a chain ends,
@@ -340,6 +346,7 @@ impl Turns {
             bridge: None,
             browsers: nekko_web::browser::Browsers::new(),
             watches: None,
+            training: None,
             running: Mutex::default(),
             pending: Pending::default(),
             chained: Mutex::default(),
@@ -368,6 +375,12 @@ impl Turns {
     /// `agent_watch` runs here (watches.rs).
     pub fn with_watches(mut self, watches: Option<Arc<crate::watches::Watches>>) -> Self {
         self.watches = watches;
+        self
+    }
+
+    /// A run chat's tools run here (nekko-automation `training`).
+    pub fn with_training(mut self, training: Option<Arc<nekko_automation::Training>>) -> Self {
+        self.training = training;
         self
     }
 
@@ -1451,6 +1464,12 @@ impl TurnTools {
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
             _ => {}
         }
+        if self.training
+            && let Some(runs) = self.turns.training.clone()
+            && matches!(name, "report_experiment" | "report_artifact" | "update_plan")
+        {
+            return Ok(self.run_tool(&runs, id, name, input).await);
+        }
         if name == "decide"
             && let Some(service) = &self.decide
         {
@@ -1504,6 +1523,36 @@ impl TurnTools {
             self.shared.emit(json!({ "type": "session_meta", "sessionId": self.shared.session_id }));
         }
         Ok(reply.get("result").cloned().unwrap_or_else(|| error(id, "The host returned no result.")))
+    }
+
+    /// A run chat's `report_experiment`, `report_artifact` or `update_plan`
+    /// (chat.ts `runHostTool`): recorded on the run, the plan mirrored onto
+    /// the chat so its plan rail shows it.
+    async fn run_tool(&self, runs: &Arc<nekko_automation::Training>, id: &str, name: &str, input: Value) -> Value {
+        let (runs, sid, tool) = (runs.clone(), self.shared.session_id.clone(), name.to_string());
+        let out = tokio::task::spawn_blocking(move || runs.tool(&sid, &tool, &input))
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+        let failed = match name {
+            "report_experiment" => "Failed to record",
+            "report_artifact" => "Failed to record the artifact",
+            _ => "Failed to update the plan",
+        };
+        let out = match out {
+            Ok(out) => out,
+            Err(e) => return error(id, format!("{failed}: {e}")),
+        };
+        if name == "update_plan" {
+            if let Some(obj) = lock(&self.session).as_object_mut() {
+                match out.get("plan").filter(|p| !p.is_null()) {
+                    Some(plan) => obj.insert("agentPlan".into(), plan.clone()),
+                    None => obj.remove("agentPlan"),
+                };
+            }
+            persist(&self.store, &self.session, self.incognito).await;
+            self.meta();
+        }
+        result(id, out.get("output").map(js::display).unwrap_or_default())
     }
 
     /// `agent_watch` (chat.ts `runHostTool`): not in incognito, goal-run or

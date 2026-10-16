@@ -339,6 +339,11 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::automation::WORKFLOW_CHANNELS.contains(&c) && ctx.automation.owns_workflows() => {
             ctx.automation.route(c, &args).await
         }
+        c if (crate::automation::TRAINING_CHANNELS.contains(&c) || c == crate::automation::TRAINING_TOOL)
+            && ctx.automation.owns_training() =>
+        {
+            ctx.automation.route(c, &args).await
+        }
         c if crate::connectors::CHANNELS.contains(&c) && crate::connectors::owned(ctx) => {
             crate::connectors::route(ctx, c, &args).await
         }
@@ -473,6 +478,10 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.automation.owns_workflows() {
         all.extend_from_slice(crate::automation::WORKFLOW_CHANNELS);
+    }
+    if ctx.automation.owns_training() {
+        all.extend_from_slice(crate::automation::TRAINING_CHANNELS);
+        all.push(crate::automation::TRAINING_TOOL);
     }
     if ctx.turns.watches.is_some() {
         all.extend_from_slice(crate::watches::CHANNELS);

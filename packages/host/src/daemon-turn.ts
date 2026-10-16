@@ -22,7 +22,8 @@ import { daemonOwns, LIVENESS_INTERVAL_MS, LIVENESS_STRIKES } from './daemon-cap
  *   fetches connector and index snippets and resolves the provider (a fresh
  *   subscription token), and puts all of that in the `chat:turn` spec;
  * - during it, the daemon calls back for the tools that still live here
- *   (`turn:tool`: delegation targets, training reports), for
+ *   (`turn:tool`: delegation targets; a training or goal run's tools only
+ *   when the daemon does not own training), for
  *   hooks when the daemon does not run them itself (`turn:hook`; it does when
  *   it owns `turn:hooks`) and with Anthropic
  *   rate-limit headers (`turn:headers`); a tool here that needs approval parks it in the daemon

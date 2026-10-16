@@ -328,7 +328,7 @@ export interface PlanUpdateResult {
 
 /**
  * Apply an `update_plan` call to an existing plan: the semantics both writers
- * share — goal-run plans on a TrainingRun and the live `agentPlan` on an
+ * share: goal-run plans on a TrainingRun and the live `agentPlan` on an
  * ordinary chat session.
  *
  * `replace` rewrites unfinished scope while retaining done/skipped history;

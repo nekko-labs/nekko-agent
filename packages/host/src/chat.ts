@@ -22,7 +22,7 @@ import {
   repairInterruptedHistory,
   INTERRUPTED_NOTE,
 } from '@nekko-agent/core';
-import { reportExperiment, reportArtifact, updateRunPlan, runPlanForSession } from './training.js';
+import { trainingTool } from './training.js';
 import { getSettings } from './store.js';
 import { DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
 import { chatWorkspaces, prepareChatWorktrees, runWorktreeSetup } from './chat-worktrees.js';
@@ -729,14 +729,14 @@ async function runHostTool(ctx: HostToolContext, call: ToolCall): Promise<ToolRe
   }
   if (call.name === 'report_experiment' && session.trainingRunId) {
     try {
-      return { toolCallId: call.id, output: reportExperiment(opts.sessionId, call.input as Record<string, unknown>) };
+      return { toolCallId: call.id, output: (await trainingTool(opts.sessionId, call.name, call.input as Record<string, unknown>)).output };
     } catch (e) {
       return { toolCallId: call.id, output: `Failed to record: ${(e as Error).message}`, isError: true };
     }
   }
   if (call.name === 'report_artifact' && session.trainingRunId) {
     try {
-      return { toolCallId: call.id, output: reportArtifact(opts.sessionId, call.input as Record<string, unknown>) };
+      return { toolCallId: call.id, output: (await trainingTool(opts.sessionId, call.name, call.input as Record<string, unknown>)).output };
     } catch (e) {
       return { toolCallId: call.id, output: `Failed to record the artifact: ${(e as Error).message}`, isError: true };
     }
@@ -748,10 +748,14 @@ async function runHostTool(ctx: HostToolContext, call: ToolCall): Promise<ToolRe
       // the plan rail can render it too); ordinary chats write
       // session.agentPlan directly. Either way the rail needs a session_meta
       // poke to re-read.
-      const output = session.trainingRunId
-        ? updateRunPlan(opts.sessionId, input)
-        : updateSessionPlan(session, input);
-      if (session.trainingRunId) session.agentPlan = runPlanForSession(opts.sessionId);
+      let output: string;
+      if (session.trainingRunId) {
+        const run = await trainingTool(opts.sessionId, 'update_plan', input);
+        output = run.output;
+        session.agentPlan = run.plan;
+      } else {
+        output = updateSessionPlan(session, input);
+      }
       persist();
       send({ type: 'session_meta', sessionId: opts.sessionId });
       return { toolCallId: call.id, output };
