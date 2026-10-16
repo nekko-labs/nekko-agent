@@ -161,7 +161,7 @@ final class RelayClientTests: XCTestCase {
                 lock.unlock()
                 try? await Task.sleep(nanoseconds: 5_000_000)
             }
-            XCTFail("status never matched; saw \(statuses.map(\.state))", file: file, line: line)
+            XCTFail("status never matched; saw \(statuses.map { "\($0.state)(\($0.detail ?? ""))" })", file: file, line: line)
             return nil
         }
 
