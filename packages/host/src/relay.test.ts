@@ -114,7 +114,8 @@ describe('relay agent: what a phone may do', () => {
       await vi.waitFor(async () => {
         res = (await framesFor(agent.ws, agent.key, 'c1')).find((f) => f.type === 'res' && f.id === rid);
         expect(res).toBeDefined();
-      });
+        // Sealing a ~10 MB reply takes over a second on CI runners (#627).
+      }, { timeout: 10_000 });
       return res;
     };
     return { ...agent, call, saved, wipe };

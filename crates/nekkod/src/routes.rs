@@ -63,8 +63,26 @@ pub struct Ctx {
     pub compactions: Arc<crate::compaction::Compactions>,
     /// Image-generation turns (`chat:generateImage`), with the model server.
     pub image_turns: Arc<crate::image_turns::ImageTurns>,
+    /// What `app:info` reports, and the desktop bridge `workspace:add` opens the picker through.
+    pub app: Arc<AppCtx>,
+    /// The catalog refresh checks (`updates:check`) and their scheduler.
+    pub update_checks: Arc<crate::small_services::UpdateChecks>,
     /// The messaging bridges (`messaging:status`), with a data directory.
     pub messaging: Option<Arc<crate::messaging::Messaging>>,
+}
+
+/// The app around the daemon: its facts and the desktop bridge.
+#[derive(Default)]
+pub struct AppCtx {
+    pub facts: crate::small_services::AppFacts,
+    /// `(url, token)` of Electron main's bridge (`config.browserBridge`).
+    pub bridge: Option<(String, String)>,
+}
+
+/// The small services (small_services.rs) are the daemon's with a data
+/// directory, the settings and the sessions.
+fn owns_small_services(ctx: &Ctx) -> bool {
+    ctx.sessions.is_some() && ctx.settings.is_some()
 }
 
 /// `chat:compact` and `chat:cancelCompaction` are the daemon's when it admits turns.
@@ -337,6 +355,12 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "session:nextWatch" if ctx.turns.watches.is_some() => {
             Ok(ctx.turns.watches.as_ref().expect("checked").next_wake_at(str_arg(&args, 0).unwrap_or_default()))
         }
+        "session:watches" if ctx.turns.watches.is_some() => {
+            Ok(ctx.turns.watches.as_ref().expect("checked").views(str_arg(&args, 0).unwrap_or_default()))
+        }
+        c if crate::small_services::CHANNELS.contains(&c) && owns_small_services(ctx) => {
+            crate::small_services::route(ctx, c, &args).await
+        }
         c if crate::sandbox::CHANNELS.contains(&c) && ctx.sandboxes.is_some() => {
             ctx.sandboxes.clone().expect("checked").route(ctx, c, &args).await
         }
@@ -526,6 +550,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.turns.watches.is_some() {
         all.extend_from_slice(crate::watches::CHANNELS);
+    }
+    if owns_small_services(ctx) {
+        all.extend_from_slice(crate::small_services::CHANNELS);
     }
     if ctx.runtimes.is_some() {
         all.extend_from_slice(crate::runtimes::CHANNELS);

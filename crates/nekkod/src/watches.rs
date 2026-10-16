@@ -24,7 +24,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// What the backend is told the daemon owns (`NEKKOD_OWNS`).
 pub const OWNS: &str = "agent-watches";
 /// The channels served here.
-pub const CHANNELS: &[&str] = &["session:nextWatch", "watch:tool"];
+pub const CHANNELS: &[&str] = &["session:nextWatch", "session:watches", "watch:tool"];
 
 const TICK: Duration = Duration::from_secs(15);
 const AUX_WAIT: Duration = Duration::from_secs(5);
@@ -60,6 +60,39 @@ fn str_of<'a>(w: &'a Value, k: &str) -> Option<&'a str> {
 
 fn num(w: &Value, k: &str) -> f64 {
     w.get(k).and_then(Value::as_f64).unwrap_or(f64::NAN)
+}
+
+/// `listAgentWatchViews(sessionId)` over the file at `path`.
+pub fn views_of(path: &std::path::Path, session_id: &str) -> Value {
+    let Ok(text) = std::fs::read_to_string(path) else { return json!([]) };
+    let Ok(Value::Array(all)) = serde_json::from_str::<Value>(&text) else { return json!([]) };
+    Value::Array(all.iter().filter(|w| str_of(w, "sessionId") == Some(session_id)).map(view).collect())
+}
+
+/// `watchView(w)`: the fields the transcript shows, in the TS literal's order
+/// (`url` and `lastError` only when truthy, the error cut at 300 units).
+pub fn view(w: &Value) -> Value {
+    let field = |k: &str| w.get(k).cloned();
+    let mut out = Map::new();
+    let mut put = |k: &str, v: Option<Value>| {
+        if let Some(v) = v {
+            out.insert(k.into(), v);
+        }
+    };
+    put("id", field("id"));
+    put("kind", field("kind"));
+    if js::truthy(w.get("url")) {
+        put("url", field("url"));
+    }
+    put("status", field("status"));
+    put("deadlineAt", field("deadlineAt"));
+    put("nextPollAt", field("nextPollAt"));
+    put("pending", Some(json!(js::truthy(w.get("pending")))));
+    put("failures", Some(js::coalesce(w.get("failures"), Some(&json!(0))).cloned().unwrap_or(json!(0))));
+    if let Some(e) = w.get("lastError").filter(|e| js::truthy(Some(e))) {
+        put("lastError", Some(json!(js::slice16(&js::display(e), 300))));
+    }
+    Value::Object(out)
 }
 
 /// What the scheduler needs from outside: whether a chat exists and is busy,
@@ -168,6 +201,13 @@ impl Watches {
             .fold(f64::INFINITY, |a, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.min(b) });
         // A whole number goes on the wire as one, as JSON.stringify writes it.
         if min.fract() == 0.0 && min.abs() < 9_007_199_254_740_992.0 { json!(min as i64) } else { json!(min) }
+    }
+
+    /// `session:watches` (`listAgentWatchViews`): what the transcript shows
+    /// of each watch, newest last, prompts left out; `[]` when the file
+    /// cannot be read.
+    pub fn views(&self, session_id: &str) -> Value {
+        views_of(&self.path, session_id)
     }
 
     /// `patch(id, patch)`: only an active watch changes. `null` removes a key

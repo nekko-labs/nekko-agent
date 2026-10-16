@@ -91,6 +91,14 @@ export const DAEMON_SERVED = new Set<string>([
   IpcChannels.chatCompact,
   IpcChannels.chatCancelCompaction,
   IpcChannels.chatGenerateImage,
+  // The small services (crates/nekkod/src/small_services.rs, watches.rs).
+  IpcChannels.prContinueStack,
+  IpcChannels.prLinkStack,
+  IpcChannels.dataWipe,
+  IpcChannels.appInfo,
+  IpcChannels.updatesCheck,
+  IpcChannels.workspaceAdd,
+  IpcChannels.sessionWatches,
   // The messaging bridges (crates/nekkod/src/messaging.rs).
   IpcChannels.messagingStatus,
 ]);
@@ -104,7 +112,8 @@ import { watchResume, watchSnapshot } from './agent-watches.js';
  *
  * Note: `workspaceAdd` (the native folder picker) has no headless equivalent, so
  * transports that can't show a dialog (web) should call `workspaceAddByPath`
- * instead; here it degrades to listing current workspaces.
+ * instead; here it degrades to listing current workspaces. Under the engine
+ * daemon it is the daemon's, which asks Electron main for the picker.
  */
 export function createDispatcher(host: Host): (channel: string, args: any[]) => unknown {
   const C = IpcChannels;

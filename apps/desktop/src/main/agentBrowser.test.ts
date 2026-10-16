@@ -133,6 +133,26 @@ describe('private Electron browser bridge', () => {
     } finally { bridge.close(); }
     expect(fake.windows.every((w) => w.destroyed)).toBe(true);
   });
+
+  it('answers the daemon folder picker request through the same token, opening no browser', async () => {
+    const pickFolder = vi.fn(async () => 'C:\\picked');
+    const bridge = await startAgentBrowser({ driver: async () => fakeDriver().driver, pickFolder });
+    const post = (headers: Record<string, string>) => fetch(bridge.url, { method: 'POST', headers, body: JSON.stringify({ tool: 'pickFolder' }) });
+    try {
+      expect((await post({})).status).toBe(403);
+      expect(pickFolder).not.toHaveBeenCalled();
+      const ok = await post({ Authorization: `Bearer ${bridge.token}` });
+      expect(await ok.json()).toEqual({ path: 'C:\\picked' });
+      pickFolder.mockResolvedValueOnce(null as never);
+      expect(await (await post({ Authorization: `Bearer ${bridge.token}` })).json()).toEqual({ path: null });
+      expect(fake.windows).toHaveLength(0);
+    } finally { bridge.close(); }
+    const bare = await startAgentBrowser({ driver: async () => fakeDriver().driver });
+    try {
+      const refused = await fetch(bare.url, { method: 'POST', headers: { Authorization: `Bearer ${bare.token}` }, body: JSON.stringify({ tool: 'pickFolder' }) });
+      expect(refused.status).toBe(400);
+    } finally { bare.close(); }
+  });
 });
 
 describe('errorLine', () => {
