@@ -3,6 +3,8 @@ import type { TerminalEvent, TerminalInfo, TerminalStream, TerminalRenderer } fr
 import '@xterm/xterm/css/xterm.css';
 import { PaneActions, useInPaneFrame } from './PaneFrame.js';
 import { useStore } from '../store.js';
+import { ContextAction, ContextMenu } from './ContextMenu.js';
+import { terminalKeyAction, terminalKeyLabels } from './terminalClipboard.js';
 
 /**
  * A real terminal wired to a pty. Keystrokes stream to the pty and raw output
@@ -83,7 +85,42 @@ interface TermSurface {
   loadAddon(addon: unknown): void;
   focus(): void;
   reset(): void;
+  hasSelection(): boolean;
+  getSelection(): string;
+  clearSelection(): void;
+  selectAll(): void;
+  clear(): void;
+  /** Sends text as typed input, bracketed when the program asked for it. */
+  paste(data: string): void;
+  /** xterm: return false to swallow the key. ghostty-web: return true. */
+  attachCustomKeyEventHandler(handler: (e: KeyboardEvent) => boolean): void;
   dispose(): void;
+}
+
+/** Copy the terminal's selection; false when there was nothing to copy or the clipboard refused. */
+async function copySelection(term: TermSurface): Promise<boolean> {
+  const text = term.hasSelection() ? term.getSelection() : '';
+  if (!text) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    useStore.getState().pushToast('error', "Couldn't reach the clipboard.");
+    return false;
+  }
+  term.clearSelection();
+  return true;
+}
+
+async function pasteClipboard(term: TermSurface): Promise<void> {
+  let text = '';
+  try {
+    text = await navigator.clipboard.readText();
+  } catch {
+    useStore.getState().pushToast('error', "Couldn't read the clipboard.");
+    return;
+  }
+  if (text) term.paste(text);
+  term.focus();
 }
 
 interface Mounted {
@@ -147,10 +184,21 @@ async function mountTerminal(el: HTMLElement, prefer: TerminalRenderer, readOnly
   return { term, fit, kind: 'xterm' };
 }
 
+function MenuRow({ label, hint }: { label: string; hint?: string }) {
+  return (
+    <span className="flex items-center justify-between gap-3">
+      <span>{label}</span>
+      {hint && <span className="text-[11px] text-ink-faint">{hint}</span>}
+    </span>
+  );
+}
+
 export function TerminalPane({ terminalId }: { terminalId: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [info, setInfo] = useState<TerminalInfo | null>(null);
   const prefer = useStore((s) => s.settings?.terminal?.renderer) ?? 'xterm';
+  const termRef = useRef<TermSurface | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; selection: boolean; canPaste: boolean } | null>(null);
 
   useEffect(() => {
     const el = hostRef.current;
@@ -166,8 +214,21 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
         return;
       }
       cleanups.push(() => term.dispose());
+      termRef.current = term;
+      cleanups.push(() => { if (termRef.current === term) termRef.current = null; });
       try { fit.fit(); } catch { /* not laid out yet */ }
       term.focus();
+
+      // Clipboard keys (see terminalClipboard.ts). The app has no Edit menu on
+      // Windows/Linux, so nothing else copies a terminal selection. The default
+      // is cancelled too, or the browser's own paste event would paste twice.
+      term.attachCustomKeyEventHandler((e) => {
+        const action = terminalKeyAction(e, term.hasSelection(), !term.options.disableStdin);
+        if (!action) return kind !== 'ghostty';
+        e.preventDefault();
+        if (e.type === 'keydown') void (action === 'copy' ? copySelection(term) : pasteClipboard(term));
+        return kind === 'ghostty';
+      });
 
       const exited = (code: number | null | undefined) => {
         setInfo((i) => (i ? { ...i, running: false, exitCode: code ?? undefined } : i));
@@ -287,6 +348,19 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
   // second border) under it: a terminal used to read as two headers while every
   // other window read as one.
   const framed = useInPaneFrame();
+  const keys = terminalKeyLabels();
+  const closeMenu = () => {
+    setMenu(null);
+    termRef.current?.focus();
+  };
+  /** Run a menu action on the live terminal, then hand focus back to it. */
+  const run = (action: (term: TermSurface) => void) => {
+    const term = termRef.current;
+    setMenu(null);
+    if (!term) return;
+    action(term);
+    term.focus();
+  };
   const status = (
     <span className="flex items-center gap-2 text-[11px] text-ink-faint">
       <span className="max-w-[26ch] truncate font-mono">{info?.cwd ?? ''}</span>
@@ -303,7 +377,34 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
       ) : (
         <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1.5">{status}</div>
       )}
-      <div ref={hostRef} className="min-h-0 flex-1 px-2 py-1" />
+      <div
+        ref={hostRef}
+        className="min-h-0 flex-1 px-2 py-1"
+        onContextMenu={(e) => {
+          const term = termRef.current;
+          if (!term) return;
+          e.preventDefault();
+          e.stopPropagation();
+          setMenu({ x: e.clientX, y: e.clientY, selection: term.hasSelection(), canPaste: !term.options.disableStdin });
+        }}
+      />
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} onClose={closeMenu}>
+          <ContextAction disabled={!menu.selection} onClick={() => run((t) => void copySelection(t))}>
+            <MenuRow label="Copy" hint={keys.copy} />
+          </ContextAction>
+          <ContextAction disabled={!menu.canPaste} onClick={() => run((t) => void pasteClipboard(t))}>
+            <MenuRow label="Paste" hint={keys.paste} />
+          </ContextAction>
+          <div className="my-1 h-px bg-line" role="separator" />
+          <ContextAction onClick={() => run((t) => t.selectAll())}>
+            <MenuRow label="Select all" />
+          </ContextAction>
+          <ContextAction onClick={() => run((t) => t.clear())}>
+            <MenuRow label="Clear terminal" />
+          </ContextAction>
+        </ContextMenu>
+      )}
     </div>
   );
 }
