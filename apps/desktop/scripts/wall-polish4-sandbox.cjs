@@ -38,7 +38,7 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(dir, name + '.png'), (await win.capturePage(rect || undefined, { stayHidden: true, stayAwake: false })).toPNG());
   };
   // Only fixed selectors and presets reach the page, looked up by index there.
-  const SELECTORS = { beta: '[data-grid-cell="chat:beta"]', alpha: '[data-grid-cell="chat:alpha"]', dock: '.wall-dock__utilization' };
+  const SELECTORS = { beta: '[data-grid-cell="chat:beta"]', alpha: '[data-grid-cell="chat:alpha"]', dock: '.monitors-dock__utilization' };
   const PRESETS = { question: { question: true }, plan: { plan: true, planOpen: true }, planFocus: { plan: true, planOpen: true, focus: true }, planClosedFocus: { plan: true, focus: true }, expired: { expired: true } };
   const rectOf = async (key, pad = 12) => {
     if (!(key in SELECTORS) || !Number.isInteger(pad)) throw Error('unknown selector');
@@ -81,7 +81,7 @@ app.whenReady().then(async () => {
       await capture(`plan-dynamic-${t}`);
       // 3. Dock: Sign in again right in Utilization.
       await reset('expired'); await theme(t); await sleep(800);
-      await check(`utilization offers Sign in again inline (${t})`, "(()=>{const d=document.querySelector('.wall-dock__utilization');return !!d&&!!d.querySelector('[data-dock-signin] button')&&/Sign in again/.test(d.textContent)&&!/in Settings/.test(d.textContent)})()");
+      await check(`utilization offers Sign in again inline (${t})`, "(()=>{const d=document.querySelector('.monitors-dock__utilization');return !!d&&!!d.querySelector('[data-dock-signin] button')&&/Sign in again/.test(d.textContent)&&!/in Settings/.test(d.textContent)})()");
       await capture(`dock-signin-${t}`, await rectOf('dock', 8));
       await run("document.querySelector('[data-dock-signin] button')?.click()"); await sleep(400);
       await check(`Sign in again opens the sign-in flow (${t})`, "/Sign in with Claude/.test(document.querySelector('[data-dock-signin]')?.textContent||'')");

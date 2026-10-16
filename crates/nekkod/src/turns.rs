@@ -922,6 +922,7 @@ impl Turns {
             max_history_turns: opts.get("maxHistoryTurns").and_then(Value::as_f64),
             context_window: facts.get("contextWindow").and_then(Value::as_f64).filter(|w| *w > 0.0),
             max_output_tokens: facts.get("maxOutputTokens").and_then(Value::as_u64),
+            image_input: facts.get("imageInput").and_then(Value::as_bool),
             resume: opts.get("resume") == Some(&json!(true)),
             cancel: shared.cancel.clone(),
             steering: shared.steering.clone(),

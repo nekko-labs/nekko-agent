@@ -67,6 +67,8 @@ pub struct Ctx {
     pub app: Arc<AppCtx>,
     /// The catalog refresh checks (`updates:check`) and their scheduler.
     pub update_checks: Arc<crate::small_services::UpdateChecks>,
+    /// The messaging bridges (`messaging:status`), with a data directory.
+    pub messaging: Option<Arc<crate::messaging::Messaging>>,
 }
 
 /// The app around the daemon: its facts and the desktop bridge.
@@ -385,6 +387,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             crate::connectors::route(ctx, c, &args).await
         }
         c if crate::remote::CHANNELS.contains(&c) && ctx.remote.enabled() => ctx.remote.route(c, &args).await,
+        c if crate::messaging::CHANNELS.contains(&c) && ctx.messaging.is_some() => {
+            ctx.messaging.as_ref().expect("checked").route(c)
+        }
         c if crate::runtimes::CHANNELS.contains(&c) && ctx.runtimes.is_some() => match &ctx.runtimes {
             Some(rt) => crate::runtimes::route(ctx, rt, c, &args).await,
             None => ctx.backend.call(c, Value::Array(args)).await,
@@ -528,6 +533,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.remote.enabled() {
         all.extend_from_slice(crate::remote::CHANNELS);
+    }
+    if ctx.messaging.is_some() {
+        all.extend_from_slice(crate::messaging::CHANNELS);
     }
     all.extend_from_slice(crate::machine::CHANNELS);
     if ctx.resource_queue.is_some() {

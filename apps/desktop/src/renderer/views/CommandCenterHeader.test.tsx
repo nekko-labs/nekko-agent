@@ -11,7 +11,7 @@ vi.mock('../components/AgentWindowPicker.js', () => ({ AgentWindowPicker: () => 
 vi.mock('../components/InsightsBox.js', () => ({}));
 vi.mock('../components/CommandWall.js', () => ({ CommandWall: () => null, TerminalExcerpt: () => null }));
 vi.mock('../components/WallComposer.js', () => ({ WallComposer: () => null }));
-vi.mock('../components/WallDock.js', () => ({ WallDock: () => null }));
+vi.mock('../components/MonitorsDock.js', () => ({ MonitorsDock: () => null }));
 import { TitleBar } from '../components/TitleBar.js';
 import { DEFAULT_WALL_STATE } from '../commandWall.js';
 import { LAYOUT_LABEL, WallToolbar } from './CommandCenterView.js';
@@ -53,7 +53,7 @@ describe('Agents header placement', () => {
     expect(html).not.toContain('on the wall');
     expect(html).not.toContain('0 agents');
     expect(html).not.toContain('0 terminals');
-    for (const label of ['Wall layout', 'Focused', 'Dynamic', 'Grid', 'Show', 'Auto-arrange', 'Panels']) expect(html).toContain(label);
+    for (const label of ['Wall layout', 'Focused', 'Dynamic', 'Grid', 'Show', 'Auto-arrange', 'Monitors']) expect(html).toContain(label);
     expect(html).not.toContain('>Fixed<');
     // Adding lives in the toolbar's icon bar in every layout: agent, terminal,
     // without an overflow button. An agent's Changes/Files/Browser moved into

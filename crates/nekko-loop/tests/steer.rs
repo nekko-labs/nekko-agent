@@ -73,6 +73,7 @@ async fn folds_a_steering_message_in_at_the_next_tool_boundary() {
             max_history_turns: None,
             context_window: None,
             max_output_tokens: None,
+            image_input: None,
             resume: false,
             cancel: Cancel::default(),
             steering: steering.clone(),

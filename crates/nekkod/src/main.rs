@@ -24,6 +24,7 @@ mod installs;
 mod library;
 mod machine;
 mod mcp;
+mod messaging;
 mod model_server;
 mod oauth;
 mod procgroup;
@@ -102,6 +103,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                     oauth::OWNS,
                     automation::OWNS,
                     remote::OWNS,
+                    messaging::OWNS,
                     watches::OWNS,
                     sandbox::OWNS,
                     library::OWNS,
@@ -154,6 +156,17 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let automation =
         Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), backend.clone(), hub.clone()));
     let remote = Arc::new(remote::Remote::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
+    // The messaging bridges, with the data directory (and so the settings and sessions).
+    let messaging = match (&cfg.data_dir, &settings, &sessions) {
+        (Some(d), Some(s), Some(store)) => {
+            let api = cfg
+                .telegram_api_url
+                .clone()
+                .or_else(|| std::env::var("NEKKO_TELEGRAM_API_URL").ok().filter(|u| !u.is_empty()));
+            Some(messaging::Messaging::new(d.into(), s.store.clone(), store.clone(), api))
+        }
+        _ => None,
+    };
     // The machine probes and the resource queue read the daemon's settings store.
     let read_settings = |s: &Option<Arc<settings::Settings>>| {
         let store = s.as_ref().map(|s| s.store.clone());
@@ -269,6 +282,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             bridge: cfg.browser_bridge.clone().map(|b| (b.url, b.token)),
         }),
         update_checks: small_services::UpdateChecks::new(),
+        messaging: messaging.clone(),
     };
     routes::forward_terminal_events(&ctx);
     if let Some(adm) = ctx.admission.clone() {
@@ -310,6 +324,15 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }));
     }
     remote.start();
+    if let Some(m) = &messaging {
+        // A chat's turn, approvals and answers go through the router, as the UI's do.
+        let ctx = ctx.clone();
+        m.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
+            let ctx = ctx.clone();
+            Box::pin(async move { routes::route(&ctx, &channel, args).await })
+        }));
+        m.start(&hub);
+    }
 
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
     let router = wire::router(app);
@@ -323,6 +346,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     axum::serve(listener, router).with_graceful_shutdown(shutdown_signal(cfg.exit_on_stdin_close)).await?;
 
     remote.stop();
+    if let Some(m) = &messaging {
+        m.stop();
+    }
     engine.shutdown();
     // The servers this daemon started (Ollama) go down with it.
     if let Some(rt) = &runtimes {

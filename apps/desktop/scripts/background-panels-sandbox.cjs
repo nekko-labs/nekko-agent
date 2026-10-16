@@ -30,12 +30,12 @@ app.whenReady().then(async()=>{
    await click("[...document.querySelectorAll('.agent-window-picker__option')].find(b=>b.querySelector('strong')?.textContent==='Chat').click()");await capture(label+'-toolbar-chat');
    if(after){await click("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");await check(label+' Escape closes and restores DOM focus',"!document.querySelector('.agent-window-dropdown')&&document.activeElement===document.querySelector('[data-wall-add-button]')");await open();await click("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");await check(label+' outside pointer dismisses',"!document.querySelector('.agent-window-dropdown')");}
    await reset(theme);await run('integration.dashboard()');await sleep(900);
-   await run("document.querySelector('[aria-label=\"Budget dock panel\"]').scrollIntoView({block:'start'})");
+   await run("document.querySelector('[aria-label=\"Budget monitor\"]').scrollIntoView({block:'start'})");
    for(const range of ['1m','today','all-time']){
     await click(`[...document.querySelectorAll('[aria-label="Budget time range"] button')].find(b=>b.textContent==='${range}').click()`);
     await capture(label+'-budget-'+range);
     await check(label+' '+range+' sole active range',`[...document.querySelectorAll('[aria-label="Budget time range"] button')].filter(b=>b.getAttribute('aria-pressed')==='true').map(b=>b.textContent).join()==='${range}'`);
-    if(after){const spend=range==='today'?'$0.42':range==='1m'?'$2.32':'$9.82';const local=range==='today'?'1,500':range==='1m'?'5,500':'15,500';await check(label+' '+range+' detail follows range',`(()=>{const t=document.querySelector('[aria-label="Budget dock panel"]').innerText;return t.includes('${spend}')&&t.includes('${local}')&&!t.includes('Unavailable')})()`);}
+    if(after){const spend=range==='today'?'$0.42':range==='1m'?'$2.32':'$9.82';const local=range==='today'?'1,500':range==='1m'?'5,500':'15,500';await check(label+' '+range+' detail follows range',`(()=>{const t=document.querySelector('[aria-label="Budget monitor"]').innerText;return t.includes('${spend}')&&t.includes('${local}')&&!t.includes('Unavailable')})()`);}
    }
    await reset(theme);await run("integration.route('settings')");await sleep(800);
    await run("(()=>{const text=[...document.querySelectorAll('span')].find(e=>e.textContent==='Desktop notifications');text.closest('section').scrollIntoView({block:'start'})})()");await capture(label+'-notifications-on');

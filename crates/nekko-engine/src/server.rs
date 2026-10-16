@@ -222,6 +222,9 @@ pub fn model_row(model: &Value, loaded: bool) -> Value {
         m.insert("location".into(), json!(label));
     }
     m.insert("modality".into(), model.get("modality").filter(|v| !v.is_null()).cloned().unwrap_or(json!("chat")));
+    if let Some(inputs) = input_modalities(model) {
+        m.insert("input_modalities".into(), inputs);
+    }
     for (k, from) in
         [("max_context_length", "maxContext"), ("quantization", "quantization"), ("size_bytes", "sizeBytes")]
     {
@@ -230,6 +233,16 @@ pub fn model_row(model: &Value, loaded: bool) -> Value {
         }
     }
     Value::Object(m)
+}
+
+/// `inputModalities` (server.ts): text always, images only with the projector;
+/// nothing for rows that are not chat models.
+fn input_modalities(model: &Value) -> Option<Value> {
+    let modality = model.get("modality").and_then(Value::as_str).unwrap_or("chat");
+    if modality != "chat" && modality != "vision" {
+        return None;
+    }
+    Some(if model.get("hasProjector") == Some(&Value::Bool(true)) { json!(["text", "image"]) } else { json!(["text"]) })
 }
 
 /// `MODEL_FOLDER_PROVIDERS[id].label`.

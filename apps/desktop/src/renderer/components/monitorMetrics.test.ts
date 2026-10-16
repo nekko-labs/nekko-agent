@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import type { UsageSummary, SessionSummary, ProviderConfig } from '@nekko-agent/shared';
-import { budgetRange, recordedBudgetMetrics, utilizationProviders } from './wallDockMetrics.js';
+import { budgetRange, recordedBudgetMetrics, utilizationProviders } from './monitorMetrics.js';
 it('reports unavailable rather than zero when the usage snapshot is missing', () => {
   expect(recordedBudgetMetrics(null, [], [])).toEqual({ topAgent: 'Unavailable', localTokens: 'Unavailable' });
 });

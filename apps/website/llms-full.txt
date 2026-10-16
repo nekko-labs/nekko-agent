@@ -127,7 +127,7 @@ The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet
 
 ### Create an agent, media session or terminal
 
-Hover over the sidebar **+** to choose **Agent**, **Media gen** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Media gen opens an image session; video generation is not available.
+Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Videos** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Media gen opens an image session; video generation is not available.
 
 ---
 
@@ -721,6 +721,26 @@ going rather than stopping when the window fills:
 Giving the model more room is still the best fix. Raise its context when you load it (the
 Models page shows what that costs in memory), and `OLLAMA_KV_CACHE_TYPE=q8_0` roughly halves
 the memory a longer context needs.
+
+## Pictures and models that cannot see
+
+Only a vision model with its projector file (`mmproj-*.gguf`) beside it can look at a
+picture. The Nekko engine tells the app which of its models have one, so for a text-only
+model such as Qwen3 4B the composer greys out **Photo / Video** and says why.
+
+A picture can still end up in a text-only chat: you attached it while a vision model was
+picked and then switched, or you used a server the app cannot classify. Such a server
+rejects every request that carries an image, and the image stays in the conversation, so
+before this guard the chat failed on every later message too. Now, when the model is known
+not to take images, each picture is sent as a one-line note ("1 image attachment omitted:
+this model does not accept image input") and the chat keeps working. The picture stays in
+the chat itself, so switching back to a vision model sends it again.
+
+A server that does not say what its models take still receives the pictures. If such a
+model refuses them, click **Delete last message** in the failure notice (or **Delete** on
+the message itself). That removes the message with the picture and anything after it, and
+the chat answers again. You can then ask again without the picture, or switch to a model
+with vision input.
 
 ## What is not here yet
 

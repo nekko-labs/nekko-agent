@@ -4,7 +4,7 @@ vi.mock('../components/AgentWindowPicker.js', () => ({ AgentWindowPicker: () => 
 vi.mock('../components/InsightsBox.js', () => ({}));
 vi.mock('../components/CommandWall.js', () => ({ CommandWall: () => null, TerminalExcerpt: () => null }));
 vi.mock('../components/WallComposer.js', () => ({ WallComposer: () => null }));
-vi.mock('../components/WallDock.js', () => ({ WallDock: () => null }));
+vi.mock('../components/MonitorsDock.js', () => ({ MonitorsDock: () => null }));
 vi.mock('../chrome.js', () => ({ hasAppChrome: false }));
 import React, { useState } from 'react';
 vi.mock('react', async (original) => {

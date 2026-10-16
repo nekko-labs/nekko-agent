@@ -213,7 +213,9 @@ pub async fn list_models(ctx: &Ctx, id: &str) -> Value {
 const WINDOW_CACHE: Duration = Duration::from_secs(60);
 const WINDOW_LOOKUP: Duration = Duration::from_millis(2500);
 
-type WindowCache = Mutex<Vec<(String, Instant, Vec<(String, u64)>)>>;
+/// Per provider: when it was asked, each model's window, and each model's
+/// listed input modalities (`details.inputModalities`, comma-joined).
+type WindowCache = Mutex<Vec<(String, Instant, Vec<(String, u64)>, Vec<(String, String)>)>>;
 fn window_cache() -> &'static WindowCache {
     static CACHE: std::sync::OnceLock<WindowCache> = std::sync::OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(Vec::new()))
@@ -242,40 +244,66 @@ async fn ollama_loaded(base_url: &str) -> Vec<(String, u64)> {
 /// Never blocks a turn for long, and never fails it.
 pub async fn context_window_for(ctx: &Ctx, provider: &Value, model_id: &str) -> u64 {
     let guess = crate::context::guess_context_window(Some(model_id));
+    let Some((windows, _)) = listing(ctx, provider).await else { return guess };
+    windows.iter().rev().find(|(m, _)| m == model_id).map(|(_, w)| *w).unwrap_or(guess)
+}
+
+/// `imageInputFor` (context-window.ts), from the listing's evidence: false only
+/// when the provider lists this model's inputs and images are not among them
+/// (the engine's model without a projector, a text-only OpenRouter model).
+/// Anything unlisted stays true, as an unknown model does in the composer.
+pub async fn image_input_for(ctx: &Ctx, provider: &Value, model_id: &str) -> bool {
+    let Some((_, inputs)) = listing(ctx, provider).await else { return true };
+    match inputs.iter().rev().find(|(m, _)| m == model_id) {
+        Some((_, list)) => list.split(',').any(|m| m.trim().eq_ignore_ascii_case("image")),
+        None => true,
+    }
+}
+
+/// The provider's cached model listing (windows, input modalities), asked
+/// for at most once a minute; `None` for providers whose list is not asked.
+async fn listing(ctx: &Ctx, provider: &Value) -> Option<(Vec<(String, u64)>, Vec<(String, String)>)> {
     let kind = provider.get("kind").and_then(Value::as_str).unwrap_or("");
     let asks = matches!(kind, "ollama" | "lmstudio" | "vllm" | "llamacpp" | "engine" | "openai-compat" | "openrouter");
     let id = provider.get("id").and_then(Value::as_str).unwrap_or("").to_string();
     if !asks || id.is_empty() {
-        return guess;
+        return None;
     }
     let cached = {
         let cache = window_cache().lock().unwrap_or_else(|e| e.into_inner());
-        cache.iter().find(|(p, at, _)| *p == id && at.elapsed() < WINDOW_CACHE).map(|(_, _, w)| w.clone())
+        cache
+            .iter()
+            .find(|(p, at, _, _)| *p == id && at.elapsed() < WINDOW_CACHE)
+            .map(|(_, _, w, i)| (w.clone(), i.clone()))
     };
-    let windows = match cached {
-        Some(w) => w,
-        None => {
-            let mut windows: Vec<(String, u64)> = match tokio::time::timeout(WINDOW_LOOKUP, list_models(ctx, &id)).await
-            {
-                Ok(Value::Array(models)) => models
-                    .iter()
-                    .filter_map(|m| {
-                        let ctx = m.get("contextLength").and_then(Value::as_u64).filter(|c| *c > 0)?;
-                        Some((m.get("id")?.as_str()?.to_string(), ctx))
-                    })
-                    .collect(),
-                _ => Vec::new(),
-            };
-            if kind == "ollama" {
-                windows.extend(ollama_loaded(provider.get("baseUrl").and_then(Value::as_str).unwrap_or("")).await);
-            }
-            let mut cache = window_cache().lock().unwrap_or_else(|e| e.into_inner());
-            cache.retain(|(p, _, _)| *p != id);
-            cache.push((id, Instant::now(), windows.clone()));
-            windows
-        }
+    if cached.is_some() {
+        return cached;
+    }
+    let models = match tokio::time::timeout(WINDOW_LOOKUP, list_models(ctx, &id)).await {
+        Ok(Value::Array(models)) => models,
+        _ => Vec::new(),
     };
-    windows.iter().rev().find(|(m, _)| m == model_id).map(|(_, w)| *w).unwrap_or(guess)
+    let mut windows: Vec<(String, u64)> = models
+        .iter()
+        .filter_map(|m| {
+            let ctx = m.get("contextLength").and_then(Value::as_u64).filter(|c| *c > 0)?;
+            Some((m.get("id")?.as_str()?.to_string(), ctx))
+        })
+        .collect();
+    let inputs: Vec<(String, String)> = models
+        .iter()
+        .filter_map(|m| {
+            let list = m.pointer("/details/inputModalities")?.as_str()?;
+            Some((m.get("id")?.as_str()?.to_string(), list.to_string()))
+        })
+        .collect();
+    if kind == "ollama" {
+        windows.extend(ollama_loaded(provider.get("baseUrl").and_then(Value::as_str).unwrap_or("")).await);
+    }
+    let mut cache = window_cache().lock().unwrap_or_else(|e| e.into_inner());
+    cache.retain(|(p, _, _, _)| *p != id);
+    cache.push((id, Instant::now(), windows.clone(), inputs.clone()));
+    Some((windows, inputs))
 }
 
 /// `knownContextWindow` (context-window.ts): the window a turn last found for
@@ -286,8 +314,8 @@ pub fn known_context_window(provider: &Value, model_id: &str) -> u64 {
     let cache = window_cache().lock().unwrap_or_else(|e| e.into_inner());
     cache
         .iter()
-        .find(|(p, _, _)| p == id)
-        .and_then(|(_, _, w)| w.iter().rev().find(|(m, _)| m == model_id).map(|(_, w)| *w))
+        .find(|(p, _, _, _)| p == id)
+        .and_then(|(_, _, w, _)| w.iter().rev().find(|(m, _)| m == model_id).map(|(_, w)| *w))
         .unwrap_or(guess)
 }
 

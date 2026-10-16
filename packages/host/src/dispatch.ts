@@ -99,6 +99,8 @@ export const DAEMON_SERVED = new Set<string>([
   IpcChannels.updatesCheck,
   IpcChannels.workspaceAdd,
   IpcChannels.sessionWatches,
+  // The messaging bridges (crates/nekkod/src/messaging.rs).
+  IpcChannels.messagingStatus,
 ]);
 import { listInstalledSkillDefs } from './skills.js';
 import { watchResume, watchSnapshot } from './agent-watches.js';

@@ -22,7 +22,7 @@ import { PaneFrame } from '../components/PaneFrame.js';
 import { Divider } from '../components/Divider.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { StatusIcon, WorkspaceCard, type AgentStatus } from '../components/WorkspaceCard.js';
-import { CheckIcon, ChatIcon, TerminalIcon, PlusIcon, FileIcon, FolderIcon, ExternalIcon, PanelIcon, ShieldIcon, PanelLeftIcon, PanelSwapIcon } from '../icons.js';
+import { CheckIcon, ChatIcon, PhotoIcon, TerminalIcon, PlusIcon, FileIcon, FolderIcon, ExternalIcon, PanelIcon, ShieldIcon, PanelLeftIcon, PanelSwapIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../completionExit.js';
@@ -160,7 +160,7 @@ function CreateRow({
       onClick={onClick}
     >
       <span className="create-tile">{icon}</span>
-      <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{label}</span>
+      <span className="min-w-0 flex-1 text-[13px] font-medium leading-snug">{label}</span>
     </button>
   );
 }
@@ -632,11 +632,14 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
       data-agent-panel={sidebarOnly || undefined}
       data-orientation={sidebarOnly ? orientation : undefined}
     >
-      <div className={horizontal ? 'flex shrink-0 flex-col items-center justify-center gap-1 border-r border-line px-1.5 py-2' : `flex items-center ${sidebarOnly ? 'justify-end' : 'justify-between'} px-3 py-2.5`}>
+      <div className={horizontal ? 'flex shrink-0 flex-col items-center justify-center gap-1 border-r border-line px-1.5 py-2' : 'flex items-center justify-between px-3 py-2.5'} data-agent-panel-header>
         {!sidebarOnly && <span className="text-sm font-semibold">Agents</span>}
+        {/* A column panel keeps show/hide and orientation at its left and the
+            + at its right; a row panel stacks all three in its left strip. */}
+        {sidebarOnly && !horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />}
         <div className={`relative flex shrink-0 items-center ${horizontal ? 'flex-col gap-1' : 'gap-0.5'}`} ref={newMenuRef}>
           {sidebarOnly ? (
-            <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />
+            horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />
           ) : (
           <button
             className={`rounded-sm p-1.5 ${contextPanelOpen ? 'bg-surface-2 text-accent' : 'text-ink-faint hover:text-ink'}`}
@@ -678,7 +681,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                 onClick={() => { closeNewMenu(); void Promise.resolve(newChat()).catch((e: Error) => useStore.getState().pushToast('error', `Could not start an agent: ${e.message}`)); }}
               >
                 <span className="create-tile create-tile-brand">
-                  <ChatIcon className="h-4 w-4" />
+                  <NekkoAvatar size={16} stationary eyes={false} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-semibold">Agent</span>
@@ -689,8 +692,8 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
 
               <CreateRow
                 tone="var(--accent)"
-                icon={<ChatIcon className="h-4 w-4" />}
-                label="Media gen"
+                icon={<PhotoIcon className="h-4 w-4" />}
+                label="Create or Edit Photos and Videos"
                 onClick={() => { closeNewMenu(); void newImageChat().catch((e: Error) => useStore.getState().pushToast('error', e.message)); }}
               />
               <CreateRow

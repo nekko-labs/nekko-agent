@@ -62,7 +62,7 @@ import { killSessionProcesses } from './processes.js';
 import { DAEMON_HOOKS, hasToolHooks, postToolHooks, preToolHooks, turnEndHooks } from './hooks.js';
 import { completeText } from './sideband.js';
 import { createHostProvider as createProvider, promptCachingForHost } from './prompt-caching.js';
-import { contextWindowFor, knownContextWindow } from './context-window.js';
+import { contextWindowFor, imageInputFor, knownContextWindow } from './context-window.js';
 import { appendAgentTerminal, finishAgentTerminal } from './terminal.js';
 
 /** The chat's index snippets, from the engine daemon when it holds the index. */
@@ -1019,6 +1019,9 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
   // The window the model was actually loaded with, so the loop can keep a long
   // run inside it (fit.ts) rather than assume the id's nominal size.
   const contextWindow = await contextWindowFor(provider, opts.modelId, () => createProvider(resolvedProvider).listModels());
+  // A model that cannot see is sent a note in place of each picture, so one
+  // attachment does not fail this chat's every later turn.
+  const imageInput = await imageInputFor(provider, opts.modelId, () => createProvider(resolvedProvider).listModels());
   let attempts = 0;
   let eventsSeen = false;
   let lastError: Error | undefined;
@@ -1111,6 +1114,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
         think: session.thinking,
         maxHistoryTurns: opts.maxHistoryTurns,
         contextWindow,
+        imageInput,
         resume: opts.resume,
         pullSteering: () => steering.get(opts.sessionId)?.splice(0) ?? [],
         signal: abort.signal,
@@ -1350,6 +1354,8 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
       promptCaching: promptCachingForHost(),
       // The loaded window, for the daemon's loop to keep the run inside (fit.rs).
       contextWindow: await contextWindowFor(provider, opts.modelId, () => createProvider(resolvedProvider ?? provider).listModels()),
+      // False for a model known not to take pictures: the loop sends a note instead (nekko-loop history.rs).
+      imageInput: await imageInputFor(provider, opts.modelId, () => createProvider(resolvedProvider ?? provider).listModels()),
       ...(resolvedProvider ? { provider: config(resolvedProvider) } : {}),
       ...(providerError !== undefined ? { providerError } : {}),
       headers: provider.kind === 'anthropic' && provider.auth === 'subscription' && !!provider.tokenKey,

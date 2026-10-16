@@ -1567,6 +1567,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nekko-messaging"
+version = "0.1.0"
+dependencies = [
+ "nekko-js",
+ "nekko-tools",
+ "serde_json",
+]
+
+[[package]]
 name = "nekko-oauth"
 version = "0.1.0"
 dependencies = [
@@ -1740,6 +1749,7 @@ dependencies = [
  "nekko-js",
  "nekko-loop",
  "nekko-machine",
+ "nekko-messaging",
  "nekko-oauth",
  "nekko-remote",
  "nekko-sandbox",

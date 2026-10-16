@@ -4475,4 +4475,185 @@ async fn adds_a_folder_from_the_desktop_picker_through_the_bridge() {
     assert_eq!(again, added);
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
+/// A loopback stand-in for Telegram's Bot API: records every call (method
+/// and body; the token is in the path), answers `getMe` and `sendMessage`,
+/// and holds `getUpdates` until the test queues updates (or 25 s pass, as
+/// Telegram's long poll does). Never a real bot or token.
+struct FakeTelegram {
+    port: u16,
+    calls: std::sync::Arc<std::sync::Mutex<Vec<(String, String, Value)>>>,
+    updates: tokio::sync::mpsc::UnboundedSender<Value>,
+    server: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for FakeTelegram {
+    fn drop(&mut self) {
+        self.server.abort();
+    }
+}
+
+impl FakeTelegram {
+    fn calls(&self, method: &str) -> Vec<Value> {
+        self.calls.lock().unwrap().iter().filter(|c| c.1 == method).map(|c| c.2.clone()).collect()
+    }
+
+    fn polls_since(&self, n: usize) -> usize {
+        self.calls.lock().unwrap().iter().filter(|c| c.1 == "getUpdates").count().saturating_sub(n)
+    }
+}
+
+async fn fake_telegram() -> FakeTelegram {
+    use axum::extract::Path;
+    use axum::routing::post as route_post;
+    let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (updates, rx) = tokio::sync::mpsc::unbounded_channel::<Value>();
+    let rx = std::sync::Arc::new(tokio::sync::Mutex::new(rx));
+    let next_id = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(500));
+    let seen = calls.clone();
+    let app = axum::Router::new().route(
+        "/{bot}/{method}",
+        route_post(move |Path((bot, method)): Path<(String, String)>, body: String| {
+            let (seen, rx, next_id) = (seen.clone(), rx.clone(), next_id.clone());
+            async move {
+                let body: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+                seen.lock().unwrap().push((bot.clone(), method.clone(), body.clone()));
+                let result = match method.as_str() {
+                    "getMe" => json!({ "id": 7, "is_bot": true, "username": "nekko_test_bot" }),
+                    "sendMessage" => {
+                        let id = next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        json!({ "message_id": id, "chat": { "id": body["chat_id"], "type": "private" } })
+                    }
+                    "getUpdates" => {
+                        let mut rx = rx.lock().await;
+                        match tokio::time::timeout(Duration::from_secs(25), rx.recv()).await {
+                            Ok(Some(batch)) => batch,
+                            _ => json!([]),
+                        }
+                    }
+                    _ => json!(true),
+                };
+                axum::Json(json!({ "ok": true, "result": result }))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    FakeTelegram { port, calls, updates, server }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_runs_the_telegram_bridge() {
+    let tg = fake_telegram().await;
+    let model = scripted_model(vec![say_text("Hello from the daemon")]).await;
+    let data = std::env::temp_dir().join(format!("nekkod-messaging-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // The chat this Telegram chat is already bound to: no worktree, so no git.
+    let session = json!({
+        "id": "s_tg", "title": "From Telegram", "executionMode": "local", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    std::fs::write(data.join("sessions/s_tg.json"), session.to_string()).unwrap();
+    std::fs::write(data.join("messaging-state.json"), r#"{"offset":40,"bindings":{"42":"s_tg"}}"#).unwrap();
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let settings = json!({
+        "providers": [provider], "defaultProviderId": "p1", "defaultModelId": "synthetic", "defaultChatMode": "yolo",
+        "messaging": { "telegram": { "enabled": true, "botToken": "123:TEST", "allowedChatIds": ["42"] } },
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with_config(true, Some(&data), json!({ "telegramApiUrl": format!("http://127.0.0.1:{}", tg.port) }));
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("messaging:status")), "{info}");
+    wait_for("the first long poll", || tg.polls_since(0) >= 1).await;
+    let first = &tg.calls("getUpdates")[0];
+    assert_eq!(first["offset"], 40, "the poll resumes from the saved offset");
+    assert_eq!(first["timeout"], 25);
+    assert!(tg.calls.lock().unwrap().iter().all(|c| c.0 == "bot123:TEST"), "every call uses the bot token");
+    let status = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let (_, s) = post(d.port, "messaging:status", json!([]), Some(TOKEN)).await;
+            if s["telegram"]["botUsername"].is_string() {
+                return s;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("getMe answered");
+    assert_eq!(status, json!({ "telegram": { "running": true, "botUsername": "nekko_test_bot", "boundChats": 1 } }));
+
+    // An unlisted chat is refused and starts nothing; the allowed one starts a turn.
+    tg.updates
+        .send(json!([
+            { "update_id": 41, "message": { "message_id": 1, "chat": { "id": 99, "type": "private" }, "text": "let me in" } },
+            { "update_id": 42, "message": { "message_id": 2, "chat": { "id": 42, "type": "private" }, "text": "  say hello  " } },
+        ]))
+        .unwrap();
+    wait_for("the refusal", || {
+        tg.calls("sendMessage")
+            .iter()
+            .any(|b| b["chat_id"] == "99" && b["text"].as_str().unwrap().contains("allowlist"))
+    })
+    .await;
+    // The streamed reply lands in one message: sent, then edited to the final text.
+    wait_for("the reply", || {
+        tg.calls("editMessageText").iter().any(|b| b["chat_id"] == "42" && b["text"] == "Hello from the daemon")
+            || tg.calls("sendMessage").iter().any(|b| b["chat_id"] == "42" && b["text"] == "Hello from the daemon")
+    })
+    .await;
+    let to_42: Vec<Value> = tg.calls("sendMessage").into_iter().filter(|b| b["chat_id"] == "42").collect();
+    assert_eq!(to_42.len(), 1, "one message for the whole reply: {to_42:?}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_tg.json")).unwrap()).unwrap();
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages.first().unwrap()["content"], "say hello");
+    assert_eq!(messages.last().unwrap()["content"], "Hello from the daemon");
+    // Admitted and driven by the daemon: the host was handed the turn, never asked to send it.
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(calls.iter().any(|c| c[0] == "turn:adopt"), "{calls:?}");
+    assert!(!calls.iter().any(|c| c[0] == "chat:send"), "{calls:?}");
+    assert_eq!(model.requests.lock().unwrap()[0]["model"], "synthetic");
+    // The offset moved past both updates, and no session was made for chat 99.
+    wait_for("the offset saved", || {
+        std::fs::read_to_string(data.join("messaging-state.json")).is_ok_and(|t| t.contains("\"offset\": 43"))
+    })
+    .await;
+    let state: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("messaging-state.json")).unwrap()).unwrap();
+    assert_eq!(state["bindings"], json!({ "42": "s_tg" }));
+
+    // Disabling stops the poll at once and the status goes empty.
+    let polls = tg.polls_since(0);
+    let off =
+        json!({ "messaging": { "telegram": { "enabled": false, "botToken": "123:TEST", "allowedChatIds": ["42"] } } });
+    let (status, _) = post(d.port, "settings:update", json!([off]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let (_, s) = post(d.port, "messaging:status", json!([]), Some(TOKEN)).await;
+            if s == json!({}) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("the bridge stopped");
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(tg.polls_since(polls), 0, "no poll after disabling");
+    // A message sent meanwhile is not read.
+    tg.updates
+        .send(json!([{ "update_id": 43, "message": { "message_id": 3, "chat": { "id": 42, "type": "private" }, "text": "anyone?" } }]))
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(model.requests.lock().unwrap().len(), 1, "no turn while off");
+    // The backend never ran a bridge of its own.
+    assert!(!calls.iter().any(|c| c[0] == "messaging:status"));
+    drop(d);
+    std::fs::remove_dir_all(&data).ok();
 }
