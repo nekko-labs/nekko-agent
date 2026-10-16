@@ -1210,6 +1210,589 @@
     }
    ],
    "error": "fetch failed"
+  },
+  {
+   "kind": "trello",
+   "token": "tt",
+   "settings": {
+    "key": " k&1 "
+   },
+   "replies": [
+    {
+     "json": [
+      {
+       "id": "c1",
+       "name": "Ship it",
+       "desc": null,
+       "shortUrl": "https://trello.com/c/1",
+       "due": "2026-05-01T00:00:00.000Z"
+      },
+      {
+       "id": 2,
+       "name": "Other"
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.trello.com/1/members/me/cards?filter=open&fields=name,desc,shortUrl,due,dateLastActivity&key=k%261&token=tt",
+     "headers": [],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "c1",
+     "title": "Ship it",
+     "subtitle": "Trello card · due 2026-05-01",
+     "url": "https://trello.com/c/1",
+     "body": ""
+    },
+    {
+     "id": "2",
+     "title": "Other",
+     "subtitle": "Trello card",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "trello",
+   "token": "tt",
+   "query": "SHIP",
+   "settings": {
+    "key": "k"
+   },
+   "replies": [
+    {
+     "json": [
+      {
+       "id": "c1",
+       "name": "Ship it"
+      },
+      {
+       "id": "c2",
+       "name": "x",
+       "desc": "ship later"
+      },
+      {
+       "id": "c3",
+       "name": "no"
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.trello.com/1/members/me/cards?filter=open&fields=name,desc,shortUrl,due,dateLastActivity&key=k&token=tt",
+     "headers": [],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "c1",
+     "title": "Ship it",
+     "subtitle": "Trello card",
+     "body": ""
+    },
+    {
+     "id": "c2",
+     "title": "x",
+     "subtitle": "Trello card",
+     "body": "ship later"
+    }
+   ]
+  },
+  {
+   "kind": "trello",
+   "token": "tt",
+   "settings": {},
+   "replies": [],
+   "requests": [],
+   "error": "Trello needs the API key as well as the token."
+  },
+  {
+   "kind": "trello",
+   "token": "tt",
+   "settings": {
+    "key": "k"
+   },
+   "replies": [
+    {
+     "status": 401,
+     "text": "invalid key"
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.trello.com/1/members/me/cards?filter=open&fields=name,desc,shortUrl,due,dateLastActivity&key=k&token=tt",
+     "headers": [],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Trello 401"
+  },
+  {
+   "kind": "asana",
+   "token": "pat",
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "workspaces": [
+        {
+         "gid": "w 1"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "json": {
+      "data": [
+       {
+        "gid": 1,
+        "name": "Write spec",
+        "notes": "n",
+        "permalink_url": "u",
+        "due_on": "2026-06-01"
+       },
+       {
+        "gid": "2",
+        "name": null
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://app.asana.com/api/1.0/users/me",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer pat"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    },
+    {
+     "method": "GET",
+     "url": "https://app.asana.com/api/1.0/tasks?assignee=me&workspace=w%201&completed_since=now&limit=50&opt_fields=name,notes,permalink_url,due_on",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer pat"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "1",
+     "title": "Write spec",
+     "subtitle": "Asana task · due 2026-06-01",
+     "url": "u",
+     "body": "n"
+    },
+    {
+     "id": "2",
+     "title": "",
+     "subtitle": "Asana task",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "asana",
+   "token": "pat",
+   "settings": {
+    "workspace": "w9"
+   },
+   "replies": [
+    {
+     "json": {
+      "data": []
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://app.asana.com/api/1.0/tasks?assignee=me&workspace=w9&completed_since=now&limit=50&opt_fields=name,notes,permalink_url,due_on",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer pat"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": []
+  },
+  {
+   "kind": "asana",
+   "token": "pat",
+   "replies": [
+    {
+     "json": {
+      "data": {
+       "workspaces": []
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://app.asana.com/api/1.0/users/me",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer pat"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Asana account has no workspace."
+  },
+  {
+   "kind": "asana",
+   "token": "pat",
+   "replies": [
+    {
+     "status": 403,
+     "json": {}
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://app.asana.com/api/1.0/users/me",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer pat"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Asana 403"
+  },
+  {
+   "kind": "todoist",
+   "token": "td",
+   "replies": [
+    {
+     "json": {
+      "results": [
+       {
+        "id": "9",
+        "content": "Buy milk",
+        "description": "x",
+        "due": {
+         "date": "2026-01-02"
+        }
+       },
+       {
+        "id": 10,
+        "content": "Call",
+        "url": "https://todoist/10",
+        "due": null
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.todoist.com/api/v1/tasks?limit=100",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer td"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "9",
+     "title": "Buy milk",
+     "subtitle": "Todoist · due 2026-01-02",
+     "url": "https://app.todoist.com/app/task/9",
+     "body": "x"
+    },
+    {
+     "id": "10",
+     "title": "Call",
+     "subtitle": "Todoist task",
+     "url": "https://todoist/10",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "todoist",
+   "token": "td",
+   "query": "call",
+   "replies": [
+    {
+     "json": [
+      {
+       "id": "1",
+       "content": "Call mum"
+      },
+      {
+       "id": "2",
+       "content": "Other"
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.todoist.com/api/v1/tasks?limit=100",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer td"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "1",
+     "title": "Call mum",
+     "subtitle": "Todoist task",
+     "url": "https://app.todoist.com/app/task/1",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "todoist",
+   "token": "td",
+   "replies": [
+    {
+     "status": 500,
+     "text": "x"
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.todoist.com/api/v1/tasks?limit=100",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer td"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Todoist 500"
+  },
+  {
+   "kind": "clickup",
+   "token": "pk_1",
+   "replies": [
+    {
+     "json": {
+      "teams": [
+       {
+        "id": 42
+       }
+      ]
+     }
+    },
+    {
+     "json": {
+      "tasks": [
+       {
+        "id": "a",
+        "name": "Fix",
+        "status": {
+         "status": "open"
+        },
+        "url": "u",
+        "description": "d"
+       },
+       {
+        "id": "b",
+        "name": "Nostatus"
+       }
+      ]
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.clickup.com/api/v2/team",
+     "headers": [
+      [
+       "Authorization",
+       "pk_1"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    },
+    {
+     "method": "GET",
+     "url": "https://api.clickup.com/api/v2/team/42/task?order_by=updated&subtasks=true",
+     "headers": [
+      [
+       "Authorization",
+       "pk_1"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "a",
+     "title": "Fix",
+     "subtitle": "ClickUp · open",
+     "url": "u",
+     "body": "d"
+    },
+    {
+     "id": "b",
+     "title": "Nostatus",
+     "subtitle": "ClickUp",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "clickup",
+   "token": "pk_1",
+   "settings": {
+    "team": "7"
+   },
+   "replies": [
+    {
+     "json": {
+      "tasks": []
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.clickup.com/api/v2/team/7/task?order_by=updated&subtasks=true",
+     "headers": [
+      [
+       "Authorization",
+       "pk_1"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": []
+  },
+  {
+   "kind": "clickup",
+   "token": "pk_1",
+   "replies": [
+    {
+     "json": {
+      "teams": []
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://api.clickup.com/api/v2/team",
+     "headers": [
+      [
+       "Authorization",
+       "pk_1"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "ClickUp account has no workspace."
+  },
+  {
+   "kind": "tasksfile",
+   "token": "",
+   "settings": {},
+   "replies": [],
+   "requests": [],
+   "error": "Pick the Markdown file that holds your tasks."
   }
  ],
  "polls": [

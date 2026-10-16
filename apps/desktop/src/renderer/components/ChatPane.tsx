@@ -539,7 +539,7 @@ function ComposerFocus({ target, sessionId, ready }: { target: React.RefObject<M
   return null;
 }
 
-function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCenter = false, surface = 'full', status, selected, header }: {
+function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCenter = false, surface = 'full', status, selected, header, cleanStart: cleanStartWanted = false }: {
   sessionId: string;
   /** What the agent is doing (rocket, Zz, ?), drawn in the far bottom-right corner of the window's footer. */
   // A value, not an element: ChatPane is memoized, and a fresh <StatusIcon/>
@@ -562,6 +562,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * wall window and the composer); both read the same live run and cache.
    */
   surface?: 'full' | 'transcript' | 'composer';
+  /**
+   * Focus mode's new-chat view: while the chat is still empty, show only a
+   * centered composer (no header, transcript chrome, footer or monitor). The
+   * first message ends it and the window becomes the full chat.
+   */
+  cleanStart?: boolean;
   onRunningChange?: (running: boolean) => void;
   /**
    * An archived chat, opened to be read: the transcript renders as usual, but
@@ -2244,6 +2250,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
+  const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   const onCompacted = useCallback(() => {
     refreshCtxRef.current();
     loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
@@ -2297,7 +2304,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   return (
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
-    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); setChatMenu({ x: e.clientX, y: e.clientY }); }} data-session-id={sessionId} data-chat-surface={surface} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
+    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); setChatMenu({ x: e.clientX, y: e.clientY }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
       {contextChangeNotice && <Modal title="Context on your next reply" zIndex={100} overlayClassName="p-4" className="w-full max-w-md rounded-xl border border-line bg-surface p-5 text-ink shadow-xl" onClose={closeContextNotice}>
             <h2 className="font-semibold">Context on your next reply</h2>
             <p className="mt-3 text-sm text-ink-soft">Your selection is saved. Changing the model or effort does not send a request now or change an already-running reply. The next reply sends the assembled chat context again, as ordinary follow-up replies do.</p>
@@ -2309,11 +2316,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMarkdown()).catch(() => useStore.getState().pushToast('error', "Couldn't copy chat.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy chat</ContextAction>
         <ContextAction onClick={() => { exportChat(); setChatMenu(null); }}><DownloadIcon className="mr-2 inline h-3.5 w-3.5" />Export as Markdown</ContextAction>
       </ContextMenu>}
-      <section className="flex min-w-0 w-full flex-1 flex-col overflow-x-hidden">
+      <section className={`flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
         {/* One bar per window. Inside a workspace these ride in the frame's
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
-        {surface !== 'composer' && (
+        {surface !== 'composer' && !cleanStart && (
         <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter} metadata={
             git && (
               <span className="flex min-w-0 shrink items-center gap-1 text-[11px]">
@@ -2363,7 +2370,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <div className="agent-question-pin-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => setPlanChangeOpen(false)} /></div>
           </div>
         )}
-        {surface !== 'composer' && (
+        {surface !== 'composer' && !cleanStart && (
         <div className="relative flex min-h-0 w-full flex-1">
           <SubagentParentContext.Provider value={subagentChildren}><SubagentInheritedModelContext.Provider value={delegationDefaultModel ?? (modelId && modelId !== AUTO_MODEL_ID ? modelId : undefined)}><WatchSessionContext.Provider value={sessionId}><VirtualTranscript
             ref={transcriptRef}
@@ -2514,7 +2521,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-4 pt-1.5`}>
           {/* The resize grip rides the composer's top border: a wide invisible
               hit area over a hairline that lights up on hover. */}
-          {surface !== 'composer' && <div
+          {surface !== 'composer' && !cleanStart && <div
             className="group absolute inset-x-0 -top-1.5 z-10 h-3 cursor-row-resize"
             onPointerDown={startComposerResize}
             onDoubleClick={resetComposerHeight}
@@ -2526,7 +2533,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <span className="absolute inset-x-0 top-[5px] h-0.5 opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'color-mix(in srgb, var(--accent) 45%, transparent)' }} />
             <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
           </div>}
-          <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={commandCenter ? { width: '98%' } : undefined}>
+          {cleanStart && <div className="clean-start-greeting fade-in" data-clean-start-greeting>
+            <h2>What should we work on?</h2>
+            <p>Describe the task. The full chat opens once you send.</p>
+          </div>}
+          <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
             {surface !== 'composer' && <ComposerQuestion request={question} onAnswer={(answers) => { void answerQuestion(answers); }} />}
             {surface !== 'composer' && planChangeOpen && !question && (
               <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
@@ -3105,7 +3116,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             folder and usage controls live in the agent window), so it draws no
             chrome of its own: empty, it used to show as a bare band under the
             composer. */}
-        <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 border-t border-line bg-surface px-3 py-1.5'} aria-label="Chat actions and information">
+        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 border-t border-line bg-surface px-3 py-1.5'} aria-label="Chat actions and information">
           <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} />
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
@@ -3147,13 +3158,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           </div>
           </div>}
           {/* An image chat runs no agent, so no tools or internet switch: just its status. */}
-                  </div>
+                  </div>}
       </section>
 
       {/* The work rail, in the quarter the transcript gives back. Kept inside
           the chat pane (not the workbench's right panel) because everything in
           it belongs to this one conversation. */}
-      {surface !== 'composer' && planRailOpen && (
+      {surface !== 'composer' && planRailOpen && !cleanStart && (
         <div className="shrink-0" style={{ width: PLAN_RAIL_WIDTH }}>
           <PlanRail
             sessionId={sessionId}

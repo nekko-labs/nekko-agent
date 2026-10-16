@@ -70,6 +70,11 @@ pub async fn fetch(
         "gitlab" => gitlab_fetch(http, token, query, settings).await,
         "jira" => jira_fetch(http, token, query, settings).await,
         "teams" => teams_fetch(http, token, query, settings).await,
+        "trello" => trello_fetch(http, token, query, settings).await,
+        "asana" => asana_fetch(http, token, query, settings).await,
+        "todoist" => todoist_fetch(http, token, query).await,
+        "clickup" => clickup_fetch(http, token, query, settings).await,
+        "tasksfile" => tasks_file_fetch(query, settings),
         "gmail" => {
             let url = format!(
                 "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20{}",
@@ -795,5 +800,264 @@ pub async fn snippets(
     match tokio::time::timeout(timeout, futures_util::future::join_all(fetches)).await {
         Ok(all) => all.into_iter().flatten().collect(),
         Err(_) => Vec::new(),
+    }
+}
+
+// ---- Task systems (Trello, Asana, Todoist, ClickUp, a local tasks file) ----
+
+fn truthy(v: Option<&Value>) -> bool {
+    nekko_js::truthy(v)
+}
+
+/// `matching(items, query)`: keep resources whose title or body mentions the query.
+fn matching(items: Vec<Value>, query: Option<&str>) -> Value {
+    let q = lower(nekko_js::trim(query.unwrap_or("")));
+    if q.is_empty() {
+        return Value::Array(items);
+    }
+    Value::Array(
+        items
+            .into_iter()
+            .filter(|i| lower(&format!("{}\n{}", string(i.get("title")), or_empty(i.get("body")))).contains(&q))
+            .collect(),
+    )
+}
+
+async fn trello_fetch(
+    http: &dyn Http,
+    token: &str,
+    query: Option<&str>,
+    settings: Option<&Value>,
+) -> Result<Value, String> {
+    let key = setting(settings, "key");
+    if key.is_empty() {
+        return Err("Trello needs the API key as well as the token.".into());
+    }
+    let auth = format!("key={}&token={}", encode_uri_component(&key), encode_uri_component(token));
+    let url = format!(
+        "https://api.trello.com/1/members/me/cards?filter=open&fields=name,desc,shortUrl,due,dateLastActivity&{auth}"
+    );
+    let res = send(http, Request::get(url, &[])).await?;
+    ok_or(&res, "Trello")?;
+    let cards = js::parse_json(&res.body)?;
+    let items = arr(Some(&cards))
+        .iter()
+        .map(|c| {
+            let subtitle = if truthy(c.get("due")) {
+                format!("Trello card · due {}", js::slice16(&string(c.get("due")), 10))
+            } else {
+                "Trello card".into()
+            };
+            obj(vec![
+                ("id", Some(json!(string(c.get("id"))))),
+                ("title", Some(c.get("name").filter(|v| !v.is_null()).cloned().unwrap_or(json!("")))),
+                ("subtitle", Some(json!(subtitle))),
+                ("url", c.get("shortUrl").cloned()),
+                ("body", Some(c.get("desc").filter(|v| !v.is_null()).cloned().unwrap_or(json!("")))),
+            ])
+        })
+        .collect();
+    Ok(matching(items, query))
+}
+
+async fn asana_fetch(
+    http: &dyn Http,
+    token: &str,
+    query: Option<&str>,
+    settings: Option<&Value>,
+) -> Result<Value, String> {
+    let auth = format!("Bearer {token}");
+    let headers = [("Authorization", auth.as_str()), ("Accept", "application/json")];
+    let mut workspace = setting(settings, "workspace");
+    if workspace.is_empty() {
+        let me = send(http, Request::get("https://app.asana.com/api/1.0/users/me", &headers)).await?;
+        ok_or(&me, "Asana")?;
+        let json = js::parse_json(&me.body)?;
+        let first = at(&json, &["data", "workspaces"]).and_then(|w| w.get(0)).and_then(|w| w.get("gid"));
+        workspace = or_empty(first);
+        if workspace.is_empty() {
+            return Err("Asana account has no workspace.".into());
+        }
+    }
+    let qs = format!(
+        "assignee=me&workspace={}&completed_since=now&limit=50&opt_fields=name,notes,permalink_url,due_on",
+        encode_uri_component(&workspace)
+    );
+    let res = send(http, Request::get(format!("https://app.asana.com/api/1.0/tasks?{qs}"), &headers)).await?;
+    ok_or(&res, "Asana")?;
+    let json = js::parse_json(&res.body)?;
+    let items = arr(json.get("data"))
+        .iter()
+        .map(|t| {
+            let subtitle = if truthy(t.get("due_on")) {
+                format!("Asana task · due {}", string(t.get("due_on")))
+            } else {
+                "Asana task".into()
+            };
+            obj(vec![
+                ("id", Some(json!(string(t.get("gid"))))),
+                ("title", Some(t.get("name").filter(|v| !v.is_null()).cloned().unwrap_or(json!("")))),
+                ("subtitle", Some(json!(subtitle))),
+                ("url", t.get("permalink_url").cloned()),
+                ("body", Some(t.get("notes").filter(|v| !v.is_null()).cloned().unwrap_or(json!("")))),
+            ])
+        })
+        .collect();
+    Ok(matching(items, query))
+}
+
+async fn todoist_fetch(http: &dyn Http, token: &str, query: Option<&str>) -> Result<Value, String> {
+    let auth = format!("Bearer {token}");
+    let res =
+        send(http, Request::get("https://api.todoist.com/api/v1/tasks?limit=100", &[("Authorization", &auth)])).await?;
+    ok_or(&res, "Todoist")?;
+    let json = js::parse_json(&res.body)?;
+    let tasks = if json.is_array() { arr(Some(&json)) } else { arr(json.get("results")) };
+    let items = tasks
+        .iter()
+        .map(|t| {
+            let due = t.get("due").and_then(|d| d.get("date"));
+            let subtitle = if truthy(due) { format!("Todoist · due {}", string(due)) } else { "Todoist task".into() };
+            let url = match t.get("url") {
+                Some(u) if !u.is_null() => u.clone(),
+                _ => json!(format!("https://app.todoist.com/app/task/{}", string(t.get("id")))),
+            };
+            obj(vec![
+                ("id", Some(json!(string(t.get("id"))))),
+                ("title", Some(t.get("content").filter(|v| !v.is_null()).cloned().unwrap_or(json!("")))),
+                ("subtitle", Some(json!(subtitle))),
+                ("url", Some(url)),
+                ("body", Some(t.get("description").filter(|v| !v.is_null()).cloned().unwrap_or(json!("")))),
+            ])
+        })
+        .collect();
+    Ok(matching(items, query))
+}
+
+async fn clickup_fetch(
+    http: &dyn Http,
+    token: &str,
+    query: Option<&str>,
+    settings: Option<&Value>,
+) -> Result<Value, String> {
+    let headers = [("Authorization", token), ("Accept", "application/json")];
+    let mut team = setting(settings, "team");
+    if team.is_empty() {
+        let res = send(http, Request::get("https://api.clickup.com/api/v2/team", &headers)).await?;
+        ok_or(&res, "ClickUp")?;
+        let json = js::parse_json(&res.body)?;
+        team = or_empty(json.get("teams").and_then(|t| t.get(0)).and_then(|t| t.get("id")));
+        if team.is_empty() {
+            return Err("ClickUp account has no workspace.".into());
+        }
+    }
+    let url = format!(
+        "https://api.clickup.com/api/v2/team/{}/task?order_by=updated&subtasks=true",
+        encode_uri_component(&team)
+    );
+    let res = send(http, Request::get(url, &headers)).await?;
+    ok_or(&res, "ClickUp")?;
+    let json = js::parse_json(&res.body)?;
+    let items = arr(json.get("tasks"))
+        .iter()
+        .map(|t| {
+            let mut parts = vec!["ClickUp".to_string()];
+            let status = t.get("status").and_then(|s| s.get("status"));
+            if truthy(status) {
+                parts.push(string(status));
+            }
+            obj(vec![
+                ("id", Some(json!(string(t.get("id"))))),
+                ("title", Some(t.get("name").filter(|v| !v.is_null()).cloned().unwrap_or(json!("")))),
+                ("subtitle", Some(json!(parts.join(" · ")))),
+                ("url", t.get("url").cloned()),
+                ("body", Some(t.get("description").filter(|v| !v.is_null()).cloned().unwrap_or(json!("")))),
+            ])
+        })
+        .collect();
+    Ok(matching(items, query))
+}
+
+/// `parseTasksMarkdown`: open `- [ ]` items, each under its nearest heading.
+pub fn parse_tasks_markdown(text: &str, path: &str) -> Vec<Value> {
+    let mut out = Vec::new();
+    let mut section = String::new();
+    for (i, raw) in text.split('\n').enumerate() {
+        let line = raw.strip_suffix('\r').unwrap_or(raw);
+        let hashes = line.chars().take_while(|c| *c == '#').count();
+        if (1..=6).contains(&hashes) {
+            let rest = &line[hashes..];
+            if rest.starts_with(char::is_whitespace) {
+                section = rest.trim().to_string();
+                continue;
+            }
+        }
+        let body = line.trim_start();
+        let Some(after_bullet) = body.strip_prefix(['-', '*', '+']) else { continue };
+        if !after_bullet.starts_with(char::is_whitespace) {
+            continue;
+        }
+        let rest = after_bullet.trim_start();
+        let Some(rest) = rest.strip_prefix('[') else { continue };
+        let mut chars = rest.chars();
+        let mark = chars.next();
+        if !matches!(mark, Some(' ' | 'x' | 'X')) {
+            continue;
+        }
+        let Some(rest) = chars.as_str().strip_prefix(']') else { continue };
+        if !rest.starts_with(char::is_whitespace) || mark != Some(' ') {
+            continue;
+        }
+        out.push(obj(vec![
+            ("id", Some(json!(format!("{path}:{}", i + 1)))),
+            ("title", Some(json!(rest.trim()))),
+            ("subtitle", Some(json!(if section.is_empty() { "Tasks file".to_string() } else { section.clone() }))),
+            ("url", if path.is_empty() { None } else { Some(json!(format!("file://{path}"))) }),
+            ("body", Some(json!(""))),
+        ]));
+    }
+    out
+}
+
+fn tasks_file_fetch(query: Option<&str>, settings: Option<&Value>) -> Result<Value, String> {
+    let path = setting(settings, "path");
+    if path.is_empty() {
+        return Err("Pick the Markdown file that holds your tasks.".into());
+    }
+    let text = std::fs::read_to_string(&path).map_err(|_| format!("Couldn't read {path}."))?;
+    Ok(matching(parse_tasks_markdown(&text, &path), query))
+}
+
+#[cfg(test)]
+mod task_tests {
+    use super::*;
+
+    #[test]
+    fn parses_open_tasks_under_headings_like_the_ts_parser() {
+        let md = "# Now\n- [ ] Open task\n- [x] Done task\n## Later\n  * [ ] Nested later\nnot a task\n";
+        assert_eq!(
+            Value::Array(parse_tasks_markdown(md, "/t/TASKS.md")),
+            json!([
+                { "id": "/t/TASKS.md:2", "title": "Open task", "subtitle": "Now", "url": "file:///t/TASKS.md", "body": "" },
+                { "id": "/t/TASKS.md:5", "title": "Nested later", "subtitle": "Later", "url": "file:///t/TASKS.md", "body": "" },
+            ])
+        );
+    }
+
+    #[test]
+    fn reads_the_file_and_filters() {
+        let dir = std::env::temp_dir().join(format!("nekko-tasks-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("TASKS.md");
+        std::fs::write(&path, "- [ ] Ship it\n- [ ] Other\r\n").unwrap();
+        let settings = json!({ "path": path.to_string_lossy() });
+        let all = tasks_file_fetch(None, Some(&settings)).unwrap();
+        assert_eq!(all.as_array().unwrap().len(), 2);
+        let some = tasks_file_fetch(Some("SHIP"), Some(&settings)).unwrap();
+        assert_eq!(some[0]["title"], "Ship it");
+        assert_eq!(
+            tasks_file_fetch(None, Some(&json!({}))).unwrap_err(),
+            "Pick the Markdown file that holds your tasks."
+        );
     }
 }
