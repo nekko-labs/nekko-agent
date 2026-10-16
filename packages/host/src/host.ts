@@ -204,7 +204,7 @@ import { createRemoteService, DAEMON_REMOTE } from './remote.js';
 import { createMessagingService, DAEMON_MESSAGING, type MessagingService } from './messaging/service.js';
 import { detectAgentTools, installSubagent, refreshSubagent, subagentSnippet } from './integrations.js';
 import { getGpuStats, getGpuStatsFresh } from './gpu.js';
-import { startUpdateChecks } from './update-checks.js';
+import { DAEMON_UPDATE_CHECKS, startUpdateChecks } from './update-checks.js';
 import { detectGpuAdapters } from './gpu-adapters.js';
 import { getSystemStats } from './system.js';
 import { stopLocalServer } from './servers.js';
@@ -846,11 +846,14 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
 
   // Periodic catalog refreshes (Settings → Updates): provider model lists and
   // the skills shelf, each on its own toggle. The `host.listModels` call inside
-  // the service is deferred past construction.
+  // the service is deferred past construction. A daemon that owns them
+  // (crates/nekkod/src/small_services.rs) runs them instead, so the UI hears
+  // one change, not two.
   const updateChecks = startUpdateChecks({
     settings: getSettings,
     listModels: (id) => host.listModels(id),
     emit: (channel, payload) => events.emit(channel, payload),
+    scheduled: !daemonOwns(DAEMON_UPDATE_CHECKS),
   });
 
   // A paired phone follows the desktop's theme: tell it (through the relay)

@@ -1,0 +1,6355 @@
+[
+  {
+    "name": "continue: pins the parent and makes the follow-up chat",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "result": {
+      "id": "s_new",
+      "title": "Follow-up to PR #12",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5,
+      "titleAuto": false,
+      "providerId": "p",
+      "modelId": "m",
+      "autoModel": false,
+      "thinking": "high",
+      "mode": "ask",
+      "disabledTools": [
+        "browser"
+      ],
+      "gitStackParent": {
+        "workspaceId": "repo",
+        "url": "https://github.com/owner/repo/pull/12",
+        "branch": "parent",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "origin",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "rev-parse",
+          "refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}"
+        ]
+      ],
+      [
+        "create",
+        "repo"
+      ],
+      [
+        "save",
+        {
+          "id": "s_new",
+          "title": "Follow-up to PR #12",
+          "workspaceId": "repo",
+          "executionMode": "worktree",
+          "gitIsolation": true,
+          "messages": [],
+          "createdAt": 5,
+          "updatedAt": 5,
+          "titleAuto": false,
+          "providerId": "p",
+          "modelId": "m",
+          "autoModel": false,
+          "thinking": "high",
+          "mode": "ask",
+          "disabledTools": [
+            "browser"
+          ],
+          "gitStackParent": {
+            "workspaceId": "repo",
+            "url": "https://github.com/owner/repo/pull/12",
+            "branch": "parent",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    ]
+  },
+  {
+    "name": "continue: no such chat",
+    "sessionId": "s_gone",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Chat not found.",
+    "calls": []
+  },
+  {
+    "name": "continue: offline chat",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "offline": true
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "PR stacks require an online, saved chat outside the sandbox.",
+    "calls": []
+  },
+  {
+    "name": "continue: incognito chat",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "incognito": true
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "PR stacks require an online, saved chat outside the sandbox.",
+    "calls": []
+  },
+  {
+    "name": "continue: sandbox chat",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "sandbox",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "PR stacks require an online, saved chat outside the sandbox.",
+    "calls": []
+  },
+  {
+    "name": "continue: archived chat",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "archivedAt": 9
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Continue from an active coding chat.",
+    "calls": []
+  },
+  {
+    "name": "continue: image chat",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "chatType": "image"
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Continue from an active coding chat.",
+    "calls": []
+  },
+  {
+    "name": "continue: legacy chat without a mode, unified",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "gitIsolation": false,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "result": {
+      "id": "s_new",
+      "title": "Follow-up to PR #12",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5,
+      "titleAuto": false,
+      "providerId": "p",
+      "modelId": "m",
+      "autoModel": false,
+      "thinking": "high",
+      "mode": "ask",
+      "disabledTools": [
+        "browser"
+      ],
+      "gitStackParent": {
+        "workspaceId": "repo",
+        "url": "https://github.com/owner/repo/pull/12",
+        "branch": "parent",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "origin",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "rev-parse",
+          "refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}"
+        ]
+      ],
+      [
+        "create",
+        "repo"
+      ],
+      [
+        "save",
+        {
+          "id": "s_new",
+          "title": "Follow-up to PR #12",
+          "workspaceId": "repo",
+          "executionMode": "worktree",
+          "gitIsolation": true,
+          "messages": [],
+          "createdAt": 5,
+          "updatedAt": 5,
+          "titleAuto": false,
+          "providerId": "p",
+          "modelId": "m",
+          "autoModel": false,
+          "thinking": "high",
+          "mode": "ask",
+          "disabledTools": [
+            "browser"
+          ],
+          "gitStackParent": {
+            "workspaceId": "repo",
+            "url": "https://github.com/owner/repo/pull/12",
+            "branch": "parent",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    ]
+  },
+  {
+    "name": "continue: not a GitHub PR URL",
+    "sessionId": "s_src",
+    "url": "https://gitlab.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Use a GitHub PR URL.",
+    "calls": []
+  },
+  {
+    "name": "continue: PR zero",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/0",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Use a GitHub PR URL.",
+    "calls": []
+  },
+  {
+    "name": "continue: a trailing slash and a .git repo name",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo.git/pull/12/",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "result": {
+      "id": "s_new",
+      "title": "Follow-up to PR #12",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5,
+      "titleAuto": false,
+      "providerId": "p",
+      "modelId": "m",
+      "autoModel": false,
+      "thinking": "high",
+      "mode": "ask",
+      "disabledTools": [
+        "browser"
+      ],
+      "gitStackParent": {
+        "workspaceId": "repo",
+        "url": "https://github.com/owner/repo/pull/12",
+        "branch": "parent",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "origin",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "rev-parse",
+          "refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}"
+        ]
+      ],
+      [
+        "create",
+        "repo"
+      ],
+      [
+        "save",
+        {
+          "id": "s_new",
+          "title": "Follow-up to PR #12",
+          "workspaceId": "repo",
+          "executionMode": "worktree",
+          "gitIsolation": true,
+          "messages": [],
+          "createdAt": 5,
+          "updatedAt": 5,
+          "titleAuto": false,
+          "providerId": "p",
+          "modelId": "m",
+          "autoModel": false,
+          "thinking": "high",
+          "mode": "ask",
+          "disabledTools": [
+            "browser"
+          ],
+          "gitStackParent": {
+            "workspaceId": "repo",
+            "url": "https://github.com/owner/repo/pull/12",
+            "branch": "parent",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    ]
+  },
+  {
+    "name": "continue: a PR number past the safe range",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/99999999999999999999",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Invalid PR number.",
+    "calls": []
+  },
+  {
+    "name": "continue: closed parent",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "closed",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "The parent PR must still be open. Refresh it or start a normal chat.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ]
+    ]
+  },
+  {
+    "name": "continue: merged parent",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "merged": true
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "The parent PR must still be open. Refresh it or start a normal chat.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ]
+    ]
+  },
+  {
+    "name": "continue: fork parent",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "fork/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "GitHub stacks require the head and base branches in the same repository. Fork PRs cannot be stacked.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ]
+    ]
+  },
+  {
+    "name": "continue: base repository named in another case",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "Owner/Repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "result": {
+      "id": "s_new",
+      "title": "Follow-up to PR #12",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5,
+      "titleAuto": false,
+      "providerId": "p",
+      "modelId": "m",
+      "autoModel": false,
+      "thinking": "high",
+      "mode": "ask",
+      "disabledTools": [
+        "browser"
+      ],
+      "gitStackParent": {
+        "workspaceId": "repo",
+        "url": "https://github.com/owner/repo/pull/12",
+        "branch": "parent",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "origin",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "rev-parse",
+          "refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}"
+        ]
+      ],
+      [
+        "create",
+        "repo"
+      ],
+      [
+        "save",
+        {
+          "id": "s_new",
+          "title": "Follow-up to PR #12",
+          "workspaceId": "repo",
+          "executionMode": "worktree",
+          "gitIsolation": true,
+          "messages": [],
+          "createdAt": 5,
+          "updatedAt": 5,
+          "titleAuto": false,
+          "providerId": "p",
+          "modelId": "m",
+          "autoModel": false,
+          "thinking": "high",
+          "mode": "ask",
+          "disabledTools": [
+            "browser"
+          ],
+          "gitStackParent": {
+            "workspaceId": "repo",
+            "url": "https://github.com/owner/repo/pull/12",
+            "branch": "parent",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    ]
+  },
+  {
+    "name": "continue: no valid head commit",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "xyz",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "GitHub did not return a valid parent branch and commit.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ]
+    ]
+  },
+  {
+    "name": "continue: GitHub refuses the read",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "__error": "HTTP 404: Not Found"
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "HTTP 404: Not Found",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ]
+    ]
+  },
+  {
+    "name": "continue: parent at the top of its stack",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "stack": {
+          "number": 3,
+          "size": 2
+        }
+      },
+      "repos/owner/repo/stacks/3": {
+        "pull_requests": [
+          {
+            "number": 10
+          },
+          {
+            "number": 12
+          }
+        ]
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "result": {
+      "id": "s_new",
+      "title": "Follow-up to PR #12",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5,
+      "titleAuto": false,
+      "providerId": "p",
+      "modelId": "m",
+      "autoModel": false,
+      "thinking": "high",
+      "mode": "ask",
+      "disabledTools": [
+        "browser"
+      ],
+      "gitStackParent": {
+        "workspaceId": "repo",
+        "url": "https://github.com/owner/repo/pull/12",
+        "branch": "parent",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks/3"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "origin",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "rev-parse",
+          "refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}"
+        ]
+      ],
+      [
+        "create",
+        "repo"
+      ],
+      [
+        "save",
+        {
+          "id": "s_new",
+          "title": "Follow-up to PR #12",
+          "workspaceId": "repo",
+          "executionMode": "worktree",
+          "gitIsolation": true,
+          "messages": [],
+          "createdAt": 5,
+          "updatedAt": 5,
+          "titleAuto": false,
+          "providerId": "p",
+          "modelId": "m",
+          "autoModel": false,
+          "thinking": "high",
+          "mode": "ask",
+          "disabledTools": [
+            "browser"
+          ],
+          "gitStackParent": {
+            "workspaceId": "repo",
+            "url": "https://github.com/owner/repo/pull/12",
+            "branch": "parent",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    ]
+  },
+  {
+    "name": "continue: parent in the middle of a stack",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "stack": {
+          "number": 3,
+          "size": 3
+        }
+      },
+      "repos/owner/repo/stacks/3": {
+        "pull_requests": [
+          {
+            "number": 12
+          },
+          {
+            "number": 14
+          }
+        ]
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Continue from the top PR of this stack. Another dependent PR is already above this parent.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks/3"
+      ]
+    ]
+  },
+  {
+    "name": "continue: a stack with no pull request list",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "stack": {
+          "number": 3,
+          "size": 1
+        }
+      },
+      "repos/owner/repo/stacks/3": {}
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Continue from the top PR of this stack. Another dependent PR is already above this parent.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks/3"
+      ]
+    ]
+  },
+  {
+    "name": "continue: no saved folder for the chat",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Select a local project with a GitHub remote matching this PR before continuing it.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ]
+    ]
+  },
+  {
+    "name": "continue: a folder that is not a repository",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {},
+    "error": "Select a local project with a GitHub remote matching this PR before continuing it.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "continue: the only remote is another repository",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "https://github.com/other/repo.git",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Select a local project with a GitHub remote matching this PR before continuing it.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "continue: a look-alike host is not GitHub",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "https://github.com.evil.test/owner/repo.git",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Select a local project with a GitHub remote matching this PR before continuing it.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "continue: the second remote matches, CRLF list",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "fork\r\nupstream\r\n",
+      "/repo|remote get-url fork": "https://github.com/me/repo.git",
+      "/repo|remote get-url upstream": "ssh://git@github.com/OWNER/REPO/",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "result": {
+      "id": "s_new",
+      "title": "Follow-up to PR #12",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5,
+      "titleAuto": false,
+      "providerId": "p",
+      "modelId": "m",
+      "autoModel": false,
+      "thinking": "high",
+      "mode": "ask",
+      "disabledTools": [
+        "browser"
+      ],
+      "gitStackParent": {
+        "workspaceId": "repo",
+        "url": "https://github.com/owner/repo/pull/12",
+        "branch": "parent",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "fork"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "upstream"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "upstream",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "rev-parse",
+          "refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}"
+        ]
+      ],
+      [
+        "create",
+        "repo"
+      ],
+      [
+        "save",
+        {
+          "id": "s_new",
+          "title": "Follow-up to PR #12",
+          "workspaceId": "repo",
+          "executionMode": "worktree",
+          "gitIsolation": true,
+          "messages": [],
+          "createdAt": 5,
+          "updatedAt": 5,
+          "titleAuto": false,
+          "providerId": "p",
+          "modelId": "m",
+          "autoModel": false,
+          "thinking": "high",
+          "mode": "ask",
+          "disabledTools": [
+            "browser"
+          ],
+          "gitStackParent": {
+            "workspaceId": "repo",
+            "url": "https://github.com/owner/repo/pull/12",
+            "branch": "parent",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    ]
+  },
+  {
+    "name": "continue: a .git/ remote does not match",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "https://github.com/owner/repo.git/",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Select a local project with a GitHub remote matching this PR before continuing it.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "continue: a supporting folder matches",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "docs",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "supportingWorkspaceIds": [
+          "docs",
+          "repo",
+          ""
+        ]
+      }
+    },
+    "workspaces": [
+      {
+        "id": "docs",
+        "name": "docs",
+        "path": "/docs"
+      },
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/docs|remote": "",
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "result": {
+      "id": "s_new",
+      "title": "Follow-up to PR #12",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5,
+      "titleAuto": false,
+      "providerId": "p",
+      "modelId": "m",
+      "autoModel": false,
+      "thinking": "high",
+      "mode": "ask",
+      "disabledTools": [
+        "browser"
+      ],
+      "gitStackParent": {
+        "workspaceId": "repo",
+        "url": "https://github.com/owner/repo/pull/12",
+        "branch": "parent",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/docs",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "origin",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "rev-parse",
+          "refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}"
+        ]
+      ],
+      [
+        "create",
+        "repo"
+      ],
+      [
+        "save",
+        {
+          "id": "s_new",
+          "title": "Follow-up to PR #12",
+          "workspaceId": "repo",
+          "executionMode": "worktree",
+          "gitIsolation": true,
+          "messages": [],
+          "createdAt": 5,
+          "updatedAt": 5,
+          "titleAuto": false,
+          "providerId": "p",
+          "modelId": "m",
+          "autoModel": false,
+          "thinking": "high",
+          "mode": "ask",
+          "disabledTools": [
+            "browser"
+          ],
+          "gitStackParent": {
+            "workspaceId": "repo",
+            "url": "https://github.com/owner/repo/pull/12",
+            "branch": "parent",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    ]
+  },
+  {
+    "name": "continue: a branch name git refuses",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": {
+        "__error": "Command failed: git check-ref-format refs/heads/parent"
+      },
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "error": "Command failed: git check-ref-format refs/heads/parent",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "continue: the fetch fails",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "fetchFails": true,
+    "error": "Could not fetch the parent PR. Check Git authentication and repository access, then retry.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "origin",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "continue: the parent moved during the fetch",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+    },
+    "error": "The parent PR changed while fetching. Refresh and try again.",
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "origin",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "rev-parse",
+          "refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "continue: a source without options",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Bare",
+        "workspaceId": "repo",
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 1
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "result": {
+      "id": "s_new",
+      "title": "Follow-up to PR #12",
+      "workspaceId": "repo",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5,
+      "titleAuto": false,
+      "executionMode": "worktree",
+      "gitStackParent": {
+        "workspaceId": "repo",
+        "url": "https://github.com/owner/repo/pull/12",
+        "branch": "parent",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "origin",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "rev-parse",
+          "refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}"
+        ]
+      ],
+      [
+        "create",
+        "repo"
+      ],
+      [
+        "save",
+        {
+          "id": "s_new",
+          "title": "Follow-up to PR #12",
+          "workspaceId": "repo",
+          "gitIsolation": true,
+          "messages": [],
+          "createdAt": 5,
+          "updatedAt": 5,
+          "titleAuto": false,
+          "executionMode": "worktree",
+          "gitStackParent": {
+            "workspaceId": "repo",
+            "url": "https://github.com/owner/repo/pull/12",
+            "branch": "parent",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    ]
+  },
+  {
+    "name": "continue: null options are copied",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": null,
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": null,
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "autoQuality": 0.5
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "continue",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/repo|remote": "origin\n",
+      "/repo|remote get-url origin": "git@github.com:owner/repo.git\n",
+      "/repo|check-ref-format refs/heads/parent": "",
+      "/repo|rev-parse refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "result": {
+      "id": "s_new",
+      "title": "Follow-up to PR #12",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5,
+      "titleAuto": false,
+      "providerId": null,
+      "modelId": "m",
+      "autoModel": false,
+      "autoQuality": 0.5,
+      "thinking": "high",
+      "mode": "ask",
+      "gitStackParent": {
+        "workspaceId": "repo",
+        "url": "https://github.com/owner/repo/pull/12",
+        "branch": "parent",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "remote",
+          "get-url",
+          "origin"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "check-ref-format",
+          "refs/heads/parent"
+        ]
+      ],
+      [
+        "fetch",
+        "/repo",
+        [
+          "fetch",
+          "--no-tags",
+          "origin",
+          "refs/heads/parent:refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      [
+        "git",
+        "/repo",
+        [
+          "rev-parse",
+          "refs/nekko/pr-bases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}"
+        ]
+      ],
+      [
+        "create",
+        "repo"
+      ],
+      [
+        "save",
+        {
+          "id": "s_new",
+          "title": "Follow-up to PR #12",
+          "workspaceId": "repo",
+          "executionMode": "worktree",
+          "gitIsolation": true,
+          "messages": [],
+          "createdAt": 5,
+          "updatedAt": 5,
+          "titleAuto": false,
+          "providerId": null,
+          "modelId": "m",
+          "autoModel": false,
+          "autoQuality": 0.5,
+          "thinking": "high",
+          "mode": "ask",
+          "gitStackParent": {
+            "workspaceId": "repo",
+            "url": "https://github.com/owner/repo/pull/12",
+            "branch": "parent",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    ]
+  },
+  {
+    "name": "link: creates the stack in dependency order",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": true,
+      "message": "Linked as a GitHub PR stack.",
+      "pr": {
+        "url": "https://github.com/owner/repo/pull/13",
+        "owner": "owner",
+        "repo": "repo",
+        "number": 13,
+        "title": "Child",
+        "state": "open",
+        "stack": {
+          "number": 3,
+          "size": 2
+        }
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks?pull_request=12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks",
+        [
+          12,
+          13
+        ]
+      ],
+      [
+        "refresh",
+        "https://github.com/owner/repo/pull/13"
+      ]
+    ]
+  },
+  {
+    "name": "link: no such chat",
+    "sessionId": "s_gone",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "Chat not found."
+    },
+    "calls": []
+  },
+  {
+    "name": "link: a chat not started from a parent",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "This chat was not started from a parent PR."
+    },
+    "calls": []
+  },
+  {
+    "name": "link: a unified chat with a parent",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "unified",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "This chat was not started from a parent PR."
+    },
+    "calls": []
+  },
+  {
+    "name": "link: the parent itself",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/12",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "Select the new dependent PR in the same repository."
+    },
+    "calls": []
+  },
+  {
+    "name": "link: another repository",
+    "sessionId": "s_src",
+    "url": "https://github.com/other/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "Select the new dependent PR in the same repository."
+    },
+    "calls": []
+  },
+  {
+    "name": "link: the same repository in another case",
+    "sessionId": "s_src",
+    "url": "https://github.com/Owner/Repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      },
+      "repos/Owner/Repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": true,
+      "message": "Linked as a GitHub PR stack.",
+      "pr": {
+        "url": "https://github.com/owner/repo/pull/13",
+        "owner": "owner",
+        "repo": "repo",
+        "number": 13,
+        "title": "Child",
+        "state": "open",
+        "stack": {
+          "number": 3,
+          "size": 2
+        }
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/Owner/Repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks?pull_request=12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks",
+        [
+          12,
+          13
+        ]
+      ],
+      [
+        "refresh",
+        "https://github.com/Owner/Repo/pull/13"
+      ]
+    ]
+  },
+  {
+    "name": "link: not a PR URL",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/issues/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "Use a GitHub PR URL."
+    },
+    "calls": []
+  },
+  {
+    "name": "link: no worktree yet",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "Send the first prompt to prepare this chat’s dependent worktree."
+    },
+    "calls": []
+  },
+  {
+    "name": "link: closed parent",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "closed",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "The parent PR must still be open. Refresh it or start a normal chat."
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ]
+    ]
+  },
+  {
+    "name": "link: a fork dependent",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "fork/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "GitHub stacks require the head and base branches in the same repository. Fork PRs cannot be stacked."
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ]
+    ]
+  },
+  {
+    "name": "link: the dependent uses another branch",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "other",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "The dependent PR must use this chat’s branch and target its parent PR branch. Update its base on GitHub, then retry."
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ]
+    ]
+  },
+  {
+    "name": "link: the checkout moved to another branch",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "main\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "The dependent PR must use this chat’s branch and target its parent PR branch. Update its base on GitHub, then retry."
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "link: the dependent targets main",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "The dependent PR must use this chat’s branch and target its parent PR branch. Update its base on GitHub, then retry."
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "link: git fails on the checkout",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {},
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "Command failed: git branch --show-current"
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "link: stack membership is not a list",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": {
+        "message": "Not Found"
+      },
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "Could not read GitHub stack membership."
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks?pull_request=12"
+      ]
+    ]
+  },
+  {
+    "name": "link: extends the top of an existing stack",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [
+        {
+          "number": 9,
+          "pull_requests": [
+            {
+              "number": 7
+            }
+          ]
+        },
+        {
+          "number": 3,
+          "pull_requests": [
+            {
+              "number": 10
+            },
+            {
+              "number": 12
+            }
+          ]
+        }
+      ],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": true,
+      "message": "Linked as a GitHub PR stack.",
+      "pr": {
+        "url": "https://github.com/owner/repo/pull/13",
+        "owner": "owner",
+        "repo": "repo",
+        "number": 13,
+        "title": "Child",
+        "state": "open",
+        "stack": {
+          "number": 3,
+          "size": 2
+        }
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks?pull_request=12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks/3/add",
+        [
+          13
+        ]
+      ],
+      [
+        "refresh",
+        "https://github.com/owner/repo/pull/13"
+      ]
+    ]
+  },
+  {
+    "name": "link: already linked",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [
+        {
+          "number": 3,
+          "pull_requests": [
+            {
+              "number": 12
+            },
+            {
+              "number": 13
+            }
+          ]
+        }
+      ],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": true,
+      "message": "This PR is already linked to its parent stack.",
+      "pr": {
+        "url": "https://github.com/owner/repo/pull/13",
+        "owner": "owner",
+        "repo": "repo",
+        "number": 13,
+        "title": "Child",
+        "state": "open",
+        "stack": {
+          "number": 3,
+          "size": 2
+        }
+      }
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks?pull_request=12"
+      ],
+      [
+        "refresh",
+        "https://github.com/owner/repo/pull/13"
+      ]
+    ]
+  },
+  {
+    "name": "link: the parent is not the top",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [
+        {
+          "number": 3,
+          "pull_requests": [
+            {
+              "number": 12
+            },
+            {
+              "number": 14
+            }
+          ]
+        }
+      ],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "Continue from the top PR of this stack. Another dependent PR is already above this parent."
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks?pull_request=12"
+      ]
+    ]
+  },
+  {
+    "name": "link: creating the stack fails",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "__error": "HTTP 422: Validation Failed"
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": {
+      "url": "https://github.com/owner/repo/pull/13",
+      "owner": "owner",
+      "repo": "repo",
+      "number": 13,
+      "title": "Child",
+      "state": "open",
+      "stack": {
+        "number": 3,
+        "size": 2
+      }
+    },
+    "result": {
+      "ok": false,
+      "message": "HTTP 422: Validation Failed"
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks?pull_request=12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks",
+        [
+          12,
+          13
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "link: no PR state after linking",
+    "sessionId": "s_src",
+    "url": "https://github.com/owner/repo/pull/13",
+    "sessions": {
+      "s_src": {
+        "id": "s_src",
+        "title": "Source",
+        "workspaceId": "repo",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "providerId": "p",
+        "modelId": "m",
+        "autoModel": false,
+        "thinking": "high",
+        "mode": "ask",
+        "disabledTools": [
+          "browser"
+        ],
+        "messages": [],
+        "createdAt": 1,
+        "updatedAt": 2,
+        "gitStackParent": {
+          "workspaceId": "repo",
+          "url": "https://github.com/owner/repo/pull/12",
+          "branch": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "gitWorktrees": {
+          "repo": {
+            "path": "/dependent",
+            "branch": "nekko/child"
+          }
+        }
+      }
+    },
+    "workspaces": [
+      {
+        "id": "repo",
+        "name": "repo",
+        "path": "/repo"
+      }
+    ],
+    "created": {
+      "id": "s_new",
+      "title": "New chat",
+      "workspaceId": "repo",
+      "executionMode": "worktree",
+      "gitIsolation": true,
+      "messages": [],
+      "createdAt": 5,
+      "updatedAt": 5
+    },
+    "op": "link",
+    "requests": {
+      "repos/owner/repo/pulls/12": {
+        "number": 12,
+        "state": "open",
+        "head": {
+          "ref": "parent",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/pulls/13": {
+        "number": 13,
+        "state": "open",
+        "head": {
+          "ref": "nekko/child",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        },
+        "base": {
+          "ref": "parent",
+          "repo": {
+            "full_name": "owner/repo"
+          }
+        }
+      },
+      "repos/owner/repo/stacks?pull_request=12": [],
+      "repos/owner/repo/stacks": {
+        "number": 3
+      },
+      "repos/owner/repo/stacks/3/add": {
+        "number": 3
+      }
+    },
+    "git": {
+      "/dependent|branch --show-current": "nekko/child\n"
+    },
+    "refresh": null,
+    "result": {
+      "ok": true,
+      "message": "Linked as a GitHub PR stack."
+    },
+    "calls": [
+      [
+        "request",
+        "repos/owner/repo/pulls/12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/pulls/13"
+      ],
+      [
+        "git",
+        "/dependent",
+        [
+          "branch",
+          "--show-current"
+        ]
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks?pull_request=12"
+      ],
+      [
+        "request",
+        "repos/owner/repo/stacks",
+        [
+          12,
+          13
+        ]
+      ],
+      [
+        "refresh",
+        "https://github.com/owner/repo/pull/13"
+      ]
+    ]
+  }
+]

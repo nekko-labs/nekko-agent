@@ -22,6 +22,7 @@ pub mod pr;
 pub mod proc;
 pub mod skills;
 pub mod spec;
+pub mod stacks;
 
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
