@@ -1,10 +1,14 @@
 ---
 
+## Wall push and navigation shoulders
+
+Implemented; 1,241 desktop tests, 18 launcher checks, desktop typecheck and production build pass. Matched isolated light/dark wide/narrow renderer captures and sampled motion frames inspected; native chrome and packaged macOS not tested. Opening an agent window reveals only the incoming window from its outer edge while existing windows slide to their new positions. Existing windows take their final width and height immediately, without a second top-left resize animation. Closing folds and reduced-motion behavior remain unchanged. Navigation shoulders begin 10px beyond the icon rows (compressed proportionally in short windows) and mirror at both ends. These visual changes add no host calls, permissions, network access or persisted settings.
+
 ## Navigation panel, media fade and macOS app menu (2026-10-16)
 
 Implemented; focused rail geometry tests, desktop typecheck and isolated-sandbox renderer captures (CDP, separate `NEKKO_DATA_DIR`); native macOS menu and window-chrome alignment not yet checked by eye in a packaged build:
 
-- **Left navigation panel.** The panel outline has rounded bends and each end finishes in a concave curve into the window edge. At rest the tails above and below the destinations are the collapsed width (one even 52px column); on hover or keyboard focus the whole panel, tails included, widens to 198px together (the SVG path `d` interpolates between two outlines with matching commands). Pointing at any painted part of the panel opens it, not just the icons. The destinations sit about 20% higher (spare space split 1:4 instead of 1:3). The tails no longer reach into the title bar.
+- **Left navigation panel.** The panel outline has rounded bends and each end finishes in a concave curve into the window edge. The shoulders start about 10px beyond the top and bottom destination rows, narrowing into mirrored tails with matching concave curves at the window edge. At rest the body is 52px and the tails 26px; on hover or keyboard focus the body widens to 198px and the tails to 52px together (the SVG path `d` interpolates between two outlines with matching commands). Pointing at any painted part of the panel opens it, not just the icons. The destinations sit about 20% higher (spare space split 1:4 instead of 1:3). The tails no longer reach into the title bar.
 - **Composer.** Verified on a fresh profile: the wall composer's editor opens at 64px, two 20px text rows plus padding; no change needed. A height dragged by the user is still remembered.
 - **Media fade.** Newly pasted or attached images, videos and file chips fade and scale in over 160ms; existing items do not re-animate; reduced motion disables it.
 - **macOS app menu.** The "Nekko Agent" menu has **Settings…** (⌘,) and **About Nekko Agent**, which opens an in-app About page (Nekko Labs; pet the cat). Both go through the existing `nekko-agent://` link path (`settings`, `about`). Other platforms keep no menu bar.

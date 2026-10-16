@@ -225,6 +225,8 @@ A successfully changed **Permissions** mode (Ask, Guardrails or YOLO) becomes th
 
 A successfully completed reply should not retain a stale **Reply interrupted** warning. When the final transcript records successful completion, that terminal record takes precedence over missing older tool bookkeeping. Explicit interruption markers, provider failures, and intentional stops remain visible; the app does not rewrite your transcript to dismiss them.
 
+The left navigation panel curves into its tails about 10px beyond the icon rows, with matching curves at both ends. Opening a wall window reveals the incoming window and slides existing windows aside, without a separate corner-resize animation. Reduced motion disables the wall transitions.
+
 On the Agents wall, the agent, image, and terminal icons with small bottom-right **+** indicators create new windows. A subtle divider separates them from the Focused, Dynamic, and Grid view modes. Inside a window header, the larger accent-colored **Focus** icon sits immediately beside Minimize and opens that window in Focused view. Minimize removes only the wall window, keeping the chat in the Agent panel. The left navigation keeps its position and tint, with broad curved wings above and below the destinations.
 
 The **Chat** tab is the heart of the app. There are no separate "chat", "cowork",
