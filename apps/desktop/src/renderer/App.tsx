@@ -154,8 +154,8 @@ export function App() {
   );
 
   useEffect(() => {
-    refreshSettings();
-    refreshProviders();
+    // Restore the saved provider/model before catalog loading chooses a fallback.
+    void refreshSettings().then(() => refreshProviders());
     refreshSessions();
     refreshTerminals();
     useStore.getState().refreshSkills();

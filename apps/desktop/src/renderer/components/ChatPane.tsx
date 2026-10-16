@@ -3,7 +3,7 @@ import { ChatArtifacts } from './ChatArtifacts.js';
 import { MarkdownSession } from './Markdown.js';
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
-import { chatPaneSettings } from './ChatPane.settings.js';
+import { chatPaneSettings, initialChatBrain } from './ChatPane.settings.js';
 import { CopyIcon, ControlPanelIcon } from '../icons.js';
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
@@ -286,11 +286,7 @@ function ImageMenu({ x, y, src, onClose }: { x: number; y: number; src: string; 
 
 /** The provider and model a chat opens on: its own, or the app's defaults. */
 function initialBrain(s: Session | null | undefined): { providerId: string | null; modelId: string | null } {
-  const st = useStore.getState();
-  return {
-    providerId: s?.providerId ?? st.activeProviderId ?? st.providers[0]?.id ?? null,
-    modelId: s?.autoModel ? AUTO_MODEL_ID : (s?.modelId ?? st.activeModelId ?? null),
-  };
+  return initialChatBrain(s, useStore.getState());
 }
 
 /**
@@ -2159,7 +2155,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             ...(pid ? { providerId: pid } : {}),
             ...(auto ? {} : { modelId: v }),
           })
-          .then((s) => { if (s) window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: sessionId, session: s } })); })
+          .then((s) => { if (s) { useStore.getState().rememberModel(pid ?? providerId ?? '', v); window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: sessionId, session: s } })); } })
           .catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
     />
@@ -2274,7 +2270,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     <ModelPicker providers={providers} providerId={providerId} models={models} modelId={modelId}
                       open={false} onOpenChange={openModelMenu} expanded
                       recent={recentModels}
-                      onProvider={setProviderId} onModel={(pid, mid) => { setProviderId(pid); setModelId(mid); setUnavailableModel(null); void window.nekko.setSessionOptions(sessionId, { providerId: pid, modelId: mid, autoModel: mid === AUTO_MODEL_ID }).then((s) => { if (s) window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: sessionId, session: s } })); }).catch((e) => useStore.getState().pushToast('error', String(e))); }} />}
+                      onProvider={setProviderId} onModel={(pid, mid) => { setProviderId(pid); setModelId(mid); setUnavailableModel(null); void window.nekko.setSessionOptions(sessionId, { providerId: pid, modelId: mid, autoModel: mid === AUTO_MODEL_ID }).then((s) => { if (s) { useStore.getState().rememberModel(pid, mid); window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: sessionId, session: s } })); } }).catch((e) => useStore.getState().pushToast('error', String(e))); }} />}
                 </div>}
               </div>
             ) : undefined}

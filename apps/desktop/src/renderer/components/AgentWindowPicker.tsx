@@ -201,7 +201,7 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
             {modelListOpen && (
               <fieldset id="awp-model-list" className="agent-window-picker__models" disabled={pending}>
                 <legend className="agent-window-picker__sr-only">Choose a chat model</legend>
-                <ModelPicker expanded readOnly open providers={enabledProviders} providerId={model?.providerId ?? activeProviderId} models={!model || model.providerId === activeProviderId ? models : []} modelId={model?.modelId ?? null} needsChoice={!model} onOpenChange={() => {}} onProvider={() => {}} onModel={(providerId, modelId) => { setChoice({ providerId, modelId }); setModelListOpen(false); }} />
+                <ModelPicker expanded readOnly open providers={enabledProviders} providerId={model?.providerId ?? activeProviderId} models={!model || model.providerId === activeProviderId ? models : []} modelId={model?.modelId ?? null} needsChoice={!model} onOpenChange={() => {}} onProvider={() => {}} onModel={(providerId, modelId) => { setChoice({ providerId, modelId }); useStore.getState().rememberModel(providerId, modelId); setModelListOpen(false); }} />
               </fieldset>
             )}
             <EffortSlider modelId={model?.modelId} />

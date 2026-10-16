@@ -284,6 +284,7 @@ interface UiState {
   /** Re-list a provider's models after a background catalog refresh. */
   reloadModels: (providerId: string) => Promise<void>;
   selectModel: (id: string) => void;
+  rememberModel: (providerId: string, modelId: string) => void;
   toggleContextPanel: () => void;
   togglePlanRail: (sessionId: string) => void;
   applyTheme: () => void;
@@ -783,7 +784,14 @@ export const useStore = create<UiState>((set, get) => ({
     set({ activeModelId: id });
     const defaultProviderId = get().activeProviderId;
     if (!defaultProviderId) return;
-    void window.nekko.updateSettings({ defaultProviderId, defaultModelId: id })
+    get().rememberModel(defaultProviderId, id);
+  },
+
+  // Explicit choices only: catalog loading, Auto resolution and privacy toggles
+  // must not rewrite the next window's model. Always save the provider/model pair.
+  rememberModel: (defaultProviderId, defaultModelId) => {
+    if (!defaultProviderId) return;
+    void window.nekko.updateSettings({ defaultProviderId, defaultModelId })
       .then((settings) => set({ settings }))
       .catch((e) => get().pushToast('error', String(e)));
   },
