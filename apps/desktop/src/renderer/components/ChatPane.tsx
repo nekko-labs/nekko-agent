@@ -46,6 +46,7 @@ import { MarkdownSandbox } from './Markdown.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
 import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, suggestedReplyClassName } from './agent-console/interruption.js';
+import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
@@ -360,7 +361,7 @@ function ChatHeader({
  * only when its own data does.
  */
 const TranscriptRowView = memo(function TranscriptRowView({
-  row, streaming, readOnly, prByUrl, sessionId, basePath, onEditResend, onCopyToComposer, onSplit, onImageClick, onImageContextMenu,
+  row, streaming, readOnly, prByUrl, sessionId, basePath, cuts, onEditResend, onCopyToComposer, onSplit, onDelete, onRestart, onImageClick, onImageContextMenu,
 }: {
   row: TranscriptRow;
   basePath?: string;
@@ -372,6 +373,10 @@ const TranscriptRowView = memo(function TranscriptRowView({
   onEditResend: (id: string, text: string) => void;
   onCopyToComposer: (id: string) => void;
   onSplit: (id: string) => void;
+  /** Which rows can be taken back, and how (messageCut.ts). */
+  cuts: MessageCuts;
+  onDelete: (id: string) => void;
+  onRestart: (id: string) => void;
   onImageClick: (src: string) => void;
   onImageContextMenu: (e: React.MouseEvent, src: string) => void;
 }) {
@@ -394,6 +399,8 @@ const TranscriptRowView = memo(function TranscriptRowView({
         onReset={editable ? onEditResend : undefined}
         onCopyToComposer={!readOnly && persisted ? onCopyToComposer : undefined}
         onSplit={editable ? onSplit : undefined}
+        onDelete={editable && cuts.deleteLast?.id === row.message.id ? onDelete : undefined}
+        onRestart={!readOnly && !streaming && persisted && cuts.restart.has(row.message.id) ? onRestart : undefined}
         onImageClick={onImageClick}
         onImageContextMenu={onImageContextMenu}
         chronological
@@ -2188,6 +2195,28 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   copyToComposerRef.current = copyToComposer;
   const onCopyToComposer = useCallback((id: string) => copyToComposerRef.current(id), []);
   const onSplit = useCallback((id: string) => { void useStore.getState().splitChat(sessionId, id); }, [sessionId]);
+  // Delete / Restart from here: both cut the saved transcript at one message
+  // (truncateSession) after saying what goes. Nothing is re-sent, so a message
+  // the model refuses (a picture to a text-only model) can be taken back
+  // without resending it, and a reply can become the end of the chat again.
+  const cuts = useMemo(() => messageCuts(session?.messages ?? []), [session?.messages]);
+  const cutsRef = useRef(cuts);
+  cutsRef.current = cuts;
+  const takeBack = useCallback(async (kind: 'delete' | 'restart', id: string) => {
+    const current = cutsRef.current;
+    const cut = kind === 'delete' ? (current.deleteLast?.id === id ? current.deleteLast.cut : undefined) : current.restart.get(id);
+    if (!cut || !window.confirm(cutPrompt(kind, cut))) return;
+    try {
+      const updated = await window.nekko.truncateSession(sessionId, cut.from);
+      if (updated) { putCachedSession(updated); setSession(updated); }
+      setErrorNotice(null);
+      void refreshSessions();
+    } catch {
+      useStore.getState().pushToast('error', kind === 'delete' ? 'Could not delete that message.' : 'Could not restart from that reply.');
+    }
+  }, [sessionId]);
+  const onDelete = useCallback((id: string) => { void takeBack('delete', id); }, [takeBack]);
+  const onRestart = useCallback((id: string) => { void takeBack('restart', id); }, [takeBack]);
   const artifactBasePath = session?.workspaceId ? session.gitWorktrees?.[session.workspaceId]?.path ?? settings?.workspaces.find((w) => w.id === session.workspaceId)?.path : undefined;
   const renderRow = useCallback(
     (row: TranscriptRow) => (
@@ -2201,11 +2230,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         onEditResend={onEditResend}
         onCopyToComposer={onCopyToComposer}
         onSplit={onSplit}
+        cuts={cuts}
+        onDelete={onDelete}
+        onRestart={onRestart}
         onImageClick={setLightbox}
         onImageContextMenu={openImageMenu}
       />
     ),
-    [artifactBasePath, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, openImageMenu],
+    [artifactBasePath, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, cuts, onDelete, onRestart, openImageMenu],
   );
   // Width of the text column, for the height estimates of rows not yet measured.
   const columnWidth = Math.max(0, (paneWidth || 800) * (contentWidth.includes('75%') ? 0.75 : 1) - 32);
@@ -2418,6 +2450,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       <button className="btn btn-primary shrink-0 px-2.5 py-0.5 text-[11px]"
                         title="Retry using the saved conversation and work" onClick={() => void resumeRun()}>
                         Retry
+                      </button>
+                    )}
+                    {cuts.deleteLast && !readOnly && (
+                      <button className="btn btn-outline shrink-0 px-2.5 py-0.5 text-[11px]" data-notice-delete
+                        title="Delete your last message and anything after it, then write it again (for example without the picture)"
+                        onClick={() => onDelete(cuts.deleteLast!.id)}>
+                        Delete last message
                       </button>
                     )}
                     <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => { setDismissedInterruption(lastMsgId ?? null); setErrorNotice(null); }}>
