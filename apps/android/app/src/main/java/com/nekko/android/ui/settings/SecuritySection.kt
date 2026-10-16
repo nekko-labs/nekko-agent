@@ -116,7 +116,7 @@ private fun AppLockCard(lock: AppLock) {
         }
         error?.let { Notice(it, Tone.DANGER, Modifier.padding(top = 10.dp)) }
         Text(
-            "Saved on this phone. While locked nothing is shown and nothing can be approved. With the lock on, the recent-apps preview stays blank and the app can’t be screenshotted. After a restart the app doesn’t connect to your computer until you unlock.",
+            "Saved on this phone. While locked nothing is shown and nothing can be approved. With the lock on, the recent-apps preview shows a plain cover instead of your chats; screenshots still work. After a restart the app doesn’t connect to your computer until you unlock.",
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
