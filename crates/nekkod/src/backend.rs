@@ -275,34 +275,25 @@ impl Backend {
     }
 }
 
-/// True for backend events the daemon must not relay: output of terminals the
-/// daemon owns, which the backend only re-emits for its own relay.
-fn is_daemon_terminal_echo(text: &str) -> bool {
-    if !text.contains("\"terminal:event\"") {
-        return false;
+/// The backend's events the daemon relays to its clients. The backend sends
+/// none of its copies of the daemon's own events (`?forDaemon=1`: no
+/// `relayOnly` frame and no daemon terminal's output, see
+/// apps/desktop/src/backend/wire.ts), so a frame is parsed only when it is an
+/// agent event, to scope it to its chat (`Hub::publish_backend`).
+///
+/// An older backend ignores `forDaemon` and still sends both; its copies are
+/// told apart by a substring check, never a parse of every frame:
+/// `"relayOnly":true` is written last by the host (`{ ...event, relayOnly }`),
+/// and a daemon terminal's id does not start with `agent_`.
+fn is_daemon_copy(text: &str) -> bool {
+    if text.ends_with(r#","relayOnly":true}}"#) {
+        return true;
     }
-    let Ok(v) = serde_json::from_str::<Value>(text) else {
-        return false;
-    };
-    if v.get("channel").and_then(Value::as_str) != Some("terminal:event") {
-        return false;
-    }
-    let id = v.pointer("/payload/terminalId").and_then(Value::as_str).unwrap_or("");
-    !id.starts_with("agent_")
-}
-
-/// True for a backend event the daemon already sent: a run the daemon drives
-/// publishes its agent events itself, in order, and a limit change the daemon
-/// made is published by it too. The backend re-emits its copies, marked
-/// `relayOnly`, only for its own listeners (messaging).
-fn is_relay_only(text: &str) -> bool {
-    text.contains("\"relayOnly\":true")
-        && serde_json::from_str::<Value>(text)
-            .is_ok_and(|v| v.pointer("/payload/relayOnly") == Some(&Value::Bool(true)))
+    text.starts_with(r#"{"channel":"terminal:event""#) && !text.contains(r#""terminalId":"agent_"#)
 }
 
 async fn relay_events(port: u16, token: String, hub: Hub) {
-    let url = format!("ws://127.0.0.1:{port}/api/events?token={token}");
+    let url = format!("ws://127.0.0.1:{port}/api/events?forDaemon=1&token={token}");
     loop {
         match tokio_tungstenite::connect_async(url.as_str()).await {
             Ok((mut ws, _)) => {
@@ -310,8 +301,8 @@ async fn relay_events(port: u16, token: String, hub: Hub) {
                     match msg {
                         Ok(Message::Text(text)) => {
                             let text = text.as_str();
-                            if !is_daemon_terminal_echo(text) && !is_relay_only(text) {
-                                hub.publish_raw(text, false);
+                            if !is_daemon_copy(text) {
+                                hub.publish_backend(text);
                             }
                         }
                         Ok(Message::Close(_)) | Err(_) => break,
@@ -330,29 +321,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn drops_agent_events_the_daemon_already_sent() {
-        assert!(is_relay_only(
+    fn an_older_backends_copies_of_daemon_events_are_dropped_without_a_parse() {
+        assert!(is_daemon_copy(
             r#"{"channel":"agent:event","payload":{"type":"text","sessionId":"s","delta":"x","relayOnly":true}}"#
         ));
-        assert!(!is_relay_only(r#"{"channel":"agent:event","payload":{"type":"text","sessionId":"s","delta":"x"}}"#));
+        assert!(!is_daemon_copy(r#"{"channel":"agent:event","payload":{"type":"text","sessionId":"s","delta":"x"}}"#));
         // The host's echo of a limit change the daemon published itself.
-        assert!(is_relay_only(
-            r#"{"channel":"limits:updated","payload":{"tokenKey":"k","limits":{},"relayOnly":true}}"#
-        ));
+        assert!(is_daemon_copy(r#"{"channel":"limits:updated","payload":{"tokenKey":"k","limits":{},"relayOnly":true}}"#));
         // Only the payload's own flag counts, not text that mentions it.
-        assert!(!is_relay_only(
+        assert!(!is_daemon_copy(
             r#"{"channel":"agent:event","payload":{"type":"text","delta":"{\"relayOnly\":true}","inner":{"relayOnly":true}}}"#
         ));
-    }
-
-    #[test]
-    fn drops_only_echoes_of_daemon_terminals() {
-        assert!(is_daemon_terminal_echo(
-            r#"{"channel":"terminal:event","payload":{"type":"data","terminalId":"term_1","data":"x"}}"#
-        ));
-        assert!(!is_daemon_terminal_echo(
+        // Output of a terminal the daemon owns; the agent command logs are the backend's.
+        assert!(is_daemon_copy(r#"{"channel":"terminal:event","payload":{"type":"data","terminalId":"term_1","data":"x"}}"#));
+        assert!(!is_daemon_copy(
             r#"{"channel":"terminal:event","payload":{"type":"data","terminalId":"agent_s1","data":"x"}}"#
         ));
-        assert!(!is_daemon_terminal_echo(r#"{"channel":"agent:event","payload":{"type":"delta"}}"#));
     }
 }

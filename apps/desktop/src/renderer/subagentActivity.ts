@@ -80,6 +80,8 @@ export function stopSubagentActivity(id: string): void {
   if (activities.has(id)) activities.set(id, { status: 'stopped', detail: 'The run was stopped.' });
 }
 export function resetSubagentActivity(): void { activities.clear(); delegations.clear(); }
+/** Forget one chat's own activity (its delegations stay): a replay folds it again. */
+export function resetSubagentActivityFor(id: string): void { activities.delete(id); }
 
 export function childActivity(child: SessionSummary, running = false, pending?: PendingInput): SubagentActivity {
   if (pending?.question || pending?.approval) return { status: 'waiting', detail: pending.question ? 'Waiting for your answer.' : 'Waiting for approval.' };

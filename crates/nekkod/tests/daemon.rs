@@ -1131,6 +1131,137 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     assert!(system.contains("1: export const secret = 'pineapple';"), "{system}");
 }
 
+/// A model that streams `n` words of `word`, one chunk every `gap`.
+fn slow_text(word: &str, n: usize) -> String {
+    let mut chunks: Vec<Value> =
+        (0..n).map(|i| json!({ "choices": [{ "delta": { "content": format!("{word}{i} ") }, "finish_reason": null }] })).collect();
+    chunks.push(json!({ "choices": [{ "delta": {}, "finish_reason": "stop" }], "usage": { "prompt_tokens": 10, "completion_tokens": n } }));
+    sse(&chunks)
+}
+
+/// Everything a socket receives until both chats' `done`, as (channel, payload).
+async fn collect_until_done(socket: &mut Socket, sessions: &[&str]) -> Vec<(String, Value)> {
+    let mut seen = Vec::new();
+    let mut done = std::collections::HashSet::new();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while done.len() < sessions.len() {
+        let Some(frame) = next_json(socket, deadline.saturating_duration_since(Instant::now())).await else {
+            panic!("socket went quiet; done for {done:?}, saw {}", seen.len())
+        };
+        let Some(channel) = frame["channel"].as_str() else { continue };
+        let payload = frame["payload"].clone();
+        if channel == "agent:event" && payload["type"] == "done" {
+            done.insert(payload["sessionId"].as_str().unwrap_or_default().to_string());
+        }
+        seen.push((channel.to_string(), payload));
+    }
+    seen
+}
+
+fn streamed_text(frames: &[(String, Value)], session: &str) -> String {
+    let mut out = String::new();
+    for (channel, p) in frames {
+        if channel == "agent:replay" && p["sessionId"] == session {
+            for e in p["events"].as_array().unwrap() {
+                if e["type"] == "text" {
+                    out.push_str(e["delta"].as_str().unwrap());
+                }
+            }
+        } else if channel == "agent:event" && p["sessionId"] == session && p["type"] == "text" {
+            out.push_str(p["delta"].as_str().unwrap());
+        }
+    }
+    out
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_turns_end() {
+    let chat = |id: &str| json!({ "id": id, "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("subscribe", chat("s_one"));
+    std::fs::write(rig.data.join("sessions").join("s_two.json"), chat("s_two").to_string()).unwrap();
+    // Each reply is 40 chunks, so 40 text events per chat, interleaved.
+    let model = scripted_model(vec![slow_text("one", 40), slow_text("two", 40)]).await;
+    let port = rig.d.port;
+
+    // Socket A takes s_one's stream (daemon:subscribe), B s_two's (?sessions=),
+    // C every chat (no subscription, as before).
+    let mut a = ws(port, &format!("/api/ws?token={TOKEN}"), None).await.unwrap();
+    a.send(Message::Text(json!({ "id": 1, "channel": "daemon:subscribe", "args": [["s_one"]] }).to_string().into()))
+        .await
+        .unwrap();
+    let ack = next_json(&mut a, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(ack, json!({ "id": 1, "result": true }), "no turn is running yet, so nothing comes before the answer");
+    let mut b = ws(port, &format!("/api/ws?sessions=s_two&token={TOKEN}"), None).await.unwrap();
+    let mut c = ws(port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
+
+    let mut one = turn_spec(&rig, &model, "turn_one", "s_one", json!({}));
+    let mut two = turn_spec(&rig, &model, "turn_two", "s_two", json!({}));
+    // As a host whose relay, messaging and accounting are the daemon's asks.
+    one["facts"]["hostEvents"] = json!(["done", "error"]);
+    two["facts"]["hostEvents"] = json!(["done", "error"]);
+    let (s1, _) = post(port, "chat:turn", json!([one]), Some(TOKEN)).await;
+    let (s2, _) = post(port, "chat:turn", json!([two]), Some(TOKEN)).await;
+    assert_eq!((s1, s2), (200, 200));
+
+    let (fa, fb, fc) = tokio::join!(
+        collect_until_done(&mut a, &["s_one", "s_two"]),
+        collect_until_done(&mut b, &["s_one", "s_two"]),
+        collect_until_done(&mut c, &["s_one", "s_two"]),
+    );
+    let words = |w: &str| (0..40).map(|i| format!("{w}{i} ")).collect::<String>();
+    // Every socket has its own chat's whole reply, once.
+    assert_eq!(streamed_text(&fa, "s_one"), words("one"));
+    assert_eq!(streamed_text(&fb, "s_two"), words("two"));
+    assert_eq!(streamed_text(&fc, "s_one"), words("one"));
+    assert_eq!(streamed_text(&fc, "s_two"), words("two"));
+    // Of the other chat a subscribed socket hears the turn start and end,
+    // and none of its stream after the first event.
+    let of = |frames: &[(String, Value)], s: &str| -> Vec<String> {
+        frames
+            .iter()
+            .filter(|(ch, p)| ch == "agent:event" && p["sessionId"] == s)
+            .map(|(_, p)| p["type"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let other_a = of(&fa, "s_two");
+    let other_b = of(&fb, "s_one");
+    assert!(other_a.first().is_some_and(|t| t != "done") && other_a.last().is_some_and(|t| t == "done"), "{other_a:?}");
+    assert!(other_a.len() <= 4, "a's view of s_two is a summary: {other_a:?}");
+    assert!(other_b.len() <= 4, "b's view of s_one is a summary: {other_b:?}");
+    let frames = |f: &[(String, Value)]| f.iter().filter(|(ch, _)| ch == "agent:event").count();
+    assert!(frames(&fa) * 3 < frames(&fc) * 2, "a {} frames vs c {}", frames(&fa), frames(&fc));
+    println!("agent frames per socket: subscribed a={} b={}, unsubscribed c={}", frames(&fa), frames(&fb), frames(&fc));
+
+    // The host asked only for how the turns end.
+    for turn in ["turn_one", "turn_two"] {
+        let (events, _) = turn_record(port, turn).await;
+        assert_eq!(event_types(&events), ["done"], "{turn}");
+    }
+
+    // A socket that starts showing a chat mid-turn is sent the turn so far.
+    let model2 = scripted_model(vec![call_tool("c_wait", "ask_user", json!({ "questions": [{ "question": "Go?", "options": ["yes", "no"] }] })), say_text("went")]).await;
+    let mut three = turn_spec(&rig, &model2, "turn_three", "s_one", json!({}));
+    three["facts"]["hostEvents"] = json!(["done", "error"]);
+    post(port, "chat:turn", json!([three]), Some(TOKEN)).await;
+    wait_pending(port, "s_one", "question", "c_wait").await;
+    let mut late = ws(port, &format!("/api/ws?sessions=s_two&token={TOKEN}"), None).await.unwrap();
+    // Connected narrowed: told that s_one is running (its first event).
+    let first = next_json(&mut late, Duration::from_secs(5)).await.unwrap();
+    assert_eq!((first["channel"].as_str(), first["payload"]["sessionId"].as_str()), (Some("agent:event"), Some("s_one")), "{first}");
+    late.send(Message::Text(json!({ "id": 7, "channel": "daemon:subscribe", "args": [["s_one", "s_two"]] }).to_string().into()))
+        .await
+        .unwrap();
+    let replay = next_json(&mut late, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(replay["channel"], "agent:replay", "{replay}");
+    let types: Vec<&str> = replay["payload"]["events"].as_array().unwrap().iter().map(|e| e["type"].as_str().unwrap()).collect();
+    assert!(types.contains(&"tool_call") && types.contains(&"question"), "{types:?}");
+    assert_eq!(next_json(&mut late, Duration::from_secs(5)).await.unwrap(), json!({ "id": 7, "result": true }));
+    post(port, "chat:answer", json!(["s_one", "c_wait", [{ "questionId": "q1", "labels": ["yes"] }]]), Some(TOKEN)).await;
+    let rest = collect_until_done(&mut late, &["s_one"]).await;
+    assert!(rest.iter().all(|(ch, p)| ch != "agent:event" || p["type"] != "question"), "the question is not sent twice");
+    assert_eq!(streamed_text(&rest, "s_one"), "went");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
     let session = json!({

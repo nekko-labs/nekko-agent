@@ -22,6 +22,7 @@ import { useGitStatus } from '../useGitStatus.js';
 import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, loadSession, putCachedSession } from '../sessionCache.js';
 import { usePaneVisible } from '../paneVisibility.js';
+import { useAgentEventClaim } from '../agentSubscription.js';
 import { afterPaint } from '../afterPaint.js';
 import { chatWelcomeState } from './agent-console/chatWelcome.js';
 import { useAllProviderLimits, useProviderLimits } from '../useLimits.js';
@@ -576,6 +577,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    */
   readOnly?: boolean;
 }) {
+  // This window takes this chat's event stream (and its sub-agents') while the
+  // pane is mounted, shown or kept warm (agentSubscription.ts).
+  useAgentEventClaim(sessionId);
   const subagentSessions = useStore(s => s.sessions);
   const subagentChildren = useMemo(() => subagentSessions.filter(s => s.parentSessionId === sessionId), [subagentSessions, sessionId]);
   // What a delegation that names no model runs on: the saved route, else this chat's model.

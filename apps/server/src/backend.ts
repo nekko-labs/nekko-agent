@@ -54,8 +54,8 @@ export async function runBackend(dataDir: string): Promise<void> {
     }
   });
   app.get('/api/events', { websocket: true }, (socket: any, req) => {
-    const only = (req.query as Record<string, string> | undefined)?.only;
-    const off = subscribeHostEvents(host, (frame) => socket.send(frame), only);
+    const query = req.query as Record<string, string> | undefined;
+    const off = subscribeHostEvents(host, (frame) => socket.send(frame), query?.only, query?.forDaemon === '1');
     socket.on('close', off);
   });
   await app.listen({ host: '127.0.0.1', port: 0 });
