@@ -89,22 +89,18 @@ jobs:
             . "/tmp/stack-$THEME.env"
             TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_THEME="$THEME" \
               xcodebuild "${COMMON[@]}" -resultBundlePath "evidence/live-$THEME.xcresult" test-without-building \
-              -only-testing:NekkoNativeUITests/LiveRelayTests
+              -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone
             kill $NEKKO_ITEST_PIDS 2>/dev/null || true
             # The app is reinstalled per run; wipe it so the next theme pairs from scratch.
             xcrun simctl uninstall "$DEVICE" com.nekko.native.ios || true
           done
-          # The deep link from the computer's QR (camera app → nekko-agent-pair:) opens the confirmation sheet.
+          # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.
           xcrun simctl ui "$DEVICE" appearance light
-          xcrun simctl install "$DEVICE" DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app
-          xcrun simctl launch "$DEVICE" com.nekko.native.ios -appLock NO -uiTestReset YES
-          sleep 4
           ../../apps/ios/scripts/itest-stack.sh /tmp/stack-link.env
           . /tmp/stack-link.env
-          xcrun simctl openurl "$DEVICE" "$NEKKO_ITEST_LINK"
-          sleep 4
-          mkdir -p evidence/shots/deeplink
-          xcrun simctl io "$DEVICE" screenshot evidence/shots/deeplink/confirm-sheet.png
+          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/deeplink.xcresult test-without-building \
+            -only-testing:NekkoNativeUITests/LiveRelayTests/testPairFromADeepLink
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
       - name: Export screenshots from the test results
         if: always()
