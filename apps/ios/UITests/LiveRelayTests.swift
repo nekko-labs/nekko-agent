@@ -30,7 +30,7 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "\(theme)-2-chats")
 
         newChat.tap()
-        let prompt = app.textFields["What should your computer do?"]
+        let prompt = app.input("What should your computer do?")
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
         prompt.tap()
         prompt.typeText("Say hello")
@@ -40,7 +40,7 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the reply streamed in")
         attach(app, "\(theme)-4-reply")
 
-        let message = app.textFields["Message"]
+        let message = app.input("Message")
         XCTAssertTrue(message.waitForExistence(timeout: 10))
         message.tap()
         message.typeText("please approve a cleanup")

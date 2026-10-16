@@ -6,6 +6,8 @@ import SwiftUI
 /// first), project folder, tool policy, and the first message.
 struct NewChatView: View {
     @Binding var path: [Route]
+    /// Show the created chat (pushed on iPhone, the split view's detail on iPad).
+    var opened: (String) -> Void = { _ in }
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -60,6 +62,8 @@ struct NewChatView: View {
             }
         }
         .onAppear(perform: pickDefault)
+        // The computer's defaults may arrive after this screen opened.
+        .onChange(of: store.defaults) { _, _ in pickDefault() }
     }
 
     private func modelName(_ m: (String, String)) -> String {
@@ -89,7 +93,7 @@ struct NewChatView: View {
         Task {
             do {
                 let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: mode)
-                path = [.chat(id)]
+                opened(id)
                 let first = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !first.isEmpty {
                     let chat = ChatModel(sessionId: id, store: store)
