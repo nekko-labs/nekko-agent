@@ -25,7 +25,8 @@ describe('artifact previews', () => {
   });
   it('does not read or fetch an image during message rendering', () => {
     const html = renderToStaticMarkup(<Markdown text="![Evidence](/project/shot.png)" />);
-    expect(html).toContain('Load image');
+    expect(html).toContain('Loading image…');
+    expect(html).toContain('Open source');
     expect(html).not.toContain('<img');
     expect(html).not.toContain('src=');
   });
