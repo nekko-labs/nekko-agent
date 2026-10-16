@@ -77,6 +77,14 @@ export const DAEMON_SERVED = new Set<string>([
   IpcChannels.engineSettingsSave,
   IpcChannels.engineSetResidentTtl,
   IpcChannels.engineGenerateImage,
+  IpcChannels.trainingList,
+  IpcChannels.trainingCreate,
+  IpcChannels.trainingUpdate,
+  IpcChannels.trainingDelete,
+  IpcChannels.trainingStart,
+  IpcChannels.trainingPause,
+  IpcChannels.trainingStop,
+  IpcChannels.trainingHint,
   // Turn variants (crates/nekkod/src/compaction.rs, image_turns.rs). Not
   // `chat:interruptQueued`: like `chat:send`, the daemon hands a sandbox chat's
   // back here.

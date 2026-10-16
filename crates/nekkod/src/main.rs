@@ -215,7 +215,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             )
             .with_settings(settings.as_ref().map(|s| s.store.clone()))
             .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token)))
-            .with_watches(agent_watches.clone()),
+            .with_watches(agent_watches.clone())
+            .with_training(automation.training.clone()),
         ),
         mcp: mcp.clone(),
         accounts: accounts.clone(),
