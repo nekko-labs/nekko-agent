@@ -1,6 +1,8 @@
 package com.nekko.android.ui
 
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -110,7 +112,7 @@ fun NekkoNavHost(
                 onPair = { nav.navigate(Routes.pair()) },
                 onCreated = { id ->
                     shareInbox.handOff(id)
-                    nav.navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } }
+                    nav.onMain { navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } } }
                 },
             )
         }
@@ -122,7 +124,7 @@ fun NekkoNavHost(
                 repo = repo,
                 initialLink = entry.arguments?.getString("link"),
                 onBack = { nav.popBackStack() },
-                onPaired = { nav.backToChats() },
+                onPaired = { nav.onMain { backToChats() } },
             )
         }
         composable(Routes.SETTINGS) {
@@ -142,6 +144,18 @@ fun NekkoNavHost(
             )
         }
     }
+}
+
+/**
+ * Navigation must run on the main thread. These callbacks come at the end of
+ * suspend work (pairing, creating a chat), and a coroutine is not guaranteed to
+ * resume on the main thread: under Compose UI tests the effect dispatcher
+ * resumes wherever the last suspension finished, and navigating from there
+ * threw "Method setCurrentState must be called on the main thread"
+ * (the emulator journey, apps/android/scripts/emulator-journey.sh).
+ */
+private fun NavHostController.onMain(block: NavHostController.() -> Unit) {
+    if (Looper.myLooper() == Looper.getMainLooper()) block() else Handler(Looper.getMainLooper()).post { block() }
 }
 
 /** Back to the chat list, dropping whatever was stacked on top (pairing, settings). */
