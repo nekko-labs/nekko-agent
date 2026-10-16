@@ -116,6 +116,36 @@ function deliverLink(url: string): void {
   win.webContents.send(IpcEvents.deepLink, url);
 }
 
+/**
+ * macOS keeps the system menu bar. Electron's default app menu is kept for
+ * everything else, but its "Nekko Agent" menu gains Settings… (⌘,) and its
+ * About item opens the in-app About page instead of the stock panel.
+ */
+function installMacAppMenu(): void {
+  const send = (url: string) => () => deliverLink(url);
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: app.name,
+      submenu: [
+        { label: `About ${app.name}`, click: send('nekko-agent://about') },
+        { type: 'separator' },
+        { label: 'Settings…', accelerator: 'Cmd+,', click: send('nekko-agent://settings') },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ]));
+}
+
 function resolveWindowIcon(): string | undefined {
   const candidates = [
     join(__dirname, '../renderer/icon-512.png'),
@@ -349,6 +379,7 @@ app.whenReady().then(async () => {
   // it lives in the system bar rather than in the window, and ⌘Q/⌘H/⌘W come
   // from it.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
+  else installMacAppMenu();
 
   // Where user data lives is decided here, before the engine starts, because a
   // move from an older profile needs a native dialog and the user's answer.

@@ -2,37 +2,83 @@ export interface RailGeometryInput {
   railHeight: number;
   groupTop: number;
   groupHeight: number;
+  /** Width of the expanded panel, tail included. */
   bodyWidth?: number;
+  /** Width of the collapsed (icon-only) panel. */
+  restWidth?: number;
+}
+
+type Pt = [number, number];
+
+/** Corner radius for every bend of the outline. */
+export const RAIL_CORNER = 16;
+
+const r1 = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * One outline as an SVG path: each tail ends in a concave curve that sweeps
+ * into x=0, and every bend between is rounded. Rest and open outlines share
+ * the same command sequence, so CSS can interpolate `d` between them.
+ */
+function outline(tip: number, mid: Pt[], bottom: number, radius: number): string {
+  const upper = mid;
+  const lower = [...mid].reverse().map(([x, y]): Pt => [x, bottom + tip - y]);
+  const first = upper[0];
+  const last = lower[lower.length - 1];
+  const cmd: string[] = [`M0,${r1(tip)}`];
+  // Concave tip: bows toward the left edge, so the tail flares into the wall.
+  // The concave sweep stops short of the far edge, which then rounds down.
+  const er = Math.min(radius, first[0] / 2);
+  cmd.push(`Q0,${r1(first[1])} ${r1(first[0] - er)},${r1(first[1])}`);
+  cmd.push(`Q${r1(first[0])},${r1(first[1])} ${r1(first[0])},${r1(first[1] + er)}`);
+  const corners = [...upper, ...lower];
+  for (let i = 1; i < corners.length - 1; i++) {
+    const [px, py] = corners[i - 1];
+    const [x, y] = corners[i];
+    const [nx, ny] = corners[i + 1];
+    const inLen = Math.hypot(x - px, y - py);
+    const outLen = Math.hypot(nx - x, ny - y);
+    const r = Math.min(radius, inLen / 2, outLen / 2);
+    const a: Pt = inLen ? [x - ((x - px) / inLen) * r, y - ((y - py) / inLen) * r] : [x, y];
+    const b: Pt = outLen ? [x + ((nx - x) / outLen) * r, y + ((ny - y) / outLen) * r] : [x, y];
+    cmd.push(`L${r1(a[0])},${r1(a[1])}`, `Q${r1(x)},${r1(y)} ${r1(b[0])},${r1(b[1])}`);
+  }
+  cmd.push(`L${r1(last[0])},${r1(last[1] - er)}`);
+  cmd.push(`Q${r1(last[0])},${r1(last[1])} ${r1(last[0] - er)},${r1(last[1])}`);
+  cmd.push(`Q0,${r1(last[1])} 0,${r1(bottom)}`);
+  cmd.push('Z');
+  return cmd.join(' ');
 }
 
 /** Coordinates are rail-local. Only the decoration grows; the menu never moves.
- * 40/30/20 are collinear tail stations, not three outward-flaring wings. */
-export function railGeometry({ railHeight, groupTop, groupHeight, bodyWidth = 198 }: RailGeometryInput) {
+ * At rest the tails are the collapsed width, one even column; expanded, the
+ * whole panel, tails included, takes the full body width together. */
+export function railGeometry({ railHeight, groupTop, groupHeight, bodyWidth = 198, restWidth = 52 }: RailGeometryInput) {
   const height = Math.max(0, Number.isFinite(railHeight) ? railHeight : 0);
   const top = Math.min(height, Math.max(0, Number.isFinite(groupTop) ? groupTop : 0));
   const bottom = Math.min(height, top + Math.max(0, Number.isFinite(groupHeight) ? groupHeight : 0));
   const width = Math.max(0, Number.isFinite(bodyWidth) ? bodyWidth : 198);
+  const rest = Math.min(width, Math.max(0, Number.isFinite(restWidth) ? restWidth : 52));
   const extension = Math.max(0, Math.min(top, height - bottom) - 2);
-  // The shoulder leaves the narrow tail around the CODE heading, 95px
-  // above the first button, and reaches full body width at the button.
   // Short windows compress the vertical segments without moving the menu.
   const scale = Math.min(1, extension / 240);
-  const bodyLead = 0;
-  const shoulder = 95 * scale;
-  const tip = 10 * scale;
-  const tail = Math.max(0, extension - bodyLead - shoulder - tip);
-  const tailWidth = Math.min(40, width);
-  const upper: Array<[number, number]> = [
-    [0, top - extension],
-    [tailWidth / 2, top - extension + tip],
-    [tailWidth * 0.75, top - extension + tip + tail / 2],
-    [tailWidth, top - bodyLead - shoulder],
-    [width, top - bodyLead],
-    [width, top],
+  const shoulder = 72 * scale;
+  const concave = 28 * scale;
+  const tipY = top - extension;
+  const endY = top + bottom - tipY;
+  // The far edge of each tail and the body share x, so the panel reads as
+  // one rounded column; the shoulder only matters while it widens.
+  const station = (w: number, b: number): Pt[] => [
+    [w, tipY + concave],
+    [w, top - shoulder],
+    [b, top],
+    [b, top + (bottom - top) / 2],
   ];
-  const points: Array<[number, number]> = [
-    ...upper,
-    ...[...upper].reverse().map(([x, y]): [number, number] => [x, top + bottom - y]),
-  ];
-  return { width, height, top, bottom, extension, points, polygon: points.map(p => p.join(',')).join(' ') };
+  const restPts = station(rest, rest);
+  const openPts = station(width, width);
+  const radius = RAIL_CORNER * Math.max(0.3, scale);
+  const restPath = outline(tipY, restPts, endY, radius);
+  const openPath = outline(tipY, openPts, endY, radius);
+  const mirror = (pts: Pt[]) => [...pts, ...[...pts].reverse().map(([x, y]): Pt => [x, endY + tipY - y])];
+  return { width, height, top, bottom, extension, rest: mirror(restPts), open: mirror(openPts), restPath, openPath };
 }
