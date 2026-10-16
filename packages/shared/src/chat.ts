@@ -452,6 +452,9 @@ export function lastReplyInterrupted(history: ChatMessage[]): boolean {
   const turn = history.slice(turnStart + 1);
   const lastAssistant = [...turn].reverse().find((m) => m.role === 'assistant');
   if (lastAssistant?.interrupted) return true;
+  // An explicit successful terminal event is stronger than missing historical
+  // tool bookkeeping (for example, an earlier failed/retried tool step).
+  if (lastAssistant?.turnStats?.stop === 'complete') return false;
   const results = new Set(turn.flatMap((m) => m.toolResult ? [m.toolResult.toolCallId] : []));
   return turn.some((m) => m.role === 'assistant' && m.toolCalls?.some((call) => !results.has(call.id)));
 }

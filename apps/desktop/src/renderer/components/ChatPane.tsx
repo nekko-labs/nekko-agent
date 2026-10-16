@@ -44,7 +44,7 @@ import { MarkdownEditor, type MarkdownEditorElement } from './agent-console/Mark
 import { MarkdownSandbox } from './Markdown.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
-import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, describeInterruption, suggestedReplyClassName } from './agent-console/interruption.js';
+import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, suggestedReplyClassName } from './agent-console/interruption.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
@@ -1833,8 +1833,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // read off the record itself. Dismissing it is remembered per reply.
   const [dismissedInterruption, setDismissedInterruption] = useState<string | null>(null);
   useEffect(() => {
-    if (errorNotice || !session || dismissedInterruption === lastMsgId) return;
-    if (shouldShowPersistedInterruption(session.messages, streaming, !!held || finalizingReply.current, !!question)) setErrorNotice(PERSISTED_INTERRUPTION);
+    if (!session) return;
+    const interrupted = shouldShowPersistedInterruption(session.messages, streaming, !!held || finalizingReply.current, !!question);
+    // A stale transcript can arrive before the completed record. Retire only
+    // the inferred notice, never a provider error or a user-requested stop.
+    if (reconcileInterruptionNotice(errorNotice, interrupted) !== errorNotice) {
+      setErrorNotice(null);
+      return;
+    }
+    if (errorNotice || dismissedInterruption === lastMsgId) return;
+    if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
   }, [session, streaming, held, errorNotice, lastMsgId, dismissedInterruption, question]);
   const canContinueWork = !streaming && !held && !session?.activeRun && !errorNotice &&
     session?.messages.at(-1)?.role === 'assistant' && hasResumableProgress(session.messages);

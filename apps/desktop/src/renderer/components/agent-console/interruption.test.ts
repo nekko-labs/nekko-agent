@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeInterruption, shouldShowPersistedInterruption, suggestedReplyClassName } from './interruption.js';
+import { describeInterruption, shouldShowPersistedInterruption, reconcileInterruptionNotice, PERSISTED_INTERRUPTION, suggestedReplyClassName } from './interruption.js';
 
 describe('describeInterruption', () => {
   it('treats an intentional stop as a pause, not an error', () => {
@@ -49,6 +49,19 @@ describe('persisted interruption after completion', () => {
     expect(shouldShowPersistedInterruption(stale, false, true)).toBe(false);
     const finished = [...stale, { id: 'result', role: 'tool' as const, content: 'ok', toolResult: { toolCallId: 'call', output: 'ok' }, createdAt: 2 }, { id: 'final', role: 'assistant' as const, content: 'Done.', createdAt: 2 }];
     expect(shouldShowPersistedInterruption(finished, false, false)).toBe(false);
+  });
+  it('trusts explicit completion over missing historical tool bookkeeping', () => {
+    const stats = { providerId: 'p', modelId: 'm', inputTokens: 1, outputTokens: 1, wallMs: 1, calls: 1, stop: 'complete' as const };
+    const final = { id: 'final', role: 'assistant' as const, content: 'Finished.', createdAt: 2, turnStats: stats };
+    expect(shouldShowPersistedInterruption([...stale, final], false, false)).toBe(false);
+    expect(shouldShowPersistedInterruption([...stale, { ...final, interrupted: true }], false, false)).toBe(true);
+    expect(shouldShowPersistedInterruption([...stale, { ...final, turnStats: { ...stats, stop: 'loop' } }], false, false)).toBe(true);
+  });
+  it('retires a stale inferred warning when the completed transcript arrives', () => {
+    expect(reconcileInterruptionNotice(PERSISTED_INTERRUPTION, false)).toBe(null);
+    expect(reconcileInterruptionNotice(PERSISTED_INTERRUPTION, true)).toBe(PERSISTED_INTERRUPTION);
+    expect(reconcileInterruptionNotice('Stopped', false)).toBe('Stopped');
+    expect(reconcileInterruptionNotice('Provider disconnected', false)).toBe('Provider disconnected');
   });
   it('still detects a genuinely interrupted persisted reply', () => {
     expect(shouldShowPersistedInterruption(stale, false, false)).toBe(true);

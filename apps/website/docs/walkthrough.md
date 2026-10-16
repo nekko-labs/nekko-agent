@@ -76,6 +76,8 @@ answer, so you see progress during long reasoning and the answer stays clean.
 
 ## 3. The unified chat
 
+A successfully completed reply should not retain a stale **Reply interrupted** warning. When the final transcript records successful completion, that terminal record takes precedence over missing older tool bookkeeping. Explicit interruption markers, provider failures, and intentional stops remain visible; the app does not rewrite your transcript to dismiss them.
+
 On the Agents wall, the agent, image, and terminal icons with small bottom-right **+** indicators create new windows. A subtle divider separates them from the Focused, Dynamic, and Grid view modes. Inside a window header, the larger accent-colored **Focus** icon sits immediately beside Minimize and opens that window in Focused view. Minimize removes only the wall window, keeping the chat in the Agent panel. The left navigation keeps its position and tint, with broad curved wings above and below the destinations.
 
 The **Chat** tab is the heart of the app. There are no separate "chat", "cowork",
