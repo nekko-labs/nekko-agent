@@ -15,6 +15,8 @@ const calls: any[] = [];
 let settings: any;
 const bridge: any = {
   getSettings: async () => settings,
+  createSession: async () => { const s = { ...records[0], id: `chat${records.length}`, title: 'New offline agent' }; records.push(s); return s; },
+  setSessionOptions: async (id: string, options: any) => Object.assign(records.find(s => s.id === id), options),
   updateSettings: async (patch: any) => { calls.push({ method: 'updateSettings', patch }); settings = { ...settings, ...patch }; return settings; },
   listSessionSummaries: async () => records.map(summarizeSession), getSession: async (id: string) => records.find(s => s.id === id),
   listTerminals: async () => [], runningSessions: async () => [], pendingInput: async () => ({}), listTasks: async () => [],

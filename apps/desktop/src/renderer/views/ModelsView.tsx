@@ -1,6 +1,7 @@
 import { FirstProviderSetup } from '../components/providers/FirstProviderSetup.js';
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { columnsFor, packGroups } from './providerLayout.js';
 import type { LimitWindow, ModelInfo, OAuthProvider, OAuthStatus, ProviderConfig, ProviderKind, SubscriptionLimits } from '@nekko-agent/shared';
 import { formatUSD, isLocalProvider, isRuntimeKind, formatModelPriceLabel, modelPricing } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -87,7 +88,7 @@ export function ModelsView() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-4xl px-8 py-8">
+      <div className="mx-auto max-w-6xl px-8 py-8">
         <div className="flex items-center justify-between">
           <div>
             {!hasAppChrome && <h1 className="view-title">Model Providers</h1>}
@@ -108,18 +109,23 @@ export function ModelsView() {
 
         {adding && <AddProvider onDone={() => { setAdding(false); refreshProviders(); }} />}
 
-        <ProviderSection
-          title="Connected local servers"
-          accent="var(--success)"
-          subtitle="Servers you already run: Ollama, LM Studio, vLLM."
-          providers={local}
-          onChanged={refreshProviders}
-        />
-        <ProviderSection
-          title="Cloud"
-          accent="var(--info)"
-          subtitle="Hosted APIs, Anthropic, OpenAI, OpenRouter, or any compatible endpoint."
-          providers={cloud}
+        <ProviderSections
+          groups={[
+            {
+              key: 'local',
+              title: 'Connected local servers',
+              accent: 'var(--success)',
+              subtitle: 'Servers you already run: Ollama, LM Studio, vLLM.',
+              providers: local,
+            },
+            {
+              key: 'cloud',
+              title: 'Cloud',
+              accent: 'var(--info)',
+              subtitle: 'Hosted APIs, Anthropic, OpenAI, OpenRouter, or any compatible endpoint.',
+              providers: cloud,
+            },
+          ]}
           onChanged={refreshProviders}
         />
 
@@ -189,34 +195,89 @@ function LimitsPanel({ limits, now, subName }: { limits: SubscriptionLimits | nu
   );
 }
 
-function ProviderSection({
-  title,
-  subtitle,
-  accent,
-  providers,
-  onChanged,
-}: {
+interface ProviderGroup {
+  key: string;
   title: string;
   subtitle: string;
   accent: string;
   providers: ProviderConfig[];
-  onChanged: () => void;
-}) {
-  if (providers.length === 0) return null;
+}
+
+const CARD_MIN_WIDTH = 340;
+const CARD_GAP = 16;
+
+/**
+ * Provider groups laid out side by side when there is room. A group's cards stay
+ * together; only the cards left over after a group's full rows share a line with
+ * another group (see packGroups).
+ */
+function ProviderSections({ groups, onChanged }: { groups: ProviderGroup[]; onChanged: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState(1);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setColumns(columnsFor(el.clientWidth, CARD_MIN_WIDTH, CARD_GAP));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const byKey = new Map(groups.map((g) => [g.key, g]));
+  const rows = packGroups(groups.map((g) => ({ key: g.key, items: g.providers })), columns);
+  const headed = new Set<string>();
+
   return (
-    <section className="mt-7">
-      <div className="flex items-center gap-2">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: accent }} />
-        <h2 className="text-[15px] font-semibold">{title} models</h2>
-        <span className="chip">{providers.length}</span>
-      </div>
-      <p className="mt-0.5 text-[12px] text-ink-faint">{subtitle}</p>
-      <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-        {providers.map((p) => (
-          <ProviderCard key={p.id} provider={p} onChanged={onChanged} />
-        ))}
-      </div>
-    </section>
+    <div ref={ref}>
+      {rows.map((row, i) => (
+        <div
+          key={row.map((s) => `${s.group}:${s.items[0]?.id}`).join('|') || i}
+          className="mt-7 grid items-start"
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, columnGap: CARD_GAP }}
+        >
+          {(() => {
+            let start = 1;
+            return row.map((seg) => {
+              const g = byKey.get(seg.group)!;
+              const showHeader = !headed.has(g.key);
+              headed.add(g.key);
+              const gridColumn = `${start} / span ${seg.items.length}`;
+              start += seg.items.length;
+              // Headings sit on grid row 1 and cards on row 2, so cards sharing a
+              // line stay top-aligned even when only one of them carries a heading.
+              return (
+                <React.Fragment key={g.key}>
+                  {showHeader && (
+                    <div className="mb-3 min-w-0" style={{ gridColumn, gridRow: 1 }}>
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: g.accent }} />
+                        <h2 className="text-[15px] font-semibold">{g.title} models</h2>
+                        <span className="chip">{g.providers.length}</span>
+                      </div>
+                      <p className="mt-0.5 text-[12px] text-ink-faint">{g.subtitle}</p>
+                    </div>
+                  )}
+                  <div
+                    className="grid min-w-0 items-start"
+                    style={{
+                      gridColumn,
+                      gridRow: 2,
+                      gridTemplateColumns: `repeat(${seg.items.length}, minmax(0, 1fr))`,
+                      gap: CARD_GAP,
+                    }}
+                  >
+                    {seg.items.map((p) => (
+                      <ProviderCard key={p.id} provider={p} onChanged={onChanged} />
+                    ))}
+                  </div>
+                </React.Fragment>
+              );
+            });
+          })()}
+        </div>
+      ))}
+    </div>
   );
 }
 

@@ -1756,6 +1756,8 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] Native-effort Claude models show Default on the rung it resolves to instead of a separate stop left of Low (ported from the stale gentle-sage-wren WIP; its window title, sub-agent chip and folder chip parts were superseded on main). See SPEC.md: Effort that follows the model.
 - [ ] Matched before/after desktop captures of the composer and Add window effort slider for Opus 5.5 and Opus 5.
 
+- [x] Wall push and navigation shoulders: remove existing-pane size tween, retain positional push and incoming reveal; mirror 10px-clearance rail shoulders and tail curves. Desktop build/typecheck, 1,241 tests and 18 launcher checks pass; matched isolated renderer evidence captured. See SPEC.md, Wall push and navigation shoulders.
+
 ### Models page: why a model list failed (2026-10-15, #590) · [spec](SPEC.md#models--providers)
 - [x] `models:listStatus` (`{ models, error? }`) in shared, TS host, `nekkod`, preload and web client; `models:list` unchanged. Tests: `models-list-status.test.ts`, `nekkod` providers test (401 case).
 - [x] Provider card shows the error or "<name> didn't answer at <url>" with Retry; filter past eight models (`modelListProblem.ts`); no repeat of an error the failed connection test already shows.

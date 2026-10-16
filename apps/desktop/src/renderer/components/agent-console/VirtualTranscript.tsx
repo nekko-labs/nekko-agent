@@ -61,6 +61,8 @@ export interface VirtualTranscriptHandle {
   scrollToBottom(behavior?: ScrollBehavior): void;
   /** Bring a row to the top of the viewport, rendering it first if it is far away. */
   scrollToKey(key: string, behavior?: ScrollBehavior): void;
+  /** Move the view by `delta` pixels and stop following the bottom (find-in-chat centring a match). */
+  scrollByPx(delta: number): void;
 }
 
 export interface VirtualTranscriptProps<R extends VirtualRow> {
@@ -283,6 +285,14 @@ function VirtualTranscriptImpl<R extends VirtualRow>({
       setPinned(false);
       const listTop = list.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
       sc.scrollTo({ top: listTop + o[i], behavior });
+    },
+    scrollByPx(delta: number) {
+      const sc = scrollRef.current;
+      if (!sc || !delta) return;
+      // Unpinned first, or the next size change snaps the view back down.
+      setPinned(sc.scrollHeight - (sc.scrollTop + delta) - sc.clientHeight < 1);
+      sc.scrollTop += delta;
+      lastTop.current = sc.scrollTop;
     },
   }), [setPinned]);
 
