@@ -114,7 +114,7 @@ struct LockView: View {
                 Button {
                     Task { await app.lock.unlock() }
                 } label: {
-                    Label("Unlock", systemImage: "faceid").frame(maxWidth: 220).padding(.vertical, 6)
+                    Label("Unlock", systemImage: "faceid").frame(maxWidth: 220).padding(.vertical, 6).foregroundStyle(palette.onAccent)
                 }
                 .buttonStyle(.borderedProminent)
                 if let e = app.lock.error { Text(e).font(.footnote).foregroundStyle(palette.danger) }

@@ -22,6 +22,7 @@ struct WelcomeView: View {
         .safeAreaInset(edge: .bottom) {
             NavigationLink(value: Route.pair) {
                 Label("Pair with your computer", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity).padding(.vertical, 6)
+                    .foregroundStyle(palette.onAccent)
             }
             .buttonStyle(.borderedProminent)
             .padding(.horizontal, 20)
@@ -54,6 +55,7 @@ struct TailscaleGuide: View {
             }
             if !tailnet {
                 Link("Get Tailscale for iPhone", destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!).font(.footnote)
+                    .frame(minHeight: 44, alignment: .leading).contentShape(Rectangle())
             }
             Divider().padding(.vertical, 4)
             Text("No Tailscale?").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
@@ -100,12 +102,14 @@ struct PairView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .listRowInsets(EdgeInsets())
             } footer: {
-                Text("On the computer: Settings → Remote access → Pair a phone.")
+                Text("On the computer: Settings → Remote access → Pair a phone.").foregroundStyle(palette.inkSoft)
             }
-            Section("Or paste the pairing link") {
+            Section {
                 TextField("nekko-agent-pair:?relay=…", text: $pasted, axis: .vertical)
                     .textInputAutocapitalization(.never).autocorrectionDisabled().font(.footnote.monospaced())
                 Button("Pair") { submit(pasted) }.disabled(pasted.trimmingCharacters(in: .whitespaces).isEmpty || busy)
+            } header: {
+                SectionHeader("Or paste the pairing link")
             }
             if let error {
                 Section { Text(error).foregroundStyle(palette.danger).font(.footnote) }
@@ -113,6 +117,7 @@ struct PairView: View {
             Section { TailscaleGuide().listRowInsets(EdgeInsets()) }
         }
         .navigationTitle("Pair")
+        .keyboardDoneButton()
         .overlay { if busy { ProgressView("Pairing…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
         .task {
             if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {

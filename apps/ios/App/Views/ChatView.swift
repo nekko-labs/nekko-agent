@@ -26,6 +26,7 @@ struct ChatView: View {
         }
         .background(palette.paper)
         .navigationBarTitleDisplayMode(.inline)
+        .keyboardDoneButton()
         .task(id: sessionId) {
             let c = ChatModel(sessionId: sessionId, store: store)
             chat = c
@@ -38,6 +39,10 @@ struct ChatView: View {
 
     @ViewBuilder private func content(_ chat: ChatModel) -> some View {
         ScrollViewReader { proxy in
+          // At least as tall as the space above the bottom bar, bottom-aligned:
+          // a short transcript then moves up when an approval or question card
+          // grows the bar, instead of staying pinned where the card now covers it.
+          GeometryReader { geo in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if let n = chat.session?.omittedMessages, n > 0 {
@@ -59,10 +64,16 @@ struct ChatView: View {
                     Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(minHeight: geo.size.height, alignment: .bottom)
             }
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
+          }
             .onChange(of: chat.blocks.last) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+            // An approval or question card grows the bottom bar: keep the latest step above it.
+            // After the card has been laid out: scrolling in the same update used the old inset.
+            .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
+            .onChange(of: chat.turn.question != nil) { _, _ in scrollAfterLayout(proxy) }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
                     if let a = chat.turn.approval {
@@ -125,6 +136,13 @@ struct ChatView: View {
         } message: { Text(actionError ?? "") }
     }
 
+    private func scrollAfterLayout(_ proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+        }
+    }
+
     private func act(_ body: @escaping () async throws -> Void) {
         Task {
             do { try await body() } catch { actionError = error.localizedDescription }
@@ -179,7 +197,9 @@ struct BlockView: View {
                 } label: {
                     HStack(spacing: 8) {
                         statusIcon(status)
-                        Text(label).font(.footnote.monospaced()).foregroundStyle(palette.inkSoft).lineLimit(expanded ? nil : 1)
+                        // Two lines collapsed: one line truncated even short commands by a fraction of a point.
+                        Text(label).font(.footnote.monospaced()).foregroundStyle(palette.inkSoft).lineLimit(expanded ? nil : 2)
+                            .multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                         if output != nil { Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(palette.inkFaint) }
                     }
@@ -223,17 +243,28 @@ struct ApprovalCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("Approve this tool?", systemImage: "hand.raised").font(.subheadline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Text(approval.severity.rawValue.capitalized).font(.caption2.weight(.bold)).padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(color.opacity(0.18), in: Capsule()).foregroundStyle(color)
+                    .background(color.opacity(0.12), in: Capsule()).foregroundStyle(color)
             }
             Text(Transcript.toolLabel(approval.call)).font(.footnote.monospaced()).foregroundStyle(palette.ink).lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
             if let detail { ScrollView { Text(detail).font(.caption.monospaced()).foregroundStyle(palette.inkSoft).textSelection(.enabled) }.frame(maxHeight: 120) }
-            if !approval.reason.isEmpty { Text(approval.reason).font(.footnote).foregroundStyle(palette.inkSoft) }
+            if !approval.reason.isEmpty { Text(approval.reason).font(.footnote).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true) }
             HStack {
-                Button(role: .destructive) { answer(false) } label: { Text("Deny").frame(maxWidth: .infinity) }.buttonStyle(.bordered)
-                Button { answer(true) } label: { Text("Allow").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent)
+                Button(role: .destructive) { answer(false) } label: { Text("Deny").frame(maxWidth: .infinity).foregroundStyle(palette.ink) }
+                    .buttonStyle(.bordered).tint(palette.inkSoft)
+                // Drawn rather than .borderedProminent, which the audit reports as clipping its label.
+                Button { answer(true) } label: {
+                    Text("Allow").font(.body.weight(.semibold)).foregroundStyle(palette.onAccent)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(palette.accent, in: RoundedRectangle(cornerRadius: 12))
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
             }
+            .controlSize(.large)
         }
         .padding(14)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
@@ -271,7 +302,7 @@ struct QuestionCard: View {
             ForEach(request.questions) { q in
                 VStack(alignment: .leading, spacing: 6) {
                     if !q.header.isEmpty { Text(q.header).font(.caption.weight(.semibold)).foregroundStyle(palette.accent) }
-                    Text(q.question).font(.subheadline).foregroundStyle(palette.ink)
+                    Text(q.question).font(.subheadline).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
                     FlowOptions(options: q.options.map(\.label) + [askOtherLabel], selected: picked[q.id] ?? []) { label in
                         var s = picked[q.id] ?? []
                         if q.multiSelect { if s.contains(label) { s.remove(label) } else { s.insert(label) } } else { s = [label] }
@@ -285,14 +316,16 @@ struct QuestionCard: View {
             }
             Button {
                 submit(request.questions.map { q in AskAnswer(questionId: q.id, labels: Array(picked[q.id] ?? []), note: notes[q.id]) })
-            } label: { Text("Answer").frame(maxWidth: .infinity) }
+            } label: { Text("Answer").frame(maxWidth: .infinity).foregroundStyle(ready ? palette.onAccent : palette.inkFaint) }
                 .buttonStyle(.borderedProminent)
-                .disabled(request.questions.contains { (picked[$0.id] ?? []).isEmpty })
+                .disabled(!ready)
         }
         .padding(14)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(palette.accent.opacity(0.4)))
     }
+
+    private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }
 }
 
 struct FlowOptions: View {
