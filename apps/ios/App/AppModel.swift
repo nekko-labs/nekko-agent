@@ -37,9 +37,6 @@ final class AppModel {
         #if DEBUG
         // UI tests start from a fresh install; the Keychain outlives uninstalling the app.
         if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { keychain.wipe() }
-        // What the share extension leaves behind, without driving another app's share sheet.
-        let args = ProcessInfo.processInfo.arguments
-        if let i = args.firstIndex(of: "-uiTestShare"), i + 1 < args.count { shareInbox.offer(args[i + 1]) }
         #endif
         let prefs = Prefs()
         let deviceName = UIDevice.current.name
@@ -51,6 +48,11 @@ final class AppModel {
             deviceName: { deviceName },
             app: Bundle.main.bundleIdentifier)
         lock = AppLock(enabled: prefs.appLock)
+        #if DEBUG
+        // What the share extension leaves behind, without driving another app's share sheet.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-uiTestShare"), i + 1 < args.count { shareInbox.offer(args[i + 1]) }
+        #endif
     }
 
     /// The relay connection opens only after the first unlock (when the lock is
