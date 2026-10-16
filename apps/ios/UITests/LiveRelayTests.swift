@@ -31,7 +31,7 @@ final class LiveRelayTests: XCTestCase {
         app.buttons["Pair"].firstMatch.tap()
         tapSystemAlertIfShown()
 
-        let newChat = app.buttons["New chat"]
+        let newChat = app.navigationBars.buttons["New chat"]
         XCTAssertTrue(newChat.waitForExistence(timeout: 20))
         XCTAssertTrue(waitEnabled(newChat, 20), "connected to the computer")
         attach(app, "\(theme)-2-chats")
