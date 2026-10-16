@@ -58,7 +58,20 @@ struct ChatsView: View {
 
     @ViewBuilder private var rows: some View {
             ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-            if store.conn == .online && store.summaries.isEmpty && !store.summariesLoading {
+            if store.summariesLoaded && store.summaries.isEmpty && !store.summariesLoading, let e = store.lastError {
+                // A list that failed to load is not an empty one.
+                VStack(spacing: 10) {
+                    Label("Couldn’t load the chats", systemImage: "exclamationmark.triangle")
+                        .font(.headline).foregroundStyle(palette.ink)
+                    Text(e).font(.subheadline).foregroundStyle(palette.inkSoft)
+                    Button("Try again") { Task { await store.refresh() } }.buttonStyle(.bordered)
+                }
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 32)
+                .listRowBackground(Color.clear)
+            } else if store.conn == .online && store.summariesLoaded && store.summaries.isEmpty && !store.summariesLoading {
                 // Not ContentUnavailableView: its fixed layout clips at large text sizes.
                 VStack(spacing: 10) {
                     Image(systemName: "bubble.left.and.bubble.right").font(.largeTitle).foregroundStyle(palette.inkSoft)
@@ -75,10 +88,14 @@ struct ChatsView: View {
                 .padding(.vertical, 32)
                 .listRowBackground(Color.clear)
             }
+            if !query.isEmpty && filtered.isEmpty {
+                Text("No chats match “\(query)”.").font(.subheadline).foregroundStyle(palette.inkSoft)
+                    .frame(maxWidth: .infinity).padding(.vertical, 24).listRowBackground(Color.clear)
+            }
             if !needsYou.isEmpty && query.isEmpty {
                 Section("Needs you") { ForEach(needsYou) { row($0) } }
             }
-            ForEach(groups) { g in
+            ForEach(query.isEmpty || !filtered.isEmpty ? groups : []) { g in
                 Section {
                     if g.active.isEmpty && g.completed.isEmpty {
                         Text("No active agents").font(.footnote).foregroundStyle(palette.inkFaint)
@@ -169,8 +186,11 @@ struct ChatRow: View {
             }
             Spacer(minLength: 6)
             VStack(alignment: .trailing, spacing: 4) {
-                Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
-                    .font(.caption2).foregroundStyle(palette.inkFaint)
+                // Re-rendered each minute, so "2m" doesn't stay "2m".
+                TimelineView(.periodic(from: .now, by: 60)) { _ in
+                    Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                        .font(.caption2).foregroundStyle(palette.inkFaint)
+                }
                 badge
             }
         }

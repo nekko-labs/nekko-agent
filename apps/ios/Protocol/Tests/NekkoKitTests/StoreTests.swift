@@ -323,6 +323,45 @@ final class ChatModelTests: XCTestCase {
         XCTAssertEqual(c.callsTo(Channels.chatAbort).last, ["s"])
     }
 
+    func testAFailedAnswerKeepsTheCardSoItCanBeRetried() async throws {
+        let (s, c) = try await makeOnline()
+        let chat = ChatModel(sessionId: "s", store: s)
+        chat.start()
+        await settle()
+        c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
+        await settle()
+        c.replies[Channels.toolApprove] = { _ in throw RelayError("offline") }
+        do { try await chat.approve(true); XCTFail("expected a failure") } catch {}
+        XCTAssertEqual(chat.turn.approval?.call.id, "t", "the computer is still waiting, so the card stays")
+
+        c.event(["type": "question", "sessionId": "s", "request": ["callId": "q", "questions": [["id": "x", "question": "Which?", "options": [["label": "A"]]]]]])
+        await settle()
+        c.replies[Channels.chatAnswer] = { _ in throw RelayError("offline") }
+        do { try await chat.answer([AskAnswer(questionId: "x", labels: ["A"])]); XCTFail("expected a failure") } catch {}
+        XCTAssertEqual(chat.turn.question?.callId, "q")
+        chat.stop()
+    }
+
+    func testAPromptThatNeverStartedComesBackToTheComposer() async throws {
+        let (s, c) = try await makeOnline()
+        let chat = ChatModel(sessionId: "s", store: s, now: { 7 })
+        chat.start()
+        await settle()
+        c.replies[Channels.chatSend] = { _ in throw RelayError("The computer went offline.") }
+        try await chat.send("draft", skill: SkillSummary(name: "review"), images: ["data:image/jpeg;base64,AA"])
+        XCTAssertTrue(chat.running)
+        await settle()
+        XCTAssertFalse(chat.running)
+        XCTAssertEqual(chat.error, "The computer went offline.")
+        XCTAssertFalse(chat.blocks.contains { $0.id == "pending-7" }, "no bubble for a prompt that was never delivered")
+        let back = try XCTUnwrap(chat.takeUnsent())
+        XCTAssertEqual(back.text, "draft")
+        XCTAssertEqual(back.skill?.name, "review")
+        XCTAssertEqual(back.images.count, 1)
+        XCTAssertNil(chat.takeUnsent(), "handed back once")
+        chat.stop()
+    }
+
     func testBlockedReasons() async throws {
         let (s, c) = try await makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)

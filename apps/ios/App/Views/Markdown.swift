@@ -17,6 +17,7 @@ struct MarkdownText: View {
                     CodeBlock(language: lang, code: body)
                 case .heading(let level, let s):
                     inline(s).font(level <= 1 ? .title3.weight(.semibold) : level == 2 ? .headline : .subheadline.weight(.semibold))
+                        .accessibilityAddTraits(.isHeader)
                 case .bullet(let indent, let marker, let s):
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(marker).foregroundStyle(palette.inkSoft).monospacedDigit()
@@ -121,9 +122,11 @@ struct CodeBlock: View {
                 Button {
                     UIPasteboard.general.string = code
                     copied = true
+                    AccessibilityNotification.Announcement("Copied").post()
                     Task { try? await Task.sleep(nanoseconds: 1_200_000_000); copied = false }
                 } label: {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.caption)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .accessibilityLabel("Copy code")
             }

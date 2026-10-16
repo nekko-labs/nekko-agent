@@ -101,13 +101,11 @@ struct NewChatView: View {
         Task {
             do {
                 let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: mode)
-                opened(id)
+                // The chat's own model sends the first message, so a failure shows
+                // there and the text comes back in its composer.
                 let first = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !first.isEmpty {
-                    let chat = ChatModel(sessionId: id, store: store)
-                    await chat.reload()
-                    try? await chat.send(first)
-                }
+                if !first.isEmpty { app.firstMessages[id] = first }
+                opened(id)
             } catch {
                 self.error = error.localizedDescription
             }
@@ -181,5 +179,6 @@ struct ModelPicker: View {
                 if selected.0 == p && selected.1 == m { Image(systemName: "checkmark").foregroundStyle(palette.accent) }
             }
         }
+        .accessibilityAddTraits(selected.0 == p && selected.1 == m ? .isSelected : [])
     }
 }

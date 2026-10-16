@@ -15,6 +15,9 @@ struct ChatView: View {
     @State private var renaming = false
     @State private var renameText = ""
     @State private var actionError: String?
+    /// Whether the end of the transcript is on screen: only then does it follow new output.
+    @State private var atBottom = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -28,10 +31,21 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .keyboardDoneButton()
         .task(id: sessionId) {
-            let c = ChatModel(sessionId: sessionId, store: store)
-            chat = c
-            c.start()
+            // Coming back to the same chat (a pushed screen popped) keeps the
+            // model and what has streamed so far; start() re-subscribes and re-reads.
+            if chat?.sessionId != sessionId {
+                chat?.stop()
+                chat = ChatModel(sessionId: sessionId, store: store)
+            }
+            chat?.start()
             app.notifier.clear(sessionId: sessionId)
+            if let first = app.firstMessages.removeValue(forKey: sessionId), let chat {
+                await chat.reload()
+                do { try await chat.send(first) } catch {
+                    chat.handBack(UnsentPrompt(text: first, skill: nil, images: []))
+                    actionError = error.localizedDescription
+                }
+            }
         }
         .onDisappear { chat?.stop() }
         .onChange(of: store.conn) { _, s in chat?.connectionChanged(s) }
@@ -58,22 +72,38 @@ struct ChatView: View {
                         Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
                     }
                     Color.clear.frame(height: 1).id("bottom")
+                        .onAppear { atBottom = true }
+                        .onDisappear { atBottom = false }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
             }
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
-            .onChange(of: chat.blocks.last) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+            // Follow streamed output only while the reader is at the end, and
+            // without animating every token (overlapping animations shudder).
+            .onChange(of: chat.blocks.last) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
             // An approval or question card grows the bottom bar: keep the latest step above it.
-            .onChange(of: chat.turn.approval?.call.id) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
-            .onChange(of: chat.turn.question != nil) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+            .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollToEnd(proxy) }
+            .onChange(of: chat.turn.question != nil) { _, _ in scrollToEnd(proxy) }
+            .overlay(alignment: .bottomTrailing) {
+                if !atBottom && chat.running {
+                    Button { scrollToEnd(proxy) } label: {
+                        Label("Jump to latest", systemImage: "arrow.down").labelStyle(.iconOnly)
+                            .font(.body.weight(.semibold)).frame(width: 44, height: 44)
+                            .background(.regularMaterial, in: Circle())
+                    }
+                    .padding(16)
+                    .transition(.opacity)
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
                     if let a = chat.turn.approval {
-                        ApprovalCard(approval: a) { ok in act { try await chat.approve(ok) } }
+                        ApprovalCard(approval: a) { ok in try await chat.approve(ok) }.id(a.call.id)
                     }
                     if let q = chat.turn.question {
-                        QuestionCard(request: q) { answers in act { try await chat.answer(answers) } }
+                        // A new question starts with nothing picked.
+                        QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
                     }
                     if !chat.queued.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -111,7 +141,7 @@ struct ChatView: View {
                     Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                     Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     Button { Task { await chat.reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-                } label: { Image(systemName: "ellipsis.circle") }
+                } label: { Label("More", systemImage: "ellipsis.circle") }
             }
         }
         .sheet(isPresented: $showModels) {
@@ -127,6 +157,10 @@ struct ChatView: View {
         .alert("Couldn’t do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(actionError ?? "") }
+    }
+
+    private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
     }
 
     private func act(_ body: @escaping () async throws -> Void) {
@@ -164,6 +198,8 @@ struct BlockView: View {
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(images > 0 ? "You: \(text), with \(images == 1 ? "1 image" : "\(images) images")" : "You: \(text)")
         case .assistant(_, let text, let reasoning, let streaming, let interrupted):
             VStack(alignment: .leading, spacing: 6) {
                 if let reasoning, !reasoning.isEmpty {
@@ -189,6 +225,9 @@ struct BlockView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("\(label), \(statusName(status))")
+                .accessibilityValue(output == nil ? "" : (expanded ? "Output shown" : "Output hidden"))
+                .accessibilityHint(output == nil ? "" : "Shows or hides the output")
                 if expanded, let output {
                     let split = Transcript.splitNotes(output)
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -207,6 +246,15 @@ struct BlockView: View {
         }
     }
 
+    private func statusName(_ s: ToolStatus) -> String {
+        switch s {
+        case .running: return "running"
+        case .waiting: return "waiting for you"
+        case .ok: return "done"
+        case .error: return "failed"
+        }
+    }
+
     @ViewBuilder private func statusIcon(_ s: ToolStatus) -> some View {
         switch s {
         case .running: ProgressView().controlSize(.mini)
@@ -220,8 +268,10 @@ struct BlockView: View {
 /// The computer asks before running a tool: show exactly what, and why.
 struct ApprovalCard: View {
     let approval: Approval
-    var answer: (Bool) -> Void
+    var answer: (Bool) async throws -> Void
     @Environment(\.palette) private var palette
+    @State private var busy = false
+    @State private var failed: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -236,17 +286,35 @@ struct ApprovalCard: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let detail { ScrollView { Text(detail).font(.caption.monospaced()).foregroundStyle(palette.inkSoft).textSelection(.enabled) }.frame(maxHeight: 120) }
             if !approval.reason.isEmpty { Text(approval.reason).font(.footnote).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true) }
+            if let failed {
+                Label(failed, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
+            }
             HStack {
-                Button(role: .destructive) { answer(false) } label: { Text("Deny").frame(maxWidth: .infinity).foregroundStyle(palette.ink) }
+                Button(role: .destructive) { decide(false) } label: { Text("Deny").frame(maxWidth: .infinity).foregroundStyle(palette.ink) }
                     .buttonStyle(.bordered).tint(palette.inkSoft)
-                Button { answer(true) } label: { Text("Allow").frame(maxWidth: .infinity).foregroundStyle(palette.onAccent) }.buttonStyle(.borderedProminent)
+                Button { decide(true) } label: {
+                    Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Allow") } }
+                        .frame(maxWidth: .infinity).foregroundStyle(palette.onAccent)
+                }
+                .buttonStyle(.borderedProminent)
             }
             .controlSize(.large)
+            .disabled(busy)
         }
         .padding(14)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(color.opacity(0.5)))
-        .onAppear { Haptics.needsYou() }
+        // The haptic comes from AppModel, per the user's vibration setting; VoiceOver gets told here.
+        .onAppear { AccessibilityNotification.Announcement("Approval needed: \(Transcript.toolLabel(approval.call))").post() }
+    }
+
+    private func decide(_ ok: Bool) {
+        busy = true
+        failed = nil
+        Task {
+            do { try await answer(ok) } catch { failed = "Couldn’t send that: \(error.localizedDescription) Try again." }
+            busy = false
+        }
     }
 
     private var color: Color {
@@ -269,10 +337,12 @@ struct ApprovalCard: View {
 /// The agent's `ask_user` questions: options, multi-select, or "Something else" with a note.
 struct QuestionCard: View {
     let request: AskRequest
-    var submit: ([AskAnswer]) -> Void
+    var submit: ([AskAnswer]) async throws -> Void
     @Environment(\.palette) private var palette
     @State private var picked: [String: Set<String>] = [:]
     @State private var notes: [String: String] = [:]
+    @State private var busy = false
+    @State private var failed: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -291,11 +361,16 @@ struct QuestionCard: View {
                     }
                 }
             }
-            Button {
-                submit(request.questions.map { q in AskAnswer(questionId: q.id, labels: Array(picked[q.id] ?? []), note: notes[q.id]) })
-            } label: { Text("Answer").frame(maxWidth: .infinity).foregroundStyle(ready ? palette.onAccent : palette.inkFaint) }
+            if let failed {
+                Label(failed, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
+            }
+            Button(action: send) {
+                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer") } }
+                    .frame(maxWidth: .infinity).foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
+            }
                 .buttonStyle(.borderedProminent)
-                .disabled(!ready)
+                .controlSize(.large)
+                .disabled(!ready || busy)
         }
         .padding(14)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
@@ -303,6 +378,16 @@ struct QuestionCard: View {
     }
 
     private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }
+
+    private func send() {
+        let answers = request.questions.map { q in AskAnswer(questionId: q.id, labels: Array(picked[q.id] ?? []), note: notes[q.id]) }
+        busy = true
+        failed = nil
+        Task {
+            do { try await submit(answers) } catch { failed = "Couldn’t send that: \(error.localizedDescription) Try again." }
+            busy = false
+        }
+    }
 }
 
 struct FlowOptions: View {
@@ -320,11 +405,20 @@ struct FlowOptions: View {
 
     private var chips: some View {
         ForEach(options, id: \.self) { o in
+            let on = selected.contains(o)
             Button { tap(o) } label: {
-                Text(o).font(.footnote).padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(selected.contains(o) ? palette.accent : palette.surface2, in: Capsule())
-                    .foregroundStyle(selected.contains(o) ? palette.onAccent : palette.ink)
-            }.buttonStyle(.plain)
+                // A checkmark as well as the colour, and a 44 pt target.
+                HStack(spacing: 5) {
+                    if on { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
+                    Text(o)
+                }
+                .font(.footnote).padding(.horizontal, 14).frame(minHeight: 44)
+                .background(on ? palette.accent : palette.surface2, in: Capsule())
+                .foregroundStyle(on ? palette.onAccent : palette.ink)
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(on ? .isSelected : [])
         }
     }
 }
@@ -338,6 +432,7 @@ struct Composer: View {
     @State private var skill: SkillSummary?
     @State private var photos: [PhotosPickerItem] = []
     @State private var images: [String] = []
+    @State private var loadingPhotos = false
     @State private var error: String?
     @State private var dictation = Dictation()
     @FocusState private var focused: Bool
@@ -355,7 +450,12 @@ struct Composer: View {
                 }
                 .padding(.horizontal, 10).padding(.vertical, 4).background(palette.accent.opacity(0.15), in: Capsule()).foregroundStyle(palette.accent)
             }
-            if !images.isEmpty {
+            if loadingPhotos {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Adding photos…").font(.caption)
+                }.foregroundStyle(palette.inkSoft)
+            } else if !images.isEmpty {
                 HStack {
                     Label(images.count == 1 ? "1 photo" : "\(images.count) photos", systemImage: "photo").font(.caption)
                     Button { images = []; photos = [] } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove photos")
@@ -391,9 +491,10 @@ struct Composer: View {
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .accessibilityLabel("Add")
-                TextField(chat.turn.running ? "Queue a follow-up" : "Message", text: $text, axis: .vertical)
+                TextField(chat.running ? "Queue a follow-up" : "Message", text: $text, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
                     .padding(.horizontal, 12).padding(.vertical, 8)
@@ -402,36 +503,57 @@ struct Composer: View {
                 if dictation.available && text.isEmpty && !dictation.recording {
                     Button { Task { await dictation.start(store: store) } } label: {
                         Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Dictate")
                 } else if dictation.recording {
                     Button { Task { if let t = await dictation.stop(store: store) { text += (text.isEmpty ? "" : " ") + t } } } label: {
                         Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Stop dictation")
                 }
-                if chat.turn.running && text.trimmingCharacters(in: .whitespaces).isEmpty {
+                // Stop while running with nothing to queue; a photo or skill alone can be queued.
+                if chat.running && !hasContent {
                     Button { chat.abort() } label: {
                         Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
                             .background(palette.danger, in: Circle()).foregroundStyle(.white)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Stop")
                 } else {
                     Button(action: send) {
                         Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
                             .background(canSend ? palette.accent : palette.surface2, in: Circle())
                             .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }
                     .disabled(!canSend)
-                    .accessibilityLabel(chat.turn.running ? "Queue" : "Send")
+                    .accessibilityLabel(chat.running ? "Queue" : "Send")
                 }
             }
             if dictation.recording { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
         }
-        .onChange(of: photos) { _, items in Task { images = await ImageAttachments.load(items) } }
+        // Send waits for the photos (it used to send without them, and they came back later).
+        .task(id: photos) {
+            guard !photos.isEmpty else { return }
+            loadingPhotos = true
+            let loaded = await ImageAttachments.load(photos)
+            if !Task.isCancelled { images = loaded }
+            loadingPhotos = false
+        }
         .onChange(of: dictation.error) { _, e in if let e { error = e } }
+        // A prompt that never reached the computer comes back, with its skill and photos.
+        .onChange(of: chat.unsent) { _, u in
+            guard u != nil, let back = chat.takeUnsent() else { return }
+            if text.isEmpty { text = back.text }
+            if skill == nil { skill = back.skill }
+            if images.isEmpty { images = back.images }
+        }
     }
 
-    private var canSend: Bool {
-        chat.blocked == nil && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || skill != nil || !images.isEmpty)
+    private var hasContent: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || skill != nil || !images.isEmpty
     }
+
+    private var canSend: Bool { chat.blocked == nil && !loadingPhotos && hasContent }
 
     /// `/re` → the computer's skills starting with "re".
     private var skillMatches: [SkillSummary] {
@@ -467,6 +589,8 @@ struct Composer: View {
             } catch {
                 self.error = error.localizedDescription
                 text = saved
+                skill = sentSkill
+                images = sentImages
             }
         }
     }
@@ -482,7 +606,10 @@ enum ImageAttachments {
             let maxSide: CGFloat = 1600
             let scale = min(1, maxSide / max(image.size.width, image.size.height))
             let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-            let resized = UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+            // Scale 1: `size` is in pixels. The default (the screen's 3x) made 4,800 px JPEGs.
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = 1
+            let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
             guard let jpeg = resized.jpegData(compressionQuality: 0.8) else { continue }
             out.append("data:image/jpeg;base64," + jpeg.base64EncodedString())
         }

@@ -28,6 +28,8 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A chat to open (notification tap, Live Activity tap, `nekko-agent://chat/<id>`).
     var openChat: String?
+    /// The first message typed on New chat, sent by that chat's screen once it opens.
+    var firstMessages: [String: String] = [:]
 
     init() {
         let keychain = KeychainStore()
