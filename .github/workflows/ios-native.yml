@@ -52,7 +52,7 @@ jobs:
         run: xcodegen generate
       - name: Validate plists
         run: |
-          plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements apps/ios/App/PrivacyInfo.xcprivacy
+          plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements apps/ios/Widgets/NekkoWidgets.entitlements apps/ios/App/PrivacyInfo.xcprivacy
       - name: Build unsigned iOS Simulator app
         working-directory: apps/ios
         run: >-
