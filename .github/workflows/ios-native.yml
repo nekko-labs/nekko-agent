@@ -52,7 +52,7 @@ jobs:
         run: xcodegen generate
       - name: Validate plists
         run: |
-          plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements
+          plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements apps/ios/App/PrivacyInfo.xcprivacy
       - name: Build unsigned iOS Simulator app
         working-directory: apps/ios
         run: >-
@@ -60,13 +60,17 @@ jobs:
           -configuration Debug -sdk iphonesimulator
           -destination 'generic/platform=iOS Simulator'
           -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build
-      - name: Verify bundle (launch screen, widget extension, URL schemes)
+      - name: Verify bundle (launch screen, widget extension, URL schemes, icon, privacy manifest)
         run: |
           APP=apps/ios/DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchStoryboardName' $APP/Info.plist)" = LaunchScreen
           test -d $APP/LaunchScreen.storyboardc
           test -d $APP/PlugIns/NekkoWidgets.appex
           /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes' $APP/Info.plist | grep -q nekko-agent-pair
+          # App Store requirements: the icon compiled into the asset catalog, and the privacy manifest.
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' $APP/Info.plist)" = AppIcon
+          test -f $APP/Assets.car
+          plutil -lint $APP/PrivacyInfo.xcprivacy
       - name: Simulator tests and live screenshots (light, dark)
         working-directory: apps/ios
         run: |
