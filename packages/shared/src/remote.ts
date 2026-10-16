@@ -7,8 +7,9 @@
  * key derived from that secret, so the relay only ever routes ciphertext. On top
  * of that transport, every device must complete an application-level HELLO
  * handshake with the agent: known + not-revoked devices are welcomed, brand-new
- * devices are enrolled only with a short-lived single-use pairing code, and
- * everything else is denied. The agent unicasts responses and events per device
+ * devices are enrolled only with a short-lived single-use pairing code, a
+ * revoked device comes back only the same way (a fresh code from the owner),
+ * and everything else is denied. The agent unicasts responses and events per device
  * (never broadcast), so a revoked device receives nothing even while it still
  * holds the old link. Rotating the secret is the cryptographic kill switch: it
  * re-keys the room and forces every device to re-pair.
@@ -86,7 +87,11 @@ export type HelloVerdict =
 
 /**
  * Validate a device HELLO. Known devices are welcomed unless revoked; unknown
- * devices enroll only with a live pairing code. Pure so it's unit-testable; the
+ * devices enroll only with a live pairing code. A revoked device is re-admitted
+ * only with a live pairing code too: the same proof a new phone needs, made on
+ * the computer by its owner, single use. A phone keeps its device id across
+ * "forget this computer", so without this a revoked phone could never pair
+ * again short of rotating the room secret. Pure so it's unit-testable; the
  * caller persists the returned device (new or lastSeen-updated) and consumes the
  * pairing grant when `enrolled` is true.
  */
@@ -101,11 +106,13 @@ export function verifyHello(
     return { action: 'deny', reason: 'invalid' };
   }
   const known = devices.find((d) => d.id === h.deviceId);
-  if (known) {
-    if (known.revoked) return { action: 'deny', reason: 'revoked' };
+  if (known && !known.revoked) {
     return { action: 'welcome', device: { ...known, lastSeenAt: now }, enrolled: false };
   }
-  if (!h.pair) return { action: 'deny', reason: 'unknown-device' };
+  // A revoked device with no code is told it was removed; one that brings a
+  // code is pairing again, so it is checked exactly like a new device and gets
+  // a fresh registry entry.
+  if (!h.pair) return { action: 'deny', reason: known ? 'revoked' : 'unknown-device' };
   if (!pairing || pairing.code !== h.pair || pairing.expiresAt <= now) {
     return { action: 'deny', reason: 'bad-code' };
   }

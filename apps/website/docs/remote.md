@@ -116,7 +116,9 @@ stores them.
 
 Manage devices from the same card: **rename** them, **revoke** one instantly (it's kicked live and
 denied from then on), or **Rotate secret** to cryptographically reset the room, which unpairs
-everything at once.
+everything at once. A revoked phone can come back only the way a new one does: choose **Pair a
+device** on the computer and scan the new QR from the phone (the one-time code is the proof). Older
+computers refused a revoked phone even then; on those, **Rotate secret** first.
 
 Remote access survives restarts: if it was enabled, the agent reconnects when Nekko Agent starts.
 
@@ -152,7 +154,7 @@ changes how the computer itself is set up:
 | Stranger connects to your room | Needs the pairing secret (128-bit) for transport auth, then a registered device or a live pairing code |
 | Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
 | Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
-| Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; rotate the secret for a full cryptographic reset |
+| Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
 | Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
 
