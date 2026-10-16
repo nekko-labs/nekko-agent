@@ -153,10 +153,16 @@ impl AgentCore {
         }
     }
 
-    /// The sealed reply to a dispatched request.
+    /// The sealed reply to a dispatched request. The relay silently drops a
+    /// frame over its limit, so a reply that seals larger than the phone limit
+    /// goes out as an error the phone can show at once (`reply` in relay.ts).
     pub fn reply(&mut self, cid: &str, id: Option<Value>, result: Result<Value, String>) -> String {
-        let res = res(id, result);
-        self.send_to(cid, &res)
+        let data = self.seal(&res(id.clone(), result));
+        if data.len() <= crate::phone::policy().max_frame_bytes {
+            return frame(json!({ "type": "d", "cid": cid, "data": data }));
+        }
+        let error = res(id, Err(crate::phone::frame_too_large(data.len())));
+        self.send_to(cid, &error)
     }
 
     /// A host event: the push ping when a run finished, then the event to

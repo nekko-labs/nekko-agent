@@ -90,8 +90,10 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
             (if (n > 0) "$base#$n" else base) to b
         }
     }
+    // A note above the messages when the computer sent only the newest ones.
+    val headerCount = if (chat.omittedMessages > 0) 1 else 0
     val footerCount = 1
-    val lastIndex = keyed.size + footerCount - 1
+    val lastIndex = headerCount + keyed.size + footerCount - 1
 
     // Follow the reply while it streams, unless the user scrolled up to read.
     val streamTick = (chat.blocks.lastOrNull() as? Block.Assistant)?.let { it.text.length + (it.reasoning?.length ?: 0) } ?: 0
@@ -151,6 +153,18 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
+                        if (chat.omittedMessages > 0) {
+                            item(key = "omitted") {
+                                Text(
+                                    if (chat.omittedMessages == 1) "1 earlier message is on the computer."
+                                    else "${chat.omittedMessages} earlier messages are on the computer.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = p.inkFaint,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                )
+                            }
+                        }
                         itemsIndexed(keyed, key = { _, (k, _) -> k }) { _, (_, block) -> BlockView(block) }
                         item(key = "footer") {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

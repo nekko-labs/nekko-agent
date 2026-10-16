@@ -42,6 +42,1621 @@
    "sensitivity": 50
   }
  },
+ "sessions": {
+  "small": {
+   "id": "small",
+   "title": "Hi",
+   "messages": [
+    {
+     "id": "m1",
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "long": {
+   "id": "long",
+   "messages": [
+    {
+     "id": "m0",
+     "role": "user",
+     "content": "t0"
+    },
+    {
+     "id": "m1",
+     "role": "assistant",
+     "content": "t1"
+    },
+    {
+     "id": "m2",
+     "role": "user",
+     "content": "t2"
+    },
+    {
+     "id": "m3",
+     "role": "assistant",
+     "content": "t3"
+    },
+    {
+     "id": "m4",
+     "role": "user",
+     "content": "t4"
+    },
+    {
+     "id": "m5",
+     "role": "assistant",
+     "content": "t5"
+    },
+    {
+     "id": "m6",
+     "role": "user",
+     "content": "t6"
+    },
+    {
+     "id": "m7",
+     "role": "assistant",
+     "content": "t7"
+    },
+    {
+     "id": "m8",
+     "role": "user",
+     "content": "t8"
+    },
+    {
+     "id": "m9",
+     "role": "assistant",
+     "content": "t9"
+    },
+    {
+     "id": "m10",
+     "role": "user",
+     "content": "t10"
+    },
+    {
+     "id": "m11",
+     "role": "assistant",
+     "content": "t11"
+    },
+    {
+     "id": "m12",
+     "role": "user",
+     "content": "t12"
+    },
+    {
+     "id": "m13",
+     "role": "assistant",
+     "content": "t13"
+    },
+    {
+     "id": "m14",
+     "role": "user",
+     "content": "t14"
+    },
+    {
+     "id": "m15",
+     "role": "assistant",
+     "content": "t15"
+    },
+    {
+     "id": "m16",
+     "role": "user",
+     "content": "t16"
+    },
+    {
+     "id": "m17",
+     "role": "assistant",
+     "content": "t17"
+    },
+    {
+     "id": "m18",
+     "role": "user",
+     "content": "t18"
+    },
+    {
+     "id": "m19",
+     "role": "assistant",
+     "content": "t19"
+    },
+    {
+     "id": "m20",
+     "role": "user",
+     "content": "t20"
+    },
+    {
+     "id": "m21",
+     "role": "assistant",
+     "content": "t21"
+    },
+    {
+     "id": "m22",
+     "role": "user",
+     "content": "t22"
+    },
+    {
+     "id": "m23",
+     "role": "assistant",
+     "content": "t23"
+    },
+    {
+     "id": "m24",
+     "role": "user",
+     "content": "t24"
+    },
+    {
+     "id": "m25",
+     "role": "assistant",
+     "content": "t25"
+    },
+    {
+     "id": "m26",
+     "role": "user",
+     "content": "t26"
+    },
+    {
+     "id": "m27",
+     "role": "assistant",
+     "content": "t27"
+    },
+    {
+     "id": "m28",
+     "role": "user",
+     "content": "t28"
+    },
+    {
+     "id": "m29",
+     "role": "assistant",
+     "content": "t29"
+    },
+    {
+     "id": "m30",
+     "role": "user",
+     "content": "t30"
+    },
+    {
+     "id": "m31",
+     "role": "assistant",
+     "content": "t31"
+    },
+    {
+     "id": "m32",
+     "role": "user",
+     "content": "t32"
+    },
+    {
+     "id": "m33",
+     "role": "assistant",
+     "content": "t33"
+    },
+    {
+     "id": "m34",
+     "role": "user",
+     "content": "t34"
+    },
+    {
+     "id": "m35",
+     "role": "assistant",
+     "content": "t35"
+    },
+    {
+     "id": "m36",
+     "role": "user",
+     "content": "t36"
+    },
+    {
+     "id": "m37",
+     "role": "assistant",
+     "content": "t37"
+    },
+    {
+     "id": "m38",
+     "role": "user",
+     "content": "t38"
+    },
+    {
+     "id": "m39",
+     "role": "assistant",
+     "content": "t39"
+    },
+    {
+     "id": "m40",
+     "role": "user",
+     "content": "t40"
+    },
+    {
+     "id": "m41",
+     "role": "assistant",
+     "content": "t41"
+    },
+    {
+     "id": "m42",
+     "role": "user",
+     "content": "t42"
+    },
+    {
+     "id": "m43",
+     "role": "assistant",
+     "content": "t43"
+    },
+    {
+     "id": "m44",
+     "role": "user",
+     "content": "t44"
+    },
+    {
+     "id": "m45",
+     "role": "assistant",
+     "content": "t45"
+    },
+    {
+     "id": "m46",
+     "role": "user",
+     "content": "t46"
+    },
+    {
+     "id": "m47",
+     "role": "assistant",
+     "content": "t47"
+    },
+    {
+     "id": "m48",
+     "role": "user",
+     "content": "t48"
+    },
+    {
+     "id": "m49",
+     "role": "assistant",
+     "content": "t49"
+    },
+    {
+     "id": "m50",
+     "role": "user",
+     "content": "t50"
+    },
+    {
+     "id": "m51",
+     "role": "assistant",
+     "content": "t51"
+    },
+    {
+     "id": "m52",
+     "role": "user",
+     "content": "t52"
+    },
+    {
+     "id": "m53",
+     "role": "assistant",
+     "content": "t53"
+    },
+    {
+     "id": "m54",
+     "role": "user",
+     "content": "t54"
+    },
+    {
+     "id": "m55",
+     "role": "assistant",
+     "content": "t55"
+    },
+    {
+     "id": "m56",
+     "role": "user",
+     "content": "t56"
+    },
+    {
+     "id": "m57",
+     "role": "assistant",
+     "content": "t57"
+    },
+    {
+     "id": "m58",
+     "role": "user",
+     "content": "t58"
+    },
+    {
+     "id": "m59",
+     "role": "assistant",
+     "content": "t59"
+    },
+    {
+     "id": "m60",
+     "role": "user",
+     "content": "t60"
+    },
+    {
+     "id": "m61",
+     "role": "assistant",
+     "content": "t61"
+    },
+    {
+     "id": "m62",
+     "role": "user",
+     "content": "t62"
+    },
+    {
+     "id": "m63",
+     "role": "assistant",
+     "content": "t63"
+    },
+    {
+     "id": "m64",
+     "role": "user",
+     "content": "t64"
+    },
+    {
+     "id": "m65",
+     "role": "assistant",
+     "content": "t65"
+    },
+    {
+     "id": "m66",
+     "role": "user",
+     "content": "t66"
+    },
+    {
+     "id": "m67",
+     "role": "assistant",
+     "content": "t67"
+    },
+    {
+     "id": "m68",
+     "role": "user",
+     "content": "t68"
+    },
+    {
+     "id": "m69",
+     "role": "assistant",
+     "content": "t69"
+    },
+    {
+     "id": "m70",
+     "role": "user",
+     "content": "t70"
+    },
+    {
+     "id": "m71",
+     "role": "assistant",
+     "content": "t71"
+    },
+    {
+     "id": "m72",
+     "role": "user",
+     "content": "t72"
+    },
+    {
+     "id": "m73",
+     "role": "assistant",
+     "content": "t73"
+    },
+    {
+     "id": "m74",
+     "role": "user",
+     "content": "t74"
+    },
+    {
+     "id": "m75",
+     "role": "assistant",
+     "content": "t75"
+    },
+    {
+     "id": "m76",
+     "role": "user",
+     "content": "t76"
+    },
+    {
+     "id": "m77",
+     "role": "assistant",
+     "content": "t77"
+    },
+    {
+     "id": "m78",
+     "role": "user",
+     "content": "t78"
+    },
+    {
+     "id": "m79",
+     "role": "assistant",
+     "content": "t79"
+    },
+    {
+     "id": "m80",
+     "role": "user",
+     "content": "t80"
+    },
+    {
+     "id": "m81",
+     "role": "assistant",
+     "content": "t81"
+    },
+    {
+     "id": "m82",
+     "role": "user",
+     "content": "t82"
+    },
+    {
+     "id": "m83",
+     "role": "assistant",
+     "content": "t83"
+    },
+    {
+     "id": "m84",
+     "role": "user",
+     "content": "t84"
+    },
+    {
+     "id": "m85",
+     "role": "assistant",
+     "content": "t85"
+    },
+    {
+     "id": "m86",
+     "role": "user",
+     "content": "t86"
+    },
+    {
+     "id": "m87",
+     "role": "assistant",
+     "content": "t87"
+    },
+    {
+     "id": "m88",
+     "role": "user",
+     "content": "t88"
+    },
+    {
+     "id": "m89",
+     "role": "assistant",
+     "content": "t89"
+    },
+    {
+     "id": "m90",
+     "role": "user",
+     "content": "t90"
+    },
+    {
+     "id": "m91",
+     "role": "assistant",
+     "content": "t91"
+    },
+    {
+     "id": "m92",
+     "role": "user",
+     "content": "t92"
+    },
+    {
+     "id": "m93",
+     "role": "assistant",
+     "content": "t93"
+    },
+    {
+     "id": "m94",
+     "role": "user",
+     "content": "t94"
+    },
+    {
+     "id": "m95",
+     "role": "assistant",
+     "content": "t95"
+    },
+    {
+     "id": "m96",
+     "role": "user",
+     "content": "t96"
+    },
+    {
+     "id": "m97",
+     "role": "assistant",
+     "content": "t97"
+    },
+    {
+     "id": "m98",
+     "role": "user",
+     "content": "t98"
+    },
+    {
+     "id": "m99",
+     "role": "assistant",
+     "content": "t99"
+    },
+    {
+     "id": "m100",
+     "role": "user",
+     "content": "t100"
+    },
+    {
+     "id": "m101",
+     "role": "assistant",
+     "content": "t101"
+    },
+    {
+     "id": "m102",
+     "role": "user",
+     "content": "t102"
+    },
+    {
+     "id": "m103",
+     "role": "assistant",
+     "content": "t103"
+    },
+    {
+     "id": "m104",
+     "role": "user",
+     "content": "t104"
+    },
+    {
+     "id": "m105",
+     "role": "assistant",
+     "content": "t105"
+    },
+    {
+     "id": "m106",
+     "role": "user",
+     "content": "t106"
+    },
+    {
+     "id": "m107",
+     "role": "assistant",
+     "content": "t107"
+    },
+    {
+     "id": "m108",
+     "role": "user",
+     "content": "t108"
+    },
+    {
+     "id": "m109",
+     "role": "assistant",
+     "content": "t109"
+    },
+    {
+     "id": "m110",
+     "role": "user",
+     "content": "t110"
+    },
+    {
+     "id": "m111",
+     "role": "assistant",
+     "content": "t111"
+    },
+    {
+     "id": "m112",
+     "role": "user",
+     "content": "t112"
+    },
+    {
+     "id": "m113",
+     "role": "assistant",
+     "content": "t113"
+    },
+    {
+     "id": "m114",
+     "role": "user",
+     "content": "t114"
+    },
+    {
+     "id": "m115",
+     "role": "assistant",
+     "content": "t115"
+    },
+    {
+     "id": "m116",
+     "role": "user",
+     "content": "t116"
+    },
+    {
+     "id": "m117",
+     "role": "assistant",
+     "content": "t117"
+    },
+    {
+     "id": "m118",
+     "role": "user",
+     "content": "t118"
+    },
+    {
+     "id": "m119",
+     "role": "assistant",
+     "content": "t119"
+    },
+    {
+     "id": "m120",
+     "role": "user",
+     "content": "t120"
+    },
+    {
+     "id": "m121",
+     "role": "assistant",
+     "content": "t121"
+    },
+    {
+     "id": "m122",
+     "role": "user",
+     "content": "t122"
+    },
+    {
+     "id": "m123",
+     "role": "assistant",
+     "content": "t123"
+    },
+    {
+     "id": "m124",
+     "role": "user",
+     "content": "t124"
+    },
+    {
+     "id": "m125",
+     "role": "assistant",
+     "content": "t125"
+    },
+    {
+     "id": "m126",
+     "role": "user",
+     "content": "t126"
+    },
+    {
+     "id": "m127",
+     "role": "assistant",
+     "content": "t127"
+    },
+    {
+     "id": "m128",
+     "role": "user",
+     "content": "t128"
+    },
+    {
+     "id": "m129",
+     "role": "assistant",
+     "content": "t129"
+    },
+    {
+     "id": "m130",
+     "role": "user",
+     "content": "t130"
+    },
+    {
+     "id": "m131",
+     "role": "assistant",
+     "content": "t131"
+    },
+    {
+     "id": "m132",
+     "role": "user",
+     "content": "t132"
+    },
+    {
+     "id": "m133",
+     "role": "assistant",
+     "content": "t133"
+    },
+    {
+     "id": "m134",
+     "role": "user",
+     "content": "t134"
+    },
+    {
+     "id": "m135",
+     "role": "assistant",
+     "content": "t135"
+    },
+    {
+     "id": "m136",
+     "role": "user",
+     "content": "t136"
+    },
+    {
+     "id": "m137",
+     "role": "assistant",
+     "content": "t137"
+    },
+    {
+     "id": "m138",
+     "role": "user",
+     "content": "t138"
+    },
+    {
+     "id": "m139",
+     "role": "assistant",
+     "content": "t139"
+    },
+    {
+     "id": "m140",
+     "role": "user",
+     "content": "t140"
+    },
+    {
+     "id": "m141",
+     "role": "assistant",
+     "content": "t141"
+    },
+    {
+     "id": "m142",
+     "role": "user",
+     "content": "t142"
+    },
+    {
+     "id": "m143",
+     "role": "assistant",
+     "content": "t143"
+    },
+    {
+     "id": "m144",
+     "role": "user",
+     "content": "t144"
+    },
+    {
+     "id": "m145",
+     "role": "assistant",
+     "content": "t145"
+    },
+    {
+     "id": "m146",
+     "role": "user",
+     "content": "t146"
+    },
+    {
+     "id": "m147",
+     "role": "assistant",
+     "content": "t147"
+    },
+    {
+     "id": "m148",
+     "role": "user",
+     "content": "t148"
+    },
+    {
+     "id": "m149",
+     "role": "assistant",
+     "content": "t149"
+    },
+    {
+     "id": "m150",
+     "role": "user",
+     "content": "t150"
+    },
+    {
+     "id": "m151",
+     "role": "assistant",
+     "content": "t151"
+    },
+    {
+     "id": "m152",
+     "role": "user",
+     "content": "t152"
+    },
+    {
+     "id": "m153",
+     "role": "assistant",
+     "content": "t153"
+    },
+    {
+     "id": "m154",
+     "role": "user",
+     "content": "t154"
+    },
+    {
+     "id": "m155",
+     "role": "assistant",
+     "content": "t155"
+    },
+    {
+     "id": "m156",
+     "role": "user",
+     "content": "t156"
+    },
+    {
+     "id": "m157",
+     "role": "assistant",
+     "content": "t157"
+    },
+    {
+     "id": "m158",
+     "role": "user",
+     "content": "t158"
+    },
+    {
+     "id": "m159",
+     "role": "assistant",
+     "content": "t159"
+    },
+    {
+     "id": "m160",
+     "role": "user",
+     "content": "t160"
+    },
+    {
+     "id": "m161",
+     "role": "assistant",
+     "content": "t161"
+    },
+    {
+     "id": "m162",
+     "role": "user",
+     "content": "t162"
+    },
+    {
+     "id": "m163",
+     "role": "assistant",
+     "content": "t163"
+    },
+    {
+     "id": "m164",
+     "role": "user",
+     "content": "t164"
+    },
+    {
+     "id": "m165",
+     "role": "assistant",
+     "content": "t165"
+    },
+    {
+     "id": "m166",
+     "role": "user",
+     "content": "t166"
+    },
+    {
+     "id": "m167",
+     "role": "assistant",
+     "content": "t167"
+    },
+    {
+     "id": "m168",
+     "role": "user",
+     "content": "t168"
+    },
+    {
+     "id": "m169",
+     "role": "assistant",
+     "content": "t169"
+    },
+    {
+     "id": "m170",
+     "role": "user",
+     "content": "t170"
+    },
+    {
+     "id": "m171",
+     "role": "assistant",
+     "content": "t171"
+    },
+    {
+     "id": "m172",
+     "role": "user",
+     "content": "t172"
+    },
+    {
+     "id": "m173",
+     "role": "assistant",
+     "content": "t173"
+    },
+    {
+     "id": "m174",
+     "role": "user",
+     "content": "t174"
+    },
+    {
+     "id": "m175",
+     "role": "assistant",
+     "content": "t175"
+    },
+    {
+     "id": "m176",
+     "role": "user",
+     "content": "t176"
+    },
+    {
+     "id": "m177",
+     "role": "assistant",
+     "content": "t177"
+    },
+    {
+     "id": "m178",
+     "role": "user",
+     "content": "t178"
+    },
+    {
+     "id": "m179",
+     "role": "assistant",
+     "content": "t179"
+    },
+    {
+     "id": "m180",
+     "role": "user",
+     "content": "t180"
+    },
+    {
+     "id": "m181",
+     "role": "assistant",
+     "content": "t181"
+    },
+    {
+     "id": "m182",
+     "role": "user",
+     "content": "t182"
+    },
+    {
+     "id": "m183",
+     "role": "assistant",
+     "content": "t183"
+    },
+    {
+     "id": "m184",
+     "role": "user",
+     "content": "t184"
+    },
+    {
+     "id": "m185",
+     "role": "assistant",
+     "content": "t185"
+    },
+    {
+     "id": "m186",
+     "role": "user",
+     "content": "t186"
+    },
+    {
+     "id": "m187",
+     "role": "assistant",
+     "content": "t187"
+    },
+    {
+     "id": "m188",
+     "role": "user",
+     "content": "t188"
+    },
+    {
+     "id": "m189",
+     "role": "assistant",
+     "content": "t189"
+    },
+    {
+     "id": "m190",
+     "role": "user",
+     "content": "t190"
+    },
+    {
+     "id": "m191",
+     "role": "assistant",
+     "content": "t191"
+    },
+    {
+     "id": "m192",
+     "role": "user",
+     "content": "t192"
+    },
+    {
+     "id": "m193",
+     "role": "assistant",
+     "content": "t193"
+    },
+    {
+     "id": "m194",
+     "role": "user",
+     "content": "t194"
+    },
+    {
+     "id": "m195",
+     "role": "assistant",
+     "content": "t195"
+    },
+    {
+     "id": "m196",
+     "role": "user",
+     "content": "t196"
+    },
+    {
+     "id": "m197",
+     "role": "assistant",
+     "content": "t197"
+    },
+    {
+     "id": "m198",
+     "role": "user",
+     "content": "t198"
+    },
+    {
+     "id": "m199",
+     "role": "assistant",
+     "content": "t199"
+    },
+    {
+     "id": "m200",
+     "role": "user",
+     "content": "t200"
+    },
+    {
+     "id": "m201",
+     "role": "assistant",
+     "content": "t201"
+    },
+    {
+     "id": "m202",
+     "role": "user",
+     "content": "t202"
+    },
+    {
+     "id": "m203",
+     "role": "assistant",
+     "content": "t203"
+    },
+    {
+     "id": "m204",
+     "role": "user",
+     "content": "t204"
+    },
+    {
+     "id": "m205",
+     "role": "assistant",
+     "content": "t205"
+    },
+    {
+     "id": "m206",
+     "role": "user",
+     "content": "t206"
+    },
+    {
+     "id": "m207",
+     "role": "assistant",
+     "content": "t207"
+    },
+    {
+     "id": "m208",
+     "role": "user",
+     "content": "t208"
+    },
+    {
+     "id": "m209",
+     "role": "assistant",
+     "content": "t209"
+    },
+    {
+     "id": "m210",
+     "role": "user",
+     "content": "t210"
+    },
+    {
+     "id": "m211",
+     "role": "assistant",
+     "content": "t211"
+    },
+    {
+     "id": "m212",
+     "role": "user",
+     "content": "t212"
+    },
+    {
+     "id": "m213",
+     "role": "assistant",
+     "content": "t213"
+    },
+    {
+     "id": "m214",
+     "role": "user",
+     "content": "t214"
+    },
+    {
+     "id": "m215",
+     "role": "assistant",
+     "content": "t215"
+    },
+    {
+     "id": "m216",
+     "role": "user",
+     "content": "t216"
+    },
+    {
+     "id": "m217",
+     "role": "assistant",
+     "content": "t217"
+    },
+    {
+     "id": "m218",
+     "role": "user",
+     "content": "t218"
+    },
+    {
+     "id": "m219",
+     "role": "assistant",
+     "content": "t219"
+    },
+    {
+     "id": "m220",
+     "role": "user",
+     "content": "t220"
+    },
+    {
+     "id": "m221",
+     "role": "assistant",
+     "content": "t221"
+    },
+    {
+     "id": "m222",
+     "role": "user",
+     "content": "t222"
+    },
+    {
+     "id": "m223",
+     "role": "assistant",
+     "content": "t223"
+    },
+    {
+     "id": "m224",
+     "role": "user",
+     "content": "t224"
+    },
+    {
+     "id": "m225",
+     "role": "assistant",
+     "content": "t225"
+    },
+    {
+     "id": "m226",
+     "role": "user",
+     "content": "t226"
+    },
+    {
+     "id": "m227",
+     "role": "assistant",
+     "content": "t227"
+    },
+    {
+     "id": "m228",
+     "role": "user",
+     "content": "t228"
+    },
+    {
+     "id": "m229",
+     "role": "assistant",
+     "content": "t229"
+    },
+    {
+     "id": "m230",
+     "role": "user",
+     "content": "t230"
+    },
+    {
+     "id": "m231",
+     "role": "assistant",
+     "content": "t231"
+    },
+    {
+     "id": "m232",
+     "role": "user",
+     "content": "t232"
+    },
+    {
+     "id": "m233",
+     "role": "assistant",
+     "content": "t233"
+    },
+    {
+     "id": "m234",
+     "role": "user",
+     "content": "t234"
+    },
+    {
+     "id": "m235",
+     "role": "assistant",
+     "content": "t235"
+    },
+    {
+     "id": "m236",
+     "role": "user",
+     "content": "t236"
+    },
+    {
+     "id": "m237",
+     "role": "assistant",
+     "content": "t237"
+    },
+    {
+     "id": "m238",
+     "role": "user",
+     "content": "t238"
+    },
+    {
+     "id": "m239",
+     "role": "assistant",
+     "content": "t239"
+    },
+    {
+     "id": "m240",
+     "role": "user",
+     "content": "t240"
+    },
+    {
+     "id": "m241",
+     "role": "assistant",
+     "content": "t241"
+    },
+    {
+     "id": "m242",
+     "role": "user",
+     "content": "t242"
+    },
+    {
+     "id": "m243",
+     "role": "assistant",
+     "content": "t243"
+    },
+    {
+     "id": "m244",
+     "role": "user",
+     "content": "t244"
+    },
+    {
+     "id": "m245",
+     "role": "assistant",
+     "content": "t245"
+    },
+    {
+     "id": "m246",
+     "role": "user",
+     "content": "t246"
+    },
+    {
+     "id": "m247",
+     "role": "assistant",
+     "content": "t247"
+    },
+    {
+     "id": "m248",
+     "role": "user",
+     "content": "t248"
+    },
+    {
+     "id": "m249",
+     "role": "assistant",
+     "content": "t249"
+    },
+    {
+     "id": "m250",
+     "role": "user",
+     "content": "t250"
+    },
+    {
+     "id": "m251",
+     "role": "assistant",
+     "content": "t251"
+    },
+    {
+     "id": "m252",
+     "role": "user",
+     "content": "t252"
+    },
+    {
+     "id": "m253",
+     "role": "assistant",
+     "content": "t253"
+    },
+    {
+     "id": "m254",
+     "role": "user",
+     "content": "t254"
+    },
+    {
+     "id": "m255",
+     "role": "assistant",
+     "content": "t255"
+    },
+    {
+     "id": "m256",
+     "role": "user",
+     "content": "t256"
+    },
+    {
+     "id": "m257",
+     "role": "assistant",
+     "content": "t257"
+    },
+    {
+     "id": "m258",
+     "role": "user",
+     "content": "t258"
+    },
+    {
+     "id": "m259",
+     "role": "assistant",
+     "content": "t259"
+    },
+    {
+     "id": "m260",
+     "role": "user",
+     "content": "t260"
+    },
+    {
+     "id": "m261",
+     "role": "assistant",
+     "content": "t261"
+    },
+    {
+     "id": "m262",
+     "role": "user",
+     "content": "t262"
+    },
+    {
+     "id": "m263",
+     "role": "assistant",
+     "content": "t263"
+    },
+    {
+     "id": "m264",
+     "role": "user",
+     "content": "t264"
+    },
+    {
+     "id": "m265",
+     "role": "assistant",
+     "content": "t265"
+    },
+    {
+     "id": "m266",
+     "role": "user",
+     "content": "t266"
+    },
+    {
+     "id": "m267",
+     "role": "assistant",
+     "content": "t267"
+    },
+    {
+     "id": "m268",
+     "role": "user",
+     "content": "t268"
+    },
+    {
+     "id": "m269",
+     "role": "assistant",
+     "content": "t269"
+    },
+    {
+     "id": "m270",
+     "role": "user",
+     "content": "t270"
+    },
+    {
+     "id": "m271",
+     "role": "assistant",
+     "content": "t271"
+    },
+    {
+     "id": "m272",
+     "role": "user",
+     "content": "t272"
+    },
+    {
+     "id": "m273",
+     "role": "assistant",
+     "content": "t273"
+    },
+    {
+     "id": "m274",
+     "role": "user",
+     "content": "t274"
+    },
+    {
+     "id": "m275",
+     "role": "assistant",
+     "content": "t275"
+    },
+    {
+     "id": "m276",
+     "role": "user",
+     "content": "t276"
+    },
+    {
+     "id": "m277",
+     "role": "assistant",
+     "content": "t277"
+    },
+    {
+     "id": "m278",
+     "role": "user",
+     "content": "t278"
+    },
+    {
+     "id": "m279",
+     "role": "assistant",
+     "content": "t279"
+    },
+    {
+     "id": "m280",
+     "role": "user",
+     "content": "t280"
+    },
+    {
+     "id": "m281",
+     "role": "assistant",
+     "content": "t281"
+    },
+    {
+     "id": "m282",
+     "role": "user",
+     "content": "t282"
+    },
+    {
+     "id": "m283",
+     "role": "assistant",
+     "content": "t283"
+    },
+    {
+     "id": "m284",
+     "role": "user",
+     "content": "t284"
+    },
+    {
+     "id": "m285",
+     "role": "assistant",
+     "content": "t285"
+    },
+    {
+     "id": "m286",
+     "role": "user",
+     "content": "t286"
+    },
+    {
+     "id": "m287",
+     "role": "assistant",
+     "content": "t287"
+    },
+    {
+     "id": "m288",
+     "role": "user",
+     "content": "t288"
+    },
+    {
+     "id": "m289",
+     "role": "assistant",
+     "content": "t289"
+    },
+    {
+     "id": "m290",
+     "role": "user",
+     "content": "t290"
+    },
+    {
+     "id": "m291",
+     "role": "assistant",
+     "content": "t291"
+    },
+    {
+     "id": "m292",
+     "role": "user",
+     "content": "t292"
+    },
+    {
+     "id": "m293",
+     "role": "assistant",
+     "content": "t293"
+    },
+    {
+     "id": "m294",
+     "role": "user",
+     "content": "t294"
+    },
+    {
+     "id": "m295",
+     "role": "assistant",
+     "content": "t295"
+    },
+    {
+     "id": "m296",
+     "role": "user",
+     "content": "t296"
+    },
+    {
+     "id": "m297",
+     "role": "assistant",
+     "content": "t297"
+    },
+    {
+     "id": "m298",
+     "role": "user",
+     "content": "t298"
+    },
+    {
+     "id": "m299",
+     "role": "assistant",
+     "content": "t299"
+    },
+    {
+     "id": "m300",
+     "role": "user",
+     "content": "t300"
+    },
+    {
+     "id": "m301",
+     "role": "assistant",
+     "content": "t301"
+    },
+    {
+     "id": "m302",
+     "role": "user",
+     "content": "t302"
+    }
+   ]
+  },
+  "heavy": {
+   "id": "heavy",
+   "messages": [
+    {
+     "id": "a",
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c1",
+       "name": "write_file",
+       "input": {
+        "path": "x",
+        "content": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "n": 3
+       }
+      },
+      {
+       "id": "c2",
+       "name": "bash",
+       "input": {
+        "command": "ls"
+       }
+      },
+      {
+       "id": "c3",
+       "name": "raw",
+       "input": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+      },
+      {
+       "id": "c4",
+       "name": "none"
+      }
+     ]
+    },
+    {
+     "id": "t1",
+     "role": "tool",
+     "content": "",
+     "toolResult": {
+      "toolCallId": "c1",
+      "output": "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo",
+      "images": [
+       {
+        "data": "AAAA"
+       },
+       {
+        "data": "BBBB"
+       }
+      ]
+     }
+    },
+    {
+     "id": "t2",
+     "role": "tool",
+     "content": "",
+     "toolResult": {
+      "toolCallId": "c2",
+      "output": "ok",
+      "images": []
+     }
+    },
+    {
+     "id": "t3",
+     "role": "tool",
+     "content": "",
+     "toolResult": {
+      "toolCallId": "c3",
+      "output": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz😀tail"
+     }
+    },
+    {
+     "id": "t4",
+     "role": "tool",
+     "content": "",
+     "toolResult": {
+      "toolCallId": "c4",
+      "output": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+     }
+    }
+   ]
+  }
+ },
  "cases": [
   {
    "channel": "data:wipe",
@@ -154,9 +1769,7 @@
      ]
     ]
    ],
-   "result": {
-    "ok": "session:get"
-   }
+   "result": null
   },
   {
    "channel": "session:delete",
@@ -620,6 +2233,1645 @@
    ],
    "calls": [],
    "error": "Not allowed from a paired phone (option-denied): attachedPaths"
+  },
+  {
+   "channel": "session:get",
+   "args": [
+    "small"
+   ],
+   "calls": [
+    [
+     "session:get",
+     [
+      "small"
+     ]
+    ]
+   ],
+   "result": {
+    "id": "small",
+    "title": "Hi",
+    "messages": [
+     {
+      "id": "m1",
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  {
+   "channel": "session:get",
+   "args": [
+    "long"
+   ],
+   "calls": [
+    [
+     "session:get",
+     [
+      "long"
+     ]
+    ]
+   ],
+   "result": {
+    "id": "long",
+    "messages": [
+     {
+      "id": "m3",
+      "role": "assistant",
+      "content": "t3"
+     },
+     {
+      "id": "m4",
+      "role": "user",
+      "content": "t4"
+     },
+     {
+      "id": "m5",
+      "role": "assistant",
+      "content": "t5"
+     },
+     {
+      "id": "m6",
+      "role": "user",
+      "content": "t6"
+     },
+     {
+      "id": "m7",
+      "role": "assistant",
+      "content": "t7"
+     },
+     {
+      "id": "m8",
+      "role": "user",
+      "content": "t8"
+     },
+     {
+      "id": "m9",
+      "role": "assistant",
+      "content": "t9"
+     },
+     {
+      "id": "m10",
+      "role": "user",
+      "content": "t10"
+     },
+     {
+      "id": "m11",
+      "role": "assistant",
+      "content": "t11"
+     },
+     {
+      "id": "m12",
+      "role": "user",
+      "content": "t12"
+     },
+     {
+      "id": "m13",
+      "role": "assistant",
+      "content": "t13"
+     },
+     {
+      "id": "m14",
+      "role": "user",
+      "content": "t14"
+     },
+     {
+      "id": "m15",
+      "role": "assistant",
+      "content": "t15"
+     },
+     {
+      "id": "m16",
+      "role": "user",
+      "content": "t16"
+     },
+     {
+      "id": "m17",
+      "role": "assistant",
+      "content": "t17"
+     },
+     {
+      "id": "m18",
+      "role": "user",
+      "content": "t18"
+     },
+     {
+      "id": "m19",
+      "role": "assistant",
+      "content": "t19"
+     },
+     {
+      "id": "m20",
+      "role": "user",
+      "content": "t20"
+     },
+     {
+      "id": "m21",
+      "role": "assistant",
+      "content": "t21"
+     },
+     {
+      "id": "m22",
+      "role": "user",
+      "content": "t22"
+     },
+     {
+      "id": "m23",
+      "role": "assistant",
+      "content": "t23"
+     },
+     {
+      "id": "m24",
+      "role": "user",
+      "content": "t24"
+     },
+     {
+      "id": "m25",
+      "role": "assistant",
+      "content": "t25"
+     },
+     {
+      "id": "m26",
+      "role": "user",
+      "content": "t26"
+     },
+     {
+      "id": "m27",
+      "role": "assistant",
+      "content": "t27"
+     },
+     {
+      "id": "m28",
+      "role": "user",
+      "content": "t28"
+     },
+     {
+      "id": "m29",
+      "role": "assistant",
+      "content": "t29"
+     },
+     {
+      "id": "m30",
+      "role": "user",
+      "content": "t30"
+     },
+     {
+      "id": "m31",
+      "role": "assistant",
+      "content": "t31"
+     },
+     {
+      "id": "m32",
+      "role": "user",
+      "content": "t32"
+     },
+     {
+      "id": "m33",
+      "role": "assistant",
+      "content": "t33"
+     },
+     {
+      "id": "m34",
+      "role": "user",
+      "content": "t34"
+     },
+     {
+      "id": "m35",
+      "role": "assistant",
+      "content": "t35"
+     },
+     {
+      "id": "m36",
+      "role": "user",
+      "content": "t36"
+     },
+     {
+      "id": "m37",
+      "role": "assistant",
+      "content": "t37"
+     },
+     {
+      "id": "m38",
+      "role": "user",
+      "content": "t38"
+     },
+     {
+      "id": "m39",
+      "role": "assistant",
+      "content": "t39"
+     },
+     {
+      "id": "m40",
+      "role": "user",
+      "content": "t40"
+     },
+     {
+      "id": "m41",
+      "role": "assistant",
+      "content": "t41"
+     },
+     {
+      "id": "m42",
+      "role": "user",
+      "content": "t42"
+     },
+     {
+      "id": "m43",
+      "role": "assistant",
+      "content": "t43"
+     },
+     {
+      "id": "m44",
+      "role": "user",
+      "content": "t44"
+     },
+     {
+      "id": "m45",
+      "role": "assistant",
+      "content": "t45"
+     },
+     {
+      "id": "m46",
+      "role": "user",
+      "content": "t46"
+     },
+     {
+      "id": "m47",
+      "role": "assistant",
+      "content": "t47"
+     },
+     {
+      "id": "m48",
+      "role": "user",
+      "content": "t48"
+     },
+     {
+      "id": "m49",
+      "role": "assistant",
+      "content": "t49"
+     },
+     {
+      "id": "m50",
+      "role": "user",
+      "content": "t50"
+     },
+     {
+      "id": "m51",
+      "role": "assistant",
+      "content": "t51"
+     },
+     {
+      "id": "m52",
+      "role": "user",
+      "content": "t52"
+     },
+     {
+      "id": "m53",
+      "role": "assistant",
+      "content": "t53"
+     },
+     {
+      "id": "m54",
+      "role": "user",
+      "content": "t54"
+     },
+     {
+      "id": "m55",
+      "role": "assistant",
+      "content": "t55"
+     },
+     {
+      "id": "m56",
+      "role": "user",
+      "content": "t56"
+     },
+     {
+      "id": "m57",
+      "role": "assistant",
+      "content": "t57"
+     },
+     {
+      "id": "m58",
+      "role": "user",
+      "content": "t58"
+     },
+     {
+      "id": "m59",
+      "role": "assistant",
+      "content": "t59"
+     },
+     {
+      "id": "m60",
+      "role": "user",
+      "content": "t60"
+     },
+     {
+      "id": "m61",
+      "role": "assistant",
+      "content": "t61"
+     },
+     {
+      "id": "m62",
+      "role": "user",
+      "content": "t62"
+     },
+     {
+      "id": "m63",
+      "role": "assistant",
+      "content": "t63"
+     },
+     {
+      "id": "m64",
+      "role": "user",
+      "content": "t64"
+     },
+     {
+      "id": "m65",
+      "role": "assistant",
+      "content": "t65"
+     },
+     {
+      "id": "m66",
+      "role": "user",
+      "content": "t66"
+     },
+     {
+      "id": "m67",
+      "role": "assistant",
+      "content": "t67"
+     },
+     {
+      "id": "m68",
+      "role": "user",
+      "content": "t68"
+     },
+     {
+      "id": "m69",
+      "role": "assistant",
+      "content": "t69"
+     },
+     {
+      "id": "m70",
+      "role": "user",
+      "content": "t70"
+     },
+     {
+      "id": "m71",
+      "role": "assistant",
+      "content": "t71"
+     },
+     {
+      "id": "m72",
+      "role": "user",
+      "content": "t72"
+     },
+     {
+      "id": "m73",
+      "role": "assistant",
+      "content": "t73"
+     },
+     {
+      "id": "m74",
+      "role": "user",
+      "content": "t74"
+     },
+     {
+      "id": "m75",
+      "role": "assistant",
+      "content": "t75"
+     },
+     {
+      "id": "m76",
+      "role": "user",
+      "content": "t76"
+     },
+     {
+      "id": "m77",
+      "role": "assistant",
+      "content": "t77"
+     },
+     {
+      "id": "m78",
+      "role": "user",
+      "content": "t78"
+     },
+     {
+      "id": "m79",
+      "role": "assistant",
+      "content": "t79"
+     },
+     {
+      "id": "m80",
+      "role": "user",
+      "content": "t80"
+     },
+     {
+      "id": "m81",
+      "role": "assistant",
+      "content": "t81"
+     },
+     {
+      "id": "m82",
+      "role": "user",
+      "content": "t82"
+     },
+     {
+      "id": "m83",
+      "role": "assistant",
+      "content": "t83"
+     },
+     {
+      "id": "m84",
+      "role": "user",
+      "content": "t84"
+     },
+     {
+      "id": "m85",
+      "role": "assistant",
+      "content": "t85"
+     },
+     {
+      "id": "m86",
+      "role": "user",
+      "content": "t86"
+     },
+     {
+      "id": "m87",
+      "role": "assistant",
+      "content": "t87"
+     },
+     {
+      "id": "m88",
+      "role": "user",
+      "content": "t88"
+     },
+     {
+      "id": "m89",
+      "role": "assistant",
+      "content": "t89"
+     },
+     {
+      "id": "m90",
+      "role": "user",
+      "content": "t90"
+     },
+     {
+      "id": "m91",
+      "role": "assistant",
+      "content": "t91"
+     },
+     {
+      "id": "m92",
+      "role": "user",
+      "content": "t92"
+     },
+     {
+      "id": "m93",
+      "role": "assistant",
+      "content": "t93"
+     },
+     {
+      "id": "m94",
+      "role": "user",
+      "content": "t94"
+     },
+     {
+      "id": "m95",
+      "role": "assistant",
+      "content": "t95"
+     },
+     {
+      "id": "m96",
+      "role": "user",
+      "content": "t96"
+     },
+     {
+      "id": "m97",
+      "role": "assistant",
+      "content": "t97"
+     },
+     {
+      "id": "m98",
+      "role": "user",
+      "content": "t98"
+     },
+     {
+      "id": "m99",
+      "role": "assistant",
+      "content": "t99"
+     },
+     {
+      "id": "m100",
+      "role": "user",
+      "content": "t100"
+     },
+     {
+      "id": "m101",
+      "role": "assistant",
+      "content": "t101"
+     },
+     {
+      "id": "m102",
+      "role": "user",
+      "content": "t102"
+     },
+     {
+      "id": "m103",
+      "role": "assistant",
+      "content": "t103"
+     },
+     {
+      "id": "m104",
+      "role": "user",
+      "content": "t104"
+     },
+     {
+      "id": "m105",
+      "role": "assistant",
+      "content": "t105"
+     },
+     {
+      "id": "m106",
+      "role": "user",
+      "content": "t106"
+     },
+     {
+      "id": "m107",
+      "role": "assistant",
+      "content": "t107"
+     },
+     {
+      "id": "m108",
+      "role": "user",
+      "content": "t108"
+     },
+     {
+      "id": "m109",
+      "role": "assistant",
+      "content": "t109"
+     },
+     {
+      "id": "m110",
+      "role": "user",
+      "content": "t110"
+     },
+     {
+      "id": "m111",
+      "role": "assistant",
+      "content": "t111"
+     },
+     {
+      "id": "m112",
+      "role": "user",
+      "content": "t112"
+     },
+     {
+      "id": "m113",
+      "role": "assistant",
+      "content": "t113"
+     },
+     {
+      "id": "m114",
+      "role": "user",
+      "content": "t114"
+     },
+     {
+      "id": "m115",
+      "role": "assistant",
+      "content": "t115"
+     },
+     {
+      "id": "m116",
+      "role": "user",
+      "content": "t116"
+     },
+     {
+      "id": "m117",
+      "role": "assistant",
+      "content": "t117"
+     },
+     {
+      "id": "m118",
+      "role": "user",
+      "content": "t118"
+     },
+     {
+      "id": "m119",
+      "role": "assistant",
+      "content": "t119"
+     },
+     {
+      "id": "m120",
+      "role": "user",
+      "content": "t120"
+     },
+     {
+      "id": "m121",
+      "role": "assistant",
+      "content": "t121"
+     },
+     {
+      "id": "m122",
+      "role": "user",
+      "content": "t122"
+     },
+     {
+      "id": "m123",
+      "role": "assistant",
+      "content": "t123"
+     },
+     {
+      "id": "m124",
+      "role": "user",
+      "content": "t124"
+     },
+     {
+      "id": "m125",
+      "role": "assistant",
+      "content": "t125"
+     },
+     {
+      "id": "m126",
+      "role": "user",
+      "content": "t126"
+     },
+     {
+      "id": "m127",
+      "role": "assistant",
+      "content": "t127"
+     },
+     {
+      "id": "m128",
+      "role": "user",
+      "content": "t128"
+     },
+     {
+      "id": "m129",
+      "role": "assistant",
+      "content": "t129"
+     },
+     {
+      "id": "m130",
+      "role": "user",
+      "content": "t130"
+     },
+     {
+      "id": "m131",
+      "role": "assistant",
+      "content": "t131"
+     },
+     {
+      "id": "m132",
+      "role": "user",
+      "content": "t132"
+     },
+     {
+      "id": "m133",
+      "role": "assistant",
+      "content": "t133"
+     },
+     {
+      "id": "m134",
+      "role": "user",
+      "content": "t134"
+     },
+     {
+      "id": "m135",
+      "role": "assistant",
+      "content": "t135"
+     },
+     {
+      "id": "m136",
+      "role": "user",
+      "content": "t136"
+     },
+     {
+      "id": "m137",
+      "role": "assistant",
+      "content": "t137"
+     },
+     {
+      "id": "m138",
+      "role": "user",
+      "content": "t138"
+     },
+     {
+      "id": "m139",
+      "role": "assistant",
+      "content": "t139"
+     },
+     {
+      "id": "m140",
+      "role": "user",
+      "content": "t140"
+     },
+     {
+      "id": "m141",
+      "role": "assistant",
+      "content": "t141"
+     },
+     {
+      "id": "m142",
+      "role": "user",
+      "content": "t142"
+     },
+     {
+      "id": "m143",
+      "role": "assistant",
+      "content": "t143"
+     },
+     {
+      "id": "m144",
+      "role": "user",
+      "content": "t144"
+     },
+     {
+      "id": "m145",
+      "role": "assistant",
+      "content": "t145"
+     },
+     {
+      "id": "m146",
+      "role": "user",
+      "content": "t146"
+     },
+     {
+      "id": "m147",
+      "role": "assistant",
+      "content": "t147"
+     },
+     {
+      "id": "m148",
+      "role": "user",
+      "content": "t148"
+     },
+     {
+      "id": "m149",
+      "role": "assistant",
+      "content": "t149"
+     },
+     {
+      "id": "m150",
+      "role": "user",
+      "content": "t150"
+     },
+     {
+      "id": "m151",
+      "role": "assistant",
+      "content": "t151"
+     },
+     {
+      "id": "m152",
+      "role": "user",
+      "content": "t152"
+     },
+     {
+      "id": "m153",
+      "role": "assistant",
+      "content": "t153"
+     },
+     {
+      "id": "m154",
+      "role": "user",
+      "content": "t154"
+     },
+     {
+      "id": "m155",
+      "role": "assistant",
+      "content": "t155"
+     },
+     {
+      "id": "m156",
+      "role": "user",
+      "content": "t156"
+     },
+     {
+      "id": "m157",
+      "role": "assistant",
+      "content": "t157"
+     },
+     {
+      "id": "m158",
+      "role": "user",
+      "content": "t158"
+     },
+     {
+      "id": "m159",
+      "role": "assistant",
+      "content": "t159"
+     },
+     {
+      "id": "m160",
+      "role": "user",
+      "content": "t160"
+     },
+     {
+      "id": "m161",
+      "role": "assistant",
+      "content": "t161"
+     },
+     {
+      "id": "m162",
+      "role": "user",
+      "content": "t162"
+     },
+     {
+      "id": "m163",
+      "role": "assistant",
+      "content": "t163"
+     },
+     {
+      "id": "m164",
+      "role": "user",
+      "content": "t164"
+     },
+     {
+      "id": "m165",
+      "role": "assistant",
+      "content": "t165"
+     },
+     {
+      "id": "m166",
+      "role": "user",
+      "content": "t166"
+     },
+     {
+      "id": "m167",
+      "role": "assistant",
+      "content": "t167"
+     },
+     {
+      "id": "m168",
+      "role": "user",
+      "content": "t168"
+     },
+     {
+      "id": "m169",
+      "role": "assistant",
+      "content": "t169"
+     },
+     {
+      "id": "m170",
+      "role": "user",
+      "content": "t170"
+     },
+     {
+      "id": "m171",
+      "role": "assistant",
+      "content": "t171"
+     },
+     {
+      "id": "m172",
+      "role": "user",
+      "content": "t172"
+     },
+     {
+      "id": "m173",
+      "role": "assistant",
+      "content": "t173"
+     },
+     {
+      "id": "m174",
+      "role": "user",
+      "content": "t174"
+     },
+     {
+      "id": "m175",
+      "role": "assistant",
+      "content": "t175"
+     },
+     {
+      "id": "m176",
+      "role": "user",
+      "content": "t176"
+     },
+     {
+      "id": "m177",
+      "role": "assistant",
+      "content": "t177"
+     },
+     {
+      "id": "m178",
+      "role": "user",
+      "content": "t178"
+     },
+     {
+      "id": "m179",
+      "role": "assistant",
+      "content": "t179"
+     },
+     {
+      "id": "m180",
+      "role": "user",
+      "content": "t180"
+     },
+     {
+      "id": "m181",
+      "role": "assistant",
+      "content": "t181"
+     },
+     {
+      "id": "m182",
+      "role": "user",
+      "content": "t182"
+     },
+     {
+      "id": "m183",
+      "role": "assistant",
+      "content": "t183"
+     },
+     {
+      "id": "m184",
+      "role": "user",
+      "content": "t184"
+     },
+     {
+      "id": "m185",
+      "role": "assistant",
+      "content": "t185"
+     },
+     {
+      "id": "m186",
+      "role": "user",
+      "content": "t186"
+     },
+     {
+      "id": "m187",
+      "role": "assistant",
+      "content": "t187"
+     },
+     {
+      "id": "m188",
+      "role": "user",
+      "content": "t188"
+     },
+     {
+      "id": "m189",
+      "role": "assistant",
+      "content": "t189"
+     },
+     {
+      "id": "m190",
+      "role": "user",
+      "content": "t190"
+     },
+     {
+      "id": "m191",
+      "role": "assistant",
+      "content": "t191"
+     },
+     {
+      "id": "m192",
+      "role": "user",
+      "content": "t192"
+     },
+     {
+      "id": "m193",
+      "role": "assistant",
+      "content": "t193"
+     },
+     {
+      "id": "m194",
+      "role": "user",
+      "content": "t194"
+     },
+     {
+      "id": "m195",
+      "role": "assistant",
+      "content": "t195"
+     },
+     {
+      "id": "m196",
+      "role": "user",
+      "content": "t196"
+     },
+     {
+      "id": "m197",
+      "role": "assistant",
+      "content": "t197"
+     },
+     {
+      "id": "m198",
+      "role": "user",
+      "content": "t198"
+     },
+     {
+      "id": "m199",
+      "role": "assistant",
+      "content": "t199"
+     },
+     {
+      "id": "m200",
+      "role": "user",
+      "content": "t200"
+     },
+     {
+      "id": "m201",
+      "role": "assistant",
+      "content": "t201"
+     },
+     {
+      "id": "m202",
+      "role": "user",
+      "content": "t202"
+     },
+     {
+      "id": "m203",
+      "role": "assistant",
+      "content": "t203"
+     },
+     {
+      "id": "m204",
+      "role": "user",
+      "content": "t204"
+     },
+     {
+      "id": "m205",
+      "role": "assistant",
+      "content": "t205"
+     },
+     {
+      "id": "m206",
+      "role": "user",
+      "content": "t206"
+     },
+     {
+      "id": "m207",
+      "role": "assistant",
+      "content": "t207"
+     },
+     {
+      "id": "m208",
+      "role": "user",
+      "content": "t208"
+     },
+     {
+      "id": "m209",
+      "role": "assistant",
+      "content": "t209"
+     },
+     {
+      "id": "m210",
+      "role": "user",
+      "content": "t210"
+     },
+     {
+      "id": "m211",
+      "role": "assistant",
+      "content": "t211"
+     },
+     {
+      "id": "m212",
+      "role": "user",
+      "content": "t212"
+     },
+     {
+      "id": "m213",
+      "role": "assistant",
+      "content": "t213"
+     },
+     {
+      "id": "m214",
+      "role": "user",
+      "content": "t214"
+     },
+     {
+      "id": "m215",
+      "role": "assistant",
+      "content": "t215"
+     },
+     {
+      "id": "m216",
+      "role": "user",
+      "content": "t216"
+     },
+     {
+      "id": "m217",
+      "role": "assistant",
+      "content": "t217"
+     },
+     {
+      "id": "m218",
+      "role": "user",
+      "content": "t218"
+     },
+     {
+      "id": "m219",
+      "role": "assistant",
+      "content": "t219"
+     },
+     {
+      "id": "m220",
+      "role": "user",
+      "content": "t220"
+     },
+     {
+      "id": "m221",
+      "role": "assistant",
+      "content": "t221"
+     },
+     {
+      "id": "m222",
+      "role": "user",
+      "content": "t222"
+     },
+     {
+      "id": "m223",
+      "role": "assistant",
+      "content": "t223"
+     },
+     {
+      "id": "m224",
+      "role": "user",
+      "content": "t224"
+     },
+     {
+      "id": "m225",
+      "role": "assistant",
+      "content": "t225"
+     },
+     {
+      "id": "m226",
+      "role": "user",
+      "content": "t226"
+     },
+     {
+      "id": "m227",
+      "role": "assistant",
+      "content": "t227"
+     },
+     {
+      "id": "m228",
+      "role": "user",
+      "content": "t228"
+     },
+     {
+      "id": "m229",
+      "role": "assistant",
+      "content": "t229"
+     },
+     {
+      "id": "m230",
+      "role": "user",
+      "content": "t230"
+     },
+     {
+      "id": "m231",
+      "role": "assistant",
+      "content": "t231"
+     },
+     {
+      "id": "m232",
+      "role": "user",
+      "content": "t232"
+     },
+     {
+      "id": "m233",
+      "role": "assistant",
+      "content": "t233"
+     },
+     {
+      "id": "m234",
+      "role": "user",
+      "content": "t234"
+     },
+     {
+      "id": "m235",
+      "role": "assistant",
+      "content": "t235"
+     },
+     {
+      "id": "m236",
+      "role": "user",
+      "content": "t236"
+     },
+     {
+      "id": "m237",
+      "role": "assistant",
+      "content": "t237"
+     },
+     {
+      "id": "m238",
+      "role": "user",
+      "content": "t238"
+     },
+     {
+      "id": "m239",
+      "role": "assistant",
+      "content": "t239"
+     },
+     {
+      "id": "m240",
+      "role": "user",
+      "content": "t240"
+     },
+     {
+      "id": "m241",
+      "role": "assistant",
+      "content": "t241"
+     },
+     {
+      "id": "m242",
+      "role": "user",
+      "content": "t242"
+     },
+     {
+      "id": "m243",
+      "role": "assistant",
+      "content": "t243"
+     },
+     {
+      "id": "m244",
+      "role": "user",
+      "content": "t244"
+     },
+     {
+      "id": "m245",
+      "role": "assistant",
+      "content": "t245"
+     },
+     {
+      "id": "m246",
+      "role": "user",
+      "content": "t246"
+     },
+     {
+      "id": "m247",
+      "role": "assistant",
+      "content": "t247"
+     },
+     {
+      "id": "m248",
+      "role": "user",
+      "content": "t248"
+     },
+     {
+      "id": "m249",
+      "role": "assistant",
+      "content": "t249"
+     },
+     {
+      "id": "m250",
+      "role": "user",
+      "content": "t250"
+     },
+     {
+      "id": "m251",
+      "role": "assistant",
+      "content": "t251"
+     },
+     {
+      "id": "m252",
+      "role": "user",
+      "content": "t252"
+     },
+     {
+      "id": "m253",
+      "role": "assistant",
+      "content": "t253"
+     },
+     {
+      "id": "m254",
+      "role": "user",
+      "content": "t254"
+     },
+     {
+      "id": "m255",
+      "role": "assistant",
+      "content": "t255"
+     },
+     {
+      "id": "m256",
+      "role": "user",
+      "content": "t256"
+     },
+     {
+      "id": "m257",
+      "role": "assistant",
+      "content": "t257"
+     },
+     {
+      "id": "m258",
+      "role": "user",
+      "content": "t258"
+     },
+     {
+      "id": "m259",
+      "role": "assistant",
+      "content": "t259"
+     },
+     {
+      "id": "m260",
+      "role": "user",
+      "content": "t260"
+     },
+     {
+      "id": "m261",
+      "role": "assistant",
+      "content": "t261"
+     },
+     {
+      "id": "m262",
+      "role": "user",
+      "content": "t262"
+     },
+     {
+      "id": "m263",
+      "role": "assistant",
+      "content": "t263"
+     },
+     {
+      "id": "m264",
+      "role": "user",
+      "content": "t264"
+     },
+     {
+      "id": "m265",
+      "role": "assistant",
+      "content": "t265"
+     },
+     {
+      "id": "m266",
+      "role": "user",
+      "content": "t266"
+     },
+     {
+      "id": "m267",
+      "role": "assistant",
+      "content": "t267"
+     },
+     {
+      "id": "m268",
+      "role": "user",
+      "content": "t268"
+     },
+     {
+      "id": "m269",
+      "role": "assistant",
+      "content": "t269"
+     },
+     {
+      "id": "m270",
+      "role": "user",
+      "content": "t270"
+     },
+     {
+      "id": "m271",
+      "role": "assistant",
+      "content": "t271"
+     },
+     {
+      "id": "m272",
+      "role": "user",
+      "content": "t272"
+     },
+     {
+      "id": "m273",
+      "role": "assistant",
+      "content": "t273"
+     },
+     {
+      "id": "m274",
+      "role": "user",
+      "content": "t274"
+     },
+     {
+      "id": "m275",
+      "role": "assistant",
+      "content": "t275"
+     },
+     {
+      "id": "m276",
+      "role": "user",
+      "content": "t276"
+     },
+     {
+      "id": "m277",
+      "role": "assistant",
+      "content": "t277"
+     },
+     {
+      "id": "m278",
+      "role": "user",
+      "content": "t278"
+     },
+     {
+      "id": "m279",
+      "role": "assistant",
+      "content": "t279"
+     },
+     {
+      "id": "m280",
+      "role": "user",
+      "content": "t280"
+     },
+     {
+      "id": "m281",
+      "role": "assistant",
+      "content": "t281"
+     },
+     {
+      "id": "m282",
+      "role": "user",
+      "content": "t282"
+     },
+     {
+      "id": "m283",
+      "role": "assistant",
+      "content": "t283"
+     },
+     {
+      "id": "m284",
+      "role": "user",
+      "content": "t284"
+     },
+     {
+      "id": "m285",
+      "role": "assistant",
+      "content": "t285"
+     },
+     {
+      "id": "m286",
+      "role": "user",
+      "content": "t286"
+     },
+     {
+      "id": "m287",
+      "role": "assistant",
+      "content": "t287"
+     },
+     {
+      "id": "m288",
+      "role": "user",
+      "content": "t288"
+     },
+     {
+      "id": "m289",
+      "role": "assistant",
+      "content": "t289"
+     },
+     {
+      "id": "m290",
+      "role": "user",
+      "content": "t290"
+     },
+     {
+      "id": "m291",
+      "role": "assistant",
+      "content": "t291"
+     },
+     {
+      "id": "m292",
+      "role": "user",
+      "content": "t292"
+     },
+     {
+      "id": "m293",
+      "role": "assistant",
+      "content": "t293"
+     },
+     {
+      "id": "m294",
+      "role": "user",
+      "content": "t294"
+     },
+     {
+      "id": "m295",
+      "role": "assistant",
+      "content": "t295"
+     },
+     {
+      "id": "m296",
+      "role": "user",
+      "content": "t296"
+     },
+     {
+      "id": "m297",
+      "role": "assistant",
+      "content": "t297"
+     },
+     {
+      "id": "m298",
+      "role": "user",
+      "content": "t298"
+     },
+     {
+      "id": "m299",
+      "role": "assistant",
+      "content": "t299"
+     },
+     {
+      "id": "m300",
+      "role": "user",
+      "content": "t300"
+     },
+     {
+      "id": "m301",
+      "role": "assistant",
+      "content": "t301"
+     },
+     {
+      "id": "m302",
+      "role": "user",
+      "content": "t302"
+     }
+    ],
+    "omittedMessages": 3
+   }
+  },
+  {
+   "channel": "session:get",
+   "args": [
+    "heavy"
+   ],
+   "calls": [
+    [
+     "session:get",
+     [
+      "heavy"
+     ]
+    ]
+   ],
+   "result": {
+    "id": "heavy",
+    "messages": [
+     {
+      "id": "a",
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "c1",
+        "name": "write_file",
+        "input": {
+         "path": "x",
+         "content": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+         "n": 3
+        },
+        "truncated": true
+       },
+       {
+        "id": "c2",
+        "name": "bash",
+        "input": {
+         "command": "ls"
+        }
+       },
+       {
+        "id": "c3",
+        "name": "raw",
+        "input": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+        "truncated": true
+       },
+       {
+        "id": "c4",
+        "name": "none"
+       }
+      ]
+     },
+     {
+      "id": "t1",
+      "role": "tool",
+      "content": "",
+      "toolResult": {
+       "toolCallId": "c1",
+       "output": "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo",
+       "omittedImages": 2,
+       "outputChars": 4050,
+       "truncated": true
+      }
+     },
+     {
+      "id": "t2",
+      "role": "tool",
+      "content": "",
+      "toolResult": {
+       "toolCallId": "c2",
+       "output": "ok"
+      }
+     },
+     {
+      "id": "t3",
+      "role": "tool",
+      "content": "",
+      "toolResult": {
+       "toolCallId": "c3",
+       "output": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+       "outputChars": 4005,
+       "truncated": true
+      }
+     },
+     {
+      "id": "t4",
+      "role": "tool",
+      "content": "",
+      "toolResult": {
+       "toolCallId": "c4",
+       "output": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      }
+     }
+    ]
+   }
   }
  ]
 }

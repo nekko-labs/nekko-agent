@@ -90,7 +90,18 @@ data class ToolCall(val id: String, val name: String, val input: JsonObject) {
     }
 }
 
-data class ToolResult(val toolCallId: String, val output: String, val isError: Boolean) {
+/**
+ * A tool's result. [outputChars] is the original length when the computer cut
+ * the output for the phone (`truncated`), [omittedImages] the screenshots it
+ * left out (see PHONE_SESSION_VIEW in packages/shared/src/phone-access.ts).
+ */
+data class ToolResult(
+    val toolCallId: String,
+    val output: String,
+    val isError: Boolean,
+    val outputChars: Int? = null,
+    val omittedImages: Int = 0,
+) {
     companion object {
         fun from(e: JsonElement?): ToolResult? {
             val o = e.obj() ?: return null
@@ -99,7 +110,13 @@ data class ToolResult(val toolCallId: String, val output: String, val isError: B
                 null, JsonNull -> ""
                 else -> v.toString()
             }
-            return ToolResult(o.str("toolCallId") ?: return null, output, o.bool("isError"))
+            return ToolResult(
+                o.str("toolCallId") ?: return null,
+                output,
+                o.bool("isError"),
+                outputChars = o.long("outputChars")?.toInt()?.takeIf { o.bool("truncated") && it > output.length },
+                omittedImages = o.long("omittedImages")?.toInt()?.coerceAtLeast(0) ?: 0,
+            )
         }
     }
 }
@@ -143,6 +160,8 @@ data class Session(
     val modelId: String?,
     val workspaceId: String?,
     val messages: List<ChatMessage>,
+    /** Older messages the computer kept back from the phone (only the newest are sent). */
+    val omittedMessages: Int = 0,
     val queue: List<String>,
     val updatedAt: Long,
 ) {
@@ -156,6 +175,7 @@ data class Session(
                 modelId = o.str("modelId"),
                 workspaceId = o.str("workspaceId"),
                 messages = o["messages"].arr()?.mapNotNull { ChatMessage.from(it) } ?: emptyList(),
+                omittedMessages = o.long("omittedMessages")?.toInt()?.coerceAtLeast(0) ?: 0,
                 // Queue entries may be plain strings or {text, images, skill}; the phone shows text.
                 queue = o["queue"].arr()?.mapNotNull { q ->
                     (q as? JsonPrimitive)?.contentOrNull ?: q.obj()?.str("text")

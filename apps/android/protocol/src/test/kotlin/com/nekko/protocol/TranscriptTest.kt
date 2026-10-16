@@ -110,6 +110,42 @@ class TranscriptTest {
 
     @Test fun `long tool output is clipped`() {
         val c = Transcript.clip("x".repeat(4010))
-        assertTrue(c.endsWith("(10 more characters)"))
+        assertTrue(c.endsWith("(10 more characters, on the computer)"))
+    }
+
+    @Test fun `output the computer cut for the phone says how much is on the computer`() {
+        // The computer sent 4000 of 9000 characters and left out two screenshots.
+        val c = Transcript.clip("o".repeat(4000), full = 9000, images = 2)
+        assertTrue(c.startsWith("o".repeat(4000) + "\n"))
+        assertTrue(c.contains("… (5000 more characters, on the computer)"))
+        assertTrue(c.endsWith("2 images, on the computer"))
+        assertEquals("ok\n1 image, on the computer", Transcript.clip("ok", images = 1))
+        assertEquals("short", Transcript.clip("short"))
+        // Shown apart from the output, so a 40-line limit never hides them.
+        assertEquals("o".repeat(4000) to listOf("… (5000 more characters, on the computer)", "2 images, on the computer"), Transcript.splitNotes(c))
+        assertEquals("plain\n2 images" to emptyList<String>(), Transcript.splitNotes("plain\n2 images"))
+    }
+
+    @Test fun `a phone-sized session reads the cut and the left-out parts`() {
+        val s = Session.from(WireJson.parseToJsonElement("""
+            {"id":"s1","title":"T","omittedMessages":120,"messages":[
+              {"id":"a","role":"assistant","content":"","toolCalls":[{"id":"c1","name":"bash","input":{"command":"ls"}}]},
+              {"id":"t","role":"tool","content":"","toolResult":{"toolCallId":"c1","output":"abc","truncated":true,"outputChars":9000,"omittedImages":3}}
+            ]}
+        """.trimIndent()))!!
+        assertEquals(120, s.omittedMessages)
+        val r = s.messages[1].toolResult!!
+        assertEquals(9000, r.outputChars)
+        assertEquals(3, r.omittedImages)
+        val tool = Transcript.fromMessages(s.messages).single() as Block.Tool
+        assertTrue(tool.output!!.contains("8997 more characters, on the computer"))
+        assertTrue(tool.output!!.endsWith("3 images, on the computer"))
+    }
+
+    @Test fun `a full session from an older computer reads as before`() {
+        val s = Session.from(WireJson.parseToJsonElement("""{"id":"s1","messages":[]}"""))!!
+        assertEquals(0, s.omittedMessages)
+        val r = ToolResult.from(WireJson.parseToJsonElement("""{"toolCallId":"c","output":"x","outputChars":99}"""))!!
+        assertEquals(null, r.outputChars) // only when the computer says it cut it
     }
 }

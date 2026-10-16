@@ -90,6 +90,8 @@ describe('relay agent: what a phone may do', () => {
     voice: { enabled: true, language: 'en', modelPath: '/m.bin' },
   };
 
+  const sessions: Record<string, unknown> = {};
+
   async function phone() {
     const saved: unknown[] = [];
     const wipe = vi.fn();
@@ -101,6 +103,7 @@ describe('relay agent: what a phone may do', () => {
       },
       wipeAllData: wipe,
       listSessionSummaries: () => [{ id: 's1' }],
+      getSession: (sid: string) => sessions[sid] ?? null,
     };
     const agent = await welcomedAgent(host);
     let id = 0;
@@ -123,6 +126,35 @@ describe('relay agent: what a phone may do', () => {
       expect((await call(channel)).error).toBe(`Not allowed from a paired phone (channel-denied): ${channel}`);
     }
     expect(wipe).not.toHaveBeenCalled();
+    handle.stop();
+  });
+
+  it('opens a chat too large for one relay frame, sending its newest part', async () => {
+    // 400 tool results with a 30 KB screenshot each: ~16 MB as stored, far over the relay's frame.
+    sessions.huge = {
+      id: 'huge',
+      title: 'Long agent run',
+      messages: Array.from({ length: 400 }, (_, i) => ({
+        id: `t${i}`, role: 'tool', content: '', toolResult: { toolCallId: `c${i}`, output: 'o'.repeat(9000), images: [{ data: 'A'.repeat(30_000) }] },
+      })),
+    };
+    const { call, handle } = await phone();
+    const res = await call('session:get', 'huge');
+    expect(res.error).toBeUndefined();
+    expect(res.result.omittedMessages).toBe(100);
+    expect(res.result.messages).toHaveLength(300);
+    expect(res.result.messages[0].toolResult).toMatchObject({ omittedImages: 1, truncated: true, outputChars: 9000 });
+    expect(res.result.messages[0].toolResult.images).toBeUndefined();
+    handle.stop();
+  });
+
+  it('answers a reply too large for the relay with an error instead of silence', async () => {
+    const { call, handle } = await phone();
+    // Not a session object, so nothing trims it: ~9.6 MB as JSON, over the frame limit once sealed.
+    sessions.raw = Array.from({ length: 1200 }, (_, i) => ({ id: `s${i}`, title: 'x'.repeat(8000) }));
+    const res = await call('session:get', 'raw');
+    expect(res.result).toBeUndefined();
+    expect(res.error).toMatch(/^This reply is too large to send to a phone \(\d+\.\d MB\)\. Open it on the computer\.$/);
     handle.stop();
   });
 
