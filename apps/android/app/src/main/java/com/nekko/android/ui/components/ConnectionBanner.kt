@@ -29,6 +29,9 @@ import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.DenyReason
 import com.nekko.protocol.Pairing
 import com.nekko.protocol.RelayHint
+import com.nekko.protocol.Tailnet
+import com.nekko.android.connection.TailnetStatus
+import androidx.compose.runtime.remember
 import com.nekko.android.BuildConfig
 import com.nekko.protocol.RelayState
 
@@ -54,10 +57,15 @@ fun ConnectionBanner(s: ComputersState, onPair: () -> Unit, onComputers: () -> U
     val denied = s.denied != null || s.conn == RelayState.DENIED
     // An address the phone can never reach: say why instead of "Connecting…" forever.
     val hint = RelayHint.problem(active.relayUrl, BuildConfig.DEBUG)
+    // A tailnet relay with Tailscale off on this phone: say so (re-read on each state change).
+    val tailnetHint = remember(s.conn, active.relayUrl) {
+        if (s.conn == RelayState.ONLINE) null else Tailnet.hint(active.relayUrl, TailnetStatus.phoneOnTailnet(), active.name)
+    }
     val (tone, line) = when {
         denied -> Tone.DANGER to deniedCopy(s.denied)
         s.conn == RelayState.ONLINE -> Tone.SUCCESS to "${active.name} is online"
         hint != null -> Tone.DANGER to RelayHint.message(hint, active.name)
+        tailnetHint != null -> Tone.WARNING to tailnetHint
         s.conn == RelayState.OFFLINE -> Tone.WARNING to "${active.name} is offline. Open Nekko Agent on it."
         else -> Tone.WARNING to "Connecting to ${active.name}…"
     }
