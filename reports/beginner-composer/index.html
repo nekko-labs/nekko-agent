@@ -1,0 +1,786 @@
+<title>Beginner Composer Prototypes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a spec sheet. One focused-view window (the real clean-start slot in ChatPane) per prototype,
+   with design notes under it. Tokens mirror apps/desktop/src/renderer/styles.css; glass + prism tokens are new. */
+:root, .scheme-light {
+  --field: #eeedf5;
+  --paper: #fbfbfd;
+  --surface: #ffffff;
+  --surface-2: #f2f2f7;
+  --ink: #17171d;
+  --ink-soft: #52525e;
+  --ink-faint: #8a8a97;
+  --line: #e8e8ef;
+  --accent: #6d5efc;
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
+  --success: #16a34a;
+  --warning: #d97706;
+  /* glass */
+  --glass: rgba(255, 255, 255, 0.58);
+  --glass-strong: rgba(255, 255, 255, 0.78);
+  --glass-edge: rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 1px 0 rgba(255,255,255,.8) inset, 0 18px 50px -20px rgba(60, 50, 140, 0.35), 0 2px 8px rgba(30, 20, 80, 0.06);
+  --mark: color-mix(in srgb, var(--accent) 16%, transparent);
+  /* prism + atmosphere */
+  --p1: #7c6cff; --p2: #43b5ff; --p3: #3fd6b4; --p4: #ffbe5c; --p5: #ff7eb6;
+  --orb-a: rgba(124, 108, 255, 0.55);
+  --orb-b: rgba(67, 181, 255, 0.45);
+  --orb-c: rgba(255, 126, 182, 0.40);
+  --orb-d: rgba(255, 190, 92, 0.38);
+  --cloud: rgba(255, 255, 255, 0.95);
+  --sky-top: #e9e6ff;
+  --sky-bottom: #fdf6ff;
+  --beam: rgba(124, 108, 255, 0.16);
+  --cat: #f2994a; --cat-dark: #2b2233; --cat-cheek: #ff9fb2;
+  --font-sans: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --field: #050508; --paper: #0c0c11; --surface: #16161c; --surface-2: #20202a;
+    --ink: #eceaf3; --ink-soft: #a3a1b0; --ink-faint: #6b6b78; --line: #26262f;
+    --accent: #8b7dff; --accent-ink: #0c0c11; --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+    --success: #4ade80; --warning: #fbbf24;
+    --glass: rgba(26, 24, 38, 0.52); --glass-strong: rgba(30, 28, 44, 0.78); --glass-edge: rgba(255, 255, 255, 0.10);
+    --glass-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 24px 60px -24px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,.03);
+    --mark: color-mix(in srgb, var(--accent) 26%, transparent);
+    --p1: #8b7dff; --p2: #4fb6ff; --p3: #46e0bd; --p4: #ffc46b; --p5: #ff86bd;
+    --orb-a: rgba(109, 94, 252, 0.50); --orb-b: rgba(30, 136, 229, 0.38); --orb-c: rgba(194, 24, 91, 0.32); --orb-d: rgba(255, 143, 61, 0.22);
+    --cloud: rgba(150, 140, 220, 0.20); --sky-top: #0d0b1c; --sky-bottom: #120f22; --beam: rgba(170, 160, 255, 0.16);
+    --cat: #f2994a; --cat-dark: #1b1622; --cat-cheek: #ff8fa6;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"], .scheme-dark {
+  --field: #050508; --paper: #0c0c11; --surface: #16161c; --surface-2: #20202a;
+  --ink: #eceaf3; --ink-soft: #a3a1b0; --ink-faint: #6b6b78; --line: #26262f;
+  --accent: #8b7dff; --accent-ink: #0c0c11; --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  --success: #4ade80; --warning: #fbbf24;
+  --glass: rgba(26, 24, 38, 0.52); --glass-strong: rgba(30, 28, 44, 0.78); --glass-edge: rgba(255, 255, 255, 0.10);
+  --glass-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 24px 60px -24px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,.03);
+  --mark: color-mix(in srgb, var(--accent) 26%, transparent);
+  --p1: #8b7dff; --p2: #4fb6ff; --p3: #46e0bd; --p4: #ffc46b; --p5: #ff86bd;
+  --orb-a: rgba(109, 94, 252, 0.50); --orb-b: rgba(30, 136, 229, 0.38); --orb-c: rgba(194, 24, 91, 0.32); --orb-d: rgba(255, 143, 61, 0.22);
+  --cloud: rgba(150, 140, 220, 0.20); --sky-top: #0d0b1c; --sky-bottom: #120f22; --beam: rgba(170, 160, 255, 0.16);
+  --cat: #f2994a; --cat-dark: #1b1622; --cat-cheek: #ff8fa6;
+  color-scheme: dark;
+}
+.scheme-light, .scheme-dark { color: var(--ink); }
+
+@property --spin { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+* { box-sizing: border-box; }
+body { background: var(--field); color: var(--ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.page { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 22px; }
+
+/* ---------- page header ---------- */
+.head { display: grid; gap: 6px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+.head h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
+.head p { margin: 0; color: var(--ink-soft); max-width: 70ch; }
+.head code, .notes code, td code { font-family: var(--font-mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; padding: 8px; margin: 0 -8px; border-radius: 14px; background: color-mix(in srgb, var(--field) 82%, transparent); backdrop-filter: blur(14px); }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.tab { border: 0; background: transparent; border-radius: 8px; padding: 6px 12px; color: var(--ink-soft); font-weight: 500; display: inline-flex; gap: 8px; align-items: center; }
+.tab b { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--ink-faint); }
+.tab[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); }
+.tab[aria-selected="true"] b { color: var(--accent); }
+.seg { display: flex; gap: 2px; padding: 3px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.seg button { border: 0; background: transparent; border-radius: 7px; padding: 4px 10px; font-size: 12px; color: var(--ink-soft); }
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- stage / app window ---------- */
+.stage { display: grid; gap: 14px; grid-template-columns: 1fr; }
+.stage.split { grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); }
+.win { position: relative; background: var(--paper); color: var(--ink); border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px var(--line), 0 30px 60px -40px rgba(0,0,0,.45); corner-shape: squircle; min-width: 0; }
+.wbar { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--paper); font-size: 12px; color: var(--ink-soft); position: relative; z-index: 3; }
+.wbar .title { color: var(--ink); font-weight: 600; }
+.wbar .pill { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+.wbar .grow { flex: 1; }
+.wbar .scheme { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-faint); }
+.bm { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; }
+.bm .sw { width: 26px; height: 15px; border-radius: 999px; background: var(--accent); position: relative; }
+.bm .sw::after { content: ""; position: absolute; top: 2px; right: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent-ink); }
+.wbody { position: relative; height: clamp(600px, 74vh, 700px); overflow: hidden; isolation: isolate; container-type: inline-size; }
+.wtoast { position: absolute; left: 50%; bottom: 18px; transform: translate(-50%, 12px); opacity: 0; transition: .25s; background: var(--ink); color: var(--paper); font-size: 12.5px; padding: 8px 14px; border-radius: 10px; z-index: 30; pointer-events: none; white-space: nowrap; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; }
+.wtoast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- shared glass + composer pieces ---------- */
+.center { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px 22px 40px; overflow-y: auto; }
+.glass { position: relative; background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%); border-radius: 22px; box-shadow: var(--glass-shadow); corner-shape: squircle; }
+.glass::before { /* hairline glass edge */ content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: linear-gradient(160deg, var(--glass-edge), transparent 45%, var(--glass-edge)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
+.prism-edge::after { /* refracted ring, brightens on focus */ content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px; background: conic-gradient(from var(--spin), var(--p1), var(--p2), var(--p3), var(--p4), var(--p5), var(--p1)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: .35; transition: opacity .3s; pointer-events: none; animation: spin 9s linear infinite; }
+.prism-edge:focus-within::after { opacity: 1; }
+@keyframes spin { to { --spin: 360deg; } }
+
+.composer { width: min(680px, 100%); }
+.field { position: relative; }
+.field textarea, .field .mirror { display: block; width: 100%; margin: 0; padding: 16px 18px 6px; font: 15px/1.55 var(--font-sans); letter-spacing: 0; white-space: pre-wrap; overflow-wrap: break-word; border: 0; min-height: 76px; }
+.field textarea { position: relative; z-index: 1; background: transparent; resize: none; outline: none; overflow: hidden; color: var(--ink); caret-color: var(--accent); }
+.field textarea::placeholder { color: var(--ink-faint); }
+.field .mirror { position: absolute; inset: 0; color: transparent; pointer-events: none; overflow: hidden; }
+.field mark { color: transparent; background: var(--mark); border-radius: 5px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
+.cbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px 10px; flex-wrap: wrap; }
+.cbar .grow { flex: 1; }
+.ib { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; border: 0; background: transparent; color: var(--ink-soft); }
+.ib:hover { background: var(--accent-soft); color: var(--ink); }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 999px; font-size: 12px; color: var(--ink-soft); background: color-mix(in srgb, var(--surface) 55%, transparent); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); white-space: nowrap; }
+.chip svg { width: 12px; height: 12px; }
+.send { width: 34px; height: 34px; border-radius: 11px; border: 0; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--p1), var(--p2)); box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--p1) 70%, transparent); }
+.send svg { width: 16px; height: 16px; }
+.send:disabled { opacity: .35; cursor: default; box-shadow: none; }
+.kbd { font-family: var(--font-mono); font-size: 10.5px; padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; color: var(--ink-soft); background: var(--surface); }
+.hintline { font-size: 12px; color: var(--ink-faint); display: flex; align-items: center; gap: 6px; padding: 0 18px; min-height: 18px; }
+.grad { background: linear-gradient(90deg, var(--p1), var(--p2) 45%, var(--p5)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.foot { font-size: 12px; color: var(--ink-faint); text-align: center; max-width: 60ch; }
+.foot b { color: var(--ink-soft); font-weight: 500; }
+
+/* ---------- A · Prism ---------- */
+.pv-prism { position: absolute; inset: 0; background: var(--paper); }
+.aura { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.aura i { position: absolute; border-radius: 50%; filter: blur(60px); will-change: transform; }
+.aura .o1 { width: 46%; aspect-ratio: 1; left: 12%; top: 18%; background: radial-gradient(circle, var(--orb-a), transparent 65%); animation: driftA 22s ease-in-out infinite alternate; }
+.aura .o2 { width: 40%; aspect-ratio: 1; right: 8%; top: 8%; background: radial-gradient(circle, var(--orb-b), transparent 65%); animation: driftB 26s ease-in-out infinite alternate; }
+.aura .o3 { width: 38%; aspect-ratio: 1; right: 22%; bottom: -6%; background: radial-gradient(circle, var(--orb-c), transparent 65%); animation: driftA 30s ease-in-out infinite alternate-reverse; }
+.aura .o4 { width: 30%; aspect-ratio: 1; left: 4%; bottom: 0; background: radial-gradient(circle, var(--orb-d), transparent 65%); animation: driftB 24s ease-in-out infinite alternate-reverse; }
+@keyframes driftA { to { transform: translate3d(12%, 8%, 0) scale(1.12); } }
+@keyframes driftB { to { transform: translate3d(-10%, 10%, 0) scale(.9); } }
+.hello { text-align: center; display: grid; gap: 4px; }
+.hello .hi { font-size: 30px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; }
+.hello .sub { font-size: 30px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; color: var(--ink-faint); text-wrap: balance; }
+.starters { width: min(680px, 100%); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.starter { text-align: left; border: 0; padding: 12px 12px 14px; border-radius: 16px; display: grid; gap: 6px; align-content: start; background: var(--glass); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 0 0 1px var(--glass-edge) inset; transition: transform .2s, box-shadow .2s; min-height: 108px; }
+.starter:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent) inset, 0 14px 30px -18px color-mix(in srgb, var(--p1) 60%, transparent); }
+.starter .ic { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: #fff; }
+.starter .ic svg { width: 14px; height: 14px; }
+.starter strong { font-size: 13px; font-weight: 600; }
+.starter span { font-size: 12px; color: var(--ink-soft); line-height: 1.4; }
+.starter[aria-pressed="true"] { box-shadow: 0 0 0 1.5px var(--accent) inset; }
+
+/* ---------- B · Cloud sentence builder ---------- */
+.pv-cloud { position: absolute; inset: 0; background: linear-gradient(180deg, var(--sky-top), var(--sky-bottom)); }
+.clouds { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.clouds i { position: absolute; background: var(--cloud); border-radius: 999px; filter: blur(18px); animation: float 40s linear infinite; }
+.clouds i:nth-child(1) { width: 380px; height: 120px; top: 12%; left: -10%; animation-duration: 55s; }
+.clouds i:nth-child(2) { width: 260px; height: 90px; top: 30%; left: 55%; animation-duration: 70s; animation-delay: -20s; }
+.clouds i:nth-child(3) { width: 520px; height: 160px; bottom: -4%; left: 10%; animation-duration: 80s; animation-delay: -35s; }
+.clouds i:nth-child(4) { width: 300px; height: 110px; bottom: 18%; right: -8%; animation-duration: 60s; animation-delay: -10s; }
+@keyframes float { from { transform: translateX(-12%); } 50% { transform: translateX(12%); } to { transform: translateX(-12%); } }
+.builder { width: min(700px, 100%); padding: 22px 24px 8px; }
+.sentence { font-size: 21px; line-height: 2.15; letter-spacing: -0.01em; font-weight: 500; color: var(--ink-soft); text-wrap: pretty; }
+.slot { display: inline-flex; align-items: center; vertical-align: baseline; border-radius: 12px; background: var(--glass-strong); color: var(--ink); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent) inset, 0 4px 14px -8px color-mix(in srgb, var(--p1) 60%, transparent); padding: 0 4px; margin: 0 1px; line-height: 1.4; }
+.slot select, .slot input { border: 0; background: transparent; font-size: 19px; font-weight: 600; color: var(--accent); padding: 3px 6px; outline: none; border-radius: 9px; }
+.slot select { field-sizing: content; -webkit-appearance: none; appearance: none; padding-right: 22px; background-image: linear-gradient(45deg, transparent 50%, var(--accent) 50%), linear-gradient(135deg, var(--accent) 50%, transparent 50%); background-position: right 10px top 55%, right 5px top 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+.slot input { field-sizing: content; min-width: 7ch; max-width: 100%; }
+.slot input::placeholder { color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.slot:focus-within { box-shadow: 0 0 0 2px var(--accent) inset; }
+.addons { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 0 14px; }
+.addon { border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 12.5px; color: var(--ink-soft); }
+.addon[aria-pressed="true"] { border-style: solid; background: var(--accent-soft); color: var(--ink); }
+.preview { border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); padding: 12px 0 4px; display: grid; gap: 6px; }
+.preview .lbl { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+.preview .txt { font-size: 14px; color: var(--ink); line-height: 1.6; }
+.preview .txt em { font-style: normal; color: var(--accent); font-weight: 500; }
+.linkbtn { border: 0; background: none; color: var(--ink-soft); font-size: 12.5px; text-decoration: underline; text-underline-offset: 3px; padding: 4px; }
+
+/* ---------- C · Coach ---------- */
+.pv-coach { position: absolute; inset: 0; background: radial-gradient(70% 60% at 50% 40%, var(--accent-soft), transparent 70%), var(--paper); }
+.coach-grid { width: min(860px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 16px; align-items: start; }
+.ringed { position: relative; border-radius: 24px; padding: 2px; background: conic-gradient(from -90deg, var(--p1), var(--p2) calc(var(--fill) * .3), var(--p3) calc(var(--fill) * .6), var(--p4) var(--fill), color-mix(in srgb, var(--line) 90%, transparent) var(--fill)); transition: --fill .5s; corner-shape: squircle; }
+@property --fill { syntax: '<percentage>'; initial-value: 0%; inherits: true; }
+.ringed > .glass { border-radius: 22px; background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.facets { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 14px 4px; }
+.facet { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px 3px 6px; font-size: 12px; border: 1px solid var(--line); background: transparent; color: var(--ink-soft); }
+.facet .dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--ink-faint); display: grid; place-items: center; }
+.facet.ok { color: var(--ink); border-color: color-mix(in srgb, var(--success) 45%, transparent); background: color-mix(in srgb, var(--success) 10%, transparent); }
+.facet.ok .dot { border-color: var(--success); background: var(--success); }
+.facet.ok .dot::after { content: ""; width: 6px; height: 3px; border-left: 1.5px solid var(--paper); border-bottom: 1.5px solid var(--paper); transform: rotate(-45deg) translate(1px, -1px); }
+.coach { padding: 14px 14px 12px; display: grid; gap: 10px; }
+.coach h4 { margin: 0; font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.score { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+.meter { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.meter i { display: block; height: 100%; width: var(--fill); background: linear-gradient(90deg, var(--p1), var(--p2), var(--p3), var(--p4)); transition: width .5s; }
+.tip { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
+.tip strong { color: var(--ink); font-weight: 600; }
+.tip .eg { display: block; margin-top: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 6px 8px; }
+.coach .why { font-size: 11.5px; color: var(--ink-faint); border-top: 1px solid var(--line); padding-top: 8px; }
+
+/* ---------- D · Guided steps ---------- */
+.pv-guide { position: absolute; inset: 0; background: var(--paper); }
+.beams { position: absolute; inset: -20% -10% 0; z-index: 0; pointer-events: none; background:
+  conic-gradient(from 200deg at 50% -10%, transparent 0deg, var(--beam) 8deg, transparent 18deg, transparent 40deg, color-mix(in srgb, var(--p2) 22%, transparent) 46deg, transparent 56deg, transparent 80deg, color-mix(in srgb, var(--p5) 18%, transparent) 86deg, transparent 98deg, transparent 360deg);
+  filter: blur(14px); opacity: .9; animation: sway 18s ease-in-out infinite alternate; transform-origin: 50% 0; }
+.beams::after { content: ""; position: absolute; inset: 0; background: radial-gradient(50% 40% at 50% 70%, color-mix(in srgb, var(--p1) 18%, transparent), transparent 70%); }
+@keyframes sway { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+.trail { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; min-height: 28px; }
+.crumb { border: 0; border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--ink-soft); background: var(--glass); box-shadow: 0 0 0 1px var(--glass-edge) inset; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crumb:hover { color: var(--ink); }
+.ask { width: min(620px, 100%); padding: 20px; display: grid; gap: 14px; animation: rise .35s cubic-bezier(.2,.8,.2,1); }
+@keyframes rise { from { transform: translateY(14px) scale(.98); opacity: .2; } }
+.who { display: flex; gap: 12px; align-items: center; }
+.who svg { width: 40px; height: 36px; flex: none; image-rendering: pixelated; }
+.who .q { font-size: 18px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.3; }
+.who .s { font-size: 12.5px; color: var(--ink-faint); }
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.opt { text-align: left; border: 0; border-radius: 14px; padding: 11px 12px; display: grid; gap: 3px; background: color-mix(in srgb, var(--surface) 60%, transparent); box-shadow: 0 0 0 1px var(--line) inset; transition: box-shadow .15s, transform .15s; }
+.opt:hover { box-shadow: 0 0 0 1.5px var(--accent) inset; transform: translateY(-1px); }
+.opt strong { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.opt span { font-size: 12px; color: var(--ink-soft); }
+.rec { font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 1px 6px; }
+.one { display: grid; gap: 8px; }
+.one input { width: 100%; border: 0; border-radius: 12px; padding: 12px 14px; font-size: 15px; background: color-mix(in srgb, var(--surface) 70%, transparent); box-shadow: 0 0 0 1px var(--line) inset; outline: none; }
+.one input:focus { box-shadow: 0 0 0 2px var(--accent) inset; }
+.row { display: flex; gap: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.btn { border: 0; border-radius: 10px; padding: 8px 14px; font-weight: 600; font-size: 13px; background: var(--ink); color: var(--paper); }
+.btn.ghost { background: transparent; color: var(--ink-soft); font-weight: 500; }
+.dots { display: flex; gap: 6px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.dots i.on { background: var(--accent); width: 18px; border-radius: 999px; }
+
+/* ---------- notes ---------- */
+.notes { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; min-width: 0; }
+.card h2 { margin: 0 0 6px; font-size: 18px; letter-spacing: -0.01em; }
+.card h3 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-faint); }
+.card p { margin: 0 0 8px; color: var(--ink-soft); max-width: 68ch; }
+.card ul { margin: 0; padding-left: 18px; color: var(--ink-soft); display: grid; gap: 4px; }
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pc h3.pro { color: var(--success); }
+.pc h3.con { color: var(--warning); }
+pre.code { margin: 6px 0 0; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font: 12px/1.6 var(--font-mono); color: var(--ink-soft); overflow-x: auto; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 640px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); font-weight: 600; }
+td { color: var(--ink-soft); }
+td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.lvl { font-family: var(--font-mono); letter-spacing: 2px; color: var(--accent); }
+.lvl s { text-decoration: none; color: var(--line); }
+
+/* Inside a window, adapt to the window's width (half-width in Light + Dark), not the viewport's. */
+@container (max-width: 760px) {
+  .coach-grid { grid-template-columns: 1fr; }
+  .coach-grid .coach { display: grid; grid-template-columns: 1fr; }
+}
+@container (max-width: 640px) {
+  .starters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .starter { min-height: 0; }
+  .hello .hi, .hello .sub { font-size: 24px; }
+  .sentence { font-size: 18px; }
+  .slot select, .slot input { font-size: 16px; }
+}
+@container (max-width: 480px) {
+  .opts { grid-template-columns: 1fr; }
+}
+@media (max-width: 860px) {
+  .notes { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .toolbar { position: static; }
+  .pc { grid-template-columns: 1fr; }
+  .wbar .pill, .wbar .scheme { display: none; }
+  .wbody { height: 720px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="page">
+  <header class="head">
+    <div class="eyebrow">Nekko Agent · Focused view · clean start</div>
+    <h1>Beginner composer, four ways</h1>
+    <p>Four takes on the empty focused-view chat for someone writing their first prompt. Each one replaces what <code>ChatPane</code> shows while <code>cleanStart</code> is on, and goes away when the first message is sent. Everything here is clickable. Switch the theme, or show light and dark side by side.</p>
+  </header>
+
+  <div class="toolbar">
+    <div class="tabs" role="tablist" aria-label="Prototype">
+      <button class="tab" role="tab" id="tab-prism" data-p="prism"><b>A</b>Prism starters</button>
+      <button class="tab" role="tab" id="tab-cloud" data-p="cloud"><b>B</b>Sentence builder</button>
+      <button class="tab" role="tab" id="tab-coach" data-p="coach"><b>C</b>Prompt coach</button>
+      <button class="tab" role="tab" id="tab-guide" data-p="guide"><b>D</b>Guided steps</button>
+    </div>
+    <div class="controls">
+      <div class="seg" aria-label="Theme">
+        <button data-theme-set="system" aria-pressed="true">System</button>
+        <button data-theme-set="light" aria-pressed="false">Light</button>
+        <button data-theme-set="dark" aria-pressed="false">Dark</button>
+        <button data-theme-set="split" aria-pressed="false">Light + Dark</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="stage" id="stage" aria-live="polite"></section>
+  <section class="notes" id="notes"></section>
+
+  <section class="card">
+    <h2>Side by side</h2>
+    <p>How the four compare for a first-time user, and what each costs to build into the existing clean-start slot.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Prototype</th><th>Teaches prompting</th><th>Time to first send</th><th>Friction for experts</th><th>Build effort</th><th>Render cost</th><th>Best used as</th></tr></thead>
+        <tbody>
+          <tr><td>A · Prism starters</td><td><span class="lvl">●●<s>●●</s></span> by example</td><td>~5 s (pick a card, fill one blank)</td><td>None. It is a normal composer</td><td><span class="lvl">●<s>●●●</s></span> S</td><td>Medium (blur over moving orbs)</td><td>The default clean-start look for everyone</td></tr>
+          <tr><td>B · Sentence builder</td><td><span class="lvl">●●●<s>●</s></span> structure</td><td>~10 s</td><td>High. Experts will hit “Write it myself”</td><td><span class="lvl">●●●<s>●</s></span> M</td><td>Low</td><td>An opt-in “Help me write it” view</td></tr>
+          <tr><td>C · Prompt coach</td><td><span class="lvl">●●●●</span> live feedback</td><td>~20 s, but the prompt is better</td><td>Low if collapsible</td><td><span class="lvl">●●<s>●●</s></span> S–M</td><td>Low (heuristics run on the deferred draft)</td><td>A layer on top of A, on while Beginner mode is on</td></tr>
+          <tr><td>D · Guided steps</td><td><span class="lvl">●●●<s>●</s></span> by interview</td><td>~25 s (3 questions)</td><td>Very high</td><td><span class="lvl">●●●<s>●</s></span> M</td><td>Low</td><td>The first chat after onboarding, once</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>Recommendation</h3>
+    <p>Ship <b>A</b> as the clean-start shell for everyone, since it is a restyle of what is already there. Put <b>C</b>’s facet chips and coach under a <code>beginnerMode</code> setting that onboarding turns on and that switches itself off after a few good prompts. Use <b>D</b> once, for the very first chat after the onboarding wizard’s Done step. Keep <b>B</b> as a stretch goal: it teaches structure best but costs the most and gets in an expert’s way.</p>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+  const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+  const I = {
+    plus: '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>',
+    arrow: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg>',
+    shield: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 1.8 13 3.6v4c0 3-2.2 5.3-5 6.6C5.2 12.9 3 10.6 3 7.6v-4z"/></svg>',
+    spark: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1c.4 3.2 2.8 5.6 6 6-3.2.4-5.6 2.8-6 6-.4-3.2-2.8-5.6-6-6 3.2-.4 5.6-2.8 6-6z"/></svg>',
+    folder: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4.5h4l1.5 1.5H14v6.5H2z"/></svg>',
+    book: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 2.5h7.5L13 5v8.5H3z"/><path d="M5.5 7h5M5.5 10h5"/></svg>',
+    bug: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="5" y="5" width="6" height="8" rx="3"/><path d="M8 5V3M2.5 8.5H5M11 8.5h2.5M3 5l2 1.5M13 5l-2 1.5M3 12.5l2-1.5M13 12.5 11 11"/></svg>',
+    wand: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m3 13 7-7M9 3v2M12 6h2M12 2.5l-1 1M13.5 4l-1 1"/></svg>',
+    check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7"/></svg>',
+    caret: '<svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>',
+  };
+
+  // The Nekko cat, drawn on a pixel grid like the app mascot.
+  const CAT = ['.O.......O.', '.OO.....OO.', '.OOOOOOOOO.', 'OOKKOOOKKOO', 'OOKKOOOKKOO', 'OPOOOKOOOPO', 'OOOOKOKOOOO', '.OOOOOOOOO.', '..O.....O..'];
+  const cat = () => {
+    const fill = { O: 'var(--cat)', K: 'var(--cat-dark)', P: 'var(--cat-cheek)' };
+    let r = '';
+    CAT.forEach((row, y) => [...row].forEach((c, x) => { if (fill[c]) r += `<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${fill[c]}"/>`; }));
+    return `<svg viewBox="0 0 11 9" shape-rendering="crispEdges" aria-hidden="true">${r}</svg>`;
+  };
+
+  const cbar = (mode = 'Guardrails') => `
+    <div class="cbar">
+      <button class="ib" type="button" aria-label="Add files, images or a skill" title="Add files, images or a skill">${I.plus}</button>
+      <span class="chip" data-mode title="What Nekko may do without asking">${I.shield}<span>${esc(mode)}</span></span>
+      <span class="chip">${I.folder} my-app</span>
+      <span class="grow"></span>
+      <span class="chip">Auto ${I.caret}</span>
+      <button class="send" type="button" data-send aria-label="Send">${I.arrow}</button>
+    </div>`;
+
+  const BLANK = /\[[^\]\n]*\]/g;
+  /** A textarea whose [blanks] are highlighted by a mirror behind it; Tab selects the next blank. */
+  function blankField(win, { placeholder, value = '', onInput } = {}) {
+    const el = h(`<div class="field"><div class="mirror" aria-hidden="true"></div><textarea rows="2" aria-label="Message Nekko"></textarea></div>`);
+    const ta = $('textarea', el), mirror = $('.mirror', el);
+    ta.placeholder = placeholder || '';
+    const sync = () => {
+      mirror.innerHTML = esc(ta.value).replace(BLANK, (m) => `<mark>${m}</mark>`) + '​';
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+      onInput && onInput(ta.value);
+    };
+    const nextBlank = (from = ta.selectionEnd) => {
+      const v = ta.value; BLANK.lastIndex = 0;
+      let m, first = null;
+      while ((m = BLANK.exec(v))) { if (!first) first = m; if (m.index >= from) { ta.setSelectionRange(m.index, m.index + m[0].length); return true; } }
+      if (first) { ta.setSelectionRange(first.index, first.index + first[0].length); return true; }
+      return false;
+    };
+    ta.addEventListener('input', sync);
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab' && !e.shiftKey && BLANK.test(ta.value)) { e.preventDefault(); nextBlank(ta.selectionEnd); }
+      BLANK.lastIndex = 0;
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(win, ta.value); }
+    });
+    const api = {
+      el, ta,
+      set(v, { select = true } = {}) { ta.value = v; sync(); if (select) { ta.focus({ preventScroll: true }); if (!nextBlank(0)) ta.setSelectionRange(v.length, v.length); } },
+      append(v) { const start = ta.value.length; ta.value = ta.value.replace(/\s*$/, '') + v; sync(); ta.focus({ preventScroll: true }); nextBlank(start); },
+    };
+    ta.value = value; requestAnimationFrame(sync);
+    return api;
+  }
+
+  function toast(win, msg) {
+    const t = $('.wtoast', win); t.textContent = msg; t.classList.add('on');
+    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2400);
+  }
+  function send(win, text) {
+    if (!text || !text.trim()) return toast(win, 'Write something first, or pick an example.');
+    if (/\[[^\]\n]*\]/.test(text)) return toast(win, 'Fill in the highlighted blanks first. Press Tab to jump to one.');
+    toast(win, 'Sent. In the app, the full chat opens here.');
+  }
+  const wireSend = (win, get) => $$('[data-send]', win).forEach((b) => b.addEventListener('click', () => send(win, get())));
+
+  /* ================= A · Prism starters ================= */
+  const STARTERS = [
+    { k: 'explain', t: 'Explain this project', s: 'Get a tour of the code before you change it', c: 'var(--p1)', i: I.book,
+      p: 'Explain how this project is organized. Start with [the part you care about] and keep it simple, I am new to this codebase.' },
+    { k: 'fix', t: 'Fix something broken', s: 'Describe what you see and what you expected', c: 'var(--p5)', i: I.bug,
+      p: 'Something is broken: [what you see happen]. It should [what you expected]. Find the cause, fix it, and tell me what you changed.' },
+    { k: 'add', t: 'Add a small feature', s: 'Nekko shows a plan before it writes code', c: 'var(--p2)', i: I.wand,
+      p: 'Add [a small feature] to [which page or file]. Show me a short plan before you change anything.' },
+    { k: 'test', t: 'Write tests', s: 'Nekko runs them and reports back', c: 'var(--p3)', i: I.check,
+      p: 'Write tests for [a file or function]. Run them and tell me what passed and what failed.' },
+  ];
+  function renderPrism(win, body) {
+    body.innerHTML = `
+      <div class="pv-prism">
+        <div class="aura" aria-hidden="true"><i class="o1"></i><i class="o2"></i><i class="o3"></i><i class="o4"></i></div>
+        <div class="center">
+          <div class="hello"><div class="hi"><span class="grad">Hi Philip,</span></div><div class="sub">what should we build first?</div></div>
+          <div class="glass prism-edge composer" data-slot></div>
+          <div class="starters">${STARTERS.map((s) => `
+            <button type="button" class="starter" data-k="${s.k}" aria-pressed="false">
+              <span class="ic" style="background:${s.c}">${s.i}</span><strong>${s.t}</strong><span>${s.s}</span>
+            </button>`).join('')}</div>
+          <div class="foot">Nekko works in <b>~/projects/my-app</b> and asks before anything risky. Not sure? Pick a card, then fill in the highlighted blanks.</div>
+        </div>
+      </div>`;
+    const slot = $('[data-slot]', body);
+    const hint = h(`<div class="hintline"></div>`);
+    const f = blankField(win, {
+      placeholder: 'Tell Nekko what you want to do, in your own words…',
+      onInput: (v) => {
+        BLANK.lastIndex = 0;
+        const n = (v.match(BLANK) || []).length;
+        hint.innerHTML = n ? `${I.spark.replace('<svg', '<svg width="11" height="11" style="color:var(--accent)"')} ${n} blank${n > 1 ? 's' : ''} to fill · <span class="kbd">Tab</span> jumps to the next one` : v ? '<span class="kbd">Enter</span> to send · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> for a new line' : '';
+      },
+    });
+    slot.append(f.el, hint, h(cbar()));
+    $$('.starter', body).forEach((b) => b.addEventListener('click', () => {
+      $$('.starter', body).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      f.set(STARTERS.find((s) => s.k === b.dataset.k).p);
+    }));
+    wireSend(win, () => f.ta.value);
+    // Open in a realistic working state: the "Fix" card picked, nothing typed into its blanks yet.
+    $('.starter[data-k="fix"]', body).setAttribute('aria-pressed', 'true');
+    f.ta.value = STARTERS[1].p; requestAnimationFrame(() => f.ta.dispatchEvent(new Event('input')));
+  }
+
+  /* ================= B · Sentence builder ================= */
+  const VERBS = { fix: 'Fix', explain: 'Explain', add: 'Add', tidy: 'Clean up', test: 'Write tests for' };
+  const THINGS = { fix: 'the Save button on the settings page', explain: 'how login works', add: 'a dark mode switch', tidy: 'the date helpers', test: 'the cart total function' };
+  function renderCloud(win, body) {
+    body.innerHTML = `
+      <div class="pv-cloud">
+        <div class="clouds" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="center">
+          <div class="hello"><div class="hi">Build your first prompt</div><div class="foot">Change any <span class="grad" style="font-weight:600">highlighted</span> part. Nekko reads the sentence at the bottom.</div></div>
+          <div class="glass prism-edge builder">
+            <div class="sentence" data-sentence>
+              Please
+              <span class="slot"><select id="b-verb-${win.id}" aria-label="What to do">${Object.entries(VERBS).map(([k, v]) => `<option value="${k}">${v.toLowerCase()}</option>`).join('')}</select></span>
+              <span class="slot"><input id="b-thing-${win.id}" aria-label="What it is about" placeholder="something"></span>
+              in
+              <span class="slot"><select id="b-where-${win.id}" aria-label="Where in the project">
+                <option value="the whole project">the whole project</option>
+                <option value="@src/pages/Settings.tsx">@src/pages/Settings.tsx</option>
+                <option value="@src/components">@src/components</option>
+                <option value="the file I attach">the file I attach</option>
+              </select></span>.
+              When you’re done,
+              <span class="slot"><select id="b-done-${win.id}" aria-label="What to do when finished">
+                <option value="show me what changed">show me what changed</option>
+                <option value="run the tests">run the tests</option>
+                <option value="explain it like I'm new to this">explain it simply</option>
+              </select></span>.
+              <span data-err hidden>The error says <span class="slot"><input id="b-err-${win.id}" aria-label="Error message" placeholder="paste the error"></span>.</span>
+            </div>
+            <div class="addons">
+              <button type="button" class="addon" data-add="err" aria-pressed="false">+ I have an error message</button>
+              <button type="button" class="addon" data-add="ask" aria-pressed="true">+ Ask me before you edit files</button>
+              <button type="button" class="addon" data-add="plan" aria-pressed="false">+ Plan first</button>
+            </div>
+            <div class="preview" data-preview>
+              <div class="lbl">What Nekko will read</div>
+              <div class="txt" data-out></div>
+            </div>
+            ${cbar('Ask')}
+          </div>
+          <button type="button" class="linkbtn" data-raw>Write it myself instead</button>
+        </div>
+      </div>`;
+    const v = $('select[aria-label="What to do"]', body), thing = $('input[aria-label="What it is about"]', body);
+    const where = $('select[aria-label="Where in the project"]', body), done = $('select[aria-label="What to do when finished"]', body);
+    const err = $('input[aria-label="Error message"]', body), errWrap = $('[data-err]', body), out = $('[data-out]', body);
+    const on = (k) => $(`[data-add="${k}"]`, body).getAttribute('aria-pressed') === 'true';
+    const text = () => {
+      const t = thing.value.trim() || THINGS[v.value];
+      let s = `${VERBS[v.value]} ${t} in ${where.value}. When you're done, ${done.value}.`;
+      if (on('err') && err.value.trim()) s += ` The error says: "${err.value.trim()}".`;
+      if (on('plan')) s += ' Show me a short plan before you start.';
+      if (on('ask')) s += ' Ask me before you edit any files.';
+      return s;
+    };
+    const paint = () => {
+      const t = esc(thing.value.trim() || THINGS[v.value]);
+      let s = `<em>${VERBS[v.value]}</em> <em>${t}</em> in <em>${esc(where.value)}</em>. When you're done, <em>${esc(done.value)}</em>.`;
+      if (on('err') && err.value.trim()) s += ` The error says: “<em>${esc(err.value.trim())}</em>”.`;
+      if (on('plan')) s += ' Show me a short plan before you start.';
+      if (on('ask')) s += ' Ask me before you edit any files.';
+      out.innerHTML = s;
+      thing.placeholder = THINGS[v.value];
+      $('[data-mode] span', body).textContent = on('ask') ? 'Ask' : 'Guardrails';
+    };
+    [v, where, done].forEach((x) => x.addEventListener('change', paint));
+    [thing, err].forEach((x) => x.addEventListener('input', paint));
+    $$('.addon', body).forEach((b) => b.addEventListener('click', () => {
+      b.setAttribute('aria-pressed', String(!on(b.dataset.add)));
+      if (b.dataset.add === 'err') { errWrap.hidden = !on('err'); if (on('err')) err.focus(); }
+      paint();
+    }));
+    $('[data-raw]', body).addEventListener('click', (e) => {
+      const card = $('.builder', body), written = text(), mode = on('ask') ? 'Ask' : 'Guardrails';
+      const f = blankField(win, { placeholder: 'Tell Nekko what you want to do…' });
+      card.replaceChildren(f.el, h(cbar(mode)));
+      f.set(written, { select: false });
+      e.currentTarget.textContent = 'Your sentence is in the box. Edit it freely.';
+      wireSend(win, () => f.ta.value);
+    });
+    wireSend(win, text);
+    // Example state: "fix" with a typed subject.
+    thing.value = 'the Save button on the settings page';
+    where.value = '@src/pages/Settings.tsx';
+    paint();
+  }
+
+  /* ================= C · Prompt coach ================= */
+  const FACETS = [
+    { k: 'goal', t: 'Goal', test: (s) => /\b(add|fix|make|build|explain|write|create|change|update|remove|refactor|test|find|show|rename|move|clean|help|why|how)\b/i.test(s) && s.trim().split(/\s+/).length >= 3,
+      tip: '<strong>Start with what you want.</strong> One plain sentence with an action word works best.', eg: 'Add a dark mode switch', add: '[What should Nekko do?] ' },
+    { k: 'where', t: 'Where', test: (s) => /@\S+|\b\S+\.(tsx?|jsx?|py|css|md|json|html|rs|go)\b|\b(page|screen|file|folder|component|function|button|form|menu|api|endpoint|settings|header|footer|sidebar)\b/i.test(s),
+      tip: '<strong>Say where it goes.</strong> Name the page or file. Type <span class="kbd">@</span> to pick a file, so Nekko doesn’t have to hunt.', eg: '…on the settings page (@src/pages/Settings.tsx)', add: ' on [which page or file].' },
+    { k: 'done', t: 'Done when', test: (s) => /\b(done when|so that|should|until|make sure|expect|passes?|works when|it'?s done)\b/i.test(s),
+      tip: '<strong>Describe “done”.</strong> How will you check it worked? Nekko keeps going until this is true.', eg: 'It’s done when my choice is remembered after a restart.', add: ' It’s done when [how you’ll check it works].' },
+    { k: 'limits', t: 'Limits', test: (s) => /\b(don'?t|do not|without|only|keep|avoid|ask (me )?(first|before)|no new)\b/i.test(s),
+      tip: '<strong>Add a limit or two.</strong> Anything Nekko should avoid or leave alone.', eg: 'Don’t add new libraries. Ask before deleting files.', add: ' Don’t [anything to avoid].' },
+  ];
+  const LEVEL = ['Just getting started', 'A good start', 'Getting clear', 'Almost there', 'Great prompt'];
+  function renderCoach(win, body) {
+    body.innerHTML = `
+      <div class="pv-coach">
+        <div class="aura" aria-hidden="true" style="opacity:.55"><i class="o1"></i><i class="o2"></i></div>
+        <div class="center">
+          <div class="hello"><div class="hi">What should we work on?</div><div class="foot">A good prompt has four parts. Click one that isn’t lit to add it.</div></div>
+          <div class="coach-grid">
+            <div class="ringed" data-ring style="--fill:25%">
+              <div class="glass composer" data-slot style="width:100%"></div>
+            </div>
+            <aside class="glass coach" aria-label="Prompt coach">
+              <h4>Prompt coach <span class="score" data-score>1 / 4</span></h4>
+              <div class="meter" style="--fill:25%" data-meter><i></i></div>
+              <div class="tip" data-tip></div>
+              <div class="why" data-level></div>
+            </aside>
+          </div>
+        </div>
+      </div>`;
+    const slot = $('[data-slot]', body), ring = $('[data-ring]', body), meter = $('[data-meter]', body);
+    const facetRow = h(`<div class="facets" role="group" aria-label="Parts of a good prompt">${FACETS.map((x) => `<button type="button" class="facet" data-f="${x.k}" title="Add: ${x.t}"><span class="dot"></span>${x.t}</button>`).join('')}</div>`);
+    const update = (v) => {
+      const ok = FACETS.map((x) => x.test(v));
+      const n = ok.filter(Boolean).length, pct = (n / 4) * 100 + '%';
+      ring.style.setProperty('--fill', pct); meter.style.setProperty('--fill', pct);
+      $('[data-score]', body).textContent = `${n} / 4`;
+      FACETS.forEach((x, i) => $(`[data-f="${x.k}"]`, facetRow).classList.toggle('ok', ok[i]));
+      const next = FACETS.find((_, i) => !ok[i]);
+      $('[data-tip]', body).innerHTML = next ? `${next.tip}<span class="eg">${next.eg}</span>` : '<strong>That’s a clear prompt.</strong> Press <span class="kbd">Enter</span> to send it. Nekko will check with you if anything is unclear.';
+      $('[data-level]', body).textContent = v.trim() ? `${LEVEL[n]}. Clear prompts get the right change on the first try and use fewer tokens.` : 'You can send at any point. These are suggestions, not rules.';
+    };
+    const f = blankField(win, { placeholder: 'e.g. Add a dark mode switch to the settings page', onInput: update });
+    slot.append(f.el, facetRow, h(cbar()));
+    $$('.facet', facetRow).forEach((b) => b.addEventListener('click', () => {
+      if (b.classList.contains('ok')) return;
+      const x = FACETS.find((y) => y.k === b.dataset.f);
+      if (!f.ta.value.trim()) f.set(x.add.trimStart()); else f.append(x.add);
+    }));
+    wireSend(win, () => f.ta.value);
+    f.ta.value = 'Add a dark mode switch';
+    requestAnimationFrame(() => update(f.ta.value));
+  }
+
+  /* ================= D · Guided steps ================= */
+  const KINDS = [
+    { k: 'fix', t: 'Fix something broken', s: 'A bug, an error, something that looks wrong', q: 'What’s going wrong?', ph: 'The Save button on the settings page does nothing',
+      p: (d) => `Something is broken: ${d}. Find the cause, fix it, and tell me what you changed.` },
+    { k: 'add', t: 'Add something new', s: 'A feature, a page, a button', q: 'What should it do?', ph: 'Add a dark mode switch to the settings page',
+      p: (d) => `${d.replace(/\.$/, '')}. Before writing code, show me a short plan.` },
+    { k: 'explain', t: 'Understand this project', s: 'A tour, or how one part works', q: 'What do you want to understand?', ph: 'How login works',
+      p: (d) => `Explain ${d.charAt(0).toLowerCase() + d.slice(1).replace(/\.$/, '')} in this project. I’m new to the codebase, so keep it simple and point me to the files that matter.` },
+    { k: 'tidy', t: 'Clean up or test', s: 'Tidy code or add tests', q: 'Which part?', ph: 'The date helpers in src/utils',
+      p: (d) => `Clean up ${d.charAt(0).toLowerCase() + d.slice(1).replace(/\.$/, '')}: clearer names, no dead code, and tests for what it does. Don’t change how it behaves.` },
+  ];
+  const MODES = [
+    { k: 'guardrails', t: 'Work freely, stop for risky things', s: 'Edits and runs code; asks before deleting or anything on your guardrail list', m: 'Guardrails', rec: true },
+    { k: 'ask', t: 'Ask me before every change', s: 'You approve each file edit and command', m: 'Ask' },
+    { k: 'look', t: 'Just look, don’t change anything', s: 'Reads the code and answers; no edits', m: 'Ask', suffix: ' Don’t edit any files yet.' },
+  ];
+  function renderGuide(win, body) {
+    const st = { step: 0, kind: null, detail: '', mode: null };
+    body.innerHTML = `
+      <div class="pv-guide">
+        <div class="beams" aria-hidden="true"></div>
+        <div class="center"><div class="trail" data-trail></div><div data-card style="width:100%;display:grid;justify-items:center"></div></div>
+      </div>`;
+    const card = $('[data-card]', body), trail = $('[data-trail]', body);
+    const dots = (i) => `<div class="dots" aria-label="Step ${i + 1} of 4">${[0, 1, 2, 3].map((n) => `<i class="${n === i ? 'on' : ''}"></i>`).join('')}</div>`;
+    const go = (n) => { st.step = n; draw(); };
+    const draw = () => {
+      const kind = KINDS.find((k) => k.k === st.kind), mode = MODES.find((m) => m.k === st.mode);
+      const crumbs = [];
+      if (kind && st.step > 0) crumbs.push(`<button type="button" class="crumb" data-go="0">${kind.t}</button>`);
+      if (st.detail && st.step > 1) crumbs.push(`<button type="button" class="crumb" data-go="1">${esc(st.detail)}</button>`);
+      if (mode && st.step > 2) crumbs.push(`<button type="button" class="crumb" data-go="2">${mode.m}</button>`);
+      trail.innerHTML = crumbs.join('');
+      $$('[data-go]', trail).forEach((b) => b.addEventListener('click', () => go(+b.dataset.go)));
+
+      if (st.step === 0) {
+        card.innerHTML = `<div class="glass prism-edge ask">
+          <div class="who">${cat()}<div><div class="q">Hi! I’m Nekko. What would you like help with?</div><div class="s">Three quick questions, then I’ll write your first prompt with you.</div></div></div>
+          <div class="opts">${KINDS.map((k) => `<button type="button" class="opt" data-k="${k.k}"><strong>${k.t}</strong><span>${k.s}</span></button>`).join('')}</div>
+          <div class="row">${dots(0)}<button type="button" class="btn ghost" data-skip>Skip, I’ll type it myself</button></div></div>`;
+        $$('.opt', card).forEach((b) => b.addEventListener('click', () => { st.kind = b.dataset.k; go(1); }));
+        $('[data-skip]', card).addEventListener('click', () => { st.kind = null; go(3); });
+      } else if (st.step === 1) {
+        card.innerHTML = `<div class="glass prism-edge ask">
+          <div class="who">${cat()}<div><div class="q">${kind.q}</div><div class="s">A sentence is plenty. You can add more detail later.</div></div></div>
+          <div class="one"><input id="g-detail-${win.id}" aria-label="${kind.q}" placeholder="${kind.ph}" value="${esc(st.detail)}"></div>
+          <div class="row">${dots(1)}<div><button type="button" class="btn ghost" data-ex>Use the example</button><button type="button" class="btn" data-next>Next</button></div></div></div>`;
+        const inp = $('input', card); requestAnimationFrame(() => inp.focus({ preventScroll: true }));
+        const next = () => { st.detail = inp.value.trim() || kind.ph; go(2); };
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') next(); });
+        $('[data-next]', card).addEventListener('click', next);
+        $('[data-ex]', card).addEventListener('click', () => { inp.value = kind.ph; next(); });
+      } else if (st.step === 2) {
+        card.innerHTML = `<div class="glass prism-edge ask">
+          <div class="who">${cat()}<div><div class="q">How hands-on should I be?</div><div class="s">You can change this any time from the shield in the message box.</div></div></div>
+          <div class="opts" style="grid-template-columns:1fr">${MODES.map((m) => `<button type="button" class="opt" data-m="${m.k}"><strong>${m.t}${m.rec ? ' <span class="rec">Recommended</span>' : ''}</strong><span>${m.s}</span></button>`).join('')}</div>
+          <div class="row">${dots(2)}<span></span></div></div>`;
+        $$('.opt', card).forEach((b) => b.addEventListener('click', () => { st.mode = b.dataset.m; go(3); }));
+      } else {
+        const text = kind ? kind.p(st.detail) + (mode?.suffix || '') : '';
+        card.innerHTML = `<div style="width:min(680px,100%);display:grid;gap:12px">
+          <div class="who" style="justify-content:center">${cat()}<div><div class="q">${kind ? 'Here’s your prompt. Change anything, then send.' : 'Go ahead, describe what you want.'}</div><div class="s">${kind ? 'I wrote it from your answers. Clear prompts like this get the right result first time.' : 'Plain words are fine. I’ll ask if I need more.'}</div></div></div>
+          <div class="glass prism-edge composer" data-slot></div>
+          <div class="row" style="justify-content:center">${dots(3)}</div></div>`;
+        const f = blankField(win, { placeholder: 'Tell Nekko what you want to do…' });
+        $('[data-slot]', card).append(f.el, h(cbar(mode?.m || 'Guardrails')));
+        f.set(text, { select: false });
+        wireSend(win, () => f.ta.value);
+      }
+    };
+    draw();
+  }
+
+  /* ================= shell ================= */
+  const PROTOS = {
+    prism: { render: renderPrism, name: 'A · Prism starters',
+      idea: 'The closest to Gemini: a greeting in prism gradient type, a frosted composer floating over slow colored light, and four starter cards. A card drops a template into the box with its blanks highlighted, and Tab moves between blanks.',
+      why: ['A beginner never faces an empty box: the blanks show what a good prompt contains.', 'It is still a normal composer, so nobody has to learn a second UI or leave it.', 'Fill-in-the-blank teaches the shape of a prompt (what, where, what done looks like) without a lecture.'],
+      pros: ['Smallest change: a restyle of the existing <code>.clean-start</code> branch plus a starter list', 'Works for experts as well, who just type', 'Starters can be per project (read from AGENTS.md or recent chats)'],
+      cons: ['Blur over moving color repaints every frame. Pause it when the window is hidden or not focused, and on low-power machines', 'Templates can feel canned after the third use; rotate or learn them', 'The mirror highlight needs the textarea and mirror to share exact metrics'],
+      impl: `// ChatPane.tsx, inside {cleanStart && …}
+<CleanStartAura paused={!windowVisible} />        // transform-only orbs
+<CleanStartGreeting name={profile.firstName} />
+<BlankAwareTextarea value={draft} onChange={setDraft}
+  onTab={selectNextBlank} />                      // [blank] mirror
+<StarterCards items={starters(project)} onPick={t => setDraft(t)} />
+
+// styles.css: one new token set, reused by B–D
+--glass, --glass-edge, --glass-shadow, --p1…--p5` },
+    cloud: { render: renderCloud, name: 'B · Sentence builder',
+      idea: 'The prompt is one sentence with editable parts: an action, the thing, where it is, and what to do when finished. Add-ons attach common extras (an error message, plan first, ask before editing). The exact text Nekko will read stays visible below, so the user learns the sentence pattern by watching it.',
+      why: ['It is impossible to write a vague prompt: every slot is something the agent needs.', 'The add-ons turn hidden settings (mode, plan first) into plain language.', 'The live preview teaches the pattern well enough that users graduate to free text.'],
+      pros: ['Best at teaching structure', 'Maps cleanly to settings: “Ask me before you edit files” sets the chat mode to Ask', 'Accessible: native selects and inputs, works with a keyboard'],
+      cons: ['Rigid; real requests rarely fit one sentence', 'Most new code of the four (slot model, the sentence in each locale, i18n word order)', 'Experts will skip it at once, so it must be opt-in or easy to leave'],
+      impl: `type Slot = { id: 'verb' | 'thing' | 'where' | 'done'; options?: string[] };
+// Localize whole sentence templates, not fragments:
+t('builder.sentence', { verb, thing, where, done })
+// "where" options come from the folder index (IndexedFile[])
+// already used for @-mentions in ChatPane.
+onToggle('ask') → window.nekko.setSessionOptions(id, { mode: 'ask' })` },
+    coach: { render: renderCoach, name: 'C · Prompt coach',
+      idea: 'A normal composer with a prism ring that fills as the prompt gains its four parts: Goal, Where, Done when and Limits. A coach card names the next missing part with an example. Clicking an unlit chip appends a scaffold with a blank, so the coaching is one click away from the fix.',
+      why: ['Feedback arrives while typing, which is when habits form.', 'The ring rewards a better prompt without blocking a send.', 'Clicking a part adds a scaffold with a blank, so the coaching is something they can act on.'],
+      pros: ['Teaches the most, and keeps teaching after the first prompt', 'Cheap: regex heuristics on <code>deferredDraft</code>, which ChatPane already computes', 'Fits as a layer over A instead of a separate screen'],
+      cons: ['Heuristics will misjudge some prompts (a false “missing Where” is annoying)', 'The side panel crowds narrow wall cells, so collapse it under ~700px', 'Users can game the score without writing a clearer prompt'],
+      impl: `// pure + unit-testable, next to composerSkills.ts
+export function promptFacets(text: string): Record<Facet, boolean>
+// read the deferred draft so typing stays at full speed
+const facets = useMemo(() => promptFacets(deferredDraft), [deferredDraft]);
+// optional upgrade: ask a small local model to grade the facets
+// after 600ms idle, falling back to the regex result` },
+    guide: { render: renderGuide, name: 'D · Guided steps',
+      idea: 'Nekko interviews the user: what kind of help, one sentence of detail, and how hands-on it should be. It then writes the prompt from the answers and sets the chat mode to match. Answers stay as glass breadcrumbs above, and clicking one goes back to that step.',
+      why: ['Closest to talking to a person; no prompt-writing knowledge is needed.', 'The mode question explains Ask and Guardrails at the moment it matters.', 'The finished prompt is shown and editable, so it still teaches by example.'],
+      pros: ['The friendliest first run, and a natural home for the mascot', 'Choosing the mode up front avoids a surprise approval prompt in the first chat', 'Reuses the onboarding machine pattern (<code>onboardingMachine.ts</code>)'],
+      cons: ['Slowest path to the first send', 'Becomes a chore after the first time, so show it once', 'A three-question script cannot cover every request; keep “Skip” prominent'],
+      impl: `// components/onboarding/FirstPromptSteps.tsx
+type Step = 'kind' | 'detail' | 'mode' | 'compose';
+// shown when settings.onboarding.firstPromptDone !== true
+// and cleanStart is on; completes on first send:
+onSend → updateSettings({ onboarding: { firstPromptDone: true } })` },
+  };
+
+  let current = 'prism', theme = 'system', uid = 0;
+  try { const h = location.hash.slice(1); if (PROTOS[h]) current = h; else if (PROTOS[store.get('bc.proto')]) current = store.get('bc.proto'); } catch {}
+  if (['system', 'light', 'dark', 'split'].includes(store.get('bc.theme'))) theme = store.get('bc.theme');
+
+  function mountWindow(scheme) {
+    const win = h(`<div class="win ${scheme ? 'scheme-' + scheme : ''}">
+      <div class="wbar"><span class="title">New chat</span><span class="pill">Focused</span><span class="grow"></span>
+        ${scheme ? `<span class="scheme">${scheme}</span>` : ''}<span class="bm" title="Beginner mode, from onboarding">Beginner mode <span class="sw" aria-hidden="true"></span></span></div>
+      <div class="wbody"></div><div class="wtoast" role="status"></div></div>`);
+    win.id = 'w' + ++uid;
+    PROTOS[current].render(win, $('.wbody', win));
+    return win;
+  }
+  function renderNotes() {
+    const p = PROTOS[current];
+    $('#notes').innerHTML = `
+      <article class="card">
+        <h2>${p.name}</h2>
+        <p>${p.idea}</p>
+        <h3>Why it helps a beginner</h3><ul>${p.why.map((x) => `<li>${x}</li>`).join('')}</ul>
+        <div class="pc"><div><h3 class="pro">Pros</h3><ul>${p.pros.map((x) => `<li>${x}</li>`).join('')}</ul></div>
+        <div><h3 class="con">Tradeoffs</h3><ul>${p.cons.map((x) => `<li>${x}</li>`).join('')}</ul></div></div>
+      </article>
+      <article class="card">
+        <h2>In Nekko Agent</h2>
+        <p>Lives inside the existing <code>cleanStart</code> branch of <code>ChatPane.tsx</code>, so it shows only for an empty focused chat with a model ready and nothing waiting on the user, and the first send ends it.</p>
+        <pre class="code">${esc(p.impl)}</pre>
+      </article>`;
+  }
+  function render() {
+    $$('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.p === current)));
+    $$('[data-theme-set]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeSet === theme)));
+    const root = document.documentElement;
+    if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme); else if (theme === 'system') root.removeAttribute('data-theme');
+    const stage = $('#stage');
+    stage.classList.toggle('split', theme === 'split');
+    stage.replaceChildren(...(theme === 'split' ? [mountWindow('light'), mountWindow('dark')] : [mountWindow(null)]));
+    renderNotes();
+  }
+  $$('.tab').forEach((t) => t.addEventListener('click', () => { current = t.dataset.p; store.set('bc.proto', current); render(); }));
+  $$('[data-theme-set]').forEach((b) => b.addEventListener('click', () => { theme = b.dataset.themeSet; store.set('bc.theme', theme); render(); }));
+  render();
+})();
+</script>
