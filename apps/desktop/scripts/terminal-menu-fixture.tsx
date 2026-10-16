@@ -33,10 +33,28 @@ Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
 Object.assign(window, { clip });
 Object.assign(window, { nekko: new Proxy(bridge, { get(t, k: string) { if (k in t) return t[k]; if (k.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 
+/** Fixture-only readout of the in-memory clipboard, so captures can show what Copy did. */
+function ClipboardReadout() {
+  const [text, setText] = useState(clip.text);
+  React.useEffect(() => { const t = setInterval(() => setText(clip.text), 50); return () => clearInterval(t); }, []);
+  return (
+    <div data-clipboard-readout style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 12px', borderTop: '1px solid var(--line, #ddd)', font: '12px system-ui, sans-serif', background: 'var(--paper)', color: 'var(--ink)' }}>
+      <span style={{ opacity: 0.6 }}>Clipboard (test fixture):</span>
+      <code style={{ fontFamily: 'Consolas, monospace', padding: '1px 6px', borderRadius: 4, background: 'var(--surface-2)' }}>{JSON.stringify(text)}</code>
+    </div>
+  );
+}
+
 function Fixture() {
   const [id, setId] = useState('term-1');
-  Object.assign(window, { integration: { writes, toasts: () => useStore.getState().toasts, show: setId } });
-  return <main style={{ height: '100vh' }}><TerminalPane key={id} terminalId={id} /></main>;
+  const [readout, setReadout] = useState(false);
+  Object.assign(window, { integration: { writes, toasts: () => useStore.getState().toasts, show: setId, readout: setReadout } });
+  return (
+    <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, minHeight: 0 }}><TerminalPane key={id} terminalId={id} /></div>
+      {readout && <ClipboardReadout />}
+    </main>
+  );
 }
 useStore.setState({ settings: { terminal: { renderer: 'xterm' } } } as any);
 createRoot(document.getElementById('root')!).render(<Fixture />);

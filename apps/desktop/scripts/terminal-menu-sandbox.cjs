@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html')); win.showInactive(); await sleep(1500);
     for (const theme of ['light', 'dark']) {
       await run(`document.documentElement.dataset.theme='${theme}'`); await sleep(300);
-      await drag(14, 62, 170, 62); // select across the second output line
+      await drag(9, 62, 170, 62); // select across the second output line
       await rightClick(300, 200);
       await capture(`menu-selection-${theme}`);
       await run("document.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))"); await sleep(150);
@@ -79,6 +79,33 @@ app.whenReady().then(async () => {
       await capture('readonly-log-menu');
       const before = await run("integration.writes.length"); await key('v', { ctrl: true }); await sleep(150);
       await check('read-only agent log: Ctrl+V sends nothing', `integration.writes.length===${before}`);
+
+      // Step-by-step walkthrough for the PR, on a fresh terminal with the
+      // fixture's clipboard readout visible. Hover is shown by moving the
+      // pointer over the item, as a user would.
+      await run("integration.show('term-walk'); integration.readout(true); clip.text=''"); await sleep(1000);
+      const hover = async label => {
+        const p = await run(`(()=>{const r=${item(label)}.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+        win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(p.x), y: Math.round(p.y) }); await sleep(200);
+      };
+      await drag(9, 62, 170, 62);
+      await capture('walk-1-select');
+      await rightClick(300, 200); await hover('Copy');
+      await capture('walk-2-menu-copy');
+      await run(`${item('Copy')}.click()`); await sleep(250);
+      await check('walkthrough: Copy shows on the clipboard readout', "document.querySelector('[data-clipboard-readout]').textContent.includes('tests passed')");
+      await capture('walk-3-copied');
+      await rightClick(300, 200); await hover('Paste');
+      await capture('walk-4-menu-paste');
+      await run(`${item('Paste')}.click()`); await sleep(300);
+      await check('walkthrough: pasted text reaches the prompt', "integration.writes.some(w=>w.includes('tests passed'))");
+      await capture('walk-5-pasted');
+      await key('c', { ctrl: true }); await sleep(250);
+      await capture('walk-6-ctrl-c-interrupt');
+      await run("document.documentElement.dataset.theme='dark'"); await sleep(300);
+      await drag(9, 62, 170, 62); await rightClick(300, 200); await hover('Copy');
+      await capture('walk-dark-menu-copy');
+      await run("document.documentElement.dataset.theme='light'");
     } else {
       await check('baseline: no terminal menu on right-click', "!document.querySelector('[role=menu]')");
     }

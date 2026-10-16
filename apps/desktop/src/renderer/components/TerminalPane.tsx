@@ -65,8 +65,32 @@ function readTheme(): Record<string, string> {
     foreground: ink,
     cursor: accent,
     cursorAccent: v('--paper', '#fafaf8'),
-    selectionBackground: v('--ring', 'rgba(109,94,252,0.35)'),
+    selectionBackground: resolveColor('var(--ring)') ?? 'rgba(109,94,252,0.35)',
   };
+}
+
+/**
+ * Resolve a CSS colour to `rgba(...)`. `--ring` is a `color-mix()` over another
+ * variable, which xterm's colour parser cannot read: it fell back to a
+ * near-invisible default, so a selection in the light theme barely showed.
+ */
+function resolveColor(css: string): string | null {
+  try {
+    const probe = document.createElement('span');
+    probe.style.color = css;
+    document.documentElement.appendChild(probe);
+    const computed = getComputedStyle(probe).color;
+    probe.remove();
+    const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    if (!computed || !ctx) return null;
+    ctx.canvas.width = ctx.canvas.height = 1;
+    ctx.fillStyle = computed;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    return a === 0 ? null : `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
+  } catch {
+    return null;
+  }
 }
 
 interface Disposable {
