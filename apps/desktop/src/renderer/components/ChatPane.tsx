@@ -394,7 +394,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
         chronological
       />
       </MarkdownSession.Provider>
-      {row.message.role === 'assistant' && <ChatArtifacts artifacts={chatArtifacts(row.message.content, basePath)} sessionId={sessionId} />}
+      {row.message.role === 'assistant' && <ChatArtifacts artifacts={chatArtifacts(row.message.content, basePath).filter(artifact => !artifact.inlineImage)} sessionId={sessionId} />}
       {/* A PR card right after the message that first names it. */}
       {row.prUrls.map((u) => <PrCard key={u} url={u} info={prByUrl.get(u)} event="created" />)}
     </>

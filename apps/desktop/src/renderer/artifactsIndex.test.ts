@@ -31,6 +31,21 @@ describe('artifacts index', () => {
     expect(byPath['C:/proj/nekko-designs/login.html']).toMatchObject({ kind: 'design', source: 'written', title: 'Login' });
   });
 
+  it('indexes image markdown and regular image links once per path across chats', () => {
+    const old = sessionArtifacts({ id: 'old', title: 'Old images', messages: [
+      msg('a1', '![Preview](reports/chart.png) [Open image](reports/./chart.png)', 10),
+    ] }, 'C:/proj');
+    expect(old).toEqual([{ path: 'C:/proj/reports/chart.png', title: 'Preview', filename: 'chart.png', kind: 'image', sessionId: 'old', sessionTitle: 'Old images', at: 10, source: 'linked' }]);
+
+    const recent = sessionArtifacts({ id: 'new', title: 'New images', messages: [
+      msg('a2', '[Updated chart](reports/chart.png) ![Preview](reports/./chart.png)', 20),
+    ] }, 'C:/proj');
+    expect(recent).toHaveLength(1);
+    const merged = mergeArtifacts([old, recent]);
+    expect(merged).toEqual([{ ...old[0], title: 'Updated chart', sessionId: 'new', sessionTitle: 'New images', at: 20 }]);
+    expect(groupArtifacts(merged)).toEqual([{ kind: { id: 'image', label: 'Images' }, items: merged }]);
+  });
+
   it('skips relative writes with no folder to resolve against', () => {
     expect(sessionArtifacts({ id: 's', title: 't', messages: [msg('a', '', 1, { toolCalls: [write('reports/x.md')] })] })).toEqual([]);
   });
