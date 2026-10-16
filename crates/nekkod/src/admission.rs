@@ -27,16 +27,18 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub const CHANNELS: &[&str] = &["chat:send"];
+pub const CHANNELS: &[&str] = &["chat:send", "chat:interruptQueued"];
 
 /// `runWorktreeSetup`'s limit.
 const SETUP_LIMIT: Duration = Duration::from_secs(15 * 60);
 
-/// What the daemon keeps for admission: the chats being compacted (the host
-/// compacts, and says so with `compaction` events, which pass through here).
+/// What the daemon keeps for admission: the chats being prepared, and the
+/// compactions (compaction.rs), which refuse a turn while they run.
 pub struct Admission {
-    compacting: Mutex<HashSet<String>>,
     pending: Mutex<HashMap<String, Cancel>>,
+    /// The chats whose queued prompt is being started at once (`chat:interruptQueued`).
+    interrupting: Arc<Mutex<HashSet<String>>>,
+    compactions: Arc<crate::compaction::Compactions>,
     /// The desktop app's host lets the agent drive a browser; the web edition's does not.
     pub allow_browser_control: bool,
     /// `NEKKO_AGENT_LOOP=ts`: every turn stays in the host.
@@ -44,29 +46,33 @@ pub struct Admission {
 }
 
 impl Admission {
-    pub fn new(hub: &crate::hub::Hub, allow_browser_control: bool, ts_loop: bool) -> Arc<Self> {
-        let me = Arc::new(Admission {
-            compacting: Mutex::default(),
+    pub fn new(
+        compactions: Arc<crate::compaction::Compactions>,
+        allow_browser_control: bool,
+        ts_loop: bool,
+    ) -> Arc<Self> {
+        Arc::new(Admission {
             pending: Mutex::default(),
+            interrupting: Arc::default(),
+            compactions,
             allow_browser_control,
             ts_loop,
-        });
-        let (weak, mut rx) = (Arc::downgrade(&me), hub.subscribe());
-        tokio::spawn(async move {
-            loop {
-                let ev = match rx.recv().await {
-                    Ok(ev) => ev,
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(_) => break,
-                };
-                if ev.term_data || !ev.text.contains("\"compaction\"") {
-                    continue;
-                }
-                let Some(me) = weak.upgrade() else { break };
-                me.observe(&ev.text);
-            }
-        });
-        me
+        })
+    }
+
+    fn interrupting(&self, id: &str) -> bool {
+        self.interrupting.lock().unwrap_or_else(|e| e.into_inner()).contains(id)
+    }
+
+    /// Mark the chat as starting a queued prompt until the guard drops.
+    fn begin_interrupt(&self, id: &str) -> InterruptGuard {
+        self.interrupting.lock().unwrap_or_else(|e| e.into_inner()).insert(id.to_string());
+        InterruptGuard { set: self.interrupting.clone(), id: id.to_string() }
+    }
+
+    /// Whether a `chat:send` for this chat is being admitted or driven here.
+    pub fn is_admitting(&self, id: &str) -> bool {
+        self.pending.lock().unwrap_or_else(|e| e.into_inner()).contains_key(id)
     }
 
     fn begin(self: &Arc<Self>, id: &str) -> Result<AdmissionGuard, String> {
@@ -89,29 +95,23 @@ impl Admission {
         }
     }
 
-    /// Note a `compaction` progress event: running starts one, anything else ends it.
-    fn observe(&self, frame: &str) {
-        let Ok(v) = serde_json::from_str::<Value>(frame) else { return };
-        let p = &v["payload"];
-        if v["channel"] != "agent:event" || p["type"] != "compaction" {
-            return;
-        }
-        let Some(id) = p["sessionId"].as_str() else { return };
-        let mut set = self.compacting.lock().unwrap_or_else(|e| e.into_inner());
-        if p.pointer("/progress/state").and_then(Value::as_str) == Some("running") {
-            set.insert(id.to_string());
-        } else {
-            set.remove(id);
-        }
-    }
-
     fn is_compacting(&self, id: &str) -> bool {
-        self.compacting.lock().unwrap_or_else(|e| e.into_inner()).contains(id)
+        self.compactions.is_compacting(id)
     }
 }
 
 fn s<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(Value::as_str).unwrap_or_default()
+}
+
+struct InterruptGuard {
+    set: Arc<Mutex<HashSet<String>>>,
+    id: String,
+}
+impl Drop for InterruptGuard {
+    fn drop(&mut self) {
+        self.set.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.id);
+    }
 }
 
 struct AdmissionGuard {
@@ -306,9 +306,18 @@ async fn ended(ctx: &Ctx, session_id: &str, message: &str) -> Result<Admit, Stri
 /// `chat:send`.
 pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<Value, String> {
     let opts = args.first().cloned().unwrap_or(Value::Null);
+    if adm.interrupting(s(&opts, "sessionId")) {
+        return Err("A queued prompt is already starting.".into());
+    }
+    send_with(ctx, adm, opts, None).await
+}
+
+/// `sendChat(opts, ..., queued)`: admit and drive a turn and its chain; with
+/// `queued`, the turn runs that queue entry and claims it.
+async fn send_with(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Value>) -> Result<Value, String> {
     let session_id = s(&opts, "sessionId").to_string();
     let pending = adm.begin(&session_id)?;
-    let result = admit(ctx, adm, opts, None, &pending.cancel).await?;
+    let result = admit(ctx, adm, opts.clone(), queued, false, &pending.cancel).await?;
     if pending.cancel.is_cancelled() && !matches!(&result, Admit::Ended) {
         stopped(ctx, &session_id).await?;
         return Ok(Value::Null);
@@ -316,7 +325,7 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
     let spec = match result {
         Admit::Host => {
             drop(pending);
-            return ctx.backend.call("chat:send", Value::Array(args)).await;
+            return ctx.backend.call("chat:send", json!([opts])).await;
         }
         Admit::Ended => return Ok(Value::Null),
         Admit::Spec(spec) => spec,
@@ -330,6 +339,64 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
     Ok(Value::Null)
 }
 
+/// How long `chat:interruptQueued` waits for the stopped reply to let go of the chat.
+const INTERRUPT_SETTLE: Duration = Duration::from_secs(30);
+
+/// `chat:interruptQueued(sessionId, index, brain)`: stop the reply that runs
+/// (the daemon's or the host's), wait for it to end, then start the queued
+/// prompt at `index` at once, on the model picked for it, claiming it from
+/// the queue in the same write as its user message (host.ts
+/// `interruptQueuedPrompt`).
+pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<Value, String> {
+    let session_id = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
+    let index = args.get(1).cloned().unwrap_or(Value::Null);
+    let brain = args.get(2).cloned().unwrap_or(Value::Null);
+    let store = ctx.sessions.clone().ok_or("Session not found.")?;
+    let (st, id) = (store.clone(), session_id.clone());
+    let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
+    let session = session.ok_or("Session not found.")?;
+    // A sandbox chat, and the kill switch, keep the whole thing in the host.
+    if adm.ts_loop || crate::worktrees::execution_mode(&session) == "sandbox" {
+        return ctx.backend.call("chat:interruptQueued", Value::Array(args)).await;
+    }
+    let index = nekko_turn::variants::queued_index_valid(&session, &index).ok_or("Queued prompt not found.")?;
+    if adm.interrupting(&session_id) {
+        return Err("A queued prompt is already starting.".into());
+    }
+    if adm.is_compacting(&session_id) {
+        return Err("This chat is being compacted.".into());
+    }
+    let settings = crate::settings::current(ctx).await;
+    let (opts, item) = nekko_turn::variants::interrupt_queued_plan(&session, index, &brain, &settings)?;
+    let _interrupting = adm.begin_interrupt(&session_id);
+
+    let busy = |ctx: &Ctx, adm: &Arc<Admission>, id: String| {
+        let (ctx, adm) = (ctx.clone(), adm.clone());
+        async move {
+            adm.is_admitting(&id)
+                || ctx.turns.running_sessions().contains(&id)
+                || crate::routes::running_chats(&ctx).await.contains(&id)
+        }
+    };
+    if busy(ctx, adm, session_id.clone()).await {
+        // The UI's Stop, then wait for the reply to let go of the chat.
+        crate::routes::stop_chat(ctx, &session_id).await?;
+        let until = tokio::time::Instant::now() + INTERRUPT_SETTLE;
+        while busy(ctx, adm, session_id.clone()).await {
+            if tokio::time::Instant::now() > until {
+                return Err("The running reply did not stop. Try again when it finishes.".into());
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    } else if ctx.image_turns.abort(&session_id) {
+        return Err("Image turn is still stopping. Try again when it finishes.".into());
+    }
+    if adm.is_compacting(&session_id) {
+        return Err("This chat is being compacted.".into());
+    }
+    send_with(ctx, adm, opts, Some(json!({ "index": index, "item": item }))).await
+}
+
 /// The next queued prompt of a chain the daemon admitted (`turn:prepare`,
 /// answered here): `{ spec }`, `{ ended: true }` (it could not start and the
 /// chat was told why), or `{ inProcess: true }` (the host must run it).
@@ -337,7 +404,7 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
 pub async fn admit_queued(ctx: &Ctx, adm: &Arc<Admission>, payload: &Value) -> Option<Value> {
     let opts = payload.get("opts").cloned().unwrap_or(Value::Null);
     let cancel = adm.cancellation(s(&opts, "sessionId")).unwrap_or_default();
-    match admit(ctx, adm, opts, payload.get("queued").cloned(), &cancel).await {
+    match admit(ctx, adm, opts, payload.get("queued").cloned(), true, &cancel).await {
         Ok(Admit::Spec(spec)) => Some(json!({ "spec": spec })),
         Ok(Admit::Host) => None,
         Ok(Admit::Ended) | Err(_) => Some(json!({ "ended": true })),
@@ -351,6 +418,7 @@ async fn admit(
     adm: &Arc<Admission>,
     opts: Value,
     queued: Option<Value>,
+    chained: bool,
     cancel: &Cancel,
 ) -> Result<Admit, String> {
     let session_id = s(&opts, "sessionId").to_string();
@@ -363,8 +431,8 @@ async fn admit(
     if adm.ts_loop || session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox") {
         return Ok(Admit::Host);
     }
-    // A queued prompt was admitted by the host without this check; so it stays.
-    if queued.is_none() && adm.is_compacting(&session_id) {
+    // A chained queued prompt was admitted by the host without this check; so it stays.
+    if !chained && adm.is_compacting(&session_id) {
         return ended(ctx, &session_id, "This chat is being compacted. Wait or move to a new chat.").await;
     }
     let settings = crate::settings::current(ctx).await;
@@ -555,7 +623,7 @@ async fn admit(
             "allowBrowserControl": adm.allow_browser_control,
             "provider": resolved,
             // A queued turn joins the chain the host already follows.
-            "chained": queued.is_some(),
+            "chained": chained,
         }]);
         tokio::spawn(async move {
             if cancel.is_cancelled() {

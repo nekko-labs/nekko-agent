@@ -9,7 +9,8 @@
 //! - `plan_update`: `update_plan` on a chat's live plan;
 //! - `stats`: a reply's totals, kept on its last message;
 //! - `delegate`: what a `spawn_agent` child's run comes back as;
-//! - `side`: the suggested-replies and prompt-fill side calls.
+//! - `side`: the suggested-replies and prompt-fill side calls;
+//! - `variants`: compaction, image turns and starting a queued prompt at once.
 //!
 //! The tool specs and the fixed text a turn uses come from the TS sources
 //! through `src/catalog.json`, which `turn-plan.golden.test.ts` writes and
@@ -25,6 +26,7 @@ pub mod plan;
 pub mod plan_update;
 pub mod side;
 pub mod stats;
+pub mod variants;
 
 pub use ask::{format_ask_answers, parse_ask_request};
 pub use input::{apply_turn_input, clean_title, send_options_for_queued_item, title_prompt};

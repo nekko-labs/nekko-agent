@@ -274,17 +274,31 @@ impl Server {
 
     /// One image from a loaded (or loadable) image model (`generateImage`).
     async fn generate_image(&self, request: &Value) -> Result<Value, String> {
+        self.generate_image_with(request, &mut |_| {}).await
+    }
+
+    /// `generateImage(request, onStage)`: `on_stage` hears `loading` when the
+    /// model has to be loaded first (most of a cold request), then `generating`.
+    pub async fn generate_image_with(
+        &self,
+        request: &Value,
+        on_stage: &mut (dyn FnMut(&str) + Send),
+    ) -> Result<Value, String> {
         let body = launch::image_generation_body(request)?;
         let id = request.get("modelId").map(nekko_js::display).unwrap_or_default();
         let model = self.library.find(&id).await?;
         let Some(model) = model.filter(|m| m.get("modality").and_then(Value::as_str) == Some("image")) else {
             return Err("Choose an image-generation model.".into());
         };
+        if !self.model.loaded_ids().contains(&id) {
+            on_stage("loading");
+        }
         let preset = model.get("preset").filter(|p| !p.is_null()).cloned().unwrap_or(json!({}));
         let started = self.load(&id, preset).await;
         if started.get("ok") != Some(&Value::Bool(true)) {
             return Err(started.get("message").map(nekko_js::display).unwrap_or_default());
         }
+        on_stage("generating");
         let settings = engine_settings(&self.library.settings());
         let port = settings.get("port").map(nekko_js::display).unwrap_or_default();
         let mut req = self

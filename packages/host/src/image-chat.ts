@@ -1,6 +1,7 @@
 import { randomInt } from 'crypto';
-import type { AgentEvent, ChatMessage, ImageGenerationRequest, ImageGenerationResult, ImageTurnOptions } from '@nekko-agent/shared';
+import type { AgentEvent, ImageGenerationRequest, ImageGenerationResult, ImageTurnOptions } from '@nekko-agent/shared';
 import { getSession, saveSession, saveTurnSession } from './sessions.js';
+import { imageFailure, imageReply, imageSize, imageStageLabel, startImageTurn } from './turn-variants.js';
 
 /**
  * One turn of an image-generation chat.
@@ -10,6 +11,11 @@ import { getSession, saveSession, saveTurnSession } from './sessions.js';
  * message and an assistant message (carrying the image and how it was made),
  * and it still emits the turn events every surface already listens for, so the
  * chat, the sidebar and the Command Center treat it like any other turn.
+ *
+ * The pure half (the transcript edits, the request, the labels) is
+ * turn-variants.ts; the engine daemon runs the same turn itself
+ * (`chat:generateImage`, crates/nekkod/src/image_turns.rs) when it owns the
+ * model server, and the host dispatcher sends the channel there.
  */
 
 type Generate = (request: ImageGenerationRequest, onStage?: (stage: 'loading' | 'generating') => void) => Promise<ImageGenerationResult>;
@@ -25,7 +31,7 @@ export function abortImageTurn(sessionId: string): boolean {
 }
 
 export async function generateImageTurn(opts: ImageTurnOptions, generate: Generate, emit: (e: AgentEvent) => void): Promise<void> {
-  const { sessionId, prompt, params } = opts;
+  const { sessionId, params } = opts;
   const session = getSession(sessionId);
   if (!session) {
     emit({ type: 'error', sessionId, message: 'That chat no longer exists.' });
@@ -35,14 +41,12 @@ export async function generateImageTurn(opts: ImageTurnOptions, generate: Genera
     emit({ type: 'error', sessionId, message: 'This chat is already generating an image.' });
     return;
   }
-  const text = prompt.trim();
-  if (!text) {
-    emit({ type: 'error', sessionId, message: 'Describe the image you want first.' });
+  const started_ = startImageTurn(session, opts, Date.now(), randomInt(0, 2 ** 31 - 1));
+  if ('error' in started_) {
+    emit({ type: 'error', sessionId, message: started_.error });
     return;
   }
-  // -1 means "surprise me", but the reply records a real seed so the same
-  // picture can be made again.
-  const seed = params.seed >= 0 ? params.seed : randomInt(0, 2 ** 31 - 1);
+  const { request, seed } = started_;
   const controller = new AbortController();
   running.set(sessionId, controller);
   // As sendChat does: nothing touches disk for an incognito chat, and prompts
@@ -51,51 +55,26 @@ export async function generateImageTurn(opts: ImageTurnOptions, generate: Genera
     if (session.incognito) return;
     saveTurnSession(session);
   };
-
-  session.messages.push({ id: `msg_${Date.now().toString(36)}`, role: 'user', content: text, createdAt: Date.now() });
-  if (session.title === 'New chat') {
-    session.title = text.slice(0, 48);
-    session.titleAuto = true;
-  }
-  session.chatType = 'image';
-  session.imageParams = { ...params, seed: params.seed };
-  session.modelId = params.modelId;
   // Read from disk just above, so nothing is stale yet; and the settings this
   // turn was sent with are the chat's now, which a merging save would undo.
   if (!session.incognito) saveSession(session);
 
-  const size = `${params.width}×${params.height}`;
-  emit({ type: 'image_status', sessionId, stage: 'generating', label: `Generating a ${size} image` });
+  const size = imageSize(params);
+  emit({ type: 'image_status', sessionId, stage: 'generating', label: imageStageLabel('generating', size) });
   const started = Date.now();
   try {
     const aborted = new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(new Error('Stopped.'))));
     const result = await Promise.race([
-      generate({ modelId: params.modelId, prompt: text, width: params.width, height: params.height, steps: params.steps, cfgScale: params.cfgScale, seed }, (stage) =>
-        emit({ type: 'image_status', sessionId, stage, label: stage === 'loading' ? 'Loading the image model' : `Generating a ${size} image` }),
-      ),
+      generate(request, (stage) => emit({ type: 'image_status', sessionId, stage, label: imageStageLabel(stage, size) })),
       aborted,
     ]);
-    const images = result.data.map((d) => `data:image/png;base64,${d.b64_json}`);
-    const reply: ChatMessage = {
-      id: `msg_${(Date.now() + 1).toString(36)}`,
-      role: 'assistant',
-      content: '',
-      images,
-      generated: { modelId: params.modelId, width: params.width, height: params.height, steps: params.steps, cfgScale: params.cfgScale, seed, ms: Date.now() - started },
-      createdAt: Date.now(),
-    };
+    const reply = imageReply(result, params, seed, Date.now() - started, Date.now());
     session.messages.push(reply);
     persist();
     emit({ type: 'done', sessionId, messageId: reply.id });
   } catch (e) {
     const stopped = controller.signal.aborted;
-    const reply: ChatMessage = {
-      id: `msg_${(Date.now() + 1).toString(36)}`,
-      role: 'assistant',
-      content: stopped ? 'Stopped before the image finished.' : `The image could not be generated: ${(e as Error).message}`,
-      interrupted: stopped || undefined,
-      createdAt: Date.now(),
-    };
+    const reply = imageFailure(stopped, (e as Error).message, Date.now());
     session.messages.push(reply);
     persist();
     if (stopped) emit({ type: 'done', sessionId, messageId: reply.id });
