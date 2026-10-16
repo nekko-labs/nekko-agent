@@ -133,7 +133,9 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).imePadding()) {
-            Box(Modifier.weight(1f)) {
+            // Full width as well as the remaining height: without fillMaxWidth the box
+            // wraps its content, so the loading spinner sat at the left edge.
+            Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     !chat.ready -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
                     keyed.isEmpty() && chat.error == null -> Text(
