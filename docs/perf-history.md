@@ -30,6 +30,15 @@ Only record numbers that were actually measured, quoted exactly from their
 source. If a PR was performance-motivated but measured nothing, list it under
 [Unmeasured](#unmeasured) instead of guessing.
 
+This is the canonical, cumulative Markdown source for future performance articles;
+update an entry when final CI results arrive, not just when a PR is opened. Include
+PR/commit links, hardware and workload, exact samples, what changed, what did not
+improve, and the remaining question. Keep microbenchmarks, CPU-profile samples,
+profiled diagnostics and full product gates separate. Do not infer causality from
+single sequential runs or compare different machines as a time-series speedup.
+Link durable reports where possible: CI artifacts can expire, so retain the key
+numbers and conditions here even when raw traces are linked elsewhere.
+
 ## Themes
 
 Threads worth an article, with the entries that tell each story:
@@ -48,10 +57,29 @@ Threads worth an article, with the entries that tell each story:
 - **Local inference.** #152 (we were reporting half the real tok/s), #196, #218,
   #222.
 - **Developer loop.** #342, #490, #503.
+- **A faster helper is not automatically a faster frame.** #544's streaming
+  investigation, #594's baseline failure, #595's bounded excerpt scan (~6x
+  microbenchmark improvement and fewer CPU samples, but no whole-frame win),
+  and #597's independent status fix. This is an article thread about finding
+  real avoidable work without mistaking it for resolution of the user-facing
+  performance problem.
 
 ## 2026-10
 
-### Bound streaming activity excerpt scans (2026-10-16)
+### #597 Completion-status fix: continuing baseline frame investigation (2026-10-16)
+Area: renderer
+Result: no performance improvement established (correctness fix, baseline diagnostic failure)
+Conditions: same CI runner for the paired three-second profiled diagnostics, Linux / AMD EPYC 9V74 (4 threads), Chrome 155.0.8059.39, no GPU, 1440x1000, 1,000-message chat, 300 tokens/s. These short diagnostic measurements are not interchangeable with the six-second unprofiled gate.
+
+| Metric | Before (unchanged base) | After (#597 diagnostic) |
+|---|---|---|
+| Streaming frame p95, profiled diagnostic | 14.0 ms | 11.8 ms |
+
+Full head gate best p95 was **11.3 ms** across **12.2 / 11.3 / 12.1 ms** attempts, still above **10.4 ms**; all other speed/memory rows and non-performance CI checks passed. This is not evidence that status reconciliation speeds up streaming: one sequential pair, instrumentation and runner variation prevent that attribution. The change fixes contradictory Done/interrupted notices, not the frame-cost root cause. No budget changed; #544 remains open.
+
+Sources: [PR #597](https://github.com/nekko-labs/nekko-agent/pull/597), merge `8be677fa`, [CI run](https://github.com/nekko-labs/nekko-agent/actions/runs/38835173427), [reports/traces artifact](https://github.com/nekko-labs/nekko-agent/actions/runs/38835173427/artifacts/12019456830), [#544 follow-up](https://github.com/nekko-labs/nekko-agent/issues/544#issuecomment-6206132883).
+
+### #595 Bound streaming activity excerpt scans (2026-10-16)
 Area: renderer
 Result: mixed (excerpt microbenchmark improvement, no whole-frame improvement established)
 Conditions: Windows, Ryzen 9 9950X3D, Node 24.1.0; microbenchmark 100,000 long-text calls per lap after warmup, five laps. Browser: headless Chrome 153.0.8010.12, TS host, no GPU, 1440x1000, 1,000-message chat, 300 tokens/s, isolated production web builds of base d9c2f11a and optimized source. One unprofiled six-second trace and one profiled three-second diagnostic per build.
@@ -63,6 +91,30 @@ Conditions: Windows, Ryzen 9 9950X3D, Node 24.1.0; microbenchmark 100,000 long-t
 | Streaming frame p95, three seconds with CPU profiling | 6.3 ms (148 frames) | 6.5 ms (152 frames) |
 
 Why: scan only enough normalized text for the excerpt plus lookahead, instead of normalizing the entire 2,000-character tail per text event. Outputs match the previous algorithm in 10,000 seeded differential cases. Saved CI profiles from #594 show compactSentence as the top named application self-time, but this local frame comparison does not establish a frame win. No budget changed; #544 remains open. Source: `scripts/bench-compact-sentence.mjs`, local `.shots/perf-head`, `.shots/profile-head`, and matching `stream-activity-base` reports/traces. This behavior-preserving refactor has no visual change and does not change SPEC requirements.
+
+Final Linux CI follow-up: AMD EPYC 9V74 (4 threads), Chrome 155.0.8059.39, no GPU, same-runner base/head three-second profiled streaming diagnostics, 1440x1000, 1,000-message chat, 300 tokens/s. Base is unchanged `d9c2f11a`; PR head is `6f908f34`, merged as `a8e64e88`.
+
+| Metric | Before (base diagnostic) | After (head diagnostic) |
+|---|---|---|
+| Streaming frame p95 | 13.8 ms | 13.9 ms |
+| compactSentence CPU self-time samples | 106 | 15 |
+
+The named helper's sampled cost fell, consistent with the microbenchmark, but the frame result is effectively unchanged and both diagnostics fail **10.4 ms**. CPU sample counts are not elapsed milliseconds or a controlled total-CPU percentage. Full six-second head gate best p95 was **12.0 ms** across **12.1 / 12.0 / 13.2 ms** attempts; all other speed/memory rows and non-performance checks passed. There is no matching unprofiled full-gate base result in this run, so do not subtract its full result from either profiled diagnostic. The excerpt optimization landed; the frame-budget problem did not close.
+
+Sources: [PR #595](https://github.com/nekko-labs/nekko-agent/pull/595), [CI run](https://github.com/nekko-labs/nekko-agent/actions/runs/38833610415), [matched reports/profiles artifact](https://github.com/nekko-labs/nekko-agent/actions/runs/38833610415/artifacts/12018727601), [#544 results](https://github.com/nekko-labs/nekko-agent/issues/544#issuecomment-6205949101). Local benchmark reproduction: `node scripts/bench-compact-sentence.mjs`. Next: attribute the remaining script/render/style/layout/paint cost in the saved frame traces, then verify any further candidate under the unchanged gate.
+
+### #594 Streaming baseline failure identifies an excerpt hotspot (2026-10-15)
+Area: renderer investigation
+Result: baseline diagnostic failure; optimization candidate identified, no runtime improvement claimed
+Conditions: same Linux runner/browser for matched three-second profiled diagnostics, AMD EPYC 7763 (4 threads), Chrome 155.0.8059.39, no GPU, 1440x1000, 1,000-message chat, 300 tokens/s. Unchanged base `7c71ff25`; head diagnostic `6b9cf5e3`.
+
+| Metric | Before (base diagnostic) | After (head diagnostic) |
+|---|---|---|
+| Streaming frame p95 | 11.50 ms | 12.19 ms |
+
+Full head best p95 was **10.6 ms** across **10.6 / 12.0 / 10.8 ms** attempts, over the unchanged **10.4 ms** limit. All other speed/memory rows passed. The baseline diagnostic also failed; this does not establish zero incremental impact from #594 or provide an unprofiled full-gate base comparison. Both saved CPU profiles identified `compactSentence` as the largest named application self-time hotspot, motivating #595. #594 itself changed nav wings and creation/Focus controls, not that helper. Keep the independent UI work distinct from the later optimization.
+
+Sources: [PR #594](https://github.com/nekko-labs/nekko-agent/pull/594), merge `d9c2f11a`, [CI run](https://github.com/nekko-labs/nekko-agent/actions/runs/38780176028), [reports/traces artifact](https://github.com/nekko-labs/nekko-agent/actions/runs/38780176028/artifacts/11995992713), [#544 investigation](https://github.com/nekko-labs/nekko-agent/issues/544#issuecomment-6198906006).
 
 ### CI gates for streaming frame and cold-switch frame raised ~4% (2026-10-15)
 Area: perf harness
