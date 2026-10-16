@@ -321,6 +321,17 @@ impl OpenAiCompatProvider {
                 if tools {
                     details.insert("tools".into(), json!("yes"));
                 }
+                // What the model takes as input (OpenRouter's catalog, the
+                // Nekko engine's projector check), for the composer and turn.
+                let inputs: Vec<String> = m
+                    .pointer("/architecture/input_modalities")
+                    .or_else(|| m.get("input_modalities"))
+                    .and_then(Value::as_array)
+                    .map(|a| a.iter().map(js::display).collect())
+                    .unwrap_or_default();
+                if !inputs.is_empty() {
+                    details.insert("inputModalities".into(), json!(inputs.join(",")));
+                }
                 for key in ["path", "location"] {
                     if let Some(Value::String(s)) = m.get(key) {
                         details.insert(key.into(), json!(s));

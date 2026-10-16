@@ -6,7 +6,7 @@
 
 use nekko_loop::{
     RunawayGuard, RunawayOptions, as_seen_by_chat_model, from_latest_compaction, repair_interrupted_history,
-    window_history,
+    window_history, without_images,
 };
 use serde_json::{Value, json};
 use std::path::Path;
@@ -90,5 +90,9 @@ fn every_helper_matches_the_ts_loop() {
     for (i, c) in cases["compacted"].as_array().unwrap().iter().enumerate() {
         let sent = from_latest_compaction(c["history"].as_array().unwrap());
         assert_eq!(json!({ "name": c["name"], "sent": sent }), expected["compacted"][i], "compacted {}", c["name"]);
+    }
+
+    for (i, m) in cases["blind"].as_array().unwrap().iter().enumerate() {
+        assert_eq!(without_images(m), expected["blind"][i], "blind {i}");
     }
 }

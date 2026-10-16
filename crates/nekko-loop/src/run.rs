@@ -11,7 +11,9 @@
 //! TS shapes (`AgentEvent`, `ChatMessage`), as JSON.
 
 use crate::fit::{ELIDE_ALL, apply_elision, elidable, elision_for, is_context_overflow};
-use crate::history::{as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history};
+use crate::history::{
+    as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history, without_images,
+};
 use crate::progress::{LOOP_WRAP_UP_PROMPT, LoopDetector, loop_note, loop_nudge};
 use crate::resume::{INTERRUPTED_NOTE, RESUME_PROMPT, repair_interrupted_history};
 use crate::runaway::{RUNAWAY_NOTE, RunawayGuard};
@@ -142,6 +144,9 @@ pub struct RunOptions<'a> {
     /// outputs are elided from what is sent once the prompt nears it (fit.rs).
     pub context_window: Option<f64>,
     pub max_output_tokens: Option<u64>,
+    /// `imageInput`: `Some(false)` when the model is known not to take
+    /// pictures, which are then sent as a note instead (`without_images`).
+    pub image_input: Option<bool>,
     pub resume: bool,
     pub cancel: Cancel,
     /// Messages the user sent while the reply runs (`loop:steer`). Drained at
@@ -332,8 +337,12 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
         // Only a compacted transcript is copied; most are sent as they are.
         let compacted = latest_compaction_index(self.opts.history).map(|_| from_latest_compaction(self.opts.history));
         let sent: &[Value] = compacted.as_deref().unwrap_or(self.opts.history);
-        let mut messages: Vec<Value> =
-            window_history(sent, self.opts.max_history_turns).iter().map(as_seen_by_chat_model).collect();
+        let blind = self.opts.image_input == Some(false);
+        let mut messages: Vec<Value> = window_history(sent, self.opts.max_history_turns)
+            .iter()
+            .map(as_seen_by_chat_model)
+            .map(|m| if blind { without_images(&m) } else { m })
+            .collect();
         messages.extend(extra);
         let tools = if send_tools { self.opts.tools.clone() } else { Vec::new() };
         self.elided = elision_for(&self.opts.system, &tools, &messages, self.opts.context_window, self.elided);

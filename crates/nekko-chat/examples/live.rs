@@ -45,6 +45,7 @@ async fn main() {
             max_history_turns: None,
             context_window: None,
             max_output_tokens: Some(256),
+            image_input: None,
             resume: false,
             cancel: Cancel::default(),
             steering: Default::default(),
