@@ -7,10 +7,10 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -60,20 +60,20 @@ class LiveRelayTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             waitFor(hasText("Pair a computer"))
             shot("0-welcome")
-            compose.onNode(hasText("Pair a computer") and hasClickAction()).performClick()
+            tap(hasText("Pair a computer"))
 
             waitFor(hasText("Pairing link"))
             compose.onNode(hasText("Pairing link")).performTextInput(link!!)
             shot("1-pair")
-            compose.onNode(hasText("Pair") and hasClickAction()).performClick()
+            tap(hasText("Pair"))
 
             waitFor(hasText("New chat"), 30_000)
             shot("2-chats")
-            compose.onNode(hasText("New chat") and hasClickAction()).performClick()
+            tap(hasText("New chat"))
 
             waitFor(hasText("Start on", substring = true), 20_000)
             shot("3-new-chat")
-            compose.onNode(hasText("Start on", substring = true) and hasClickAction()).performClick()
+            tap(hasText("Start on", substring = true))
 
             send("Say hello")
             waitFor(hasText("Hello from your computer."), 30_000)
@@ -82,18 +82,28 @@ class LiveRelayTest {
             send("please approve a cleanup")
             waitFor(hasText("Deny"), 30_000)
             shot("5-approval")
-            compose.onNode(hasText("Deny") and hasClickAction()).performClick()
+            tap(hasText("Deny"))
             waitGone(hasText("Deny"), 15_000)
             shot("6-denied")
 
             send("ask me which platform")
             waitFor(hasText("Which platform should I build first?"), 30_000)
             shot("6b-question")
-            compose.onNode(hasText("iOS") and hasClickAction()).performClick()
-            compose.onNode(hasText("Submit") and hasClickAction()).performClick()
+            tap(hasText("iOS"))
+            tap(hasText("Submit"))
             waitGone(hasText("Which platform should I build first?"), 15_000)
             shot("7-answered")
         }
+    }
+
+    /**
+     * Tap what the user sees (a label or an icon's description) rather than the
+     * clickable node that merges it: a touch at its centre lands on its button,
+     * whatever shape the component's semantics take.
+     */
+    private fun tap(matcher: SemanticsMatcher) {
+        waitFor(matcher)
+        compose.onAllNodes(matcher, useUnmergedTree = true).onFirst().performClick()
     }
 
     private fun send(text: String) {
@@ -101,7 +111,7 @@ class LiveRelayTest {
         waitFor(box, 15_000)
         compose.onNode(box).performClick()
         compose.onNode(box).performTextInput(text)
-        compose.onNode(hasContentDescription("Send") and hasClickAction()).performClick()
+        tap(hasContentDescription("Send"))
     }
 
     private fun waitFor(matcher: SemanticsMatcher, timeoutMs: Long = 10_000) {
