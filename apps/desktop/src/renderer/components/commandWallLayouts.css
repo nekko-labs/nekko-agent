@@ -21,8 +21,8 @@
   min-width: 0;
   min-height: 0;
   border-radius: var(--pane-radius);
-  /* One push with the window opening or closing beside it (wallMotion.ts). */
-  transition: left var(--wall-push-ms) var(--wall-push-ease), top var(--wall-push-ms) var(--wall-push-ease), width var(--wall-push-ms) var(--wall-push-ease), height var(--wall-push-ms) var(--wall-push-ease);
+  /* Existing windows slide once; sizes settle without a corner-resize tween. */
+  transition: left var(--wall-push-ms) var(--wall-push-ease), top var(--wall-push-ms) var(--wall-push-ease);
 }
 .command-wall-window > .panel { min-width: 0; min-height: 0; overflow: hidden; }
 /* A Focus window that is not the hero: kept laid out under it, never drawn. */

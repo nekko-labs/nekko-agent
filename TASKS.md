@@ -1755,3 +1755,5 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 ### Effort default on its own rung (2026-10-16)
 - [x] Native-effort Claude models show Default on the rung it resolves to instead of a separate stop left of Low (ported from the stale gentle-sage-wren WIP; its window title, sub-agent chip and folder chip parts were superseded on main). See SPEC.md: Effort that follows the model.
 - [ ] Matched before/after desktop captures of the composer and Add window effort slider for Opus 5.5 and Opus 5.
+
+- [x] Wall push and navigation shoulders: remove existing-pane size tween, retain positional push and incoming reveal; mirror 10px-clearance rail shoulders and tail curves. Desktop build/typecheck, 1,241 tests and 18 launcher checks pass; matched isolated renderer evidence captured. See SPEC.md, Wall push and navigation shoulders.
