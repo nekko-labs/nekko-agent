@@ -25,7 +25,7 @@ extension XCTestCase {
         while app.keyboards.firstMatch.exists, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.1)) }
         // The keyboard going away moves the bottom bar and re-lays out the screen;
         // auditing mid-animation reported rows as clipped or covered.
-        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
         let window = app.windows.firstMatch.frame
 
         var blocking: [String] = [], other: [String] = []

@@ -37,19 +37,19 @@ struct NewChatView: View {
                 SectionHeader("Model")
             }
             Section {
-                Picker("Folder", selection: $folder) {
+                Picker(selection: $folder) {
                     Text("General").tag(String?.none)
                     ForEach(store.workspaces) { w in Text(w.name).tag(Optional(w.id)) }
-                }
+                } label: { Text("Folder").foregroundStyle(palette.ink) }
                 .pickerStyle(.navigationLink)
             } header: {
                 SectionHeader("Project")
             }
             Section {
-                Picker("Tools", selection: $mode) {
+                Picker(selection: $mode) {
                     Text("Computer default").tag(PcSettings.ChatMode?.none)
                     ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in Text(modeName(m)).tag(Optional(m)) }
-                }
+                } label: { Text("Tools").foregroundStyle(palette.ink) }
                 .pickerStyle(.navigationLink)
             } footer: {
                 Text("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Its default is \(modeName(store.pcSettings.effectiveMode)).")
