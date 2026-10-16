@@ -151,18 +151,20 @@ final class RelayClientTests: XCTestCase {
         func await(_ match: @escaping (RelayStatus) -> Bool, timeout: TimeInterval = 3, file: StaticString = #filePath, line: UInt = #line) async -> RelayStatus? {
             let deadline = Date().addingTimeInterval(timeout)
             while Date() < deadline {
-                lock.lock()
-                if let i = statuses.indices.dropFirst(cursor).first(where: { match(statuses[$0]) }) {
-                    cursor = i + 1
-                    let s = statuses[i]
-                    lock.unlock()
-                    return s
-                }
-                lock.unlock()
+                if let s = next(match) { return s }
                 try? await Task.sleep(nanoseconds: 5_000_000)
             }
-            XCTFail("status never matched; saw \(statuses.map { "\($0.state)(\($0.detail ?? ""))" })", file: file, line: line)
+            let seen = lock.sync { statuses.map { "\($0.state)(\($0.detail ?? ""))" } }
+            XCTFail("status never matched; saw \(seen)", file: file, line: line)
             return nil
+        }
+
+        private func next(_ match: (RelayStatus) -> Bool) -> RelayStatus? {
+            lock.sync {
+                guard let i = statuses.indices.dropFirst(cursor).first(where: { match(statuses[$0]) }) else { return nil }
+                cursor = i + 1
+                return statuses[i]
+            }
         }
 
         @discardableResult
