@@ -17,9 +17,38 @@ export interface PushPayload {
   body: string;
 }
 
+/**
+ * A Live Activity update for an iPhone (ActivityKit push). Content-free like
+ * every other push: a phase, and for an approval the opaque call id and the
+ * risk level the phone's buttons need; the step text stays empty and the app
+ * fills it in once it runs again.
+ */
+export interface ActivityPush {
+  event: 'update' | 'end';
+  phase: 'approval' | 'question' | 'running' | 'done' | 'failed';
+  callId?: string;
+  severity?: 'low' | 'medium' | 'high';
+}
+
 export interface PushSender {
   enabled: boolean;
-  send(token: string, platform: 'ios' | 'android', payload: PushPayload): Promise<void>;
+  /** `app` is the iPhone app's bundle id when the phone named one the relay allows. */
+  send(token: string, platform: 'ios' | 'android', payload: PushPayload, app?: string): Promise<void>;
+  sendActivity?(token: string, push: ActivityPush, app?: string): Promise<void>;
+}
+
+/** The APNs body of a Live Activity push (exported for tests). */
+export function activityPayload(push: ActivityPush, nowSec: number = Math.floor(Date.now() / 1000)) {
+  const state: Record<string, unknown> = { phase: push.phase, step: '', steps: 0 };
+  if (push.callId) state.callId = push.callId;
+  if (push.severity) state.severity = push.severity;
+  const aps: Record<string, unknown> = { timestamp: nowSec, event: push.event, 'content-state': state };
+  if (push.event === 'end') aps['dismissal-date'] = nowSec + 10 * 60;
+  // Light the Lock Screen up when the computer is waiting on the phone.
+  if (push.phase === 'approval' || push.phase === 'question') {
+    aps.alert = { title: 'Nekko Agent', body: push.phase === 'approval' ? 'A tool needs your approval.' : 'Your computer has a question.' };
+  }
+  return { aps };
 }
 
 const b64url = (b: Buffer | string) => Buffer.from(b).toString('base64url');
@@ -46,20 +75,21 @@ export function makeApnsJwt(opts: { keyP8: string; keyId: string; teamId: string
 async function sendApns(
   host: string,
   jwt: string,
-  bundleId: string,
+  topic: string,
   token: string,
-  payload: PushPayload,
+  body: unknown,
+  pushType: 'alert' | 'liveactivity' = 'alert',
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const client = http2.connect(`https://${host}`);
     client.on('error', reject);
-    const body = JSON.stringify({ aps: { alert: { title: payload.title, body: payload.body }, sound: 'default' } });
     const req = client.request({
       ':method': 'POST',
       ':path': `/3/device/${token}`,
       authorization: `bearer ${jwt}`,
-      'apns-topic': bundleId,
-      'apns-push-type': 'alert',
+      'apns-topic': topic,
+      'apns-push-type': pushType,
+      'apns-priority': '10',
       'content-type': 'application/json',
     });
     let status = 0;
@@ -71,7 +101,7 @@ async function sendApns(
       status >= 200 && status < 300 ? resolve() : reject(new Error(`APNs ${status}: ${data}`));
     });
     req.on('error', reject);
-    req.end(body);
+    req.end(JSON.stringify(body));
   });
 }
 
@@ -148,6 +178,9 @@ export function createPushSender(env: NodeJS.ProcessEnv = process.env): PushSend
   const keyId = env.APNS_KEY_ID;
   const teamId = env.APNS_TEAM_ID;
   const bundleId = env.APNS_BUNDLE_ID ?? 'dev.nekkolabs.nekkoagent';
+  // Other iPhone apps the same APNs key may reach (the native SwiftUI app), named by the phone.
+  const extraApps = new Set((env.APNS_EXTRA_BUNDLE_IDS ?? 'com.nekko.native.ios').split(',').map((s) => s.trim()).filter(Boolean));
+  const topicFor = (app?: string) => (app && extraApps.has(app) ? app : bundleId);
   const apnsHost = env.APNS_PRODUCTION === '1' ? 'api.push.apple.com' : 'api.sandbox.push.apple.com';
   const apnsReady = !!(keyP8 && keyId && teamId);
   const apnsJwt = apnsReady ? makeApnsJwt({ keyP8: keyP8!, keyId: keyId!, teamId: teamId! }) : null;
@@ -158,11 +191,21 @@ export function createPushSender(env: NodeJS.ProcessEnv = process.env): PushSend
 
   return {
     enabled: apnsReady || fcmReady,
-    async send(token, platform, payload) {
+    async sendActivity(token, push, app) {
+      try {
+        if (!apnsJwt) return void console.log('[push] APNs not configured (set APNS_KEY_P8/APNS_KEY_ID/APNS_TEAM_ID)');
+        await sendApns(apnsHost, apnsJwt(), `${topicFor(app)}.push-type.liveactivity`, token, activityPayload(push), 'liveactivity');
+        console.log(`[push] Live Activity ${push.event} sent`);
+      } catch (e) {
+        console.warn(`[push] activity send failed: ${(e as Error).message}`);
+      }
+    },
+    async send(token, platform, payload, app) {
       try {
         if (platform === 'ios') {
           if (!apnsJwt) return void console.log('[push] APNs not configured (set APNS_KEY_P8/APNS_KEY_ID/APNS_TEAM_ID)');
-          await sendApns(apnsHost, apnsJwt(), bundleId, token, payload);
+          const body = { aps: { alert: { title: payload.title, body: payload.body }, sound: 'default' } };
+          await sendApns(apnsHost, apnsJwt(), topicFor(app), token, body);
           console.log('[push] APNs sent');
         } else {
           if (!fcmToken || !serviceAccount) return void console.log('[push] FCM not configured (set FCM_SERVICE_ACCOUNT)');

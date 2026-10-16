@@ -43,6 +43,7 @@ the token the phone registered (`register-push` frame). Configure APNs:
 | `APNS_KEY_ID` | The key's 10-char Key ID |
 | `APNS_TEAM_ID` | Apple Team ID |
 | `APNS_BUNDLE_ID` | App bundle id (default `dev.nekkolabs.nekkoagent`) |
+| `APNS_EXTRA_BUNDLE_IDS` | Other iPhone apps the same key may push to, comma-separated, chosen by the phone's `app` field (default `com.nekko.native.ios`, the native SwiftUI app) |
 | `APNS_PRODUCTION` | `1` for the production APNs host (default: sandbox) |
 
 **Android (FCM)**: set `FCM_SERVICE_ACCOUNT` to the full service-account JSON
@@ -53,3 +54,24 @@ Without these the relay runs normally and just logs that push is disabled.
 
 The privacy model holds: the push body is generic ("Your task finished"); the
 relay only learns *that* a run completed, never its contents.
+
+### Live Activities (iPhone)
+
+The native iPhone app shows a running chat on the Lock Screen and in the
+Dynamic Island. iOS suspends the app soon after it leaves the screen, so the
+relay keeps those current:
+
+- The phone sends `{type:'register-activity', deviceId, tag, token, app}`, with
+  the Live Activity's ActivityKit push token. `tag` is the first 32 hex digits
+  of sha256(`nekko-activity:` + session id), so the relay never learns which chat
+  it is.
+- The computer sends `{type:'activity', tag, phase, callId?, severity?}` when a
+  chat starts, waits on an approval or a question, runs again, or ends.
+- The relay answers with an APNs `liveactivity` push to
+  `<bundle>.push-type.liveactivity`: an update, or an end for `done` / `failed`,
+  after which the tag is forgotten. This happens whether or not the phone looks
+  connected, because a suspended app's socket can linger.
+
+The content state carries the phase only, plus an approval's opaque call id and
+risk level so the Allow / Deny buttons work. It never carries text. A room keeps
+at most 64 activities, each for at most 12 hours.

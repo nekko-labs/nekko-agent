@@ -28,6 +28,7 @@ public protocol RemoteConnection: Caller {
     func nudge()
     func reconnect()
     func registerPush(token: String) async throws
+    func registerActivity(tag: String, token: String) async throws
 }
 
 extension RelayClient: RemoteConnection {}
@@ -134,6 +135,7 @@ public final class ComputersStore {
     private let summariesDebounce: TimeInterval
     private let modelListTimeout: TimeInterval
     private let platform: String
+    private let app: String?
 
     private var client: RemoteConnection?
     private var generation = 0
@@ -146,6 +148,7 @@ public final class ComputersStore {
                 makeConnection: @escaping (RelayConfig) -> RemoteConnection,
                 deviceName: @escaping () -> String,
                 platform: String = "ios",
+                app: String? = nil,
                 deriveKey: @escaping @Sendable (String, String) async -> Data = { s, r in
                     await Task.detached(priority: .userInitiated) { E2E.deriveKey(secret: s, room: r) }.value
                 },
@@ -157,6 +160,7 @@ public final class ComputersStore {
         self.makeConnection = makeConnection
         self.deviceName = deviceName
         self.platform = platform
+        self.app = app
         self.deriveKey = deriveKey
         self.newId = newId
         self.now = now
@@ -247,6 +251,7 @@ public final class ComputersStore {
         var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
                                  deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
         config.requestTimeout = 120
+        config.app = app
         let c = makeConnection(config)
         generation += 1
         let gen = generation
@@ -328,6 +333,11 @@ public final class ComputersStore {
     public func setPushToken(_ token: String) {
         pushToken = token
         if conn == .online { Task { try? await client?.registerPush(token: token) } }
+    }
+
+    /// A Live Activity's push token for `sessionId` (see `RelayClient.registerActivity`).
+    public func registerActivity(sessionId: String, token: String) async {
+        try? await client?.registerActivity(tag: E2E.activityTag(sessionId), token: token)
     }
 
     // MARK: Reading the computer

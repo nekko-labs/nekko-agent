@@ -26,7 +26,7 @@ struct AgentRunLiveActivity: Widget {
                     PhaseIcon(phase: context.state.phase).font(.title3).padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    if context.state.phase == .running {
+                    if context.state.phase == .running && context.state.hasStart {
                         Text(context.state.startedAt, style: .timer).monospacedDigit().font(.caption).frame(maxWidth: 56)
                     }
                 }
@@ -35,14 +35,14 @@ struct AgentRunLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(context.state.step).font(.caption.monospaced()).lineLimit(2).foregroundStyle(.secondary)
+                        Text(context.state.displayStep).font(.caption.monospaced()).lineLimit(2).foregroundStyle(.secondary)
                         Buttons(context: context)
                     }
                 }
             } compactLeading: {
                 PhaseIcon(phase: context.state.phase)
             } compactTrailing: {
-                if context.state.phase == .running {
+                if context.state.phase == .running && context.state.hasStart {
                     Text(context.state.startedAt, style: .timer).monospacedDigit().frame(maxWidth: 44)
                 } else {
                     Text(shortLabel(context.state.phase)).font(.caption2.weight(.semibold))
@@ -65,11 +65,11 @@ private struct LockScreenView: View {
                 PhaseIcon(phase: context.state.phase)
                 Text(context.attributes.chatTitle).font(.headline).lineLimit(1)
                 Spacer()
-                if context.state.phase == .running {
+                if context.state.phase == .running && context.state.hasStart {
                     Text(context.state.startedAt, style: .timer).monospacedDigit().font(.caption).foregroundStyle(.secondary).frame(maxWidth: 60)
                 }
             }
-            Text(context.state.step).font(.subheadline.monospaced()).lineLimit(2)
+            Text(context.state.displayStep).font(.subheadline.monospaced()).lineLimit(2)
             HStack {
                 Text("\(context.attributes.computerName) · \(context.state.steps) steps").font(.caption2).foregroundStyle(.secondary)
                 Spacer()

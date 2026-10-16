@@ -18,6 +18,8 @@ final class RunActivities {
     private var steps: [String: Int] = [:]
 
     var enabled: () -> Bool = { true }
+    /// A started activity's ActivityKit push token (hex), for the relay.
+    var onPushToken: (_ sessionId: String, _ token: String) -> Void = { _, _ in }
     var hideDetails: () -> Bool = { false }
 
     func onEvent(_ e: AgentEvent, chatTitle: String?, computerId: String, computerName: String) {
@@ -75,8 +77,18 @@ final class RunActivities {
                                        computerName: computerName)
         let state = AgentRunAttributes.ContentState(phase: phase, step: step, callId: callId, severity: severity,
                                                      steps: steps[sid] ?? 0, startedAt: now)
-        if let a = try? ActivityKit.Activity<AgentRunAttributes>.request(attributes: attrs, content: ActivityContent(state: state, staleDate: now.addingTimeInterval(15 * 60))) {
-            activities[sid] = a
+        let content = ActivityContent(state: state, staleDate: now.addingTimeInterval(15 * 60))
+        // With a push token the relay can update it while iOS has suspended the app;
+        // without push (no APNs on this build) it still works while the app runs.
+        let a = (try? ActivityKit.Activity<AgentRunAttributes>.request(attributes: attrs, content: content, pushType: .token))
+            ?? (try? ActivityKit.Activity<AgentRunAttributes>.request(attributes: attrs, content: content))
+        guard let a else { return }
+        activities[sid] = a
+        let report = onPushToken
+        Task { @MainActor in
+            for await data in a.pushTokenUpdates {
+                report(sid, data.map { String(format: "%02x", $0) }.joined())
+            }
         }
     }
 
