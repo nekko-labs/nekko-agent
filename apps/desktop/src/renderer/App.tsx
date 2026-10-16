@@ -12,6 +12,7 @@ import { TitleBar } from './components/TitleBar.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { BrandMark } from './components/BrandMark.js';
 import { RailBackdrop } from './components/RailBackdrop.js';
+import { AboutNekko } from './components/AboutNekko.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
@@ -246,6 +247,7 @@ export function App() {
     <div className="flex h-full w-full flex-col" style={{ background: 'var(--paper)' }}>
       {/* The window's own title bar, in the desktop shell only. */}
       <ErrorBoundary label="Title bar"><TitleBar /></ErrorBoundary>
+      <ErrorBoundary label="About"><AboutNekko /></ErrorBoundary>
 
       {!settingsLoaded ? (
         <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">

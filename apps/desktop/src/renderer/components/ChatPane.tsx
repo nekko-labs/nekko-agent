@@ -2792,7 +2792,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {(pendingImages.length > 0 || pendingVideos.length > 0 || (session?.attachedPaths?.length ?? 0) > 0) && (
                   <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line px-3 py-2.5" data-composer-attachments>
                     {pendingVideos.map((video, i) => (
-                      <div key={`v-${video.slice(0, 24)}-${i}`} className="group relative shrink-0">
+                      <div key={`v-${video.slice(0, 24)}-${i}`} className="composer-media-in group relative shrink-0">
                         <video
                           src={video}
                           muted
@@ -2817,7 +2817,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       </div>
                     ))}
                     {pendingImages.map((image, i) => (
-                      <div key={`${image.slice(0, 24)}-${i}`} className="group relative shrink-0">
+                      <div key={`${image.slice(0, 24)}-${i}`} className="composer-media-in group relative shrink-0">
                         <img
                           src={image}
                           alt={`Pending attachment ${i + 1}`}
@@ -2845,7 +2845,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       return (
                         <span
                           key={path}
-                          className={`group inline-flex h-7 max-w-[220px] shrink-0 items-center gap-1.5 rounded-lg border px-2 text-[12px] ${note ? 'border-dashed border-line text-ink-faint' : 'border-line text-ink-soft'}`}
+                          className={`composer-media-in group inline-flex h-7 max-w-[220px] shrink-0 items-center gap-1.5 rounded-lg border px-2 text-[12px] ${note ? 'border-dashed border-line text-ink-faint' : 'border-line text-ink-soft'}`}
                           title={note ? `${path}\n${note}` : path}
                           data-composer-file
                         >

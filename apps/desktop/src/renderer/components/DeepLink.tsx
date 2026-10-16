@@ -31,6 +31,10 @@ export function DeepLinkListener() {
 
   useEffect(() => {
     const off = window.nekko.onDeepLink((url) => {
+      if (url === 'nekko-agent://about') {
+        window.dispatchEvent(new Event('nekko:about'));
+        return;
+      }
       if (url === 'nekko-agent://settings') {
         useStore.getState().setView('settings');
         return;
