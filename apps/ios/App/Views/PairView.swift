@@ -14,16 +14,22 @@ struct WelcomeView: View {
                 Text("Your agent, in your pocket").font(.largeTitle.weight(.bold)).foregroundStyle(palette.ink)
                 Text("Drive Nekko Agent on your computer from this iPhone: follow chats as they stream, approve tools, answer questions and start new work. Everything is end-to-end encrypted between this phone and your computer.")
                     .foregroundStyle(palette.inkSoft)
-                NavigationLink(value: Route.pair) {
-                    Label("Pair with your computer", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity).padding(.vertical, 6)
-                }
-                .buttonStyle(.borderedProminent)
-                .navigationDestination(for: Route.self) { r in
-                    if case .pair = r { PairView {} }
-                }
                 TailscaleGuide()
             }
             .padding(20)
+        }
+        // Pinned so the one action stays on screen at the largest text sizes.
+        .safeAreaInset(edge: .bottom) {
+            NavigationLink(value: Route.pair) {
+                Label("Pair with your computer", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity).padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.bar)
+        }
+        .navigationDestination(for: Route.self) { r in
+            if case .pair = r { PairView {} }
         }
         .background(palette.paper)
     }
