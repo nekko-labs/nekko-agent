@@ -291,6 +291,7 @@ function makeWebClient(): NekkoApi {
     testProviderConfig: (cfg) => call(IpcChannels.providersTestConfig, cfg),
 
     listModels: (providerId) => call(IpcChannels.modelsList, providerId),
+    listModelsStatus: (providerId) => call(IpcChannels.modelsListStatus, providerId),
     pullModel: (providerId, model) => call(IpcChannels.modelPull, providerId, model),
     loadModel: (providerId, model) => call(IpcChannels.modelLoad, providerId, model),
     unloadModel: (providerId, model) => call(IpcChannels.modelUnload, providerId, model),

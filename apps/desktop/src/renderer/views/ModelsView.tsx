@@ -12,6 +12,8 @@ import { PlusIcon, TrashIcon, CheckIcon, StarIcon } from '../icons.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { RuntimeCard } from '../components/runtimes/RuntimeCard.js';
 import { hasAppChrome } from '../chrome.js';
+import { matchesModelQuery } from '../components/agent-console/modelPickerInteractions.js';
+import { MODEL_FILTER_THRESHOLD, modelListProblem } from './modelListProblem.js';
 
 const isLocal = (k: ProviderKind) => isLocalProvider(k);
 
@@ -225,11 +227,15 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   // Only an explicit off switch disables; older entries without the field stay on.
   const enabled = provider.enabled !== false;
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [listError, setListError] = useState<string | undefined>();
+  const [query, setQuery] = useState('');
   const [conn, setConn] = useState<{ state: 'unknown' | 'testing' | 'ok' | 'fail'; message?: string }>({ state: 'unknown' });
   const defaultSettings = useStore(s => s.settings);
   const [defaultMenu, setDefaultMenu] = useState<{x:number; y:number; id:string} | null>(null);
   const defaultId = defaultSettings?.defaultProviderId === provider.id ? defaultSettings.defaultModelId : undefined;
-  const listedModels = [...models].sort((a,b) => Number(b.id === defaultId) - Number(a.id === defaultId));
+  // The query only applies while its box is shown, so a list that shrinks cannot hide every model.
+  const filtering = models.length > MODEL_FILTER_THRESHOLD;
+  const listedModels = models.filter((m) => !filtering || matchesModelQuery(m, query)).sort((a,b) => Number(b.id === defaultId) - Number(a.id === defaultId));
   const [pullName, setPullName] = useState('');
   const [busy, setBusy] = useState<string | null>(null); // model id being (un)loaded
   const [stopping, setStopping] = useState(false);
@@ -274,7 +280,14 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   };
 
   const load = async () => {
-    setModels(await window.nekko.listModels(provider.id).catch(() => []));
+    const r = await window.nekko.listModelsStatus(provider.id).catch((e) => ({ models: [], error: String((e as Error)?.message ?? e) }));
+    setModels(r.models);
+    setListError(r.error);
+  };
+
+  const retry = () => {
+    void load();
+    void test();
   };
 
   const test = async () => {
@@ -286,7 +299,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   // Auto-check connectivity (and load models) when the card mounts, but only
   // for an enabled provider: a disabled one is never contacted.
   useEffect(() => {
-    if (!enabled) { setModels([]); setConn({ state: 'unknown' }); return; }
+    if (!enabled) { setModels([]); setListError(undefined); setConn({ state: 'unknown' }); return; }
     load();
     test();
     if (provider.kind === 'lmstudio') {
@@ -404,6 +417,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   const isOllama = provider.kind === 'ollama';
   const local = isLocal(provider.kind);
   const anyLoaded = models.some((m) => m.loaded);
+  const problem = modelListProblem({ error: listError, connFailed: conn.state === 'fail', local, label: provider.label, baseUrl: provider.baseUrl });
   // Ollama always supports per-model load/unload; LM Studio does too once its
   // `lms` CLI is reachable. Others fall back to the static badge + Stop server.
   const canManage = isOllama || (provider.kind === 'lmstudio' && lms?.available === true);
@@ -650,8 +664,26 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
         </div>
       )}
 
+      {filtering && (
+        <input
+          className="input mt-2 rounded-lg px-2.5 py-1 text-[12px]"
+          placeholder="Filter models…"
+          aria-label="Filter models"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      )}
+
       <div className="mt-2 max-h-44 space-y-1 overflow-y-auto">
-        {models.length === 0 && <p className="text-[12px] text-ink-faint">No models found.</p>}
+        {models.length === 0 && (problem ? (
+          <div className="flex items-start justify-between gap-2 text-[12px]" role="alert">
+            <p className="min-w-0 break-words" style={{ color: 'var(--danger)' }}>{problem}</p>
+            <button className="btn btn-outline shrink-0 px-2 py-0.5 text-[11px]" onClick={retry}>Retry</button>
+          </div>
+        ) : (
+          <p className="text-[12px] text-ink-faint">No models found.</p>
+        ))}
+        {models.length > 0 && listedModels.length === 0 && <p className="text-[12px] text-ink-faint">No models match.</p>}
         {defaultMenu && <ContextMenu x={defaultMenu.x} y={defaultMenu.y} onClose={() => setDefaultMenu(null)}><ContextAction onClick={() => { void window.nekko.updateSettings({defaultProviderId:provider.id,defaultModelId:defaultMenu.id}).then(() => useStore.getState().refreshSettings()).catch(e => pushToast("error",String(e))); setDefaultMenu(null); }}>Set as default</ContextAction></ContextMenu>}
         {defaultId && !models.some(m => m.id === defaultId) && <div aria-disabled="true" className="rounded-lg px-2 py-1.5 text-[12px] text-ink-faint">{defaultId} <span className="text-[10px]">Default · unavailable</span></div>}
         {listedModels.map((m) => {

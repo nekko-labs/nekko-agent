@@ -815,6 +815,18 @@ async fn providers_are_listed_saved_tested_and_asked_for_models_by_the_daemon() 
     let (_, models) = post(d.port, "models:list", json!(["p1"]), Some(TOKEN)).await;
     let ids: Vec<&str> = models.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect();
     assert_eq!(ids, ["m1", "m2"]);
+    let (_, status) = post(d.port, "models:listStatus", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(status["models"], models);
+    assert_eq!(status.get("error"), None);
+    let (_, missing) = post(d.port, "models:listStatus", json!(["nope"]), Some(TOKEN)).await;
+    assert_eq!(missing, json!({ "models": [] }));
+
+    // A key the server refuses: models:list stays [], listStatus says why.
+    post(d.port, "providers:save", json!([bad]), Some(TOKEN)).await;
+    let (_, empty) = post(d.port, "models:list", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(empty, json!([]));
+    let (_, failed) = post(d.port, "models:listStatus", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(failed, json!({ "models": [], "error": "listModels 401: bad key" }));
     let (_, none) = post(d.port, "lms:probe", json!(["p1"]), Some(TOKEN)).await;
     assert_eq!(none, json!({ "available": false }));
     let (_, removed) = post(d.port, "providers:remove", json!(["p1"]), Some(TOKEN)).await;

@@ -72,6 +72,7 @@ const api: NekkoApi = {
   testProviderConfig: (cfg) => inv(IpcChannels.providersTestConfig, cfg),
 
   listModels: (providerId) => inv(IpcChannels.modelsList, providerId),
+  listModelsStatus: (providerId) => inv(IpcChannels.modelsListStatus, providerId),
   pullModel: (providerId, model) => inv(IpcChannels.modelPull, providerId, model),
   loadModel: (providerId, model) => inv(IpcChannels.modelLoad, providerId, model),
   unloadModel: (providerId, model) => inv(IpcChannels.modelUnload, providerId, model),

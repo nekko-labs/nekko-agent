@@ -39,6 +39,7 @@ export const IpcChannels = {
   providersTestConfig: 'providers:testConfig',
 
   modelsList: 'models:list',
+  modelsListStatus: 'models:listStatus',
   modelPull: 'model:pull',
   modelLoad: 'model:load',
   modelUnload: 'model:unload',
@@ -359,6 +360,8 @@ export interface NekkoApi {
   testProviderConfig(cfg: ProviderConfig): Promise<{ ok: boolean; message: string }>;
 
   listModels(providerId: string): Promise<ModelInfo[]>;
+  /** listModels plus why it failed: `error` is set when the provider could not list (bad key, timeout). */
+  listModelsStatus(providerId: string): Promise<{ models: ModelInfo[]; error?: string }>;
   pullModel(providerId: string, model: string): Promise<{ ok: boolean; message: string }>;
   loadModel(providerId: string, model: string): Promise<{ ok: boolean; message?: string }>;
   unloadModel(providerId: string, model: string): Promise<{ ok: boolean; message?: string }>;
