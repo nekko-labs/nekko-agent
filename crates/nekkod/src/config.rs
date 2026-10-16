@@ -50,6 +50,11 @@ pub struct Config {
     /// Where GitHub's API is (`https://api.github.com`), for the runtime
     /// installers; tests point it at a loopback server.
     pub github_api_url: Option<String>,
+    /// Where Telegram's Bot API is (`https://api.telegram.org`), for the
+    /// messaging bridge; tests point it at a loopback fake. Without it,
+    /// `NEKKO_TELEGRAM_API_URL` (a self-hosted Bot API server, or the web
+    /// edition's live checks, whose server writes this config itself).
+    pub telegram_api_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
