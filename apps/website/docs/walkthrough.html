@@ -187,6 +187,28 @@ makes shows up as a card so you can see exactly what it did.</li>
 </tr>
 </tbody></table></div>
 <p><img src="/docs/media/command-palette.png" alt="Command palette" loading="lazy" /></p>
+<p><strong>Copy and paste in a terminal.</strong> Right-click a terminal for <strong>Copy</strong>, <strong>Paste</strong>, <strong>Select all</strong> and <strong>Clear terminal</strong>. On Windows and Linux the keys work the same way as in Windows Terminal and VS Code:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Shortcut</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Ctrl + C</code></td>
+<td>Copy the selection; with nothing selected it interrupts the running program, as always</td>
+</tr>
+<tr>
+<td><code>Ctrl + Shift + C</code>, <code>Ctrl + Insert</code></td>
+<td>Copy the selection</td>
+</tr>
+<tr>
+<td><code>Ctrl + V</code>, <code>Ctrl + Shift + V</code>, <code>Shift + Insert</code></td>
+<td>Paste</td>
+</tr>
+</tbody></table></div>
+<p>On macOS, <code>Cmd + C</code> and <code>Cmd + V</code> copy and paste, and <code>Ctrl + C</code> always interrupts. The read-only Agent commands log can be copied but not pasted into. <strong>Clear terminal</strong> clears the screen and scrollback in the window only; the shell keeps running.</p>
 <hr>
 <h3 id="add-windows-and-read-the-dock"><a class="anchor" href="#add-windows-and-read-the-dock" aria-hidden="true" tabindex="-1">#</a>Add windows and read the dock</h3>
 <p>The Agents toolbar provides direct <strong>New agent</strong>, <strong>New image session</strong> and <strong>New terminal</strong> actions, with no ellipsis or overflow button. The empty wall can still open the full window picker. Its Chat, Media and Terminal categories remain horizontal; opening it does not change the wall layout.</p>
