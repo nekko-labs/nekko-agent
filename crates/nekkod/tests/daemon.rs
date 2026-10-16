@@ -4475,6 +4475,8 @@ async fn adds_a_folder_from_the_desktop_picker_through_the_bridge() {
     assert_eq!(again, added);
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
+}
+
 /// A loopback stand-in for Telegram's Bot API: records every call (method
 /// and body; the token is in the path), answers `getMe` and `sendMessage`,
 /// and holds `getUpdates` until the test queues updates (or 25 s pass, as
