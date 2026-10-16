@@ -179,6 +179,10 @@ impl RemoteService {
     }
 
     pub fn enable(&self, relay_url: &Value) -> Result<Value, String> {
+        // Plain ws:// to the open internet is refused here as on every phone (PH1).
+        if let Some(problem) = crate::route::relay_url_problem(relay_url.as_str().unwrap_or("")) {
+            return Err(problem);
+        }
         let _io = lock(&self.io);
         let prev = self.load();
         let room = match prev.get("room").filter(|v| !v.is_null()) {

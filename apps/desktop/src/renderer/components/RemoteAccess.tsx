@@ -83,8 +83,14 @@ export function RemoteAccess() {
     setUrlProblem(problem);
     if (problem) return;
     setBusy(true);
-    setStatus(await window.nekko.enableRemote(relayUrl.trim()));
-    setBusy(false);
+    try {
+      setStatus(await window.nekko.enableRemote(relayUrl.trim()));
+    } catch (e) {
+      // The computer applies the same rule (and any other refusal) and says why.
+      setUrlProblem(String((e as Error)?.message ?? e).replace(/^Error:\s*/, ''));
+    } finally {
+      setBusy(false);
+    }
   };
   const disable = async () => {
     setBusy(true);

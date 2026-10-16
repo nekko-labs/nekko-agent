@@ -851,19 +851,35 @@
   {
    "op": "enable",
    "args": [
-    "ws://y"
+    "wss://y"
    ],
    "now": 1760000600001,
    "result": {
     "enabled": true,
-    "relayUrl": "ws://y",
+    "relayUrl": "wss://y",
     "room": "3940474e555c636a",
     "hasKey": true,
     "devices": [],
     "connected": [],
     "online": false
    },
-   "file": "{\n  \"enabled\": true,\n  \"devices\": [],\n  \"relayUrl\": \"ws://y\",\n  \"room\": \"3940474e555c636a\",\n  \"secret\": \"585f666d747b828990979ea5acb3bac1\"\n}",
+   "file": "{\n  \"enabled\": true,\n  \"devices\": [],\n  \"relayUrl\": \"wss://y\",\n  \"room\": \"3940474e555c636a\",\n  \"secret\": \"585f666d747b828990979ea5acb3bac1\"\n}",
+   "kicked": [
+    "phone-2",
+    "phone-2",
+    "nobody"
+   ]
+  },
+  {
+   "op": "enable",
+   "args": [
+    "ws://relay.example.com"
+   ],
+   "now": 1760000600001,
+   "result": {
+    "error": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+   },
+   "file": "{\n  \"enabled\": true,\n  \"devices\": [],\n  \"relayUrl\": \"wss://y\",\n  \"room\": \"3940474e555c636a\",\n  \"secret\": \"585f666d747b828990979ea5acb3bac1\"\n}",
    "kicked": [
     "phone-2",
     "phone-2",
