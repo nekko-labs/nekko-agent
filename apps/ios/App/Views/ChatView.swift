@@ -83,8 +83,9 @@ struct ChatView: View {
             // without animating every token (overlapping animations shudder).
             .onChange(of: chat.blocks.last) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
             // An approval or question card grows the bottom bar: keep the latest step above it.
-            .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollToEnd(proxy) }
-            .onChange(of: chat.turn.question != nil) { _, _ in scrollToEnd(proxy) }
+            // After the card has been laid out: scrolling in the same update used the old inset.
+            .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
+            .onChange(of: chat.turn.question != nil) { _, _ in scrollAfterLayout(proxy) }
             .overlay(alignment: .bottomTrailing) {
                 if !atBottom && chat.running {
                     Button { scrollToEnd(proxy) } label: {
@@ -161,6 +162,13 @@ struct ChatView: View {
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+    }
+
+    private func scrollAfterLayout(_ proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            scrollToEnd(proxy)
+        }
     }
 
     private func act(_ body: @escaping () async throws -> Void) {
@@ -292,11 +300,15 @@ struct ApprovalCard: View {
             HStack {
                 Button(role: .destructive) { decide(false) } label: { Text("Deny").frame(maxWidth: .infinity).foregroundStyle(palette.ink) }
                     .buttonStyle(.bordered).tint(palette.inkSoft)
+                // Drawn rather than .borderedProminent, which the audit reports as clipping its label.
                 Button { decide(true) } label: {
-                    Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Allow") } }
-                        .frame(maxWidth: .infinity).foregroundStyle(palette.onAccent)
+                    Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Allow").font(.body.weight(.semibold)) } }
+                        .foregroundStyle(palette.onAccent)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(palette.accent, in: RoundedRectangle(cornerRadius: 12))
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
             }
             .controlSize(.large)
             .disabled(busy)
