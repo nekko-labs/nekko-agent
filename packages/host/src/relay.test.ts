@@ -66,7 +66,8 @@ describe('relay agent', () => {
     // A long first delta seals slower than the short ones after it.
     const deltas = ['x'.repeat(200_000), 'Hello ', 'from ', 'your ', 'computer.'];
     for (const delta of deltas) events.emit('agentEvent', { type: 'text', sessionId: 's', delta });
-    await vi.waitFor(() => expect(ws.sent.length).toBe(1 + deltas.length));
+    // The HELLO reply and one frame per delta (the relay-only `activity` frame aside).
+    await vi.waitFor(() => expect(ws.sent.filter((raw) => JSON.parse(raw).type === 'd').length).toBe(1 + deltas.length));
     const frames = (await framesFor(ws, key, 'c1')).filter((f) => f.type === 'event');
     expect(frames.every((f) => f.channel === IpcEvents.agentEvent)).toBe(true);
     expect(frames.map((f) => f.payload.delta)).toEqual(deltas);
@@ -114,7 +115,8 @@ describe('relay agent: what a phone may do', () => {
       await vi.waitFor(async () => {
         res = (await framesFor(agent.ws, agent.key, 'c1')).find((f) => f.type === 'res' && f.id === rid);
         expect(res).toBeDefined();
-      });
+        // Sealing a ~10 MB reply takes over a second on CI runners (#627).
+      }, { timeout: 10_000 });
       return res;
     };
     return { ...agent, call, saved, wipe };

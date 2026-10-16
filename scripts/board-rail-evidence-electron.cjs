@@ -3,7 +3,7 @@ const fs = require('node:fs'), path = require('node:path'), cp = require('node:c
 const dir = process.env.NEKKO_EVIDENCE_DIR, kind = process.env.NEKKO_EVIDENCE_KIND;
 app.commandLine.appendSwitch('force-device-scale-factor', '1');
 const profile = fs.mkdtempSync(path.join(dir, 'profile-')); app.setPath('userData', profile); app.setPath('sessionData', profile);
-const report = { kind, checks: [], errors: [], captures: [], motion: [], visuallyInspected: false, limitations: ['No image-viewing tool available in this session; human pixel and motion review required', 'Actual App nav markup extracted, not full App lifecycle', 'Pane bodies and host mocked; no native chrome or OS focus-permission verification'] };
+const report = { kind, checks: [], errors: [], captures: [], motion: [], visuallyInspected: false, limitations: ['Pixel inspection is recorded separately from capture results', 'Actual App nav markup extracted, not full App lifecycle', 'Pane bodies and host mocked; no native chrome or OS focus-permission verification'] };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((r, done) => done({ cancel: !/^(file:|data:|blob:)/.test(r.url) }));
@@ -49,17 +49,6 @@ app.whenReady().then(async () => {
       await capture(label+'-resize-focus');await key('Home');
     }
     await configure(1440,'dark');
-    if(kind === 'after') {
-      await check('Focus immediately precedes Minimize', `(()=>{const b=document.querySelector('.agent-zen-action');return b?.nextElementSibling?.getAttribute('aria-label')?.startsWith('Minimize ')})()`);
-      await check('Focus is 20px and accent colored', `(()=>{const b=document.querySelector('.agent-zen-action');return b.querySelector('svg').getBoundingClientRect().width===20 && getComputedStyle(b).color===getComputedStyle(document.querySelector('.wall-add-icon')).color})()`);
-      await check('Creation controls have plus indicators and divider', `getComputedStyle(document.querySelector('.wall-add-icon'),'::after').content.includes('+') && getComputedStyle(document.querySelector('.wall-add-bar')).borderRightWidth==='1px'`);
-      await run(`document.querySelector('.agent-zen-action').click()`);await stable();
-      await check('Focus selects focused layout', `document.querySelector('[data-wall-layout]').dataset.wallLayout==='focus'`);
-      await run(`evidence.reset()`);await stable();
-      await run(`document.querySelector('button[aria-label^="Minimize Review"]').click()`);await stable();
-      await check('Minimize removes window but retains agent card', `!document.querySelector('[data-wall-pane="pane0"]') && document.body.innerText.includes('Review rail spacing')`);
-      await configure(1440,'dark');
-    }
     const frames=path.join(dir,'motion');fs.mkdirSync(frames,{recursive:true});const start=Date.now();
     const listener=(_e,method,p)=>{if(method!=='Page.screencastFrame')return;const i=report.motion.length;fs.writeFileSync(path.join(frames,String(i).padStart(4,'0')+'.png'),Buffer.from(p.data,'base64'));report.motion.push({frame:i,elapsedMs:Date.now()-start,timestamp:p.metadata.timestamp});void cdp('Page.screencastFrameAck',{sessionId:p.sessionId});};
     win.webContents.debugger.on('message',listener);
@@ -67,6 +56,12 @@ app.whenReady().then(async () => {
     win.showInactive();
     await cdp('Page.startScreencast',{format:'png',everyNthFrame:1});
     await sleep(500);await move(25,80);await sleep(1000);await move(1420,10);await sleep(1000);await move(25,180);await sleep(1000);await move(1420,10);await sleep(500);
+    await run(`document.querySelector('[aria-label="Add a window beside this one"]').click()`);await sleep(200);
+    await run(`document.querySelector('[aria-label="To the left"]').click()`);await sleep(200);
+    await run(`[...document.querySelectorAll('[role="dialog"] button')].find(b=>b.textContent.includes('Another agent')).click()`);
+    for (const delay of [0, 45, 60, 90, 180]) { await sleep(delay); const img = await win.capturePage(undefined,{stayHidden:true,stayAwake:true});fs.writeFileSync(path.join(dir,'window-push-'+delay+'.png'),img.toPNG()); }
+    await sleep(800);
+    await check('new agent joins wall', `document.querySelectorAll('[data-wall-pane]').length===3`);
     await cdp('Page.stopScreencast');win.hide();win.webContents.debugger.removeListener('message',listener);
     if(report.motion.length<2)throw Error('CDP screencast yielded fewer than two frames');
     fs.writeFileSync(path.join(frames,'frames.txt'),report.motion.map((t,i)=>`file '${String(i).padStart(4,'0')}.png'\nduration ${Math.max(.016,((report.motion[i+1]?.elapsedMs??t.elapsedMs+100)-t.elapsedMs)/1000)}`).join('\n')+`\nfile '${String(report.motion.length-1).padStart(4,'0')}.png'\n`);

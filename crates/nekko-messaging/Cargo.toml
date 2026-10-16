@@ -1,0 +1,15 @@
+[package]
+name = "nekko-messaging"
+description = "Messaging channels for the Nekko Agent engine daemon: the Telegram bridge as a state machine with no I/O, its Bot API requests and messaging-state.json, as the TS host ran them."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+nekko-js = { path = "../nekko-js" }
+# JavaScript regular expressions for the Auto model pick (`pickAutoModel`).
+nekko-tools = { path = "../nekko-tools" }
+# Numbers must parse to the exact double JavaScript has, or a rewritten file differs.
+serde_json = { workspace = true, features = ["float_roundtrip"] }

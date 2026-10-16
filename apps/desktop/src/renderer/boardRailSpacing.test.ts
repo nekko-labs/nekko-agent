@@ -1,36 +1,45 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { railGeometry } from './railGeometry.js';
+import { RAIL_ROW_CLEARANCE, railGeometry } from './railGeometry.js';
 
-describe('linear mirrored rail geometry', () => {
-  it('extends to the left edge with a 95px shoulder and a linear 40/30/20 tail', () => {
+describe('rounded mirrored rail geometry', () => {
+  it('leaves 10px beyond the rows before mirrored shoulders narrow into tails', () => {
     const g = railGeometry({ railHeight: 1200, groupTop: 300, groupHeight: 500 });
     expect(g.extension).toBe(298);
-    expect(g.points.slice(0, 6)).toEqual([
-      [0, 2], [20, 12], [30, 108.5], [40, 205], [198, 300], [198, 300],
-    ]);
-    expect(g.points[1][1] - g.points[0][1]).toBe(10);
-    expect((30 - 20) / (108.5 - 12)).toBe((40 - 30) / (205 - 108.5));
-    for (let i = 0; i < 6; i++) {
-      expect(g.points[11 - i]).toEqual([g.points[i][0], g.top + g.bottom - g.points[i][1]]);
-      if (i) expect(g.points[i][0]).toBeGreaterThanOrEqual(g.points[i - 1][0]);
+    expect(RAIL_ROW_CLEARANCE).toBe(10);
+    expect(g.rest[2]).toEqual([52, g.top - 10]);
+    expect(g.open[2]).toEqual([198, g.top - 10]);
+    expect(g.rest[0][0]).toBe(26);
+    expect(g.open[0][0]).toBe(52);
+    expect(g.open[5]).toEqual([198, g.bottom + 10]);
+    for (let i = 0; i < 4; i++) {
+      expect(g.rest[7 - i]).toEqual([g.rest[i][0], g.top + g.bottom - g.rest[i][1]]);
     }
+  });
+
+  it('ends each tail in a concave curve to x=0 and shares one command list for interpolation', () => {
+    const g = railGeometry({ railHeight: 1200, groupTop: 300, groupHeight: 500 });
+    expect(g.restPath.startsWith('M0,2 Q0,')).toBe(true);
+    expect(g.restPath).toMatch(/Q0,[\d.]+ 0,[\d.]+ Z$/);
+    const shape = (d: string) => d.replace(/[-\d.]+/g, 'n');
+    expect(shape(g.restPath)).toBe(shape(g.openPath));
   });
 
   it.each([
     [900, 80, 480], [500, 16, 468], [200, 16, 168], [32, 16, 0],
     [0, 0, 0], [100, -40, 200], [100, 140, 80], [NaN, NaN, Infinity],
-  ])('bounds and mirrors short/invalid layout %s/%s/%s', (railHeight, groupTop, groupHeight) => {
+  ])('bounds short/invalid layout %s/%s/%s', (railHeight, groupTop, groupHeight) => {
     const g = railGeometry({ railHeight, groupTop, groupHeight });
-    for (const [x, y] of g.points) {
-      expect(Number.isFinite(x) && Number.isFinite(y)).toBe(true);
+    for (const d of [g.restPath, g.openPath]) {
+      const nums = d.match(/-?[\d.]+/g)!.map(Number);
+      expect(nums.every(Number.isFinite)).toBe(true);
+    }
+    for (const [x, y] of [...g.rest, ...g.open]) {
       expect(y).toBeGreaterThanOrEqual(0);
       expect(y).toBeLessThanOrEqual(g.height);
       expect(x).toBeGreaterThanOrEqual(0);
       expect(x).toBeLessThanOrEqual(g.width);
     }
-    expect(g.top - g.points[0][1]).toBeCloseTo(g.points[11][1] - g.bottom);
-    expect(g.points.slice(0, 6).map(p => p[1])).toEqual(g.points.slice(0, 6).map(p => p[1]).sort((a, b) => a - b));
   });
 });
 
@@ -44,7 +53,8 @@ describe('compact board and navigation spacing', () => {
     expect(198 - 6 - 16).toBe(188 - 12);
     expect(css).toContain('pointer-events: none;');
     expect(css).toContain('@utility rail-destinations {\n  pointer-events: auto;');
-    expect(css).toContain('&:hover .rail-backdrop,\n  &:has(:focus-visible) .rail-backdrop');
+    expect(css).toContain('&:hover .rail-backdrop path,\n  &:has(:focus-visible) .rail-backdrop path');
+    expect(css).toContain('pointer-events: visiblePainted;');
     expect(css).not.toContain('.rail-group::before');
     expect(css).toContain('var(--accent) 4%, var(--paper)');
     expect(css).toContain('var(--accent) 7%, var(--paper)');

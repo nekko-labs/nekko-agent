@@ -1090,6 +1090,17 @@ export function buildArgs(
   return args;
 }
 
+/**
+ * The inputs a chat with this model can carry: always text, images only when
+ * the projector is there to see them. Rows that are not chat models (image
+ * generation, speech, embeddings, drafts) say nothing, as before.
+ */
+export function inputModalities(model: Pick<LocalModel, 'modality' | 'hasProjector'>): string[] | undefined {
+  const modality = model.modality ?? 'chat';
+  if (modality !== 'chat' && modality !== 'vision') return undefined;
+  return model.hasProjector ? ['text', 'image'] : ['text'];
+}
+
 function modelRow(model: LocalModel, loaded: boolean) {
   return {
     id: model.id,
@@ -1105,6 +1116,11 @@ function modelRow(model: LocalModel, loaded: boolean) {
     path: model.path,
     location: model.folderProvider ? MODEL_FOLDER_PROVIDERS[model.folderProvider].label : undefined,
     modality: model.modality ?? 'chat',
+    // What a load of this file can take, in OpenRouter's shape so the composer
+    // and the turn read it the same way. Images need the projector: a vision
+    // model without its mmproj answers text and rejects every picture, which
+    // would leave each later turn of the chat failing on the one it already holds.
+    input_modalities: inputModalities(model),
     max_context_length: model.maxContext,
     quantization: model.quantization,
     size_bytes: model.sizeBytes,

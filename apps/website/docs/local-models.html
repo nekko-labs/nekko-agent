@@ -323,6 +323,22 @@ does not loop.</li>
 <p>Giving the model more room is still the best fix. Raise its context when you load it (the
 Models page shows what that costs in memory), and <code>OLLAMA_KV_CACHE_TYPE=q8_0</code> roughly halves
 the memory a longer context needs.</p>
+<h2 id="pictures-and-models-that-cannot-see"><a class="anchor" href="#pictures-and-models-that-cannot-see" aria-hidden="true" tabindex="-1">#</a>Pictures and models that cannot see</h2>
+<p>Only a vision model with its projector file (<code>mmproj-*.gguf</code>) beside it can look at a
+picture. The Nekko engine tells the app which of its models have one, so for a text-only
+model such as Qwen3 4B the composer greys out <strong>Photo / Video</strong> and says why.</p>
+<p>A picture can still end up in a text-only chat: you attached it while a vision model was
+picked and then switched, or you used a server the app cannot classify. Such a server
+rejects every request that carries an image, and the image stays in the conversation, so
+before this guard the chat failed on every later message too. Now, when the model is known
+not to take images, each picture is sent as a one-line note (&quot;1 image attachment omitted:
+this model does not accept image input&quot;) and the chat keeps working. The picture stays in
+the chat itself, so switching back to a vision model sends it again.</p>
+<p>A server that does not say what its models take still receives the pictures. If such a
+model refuses them, click <strong>Delete last message</strong> in the failure notice (or <strong>Delete</strong> on
+the message itself). That removes the message with the picture and anything after it, and
+the chat answers again. You can then ask again without the picture, or switch to a model
+with vision input.</p>
 <h2 id="what-is-not-here-yet"><a class="anchor" href="#what-is-not-here-yet" aria-hidden="true" tabindex="-1">#</a>What is not here yet</h2>
 <p>Browsing and downloading models from inside the app, and a bundled inference engine so a
 fresh install can run a model with nothing else present, are both planned as separate
@@ -334,7 +350,7 @@ pieces of work. Today Nekko Agent manages the runtimes you already have.</p>
           </footer>
         </article>
       </main>
-      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Running models locally</a></li><li class="d2"><a href="#the-nekko-engine">The Nekko engine</a></li><li class="d2"><a href="#servers-you-already-run">Servers you already run</a></li><li class="d3"><a href="#what-each-one-can-do">What each one can do</a></li><li class="d2"><a href="#reading-the-fit-bar">Reading the fit bar</a></li><li class="d2"><a href="#the-verdicts">The verdicts</a></li><li class="d2"><a href="#why-a-model-spills-to-the-cpu">Why a model spills to the CPU</a></li><li class="d2"><a href="#apple-silicon">Apple Silicon</a></li><li class="d2"><a href="#multiple-gpus">Multiple GPUs</a></li><li class="d2"><a href="#settings-that-need-a-restart">Settings that need a restart</a></li><li class="d2"><a href="#stopping-a-server">Stopping a server</a></li><li class="d2"><a href="#long-tasks-on-a-small-context-window">Long tasks on a small context window</a></li><li class="d2"><a href="#what-is-not-here-yet">What is not here yet</a></li></ul></nav></aside>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Running models locally</a></li><li class="d2"><a href="#the-nekko-engine">The Nekko engine</a></li><li class="d2"><a href="#servers-you-already-run">Servers you already run</a></li><li class="d3"><a href="#what-each-one-can-do">What each one can do</a></li><li class="d2"><a href="#reading-the-fit-bar">Reading the fit bar</a></li><li class="d2"><a href="#the-verdicts">The verdicts</a></li><li class="d2"><a href="#why-a-model-spills-to-the-cpu">Why a model spills to the CPU</a></li><li class="d2"><a href="#apple-silicon">Apple Silicon</a></li><li class="d2"><a href="#multiple-gpus">Multiple GPUs</a></li><li class="d2"><a href="#settings-that-need-a-restart">Settings that need a restart</a></li><li class="d2"><a href="#stopping-a-server">Stopping a server</a></li><li class="d2"><a href="#long-tasks-on-a-small-context-window">Long tasks on a small context window</a></li><li class="d2"><a href="#pictures-and-models-that-cannot-see">Pictures and models that cannot see</a></li><li class="d2"><a href="#what-is-not-here-yet">What is not here yet</a></li></ul></nav></aside>
     </div>
     <dialog class="search-dialog" aria-label="Search the docs">
       <form method="dialog" class="search-box">

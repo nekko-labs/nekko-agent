@@ -22,6 +22,8 @@ export const MessageBubble = memo(function MessageBubble({
   onReset,
   onCopyToComposer,
   onSplit,
+  onDelete,
+  onRestart,
   onImageClick,
   onImageContextMenu,
   chronological,
@@ -35,6 +37,10 @@ export const MessageBubble = memo(function MessageBubble({
   onCopyToComposer?: (id: string) => void;
   /** Start a new chat from the conversation before this message, with it in the new composer. */
   onSplit?: (id: string) => void;
+  /** Delete this message and the reply it got (offered on the latest user message only). */
+  onDelete?: (id: string) => void;
+  /** Keep the conversation up to this reply and drop what follows it. */
+  onRestart?: (id: string) => void;
   onImageClick?: (src: string) => void;
   onImageContextMenu?: (e: React.MouseEvent, src: string) => void;
   chronological?: boolean;
@@ -97,6 +103,11 @@ export const MessageBubble = memo(function MessageBubble({
             {displayText && message.content && (
               <div className="mt-1 flex gap-3 text-[11px] text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
                 <button onClick={copy} title="Copy message" className="inline-flex items-center gap-1 hover:text-ink">{copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}{copied ? 'Copied' : 'Copy'}</button>
+                {onRestart && (
+                  <button onClick={() => onRestart(message.id)} title="Keep the chat up to this reply and delete everything after it" className="hover:text-ink" data-message-restart>
+                    Restart from here
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -163,6 +174,11 @@ export const MessageBubble = memo(function MessageBubble({
             )}
             <button onClick={copy} title="Copy prompt" className="inline-flex items-center gap-1 hover:text-ink">{copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}{copied ? 'Copied' : 'Copy'}</button>
             {onResend && <button onClick={() => { setDraft(displayText); setEditing(true); }} title="Edit & resend" className="hover:text-ink">Edit</button>}
+            {!isUser && onRestart && (
+              <button onClick={() => onRestart(message.id)} title="Keep the chat up to this reply and delete everything after it" className="hover:text-ink" data-message-restart>
+                Restart from here
+              </button>
+            )}
             {onReset && (
               <button
                 onClick={() => onReset(message.id, displayText)}
@@ -170,6 +186,16 @@ export const MessageBubble = memo(function MessageBubble({
                 className="hover:text-ink"
               >
                 Reset here
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(message.id)}
+                title="Delete this message and the reply it got, for example a picture this model cannot take"
+                className="hover:text-[var(--danger)]"
+                data-message-delete
+              >
+                Delete
               </button>
             )}
             {onSplit && (
