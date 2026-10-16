@@ -2,13 +2,14 @@ import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '@nekko-agent/shared';
-import { asSeenByChatModel, createRunawayGuard, fromLatestCompaction, repairInterruptedHistory, windowHistory } from '@nekko-agent/core';
+import { asSeenByChatModel, createRunawayGuard, fromLatestCompaction, repairInterruptedHistory, windowHistory, withoutImages } from '@nekko-agent/core';
 
 /**
  * What the agent loop's message helpers do, which the engine daemon's port
  * (crates/nekko-loop) must reproduce exactly: where the runaway guard trips on
  * each recorded stream, how an interrupted transcript is repaired, what a
- * history window keeps, and how a picture-only reply reads to a chat model.
+ * history window keeps, how a picture-only reply reads to a chat model, and
+ * what a model that cannot see is sent in place of pictures.
  * Inputs are `golden/cases.json`; rewrite the expectations with UPDATE_GOLDEN=1.
  */
 const golden = join(__dirname, '..', '..', '..', 'crates', 'nekko-loop', 'tests', 'golden');
@@ -34,7 +35,8 @@ describe('agent loop helpers golden set', () => {
     }));
     const seen = cases.seen.map((m: ChatMessage) => asSeenByChatModel(m));
     const compacted = cases.compacted.map((c: { name: string; history: ChatMessage[] }) => ({ name: c.name, sent: fromLatestCompaction(c.history) }));
-    const actual = JSON.parse(JSON.stringify({ streams, repairs, windows, seen, compacted }));
+    const blind = cases.blind.map((m: ChatMessage) => withoutImages(m));
+    const actual = JSON.parse(JSON.stringify({ streams, repairs, windows, seen, compacted, blind }));
     const path = join(golden, 'expected.json');
     if (process.env.UPDATE_GOLDEN) writeFileSync(path, `${JSON.stringify(actual, null, 1)}\n`);
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(actual);

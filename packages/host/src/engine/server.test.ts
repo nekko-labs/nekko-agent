@@ -6,7 +6,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import type { EngineSettings, LocalModel } from '@nekko-agent/shared';
 import { DEFAULT_ENGINE_SETTINGS } from '@nekko-agent/shared';
-import { buildArgs, createEngineServer, explainLoadError, probeFlags, resolveCompanions, type EngineServer } from './server.js';
+import { buildArgs, createEngineServer, explainLoadError, inputModalities, probeFlags, resolveCompanions, type EngineServer } from './server.js';
 
 /**
  * The router, driven against a stand-in for `llama-server`.
@@ -504,6 +504,15 @@ describe('buildArgs', () => {
   it('passes a projector to llama-server as --mmproj', () => {
     const args = buildArgs(m, 9000, {}, { mmproj: '/models/mmproj-Q4_K_M.gguf' });
     expect(args[args.indexOf('--mmproj') + 1]).toBe('/models/mmproj-Q4_K_M.gguf');
+  });
+
+  it('lists images as an input only for a model whose projector is there', () => {
+    expect(inputModalities({ modality: 'chat', hasProjector: false })).toEqual(['text']);
+    expect(inputModalities({ modality: 'vision', hasProjector: false })).toEqual(['text']);
+    expect(inputModalities({ modality: 'vision', hasProjector: true })).toEqual(['text', 'image']);
+    expect(inputModalities({})).toEqual(['text']);
+    expect(inputModalities({ modality: 'image' })).toBeUndefined();
+    expect(inputModalities({ modality: 'embedding' })).toBeUndefined();
   });
 
   it('enables jinja when a chat template file is supplied', () => {

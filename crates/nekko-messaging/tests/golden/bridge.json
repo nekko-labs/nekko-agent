@@ -1,0 +1,2253 @@
+{
+ "loads": [
+  {
+   "file": null,
+   "state": "{\n  \"offset\": 0,\n  \"bindings\": {}\n}"
+  },
+  {
+   "file": "",
+   "state": "{\n  \"offset\": 0,\n  \"bindings\": {}\n}"
+  },
+  {
+   "file": "not json",
+   "state": "{\n  \"offset\": 0,\n  \"bindings\": {}\n}"
+  },
+  {
+   "file": "﻿{\"offset\":5,\"bindings\":{}}",
+   "state": "{\n  \"offset\": 0,\n  \"bindings\": {}\n}"
+  },
+  {
+   "file": "null",
+   "state": "{\n  \"offset\": 0,\n  \"bindings\": {}\n}"
+  },
+  {
+   "file": "[1,2]",
+   "state": "{\n  \"0\": 1,\n  \"1\": 2,\n  \"offset\": 0,\n  \"bindings\": {}\n}"
+  },
+  {
+   "file": "\"ab\"",
+   "state": "{\n  \"0\": \"a\",\n  \"1\": \"b\",\n  \"offset\": 0,\n  \"bindings\": {}\n}"
+  },
+  {
+   "file": "{\"bindings\":{\"9\":\"s9\",\"-5\":\"s5\",\"1\":\"s1\"},\"offset\":3}",
+   "state": "{\n  \"offset\": 3,\n  \"bindings\": {\n    \"1\": \"s1\",\n    \"9\": \"s9\",\n    \"-5\": \"s5\"\n  }\n}"
+  },
+  {
+   "file": "{\"offset\":\"12\",\"extra\":true,\"bindings\":{\"x\":\"y\"},\"0\":\"zero\"}",
+   "state": "{\n  \"0\": \"zero\",\n  \"offset\": \"12\",\n  \"bindings\": {\n    \"x\": \"y\"\n  },\n  \"extra\": true\n}"
+  },
+  {
+   "file": "{\"offset\":1,\"offset\":2}",
+   "state": "{\n  \"offset\": 2,\n  \"bindings\": {}\n}"
+  }
+ ],
+ "initialState": "{\"bindings\":{\"7\":\"s_auto\"},\"offset\":10,\"note\":\"kept\"}",
+ "settings": {
+  "theme": "dark",
+  "providers": [
+   {
+    "id": "p1",
+    "kind": "openai-compat",
+    "label": "One",
+    "baseUrl": "http://x",
+    "enabled": true
+   },
+   {
+    "id": "p2",
+    "kind": "openai-compat",
+    "label": "Two",
+    "baseUrl": "http://y",
+    "enabled": true
+   }
+  ],
+  "defaultProviderId": "p1",
+  "defaultModelId": "m1",
+  "messaging": {}
+ },
+ "sessions": [
+  {
+   "id": "s_auto",
+   "title": "Auto chat",
+   "providerId": "p2",
+   "autoModel": true,
+   "messages": [],
+   "createdAt": 1,
+   "updatedAt": 1
+  }
+ ],
+ "autoPicks": [
+  {
+   "models": [],
+   "prompt": "hi",
+   "pick": null
+  },
+  {
+   "models": [
+    {
+     "id": "gemma-3-12b",
+     "name": "Gemma 3 12B",
+     "providerId": "p"
+    },
+    {
+     "id": "qwen2.5-32b-instruct",
+     "name": "Qwen 32B",
+     "providerId": "p"
+    },
+    {
+     "id": "llama-3.3-70b",
+     "name": "Llama 70B",
+     "providerId": "p"
+    },
+    {
+     "id": "whisper-large-v3",
+     "name": "Whisper",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "hi",
+   "pick": "gemma-3-12b"
+  },
+  {
+   "models": [
+    {
+     "id": "gemma-3-12b",
+     "name": "Gemma 3 12B",
+     "providerId": "p"
+    },
+    {
+     "id": "qwen2.5-32b-instruct",
+     "name": "Qwen 32B",
+     "providerId": "p"
+    },
+    {
+     "id": "llama-3.3-70b",
+     "name": "Llama 70B",
+     "providerId": "p"
+    },
+    {
+     "id": "whisper-large-v3",
+     "name": "Whisper",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "please refactor the module",
+   "pick": "llama-3.3-70b"
+  },
+  {
+   "models": [
+    {
+     "id": "gemma-3-12b",
+     "name": "Gemma 3 12B",
+     "providerId": "p"
+    },
+    {
+     "id": "qwen2.5-32b-instruct",
+     "name": "Qwen 32B",
+     "providerId": "p"
+    },
+    {
+     "id": "llama-3.3-70b",
+     "name": "Llama 70B",
+     "providerId": "p"
+    },
+    {
+     "id": "whisper-large-v3",
+     "name": "Whisper",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "Why does this crash?",
+   "pick": "llama-3.3-70b"
+  },
+  {
+   "models": [
+    {
+     "id": "gemma-3-12b",
+     "name": "Gemma 3 12B",
+     "providerId": "p"
+    },
+    {
+     "id": "qwen2.5-32b-instruct",
+     "name": "Qwen 32B",
+     "providerId": "p"
+    },
+    {
+     "id": "llama-3.3-70b",
+     "name": "Llama 70B",
+     "providerId": "p"
+    },
+    {
+     "id": "whisper-large-v3",
+     "name": "Whisper",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "pick": "llama-3.3-70b"
+  },
+  {
+   "models": [
+    {
+     "id": "gemma-3-12b",
+     "name": "Gemma 3 12B",
+     "providerId": "p"
+    },
+    {
+     "id": "qwen2.5-32b-instruct",
+     "name": "Qwen 32B",
+     "providerId": "p"
+    },
+    {
+     "id": "llama-3.3-70b",
+     "name": "Llama 70B",
+     "providerId": "p"
+    },
+    {
+     "id": "whisper-large-v3",
+     "name": "Whisper",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "look:\n```\ncode\n```",
+   "pick": "llama-3.3-70b"
+  },
+  {
+   "models": [
+    {
+     "id": "whisper-1",
+     "providerId": "p"
+    },
+    {
+     "id": "text-embedding-3-small",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "hi",
+   "pick": "text-embedding-3-small"
+  },
+  {
+   "models": [
+    {
+     "id": "toy-model",
+     "providerId": "p"
+    },
+    {
+     "id": "another-toy",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "hi",
+   "pick": "toy-model"
+  },
+  {
+   "models": [
+    {
+     "id": "gpt-4o-mini",
+     "providerId": "p"
+    },
+    {
+     "id": "gpt-4o",
+     "providerId": "p"
+    },
+    {
+     "id": "o3-mini",
+     "providerId": "p"
+    },
+    {
+     "id": "o3",
+     "providerId": "p"
+    },
+    {
+     "id": "claude-3-5-haiku",
+     "providerId": "p"
+    },
+    {
+     "id": "claude-sonnet-4",
+     "providerId": "p"
+    },
+    {
+     "id": "claude-opus-4",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "hello there",
+   "pick": "gpt-4o-mini"
+  },
+  {
+   "models": [
+    {
+     "id": "gpt-4o-mini",
+     "providerId": "p"
+    },
+    {
+     "id": "gpt-4o",
+     "providerId": "p"
+    },
+    {
+     "id": "o3-mini",
+     "providerId": "p"
+    },
+    {
+     "id": "o3",
+     "providerId": "p"
+    },
+    {
+     "id": "claude-3-5-haiku",
+     "providerId": "p"
+    },
+    {
+     "id": "claude-sonnet-4",
+     "providerId": "p"
+    },
+    {
+     "id": "claude-opus-4",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "debug the race",
+   "pick": "claude-opus-4"
+  },
+  {
+   "models": [
+    {
+     "id": "phi-4",
+     "providerId": "p"
+    },
+    {
+     "id": "mixtral-8x7b",
+     "providerId": "p"
+    },
+    {
+     "id": "stable-diffusion-xl",
+     "providerId": "p"
+    },
+    {
+     "id": "bge-reranker",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "quick one",
+   "pick": "phi-4"
+  },
+  {
+   "models": [
+    {
+     "id": "phi-4",
+     "providerId": "p"
+    },
+    {
+     "id": "mixtral-8x7b",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "IMPLEMENT it",
+   "pick": "mixtral-8x7b"
+  },
+  {
+   "models": [
+    {
+     "id": "model_sd_v1",
+     "providerId": "p"
+    },
+    {
+     "id": "my-ocr",
+     "providerId": "p"
+    },
+    {
+     "id": "gemma2-9b",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "hi",
+   "pick": "gemma2-9b"
+  },
+  {
+   "models": [
+    {
+     "id": "odd",
+     "providerId": "p"
+    },
+    {
+     "id": "undefined-name-flash",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "test this",
+   "pick": "odd"
+  },
+  {
+   "models": [
+    {
+     "id": "a-7b",
+     "providerId": "p"
+    },
+    {
+     "id": "b-7b",
+     "providerId": "p"
+    },
+    {
+     "id": "c-70b",
+     "providerId": "p"
+    }
+   ],
+   "prompt": "hi",
+   "pick": "a-7b"
+  }
+ ],
+ "steps": [
+  {
+   "op": {
+    "settings": {
+     "telegram": {
+      "enabled": true,
+      "botToken": "123:TEST",
+      "allowedChatIds": [
+       "42",
+       "7",
+       "-1001"
+      ]
+     }
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getMe",
+     "body": "{}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":10,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [],
+   "state": "{\"bindings\":{\"7\":\"s_auto\"},\"offset\":10,\"note\":\"kept\"}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 1
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 10,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": 99,
+        "type": "private"
+       },
+       "text": "hello"
+      }
+     },
+     {
+      "update_id": 11,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": 42,
+        "type": "private"
+       }
+      }
+     },
+     {
+      "update_id": 12,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": -100,
+        "type": "private"
+       },
+       "text": "group"
+      }
+     }
+    ]
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"99\",\"text\":\"Nekko Agent: this chat is not on the allowlist.\"}"
+    },
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"-100\",\"text\":\"Nekko Agent: this chat is not on the allowlist.\"}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":13,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [],
+   "state": "{\n  \"offset\": 13,\n  \"bindings\": {\n    \"7\": \"s_auto\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 1
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 13,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": 42,
+        "type": "private"
+       },
+       "text": "  fix the tests  "
+      }
+     }
+    ]
+   },
+   "telegram": [],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":14,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "create": "s1"
+    },
+    {
+     "send": {
+      "sessionId": "s1",
+      "providerId": "p1",
+      "modelId": "m1",
+      "text": "fix the tests"
+     }
+    }
+   ],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "tick": 1500
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"_queued…_\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "text",
+     "sessionId": "s1",
+     "delta": "Hello "
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "tool_call",
+     "sessionId": "s1",
+     "call": {
+      "id": "c1",
+      "name": "read_file",
+      "arguments": {}
+     }
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "tick": 1500
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/editMessageText",
+     "body": "{\"chat_id\":\"42\",\"message_id\":102,\"text\":\"Hello \\n\\n_running read_file…_\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "tool_result",
+     "sessionId": "s1",
+     "result": {
+      "toolCallId": "c1",
+      "output": "ok"
+     }
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "text",
+     "sessionId": "s1",
+     "delta": "there"
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "text",
+     "sessionId": "s_other",
+     "delta": "ignored"
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "text",
+     "delta": "no session"
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "done",
+     "sessionId": "s1",
+     "messageId": "m1"
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/editMessageText",
+     "body": "{\"chat_id\":\"42\",\"message_id\":102,\"text\":\"Hello there\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "tick": 1500
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "tool_approval_required",
+     "sessionId": "s1",
+     "call": {
+      "id": "call-9",
+      "name": "write_file"
+     },
+     "reason": "writes src/x.ts",
+     "severity": "medium"
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"Approval needed: write_file: writes src/x.ts (severity: medium)\",\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Approve\",\"callback_data\":\"m:1\"},{\"text\":\"Deny\",\"callback_data\":\"m:2\"}]]}}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 14,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 14,
+      "callback_query": {
+       "id": "q1",
+       "from": {
+        "id": 5
+       },
+       "message": {
+        "message_id": 55,
+        "chat": {
+         "id": 42,
+         "type": "private"
+        },
+        "text": "Approval needed: write_file: writes src/x.ts (severity: medium)"
+       },
+       "data": "m:1"
+      }
+     }
+    ]
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/answerCallbackQuery",
+     "body": "{\"callback_query_id\":\"q1\",\"text\":\"Approved\"}"
+    },
+    {
+     "url": "https://api.telegram.org/bot123:TEST/editMessageText",
+     "body": "{\"chat_id\":\"42\",\"message_id\":55,\"text\":\"Approval needed: write_file: writes src/x.ts (severity: medium): approved from Telegram.\"}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":15,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "approve": [
+      "s1",
+      "call-9",
+      true
+     ]
+    }
+   ],
+   "state": "{\n  \"offset\": 15,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 15,
+      "callback_query": {
+       "id": "q2",
+       "from": {
+        "id": 5
+       },
+       "message": {
+        "message_id": 55,
+        "chat": {
+         "id": 42,
+         "type": "private"
+        }
+       },
+       "data": "m:1"
+      }
+     }
+    ]
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/answerCallbackQuery",
+     "body": "{\"callback_query_id\":\"q2\",\"text\":\"That action expired.\"}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":16,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [],
+   "state": "{\n  \"offset\": 16,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 16,
+      "callback_query": {
+       "id": "q3",
+       "from": {
+        "id": 5
+       },
+       "message": {
+        "message_id": 55,
+        "chat": {
+         "id": 42,
+         "type": "private"
+        }
+       },
+       "data": "approve"
+      }
+     }
+    ]
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/answerCallbackQuery",
+     "body": "{\"callback_query_id\":\"q3\",\"text\":\"That action expired.\"}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":17,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [],
+   "state": "{\n  \"offset\": 17,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "tool_approval_required",
+     "sessionId": "s1",
+     "call": {
+      "id": "call-10",
+      "name": "bash"
+     },
+     "reason": "runs rm",
+     "severity": "high"
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"Approval needed: bash: runs rm (severity: high)\",\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Approve\",\"callback_data\":\"m:3\"},{\"text\":\"Deny\",\"callback_data\":\"m:4\"}]]}}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 17,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 17,
+      "callback_query": {
+       "id": "q4",
+       "from": {
+        "id": 5
+       },
+       "message": {
+        "message_id": 55,
+        "chat": {
+         "id": 99,
+         "type": "private"
+        }
+       },
+       "data": "m:3"
+      }
+     }
+    ]
+   },
+   "telegram": [],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":18,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [],
+   "state": "{\n  \"offset\": 18,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 18,
+      "callback_query": {
+       "id": "q5",
+       "from": {
+        "id": 5
+       },
+       "message": {
+        "message_id": 55,
+        "chat": {
+         "id": 42,
+         "type": "private"
+        }
+       },
+       "data": "m:4"
+      }
+     }
+    ]
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/answerCallbackQuery",
+     "body": "{\"callback_query_id\":\"q5\",\"text\":\"Denied\"}"
+    },
+    {
+     "url": "https://api.telegram.org/bot123:TEST/editMessageText",
+     "body": "{\"chat_id\":\"42\",\"message_id\":55,\"text\":\"Approval: denied from Telegram.\"}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":19,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "approve": [
+      "s1",
+      "call-10",
+      false
+     ]
+    }
+   ],
+   "state": "{\n  \"offset\": 19,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "question",
+     "sessionId": "s1",
+     "request": {
+      "callId": "ask-1",
+      "askedAt": 1,
+      "questions": [
+       {
+        "id": "q1",
+        "header": "Pick",
+        "question": "Which auth?",
+        "options": [
+         {
+          "label": "JWT"
+         },
+         {
+          "label": "OAuth"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"Agent asks: Which auth?\\n(reply with text for something else)\",\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"JWT\",\"callback_data\":\"m:5\"}],[{\"text\":\"OAuth\",\"callback_data\":\"m:6\"}]]}}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 19,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 19,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": 42,
+        "type": "private"
+       },
+       "text": "use JWT please"
+      }
+     }
+    ]
+   },
+   "telegram": [],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":20,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "answer": [
+      "s1",
+      "ask-1",
+      [
+       {
+        "questionId": "q1",
+        "labels": [],
+        "note": "use JWT please"
+       }
+      ]
+     ]
+    }
+   ],
+   "state": "{\n  \"offset\": 20,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "question",
+     "sessionId": "s1",
+     "request": {
+      "callId": "ask-2",
+      "askedAt": 2,
+      "questions": [
+       {
+        "id": "q2",
+        "header": "Pick",
+        "question": "Which database?",
+        "options": [
+         {
+          "label": "Postgres"
+         },
+         {
+          "label": "SQLite"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"Agent asks: Which database?\\n(reply with text for something else)\",\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Postgres\",\"callback_data\":\"m:7\"}],[{\"text\":\"SQLite\",\"callback_data\":\"m:8\"}]]}}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 20,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 20,
+      "callback_query": {
+       "id": "q6",
+       "from": {
+        "id": 5
+       },
+       "message": {
+        "message_id": 60,
+        "chat": {
+         "id": 42,
+         "type": "private"
+        },
+        "text": "Agent asks: Which database?"
+       },
+       "data": "m:008"
+      }
+     }
+    ]
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/answerCallbackQuery",
+     "body": "{\"callback_query_id\":\"q6\",\"text\":\"SQLite\"}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":21,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "answer": [
+      "s1",
+      "ask-2",
+      [
+       {
+        "questionId": "q2",
+        "labels": [
+         "SQLite"
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "state": "{\n  \"offset\": 21,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 21,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": 42,
+        "type": "private"
+       },
+       "text": "next task"
+      }
+     }
+    ]
+   },
+   "telegram": [],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":22,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "send": {
+      "sessionId": "s1",
+      "providerId": "p1",
+      "modelId": "m1",
+      "text": "next task"
+     }
+    }
+   ],
+   "state": "{\n  \"offset\": 22,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "error",
+     "sessionId": "s1",
+     "message": "boom"
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"Nekko Agent error: boom\"}"
+    },
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"…\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 22,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 22,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": 42,
+        "type": "private"
+       },
+       "text": "again"
+      }
+     }
+    ],
+    "failChat": "provider exploded"
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"Nekko Agent error: provider exploded\"}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":23,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "send": {
+      "sessionId": "s1",
+      "providerId": "p1",
+      "modelId": "m1",
+      "text": "again"
+     }
+    }
+   ],
+   "state": "{\n  \"offset\": 23,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "tick": 1500
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 23,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "question",
+     "sessionId": "s1",
+     "request": {
+      "callId": "ask-3",
+      "askedAt": 3,
+      "questions": [
+       {
+        "id": "a",
+        "header": "A",
+        "question": "First?",
+        "options": [
+         {
+          "label": "yes"
+         },
+         {
+          "label": "no"
+         }
+        ]
+       },
+       {
+        "id": "b",
+        "header": "B",
+        "question": "Second?",
+        "options": [
+         {
+          "label": "left"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"Agent asks:\\n\\nFirst?\\n• yes\\n• no\\n\\nSecond?\\n• left\\n\\n(reply with your answer)\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 23,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "question",
+     "sessionId": "s1",
+     "request": {
+      "callId": "ask-4",
+      "askedAt": 4,
+      "questions": [
+       {
+        "id": "c",
+        "header": "C",
+        "question": "Colour?",
+        "options": [
+         {
+          "label": "red"
+         },
+         {
+          "label": "green"
+         },
+         {
+          "label": "blue"
+         },
+         {
+          "label": "cyan"
+         },
+         {
+          "label": "pink"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"Agent asks:\\n\\nColour?\\n• red\\n• green\\n• blue\\n• cyan\\n• pink\\n\\n(reply with your answer)\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 23,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "question_resolved",
+     "sessionId": "s1",
+     "callId": "ask-4"
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 23,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 23,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": 7,
+        "type": "private"
+       },
+       "text": "implement the parser and refactor the lexer"
+      }
+     }
+    ],
+    "models": [
+     {
+      "id": "tiny-3b",
+      "name": "Tiny 3B",
+      "providerId": "p2"
+     },
+     {
+      "id": "big-70b",
+      "name": "Big 70B",
+      "providerId": "p2"
+     },
+     {
+      "id": "whisper-large",
+      "name": "Whisper",
+      "providerId": "p2"
+     }
+    ]
+   },
+   "telegram": [],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":24,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "listModels": "p2"
+    },
+    {
+     "send": {
+      "sessionId": "s_auto",
+      "providerId": "p2",
+      "modelId": "big-70b",
+      "text": "implement the parser and refactor the lexer"
+     }
+    }
+   ],
+   "state": "{\n  \"offset\": 24,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 24,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": 7,
+        "type": "private"
+       },
+       "text": "hi"
+      }
+     }
+    ],
+    "models": []
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"7\",\"text\":\"Nekko Agent: no provider/model is configured for this chat.\"}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":25,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "listModels": "p2"
+    }
+   ],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "tick": 1500
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"7\",\"text\":\"_queued…_\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "text",
+     "sessionId": "s_auto",
+     "delta": "short"
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "done",
+     "sessionId": "s_auto",
+     "messageId": "m2"
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/editMessageText",
+     "body": "{\"chat_id\":\"7\",\"message_id\":113,\"text\":\"short\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "text",
+     "sessionId": "s1",
+     "delta": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀 and the rest"
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "tick": 1500
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "done",
+     "sessionId": "s1",
+     "messageId": "m3"
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/editMessageText",
+     "body": "{\"chat_id\":\"42\",\"message_id\":114,\"text\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "text",
+     "sessionId": "s1",
+     "delta": "lost"
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "failSend": "Bad Request: chat not found"
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "tick": 1500
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"lost\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "text",
+     "sessionId": "s1",
+     "delta": " found"
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "tick": 1500
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"lost found\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "event": {
+     "type": "done",
+     "sessionId": "s1",
+     "messageId": "m4"
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/editMessageText",
+     "body": "{\"chat_id\":\"42\",\"message_id\":115,\"text\":\"lost found\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "pollError": "Conflict: terminated by other getUpdates request"
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "lastError": "telegram getUpdates: Conflict: terminated by other getUpdates request",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "tick": 5000
+   },
+   "telegram": [],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":25,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "lastError": "telegram getUpdates: Conflict: terminated by other getUpdates request",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": []
+   },
+   "telegram": [],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot123:TEST/getUpdates",
+     "body": "{\"offset\":25,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "failGetMe": "Unauthorized"
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "settings": {
+     "telegram": {
+      "enabled": true,
+      "botToken": "456:TEST2",
+      "allowedChatIds": [
+       "42",
+       "7"
+      ]
+     }
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot456:TEST2/getMe",
+     "body": "{}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 25,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "lastError": "telegram getMe: Unauthorized",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 25,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": 42,
+        "type": "private"
+       },
+       "text": "after the token change"
+      }
+     },
+     {
+      "update_id": 26,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": -1001,
+        "type": "private"
+       },
+       "text": "not listed any more"
+      }
+     }
+    ]
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot456:TEST2/sendMessage",
+     "body": "{\"chat_id\":\"-1001\",\"text\":\"Nekko Agent: this chat is not on the allowlist.\"}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot456:TEST2/getUpdates",
+     "body": "{\"offset\":27,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "send": {
+      "sessionId": "s1",
+      "providerId": "p1",
+      "modelId": "m1",
+      "text": "after the token change"
+     }
+    }
+   ],
+   "state": "{\n  \"offset\": 27,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "tick": 1500
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot456:TEST2/sendMessage",
+     "body": "{\"chat_id\":\"42\",\"text\":\"_queued…_\"}"
+    }
+   ],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 27,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "settings": {
+     "telegram": {
+      "enabled": true,
+      "botToken": "456:TEST2",
+      "allowedChatIds": [
+       "42",
+       "7"
+      ]
+     }
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 27,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "settings": {
+     "telegram": {
+      "enabled": false,
+      "botToken": "456:TEST2",
+      "allowedChatIds": [
+       "42",
+       "7"
+      ]
+     }
+    }
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 27,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {}
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 27,
+      "message": {
+       "message_id": 1,
+       "chat": {
+        "id": 42,
+        "type": "private"
+       },
+       "text": "while off"
+      }
+     }
+    ]
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 28,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {}
+  },
+  {
+   "op": {
+    "settings": {
+     "telegram": {
+      "enabled": true,
+      "botToken": "456:TEST2",
+      "allowedChatIds": [
+       "42",
+       "7"
+      ]
+     }
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot456:TEST2/getMe",
+     "body": "{}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot456:TEST2/getUpdates",
+     "body": "{\"offset\":28,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [],
+   "state": "{\n  \"offset\": 28,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "updates": [
+     {
+      "update_id": 28,
+      "callback_query": {
+       "id": "q7",
+       "from": {
+        "id": 5
+       },
+       "message": {
+        "message_id": 61,
+        "chat": {
+         "id": 42,
+         "type": "private"
+        },
+        "text": "Agent asks: Which auth?"
+       },
+       "data": "m:6"
+      }
+     }
+    ]
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot456:TEST2/answerCallbackQuery",
+     "body": "{\"callback_query_id\":\"q7\",\"text\":\"OAuth\"}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot456:TEST2/getUpdates",
+     "body": "{\"offset\":29,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [
+    {
+     "answer": [
+      "s1",
+      "ask-1",
+      [
+       {
+        "questionId": "q1",
+        "labels": [
+         "OAuth"
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "state": "{\n  \"offset\": 29,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  },
+  {
+   "op": {
+    "stop": true
+   },
+   "telegram": [],
+   "polls": [],
+   "host": [],
+   "state": "{\n  \"offset\": 29,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {}
+  },
+  {
+   "op": {
+    "restart": {
+     "telegram": {
+      "enabled": true,
+      "botToken": "456:TEST2",
+      "allowedChatIds": [
+       "42",
+       "7"
+      ]
+     }
+    }
+   },
+   "telegram": [
+    {
+     "url": "https://api.telegram.org/bot456:TEST2/getMe",
+     "body": "{}"
+    }
+   ],
+   "polls": [
+    {
+     "url": "https://api.telegram.org/bot456:TEST2/getUpdates",
+     "body": "{\"offset\":29,\"timeout\":25,\"limit\":50}"
+    }
+   ],
+   "host": [],
+   "state": "{\n  \"offset\": 29,\n  \"bindings\": {\n    \"7\": \"s_auto\",\n    \"42\": \"s1\"\n  },\n  \"note\": \"kept\"\n}",
+   "status": {
+    "telegram": {
+     "running": true,
+     "botUsername": "nekko_bot",
+     "boundChats": 2
+    }
+   }
+  }
+ ]
+}

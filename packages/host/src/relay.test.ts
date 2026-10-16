@@ -112,11 +112,11 @@ describe('relay agent: what a phone may do', () => {
       const rid = ++id;
       agent.ws.deliver({ type: 'c', cid: 'c1', data: JSON.stringify({ enc: await seal(agent.key, { type: 'req', id: rid, channel, args }) }) });
       let res: any;
-      // Sealing a multi-megabyte reply takes well over vitest's 1 s default on a busy runner.
       await vi.waitFor(async () => {
         res = (await framesFor(agent.ws, agent.key, 'c1')).find((f) => f.type === 'res' && f.id === rid);
         expect(res).toBeDefined();
-      }, { timeout: 15_000, interval: 100 });
+        // Sealing a ~10 MB reply takes over a second on CI runners (#627).
+      }, { timeout: 10_000 });
       return res;
     };
     return { ...agent, call, saved, wipe };

@@ -463,6 +463,70 @@ impl Prs {
         response.json().await.ok()
     }
 
+    /// `githubStackRequest(path, pullRequests?)`: `gh api` (a read through the
+    /// read queue, a write on its own), the REST API when gh is missing or a
+    /// read failed with a token to try. A failed write is never repeated: it
+    /// may already have happened.
+    pub async fn stack_request(
+        &self,
+        path: &str,
+        body: Option<&[Value]>,
+        token: Option<&str>,
+    ) -> Result<Value, String> {
+        let method = if body.is_some() { "POST" } else { "GET" };
+        if !self.gh_missing.load(Ordering::SeqCst) {
+            let mut args: Vec<String> = ["api", path, "--method", method, "-H", "X-GitHub-Api-Version: 2026-03-10"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+            for n in body.unwrap_or_default() {
+                args.push("-F".into());
+                args.push(format!("pull_requests[]={}", js::display(n)));
+            }
+            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            let result = if body.is_some() {
+                run(&self.gh, &refs, Duration::from_secs(30), None, 8 * 1024 * 1024).await
+            } else {
+                self.gh_read(&refs, Duration::from_secs(15), None).await
+            };
+            if result.missing {
+                self.gh_missing.store(true, Ordering::SeqCst);
+            } else if result.ok {
+                return serde_json::from_str(&result.stdout).map_err(|e| e.to_string());
+            } else if body.is_some() || token.is_none() {
+                let text = if result.stderr.is_empty() {
+                    "GitHub request failed. Sign in to gh or connect GitHub."
+                } else {
+                    &result.stderr
+                };
+                return Err(js::slice16(js::trim(text), 300).to_string());
+            }
+        }
+        let mut req = match body {
+            Some(_) => self.http.post(format!("{}/{path}", self.api)),
+            None => self.http.get(format!("{}/{path}", self.api)),
+        }
+        .headers(self.headers(token))
+        .header("Content-Type", "application/json")
+        .timeout(Duration::from_secs(30));
+        if let Some(numbers) = body {
+            req = req.body(js::stringify(&json!({ "pull_requests": numbers })));
+        }
+        let res = req.send().await.map_err(|_| "fetch failed".to_string())?;
+        if !res.status().is_success() {
+            return Err(format!(
+                "GitHub request failed ({}). Check repository access and GitHub stack availability.",
+                res.status().as_u16()
+            ));
+        }
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    /// `refreshPrInfo(url)`: the by-URL read, forced.
+    pub async fn refresh_info(&self, url: &str, token: Option<&str>) -> Value {
+        self.cached_info(url, token, true).await
+    }
+
     /// `fetchPrInfo(url)`: gh first, the REST API when gh is missing, not
     /// signed in, or cannot see the repository.
     pub async fn fetch_info(&self, url: &str, token: Option<&str>) -> Value {

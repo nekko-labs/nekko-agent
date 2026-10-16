@@ -201,10 +201,10 @@ import {
 } from './oauth.js';
 import { buildSpec, buildSpecDoc, readSpecDocs, setSpecMethodology, toggleSpecTask, specPathForSession } from './spec.js';
 import { createRemoteService, DAEMON_REMOTE } from './remote.js';
-import { createMessagingService } from './messaging/service.js';
+import { createMessagingService, DAEMON_MESSAGING, type MessagingService } from './messaging/service.js';
 import { detectAgentTools, installSubagent, refreshSubagent, subagentSnippet } from './integrations.js';
 import { getGpuStats, getGpuStatsFresh } from './gpu.js';
-import { startUpdateChecks } from './update-checks.js';
+import { DAEMON_UPDATE_CHECKS, startUpdateChecks } from './update-checks.js';
 import { detectGpuAdapters } from './gpu-adapters.js';
 import { getSystemStats } from './system.js';
 import { stopLocalServer } from './servers.js';
@@ -587,7 +587,7 @@ export interface Host {
   remote: import('./remote.js').RemoteService;
 
   /** Inbound messaging channels (Telegram bot, …): live per-channel state. */
-  messagingStatus(): import('@nekko-agent/shared').MessagingStatus;
+  messagingStatus(): import('@nekko-agent/shared').MessagingStatus | Promise<import('@nekko-agent/shared').MessagingStatus>;
 
   beginOAuth(provider: OAuthProvider): Promise<OAuthSessionInfo>;
   finishOAuth(sessionId: string, pasted: string): Promise<OAuthStatus>;
@@ -846,11 +846,14 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
 
   // Periodic catalog refreshes (Settings → Updates): provider model lists and
   // the skills shelf, each on its own toggle. The `host.listModels` call inside
-  // the service is deferred past construction.
+  // the service is deferred past construction. A daemon that owns them
+  // (crates/nekkod/src/small_services.rs) runs them instead, so the UI hears
+  // one change, not two.
   const updateChecks = startUpdateChecks({
     settings: getSettings,
     listModels: (id) => host.listModels(id),
     emit: (channel, payload) => events.emit(channel, payload),
+    scheduled: !daemonOwns(DAEMON_UPDATE_CHECKS),
   });
 
   // A paired phone follows the desktop's theme: tell it (through the relay)
@@ -859,6 +862,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     if (touchesAppearance(patch)) events.emit('appearanceUpdated', appearanceOf(getSettings()));
   };
 
+  // Set once the host exists (the bridge drives it); null when the daemon owns messaging.
+  let messaging: MessagingService | null = null;
   const host: Host = {
     events,
     dataDir,
@@ -869,7 +874,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       const next = saveSettings(patch);
       announceAppearance(patch);
       if (patch.voice !== undefined) stopVoice();
-      if (patch.messaging !== undefined) messaging.update(next.messaging);
+      if (patch.messaging !== undefined) messaging?.update(next.messaging);
       return next;
     },
 
@@ -1012,7 +1017,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       // What updateSettings does after a save, for a save the daemon made.
       if (patch && typeof patch === 'object') {
         if (patch.voice !== undefined) stopVoice();
-        if (patch.messaging !== undefined) messaging.update(getSettings().messaging);
+        if (patch.messaging !== undefined) messaging?.update(getSettings().messaging);
       }
     },
     indexProgressRelay: (status) => events.emit('indexProgress', { ...status, relayOnly: true }),
@@ -1367,7 +1372,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     renameRemoteDevice: (deviceId, name) => host.remote.rename(deviceId, name),
     rotateRemoteSecret: () => host.remote.rotate(),
 
-    messagingStatus: () => messaging.status(),
+    messagingStatus: () => (messaging ? messaging.status() : viaDaemon(DAEMON_MESSAGING, 'messaging:status', [], () => ({}))),
 
     beginOAuth,
     finishOAuth,
@@ -1422,8 +1427,10 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     if (!daemonOwns(DAEMON_REMOTE)) host.remote.startIfEnabled();
   }
   // Messaging channels likewise drive the host; configured adapters come up
-  // with the process and reconfigure through updateSettings above.
-  const messaging = createMessagingService(host);
-  messaging.update(getSettings().messaging);
+  // with the process and reconfigure through updateSettings above. A daemon
+  // that owns them (crates/nekkod/src/messaging.rs) runs the bridge and its
+  // state file instead: one poller per bot token, or Telegram answers 409.
+  messaging = daemonOwns(DAEMON_MESSAGING) ? null : createMessagingService(host);
+  messaging?.update(getSettings().messaging);
   return host;
 }

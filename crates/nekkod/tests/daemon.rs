@@ -2613,8 +2613,13 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     };
     let res = ask(2, "remote:devices", json!([])).await;
     assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): remote:devices");
+    // `app:info` is the daemon's own now (small_services.rs), not the host's echo.
     let res = ask(3, "app:info", json!([])).await;
-    assert_eq!(res["result"], json!({ "echo": "app:info", "args": [] }));
+    assert_eq!(res["result"]["edition"], "web", "{res}");
+    assert!(res["result"]["platform"].is_string(), "{res}");
+    // A channel the host serves.
+    let res = ask(31, "skills:runnable", json!([])).await;
+    assert_eq!(res["result"], json!([]), "{res}");
     let res = ask(4, "training:list", json!([])).await;
     assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): training:list");
     let res = ask(5, "turn:pending", json!([])).await;
@@ -4195,4 +4200,462 @@ async fn a_sandbox_chat_turn_runs_in_the_daemon_and_its_container() {
     if let Err(panic) = outcome {
         std::panic::resume_unwind(panic);
     }
+}
+
+fn git_in(dir: &std::path::Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "init.defaultBranch=main",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("git runs");
+    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// A loopback GitHub REST API with the pull and stack endpoints, recording what it was sent.
+async fn fake_github_stacks(pulls: Value) -> (u16, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
+    use axum::extract::{Path as AxPath, RawQuery};
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+    let (log_get, log_post) = (seen.clone(), seen.clone());
+    let app = axum::Router::new().route(
+        "/repos/{owner}/{repo}/{*rest}",
+        axum::routing::get(move |AxPath((o, r, rest)): AxPath<(String, String, String)>, RawQuery(q): RawQuery| {
+            let (log, pulls) = (log_get.clone(), pulls.clone());
+            async move {
+                let path = format!("repos/{o}/{r}/{rest}{}", q.map(|q| format!("?{q}")).unwrap_or_default());
+                log.lock().unwrap().push(json!(["GET", path]));
+                match pulls.get(&path) {
+                    Some(v) => (axum::http::StatusCode::OK, axum::Json(v.clone())),
+                    None => (axum::http::StatusCode::NOT_FOUND, axum::Json(json!({ "message": "Not Found" }))),
+                }
+            }
+        })
+        .post(move |AxPath((o, r, rest)): AxPath<(String, String, String)>, body: axum::Json<Value>| {
+            let log = log_post.clone();
+            async move {
+                log.lock().unwrap().push(json!(["POST", format!("repos/{o}/{r}/{rest}"), body.0]));
+                (axum::http::StatusCode::CREATED, axum::Json(json!({ "number": 3 })))
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = l.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    (port, seen)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn continues_and_links_pr_stacks_itself() {
+    let data = std::env::temp_dir().join(format!("nekkod-stacks-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    // The parent PR's repository on GitHub, and the user's clone of it.
+    let origin = data.join("origin.git");
+    let clone = data.join("clone");
+    std::fs::create_dir_all(&clone).unwrap();
+    git_in(&data, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+    git_in(&clone, &["init", "-q"]);
+    std::fs::write(clone.join("a.txt"), "a").unwrap();
+    git_in(&clone, &["add", "."]);
+    git_in(&clone, &["commit", "-q", "-m", "one"]);
+    git_in(&clone, &["checkout", "-q", "-b", "parent"]);
+    std::fs::write(clone.join("b.txt"), "b").unwrap();
+    git_in(&clone, &["add", "."]);
+    git_in(&clone, &["commit", "-q", "-m", "parent work"]);
+    let sha = git_in(&clone, &["rev-parse", "HEAD"]);
+    git_in(&clone, &["push", "-q", origin.to_str().unwrap(), "parent"]);
+    git_in(&clone, &["checkout", "-q", "main"]);
+    // A GitHub remote. Its fetch cannot be pointed at the bare repository
+    // without changing what `remote get-url` prints (an `insteadOf` rewrite
+    // applies to both), so the daemon's git may only use local transports:
+    // the fetch fails at once, never touching the network, and the follow-up
+    // half runs from a chat set up as continuing would have left it. The
+    // successful fetch is covered by the golden replay (tests/stacks.rs).
+    git_in(&clone, &["remote", "add", "origin", "https://github.com/owner/repo.git"]);
+
+    let pr = |n: u64, head: &str, base: &str, sha: &str| {
+        json!({
+            "number": n, "state": "open", "title": format!("PR {n}"),
+            "head": { "ref": head, "sha": sha, "repo": { "full_name": "owner/repo" } },
+            "base": { "ref": base, "repo": { "full_name": "owner/repo" } },
+        })
+    };
+    let (gh, seen) = fake_github_stacks(json!({
+        "repos/owner/repo/pulls/12": pr(12, "parent", "main", &sha),
+        "repos/owner/repo/pulls/13": pr(13, "nekko/child", "parent", &"b".repeat(40)),
+        "repos/owner/repo/stacks?pull_request=12": [],
+    }))
+    .await;
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let source = json!({ "id": "s_src", "title": "Source", "workspaceId": "w1", "executionMode": "worktree", "gitIsolation": true,
+        "providerId": "p", "modelId": "m", "mode": "ask", "disabledTools": ["browser"], "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_src.json"), source.to_string()).unwrap();
+    let d = start_with_env(
+        true,
+        Some(&data),
+        json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }),
+        &[
+            ("NEKKO_GH_PATH", Some("nekko-no-such-gh")),
+            ("GIT_ALLOW_PROTOCOL", Some("file")),
+            ("GIT_TERMINAL_PROMPT", Some("0")),
+        ],
+    );
+    let ws = json!([{ "id": "w1", "name": "clone", "path": clone, "addedAt": 1 }]);
+    post(d.port, "settings:update", json!([{ "workspaces": ws }]), Some(TOKEN)).await;
+
+    // Refusals come before any network or git work.
+    let (status, bad) =
+        post(d.port, "pr:continueStack", json!(["s_src", "https://gitlab.com/o/r/pull/1"]), Some(TOKEN)).await;
+    assert_eq!((status, bad), (400, json!({ "error": "Use a GitHub PR URL." })));
+
+    let url = "https://github.com/owner/repo/pull/12";
+    // The PR read, the remote matched in the real clone and the branch name
+    // checked; then the fetch, refused (local transports only): no chat made.
+    let (status, made) = post(d.port, "pr:continueStack", json!(["s_src", url]), Some(TOKEN)).await;
+    assert_eq!(
+        (status, made),
+        (
+            400,
+            json!({ "error": "Could not fetch the parent PR. Check Git authentication and repository access, then retry." })
+        )
+    );
+    assert!(seen.lock().unwrap().contains(&json!(["GET", "repos/owner/repo/pulls/12"])));
+    assert_eq!(std::fs::read_dir(data.join("sessions")).unwrap().count(), 1, "no follow-up chat");
+    let _ = (&origin, &sha);
+
+    // The dependent chat as continuing leaves it, once its worktree exists,
+    // links its PR as a new stack.
+    git_in(&clone, &["checkout", "-q", "-b", "nekko/child"]);
+    let id = "s_dep";
+    let dependent = json!({ "id": id, "title": "Follow-up to PR #12", "titleAuto": false, "workspaceId": "w1", "executionMode": "worktree",
+        "gitIsolation": true, "gitStackParent": { "workspaceId": "w1", "url": url, "branch": "parent", "sha": sha },
+        "gitWorktrees": { "w1": { "path": clone, "branch": "nekko/child" } }, "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join(format!("sessions/{id}.json")), dependent.to_string()).unwrap();
+    let (status, linked) =
+        post(d.port, "pr:linkStack", json!([id, "https://github.com/owner/repo/pull/13"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(linked["ok"], json!(true), "{linked}");
+    assert_eq!(linked["message"], "Linked as a GitHub PR stack.");
+    assert!(
+        seen.lock()
+            .unwrap()
+            .iter()
+            .any(|c| c == &json!(["POST", "repos/owner/repo/stacks", { "pull_requests": [12, 13] }])),
+        "{:?}",
+        seen.lock().unwrap()
+    );
+    // A failure is an answer, not an error.
+    let (status, refused) =
+        post(d.port, "pr:linkStack", json!(["s_src", "https://github.com/owner/repo/pull/13"]), Some(TOKEN)).await;
+    assert_eq!(
+        (status, refused),
+        (200, json!({ "ok": false, "message": "This chat was not started from a parent PR." }))
+    );
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in [
+        "pr:continueStack",
+        "pr:linkStack",
+        "data:wipe",
+        "app:info",
+        "updates:check",
+        "workspace:add",
+        "session:watches",
+    ] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} not owned");
+    }
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!calls.to_string().contains("continueStack"), "the host ran nothing: {calls}");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn wipes_the_data_it_owns_and_answers_the_small_services() {
+    let data = std::env::temp_dir().join(format!("nekkod-wipe-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    for (p, text) in [
+        ("sessions/s_a.json", json!({ "id": "s_a", "title": "A", "messages": [], "createdAt": 1, "updatedAt": 1 }).to_string()),
+        ("memory/m.md", "note".into()),
+        ("usage.jsonl", "{}\n".into()),
+        ("replies.jsonl", "{}\n".into()),
+        ("tokens.json", "{}".into()),
+        (
+            "agent-watches.json",
+            json!([{ "id": "w1", "sessionId": "s_a", "kind": "timer", "prompt": "secret", "nextPollAt": 4102444800000_u64, "intervalMs": 60000,
+                     "deadlineAt": 4102444800000_u64, "status": "active", "failures": 0 }])
+            .to_string(),
+        ),
+    ] {
+        std::fs::create_dir_all(data.join(p).parent().unwrap()).unwrap();
+        std::fs::write(data.join(p), text).unwrap();
+    }
+    let d = start_with_config(true, Some(&data), json!({ "appVersion": "9.8.7", "edition": "desktop" }));
+    post(d.port, "settings:update", json!([{ "theme": "light" }]), Some(TOKEN)).await;
+
+    // session:watches: what the transcript shows, never the prompt.
+    let (_, views) = post(d.port, "session:watches", json!(["s_a"]), Some(TOKEN)).await;
+    assert_eq!(
+        views,
+        json!([{ "id": "w1", "kind": "timer", "status": "active", "deadlineAt": 4102444800000_u64, "nextPollAt": 4102444800000_u64, "pending": false, "failures": 0 }])
+    );
+
+    let (_, info) = post(d.port, "app:info", json!([]), Some(TOKEN)).await;
+    assert_eq!(info["version"], "9.8.7");
+    assert_eq!(info["edition"], "desktop");
+    // No bridge here: headless, `workspace:add` lists the saved folders.
+    let (_, listed) = post(d.port, "workspace:add", json!([]), Some(TOKEN)).await;
+    assert_eq!(listed, json!([]));
+    let (status, _) = post(d.port, "updates:check", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+
+    let (status, next) = post(d.port, "data:wipe", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{next}");
+    assert_eq!(next["theme"], json!("system"), "the defaults come back");
+    assert!(!data.join("sessions/s_a.json").exists());
+    assert!(!data.join("memory/m.md").exists() && data.join("memory").is_dir());
+    assert!(!data.join("usage.jsonl").exists() && !data.join("replies.jsonl").exists());
+    assert!(data.join("tokens.json").exists(), "sign-ins are not part of a wipe");
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert_eq!(saved["theme"], json!("system"));
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(calls.iter().any(|c| c == &json!(["s_a"])), "the chat's command log went first: {calls:?}");
+    assert!(
+        calls.iter().any(|c| c[0] == "settings:changed" && c[1][1].is_null()),
+        "the host heard the reset: {calls:?}"
+    );
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn adds_a_folder_from_the_desktop_picker_through_the_bridge() {
+    let data = std::env::temp_dir().join(format!("nekkod-picker-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let picked = data.join("picked");
+    std::fs::create_dir_all(&picked).unwrap();
+    let answer = std::sync::Arc::new(std::sync::Mutex::new(json!({ "path": picked })));
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(Option<String>, Value)>::new()));
+    let (a, s) = (answer.clone(), seen.clone());
+    let app = axum::Router::new().route(
+        "/",
+        axum::routing::post(move |headers: axum::http::HeaderMap, body: axum::Json<Value>| {
+            let (a, s) = (a.clone(), s.clone());
+            async move {
+                let auth = headers.get("authorization").and_then(|v| v.to_str().ok()).map(str::to_string);
+                s.lock().unwrap().push((auth, body.0));
+                axum::Json(a.lock().unwrap().clone())
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let bridge = format!("http://127.0.0.1:{}/", l.local_addr().unwrap().port());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    let d =
+        start_with_config(true, Some(&data), json!({ "browserBridge": { "url": bridge, "token": "bridge-token" } }));
+
+    let (status, added) = post(d.port, "workspace:add", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{added}");
+    assert_eq!(added[0]["path"], json!(picked));
+    assert_eq!(added[0]["name"], "picked");
+    assert_eq!(seen.lock().unwrap()[0], (Some("Bearer bridge-token".into()), json!({ "tool": "pickFolder" })));
+    // Cancelled: the saved folders, unchanged.
+    *answer.lock().unwrap() = json!({ "path": null });
+    let (_, again) = post(d.port, "workspace:add", json!([]), Some(TOKEN)).await;
+    assert_eq!(again, added);
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// A loopback stand-in for Telegram's Bot API: records every call (method
+/// and body; the token is in the path), answers `getMe` and `sendMessage`,
+/// and holds `getUpdates` until the test queues updates (or 25 s pass, as
+/// Telegram's long poll does). Never a real bot or token.
+struct FakeTelegram {
+    port: u16,
+    calls: std::sync::Arc<std::sync::Mutex<Vec<(String, String, Value)>>>,
+    updates: tokio::sync::mpsc::UnboundedSender<Value>,
+    server: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for FakeTelegram {
+    fn drop(&mut self) {
+        self.server.abort();
+    }
+}
+
+impl FakeTelegram {
+    fn calls(&self, method: &str) -> Vec<Value> {
+        self.calls.lock().unwrap().iter().filter(|c| c.1 == method).map(|c| c.2.clone()).collect()
+    }
+
+    fn polls_since(&self, n: usize) -> usize {
+        self.calls.lock().unwrap().iter().filter(|c| c.1 == "getUpdates").count().saturating_sub(n)
+    }
+}
+
+async fn fake_telegram() -> FakeTelegram {
+    use axum::extract::Path;
+    use axum::routing::post as route_post;
+    let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (updates, rx) = tokio::sync::mpsc::unbounded_channel::<Value>();
+    let rx = std::sync::Arc::new(tokio::sync::Mutex::new(rx));
+    let next_id = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(500));
+    let seen = calls.clone();
+    let app = axum::Router::new().route(
+        "/{bot}/{method}",
+        route_post(move |Path((bot, method)): Path<(String, String)>, body: String| {
+            let (seen, rx, next_id) = (seen.clone(), rx.clone(), next_id.clone());
+            async move {
+                let body: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+                seen.lock().unwrap().push((bot.clone(), method.clone(), body.clone()));
+                let result = match method.as_str() {
+                    "getMe" => json!({ "id": 7, "is_bot": true, "username": "nekko_test_bot" }),
+                    "sendMessage" => {
+                        let id = next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        json!({ "message_id": id, "chat": { "id": body["chat_id"], "type": "private" } })
+                    }
+                    "getUpdates" => {
+                        let mut rx = rx.lock().await;
+                        match tokio::time::timeout(Duration::from_secs(25), rx.recv()).await {
+                            Ok(Some(batch)) => batch,
+                            _ => json!([]),
+                        }
+                    }
+                    _ => json!(true),
+                };
+                axum::Json(json!({ "ok": true, "result": result }))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    FakeTelegram { port, calls, updates, server }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_runs_the_telegram_bridge() {
+    let tg = fake_telegram().await;
+    let model = scripted_model(vec![say_text("Hello from the daemon")]).await;
+    let data = std::env::temp_dir().join(format!("nekkod-messaging-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // The chat this Telegram chat is already bound to: no worktree, so no git.
+    let session = json!({
+        "id": "s_tg", "title": "From Telegram", "executionMode": "local", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    std::fs::write(data.join("sessions/s_tg.json"), session.to_string()).unwrap();
+    std::fs::write(data.join("messaging-state.json"), r#"{"offset":40,"bindings":{"42":"s_tg"}}"#).unwrap();
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let settings = json!({
+        "providers": [provider], "defaultProviderId": "p1", "defaultModelId": "synthetic", "defaultChatMode": "yolo",
+        "messaging": { "telegram": { "enabled": true, "botToken": "123:TEST", "allowedChatIds": ["42"] } },
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with_config(true, Some(&data), json!({ "telegramApiUrl": format!("http://127.0.0.1:{}", tg.port) }));
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("messaging:status")), "{info}");
+    wait_for("the first long poll", || tg.polls_since(0) >= 1).await;
+    let first = &tg.calls("getUpdates")[0];
+    assert_eq!(first["offset"], 40, "the poll resumes from the saved offset");
+    assert_eq!(first["timeout"], 25);
+    assert!(tg.calls.lock().unwrap().iter().all(|c| c.0 == "bot123:TEST"), "every call uses the bot token");
+    let status = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let (_, s) = post(d.port, "messaging:status", json!([]), Some(TOKEN)).await;
+            if s["telegram"]["botUsername"].is_string() {
+                return s;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("getMe answered");
+    assert_eq!(status, json!({ "telegram": { "running": true, "botUsername": "nekko_test_bot", "boundChats": 1 } }));
+
+    // An unlisted chat is refused and starts nothing; the allowed one starts a turn.
+    tg.updates
+        .send(json!([
+            { "update_id": 41, "message": { "message_id": 1, "chat": { "id": 99, "type": "private" }, "text": "let me in" } },
+            { "update_id": 42, "message": { "message_id": 2, "chat": { "id": 42, "type": "private" }, "text": "  say hello  " } },
+        ]))
+        .unwrap();
+    wait_for("the refusal", || {
+        tg.calls("sendMessage")
+            .iter()
+            .any(|b| b["chat_id"] == "99" && b["text"].as_str().unwrap().contains("allowlist"))
+    })
+    .await;
+    // The streamed reply lands in one message: sent, then edited to the final text.
+    wait_for("the reply", || {
+        tg.calls("editMessageText").iter().any(|b| b["chat_id"] == "42" && b["text"] == "Hello from the daemon")
+            || tg.calls("sendMessage").iter().any(|b| b["chat_id"] == "42" && b["text"] == "Hello from the daemon")
+    })
+    .await;
+    let to_42: Vec<Value> = tg.calls("sendMessage").into_iter().filter(|b| b["chat_id"] == "42").collect();
+    assert_eq!(to_42.len(), 1, "one message for the whole reply: {to_42:?}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_tg.json")).unwrap()).unwrap();
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages.first().unwrap()["content"], "say hello");
+    assert_eq!(messages.last().unwrap()["content"], "Hello from the daemon");
+    // Admitted and driven by the daemon: the host was handed the turn, never asked to send it.
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(calls.iter().any(|c| c[0] == "turn:adopt"), "{calls:?}");
+    assert!(!calls.iter().any(|c| c[0] == "chat:send"), "{calls:?}");
+    assert_eq!(model.requests.lock().unwrap()[0]["model"], "synthetic");
+    // The offset moved past both updates, and no session was made for chat 99.
+    wait_for("the offset saved", || {
+        std::fs::read_to_string(data.join("messaging-state.json")).is_ok_and(|t| t.contains("\"offset\": 43"))
+    })
+    .await;
+    let state: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("messaging-state.json")).unwrap()).unwrap();
+    assert_eq!(state["bindings"], json!({ "42": "s_tg" }));
+
+    // Disabling stops the poll at once and the status goes empty.
+    let polls = tg.polls_since(0);
+    let off =
+        json!({ "messaging": { "telegram": { "enabled": false, "botToken": "123:TEST", "allowedChatIds": ["42"] } } });
+    let (status, _) = post(d.port, "settings:update", json!([off]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let (_, s) = post(d.port, "messaging:status", json!([]), Some(TOKEN)).await;
+            if s == json!({}) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("the bridge stopped");
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(tg.polls_since(polls), 0, "no poll after disabling");
+    // A message sent meanwhile is not read.
+    tg.updates
+        .send(json!([{ "update_id": 43, "message": { "message_id": 3, "chat": { "id": 42, "type": "private" }, "text": "anyone?" } }]))
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(model.requests.lock().unwrap().len(), 1, "no turn while off");
+    // The backend never ran a bridge of its own.
+    assert!(!calls.iter().any(|c| c[0] == "messaging:status"));
+    drop(d);
+    std::fs::remove_dir_all(&data).ok();
 }

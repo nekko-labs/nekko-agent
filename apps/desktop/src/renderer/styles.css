@@ -661,17 +661,18 @@
   & .rail-backdrop {
     position: absolute;
     left: -6px;
-    width: calc(100% + 12px);
+    width: 198px;
     z-index: -1;
     pointer-events: none;
     overflow: visible;
     fill: color-mix(in srgb, var(--accent) 4%, var(--paper));
-    transition: fill var(--dur-slow) ease;
-    /* Keep 40/30/20px tail widths literal when expanded, not SVG-scaled. */
-    min-width: 198px;
-    transform-origin: left center;
-    transform: scaleX(calc(52 / 198));
-    transition: fill var(--dur-slow) ease, transform var(--dur-slow) var(--ease-spring, var(--ease-out));
+    /* Rest and open outlines share one command list, so `d` interpolates:
+       the tails start at the collapsed width and widen with the body. */
+    & path {
+      d: var(--rail-rest);
+      pointer-events: visiblePainted;
+      transition: d var(--dur-slow) var(--ease-spring, var(--ease-out)), fill var(--dur-slow) ease;
+    }
   }
   &:hover,
   &:has(:focus-visible) {
@@ -680,9 +681,11 @@
   }
   &:hover .rail-backdrop,
   &:has(:focus-visible) .rail-backdrop {
-    width: 198px;
-    transform: none;
     fill: color-mix(in srgb, var(--accent) 7%, var(--paper));
+  }
+  &:hover .rail-backdrop path,
+  &:has(:focus-visible) .rail-backdrop path {
+    d: var(--rail-open);
   }
   &:hover .rail-label,
   &:has(:focus-visible) .rail-label {
@@ -697,18 +700,19 @@
   @media (prefers-reduced-motion: reduce) {
     transition: none;
     &:hover .nav-item, &:has(:focus-visible) .nav-item { animation: none; }
+    & .rail-backdrop path { transition: none; }
   }
 }
 
-/* Split unused space 1:3 above/below the destinations. This places the
-   group between the top and midpoint without a fragile viewport offset.
+/* Split unused space 1:4 above/below the destinations (was 1:3, so the
+   panel sits ~20% higher) without a fragile viewport offset.
    On short windows the spacers collapse and destinations scroll instead. */
 @utility rail-space-before {
   flex: 1 1 0;
 }
 
 @utility rail-space-after {
-  flex: 3 1 0;
+  flex: 4 1 0;
 }
 
 @utility rail-group {
@@ -785,6 +789,8 @@
      (`trafficLightPosition` in the main process centres them on this line), so
      the wordmark starts after them rather than underneath. */
   padding-left: 92px;
+  /* Lift the mark and heading 8px onto the traffic lights' line. */
+  padding-bottom: 16px;
 }
 
 @utility titlebar-heading {
@@ -2207,3 +2213,34 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-add-icon::after { content: '+'; position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: 10px; height: 10px; border-radius: 50%; background: var(--paper); color: var(--accent); font: 700 11px/1 sans-serif; pointer-events: none; }
 .agent-action-separator { order: -1; }
 .agent-change-summary .text-danger { color: var(--danger); }
+
+/* Pasted or attached media fades in quickly. Keys remount only new items,
+   so existing thumbnails never re-animate. */
+@keyframes composer-media-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.composer-media-in { animation: composer-media-in 0.16s var(--ease-out, ease-out) both; }
+@media (prefers-reduced-motion: reduce) { .composer-media-in { animation: none; } }
+
+/* About page: a hop when petted and a speech bubble that floats away. */
+.about-nekko-cat { cursor: pointer; transition: transform 0.15s var(--ease-out, ease-out); }
+.about-nekko-cat:active { transform: translateY(-4px) scale(1.04); }
+.about-nekko-purr {
+  position: absolute; left: 100%; top: 0; white-space: nowrap;
+  font-size: 11px; color: var(--accent); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+  animation: about-purr 1.4s var(--ease-out, ease-out) both;
+}
+@keyframes about-purr { 0% { opacity: 0; transform: translateY(4px); } 15% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { .about-nekko-purr { animation: none; } }
+
+/* Focus mode, new chat: one centered composer on a quiet page. The first send
+   drops data-clean-start and the window becomes the full chat. */
+[data-clean-start] .clean-start { align-items: center; padding: 0 24px 12vh; background: radial-gradient(60% 50% at 50% 42%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%); }
+[data-clean-start] .clean-start .composer-section { width: min(720px, 100%); padding: 0; }
+[data-clean-start] .clean-start .composer-column { width: 100% !important; }
+[data-clean-start] .clean-start .composer { border-radius: 18px; box-shadow: 0 12px 40px -18px color-mix(in srgb, var(--ink) 35%, transparent); }
+.clean-start-greeting { margin: 0 auto 18px; text-align: center; }
+.clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
