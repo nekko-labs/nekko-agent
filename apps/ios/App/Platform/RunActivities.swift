@@ -13,7 +13,7 @@ import NekkoProtocol
 /// (APNs `liveactivity` pushes), which is not built yet (see TASKS.md).
 @MainActor
 final class RunActivities {
-    private var activities: [String: Activity<AgentRunAttributes>] = [:]
+    private var activities: [String: ActivityKit.Activity<AgentRunAttributes>] = [:]
     private var lastUpdate: [String: Date] = [:]
     private var steps: [String: Int] = [:]
 
@@ -75,7 +75,7 @@ final class RunActivities {
                                        computerName: computerName)
         let state = AgentRunAttributes.ContentState(phase: phase, step: step, callId: callId, severity: severity,
                                                      steps: steps[sid] ?? 0, startedAt: now)
-        if let a = try? Activity.request(attributes: attrs, content: ActivityContent(state: state, staleDate: now.addingTimeInterval(15 * 60))) {
+        if let a = try? ActivityKit.Activity<AgentRunAttributes>.request(attributes: attrs, content: ActivityContent(state: state, staleDate: now.addingTimeInterval(15 * 60))) {
             activities[sid] = a
         }
     }
