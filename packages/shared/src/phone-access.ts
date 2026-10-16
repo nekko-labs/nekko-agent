@@ -155,6 +155,35 @@ export const PHONE_QUEUE_KEYS = ['images', 'skill', 'text'] as const;
  */
 export const PHONE_CHAT_MODES = ['ask', 'guardrails', 'yolo'] as const;
 
+/**
+ * How much of a chat a phone receives from `session:get`. A whole session can
+ * be far larger than one relay frame (the relay caps frames at 10 MB; a long
+ * agent chat measured 9.8 MB raw, 7.6 MB of it screenshots inside tool
+ * results), and a frame that is too large never arrives, so the phone waited
+ * two minutes for a timeout. The phone shows text and tool steps, never tool
+ * images, so it gets:
+ * - the newest `messages` messages (older ones are counted in `omittedMessages`);
+ * - tool results without their images (counted in `omittedImages`);
+ * - tool output and long string tool arguments cut to `textChars`
+ *   characters, with `truncated: true` and the original length.
+ * The computer keeps the whole chat; the desktop is where the full detail lives.
+ */
+export const PHONE_SESSION_VIEW = { messages: 300, textChars: 4000 } as const;
+
+/**
+ * The largest sealed reply frame the agent sends a phone. The relay drops
+ * frames over 10 MB (`maxFrameBytes`, apps/relay/src/server.ts) without a word,
+ * so a reply above this is replaced by an error the phone can show at once.
+ * Under 10 MB to leave room for the relay envelope.
+ */
+export const PHONE_MAX_FRAME_BYTES = 9 * 1024 * 1024;
+
+/** The error a phone gets instead of a reply too large for the relay. */
+export function phoneFrameTooLarge(bytes: number): string {
+  const mb = (bytes / (1024 * 1024)).toFixed(1);
+  return `This reply is too large to send to a phone (${mb} MB). Open it on the computer.`;
+}
+
 export type PhoneAccessCode = 'channel-denied' | 'setting-denied' | 'option-denied' | 'value-invalid' | 'skill-unknown';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
@@ -355,9 +384,74 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return Array.isArray(result) ? result.map((p) => pick(p, PHONE_PROVIDER_VIEW)) : [];
     case 'skills:runnable':
       return Array.isArray(result) ? result.map((s) => pick(s, PHONE_SKILL_VIEW)) : [];
+    case 'session:get':
+      return phoneSessionView(result);
     default:
       return result;
   }
+}
+
+/** `s` cut to `n` UTF-16 units, never leaving half of a surrogate pair. */
+function cutText(s: string, n: number): string {
+  if (s.length <= n) return s;
+  const end = s.charCodeAt(n - 1) >= 0xd800 && s.charCodeAt(n - 1) <= 0xdbff ? n - 1 : n;
+  return s.slice(0, end);
+}
+
+/** A tool call's input with long string values cut; other values kept. */
+function cutInput(input: unknown, n: number): { input: unknown; cut: boolean } {
+  if (typeof input === 'string') return input.length > n ? { input: cutText(input, n), cut: true } : { input, cut: false };
+  if (!isObj(input)) return { input, cut: false };
+  let cut = false;
+  const out: Obj = {};
+  for (const [k, v] of Object.entries(input)) {
+    if (typeof v === 'string' && v.length > n) {
+      out[k] = cutText(v, n);
+      cut = true;
+    } else out[k] = v;
+  }
+  return { input: out, cut };
+}
+
+/** One message as the phone receives it (see `PHONE_SESSION_VIEW`). */
+function phoneMessage(m: unknown, n: number): unknown {
+  if (!isObj(m)) return m;
+  const out: Obj = { ...m };
+  if (isObj(m.toolResult)) {
+    const r: Obj = { ...m.toolResult };
+    if (Array.isArray(r.images)) {
+      if (r.images.length) r.omittedImages = r.images.length;
+      delete r.images;
+    }
+    if (typeof r.output === 'string' && r.output.length > n) {
+      r.outputChars = r.output.length;
+      r.output = cutText(r.output, n);
+      r.truncated = true;
+    }
+    out.toolResult = r;
+  }
+  if (Array.isArray(m.toolCalls)) {
+    out.toolCalls = m.toolCalls.map((c) => {
+      if (!isObj(c) || !own(c, 'input')) return c;
+      const { input, cut } = cutInput(c.input, n);
+      return cut ? { ...c, input, truncated: true } : c;
+    });
+  }
+  return out;
+}
+
+/**
+ * The session as a phone receives it from `session:get`: the newest messages,
+ * tool images dropped and long tool text cut (`PHONE_SESSION_VIEW`). Anything
+ * that isn't a session object passes through unchanged.
+ */
+export function phoneSessionView(session: unknown): unknown {
+  if (!isObj(session) || !Array.isArray(session.messages)) return session;
+  const all = session.messages;
+  const keep = all.slice(Math.max(0, all.length - PHONE_SESSION_VIEW.messages));
+  const out: Obj = { ...session, messages: keep.map((m) => phoneMessage(m, PHONE_SESSION_VIEW.textChars)) };
+  if (all.length > keep.length) out.omittedMessages = all.length - keep.length;
+  return out;
 }
 
 /**
@@ -398,5 +492,7 @@ export function phoneAccessPolicy() {
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
     chatSendKeys: [...PHONE_CHAT_SEND_KEYS],
     chatModes: [...PHONE_CHAT_MODES],
+    sessionView: { ...PHONE_SESSION_VIEW },
+    maxFrameBytes: PHONE_MAX_FRAME_BYTES,
   };
 }

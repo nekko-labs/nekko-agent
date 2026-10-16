@@ -67,7 +67,7 @@ object Transcript {
                     val r = m.toolResult ?: continue
                     val i = toolIndex[r.toolCallId] ?: continue
                     val b = out[i] as Block.Tool
-                    out[i] = b.copy(status = if (r.isError) ToolStatus.ERROR else ToolStatus.OK, output = clip(r.output))
+                    out[i] = b.copy(status = if (r.isError) ToolStatus.ERROR else ToolStatus.OK, output = clip(r.output, full = r.outputChars, images = r.omittedImages))
                 }
             }
         }
@@ -178,8 +178,31 @@ object Transcript {
         return if (flat.length > max) flat.take(max - 1) + "…" else flat
     }
 
-    fun clip(s: String, max: Int = 4000): String =
-        if (s.length > max) "${s.take(max)}\n… (${s.length - max} more characters)" else s
+    /**
+     * At most [max] characters of a tool's output. [full] is the original length
+     * when the computer already cut it, so the count of what's missing stays
+     * true; [images] notes screenshots the phone did not receive.
+     */
+    fun clip(s: String, max: Int = 4000, full: Int? = null, images: Int = 0): String {
+        val total = maxOf(full ?: s.length, s.length)
+        val shown = if (s.length > max) s.take(max) else s
+        val notes = buildList {
+            if (total > shown.length) add("… (${total - shown.length} more characters, on the computer)")
+            if (images > 0) add(if (images == 1) "1 image, on the computer" else "$images images, on the computer")
+        }
+        return if (notes.isEmpty()) shown else shown + "\n" + notes.joinToString("\n")
+    }
+
+    private val NOTE = Regex("""^(… \(\d+ more characters, on the computer\)|\d+ images?, on the computer)$""")
+
+    /** [clip]'s output split back into the tool output and its trailing notes, for display. */
+    fun splitNotes(s: String): Pair<String, List<String>> {
+        val lines = s.split('\n')
+        var i = lines.size
+        while (i > 0 && NOTE.matches(lines[i - 1])) i--
+        if (i == lines.size) return s to emptyList()
+        return lines.take(i).joinToString("\n") to lines.drop(i)
+    }
 }
 
 /** What the chat list shows next to a computer's chat. */

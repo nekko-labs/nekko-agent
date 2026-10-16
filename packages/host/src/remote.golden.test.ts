@@ -259,12 +259,40 @@ it('decides phone requests the way the daemon must', async () => {
     { name: 'review', description: 'Review the code', category: 'Code quality', source: 'builtin', template: 'Review carefully.\n' },
     { name: 'tidy', description: 'Tidy up', category: 'Imported', source: 'claude', template: 'Use the "tidy" skill. Files in /Users/me/.claude/skills/tidy.' },
   ];
+  // session:get as a phone receives it: newest messages, tool images dropped,
+  // long tool text cut (PHONE_SESSION_VIEW). Sizes straddle every limit.
+  const view = phoneAccessPolicy().sessionView;
+  const big = (c: string, n: number) => c.repeat(n);
+  const sessions: Record<string, unknown> = {
+    small: { id: 'small', title: 'Hi', messages: [{ id: 'm1', role: 'user', content: 'hi' }] },
+    long: {
+      id: 'long',
+      messages: Array.from({ length: view.messages + 3 }, (_, i) => ({ id: `m${i}`, role: i % 2 ? 'assistant' : 'user', content: `t${i}` })),
+    },
+    heavy: {
+      id: 'heavy',
+      messages: [
+        { id: 'a', role: 'assistant', content: '', toolCalls: [
+          { id: 'c1', name: 'write_file', input: { path: 'x', content: big('w', view.textChars + 7), n: 3 } },
+          { id: 'c2', name: 'bash', input: { command: 'ls' } },
+          { id: 'c3', name: 'raw', input: big('r', view.textChars + 1) },
+          { id: 'c4', name: 'none' },
+        ] },
+        { id: 't1', role: 'tool', content: '', toolResult: { toolCallId: 'c1', output: big('o', view.textChars + 50), images: [{ data: 'AAAA' }, { data: 'BBBB' }] } },
+        { id: 't2', role: 'tool', content: '', toolResult: { toolCallId: 'c2', output: 'ok', images: [] } },
+        { id: 't3', role: 'tool', content: '', toolResult: { toolCallId: 'c3', output: big('z', view.textChars - 1) + '😀tail' } },
+        { id: 't4', role: 'tool', content: '', toolResult: { toolCallId: 'c4', output: big('é', view.textChars) } },
+      ],
+    },
+  };
+  for (const id of Object.keys(sessions)) requests.push(['session:get', [id]]);
   const cases = [];
   for (const [channel, args] of requests) {
     const calls: unknown[] = [];
     const dispatch = (ch: string, a: unknown[]) => {
       calls.push([ch, a]);
       if (ch === 'skills:runnable') return skills;
+      if (ch === 'session:get') return sessions[String(a[0])] ?? null;
       return ch.startsWith('settings:') || ch === 'providers:list' ? (ch === 'providers:list' ? settings.providers : settings) : { ok: ch };
     };
     const outcome = await callFromPhone(dispatch, channel, Array.isArray(args) ? args : []).then(
@@ -273,7 +301,7 @@ it('decides phone requests the way the daemon must', async () => {
     );
     cases.push({ channel, args, calls, ...outcome });
   }
-  check(join(crate, 'tests', 'golden', 'phone.json'), { settings, skills, cases });
+  check(join(crate, 'tests', 'golden', 'phone.json'), { settings, skills, sessions, cases });
 });
 
 /** A relay socket the agent dials, recording what it sends. */

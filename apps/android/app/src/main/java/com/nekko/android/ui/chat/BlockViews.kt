@@ -59,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
+import com.nekko.protocol.Transcript
 import com.nekko.protocol.ToolStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -222,13 +223,24 @@ private fun ToolRow(b: Block.Tool) {
             }
         }
         if (open && hasOutput) {
+            // What the phone doesn't show (cut output, left-out images) goes under the
+            // 40 lines, so it's visible however long the output is.
+            val (body, notes) = Transcript.splitNotes(b.output.orEmpty())
             SelectionContainer {
                 Text(
-                    b.output.orEmpty(),
+                    body,
                     style = Nekko.mono,
                     color = p.inkSoft,
                     maxLines = 40,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = if (notes.isEmpty()) 12.dp else 4.dp),
+                )
+            }
+            if (notes.isNotEmpty()) {
+                Text(
+                    notes.joinToString("\n"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = p.inkFaint,
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
                 )
             }
