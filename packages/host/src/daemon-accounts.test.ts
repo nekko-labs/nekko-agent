@@ -130,5 +130,32 @@ describe('limits with a daemon that owns them', () => {
     expect(syncMcp).toHaveBeenCalledTimes(1);
     expect(existsSync(join(dir, 'usage.jsonl'))).toBe(false);
     expect(existsSync(join(dir, 'replies.jsonl'))).toBe(false);
+    // The relay and messaging are still this host's here: it reads every event.
+    expect(spec.facts).not.toHaveProperty('hostEvents');
+  });
+
+  it('asks only how the turn ends when the relay and messaging are the daemon\'s too (#551)', async () => {
+    useFakeDaemon();
+    const before = process.env.NEKKOD_OWNS;
+    process.env.NEKKOD_OWNS = 'settings,remote,messaging';
+    try {
+      const ws = mkdtempSync(join(tmpdir(), 'nekko-daccounts-ws-'));
+      saveSettings({
+        workspaces: [{ id: 'w1', name: 'ws', path: ws, addedAt: 0 }],
+        providers: [{ id: 'p1', kind: 'llamacpp', label: 'Local', baseUrl: 'http://127.0.0.1:9/v1', enabled: true }],
+        defaultChatMode: 'yolo',
+      });
+      const s = createSession('w1');
+      s.title = 'Named';
+      s.titleAuto = false;
+      s.gitIsolation = false;
+      saveSession(s);
+      await sendChat({ sessionId: s.id, providerId: 'p1', modelId: 'm', text: 'hi' }, () => {});
+      const spec = calls.find(([c]) => c === 'chat:turn')![1][0] as { facts: Record<string, unknown> };
+      expect(spec.facts.hostEvents).toEqual(['done', 'error']);
+    } finally {
+      if (before === undefined) delete process.env.NEKKOD_OWNS;
+      else process.env.NEKKOD_OWNS = before;
+    }
   });
 });

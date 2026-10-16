@@ -1,5 +1,5 @@
-import { IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
-import type { LocalRelayStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
+import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
+import type { AgentReplay, LocalRelayStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
 
@@ -53,6 +53,9 @@ function makeWebClient(): NekkoApi {
   const downloadsUpdatedCbs = new Set<(jobs: import('@nekko-agent/shared').DownloadJob[]) => void>();
   const modelsUpdatedCbs = new Set<(e: { providerId: string }) => void>();
   const skillsUpdatedCbs = new Set<(catalog: import('@nekko-agent/shared').VaizerCatalog) => void>();
+  const replayCbs = new Set<(r: AgentReplay) => void>();
+  // Narrowing the agent event stream: only over the server's own socket to nekkod.
+  let subscribe: (ids: string[] | null) => void = () => {};
   // Server build version captured when this tab loaded (for refresh detection).
   let loadVersion: string | null = null;
   const dispatchEvent = (channel: string, payload: any) => {
@@ -251,25 +254,40 @@ function makeWebClient(): NekkoApi {
       return text ? JSON.parse(text) : null;
     };
     let ws: WebSocket | null = null;
+    // Asked once: an older server (or one running the engine in-process) has no such channel.
+    let caps: Promise<{ terminalStream?: boolean; engine?: string } | null> | null = null;
+    const capabilities = () => (caps ??= call('web:capabilities').catch(() => null));
+    // The chats whose agent event stream this page takes (null: every chat's).
+    // Only nekkod narrows a stream; the in-process server sends everything.
+    let narrowTo: string[] | null = null;
+    let daemonEvents = false;
     const connect = () => {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const q = token() ? `?token=${encodeURIComponent(token())}` : '';
-      ws = new WebSocket(`${proto}://${location.host}/api/events${q}`);
-      ws.onmessage = (ev) => {
+      const params = new URLSearchParams();
+      if (daemonEvents && narrowTo) params.set('sessions', narrowTo.join(','));
+      if (token()) params.set('token', token());
+      const q = params.toString() ? `?${params}` : '';
+      const socket = new WebSocket(`${proto}://${location.host}/api/events${q}`);
+      ws = socket;
+      socket.onmessage = (ev) => {
         try {
           const { channel, payload } = JSON.parse(ev.data);
-          dispatchEvent(channel, payload);
+          if (channel === AGENT_REPLAY) replayCbs.forEach((cb) => cb(payload));
+          else dispatchEvent(channel, payload);
         } catch {
           /* ignore malformed frames */
         }
       };
-      ws.onclose = () => setTimeout(connect, 1000); // auto-reconnect
+      socket.onclose = () => setTimeout(connect, 1000); // auto-reconnect
     };
     connect();
-    // Asked once: an older server (or one running the engine in-process) has no such channel.
-    let streams: Promise<boolean> | null = null;
-    const daemonTerminals = () =>
-      (streams ??= call('web:capabilities').then((c: { terminalStream?: boolean } | null) => c?.terminalStream === true, () => false));
+    void capabilities().then((c) => { daemonEvents = c?.engine === 'nekkod'; if (daemonEvents) subscribe(narrowTo); });
+    subscribe = (ids) => {
+      narrowTo = ids ? [...new Set(ids)] : null;
+      if (!daemonEvents || ws?.readyState !== WebSocket.OPEN) return; // sent with the next connect
+      ws.send(JSON.stringify({ channel: 'daemon:subscribe', args: [narrowTo] }));
+    };
+    const daemonTerminals = () => capabilities().then((c) => c?.terminalStream === true);
     openTerminalStream = async (id, handlers) => {
       if (!(await daemonTerminals())) return null;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -594,6 +612,11 @@ function makeWebClient(): NekkoApi {
     onAgentEvent: (cb) => {
       agentCbs.add(cb);
       return () => agentCbs.delete(cb);
+    },
+    subscribeAgentEvents: (ids) => subscribe(ids),
+    onAgentReplay: (cb) => {
+      replayCbs.add(cb);
+      return () => replayCbs.delete(cb);
     },
     onOAuthStatus: (cb) => {
       oauthStatusCbs.add(cb);

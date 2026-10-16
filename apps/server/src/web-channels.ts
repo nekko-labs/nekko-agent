@@ -1,4 +1,4 @@
-import { listAgentTerminals, type Host } from '@nekko-agent/host';
+import { isDaemonCopy, listAgentTerminals, type Host } from '@nekko-agent/host';
 import { IpcChannels, IpcEvents } from '@nekko-agent/shared';
 
 /**
@@ -59,10 +59,16 @@ export function overrideFor(overrides: ChannelOverrides, channel: string): Chann
 /** Every host event, keyed by the host's event name, with the channel clients know it by. */
 export const HOST_EVENTS = Object.entries(IpcEvents) as [string, string][];
 
-/** Subscribe `send` to every host event; returns the unsubscribe. */
-export function subscribeHostEvents(host: Host, send: (frame: string) => void, only?: string | null): () => void {
+/**
+ * Subscribe `send` to every host event (or `only` that channel); returns the
+ * unsubscribe. `forDaemon` leaves out what the daemon already has (`isDaemonCopy`).
+ */
+export function subscribeHostEvents(host: Host, send: (frame: string) => void, only?: string | null, forDaemon = false): () => void {
   const offs = HOST_EVENTS.filter(([, channel]) => !only || channel === only).map(([name, channel]) => {
-    const listener = (payload: unknown) => send(JSON.stringify({ channel, payload }));
+    const listener = (payload: unknown) => {
+      if (forDaemon && isDaemonCopy(name, payload)) return;
+      send(JSON.stringify({ channel, payload }));
+    };
     host.events.on(name, listener);
     return () => host.events.off(name, listener);
   });

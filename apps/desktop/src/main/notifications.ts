@@ -58,7 +58,9 @@ export function startMainNotifications(
       // Resolve anew after every disconnect: engine restarts can change the port.
       const endpoint = await engine.endpoint();
       if (disposed) return;
-      const ws = makeSocket(`${endpoint.url.replace(/^http/, 'ws')}/api/ws?token=${encodeURIComponent(endpoint.token)}`);
+      // `sessions=` (none): every chat's summary events (a turn's start, its
+      // waits, its end) are all a notice needs; no chat's token stream.
+      const ws = makeSocket(`${endpoint.url.replace(/^http/, 'ws')}/api/ws?sessions=&token=${encodeURIComponent(endpoint.token)}`);
       socket = ws;
       const disconnect = () => {
         if (socket !== ws) return;

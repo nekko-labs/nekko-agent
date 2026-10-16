@@ -12,13 +12,14 @@ import type {
   ProviderConfig,
   SendOptions,
   AgentEvent,
+  AgentReplay,
   IndexStatus,
   UpdateInfo,
   TerminalEvent,
   OAuthStatus,
   SubscriptionLimits,
 } from '@nekko-agent/shared';
-import { IpcChannels, IpcEvents } from '@nekko-agent/shared';
+import { AGENT_REPLAY, IpcChannels, IpcEvents } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
 import {
@@ -347,6 +348,12 @@ const api: NekkoApi = {
     const listener = (_: unknown, e: AgentEvent) => cb(e);
     bus.on(IpcEvents.agentEvent, listener);
     return () => bus.removeListener(IpcEvents.agentEvent, listener);
+  },
+  subscribeAgentEvents: (sessionIds) => engine.subscribe(sessionIds),
+  onAgentReplay: (cb) => {
+    const listener = (_: unknown, r: AgentReplay) => cb(r);
+    bus.on(AGENT_REPLAY, listener);
+    return () => bus.removeListener(AGENT_REPLAY, listener);
   },
   onOAuthStatus: (cb: (s: OAuthStatus) => void) => {
     const listener = (_: unknown, s: OAuthStatus) => cb(s);

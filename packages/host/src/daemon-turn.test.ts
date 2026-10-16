@@ -356,6 +356,59 @@ describe('after a daemon turn', () => {
   });
 });
 
+describe('what a host asks of a daemon turn\'s events (#551)', () => {
+  it('asks only how the turn ends once relay, messaging and accounting are the daemon\'s', async () => {
+    const { hostTurnEvents } = await import('./daemon-turn.js');
+    const before = process.env.NEKKOD_OWNS;
+    try {
+      process.env.NEKKOD_OWNS = 'settings,remote,messaging,tasks';
+      expect(hostTurnEvents(true)).toEqual(['done', 'error']);
+      // Accounting still here, or a TS relay or bridge: every event, as before.
+      expect(hostTurnEvents(false)).toBeUndefined();
+      process.env.NEKKOD_OWNS = 'settings,messaging';
+      expect(hostTurnEvents(true)).toBeUndefined();
+      process.env.NEKKOD_OWNS = 'settings,remote';
+      expect(hostTurnEvents(true)).toBeUndefined();
+    } finally {
+      if (before === undefined) delete process.env.NEKKOD_OWNS;
+      else process.env.NEKKOD_OWNS = before;
+    }
+  });
+
+  it('leaves it out of the spec while this host accounts the turn itself', async () => {
+    // This fake daemon does not own `turn:account` (see daemon-accounts.test.ts
+    // for one that does and is asked only for the end).
+    const before = process.env.NEKKOD_OWNS;
+    let seen: Spec | undefined;
+    const s = named();
+    fakeDaemon(async (spec) => {
+      seen = spec;
+      await turnCallback('turn:event', [spec.turnId, { events: [event(spec, { type: 'done', messageId: 'm', stop: 'complete', steps: 0 })], stats: null, startedAt: 1 }]);
+      await turnCallback('turn:end', [spec.turnId, { stop: 'complete', aborted: false }]);
+    });
+    try {
+      process.env.NEKKOD_OWNS = 'remote,messaging';
+      await sendChat({ sessionId: s.id, providerId: 'p1', modelId: 'm', text: 'hi' }, () => {});
+    } finally {
+      if (before === undefined) delete process.env.NEKKOD_OWNS;
+      else process.env.NEKKOD_OWNS = before;
+    }
+    expect(seen!.facts).not.toHaveProperty('hostEvents');
+  });
+});
+
+describe('the backend\'s events for the daemon (#551)', () => {
+  it('leaves out the copies the daemon already has', async () => {
+    const { isDaemonCopy } = await import('./daemon-caps.js');
+    expect(isDaemonCopy('agentEvent', { type: 'text', sessionId: 's', delta: 'x', relayOnly: true })).toBe(true);
+    expect(isDaemonCopy('limitsUpdated', { tokenKey: 'k', relayOnly: true })).toBe(true);
+    expect(isDaemonCopy('agentEvent', { type: 'text', sessionId: 's', delta: 'x' })).toBe(false);
+    expect(isDaemonCopy('terminalEvent', { type: 'data', terminalId: 'term_1', data: 'x' })).toBe(true);
+    expect(isDaemonCopy('terminalEvent', { type: 'data', terminalId: 'agent_s1', data: 'x' })).toBe(false);
+    expect(isDaemonCopy('tasksUpdated', [])).toBe(false);
+  });
+});
+
 describe('mergePending', () => {
   it('lets the daemon win field by field', () => {
     const host = { a: { sessionId: 'a', question: { callId: 'q' } }, b: { sessionId: 'b', approval: { x: 1 } } } as never;

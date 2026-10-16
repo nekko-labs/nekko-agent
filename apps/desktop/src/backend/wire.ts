@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo, Socket } from 'node:net';
 import { URL } from 'node:url';
 import { IpcEvents } from '@nekko-agent/shared';
-import { createDispatcher, type Host } from '@nekko-agent/host';
+import { createDispatcher, isDaemonCopy, type Host } from '@nekko-agent/host';
 import { acceptKey, encodeFrame, FrameReader, OP_CLOSE, OP_PING, OP_PONG, OP_TEXT } from './ws.js';
 
 /**
@@ -11,7 +11,8 @@ import { acceptKey, encodeFrame, FrameReader, OP_CLOSE, OP_PING, OP_PONG, OP_TEX
  * the daemon is unavailable, see `main/engine-process.ts`).
  *
  * The same three routes the daemon serves, with the same shapes:
- * `POST /api/:channel`, `/api/events` (every host event) and `/api/ws`
+ * `POST /api/:channel`, `/api/events` (every host event; `?only=` one
+ * channel, `?forDaemon=1` none of the copies the daemon already has) and `/api/ws`
  * (requests, replies and events on one socket). A per-launch token guards all
  * of it, and it binds 127.0.0.1 only.
  */
@@ -163,8 +164,13 @@ export function startWire(opts: {
       if (!socket.destroyed) socket.write(encodeFrame(Buffer.from(text, 'utf8'), OP_TEXT));
     };
     const only = url.searchParams.get('only');
+    // The daemon's own subscription: none of the copies it already has.
+    const forDaemon = url.searchParams.get('forDaemon') === '1';
     const unsubscribe = EVENTS.filter(([, channel]) => !only || channel === only).map(([name, channel]) => {
-      const listener = (payload: unknown) => send(JSON.stringify({ channel, payload }));
+      const listener = (payload: unknown) => {
+        if (forDaemon && isDaemonCopy(name, payload)) return;
+        send(JSON.stringify({ channel, payload }));
+      };
       host.events.on(name, listener);
       return () => host.events.off(name, listener);
     });
