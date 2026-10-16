@@ -16,7 +16,9 @@ extension XCTestCase {
     ///   the audit samples whatever covers them.
     /// - Clipping on the system search field's placeholder.
     /// - Findings the audit can't attach to an element.
-    func auditAccessibility(_ app: XCUIApplication, _ screen: String, file: StaticString = #filePath, line: UInt = #line) {
+    /// `ignoring`: element labels excluded on this screen, each with its reason at the call site.
+    func auditAccessibility(_ app: XCUIApplication, _ screen: String, ignoring: Set<String> = [],
+                            file: StaticString = #filePath, line: UInt = #line) {
         let done = app.buttons["keyboard.done"]
         if app.keyboards.firstMatch.exists, done.exists { done.tap() }
         let deadline = Date().addingTimeInterval(2)
@@ -24,14 +26,24 @@ extension XCTestCase {
         let window = app.windows.firstMatch.frame
 
         var blocking: [String] = [], other: [String] = []
-        do {
-            try app.performAccessibilityAudit { issue in
-                let line = "\(Self.name(issue.auditType)): \(issue.compactDescription) — \(Self.describe(issue.element))"
-                if Self.blocks(issue, in: window) { blocking.append(line) } else { other.append(line) }
-                return true // handled here; reported below
+        // XCTest's audit sometimes times out on a busy simulator (code -56): one retry.
+        for attempt in 1...2 {
+            blocking = []
+            other = []
+            do {
+                try app.performAccessibilityAudit { issue in
+                    let line = "\(Self.name(issue.auditType)): \(issue.compactDescription) — \(Self.describe(issue.element))"
+                    let ignored = issue.element.map { ignoring.contains($0.label) } ?? false
+                    if !ignored, Self.blocks(issue, in: window) { blocking.append(line) } else { other.append(line) }
+                    return true // handled here; reported below
+                }
+                break
+            } catch let e as NSError where e.code == -56 && attempt == 1 {
+                continue
+            } catch {
+                blocking.append("audit did not run: \(error)")
+                break
             }
-        } catch {
-            blocking.append("audit did not run: \(error)")
         }
         let text = (["blocking: \(blocking.count)"] + blocking + ["", "not blocking: \(other.count)"] + other).joined(separator: "\n")
         let report = XCTAttachment(string: text)

@@ -39,6 +39,10 @@ struct ChatView: View {
 
     @ViewBuilder private func content(_ chat: ChatModel) -> some View {
         ScrollViewReader { proxy in
+          // At least as tall as the space above the bottom bar, bottom-aligned:
+          // a short transcript then moves up when an approval or question card
+          // grows the bar, instead of staying pinned where the card now covers it.
+          GeometryReader { geo in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if let n = chat.session?.omittedMessages, n > 0 {
@@ -60,9 +64,11 @@ struct ChatView: View {
                     Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(minHeight: geo.size.height, alignment: .bottom)
             }
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
+          }
             .onChange(of: chat.blocks.last) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
             // An approval or question card grows the bottom bar: keep the latest step above it.
             // After the card has been laid out: scrolling in the same update used the old inset.
