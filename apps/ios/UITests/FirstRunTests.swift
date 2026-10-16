@@ -36,6 +36,22 @@ final class FirstRunTests: XCTestCase {
         XCTAssertTrue(msg.waitForExistence(timeout: 5))
     }
 
+    /// The largest accessibility text size still lays out: no clipped controls on the first screens.
+    func testLargestTextSizesStillFit() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL", "-uiTestReset", "YES"]
+        app.launch()
+        let pair = app.buttons["Pair with your computer"]
+        XCTAssertTrue(pair.waitForExistence(timeout: 10))
+        XCTAssertTrue(pair.isHittable)
+        attach(app, "Welcome (accessibility XL text)")
+        pair.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        if !field.waitForExistence(timeout: 5) { app.swipeUp() }
+        XCTAssertTrue(field.exists)
+        attach(app, "Pair (accessibility XL text)")
+    }
+
     private func attach(_ app: XCUIApplication, _ name: String) {
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = name

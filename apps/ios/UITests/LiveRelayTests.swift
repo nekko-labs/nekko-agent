@@ -17,8 +17,7 @@ final class LiveRelayTests: XCTestCase {
         app.launch()
         allowSystemAlerts()
 
-        // Pair through the paste field (the deep link lands on the same code path,
-        // but XCUITest's URL opening is unreliable for custom schemes).
+        // Pair through the paste field; testPairFromADeepLink covers the link path.
         let start = app.buttons["Pair with your computer"]
         XCTAssertTrue(start.waitForExistence(timeout: 10))
         attach(app, "\(theme)-0-welcome")
@@ -87,6 +86,35 @@ final class LiveRelayTests: XCTestCase {
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
         attach(app, "\(theme)-7-chats-after")
+    }
+
+    /// The computer's QR opens `nekko-agent-pair:` from the Camera app: iOS asks
+    /// "Open in Nekko Agent?", the app shows the confirmation sheet, and pairing
+    /// from it connects.
+    func testPairFromADeepLink() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-uiTestReset", "YES"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Pair with your computer"].waitForExistence(timeout: 10))
+
+        XCUIDevice.shared.system.open(link)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let open = springboard.buttons["Open"]
+        if open.waitForExistence(timeout: 5) { open.tap() }
+
+        let sheet = app.navigationBars["Pair with a computer?"]
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10), "the link opens the confirmation sheet")
+        attach(app, "deeplink-1-confirm")
+        sheet.buttons["Pair"].tap()
+        tapSystemAlertIfShown()
+
+        let newChat = app.navigationBars.buttons["New chat"]
+        XCTAssertTrue(newChat.waitForExistence(timeout: 20))
+        XCTAssertTrue(waitEnabled(newChat, 20), "paired from the link and connected")
+        attach(app, "deeplink-2-connected")
     }
 
     private func allowSystemAlerts() {
