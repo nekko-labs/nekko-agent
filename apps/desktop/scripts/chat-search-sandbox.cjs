@@ -67,12 +67,28 @@ app.whenReady().then(async () => {
       await run(`document.documentElement.dataset.theme='${t}'`); await sleep(300);
       await capture(`composer-${t}`);
       // The toggle, beside +, at +'s exact size.
-      const geom = await run(`(()=>{const plus=document.querySelector('[aria-label="Add a photo, video, file, folder, or skill"]');const s=document.querySelector('[data-chat-search-toggle]');if(!plus||!s)return {plus:!!plus,search:!!s};const a=plus.getBoundingClientRect(),b=s.getBoundingClientRect(),ai=plus.querySelector('svg').getBoundingClientRect(),bi=s.querySelector('svg').getBoundingClientRect();return {plus:[a.width,a.height],search:[b.width,b.height],plusIcon:[ai.width,ai.height],searchIcon:[bi.width,bi.height],gap:Math.round(b.left-a.right),sameRow:Math.abs(a.top-b.top)<1}})()`);
+      // The toggle leads the window's header icons: left of Changes (±) and
+      // Files (folder), in their exact button and icon style.
+      const geom = await run(`(()=>{
+        const s=document.querySelector('[data-chat-search-toggle]');
+        const diff=document.querySelector('[data-agent-companion="diff"]');
+        const files=document.querySelector('[data-agent-companion="files"]');
+        const plus=document.querySelector('[aria-label="Add a photo, video, file, folder, or skill"]');
+        if(!s||!diff||!files)return {search:!!s,diff:!!diff,files:!!files};
+        const box=e=>{const r=e.getBoundingClientRect();return {x:Math.round(r.left),y:Math.round(r.top),w:Math.round(r.width*10)/10,h:Math.round(r.height*10)/10}};
+        const icon=e=>{const v=e.querySelector('svg');const r=v.getBoundingClientRect();return {w:r.width,h:r.height,stroke:v.getAttribute('stroke-width'),view:v.getAttribute('viewBox')}};
+        const look=e=>{const c=getComputedStyle(e);return [c.paddingTop,c.paddingRight,c.paddingBottom,c.paddingLeft,c.borderRadius,c.color,c.backgroundColor,c.fontSize].join('|')};
+        const row=s.closest('header > div:last-child, [data-pane-actions]')||s.parentElement; const order=[...row.querySelectorAll('button')].filter(e=>e.offsetParent!==null).sort((a,b)=>a.getBoundingClientRect().left-b.getBoundingClientRect().left).map(e=>e.dataset.chatSearchToggle!==undefined?'search':e.dataset.agentCompanion||e.getAttribute('aria-label'));
+        const nearPlus=plus?[...plus.closest('div.flex').querySelectorAll('[data-chat-search-toggle]')].length:0;
+        return {search:box(s),diff:box(diff),files:box(files),searchIcon:icon(s),diffIcon:icon(diff),filesIcon:icon(files),searchLook:look(s),diffLook:look(diff),filesLook:look(files),order,sameParent:row.contains(diff)&&row.contains(files),nearPlus};
+      })()`);
       report.measures[`geometry-${t}`] = geom;
       if (base) { check(`base has no search toggle (${t})`, !geom.search); continue; }
-      check(`search icon sits right after + on the same row (${t})`, geom.sameRow && geom.gap >= 0 && geom.gap <= 12);
-      check(`search button matches + size, 32x32 (${t})`, geom.search && geom.search[0] === geom.plus[0] && geom.search[1] === geom.plus[1] && geom.plus[0] === 32);
-      check(`search icon matches + icon size, 16x16 (${t})`, geom.searchIcon && geom.searchIcon[0] === geom.plusIcon[0] && geom.searchIcon[1] === geom.plusIcon[1] && geom.plusIcon[0] === 16);
+      check(`search is the first header icon, just left of Changes and Files (${t})`, geom.sameParent && geom.order[0] === 'search' && geom.order[1] === 'diff' && geom.order.indexOf('files') > 1 && geom.search.y === geom.diff.y);
+      check(`search button is the same size as Changes and Files (${t})`, geom.search.w === geom.diff.w && geom.search.h === geom.diff.h && geom.search.w === geom.files.w && geom.search.h === geom.files.h);
+      check(`search icon is the same size, viewBox and stroke as theirs (${t})`, ['w','h','stroke','view'].every(k => geom.searchIcon[k] === geom.diffIcon[k] && geom.searchIcon[k] === geom.filesIcon[k]));
+      check(`search button has the same padding, radius, colour and background (${t})`, geom.searchLook === geom.diffLook && geom.searchLook === geom.filesLook);
+      check(`search is no longer beside the composer + (${t})`, geom.nearPlus === 0);
 
       // Ctrl+F opens the bar, focused.
       await run(`document.querySelector('[contenteditable="true"]')?.focus()`);

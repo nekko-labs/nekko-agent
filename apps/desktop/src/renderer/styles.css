@@ -2233,6 +2233,8 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 
 /* Changes leads; Zen is the action group, followed by panel openers. */
 [data-agent-companion="diff"] { order: -3; }
+/* Find in chat leads the header icons, just left of Changes. */
+[data-chat-search-toggle] { order: -4; }
 .agent-zen-action { color: var(--accent); background: var(--accent-soft); border-radius: 5px; padding: 3px; }
 .wall-add-icon { position: relative; }
 .wall-add-icon::after { content: '+'; position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: 10px; height: 10px; border-radius: 50%; background: var(--paper); color: var(--accent); font: 700 11px/1 sans-serif; pointer-events: none; }

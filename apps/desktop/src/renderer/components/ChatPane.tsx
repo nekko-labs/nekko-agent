@@ -43,8 +43,6 @@ import { WatchSessionContext } from '../agentWatches.js';
 import { VirtualTranscript, type VirtualTranscriptHandle } from './agent-console/VirtualTranscript.js';
 import { ChatSearchBar } from './agent-console/ChatSearchBar.js';
 
-/** Window event asking a chat's transcript pane to open its search bar (detail: { sessionId }). */
-const OPEN_CHAT_SEARCH = 'nekko-open-chat-search';
 import { SHORTCUTS } from '../shortcuts.js';
 import { MarkdownEditor, type MarkdownEditorElement } from './agent-console/MarkdownEditor.js';
 import { MarkdownSandbox } from './Markdown.js';
@@ -1177,8 +1175,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // no keyboard focus of its own), it goes to the visible full chat, or the
   // wall's selected transcript. The composer pane has no transcript, so it
   // hands Ctrl+F to the transcript window it drives.
-  // The search button sends the same request, so the wall composer's button
-  // opens search on the transcript window it drives.
   const paneShown = usePaneVisible();
   const searchTargetRef = useRef({ surface, selected, paneShown });
   searchTargetRef.current = { surface, selected, paneShown };
@@ -1198,15 +1194,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       e.preventDefault();
       openSearch();
     };
-    const onRequest = (e: Event) => {
-      if ((e as CustomEvent<{ sessionId: string }>).detail?.sessionId === sessionId && shown()) openSearch();
-    };
     window.addEventListener('keydown', onKey);
-    window.addEventListener(OPEN_CHAT_SEARCH, onRequest);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener(OPEN_CHAT_SEARCH, onRequest);
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, [sessionId, openSearch]);
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
@@ -2348,6 +2337,19 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 than in the wall's title bar, where they needed an agent to be
                 selected first. On the wall they open beside the window; in
                 the Chat view, as windows of the workspace. */}
+            {/* Find in this chat: the first of the window's header icons, left
+                of Changes and Files, in their exact button and icon style. */}
+            <button
+              type="button"
+              className={`btn btn-ghost shrink-0 gap-1 px-1.5 py-1 text-[11px] ${searchOpen ? 'font-medium text-accent' : ''}`}
+              onClick={() => (searchOpen ? closeSearch() : openSearch())}
+              title={`Find in this chat (${SHORTCUTS.findInChat.label})`}
+              aria-label="Find in this chat"
+              aria-pressed={searchOpen}
+              data-chat-search-toggle
+            >
+              <SearchIcon className="h-3.5 w-3.5" />
+            </button>
             <AgentCompanionButtons sessionId={sessionId} changeCount={changeSummary.files} added={changeSummary.added} removed={changeSummary.removed} commandCenter={commandCenter} compact={compact} />
             <button
               className="btn btn-ghost shrink-0 px-2 py-1 text-[11px]"
@@ -3084,22 +3086,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     />
                   </div>
                   </>)}
-                  {/* Find in this chat, beside +: the same 32px button and 16px
-                      icon. In the wall's composer it opens search on the
-                      transcript window this composer drives. */}
-                  <button
-                    type="button"
-                    className={`grid h-8 w-8 place-items-center rounded-lg transition-colors hover:bg-surface-2 hover:text-ink ${searchOpen ? 'bg-surface-2 text-ink' : 'text-ink-faint'}`}
-                    onClick={() => (surface === 'composer'
-                      ? window.dispatchEvent(new CustomEvent(OPEN_CHAT_SEARCH, { detail: { sessionId } }))
-                      : searchOpen ? closeSearch() : openSearch())}
-                    title={`Find in this chat (${SHORTCUTS.findInChat.label})`}
-                    aria-label="Find in this chat"
-                    aria-pressed={surface === 'composer' ? undefined : searchOpen}
-                    data-chat-search-toggle
-                  >
-                    <SearchIcon className="h-4 w-4" />
-                  </button>
                   {header && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
                       <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} toolsInWindow only="mode" />
