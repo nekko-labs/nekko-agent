@@ -135,3 +135,22 @@ describe('saveTurnSession', () => {
     expect(getSession(s.id)!.title).toBe('From the prompt');
   });
 });
+
+// New windows use app preferences, not privacy flags from the current chat.
+import { saveSettings, getSettings } from './store.js';
+describe('new session defaults', () => {
+  it('uses saved execution defaults and never inherits incognito or offline', () => {
+    saveSettings({ defaultProviderId: 'saved', defaultModelId: 'exact', defaultChatMode: 'ask', effort: 'high', defaultExecutionMode: 'unified', gitManagement: { mode: 'shared' } });
+    const existing = createSession();
+    setSessionOptions(existing.id, { incognito: true, offline: true, mode: 'yolo' });
+    const next = createSession();
+    expect(next).toMatchObject({ executionMode: 'unified', gitIsolation: false });
+    expect(next.incognito).toBeUndefined();
+    expect(next.offline).toBeUndefined();
+    // Model, mode and effort remain effective app defaults until explicitly set.
+    expect(next.providerId ?? getSettings().defaultProviderId).toBe('saved');
+    expect(next.modelId ?? getSettings().defaultModelId).toBe('exact');
+    expect(next.mode ?? getSettings().defaultChatMode).toBe('ask');
+    expect(getSettings().effort).toBe('high');
+  });
+});

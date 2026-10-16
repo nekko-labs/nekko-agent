@@ -6,6 +6,13 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## New agent window defaults
+
+- [x] Persist explicit ChatPane and Add window model choices as provider/model pairs without changing other panes; preserve Auto and session-specific choices. See [SPEC](SPEC.md#new-agent-window-defaults).
+- [x] Save permission default only after a successful session update; restore settings before startup catalog selection. Keep effort/execution persistence and session-only incognito/offline boundaries.
+- [x] Verified: 67 focused regressions (7 files), all 1,145 desktop tests (165 files), desktop typecheck, isolated shared/core/host and production app builds, docs regeneration and five docs tests. Initial full-suite bundle checks needed the production build; all pass after building.
+- [ ] Parent task: isolated visual interaction verification and PR landing. No app launch, commit or push in this implementation handoff.
+
 ## Noninteractive shell recovery
 
 - [x] Close Windows fallback stdin and bound timeout/cancel close-callback cleanup to five seconds, preserving partial output and once-only settlement.

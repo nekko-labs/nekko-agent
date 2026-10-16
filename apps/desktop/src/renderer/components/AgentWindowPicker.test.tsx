@@ -5,6 +5,7 @@ import { AgentWindowPicker, AgentWindowDropdown, windowDropdownPosition } from '
 vi.mock('react-dom', () => ({ createPortal: vi.fn((node) => node) }));
 import { ModelPicker } from './agent-console/ModelPicker.js';
 
+const rememberModel = vi.hoisted(() => vi.fn());
 const state = vi.hoisted(() => ({
   sessions: [{ id: 'chat-1', title: 'Active chat' }, { id: 'image-1', title: 'Pictures', chatType: 'image' }, { id: 'archived', title: 'Archived', archivedAt: 1 }],
   terminals: [{ id: 'term-1', title: 'Shell', cwd: '/project', running: true }, { id: 'term-2', title: 'Old shell', cwd: '/project', running: false }],
@@ -15,7 +16,7 @@ const state = vi.hoisted(() => ({
   activeProjectId: 'f2' as string | null,
   settings: { workspaces: [{ id: 'f1', name: 'one', path: '/one' }, { id: 'f2', name: 'two', path: '/two' }] } as Record<string, unknown> | null,
 }));
-vi.mock('../store.js', () => ({ useStore: Object.assign((select: (s: typeof state) => unknown) => select(state), { getState: () => ({ refreshSettings: vi.fn(async () => {}), pushToast: vi.fn() }) }) }));
+vi.mock('../store.js', () => ({ useStore: Object.assign((select: (s: typeof state) => unknown) => select(state), { getState: () => ({ rememberModel, refreshSettings: vi.fn(async () => {}), pushToast: vi.fn() }) }) }));
 vi.mock('./agent-console/ModelPicker.js', () => ({ ModelPicker: () => null }));
 vi.mock('./ChatMetrics.js', () => ({ EffortSlider: () => null }));
 vi.mock('react', async (original) => {
@@ -129,6 +130,7 @@ describe('AgentWindowPicker', () => {
     const modelPicker = view.elements.find((e) => e.type === ModelPicker)!;
     expect(modelPicker.props).toMatchObject({ expanded: true, open: true, readOnly: true, modelId: 'm', providers: [state.providers[0]] });
     modelPicker.props.onModel('p2', 'm2');
+      expect(rememberModel).toHaveBeenCalledWith('p2', 'm2');
     expect(view.setters[1]).toHaveBeenCalledWith({ providerId: 'p2', modelId: 'm2' });
     expect(view.setters[4]).toHaveBeenCalledWith(false);
     expect(view.onAdd).not.toHaveBeenCalled();

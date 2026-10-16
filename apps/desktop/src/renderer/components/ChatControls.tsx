@@ -429,6 +429,10 @@ export function ChatControls({
   const patch = async (p: Partial<Session>) => {
     const next = await window.nekko.setSessionOptions(session.id, p as any);
     onChange(next);
+    if (next && p.mode) {
+      await window.nekko.updateSettings({ defaultChatMode: p.mode });
+      await useStore.getState().refreshSettings();
+    }
   };
 
   const showMode = only !== 'privacy';
@@ -467,7 +471,7 @@ export function ChatControls({
                 data-chat-mode={m}
                 aria-checked={mode === m}
                 className={`flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 ${mode === m ? 'text-accent' : ''}`}
-                onClick={() => { patch({ mode: m }); setModeOpen(false); modeButton.current?.focus({ preventScroll: true }); }}
+                onClick={() => { void patch({ mode: m }).catch((e) => useStore.getState().pushToast('error', String(e))); setModeOpen(false); modeButton.current?.focus({ preventScroll: true }); }}
               >
                 <span className="text-[13px] font-medium">{MODE_LABEL[m]}{m === 'guardrails' ? ' (recommended)' : ''}</span>
                 <span className="text-[11px] text-ink-faint">{MODE_DESC[m]}</span>
