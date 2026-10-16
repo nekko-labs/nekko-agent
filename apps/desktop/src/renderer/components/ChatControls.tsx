@@ -6,6 +6,7 @@ import { SandboxSetup, SandboxReview } from './SandboxSetup.js';
 import { useStore } from '../store.js';
 import { WrenchIcon, PlaneIcon, IncognitoIcon, PlugIcon, PlusIcon, GlobeIcon, GlobeOffIcon } from '../icons.js';
 import { afterPaint } from '../afterPaint.js';
+import { toolMatchesQuery, toolPickerLabel } from './toolPresentation.js';
 
 /** Where we point people for hardened, local-first MCP server management. */
 const HYPERGATE_URL = 'https://hypergate.app';
@@ -192,7 +193,7 @@ export function ToolsMenu({ session, onChange }: { session: Session; onChange: (
   const ref = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
-  const floating = useFloatingMenu(open, button, 256);
+  const floating = useFloatingMenu(open, button, 448);
   // After the first frame: a pane that just opened paints before it asks.
   useEffect(() => afterPaint(() => { window.nekko.listTools().then(setTools).catch(() => {}); }), []);
   useEffect(() => {
@@ -212,7 +213,7 @@ export function ToolsMenu({ session, onChange }: { session: Session; onChange: (
   const usable = availableTools.filter((t) => !blockedOffline(t.name));
   const enabledCount = usable.filter((t) => !disabled.has(t.name)).length;
   const q = query.trim().toLowerCase();
-  const shown = q ? availableTools.filter((t) => t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)) : availableTools;
+  const shown = q ? availableTools.filter((t) => toolMatchesQuery(t, q)) : availableTools;
   const groups = groupToolsByCategory(shown);
   const toggle = async (name: string) => {
     const next = new Set(disabled);
@@ -272,11 +273,14 @@ export function ToolsMenu({ session, onChange }: { session: Session; onChange: (
                     const blocked = blockedOffline(t.name);
                     const on = !blocked && !disabled.has(t.name);
                     return (
-                      <button key={t.name} disabled={blocked} className="flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent" onClick={() => void toggle(t.name)} title={blocked ? `${t.name} needs the internet` : t.description} role="menuitemcheckbox" aria-checked={on}>
-                        <span className="mt-0.5 text-[12px]" style={{ color: on ? 'var(--accent)' : 'var(--ink-faint)' }}>{on ? '☑' : '☐'}</span>
-                        <span className="min-w-0">
-                          <span className="block font-mono text-[12px]">{t.name.startsWith('mcp__') ? `🔌 ${t.name.split('__').slice(2).join('__')}` : t.name}</span>
-                          <span className="block truncate text-[11px] text-ink-faint">{t.description}</span>
+                      <button key={t.name} disabled={blocked} data-tool-name={t.name} aria-label={toolPickerLabel(t.name)} aria-description={t.description} className="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2" onClick={() => void toggle(t.name)} title={blocked ? `${t.name} needs the internet` : t.description} role="menuitemcheckbox" aria-checked={on}>
+                        <span aria-hidden="true" className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border" style={{ background: on ? 'var(--accent)' : 'var(--surface-2)', borderColor: on ? 'var(--accent)' : 'var(--ink-faint)', color: 'var(--paper)' }}>
+                          {on && <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 8 3 3 7-7" /></svg>}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[12px] font-medium text-ink [overflow-wrap:anywhere]">{toolPickerLabel(t.name)}</span>
+                          <span className="mt-0.5 block font-mono text-[10px] text-ink-faint [overflow-wrap:anywhere]">{t.name}</span>
+                          <span className="mt-1 block whitespace-normal text-[11px] leading-relaxed text-ink-soft [overflow-wrap:anywhere]">{t.description}</span>
                         </span>
                       </button>
                     );

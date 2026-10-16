@@ -3,7 +3,8 @@
 // synthetic data and network blocked; only this worktree's ignored .shots/ is written.
 // node scripts/picker-tools-evidence.cjs [baseRevision]
 const fs = require('node:fs'), path = require('node:path'), cp = require('node:child_process');
-const repo = path.resolve(__dirname, '..'), out = path.join(repo, '.shots/picker-tools');
+const toolsOnly = process.argv.includes('--tools-only');
+const repo = path.resolve(__dirname, '..'), out = path.join(repo, toolsOnly ? '.shots/tool-picker' : '.shots/picker-tools');
 const resolve = (x) => require.resolve(x, { paths: [path.join(repo, 'apps/desktop'), repo] });
 const base = process.argv[2] || 'origin/main';
 (async () => {
@@ -33,10 +34,11 @@ const base = process.argv[2] || 'origin/main';
     const css = await require(resolve('postcss'))([require(resolve('@tailwindcss/postcss'))({ base: repo })]).process(fs.readFileSync(path.join(dir, 'fixture.css'), 'utf8'), { from: path.join(dir, 'fixture.css') });
     fs.writeFileSync(path.join(dir, 'styled.css'), css.css);
     fs.writeFileSync(path.join(dir, 'index.html'), `<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'"><link rel="stylesheet" href="styled.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>`);
-    const env = { ...process.env, NEKKO_EVIDENCE_DIR: dir, NEKKO_EVIDENCE_KIND: kind };
+    const env = { ...process.env, NEKKO_EVIDENCE_DIR: dir, NEKKO_EVIDENCE_KIND: kind, NEKKO_TOOLS_ONLY: toolsOnly ? '1' : '' };
     delete env.ELECTRON_RUN_AS_NODE;
     const r = cp.spawnSync(require(resolve('electron')), [path.join(__dirname, 'picker-tools-evidence-electron.cjs')], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 240000 });
     if (r.error) throw r.error;
+    if (r.status !== 0) throw new Error(`${kind} evidence exited ${r.status}`);
     console.log(kind, 'exit', r.status);
     fs.rmSync(path.join(dir, 'profile'), { recursive: true, force: true, maxRetries: 8, retryDelay: 300 });
     if (kind === 'before') fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 300 });

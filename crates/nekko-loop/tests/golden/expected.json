@@ -229,7 +229,7 @@
   },
   {
    "name": "answer before request still counts",
-   "filled": 0,
+   "filled": 1,
    "history": [
     {
      "id": "t",
@@ -252,6 +252,17 @@
        "input": {}
       }
      ],
+     "createdAt": 2
+    },
+    {
+     "id": "msg_repair_N",
+     "role": "tool",
+     "content": "",
+     "toolResult": {
+      "toolCallId": "c9",
+      "output": "This tool call did not run: the reply was interrupted first. Call it again if you still need the result.",
+      "isError": true
+     },
      "createdAt": 2
     }
    ]

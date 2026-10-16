@@ -6,6 +6,16 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Interrupted follow-ups and readable tool picker (2026-10-16)
+
+- [x] Repair ordinary follow-up tool history in TS/Rust, preserving delayed real results and filling only missing calls; test idempotence, no rerun/nudge, and Anthropic wire ordering. See [SPEC](SPEC.md#delegated-interruption-recovery).
+- [x] Reject overlapping direct sends before queue mutation, including admission; regress queue preservation and explicit interruption.
+- [x] Add friendly picker labels, literal identifiers, wrapping descriptions and drawn accessible checkboxes; preserve category/offline/sandbox behavior. See [SPEC](SPEC.md#readable-tool-picker-2026-10-16).
+- [x] Integration checks: 56 focused tests and shared/core/host builds passed after fast-forwarding main. Prior implementation verification: 49 core, 94 host, 14 UI and 14 Rust tests passed.
+- [ ] Inspect all matched wide/narrow light/dark pixels and publish evidence before landing. Hidden Electron reports pass interaction/bounds checks but are not a substitute for pixel inspection.
+- [ ] Planned follow-up: asynchronous child handles with explicit status/cancel and restart reconciliation. Synchronous spawn prevents parent supervision while waiting; do not broaden this repair into lifecycle redesign.
+- [ ] Original-session/live-provider recovery and other packaged platforms remain unverified; reproduce with an explicitly provided affected transcript or isolated provider session.
+
 ## New agent window defaults
 
 - [x] Persist explicit ChatPane and Add window model choices as provider/model pairs without changing other panes; preserve Auto and session-specific choices. See [SPEC](SPEC.md#new-agent-window-defaults).

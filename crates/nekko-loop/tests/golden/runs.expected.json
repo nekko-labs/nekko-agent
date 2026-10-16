@@ -4819,5 +4819,144 @@
     ]
    }
   ]
+ },
+ {
+  "name": "normal follow-up repairs interrupted delegation and delayed results",
+  "events": [
+   {
+    "type": "text",
+    "sessionId": "s1",
+    "delta": "Continuing."
+   },
+   {
+    "type": "done",
+    "sessionId": "s1",
+    "messageId": "msg_ID",
+    "stop": "complete",
+    "steps": 0
+   }
+  ],
+  "history": [
+   {
+    "id": "u0",
+    "role": "user",
+    "content": "delegate",
+    "createdAt": 0
+   },
+   {
+    "id": "a1",
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "child",
+      "name": "spawn_agent",
+      "input": {}
+     },
+     {
+      "id": "missing",
+      "name": "bash",
+      "input": {}
+     }
+    ],
+    "createdAt": 0
+   },
+   {
+    "id": "msg_ID",
+    "role": "tool",
+    "content": "",
+    "toolResult": {
+     "toolCallId": "missing",
+     "output": "This tool call did not run: the reply was interrupted first. Call it again if you still need the result.",
+     "isError": true
+    },
+    "createdAt": 0
+   },
+   {
+    "id": "t1",
+    "role": "tool",
+    "content": "",
+    "toolResult": {
+     "toolCallId": "child",
+     "output": "Files saved"
+    },
+    "createdAt": 0
+   },
+   {
+    "id": "u1",
+    "role": "user",
+    "content": "continue directly",
+    "createdAt": 0
+   },
+   {
+    "id": "msg_ID",
+    "role": "assistant",
+    "content": "Continuing.",
+    "createdAt": 0
+   }
+  ],
+  "requests": [
+   {
+    "model": "test-model",
+    "system": "SYSTEM",
+    "tools": [
+     "read_file",
+     "bash"
+    ],
+    "messages": [
+     {
+      "id": "u0",
+      "role": "user",
+      "content": "delegate",
+      "createdAt": 0
+     },
+     {
+      "id": "a1",
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "child",
+        "name": "spawn_agent",
+        "input": {}
+       },
+       {
+        "id": "missing",
+        "name": "bash",
+        "input": {}
+       }
+      ],
+      "createdAt": 0
+     },
+     {
+      "id": "msg_ID",
+      "role": "tool",
+      "content": "",
+      "toolResult": {
+       "toolCallId": "missing",
+       "output": "This tool call did not run: the reply was interrupted first. Call it again if you still need the result.",
+       "isError": true
+      },
+      "createdAt": 0
+     },
+     {
+      "id": "t1",
+      "role": "tool",
+      "content": "",
+      "toolResult": {
+       "toolCallId": "child",
+       "output": "Files saved"
+      },
+      "createdAt": 0
+     },
+     {
+      "id": "u1",
+      "role": "user",
+      "content": "continue directly",
+      "createdAt": 0
+     }
+    ]
+   }
+  ]
  }
 ]

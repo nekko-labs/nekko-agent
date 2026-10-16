@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { Jimp } from 'jimp';
 import { AnthropicProvider } from './anthropic.js';
+import { runAgent } from '../agent/loop.js';
 import { normalizeAnthropicImages } from './anthropic-images.js';
 import type { ChatMessage } from '@nekko-agent/shared';
 
@@ -29,6 +30,28 @@ it('bounds historical attachments and tool evidence on retry and new turns witho
     expect(wire.messages.some((m: any) => m.content?.some?.((b: any) => b.type === 'tool_result' && b.tool_use_id === 'c'))).toBe(true);
     expect(JSON.stringify(messages)).toBe(original);
   }
+});
+
+it('sends all tool results immediately after interrupted delegation on an ordinary follow-up', async () => {
+  const messages: ChatMessage[] = [
+    { id: 'a', role: 'assistant', content: '', createdAt: 1, toolCalls: [
+      { id: 'child', name: 'spawn_agent', input: {} }, { id: 'missing', name: 'bash', input: {} },
+    ] },
+    { id: 'u', role: 'user', content: 'continue directly', createdAt: 2 },
+    { id: 't', role: 'tool', content: '', createdAt: 3, toolResult: { toolCallId: 'child', output: 'Files saved' } },
+  ];
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+    'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Continuing"}}\n\ndata: {"type":"message_stop"}\n\n',
+  ));
+  const provider = new AnthropicProvider({ id: 'p', kind: 'anthropic', label: 'Test', baseUrl: 'https://example.invalid', enabled: true });
+  for await (const _ of runAgent({ sessionId: 's', provider, model: 'm', system: '', history: messages, executeTool: async () => { throw new Error('Must not rerun tools'); } })) { /* drain */ }
+  const wire = JSON.parse(fetch.mock.calls[0][1]!.body as string).messages;
+  expect(wire.map((m: any) => m.role)).toEqual(['assistant', 'user']);
+  expect(wire[1].content.slice(0, 2)).toEqual([
+    expect.objectContaining({ type: 'tool_result', tool_use_id: 'missing' }),
+    expect.objectContaining({ type: 'tool_result', tool_use_id: 'child', content: 'Files saved' }),
+  ]);
+  expect(wire[1].content[2]).toEqual({ type: 'text', text: 'continue directly' });
 });
 
 it('bounds portrait images but leaves small and unreadable bytes unchanged', async () => {
