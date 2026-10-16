@@ -15,6 +15,21 @@ fs.mkdirSync(dir, { recursive: true });
 app.setPath('userData', path.join(dir, 'profile'));
 app.setPath('sessionData', path.join(dir, 'profile'));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const UNSAFE_JS_CHAR_MAP = {
+  '<': '\\u003C',
+  '>': '\\u003E',
+  '/': '\\u002F',
+  '\\': '\\\\',
+  '\b': '\\b',
+  '\f': '\\f',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t',
+  '\0': '\\0',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029',
+};
+const escapeUnsafeJsChars = str => str.replace(/[<>/\\\b\f\n\r\t\0\u2028\u2029]/g, ch => UNSAFE_JS_CHAR_MAP[ch] || ch);
 
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((request, done) => done({ cancel: !/^(file:|data:|blob:)/.test(request.url) }));
@@ -39,7 +54,7 @@ app.whenReady().then(async () => {
   };
   const type = async text => { for (const ch of text) await key(ch, ch !== ch.toLowerCase() ? ['shift'] : []); };
   const click = async selector => {
-    const p = await run(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)return null;const r=e.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
+    const p = await run(`(()=>{const e=document.querySelector(${escapeUnsafeJsChars(JSON.stringify(selector))});if(!e)return null;const r=e.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
     if (!p) return false;
     for (const type of ['mouseDown', 'mouseUp']) win.webContents.sendInputEvent({ type, x: p.x, y: p.y, button: 'left', clickCount: 1 });
     await sleep(120);
