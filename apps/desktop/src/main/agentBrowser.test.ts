@@ -153,6 +153,25 @@ describe('private Electron browser bridge', () => {
       expect(refused.status).toBe(400);
     } finally { bare.close(); }
   });
+
+  it('answers what the daemon asks of the window shell, behind the token', async () => {
+    const shell = { nativeWindow: vi.fn(() => '1234'), dialog: vi.fn(async () => ['C:\\a.txt']), quitForUpdate: vi.fn() };
+    const bridge = await startAgentBrowser({ driver: async () => fakeDriver().driver, shell });
+    const post = async (body: unknown, auth = true) => {
+      const res = await fetch(bridge.url, { method: 'POST', headers: auth ? { Authorization: `Bearer ${bridge.token}` } : {}, body: JSON.stringify(body) });
+      return { status: res.status, body: await res.json() };
+    };
+    try {
+      expect((await post({ tool: 'nativeWindow' }, false)).status).toBe(403);
+      expect((await post({ tool: 'nativeWindow' })).body).toEqual({ handle: '1234' });
+      expect((await post({ tool: 'dialog', kind: 'openFiles', options: { multiple: true } })).body).toEqual({ result: ['C:\\a.txt'] });
+      expect(shell.dialog).toHaveBeenCalledWith('openFiles', { multiple: true });
+      expect((await post({ tool: 'dialog', kind: 'exec' })).status).toBe(400);
+      expect((await post({ tool: 'quitForUpdate' })).body).toEqual({ ok: true });
+      expect(shell.quitForUpdate).toHaveBeenCalledOnce();
+      expect(fake.windows).toHaveLength(0);
+    } finally { bridge.close(); }
+  });
 });
 
 describe('errorLine', () => {

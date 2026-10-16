@@ -21,6 +21,7 @@ import type {
 import { IpcChannels, IpcEvents } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
+import { BOTH_EVENTS, MAIN_EVENTS, routeToMain } from './routing.js';
 import {
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
@@ -28,35 +29,25 @@ import {
   type WindowChromeBridge,
 } from '../windowChrome.js';
 
-/**
- * Where each call goes. The Electron main process answers only what needs
- * Electron (native dialogs, the OS shell, the app version, the updater);
- * everything else goes straight to the engine over its socket, never through
- * main (see `engine-socket.ts`).
- */
-const SHELL_CHANNELS = new Set<string>([
-  IpcChannels.voicePermission,
-  IpcChannels.dialogOpenFiles,
-  IpcChannels.openPath,
-  IpcChannels.appInfo,
-  IpcChannels.updateCheck,
-  IpcChannels.updateDownload,
-  IpcChannels.updateInstall,
-  IpcChannels.sessionSetOptions,
-]);
-const SHELL_EVENTS = new Set<string>([IpcEvents.updateEvent, IpcEvents.deepLink]);
-
+// Where each call goes: the engine's socket, main only for the native
+// channels when no daemon runs (see `routing.ts`).
 const engine = createEngineSocket((operation) => ipcRenderer.invoke(ENGINE_ENDPOINT_CHANNEL, operation));
 
-const inv = (channel: string, ...args: unknown[]): Promise<any> =>
-  SHELL_CHANNELS.has(channel) ? ipcRenderer.invoke(channel, ...args) : engine.call(channel, args);
+const inv = async (channel: string, ...args: unknown[]): Promise<any> =>
+  (await routeToMain(channel, () => engine.mode()))
+    ? ipcRenderer.invoke(channel, ...args)
+    : engine.call(channel, args);
 
 /** `ipcRenderer.on`/`removeListener`, routed the same way as `inv`. */
 const bus = {
-  on: (channel: string, listener: Listener) =>
-    SHELL_EVENTS.has(channel) ? ipcRenderer.on(channel, listener) : engine.on(channel, listener),
-  removeListener: (channel: string, listener: Listener) =>
-    SHELL_EVENTS.has(channel) ? ipcRenderer.removeListener(channel, listener) : engine.off(channel, listener),
+  on: (channel: string, listener: Listener) => {
+    if (MAIN_EVENTS.has(channel) || BOTH_EVENTS.has(channel)) ipcRenderer.on(channel, listener);
+    if (!MAIN_EVENTS.has(channel)) engine.on(channel, listener);
+  },
+  removeListener: (channel: string, listener: Listener) => {
+    if (MAIN_EVENTS.has(channel) || BOTH_EVENTS.has(channel)) ipcRenderer.removeListener(channel, listener);
+    if (!MAIN_EVENTS.has(channel)) engine.off(channel, listener);
+  },
 };
 
 const api: NekkoApi = {
@@ -211,10 +202,10 @@ const api: NekkoApi = {
   deleteMemory: (id) => inv(IpcChannels.memoryDelete, id),
 
   listWorkspaces: () => inv(IpcChannels.workspaceList),
-  // The picker is native (main); adding the folder is the engine's.
-  pickFolder: () => ipcRenderer.invoke(PICK_FOLDER_CHANNEL),
+  // The picker is native (the daemon's, owned by this window); adding the folder is the engine's.
+  pickFolder: () => inv(PICK_FOLDER_CHANNEL),
   addWorkspace: async () => {
-    const path: string | null = await ipcRenderer.invoke(PICK_FOLDER_CHANNEL);
+    const path: string | null = await inv(PICK_FOLDER_CHANNEL);
     return path ? inv(IpcChannels.workspaceAddByPath, path) : inv(IpcChannels.workspaceList);
   },
   addWorkspaceByPath: (path) => inv(IpcChannels.workspaceAddByPath, path),

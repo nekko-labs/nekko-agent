@@ -26,6 +26,7 @@ mod machine;
 mod mcp;
 mod messaging;
 mod model_server;
+mod native;
 mod oauth;
 mod procgroup;
 mod providers;
@@ -283,6 +284,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }),
         update_checks: small_services::UpdateChecks::new(),
         messaging: messaging.clone(),
+        native: cfg
+            .native
+            .clone()
+            .filter(|_| cfg.browser_bridge.is_some())
+            .map(|n| native::Native::new(n, cfg.app_version.clone())),
     };
     routes::forward_terminal_events(&ctx);
     if let Some(adm) = ctx.admission.clone() {
@@ -301,6 +307,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }));
     }
     automation.start();
+    if let Some(n) = &ctx.native {
+        n.start(ctx.clone());
+    }
     if let Some(w) = &agent_watches {
         w.start(ctx.turns.clone());
     }

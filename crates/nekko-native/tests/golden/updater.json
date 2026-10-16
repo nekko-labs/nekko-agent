@@ -1,0 +1,553 @@
+{
+  "versions": [
+    {
+      "input": "0.8.1",
+      "parsed": "0.8.1"
+    },
+    {
+      "input": "v0.8.1",
+      "parsed": "0.8.1"
+    },
+    {
+      "input": " 0.8.1 ",
+      "parsed": "0.8.1"
+    },
+    {
+      "input": "0.8",
+      "parsed": null
+    },
+    {
+      "input": "0.8.1.2",
+      "parsed": null
+    },
+    {
+      "input": "01.0.0",
+      "parsed": null
+    },
+    {
+      "input": "0.08.1",
+      "parsed": null
+    },
+    {
+      "input": "1.0.0-alpha",
+      "parsed": "1.0.0-alpha"
+    },
+    {
+      "input": "1.0.0-alpha.1",
+      "parsed": "1.0.0-alpha.1"
+    },
+    {
+      "input": "1.0.0-alpha.beta",
+      "parsed": "1.0.0-alpha.beta"
+    },
+    {
+      "input": "1.0.0-beta.2",
+      "parsed": "1.0.0-beta.2"
+    },
+    {
+      "input": "1.0.0-beta.11",
+      "parsed": "1.0.0-beta.11"
+    },
+    {
+      "input": "1.0.0-rc.1",
+      "parsed": "1.0.0-rc.1"
+    },
+    {
+      "input": "1.0.0",
+      "parsed": "1.0.0"
+    },
+    {
+      "input": "1.0.0+build.7",
+      "parsed": "1.0.0"
+    },
+    {
+      "input": "1.0.0-01",
+      "parsed": null
+    },
+    {
+      "input": "1.0.0-0a",
+      "parsed": "1.0.0-0a"
+    },
+    {
+      "input": "1.0.0-",
+      "parsed": null
+    },
+    {
+      "input": "1.0.0+",
+      "parsed": null
+    },
+    {
+      "input": "9007199254740991.0.0",
+      "parsed": "9007199254740991.0.0"
+    },
+    {
+      "input": "9007199254740992.0.0",
+      "parsed": null
+    },
+    {
+      "input": "1.0.0-9007199254740992",
+      "parsed": "1.0.0-9007199254740992"
+    },
+    {
+      "input": "=1.0.0",
+      "parsed": null
+    },
+    {
+      "input": "V1.0.0",
+      "parsed": null
+    },
+    {
+      "input": "1.0.0-x.7.z.92",
+      "parsed": "1.0.0-x.7.z.92"
+    },
+    {
+      "input": "",
+      "parsed": null
+    },
+    {
+      "input": "latest",
+      "parsed": null
+    },
+    {
+      "input": "0.9.0-beta",
+      "parsed": "0.9.0-beta"
+    },
+    {
+      "input": "0.10.0",
+      "parsed": "0.10.0"
+    },
+    {
+      "input": "10.0.0",
+      "parsed": "10.0.0"
+    }
+  ],
+  "compares": [
+    {
+      "current": "0.8.1",
+      "latest": "0.8.1",
+      "available": false
+    },
+    {
+      "current": "0.8.1",
+      "latest": "0.8.2",
+      "available": true
+    },
+    {
+      "current": "0.8.1",
+      "latest": "0.9.0",
+      "available": true
+    },
+    {
+      "current": "0.8.1",
+      "latest": "0.8.0",
+      "available": false
+    },
+    {
+      "current": "0.9.0",
+      "latest": "0.10.0",
+      "available": true
+    },
+    {
+      "current": "0.8.1",
+      "latest": "0.9.0-beta",
+      "available": true
+    },
+    {
+      "current": "0.9.0-beta",
+      "latest": "0.9.0",
+      "available": true
+    },
+    {
+      "current": "0.9.0-beta.2",
+      "latest": "0.9.0-beta.11",
+      "available": true
+    },
+    {
+      "current": "0.9.0-alpha",
+      "latest": "0.9.0-beta",
+      "available": true
+    },
+    {
+      "current": "1.0.0",
+      "latest": "1.0.0+build",
+      "available": false
+    },
+    {
+      "current": "0.8.1",
+      "latest": "not-a-version",
+      "available": null
+    },
+    {
+      "current": "0.8.1",
+      "latest": "v0.9.0",
+      "available": true
+    },
+    {
+      "current": "1.0.0-alpha.beta",
+      "latest": "1.0.0-alpha.1",
+      "available": false
+    },
+    {
+      "current": "1.0.0-rc.1",
+      "latest": "1.0.0-rc.1",
+      "available": false
+    },
+    {
+      "current": "2.0.0",
+      "latest": "10.0.0",
+      "available": true
+    },
+    {
+      "current": "0.8.1",
+      "latest": "9007199254740992.0.0",
+      "available": null
+    }
+  ],
+  "feeds": [
+    {
+      "tag": "v0.6.1",
+      "file": "latest-linux.yml",
+      "version": "0.6.1",
+      "releaseDate": "2026-08-28T07:37:48.574Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x86_64.AppImage",
+          "sha512": "ztFA9poWOGsuTeReT0lcIq32DplaR9WcKoa+lQ/9EEZ+gUiUoFY9mGb6vqr5GBAJAww2cJ+2N6VGb5ZCMv+ayQ==",
+          "size": 131443392
+        },
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-amd64.deb",
+          "sha512": "Ey4A+dSVOkpW/gSmxhZ/ibxL7EIKrPTURIzorNETDQAKtcxA8PurDGZaggchGMwCiokWPxvX9hcdI4yhDhcUpw==",
+          "size": 102414696
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/Kotrain-0.6.1-x86_64.AppImage",
+        "http://127.0.0.1:4599/feed/Kotrain-0.6.1-amd64.deb"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x86_64.AppImage",
+        "mac-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x86_64.AppImage",
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x86_64.AppImage",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-amd64.deb",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x86_64.AppImage",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x86_64.AppImage",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x86_64.AppImage",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-amd64.deb"
+      }
+    },
+    {
+      "tag": "v0.6.1",
+      "file": "latest-mac.yml",
+      "version": "0.6.1",
+      "releaseDate": "2026-08-28T07:40:01.841Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-arm64.zip",
+          "sha512": "gfK7WYXJ3VnBqTXkUXd3jnxp/uvAlZjXkXn0Wqh3nj4axGLH4YbUydgDqDNQZAlFmry3He8fG5D8aqLG1lojag==",
+          "size": 122341818
+        },
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-arm64.dmg",
+          "sha512": "Thd+uMN4s23IeRB+BUt5FXwy2EXk6wKj4BLqcWtMPKzO+rI/ctZCBsnn7+cWke0EutCI2mJ0KJJsIWn8ZmOp+w==",
+          "size": 123309472
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/Kotrain-0.6.1-arm64.zip",
+        "http://127.0.0.1:4599/feed/Kotrain-0.6.1-arm64.dmg"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-arm64.zip",
+        "mac-x64": null,
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-arm64.zip",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-arm64.zip",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-arm64.zip",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-arm64.zip",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-arm64.zip",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-arm64.zip"
+      }
+    },
+    {
+      "tag": "v0.6.1",
+      "file": "latest.yml",
+      "version": "0.6.1",
+      "releaseDate": "2026-08-28T07:37:33.817Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x64.exe",
+          "sha512": "VNF6pRxkNpvMPojq3Ddj9jy21QzvRMeikVBLV6kN4VsyqZ8SyAq4TTtM8wQx8N9Qu2qpS8EPDL2NsTJlJZzNWQ==",
+          "size": 103299012
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/Kotrain-0.6.1-x64.exe"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x64.exe",
+        "mac-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x64.exe",
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x64.exe",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x64.exe",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x64.exe",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x64.exe",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x64.exe",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.6.1/Kotrain-0.6.1-x64.exe"
+      }
+    },
+    {
+      "tag": "v0.7.1",
+      "file": "latest-linux.yml",
+      "version": "0.7.1",
+      "releaseDate": "2026-09-11T02:51:38.798Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x86_64.AppImage",
+          "sha512": "WJP1Z6fXkzEFW6beDpb2xf5iGUdflw1tOFBe/VlkqzzQKbFrTiYVzTpQhKuN5DDAeTemxXtNaLoSkpM5/dxELw==",
+          "size": 131398521
+        },
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-amd64.deb",
+          "sha512": "dcv7w3Y/6LxKvsrk9osZZlgyb80F5AGK4JSk1117lmVSObWfzbbTAAe/t7mH3Up6a/EjSV49e3u71QjydoOcyA==",
+          "size": 102299892
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/AgentNekko-0.7.1-x86_64.AppImage",
+        "http://127.0.0.1:4599/feed/AgentNekko-0.7.1-amd64.deb"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x86_64.AppImage",
+        "mac-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x86_64.AppImage",
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x86_64.AppImage",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-amd64.deb",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x86_64.AppImage",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x86_64.AppImage",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x86_64.AppImage",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-amd64.deb"
+      }
+    },
+    {
+      "tag": "v0.7.1",
+      "file": "latest.yml",
+      "version": "0.7.1",
+      "releaseDate": "2026-09-11T02:52:04.792Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x64.exe",
+          "sha512": "fSwOFDLQ7+eOvSMB6J50rlnsqfJPGf11S1/epkK42yrJuBr3c20hsWc6FHuaB7xiqoFMBZAMu1SNcOVZfgXFPA==",
+          "size": 111263583
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/AgentNekko-0.7.1-x64.exe"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x64.exe",
+        "mac-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x64.exe",
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x64.exe",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x64.exe",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x64.exe",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x64.exe",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x64.exe",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.7.1/AgentNekko-0.7.1-x64.exe"
+      }
+    },
+    {
+      "tag": "v0.8.0",
+      "file": "latest-linux.yml",
+      "version": "0.8.0",
+      "releaseDate": "2026-10-03T13:34:52.315Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x86_64.AppImage",
+          "sha512": "WppZV96SmH66U/yIIUobfrqQuYbB1MR4bmPHIVXeKT9nEnjS1v3zjzlSCJdUpgOf3T3vAw9yd/JMQFsoSjqO8g==",
+          "size": 151015514
+        },
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-amd64.deb",
+          "sha512": "EvFyQ+iTmuYPQAr6SbVvembaK4sNUPyjDiCGKEoveZf+lwG2AUpNHuIsMHfXq3120Ooe6xCO8I8fKgGOYUT0xQ==",
+          "size": 115687696
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/AgentNekko-0.8.0-x86_64.AppImage",
+        "http://127.0.0.1:4599/feed/AgentNekko-0.8.0-amd64.deb"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x86_64.AppImage",
+        "mac-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x86_64.AppImage",
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x86_64.AppImage",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-amd64.deb",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x86_64.AppImage",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x86_64.AppImage",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x86_64.AppImage",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-amd64.deb"
+      }
+    },
+    {
+      "tag": "v0.8.0",
+      "file": "latest-mac.yml",
+      "version": "0.8.0",
+      "releaseDate": "2026-10-03T13:38:53.609Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-arm64.zip",
+          "sha512": "Z6FFBFNsJL/bRDRhN7e+QIXSdBBV98D2RneuYwZOgqCfekc1lJtglgj+TQARFHi8VWCrm8/snplmQwNa7qezzA==",
+          "size": 136614863
+        },
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-arm64.dmg",
+          "sha512": "xqi7ZYgSWLbxnEIFsQAlMy8NVNaUG410nB2sW46BDsp3ucP/ZZ/FRkZblrZB/SJUJ589jzOVxGP6MeaeP4HhXQ==",
+          "size": 142091617
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/AgentNekko-0.8.0-arm64.zip",
+        "http://127.0.0.1:4599/feed/AgentNekko-0.8.0-arm64.dmg"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-arm64.zip",
+        "mac-x64": null,
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-arm64.zip",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-arm64.zip",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-arm64.zip",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-arm64.zip",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-arm64.zip",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-arm64.zip"
+      }
+    },
+    {
+      "tag": "v0.8.0",
+      "file": "latest.yml",
+      "version": "0.8.0",
+      "releaseDate": "2026-10-03T13:35:28.423Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x64.exe",
+          "sha512": "GjfLwFIm0DZVQZ5KWfQez095+NMS9QG3j6uLPIwVoCyUi2f6e7pxPhEATaN6rnFyFj73lDJVmNi5YluD02GZnw==",
+          "size": 132037777
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/AgentNekko-0.8.0-x64.exe"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x64.exe",
+        "mac-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x64.exe",
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x64.exe",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x64.exe",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x64.exe",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x64.exe",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x64.exe",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.0/AgentNekko-0.8.0-x64.exe"
+      }
+    },
+    {
+      "tag": "v0.8.1",
+      "file": "latest-linux.yml",
+      "version": "0.8.1",
+      "releaseDate": "2026-10-12T16:05:38.434Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x86_64.AppImage",
+          "sha512": "wayrX3UOEJR+f/6ERUU6DSLrPOWfewEJ/apoPL++IVNuTpkUoERdGpWnRw8ejzbZfYRKefB7qrXHPICDZ/Z04w==",
+          "size": 202722008
+        },
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-amd64.deb",
+          "sha512": "7LuG40WH7Ej1lyom8op0hA3/KHMJGsmGo6Hq74s0y+QD7tLnFOz78URZMpwxk2/x0+Ln5S5FXiv+PZxTi0oJPw==",
+          "size": 157371272
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/NekkoAgent-0.8.1-x86_64.AppImage",
+        "http://127.0.0.1:4599/feed/NekkoAgent-0.8.1-amd64.deb"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x86_64.AppImage",
+        "mac-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x86_64.AppImage",
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x86_64.AppImage",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-amd64.deb",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x86_64.AppImage",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x86_64.AppImage",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x86_64.AppImage",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-amd64.deb"
+      }
+    },
+    {
+      "tag": "v0.8.1",
+      "file": "latest-mac.yml",
+      "version": "0.8.1",
+      "releaseDate": "2026-10-12T16:11:49.160Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-arm64.zip",
+          "sha512": "5oOxyVsAOVDexTiMsp9ZTu769N49HgZGx9mvyZO/aQqmVsIKRuqooL0TTIS0nJloUPIqs1rm1PlPhsIMapaU+w==",
+          "size": 195472596
+        },
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-arm64.dmg",
+          "sha512": "xPqbG3FbkZfoFCwZ72DitWbJGK9ofbTf5m4u7PhLeEZcWAz4k0DnooGDo5zwhDuaAFoFGqa/BnUkDBooJQ8ZFQ==",
+          "size": 203005666
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/NekkoAgent-0.8.1-arm64.zip",
+        "http://127.0.0.1:4599/feed/NekkoAgent-0.8.1-arm64.dmg"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-arm64.zip",
+        "mac-x64": null,
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-arm64.zip",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-arm64.zip",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-arm64.zip",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-arm64.zip",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-arm64.zip",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-arm64.zip"
+      }
+    },
+    {
+      "tag": "v0.8.1",
+      "file": "latest.yml",
+      "version": "0.8.1",
+      "releaseDate": "2026-10-12T16:09:07.305Z",
+      "files": [
+        {
+          "url": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x64.exe",
+          "sha512": "8bFLrlPtQQ9v2rjAx6NwlEDUeLZd1eLV8dv5B92CO2rxWK9ZKsTsecfzV1bMslo9xFvYUySjFbIyLVmQ+MHcEQ==",
+          "size": 185773714
+        }
+      ],
+      "generic": [
+        "http://127.0.0.1:4599/feed/NekkoAgent-0.8.1-x64.exe"
+      ],
+      "picks": {
+        "win-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x64.exe",
+        "mac-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x64.exe",
+        "appimage-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x64.exe",
+        "deb-x64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x64.exe",
+        "win-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x64.exe",
+        "mac-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x64.exe",
+        "appimage-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x64.exe",
+        "deb-arm64": "https://github.com/nekko-labs/nekko-agent/releases/download/v0.8.1/NekkoAgent-0.8.1-x64.exe"
+      }
+    }
+  ],
+  "urls": [
+    {
+      "base": "https://github.com",
+      "path": "/o/r/releases/latest",
+      "url": "https://github.com/o/r/releases/latest"
+    },
+    {
+      "base": "http://127.0.0.1:4599/feed/",
+      "path": "latest.yml",
+      "url": "http://127.0.0.1:4599/feed/latest.yml"
+    },
+    {
+      "base": "http://127.0.0.1:4599/feed/?t=1",
+      "path": "NekkoAgent-0.9.0-x64.exe",
+      "url": "http://127.0.0.1:4599/feed/NekkoAgent-0.9.0-x64.exe?t=1"
+    }
+  ]
+}

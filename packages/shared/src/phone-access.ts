@@ -64,12 +64,13 @@ export const PHONE_ALWAYS_DENIED = {
     'settings:reset',
     'voice:cancel',
     'voice:install',
+    'voice:permission',
     'voice:uninstall',
     'workspace:addByPath',
     'workspace:remove',
   ],
-  /** Whole families: remote access, terminals, MCP servers, OAuth sign-in. */
-  prefixes: ['mcp:', 'oauth:', 'remote:', 'terminal:', 'terminals:'],
+  /** Whole families: remote access, terminals, MCP servers, OAuth sign-in, and the desktop's native dialogs, OS shell and updater. */
+  prefixes: ['dialog:', 'mcp:', 'oauth:', 'remote:', 'shell:', 'terminal:', 'terminals:', 'update:'],
   /** Not forced off by a prefix (it still has to be in `PHONE_CHANNELS` to be callable). */
   except: ['remote:status'],
 };

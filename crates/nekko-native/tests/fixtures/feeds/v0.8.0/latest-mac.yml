@@ -1,0 +1,11 @@
+version: 0.8.0
+files:
+  - url: AgentNekko-0.8.0-arm64.zip
+    sha512: Z6FFBFNsJL/bRDRhN7e+QIXSdBBV98D2RneuYwZOgqCfekc1lJtglgj+TQARFHi8VWCrm8/snplmQwNa7qezzA==
+    size: 136614863
+  - url: AgentNekko-0.8.0-arm64.dmg
+    sha512: xqi7ZYgSWLbxnEIFsQAlMy8NVNaUG410nB2sW46BDsp3ucP/ZZ/FRkZblrZB/SJUJ589jzOVxGP6MeaeP4HhXQ==
+    size: 142091617
+path: AgentNekko-0.8.0-arm64.zip
+sha512: Z6FFBFNsJL/bRDRhN7e+QIXSdBBV98D2RneuYwZOgqCfekc1lJtglgj+TQARFHi8VWCrm8/snplmQwNa7qezzA==
+releaseDate: '2026-10-03T13:38:53.609Z'
