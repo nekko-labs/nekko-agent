@@ -305,10 +305,11 @@ fn the_phone_gate_decides_as_the_ts_does() {
 #[test]
 fn a_reply_too_large_for_the_relay_becomes_an_error() {
     // relay.ts does the same: the relay drops frames over its limit without a word.
+    // Nothing here is compared byte for byte, so fresh random IVs as in real use.
     let key = e2e::derive_key("00112233445566778899aabbccddeeff", "room-1");
-    let mut core = AgentCore::new(key.clone(), Box::new(|| [7u8; 12]));
+    let mut core = AgentCore::new(key.clone(), Box::new(e2e::random_iv));
     let hello = json!({ "type": "hello", "deviceId": "p1" });
-    let data = json!({ "enc": e2e::seal_with_iv(&key, &hello, [1u8; 12]) }).to_string();
+    let data = json!({ "enc": e2e::seal_with_iv(&key, &hello, e2e::random_iv()) }).to_string();
     let verify = |_: &Value| json!({ "type": "welcome", "device": { "id": "p1" } });
     let relay = json!({ "type": "c", "cid": "c1", "data": data }).to_string();
     core.on_relay(&relay, &verify);
