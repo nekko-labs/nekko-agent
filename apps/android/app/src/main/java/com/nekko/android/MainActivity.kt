@@ -3,8 +3,9 @@ package com.nekko.android
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import android.view.WindowManager
+import android.view.inspector.WindowInspector
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -45,7 +46,7 @@ class MainActivity : FragmentActivity() {
         val repo = app.computers
         val authenticator = Authenticator(this)
         lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.CREATED) { app.appLock.enabled.collect(::hideFromRecents) }
+            repeatOnLifecycle(Lifecycle.State.CREATED) { app.appLock.enabled.collect(::privateRecents) }
         }
         setContent {
             val choice by app.themePrefs.choice.collectAsStateWithLifecycle()
@@ -75,18 +76,51 @@ class MainActivity : FragmentActivity() {
     }
 
     /**
-     * With the lock on, the recent-apps preview must not show chats. Only
-     * FLAG_SECURE does that reliably: setRecentsScreenshotEnabled(false) still
-     * lets the overview show the live window when it is opened from the app
-     * (seen on API 37). The cost: no screenshots or screen recording of the app
-     * while the lock is on; turning the lock off lifts both.
+     * With the lock on, the recent-apps preview must not show chats, but the
+     * app itself stays screenshot-able (no FLAG_SECURE: the user wants to
+     * screenshot chats). On API 33+ the system is asked not to keep a snapshot;
+     * on every API the privacy cover (AppLock.covered, drawn by LockGate)
+     * replaces the content whenever the activity is paused or its window loses
+     * focus outside the app, so whatever the overview shows, live or snapshot,
+     * is the cover and not the chat.
      */
-    private fun hideFromRecents(hide: Boolean) {
-        if (hide) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    private fun privateRecents(hide: Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(!hide)
+    }
+
+    override fun onPause() {
+        (application as NekkoApp).appLock.onPause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        (application as NekkoApp).appLock.onResume()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        val lock = (application as NekkoApp).appLock
+        if (hasFocus) {
+            lock.onFocus(true)
+            return
         }
+        // Our own dialogs and popups take focus too; only cover when it went
+        // outside the app. Checked after the focus has moved to its new window.
+        window.decorView.post {
+            if (!window.decorView.hasWindowFocus() && !focusStayedInApp()) lock.onFocus(false)
+        }
+    }
+
+    /**
+     * Whether another window of this app (a dialog, a menu) holds input focus.
+     * Below API 29 there is no way to tell, so assume it did: only a pause
+     * covers there, and an in-app dialog never blanks the chat behind it.
+     */
+    private fun focusStayedInApp(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
+        val decor = window.decorView
+        return WindowInspector.getGlobalWindowViews().any { it !== decor && it.hasWindowFocus() }
     }
 
     override fun onNewIntent(intent: Intent) {

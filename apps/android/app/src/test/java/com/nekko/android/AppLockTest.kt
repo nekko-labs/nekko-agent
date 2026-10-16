@@ -119,4 +119,40 @@ class AppLockTest {
         l.setEnabled(true)
         assertTrue(saved.isEmpty())
     }
+
+    @Test
+    fun `the privacy cover shows only while paused with the lock on`() {
+        val l = lock()
+        l.unlock()
+        assertFalse(l.covered.value)
+        l.onPause()
+        assertTrue(l.covered.value)
+        l.onResume()
+        assertFalse(l.covered.value)
+    }
+
+    @Test
+    fun `no privacy cover with the lock off, and turning it off lifts one`() {
+        val off = lock(enabled = false)
+        off.onPause()
+        assertFalse(off.covered.value)
+
+        val on = lock()
+        on.onPause()
+        assertTrue(on.covered.value)
+        on.setEnabled(false)
+        assertFalse(on.covered.value)
+    }
+
+    @Test
+    fun `losing focus outside the app covers too, until it comes back`() {
+        val l = lock()
+        l.unlock()
+        l.onFocus(false)
+        assertTrue(l.covered.value)
+        l.onPause(); l.onFocus(true)
+        assertTrue(l.covered.value) // still paused
+        l.onResume()
+        assertFalse(l.covered.value)
+    }
 }

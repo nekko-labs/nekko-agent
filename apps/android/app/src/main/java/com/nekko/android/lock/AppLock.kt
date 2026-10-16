@@ -39,6 +39,18 @@ class AppLock(
     private val _status = MutableStateFlow(LockStatus(locked = enabled, epoch = if (enabled) 1 else 0))
     val status: StateFlow<LockStatus> = _status.asStateFlow()
 
+    private val _covered = MutableStateFlow(false)
+
+    /**
+     * Whether the privacy cover hides the app: while the lock is on and the
+     * activity is not in front (paused, or its window lost focus to something
+     * outside the app). The recent-apps overview
+     * shows the window as it is at that moment (live when opened from the app,
+     * a snapshot when the app leaves), so it shows the cover instead of a chat.
+     * Screenshots and screen recording of the app itself are never blocked.
+     */
+    val covered: StateFlow<Boolean> = _covered.asStateFlow()
+
     /** Deadline of an announced trip out of the app, if one is pending. */
     private var returnBy: Long? = null
 
@@ -55,6 +67,32 @@ class AppLock(
         val deadline = returnBy ?: return
         returnBy = null
         if (_enabled.value && now() > deadline) lock()
+    }
+
+    private var paused = false
+    private var unfocused = false
+
+    /** The activity lost the front (Activity.onPause). */
+    fun onPause() {
+        paused = true
+        cover()
+    }
+
+    /** The activity is in front again (Activity.onResume). */
+    fun onResume() {
+        paused = false
+        cover()
+    }
+
+    /**
+     * The window lost or regained input focus to something that is not the
+     * app's own (the recent-apps overview opened from inside the app, the
+     * notification shade, a system dialog). On API 37 opening the overview
+     * from the app does not pause the activity, so this is what covers it.
+     */
+    fun onFocus(hasFocus: Boolean) {
+        unfocused = !hasFocus
+        cover()
     }
 
     /** The app is about to open something outside itself and expects to come back. */
@@ -82,7 +120,12 @@ class AppLock(
         _enabled.value = on
         returnBy = null
         if (!on) _status.update { it.copy(locked = false) }
+        cover()
         persist(on)
+    }
+
+    private fun cover() {
+        _covered.value = _enabled.value && (paused || unfocused)
     }
 
     private fun lock() {
