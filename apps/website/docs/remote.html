@@ -278,8 +278,8 @@ connection and Live Activities while the app is open work as usual.</p>
 listens on the Tailscale interface, so agent enrollment without an access token
 (<code>NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1</code> in the script) is safe here; never use that flag on a public
 bind.</p>
-<p>The desktop refuses a plain <code>ws://</code> relay on the open internet when you press Enable. It uses the
-same rule as the phones, below.</p>
+<p>The computer refuses a plain <code>ws://</code> relay on the open internet, whether you press Enable or start
+a headless agent with <code>NEKKO_RELAY_URL</code>. It uses the same rule as the phones, below.</p>
 <p>Plain <code>ws://</code> is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
 the app&#39;s own end-to-end encryption sits on top. The Expo iOS app ships with Expo&#39;s default App
 Transport Security (arbitrary loads allowed). <strong>The native iPhone app allows plain <code>ws://</code> only toward
