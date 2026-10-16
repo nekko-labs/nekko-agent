@@ -163,6 +163,7 @@
  "skillSources:search",
  "skills:external",
  "skills:installed",
+ "skills:runnable",
  "skills:targets",
  "spec:build",
  "spec:buildDoc",

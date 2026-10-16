@@ -21,6 +21,8 @@ pub struct Policy {
     pub settings_keys: Vec<String>,
     pub settings_view: Vec<String>,
     pub provider_view: Vec<String>,
+    pub skill_view: Vec<String>,
+    pub queue_keys: Vec<String>,
     pub session_option_keys: Vec<String>,
     pub chat_send_keys: Vec<String>,
     pub chat_modes: Vec<String>,
@@ -49,6 +51,8 @@ pub fn policy() -> &'static Policy {
             settings_keys: strings(&v["settingsKeys"]),
             settings_view: strings(&v["settingsView"]),
             provider_view: strings(&v["providerView"]),
+            skill_view: strings(&v["skillView"]),
+            queue_keys: strings(&v["queueKeys"]),
             session_option_keys: strings(&v["sessionOptionKeys"]),
             chat_send_keys: strings(&v["chatSendKeys"]),
             chat_modes: strings(&v["chatModes"]),
@@ -150,25 +154,98 @@ fn keys_within(v: &Value, allowed: &[String], what: &str) -> Result<(), Denied> 
     }
 }
 
+/// A skill invocation from a phone: `{ name, input }`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillCall {
+    pub name: String,
+    pub input: String,
+}
+
+/// What screening a phone's call found to act on: a `settings:update`'s
+/// checked paths, or a skill turn the computer expands.
+#[derive(Debug, Default)]
+pub struct Screened {
+    pub settings: Option<Vec<(String, Value)>>,
+    pub skill: Option<SkillCall>,
+}
+
+/// `{ name, input }` from a phone, or why not (`phoneSkill`).
+fn phone_skill(v: &Value) -> Result<SkillCall, Denied> {
+    let bad = || denied("value-invalid", "skill");
+    let o = v.as_object().ok_or_else(bad)?;
+    let name = o.get("name").and_then(Value::as_str).filter(|n| !n.is_empty()).ok_or_else(bad)?;
+    let input = match o.get("input") {
+        None => "",
+        Some(Value::String(s)) => s.as_str(),
+        Some(_) => return Err(bad()),
+    };
+    if o.keys().any(|k| k != "name" && k != "input") {
+        return Err(bad());
+    }
+    Ok(SkillCall { name: name.to_string(), input: input.to_string() })
+}
+
 /// A phone's call checked against the allowlist and the per-channel rules.
-/// A `settings:update` comes back as its checked paths.
-pub fn screen(channel: &str, args: &[Value]) -> Result<Option<Vec<(String, Value)>>, Denied> {
+pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
     if !channel_allowed(channel) {
         return Err(denied("channel-denied", channel));
     }
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
+    let mut out = Screened::default();
     match channel {
-        "settings:update" => return check_settings_patch(arg(0)).map(Some),
+        "settings:update" => out.settings = Some(check_settings_patch(arg(0))?),
         "session:setOptions" => {
             keys_within(arg(1), &policy().session_option_keys, "chat options")?;
             if let Some(mode) = arg(1).get("mode") {
                 chat_mode(mode, "mode")?;
             }
         }
-        "chat:send" => keys_within(arg(0), &policy().chat_send_keys, "chat:send options")?,
+        "chat:send" => {
+            keys_within(arg(0), &policy().chat_send_keys, "chat:send options")?;
+            if let Some(skill) = arg(0).get("skill") {
+                out.skill = Some(phone_skill(skill)?);
+            }
+        }
+        "chat:queue" => {
+            let item = arg(1);
+            if !item.is_string() {
+                if !item.is_object() {
+                    return Err(denied("value-invalid", "chat:queue prompt"));
+                }
+                keys_within(item, &policy().queue_keys, "chat:queue prompt")?;
+                if let Some(skill) = item.get("skill") {
+                    out.skill = Some(phone_skill(skill)?);
+                }
+            }
+        }
         _ => {}
     }
-    Ok(None)
+    Ok(out)
+}
+
+/// The text a skill turn sends: its template, then the input (`skillTurnText`).
+pub fn skill_turn_text(template: &str, input: &str) -> String {
+    [template.trim_end(), input.trim()].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join("\n\n")
+}
+
+/// A phone's skill turn as the desktop sends it, expanded from the computer's
+/// own runnable skills (`expandPhoneSkill`): the phone's `text` is replaced,
+/// an unknown skill is refused.
+fn expand_skill(skill: &SkillCall, runnable: &Value, base: &Value) -> Result<Value, Denied> {
+    let template = runnable
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|s| {
+            s.get("name").and_then(Value::as_str) == Some(skill.name.as_str())
+                && s.get("template").is_some_and(Value::is_string)
+        })
+        .and_then(|s| s["template"].as_str())
+        .ok_or_else(|| denied("skill-unknown", skill.name.clone()))?;
+    let mut out = base.as_object().cloned().unwrap_or_default();
+    out.insert("text".into(), Value::String(skill_turn_text(template, &skill.input)));
+    out.insert("skill".into(), json!({ "name": skill.name, "input": skill.input }));
+    Ok(Value::Object(out))
 }
 
 /// The patch to save for checked phone settings, given the current settings.
@@ -226,6 +303,10 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "settings:get" | "settings:update" => pick(&result, &policy().settings_view),
         "providers:list" => match result {
             Value::Array(list) => Value::Array(list.iter().map(|p| pick(p, &policy().provider_view)).collect()),
+            _ => json!([]),
+        },
+        "skills:runnable" => match result {
+            Value::Array(list) => Value::Array(list.iter().map(|s| pick(s, &policy().skill_view)).collect()),
             _ => json!([]),
         },
         "session:get" => session_view(result),
@@ -343,8 +424,8 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         Value::Array(a) => a,
         _ => Vec::new(),
     };
-    let sets = screen(&channel, &args).map_err(|d| d.to_string())?;
-    let args = match sets {
+    let screened = screen(&channel, &args).map_err(|d| d.to_string())?;
+    let mut args = match screened.settings {
         Some(sets) => {
             let current = if sets.iter().any(|(p, _)| p.contains('.')) {
                 run("settings:get".to_string(), json!([])).await?
@@ -355,6 +436,11 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         }
         None => args,
     };
+    if let Some(skill) = screened.skill {
+        let runnable = run("skills:runnable".to_string(), json!([])).await?;
+        let at = if channel == "chat:send" { 0 } else { 1 };
+        args[at] = expand_skill(&skill, &runnable, &args[at]).map_err(|d| d.to_string())?;
+    }
     let result = run(channel.clone(), Value::Array(args)).await?;
     Ok(redact(&channel, result))
 }

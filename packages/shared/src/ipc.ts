@@ -210,6 +210,8 @@ export const IpcChannels = {
   skillsInstalled: 'skills:installed',
   skillsExternal: 'skills:external',
   skillsTargets: 'skills:targets',
+  /** Every skill a chat can run by name, with templates (a phone receives them without). */
+  skillsRunnable: 'skills:runnable',
   skillInstall: 'skill:install',
   skillUninstall: 'skill:uninstall',
 

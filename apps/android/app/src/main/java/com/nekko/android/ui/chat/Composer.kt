@@ -45,32 +45,48 @@ import androidx.compose.material3.LinearProgressIndicator
 import com.nekko.android.voice.Dictation
 import com.nekko.android.voice.Engine
 import com.nekko.android.voice.MicState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.text.font.FontWeight
+import com.nekko.android.chat.SkillMenu
+import com.nekko.protocol.SkillSummary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
  * Prompt box. While a run is going, sending queues the prompt on the computer
- * and an empty box turns Send into Stop.
+ * and an empty box turns Send into Stop. Typing `/` offers the computer's
+ * skills; a picked skill shows as a chip and the box becomes its input.
  */
 @Composable
 fun Composer(
     running: Boolean,
     blocked: String?,
     queued: List<String>,
-    onSend: suspend (String) -> Unit,
+    onSend: suspend (String, SkillSummary?) -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
     /** Pre-filled once (text shared from another app); the user still presses Send. */
     initialText: String? = null,
     /** The microphone, when dictation is on (Settings → Dictation); null hides it. */
     mic: MicUi? = null,
+    /** The computer's runnable skills for the `/` menu; empty hides it. */
+    skills: List<SkillSummary> = emptyList(),
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     var text by rememberSaveable { mutableStateOf(initialText.orEmpty()) }
     var sending by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
-    val canSend = text.isNotBlank() && blocked == null && !sending
+    // The armed skill, by name: it survives rotation and is dropped if the computer no longer has it.
+    var skillName by rememberSaveable { mutableStateOf<String?>(null) }
+    val skill = skillName?.let { n -> skills.firstOrNull { it.name == n } }
+    val menu = if (skill == null) SkillMenu.query(text)?.let { SkillMenu.match(skills, it) }.orEmpty() else emptyList()
+    val canSend = (text.isNotBlank() || skill != null) && blocked == null && !sending
     val showStop = running && text.isBlank()
     // Dictated text goes after what is typed, never replacing it, and is never sent by itself.
     val dictated: (String) -> Unit = { spoken ->
@@ -80,17 +96,20 @@ fun Composer(
 
     val send = {
         if (canSend) {
-            val value = text.trim()
+            // `/name rest` typed out in full runs that skill too, as on the desktop.
+            val (armed, value) = skill?.let { it to text.trim() } ?: SkillMenu.typed(text, skills) ?: (null to text.trim())
             sending = true
             text = ""
+            skillName = null
             error = null
             scope.launch {
                 try {
-                    onSend(value)
+                    onSend(value, armed)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     text = value // keep what they typed if it didn't go
+                    skillName = armed?.name
                     error = e.message ?: "Couldn’t send that."
                 } finally {
                     sending = false
@@ -127,6 +146,12 @@ fun Composer(
                     MicState.Idle -> Unit
                 }
             }
+            if (menu.isNotEmpty()) SkillList(menu) { picked ->
+                skillName = picked.name
+                text = ""
+                error = null
+            }
+            skill?.let { SkillChip(it) { skillName = null } }
             val note = blocked ?: error ?: mic?.error
             if (note != null) {
                 Text(
@@ -163,7 +188,12 @@ fun Composer(
                     decorationBox = { inner ->
                         if (text.isEmpty()) {
                             Text(
-                                if (running) "Queue a follow-up…" else "Message your computer",
+                                when {
+                                    skill != null -> "Add details for /${skill.name} (optional)"
+                                    running -> "Queue a follow-up…"
+                                    skills.isNotEmpty() -> "Message your computer, / for skills"
+                                    else -> "Message your computer"
+                                },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = p.inkFaint,
                             )
@@ -191,6 +221,59 @@ fun Composer(
                     }
                 }
             }
+        }
+    }
+}
+
+/** The `/` menu: the computer's skills matching what's typed after the slash. */
+@Composable
+private fun SkillList(skills: List<SkillSummary>, onPick: (SkillSummary) -> Unit) {
+    val p = Nekko.palette
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = 260.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.surface)
+            .border(1.dp, p.line, RoundedCornerShape(12.dp))
+            .verticalScroll(rememberScrollState())
+            .semantics { contentDescription = "Skills on your computer" },
+    ) {
+        skills.forEach { s ->
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onPick(s) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("/${s.name}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = p.ink)
+                    Text(SkillMenu.sourceLabel(s.source), style = MaterialTheme.typography.labelSmall, color = p.inkFaint)
+                }
+                if (s.description.isNotBlank()) {
+                    Text(s.description, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+/** The armed skill, above the message box; ✕ disarms it. */
+@Composable
+private fun SkillChip(skill: SkillSummary, onClear: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(p.accentSoft)
+            .padding(start = 10.dp, end = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(Icons.Filled.Extension, contentDescription = null, tint = p.accent, modifier = Modifier.size(16.dp))
+        Text("/${skill.name}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = p.ink)
+        IconButton(onClick = onClear, modifier = Modifier.size(36.dp)) {
+            Icon(Icons.Filled.Close, contentDescription = "Remove skill /${skill.name}", tint = p.inkSoft, modifier = Modifier.size(16.dp))
         }
     }
 }

@@ -273,18 +273,20 @@ fn the_phone_gate_decides_as_the_ts_does() {
     // packages/shared/src/phone-access.ts by the TS golden test.
     let g = golden("phone.json");
     let settings = g["settings"].clone();
+    let skills = g["skills"].clone();
     let sessions = g["sessions"].clone();
     let cases = g["cases"].as_array().unwrap();
     assert!(cases.len() >= 30);
     let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
     for case in cases {
         let calls: Arc<Mutex<Vec<Value>>> = Arc::default();
-        let (seen, settings, sessions) = (calls.clone(), settings.clone(), sessions.clone());
+        let (seen, settings, skills, sessions) = (calls.clone(), settings.clone(), skills.clone(), sessions.clone());
         let host: nekko_remote::Dispatcher = Arc::new(move |channel: String, args: Value| {
             seen.lock().unwrap().push(json!([channel, args]));
             let out = match channel.as_str() {
                 "session:get" => sessions.get(args[0].as_str().unwrap_or("")).cloned().unwrap_or(Value::Null),
                 "providers:list" => settings["providers"].clone(),
+                "skills:runnable" => skills.clone(),
                 c if c.starts_with("settings:") => settings.clone(),
                 c => json!({ "ok": c }),
             };

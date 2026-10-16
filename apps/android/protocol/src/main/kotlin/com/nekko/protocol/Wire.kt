@@ -46,11 +46,13 @@ object Channels {
     const val TOOL_APPROVE = "tool:approve"
     const val WORKSPACE_LIST = "workspace:list"
     const val APP_INFO = "app:info"
+    /** The skills a chat on the computer can run: names and descriptions only, never templates. */
+    const val SKILLS_RUNNABLE = "skills:runnable"
 
     val ALL = listOf(
         SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
-        WORKSPACE_LIST, APP_INFO,
+        WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE,
     )
 }
 
@@ -542,10 +544,53 @@ sealed interface AgentEvent {
     }
 }
 
+/**
+ * A skill the computer can run, as `skills:runnable` gives it to a phone. The
+ * computer keeps the instructions: a skill turn sends just the name and the
+ * user's input, and the computer expands it the way the desktop does.
+ */
+data class SkillSummary(
+    val name: String,
+    val description: String,
+    val category: String,
+    /** `builtin`, `marketplace`, or the tool it was imported from (`claude`, `codex`, `gemini`, `agents`). */
+    val source: String,
+) {
+    companion object {
+        fun from(e: JsonElement?): SkillSummary? {
+            val o = e.obj() ?: return null
+            val name = o.str("name")?.takeIf { it.isNotBlank() } ?: return null
+            return SkillSummary(name, o.str("description") ?: "", o.str("category") ?: "", o.str("source") ?: "")
+        }
+
+        fun list(e: JsonElement?): List<SkillSummary> = e.arr()?.mapNotNull { from(it) } ?: emptyList()
+    }
+}
+
+/** `{ name, input }`: which skill a turn runs and the user's own text after `/name`. */
+fun skillCall(name: String, input: String): JsonObject = buildJsonObject {
+    put("name", name)
+    put("input", input)
+}
+
 /** `chat:send` argument (SendOptions). Only the fields the phone uses. */
-fun sendOptions(sessionId: String, providerId: String, modelId: String, text: String): JsonObject = buildJsonObject {
+fun sendOptions(
+    sessionId: String,
+    providerId: String,
+    modelId: String,
+    text: String,
+    skill: SkillSummary? = null,
+): JsonObject = buildJsonObject {
     put("sessionId", sessionId)
     put("providerId", providerId)
     put("modelId", modelId)
     put("text", text)
+    if (skill != null) put("skill", skillCall(skill.name, text))
 }
+
+/** `chat:queue` prompt: plain text, or `{ text, skill }` for a skill turn (the computer expands it). */
+fun queuePrompt(text: String, skill: SkillSummary? = null): JsonElement =
+    if (skill == null) JsonPrimitive(text) else buildJsonObject {
+        put("text", text)
+        put("skill", skillCall(skill.name, text))
+    }

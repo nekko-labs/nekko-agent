@@ -90,7 +90,7 @@ import type {
   ModelFolderReport,
   SkillDef,
 } from '@nekko-agent/shared';
-import { appearanceOf, touchesAppearance, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, SKILLS, sameFolderPath } from '@nekko-agent/shared';
+import { appearanceOf, touchesAppearance, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, runnableSkills, SKILLS, sameFolderPath } from '@nekko-agent/shared';
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
@@ -499,6 +499,8 @@ export interface Host {
   /** Skills marketplace installs. */
   listInstalledSkills(): InstalledSkillRecord[];
   listExternalSkills(): SkillDef[];
+  /** Every skill a chat can run by name, with its template (`skills:runnable`). */
+  listRunnableSkills(): import('@nekko-agent/shared').RunnableSkill[];
   skillTargets(): InstallTargetInfo[];
   installSkill(
     skillId: string,
@@ -630,6 +632,13 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     const call = daemonCall();
     if (call && daemonOwns('voice')) void call('voice:stop').catch(() => undefined);
   };
+  /** Skills imported from other tools' SKILL.md folders, minus Nekko's own exports and taken names. */
+  const externalSkills = () =>
+    discoverExternalSkills({
+      projectRoots: getSettings().workspaces.map((w) => w.path),
+      exclude: readInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
+      reserved: [...SKILLS, ...listInstalledSkillDefs()].map((s) => s.name),
+    });
   const events = new EventEmitter();
   const activeChats = new Map<string, Promise<void>>();
   const interrupting = new Set<string>();
@@ -1266,12 +1275,8 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     resolveDesignNote,
     generateDesign,
     listInstalledSkills,
-    listExternalSkills: () =>
-      discoverExternalSkills({
-        projectRoots: getSettings().workspaces.map((w) => w.path),
-        exclude: readInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
-        reserved: [...SKILLS, ...listInstalledSkillDefs()].map((s) => s.name),
-      }),
+    listExternalSkills: externalSkills,
+    listRunnableSkills: () => runnableSkills(SKILLS, listInstalledSkillDefs(), externalSkills()),
     skillTargets,
     installSkill,
     uninstallSkill,

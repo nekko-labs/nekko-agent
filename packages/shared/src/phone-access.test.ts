@@ -164,6 +164,54 @@ describe('chat options from a phone', () => {
   });
 });
 
+describe('skills from a phone', () => {
+  const RUNNABLE = [
+    { name: 'review', description: 'Review the code', category: 'Code quality', source: 'builtin', template: 'Review this carefully.' },
+    { name: 'tidy', description: 'Tidy up', category: 'Imported', source: 'claude', template: 'Use the "tidy" skill below. Its own files are in /Users/me/.claude/skills/tidy.\n\nSteps' },
+  ];
+  const host = () =>
+    vi.fn((channel: string, args: unknown[]) => (channel === 'skills:runnable' ? RUNNABLE : { ok: channel, args }));
+
+  it('lists the skills without templates or folders', async () => {
+    const view = (await callFromPhone(host(), 'skills:runnable', [])) as Array<Record<string, unknown>>;
+    expect(view).toEqual([
+      { name: 'review', description: 'Review the code', category: 'Code quality', source: 'builtin' },
+      { name: 'tidy', description: 'Tidy up', category: 'Imported', source: 'claude' },
+    ]);
+    expect(JSON.stringify(view)).not.toContain('/Users/me');
+    expect(redactPhoneResult('skills:runnable', null)).toEqual([]);
+  });
+
+  it('expands a skill turn on the computer, replacing what the phone sent as text', async () => {
+    const dispatch = host();
+    await callFromPhone(dispatch, 'chat:send', [
+      { sessionId: 's1', providerId: 'p', modelId: 'm', text: 'ignored', skill: { name: 'review', input: ' this file ' } },
+    ]);
+    expect(dispatch).toHaveBeenLastCalledWith('chat:send', [
+      { sessionId: 's1', providerId: 'p', modelId: 'm', text: 'Review this carefully.\n\nthis file', skill: { name: 'review', input: ' this file ' } },
+    ]);
+  });
+
+  it('expands a queued skill turn the same way', async () => {
+    const dispatch = host();
+    await callFromPhone(dispatch, 'chat:queue', ['s1', { text: '', skill: { name: 'tidy', input: '' } }]);
+    expect(dispatch).toHaveBeenLastCalledWith('chat:queue', ['s1', { text: RUNNABLE[1].template, skill: { name: 'tidy', input: '' } }]);
+    await callFromPhone(dispatch, 'chat:queue', ['s1', 'plain']);
+    expect(dispatch).toHaveBeenLastCalledWith('chat:queue', ['s1', 'plain']);
+  });
+
+  it('refuses an unknown or malformed skill, and queue fields a phone may not set', async () => {
+    const dispatch = host();
+    await expect(callFromPhone(dispatch, 'chat:send', [{ sessionId: 's1', text: 'x', skill: { name: 'goal', input: 'x' } }])).rejects.toThrow('skill-unknown');
+    expect(dispatch).not.toHaveBeenCalledWith('chat:send', expect.anything());
+    expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: '', skill: 'review' }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: '', skill: { name: 'review', input: 1 } }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: '', skill: { name: 'review', template: 'x' } }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:queue', ['s', { text: 'x', attachedPaths: ['/etc'] }]))).toBe('option-denied');
+    expect(code(() => screenPhoneCall('chat:queue', ['s', 5]))).toBe('value-invalid');
+  });
+});
+
 describe('a chat as a phone receives it (session:get)', () => {
   const msg = (i: number, extra: Record<string, unknown> = {}) => ({ id: `m${i}`, role: 'assistant', content: `reply ${i}`, ...extra });
 

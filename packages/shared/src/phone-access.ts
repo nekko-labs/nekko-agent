@@ -13,6 +13,8 @@
  * phone's own app lock is not a boundary; this is.
  */
 
+import { skillTurnText } from './skills.js';
+
 /**
  * Channels a paired phone may call. Built from what the phone clients send
  * (apps/mobile/src/lib/protocol.ts, apps/android/protocol Wire.kt `Channels`,
@@ -37,6 +39,7 @@ export const PHONE_CHANNELS = [
   'sessions:summaries',
   'settings:get',
   'settings:update',
+  'skills:runnable',
   'tool:approve',
   'voice:status',
   'voice:transcribe',
@@ -137,6 +140,16 @@ export const PHONE_CHAT_SEND_KEYS = [
 ] as const;
 
 /**
+ * What a phone receives of each runnable skill (`skills:runnable`): enough for
+ * its `/` menu. Never the template, which holds the skill's instructions and,
+ * for skills imported from other tools, folder paths on this computer.
+ */
+export const PHONE_SKILL_VIEW = ['category', 'description', 'name', 'source'] as const;
+
+/** `chat:queue` payload fields a phone may set (a plain string is text). */
+export const PHONE_QUEUE_KEYS = ['images', 'skill', 'text'] as const;
+
+/**
  * Chat modes a phone may choose, for new chats or for one chat. YOLO is
  * included on purpose: the owner decided a paired phone may pick it.
  */
@@ -171,7 +184,7 @@ export function phoneFrameTooLarge(bytes: number): string {
   return `This reply is too large to send to a phone (${mb} MB). Open it on the computer.`;
 }
 
-export type PhoneAccessCode = 'channel-denied' | 'setting-denied' | 'option-denied' | 'value-invalid';
+export type PhoneAccessCode = 'channel-denied' | 'setting-denied' | 'option-denied' | 'value-invalid' | 'skill-unknown';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
 export class PhoneAccessError extends Error {
@@ -267,7 +280,10 @@ export function checkPhoneSettingsPatch(patch: unknown): Array<[string, unknown]
  * as the checked `settingsPatch`, which `phoneSettingsUpdate` turns into the
  * patch to save.
  */
-export function screenPhoneCall(channel: string, args: unknown[]): { settingsPatch?: Array<[string, unknown]> } {
+export function screenPhoneCall(
+  channel: string,
+  args: unknown[],
+): { settingsPatch?: Array<[string, unknown]>; skill?: { name: string; input: string } } {
   if (!phoneChannelAllowed(channel)) throw new PhoneAccessError('channel-denied', channel);
   switch (channel) {
     case 'settings:update':
@@ -287,11 +303,48 @@ export function screenPhoneCall(channel: string, args: unknown[]): { settingsPat
       for (const key of Object.keys(opts)) {
         if (!(PHONE_CHAT_SEND_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
       }
-      return {};
+      return own(opts, 'skill') ? { skill: phoneSkill(opts.skill) } : {};
+    }
+    case 'chat:queue': {
+      const item = args[1];
+      if (typeof item === 'string') return {};
+      if (!isObj(item)) throw new PhoneAccessError('value-invalid', 'chat:queue prompt');
+      for (const key of Object.keys(item)) {
+        if (!(PHONE_QUEUE_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
+      }
+      return own(item, 'skill') ? { skill: phoneSkill(item.skill) } : {};
     }
     default:
       return {};
   }
+}
+
+/** A `{ name, input }` skill invocation from a phone, or why not. */
+function phoneSkill(value: unknown): { name: string; input: string } {
+  if (!isObj(value) || typeof value.name !== 'string' || !value.name || (value.input !== undefined && typeof value.input !== 'string')) {
+    throw new PhoneAccessError('value-invalid', 'skill');
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== 'name' && key !== 'input') throw new PhoneAccessError('value-invalid', 'skill');
+  }
+  return { name: value.name, input: typeof value.input === 'string' ? value.input : '' };
+}
+
+/**
+ * A phone's skill turn as the desktop composer sends it: the computer looks
+ * the skill up by name in its own runnable list and sends its template plus
+ * the user's input, so the template never has to reach the phone. The phone's
+ * `text` is replaced; an unknown skill is refused rather than sent bare.
+ */
+function expandPhoneSkill(
+  skill: { name: string; input: string },
+  runnable: unknown,
+  base: Obj,
+): Obj {
+  const list = Array.isArray(runnable) ? runnable : [];
+  const found = list.find((s) => isObj(s) && s.name === skill.name && typeof s.template === 'string') as Obj | undefined;
+  if (!found) throw new PhoneAccessError('skill-unknown', skill.name);
+  return { ...base, text: skillTurnText(found.template as string, skill.input), skill };
 }
 
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -329,6 +382,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return pick(result, PHONE_SETTINGS_VIEW);
     case 'providers:list':
       return Array.isArray(result) ? result.map((p) => pick(p, PHONE_PROVIDER_VIEW)) : [];
+    case 'skills:runnable':
+      return Array.isArray(result) ? result.map((s) => pick(s, PHONE_SKILL_VIEW)) : [];
     case 'session:get':
       return phoneSessionView(result);
     default:
@@ -408,12 +463,18 @@ export async function callFromPhone(
   channel: string,
   args: unknown[],
 ): Promise<unknown> {
-  const { settingsPatch } = screenPhoneCall(channel, args);
+  const { settingsPatch, skill } = screenPhoneCall(channel, args);
   let callArgs = args;
   if (settingsPatch) {
     const nested = settingsPatch.some(([path]) => path.includes('.'));
     const current = nested ? await dispatch('settings:get', []) : undefined;
     callArgs = [phoneSettingsUpdate(settingsPatch, current)];
+  }
+  if (skill) {
+    const runnable = await dispatch('skills:runnable', []);
+    callArgs = channel === 'chat:send'
+      ? [expandPhoneSkill(skill, runnable, args[0] as Obj), ...args.slice(1)]
+      : [args[0], expandPhoneSkill(skill, runnable, args[1] as Obj), ...args.slice(2)];
   }
   return redactPhoneResult(channel, await dispatch(channel, callArgs));
 }
@@ -426,6 +487,8 @@ export function phoneAccessPolicy() {
     settingsKeys: [...PHONE_SETTINGS_KEYS],
     settingsView: [...PHONE_SETTINGS_VIEW],
     providerView: [...PHONE_PROVIDER_VIEW],
+    skillView: [...PHONE_SKILL_VIEW],
+    queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
     chatSendKeys: [...PHONE_CHAT_SEND_KEYS],
     chatModes: [...PHONE_CHAT_MODES],

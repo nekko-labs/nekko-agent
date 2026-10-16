@@ -15,7 +15,9 @@ import com.nekko.protocol.PendingInput
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.Session
+import com.nekko.protocol.SkillSummary
 import com.nekko.protocol.Transcript
+import com.nekko.protocol.queuePrompt
 import com.nekko.protocol.sendOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +39,8 @@ data class ChatState(
     val session: Session? = null,
     val turn: LiveTurn = LiveTurn(),
     val loadError: String? = null,
+    /** The computer's runnable skills, re-read with the chat; empty until loaded or on an older computer. */
+    val skills: List<SkillSummary> = emptyList(),
 )
 
 /** Connection facts the chat screen reads from the computers store. */
@@ -60,6 +64,7 @@ data class ChatUi(
     val blocked: String?,
     val queued: List<String>,
     val rate: Double?,
+    val skills: List<SkillSummary> = emptyList(),
     /** Older messages the computer kept back from the phone; they stay on the computer. */
     val omittedMessages: Int = 0,
 )
@@ -96,6 +101,7 @@ class ChatController(
                 }
                 s.await() to p.await()
             }
+            scope.launch { loadSkills() }
             val session = Session.from(raw)
             if (session == null) {
                 _state.update { it.copy(loadError = "This chat was deleted on your computer.") }
@@ -124,6 +130,22 @@ class ChatController(
         }
     }
 
+    /**
+     * The computer's skills, read again each time the chat loads, so what was
+     * installed or removed there shows up here. A computer that doesn't serve
+     * them (older version) or a failed read keeps the list it had.
+     */
+    suspend fun loadSkills() {
+        try {
+            val list = SkillSummary.list(caller.call(Channels.SKILLS_RUNNABLE))
+            _state.update { it.copy(skills = list) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Keep the previous list; the menu just offers what it last knew.
+        }
+    }
+
     /** Fold one event; returns true when the caller should [reload]. */
     fun onEvent(e: AgentEvent): Boolean {
         if (e.sessionId != sessionId) return false
@@ -133,10 +155,10 @@ class ChatController(
     }
 
     /** Throws when the prompt couldn't be sent, so the composer can keep the text. */
-    suspend fun send(text: String) {
+    suspend fun send(text: String, skill: SkillSummary? = null) {
         if (_state.value.turn.running) {
             // Same as the desktop: a prompt sent mid-run waits its turn.
-            val s = Session.from(caller.call(Channels.CHAT_QUEUE, JsonPrimitive(sessionId), JsonPrimitive(text)))
+            val s = Session.from(caller.call(Channels.CHAT_QUEUE, JsonPrimitive(sessionId), queuePrompt(text, skill)))
             if (s != null) _state.update { it.copy(session = s) }
             return
         }
@@ -144,12 +166,13 @@ class ChatController(
         if (providerId == null || modelId == null) throw IllegalStateException("Choose a default model on your computer first.")
         val at = now()
         _state.update {
-            it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-$at", text, at))))
+            val shown = if (skill == null) text else "/${skill.name} $text".trim()
+            it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-$at", shown, at))))
         }
         // Resolves only when the whole turn ends; the events carry the progress.
         scope.launch {
             try {
-                caller.callWithTimeout(TURN_TIMEOUT_MS, Channels.CHAT_SEND, sendOptions(sessionId, providerId, modelId, text))
+                caller.callWithTimeout(TURN_TIMEOUT_MS, Channels.CHAT_SEND, sendOptions(sessionId, providerId, modelId, text, skill))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -215,6 +238,7 @@ class ChatController(
                 blocked = blocked,
                 queued = state.session?.queue ?: emptyList(),
                 rate = turn.rate,
+                skills = state.skills,
                 omittedMessages = state.session?.omittedMessages ?: 0,
             )
         }

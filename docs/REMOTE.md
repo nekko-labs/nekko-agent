@@ -80,6 +80,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > which on many phones sends the audio to Google. **Settings → Dictation** on the phone lets you use
 > only the computer, only the phone, or turn the microphone off.
 >
+> **Skills** (Android): type `/` at the start of a chat's message box to see the skills on your
+> computer: the built-in ones, those you installed from the Marketplace for Nekko Agent, and the
+> ones Nekko Agent found in your Claude Code, Codex or Gemini skill folders. Pick one, add details
+> if you like, and send. Nothing is copied to the phone: the list is read from the computer each
+> time you open a chat, so a skill you install or remove there shows up on the phone right away,
+> and the computer adds the skill's instructions itself, so they never leave it. `/goal` is not
+> offered on the phone, and skills are installed and removed on the computer.
+>
 > **Long chats on the phone**: the phone gets the newest 300 messages of a chat, without the
 > screenshots inside tool results and with long tool output shortened to 4,000 characters, so even
 > a very long agent run opens in seconds. The chat says how many earlier messages, characters and
