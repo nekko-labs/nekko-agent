@@ -57,13 +57,15 @@ function Fixture() {
   const [route, setRoute] = useState<string>('picker');
   const [epoch, setEpoch] = useState(0);
   const [offline, setOffline] = useState(false);
-  const session: any = { ...sessions[0], offline, disabledTools: [] };
-  Object.assign(window, { evidence: { route: (r: string) => { setRoute(r); setEpoch((e) => e + 1); }, setOffline, session, engineRows: ENGINE_ROWS, state: () => useStore.getState() } });
+  const [disabledTools, setDisabledTools] = useState<string[]>([]);
+  const [sandbox, setSandbox] = useState(false);
+  const session: any = { ...sessions[0], offline, disabledTools, executionMode: sandbox ? 'sandbox' : 'unified' };
+  Object.assign(window, { evidence: { route: (r: string) => { setRoute(r); setEpoch((e) => e + 1); }, setOffline, setSandbox, session, engineRows: ENGINE_ROWS, state: () => useStore.getState() } });
   const ArtifactsView = (window as any).__ArtifactsView;
   return (
     <main key={epoch} data-route={route} style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }} className="bg-paper text-ink">
       {route === 'picker' && <div style={{ width: 460, height: 560, padding: 16 }}><ModelPicker expanded open providers={[engine, claude] as any} providerId="nekko-engine" modelId={rows(true)[0].id} models={ENGINE_ROWS} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} /></div>}
-      {route === 'tools' && <div style={{ padding: 16, paddingTop: 520, display: 'flex', justifyContent: 'flex-start' }}><div data-tools-anchor style={{ marginLeft: 280 }}><ToolsMenu session={session} onChange={() => {}} /></div></div>}
+      {route === 'tools' && <div style={{ padding: 16, paddingTop: 520, display: 'flex', justifyContent: 'flex-start' }}><div data-tools-anchor style={{ marginLeft: 'min(280px, 45vw)' }}><ToolsMenu session={session} onChange={(s) => setDisabledTools(s?.disabledTools ?? [])} /></div></div>}
       {route === 'wall' && <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}><CommandCenterView /></div>}
       {route === 'artifacts' && (ArtifactsView ? <ArtifactsView /> : <p data-no-artifacts style={{ padding: 24 }}>No Artifacts tab in this revision.</p>)}
     </main>

@@ -63,6 +63,17 @@ describe('repairInterruptedHistory', () => {
     expect(history.some((m) => m.toolResult?.output === 'the expensive result')).toBe(true);
   });
 
+  it('moves delayed real results before follow-ups and fills only genuinely missing calls', () => {
+    const result = toolResult('c1', 'Child completed, files saved');
+    const history = [user('go'), assistant('', [call('c1'), call('c2')]), user('are you stuck?'), assistant('checking'), result];
+    expect(repairInterruptedHistory(history)).toBe(1);
+    expect(history.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'tool', 'user', 'assistant']);
+    expect(history[3]).toBe(result);
+    const before = JSON.stringify(history);
+    expect(repairInterruptedHistory(history)).toBe(0);
+    expect(JSON.stringify(history)).toBe(before);
+  });
+
   it('handles an empty history', () => {
     const history: ChatMessage[] = [];
     expect(repairInterruptedHistory(history)).toBe(0);

@@ -233,7 +233,7 @@ list dirs, run shell commands).
 - Assistant messages render **markdown and code**; every **tool call** the model
   makes shows up as a card so you can see exactly what it did.
 - Streaming is live; hit **Stop** to abort a turn.
-- **Tools** (in the agent window's footer) lists the agent's tools by category: File system, Shell & processes, Desktop, Online, Agent and MCP servers. Turn single tools or a whole group on or off for this chat.
+- **Tools** shows a friendly action label, the literal tool name and a full wrapping description. Search matches labels, names and descriptions. Use the checkboxes to enable tools; keyboard focus and Space activation are supported. The menu (in the agent window's footer) lists the agent's tools by category: File system, Shell & processes, Desktop, Online, Agent and MCP servers. Turn single tools or a whole group on or off for this chat.
 - The **globe** beside it blocks the internet for this chat (local models only). Online tools (fetching pages, the browser), MCP servers, connectors and sub-agents are turned off; file, shell and desktop tools keep working. Shell commands are not network-sandboxed, so a command can still reach the network.
 - In the model picker, a local model shows its short name with the file it lives in beneath.
 - Answers to the agent's clarification questions stay visible in the chat as Q/A replies, including when reopening an existing conversation. Selected choices and your typed note remain visible; skipped questions say they were not answered. These reply rows do not create another prompt or offer edit/rewind actions.
@@ -286,6 +286,18 @@ Drag the line above the composer to resize it. It snaps to two points: its
 default size and full size. Release near either one and it lands exactly there.
 Snapping back to the default clears the saved height. Double-click the line to
 reset it any time.
+
+### Continue after an interrupted tool
+
+After Stop or an interrupted delegation, either type a follow-up or use Resume.
+Both paths repair incomplete tool-result history before the next model request.
+Saved real results are retained; missing results are marked interrupted rather
+than silently rerunning the tool. A typed follow-up stays your own saved message.
+While a reply is running, queue your follow-up or interrupt the current reply;
+a second direct send is rejected without discarding the queue.
+
+Delegation still waits synchronously for the child. Parent-callable child status
+and cancellation while waiting are planned, not available through this repair.
 
 ### Follow delegated work without opening every detail
 

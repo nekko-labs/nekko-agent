@@ -511,11 +511,12 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
 
     async fn run(&mut self) {
         let mut resume_extra = Vec::new();
-        if self.opts.resume {
-            repair_interrupted_history(self.opts.history);
-            if self.opts.history.last().and_then(|m| m.get("role")).and_then(Value::as_str) == Some("assistant") {
-                resume_extra.push(user_nudge(RESUME_PROMPT));
-            }
+        // A normal follow-up after Stop needs the same valid history as Resume.
+        repair_interrupted_history(self.opts.history);
+        if self.opts.resume
+            && self.opts.history.last().and_then(|m| m.get("role")).and_then(Value::as_str) == Some("assistant")
+        {
+            resume_extra.push(user_nudge(RESUME_PROMPT));
         }
         let nudge = user_nudge(EMPTY_NUDGE);
         // Loop detection (progress.rs): the first trip nudges, the second wraps up.

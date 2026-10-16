@@ -34,13 +34,6 @@ fn tool_call_ids(m: &Value) -> Vec<String> {
 /// Fill in results for tool calls that never ran. Mutates `history` in place
 /// and returns how many gaps were filled.
 pub fn repair_interrupted_history(history: &mut Vec<Value>) -> usize {
-    let mut answered: HashSet<String> = history
-        .iter()
-        .filter(|m| m.get("role").and_then(Value::as_str) == Some("tool"))
-        .filter_map(|m| {
-            m.get("toolResult").and_then(|r| r.get("toolCallId")).and_then(Value::as_str).map(str::to_string)
-        })
-        .collect();
     let mut filled = 0;
     let mut i = 0;
     while i < history.len() {
@@ -49,6 +42,36 @@ pub fn repair_interrupted_history(history: &mut Vec<Value>) -> usize {
             i += 1;
             continue;
         }
+        let requested: HashSet<String> = tool_call_ids(msg).into_iter().collect();
+        let mut end = i + 1;
+        while history.get(end).and_then(|m| m.get("role")).and_then(Value::as_str) == Some("tool") {
+            end += 1;
+        }
+        let immediate: HashSet<&str> = history[i + 1..end]
+            .iter()
+            .filter_map(|m| m.pointer("/toolResult/toolCallId").and_then(Value::as_str))
+            .collect();
+        if requested.iter().all(|id| immediate.contains(id.as_str())) {
+            i += 1;
+            continue;
+        }
+        // Preserve delayed real results, placing them before intervening turns.
+        let mut j = end;
+        while j < history.len() {
+            let result = &history[j];
+            let id = result.pointer("/toolResult/toolCallId").and_then(Value::as_str);
+            if result["role"] == "tool" && id.is_some_and(|id| requested.contains(id)) {
+                let result = history.remove(j);
+                history.insert(end, result);
+                end += 1;
+            }
+            j += 1;
+        }
+        let answered: HashSet<String> = history[i + 1..end]
+            .iter()
+            .filter_map(|m| m.pointer("/toolResult/toolCallId").and_then(Value::as_str).map(str::to_string))
+            .collect();
+        let msg = &history[i];
         let missing: Vec<String> = tool_call_ids(msg).into_iter().filter(|id| !answered.contains(id)).collect();
         if missing.is_empty() {
             i += 1;
@@ -74,7 +97,6 @@ pub fn repair_interrupted_history(history: &mut Vec<Value>) -> usize {
             .collect();
         let n = patches.len();
         history.splice(i + 1..i + 1, patches);
-        answered.extend(missing);
         filled += n;
         i += n + 1;
     }

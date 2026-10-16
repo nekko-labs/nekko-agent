@@ -24,6 +24,23 @@ function scriptedProvider(rounds: ProviderChunk[][]): Provider {
 }
 
 describe('runAgent', () => {
+  it('repairs interrupted tool history for a normal follow-up without a resume nudge', async () => {
+    const history: ChatMessage[] = [
+      msg('user', 'delegate'),
+      { ...msg('assistant', ''), toolCalls: [{ id: 'child', name: 'spawn_agent', input: {} }] },
+      msg('user', 'continue directly'),
+    ];
+    const provider = scriptedProvider([[{ type: 'text', delta: 'continuing' }, { type: 'done' }]]);
+    const chat = vi.spyOn(provider, 'chat');
+    const executeTool = vi.fn();
+    for await (const _ of runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool })) { /* drain */ }
+    const sent = chat.mock.calls[0][0].messages;
+    expect(sent.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'user']);
+    expect(sent[2].toolResult).toMatchObject({ toolCallId: 'child', isError: true });
+    expect(sent.at(-1)?.content).toBe('continue directly');
+    expect(executeTool).not.toHaveBeenCalled();
+  });
+
   it.each([
     { cacheReadTokens: 30 },
     { cacheWriteTokens: 20 },
