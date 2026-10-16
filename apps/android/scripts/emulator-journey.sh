@@ -29,7 +29,7 @@ for theme in light dark; do
   port="${NEKKO_ITEST_RELAY##*:}"
   adb reverse "tcp:$port" "tcp:$port"
   adb shell pm clear "$pkg" >/dev/null || true
-  result="$(adb shell "am instrument -w -e class $pkg.LiveRelayTest -e nekkoTheme $theme -e nekkoLink '$NEKKO_ITEST_LINK' $pkg.test/androidx.test.runner.AndroidJUnitRunner" || true)"
+  result="$(adb shell "am instrument -w -e class com.nekko.android.LiveRelayTest -e nekkoTheme $theme -e nekkoLink '$NEKKO_ITEST_LINK' $pkg.test/androidx.test.runner.AndroidJUnitRunner" || true)"
   echo "$result"
   mkdir -p "$out/$theme"
   adb pull "/sdcard/Android/data/$pkg/files/evidence/." "$out/$theme/" >/dev/null 2>&1 || echo "no screenshots for $theme"
