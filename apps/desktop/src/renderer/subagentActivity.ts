@@ -16,7 +16,21 @@ export function startSubagentActivity(id: string): void {
 
 /** Local, plain-text, one-sentence excerpts. Never render prompts as markup. */
 export function compactSentence(text: string, limit = 140): string {
-  const clean = text.slice(0, 2000).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Only the visible prefix and one lookahead character can affect the excerpt.
+  // Avoid rescanning the full streaming tail on every token.
+  let clean = '';
+  let space = false;
+  for (let i = 0, end = Math.min(text.length, 2000); i < end; i++) {
+    const char = text[i];
+    if (char <= ' ' || char === '\u007f' || (char > '\u007f' && /\s/.test(char))) {
+      if (clean) space = true;
+      continue;
+    }
+    if (space) clean += ' ';
+    clean += char;
+    space = false;
+    if (clean.length > limit) break;
+  }
   const sentence = clean.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? clean;
   return sentence.length > limit ? `${sentence.slice(0, limit - 1).trimEnd()}…` : sentence;
 }

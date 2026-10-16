@@ -51,6 +51,19 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### Bound streaming activity excerpt scans (2026-10-16)
+Area: renderer
+Result: mixed (excerpt microbenchmark improvement, no whole-frame improvement established)
+Conditions: Windows, Ryzen 9 9950X3D, Node 24.1.0; microbenchmark 100,000 long-text calls per lap after warmup, five laps. Browser: headless Chrome 153.0.8010.12, TS host, no GPU, 1440x1000, 1,000-message chat, 300 tokens/s, isolated production web builds of base d9c2f11a and optimized source. One unprofiled six-second trace and one profiled three-second diagnostic per build.
+
+| Metric | Before | After |
+|---|---|---|
+| Excerpt benchmark, ms per 100,000 calls (five laps) | 557.13 / 567.28 / 560.85 / 552.2 / 583.76 | 106.51 / 97.79 / 94.12 / 93.13 / 93.37 |
+| Streaming frame p95, six seconds | 5.2 ms (305 frames) | 5.6 ms (329 frames) |
+| Streaming frame p95, three seconds with CPU profiling | 6.3 ms (148 frames) | 6.5 ms (152 frames) |
+
+Why: scan only enough normalized text for the excerpt plus lookahead, instead of normalizing the entire 2,000-character tail per text event. Outputs match the previous algorithm in 10,000 seeded differential cases. Saved CI profiles from #594 show compactSentence as the top named application self-time, but this local frame comparison does not establish a frame win. No budget changed; #544 remains open. Source: `scripts/bench-compact-sentence.mjs`, local `.shots/perf-head`, `.shots/profile-head`, and matching `stream-activity-base` reports/traces. This behavior-preserving refactor has no visual change and does not change SPEC requirements.
+
 ### CI gates for streaming frame and cold-switch frame raised ~4% (2026-10-15)
 Area: perf harness
 Result: measurement fix (budget decision, no code speed change)
