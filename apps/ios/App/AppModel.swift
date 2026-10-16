@@ -3,6 +3,7 @@ import NekkoKit
 import NekkoProtocol
 import Observation
 import UIKit
+import WidgetKit
 
 /// The app's root object: the computers store plus the iOS glue around it
 /// (Keychain, lifecycle, network changes, haptics, notifications, Live
@@ -64,6 +65,7 @@ final class AppModel {
             Task { await self.store.registerActivity(sessionId: sid, token: token) }
         }
         _ = store.subscribe { [weak self] e in self?.onEvent(e) }
+        watchWidget()
         network.onChange = { [weak self] in Task { @MainActor in self?.store.reconnect() } }
         network.start()
         store.load(preferredId: prefs.defaultComputer)
@@ -91,6 +93,25 @@ final class AppModel {
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid
+    }
+
+    // MARK: Home Screen widget
+
+    /// Keeps the widget's snapshot (counts only) in step with the store.
+    private func watchWidget() {
+        withObservationTracking {
+            publishWidget()
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.watchWidget() }
+        }
+    }
+
+    private func publishWidget() {
+        let snapshot = StatusSnapshot(
+            computer: store.active?.name, online: store.conn == .online,
+            needsYou: store.needsYouCount, running: store.runningCount, at: .now
+        )
+        if snapshot.save() { WidgetCenter.shared.reloadTimelines(ofKind: StatusSnapshot.kind) }
     }
 
     // MARK: Events → haptics, notifications, Live Activities

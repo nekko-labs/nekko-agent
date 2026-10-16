@@ -7,6 +7,42 @@ import WidgetKit
 struct NekkoWidgets: WidgetBundle {
     var body: some Widget {
         AgentRunLiveActivity()
+        StatusWidget()
+    }
+}
+
+/// Home Screen and Lock Screen: how many chats need you, from the snapshot the
+/// app keeps in the App Group. It is only as fresh as the app's last look.
+struct StatusWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: StatusSnapshot.kind, provider: StatusProvider()) { entry in
+            StatusWidgetView(snapshot: entry.snapshot, family: entry.family)
+                .containerBackground(.fill.tertiary, for: .widget)
+        }
+        .configurationDisplayName("Needs you")
+        .description("Chats on your computer that are waiting on you or working.")
+        .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular])
+    }
+}
+
+struct StatusEntry: TimelineEntry {
+    let date: Date
+    let snapshot: StatusSnapshot
+    let family: WidgetFamily
+}
+
+struct StatusProvider: TimelineProvider {
+    func placeholder(in context: Context) -> StatusEntry {
+        StatusEntry(date: .now, snapshot: StatusSnapshot(computer: "Mac", online: true, needsYou: 1, running: 2, at: .now), family: context.family)
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (StatusEntry) -> Void) {
+        completion(context.isPreview ? placeholder(in: context) : StatusEntry(date: .now, snapshot: .load(), family: context.family))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<StatusEntry>) -> Void) {
+        // The app reloads this timeline when the counts change; nothing to poll.
+        completion(Timeline(entries: [StatusEntry(date: .now, snapshot: .load(), family: context.family)], policy: .never))
     }
 }
 
