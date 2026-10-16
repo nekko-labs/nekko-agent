@@ -11,6 +11,7 @@ import { hasAppChrome } from './chrome.js';
 import { TitleBar } from './components/TitleBar.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { BrandMark } from './components/BrandMark.js';
+import { RailBackdrop } from './components/RailBackdrop.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
@@ -256,10 +257,11 @@ export function App() {
             {/* Left rail: icon-only at rest, expands over the content on hover to
             reveal each destination's label. Hidden on phones (hover is useless on
             touch), where the bottom tab bar below takes over. */}
-        <nav className="relative z-40 hidden w-[52px] shrink-0 md:block">
-          <div className="rail absolute inset-y-0 left-0 flex flex-col overflow-hidden px-1.5 py-4">
+        <nav className="pointer-events-none relative z-40 hidden w-[52px] shrink-0 md:block">
+          <div className="rail absolute inset-y-0 left-0 flex flex-col py-4">
             <div className="rail-space-before" aria-hidden="true" />
             <div className="rail-group">
+             <RailBackdrop />
             <div className="rail-destinations flex min-h-0 flex-col gap-[7px] overflow-y-auto overflow-x-hidden">
             {/* The brand mark heads the rail. The wordmark joins it only where
                 there is no title bar to carry it (web and phone builds), so the
