@@ -42,6 +42,9 @@ struct NewChatView: View {
                     ForEach(store.workspaces) { w in Text(w.name).tag(Optional(w.id)) }
                 } label: { Text("Folder").foregroundStyle(palette.ink) }
                 .pickerStyle(.navigationLink)
+                // The selected value is drawn in the secondary style: inkSoft
+                // (about 7:1) rather than the system grey, which sat just under 4.5:1.
+                .foregroundStyle(palette.ink, palette.inkSoft)
             } header: {
                 SectionHeader("Project")
             }
@@ -51,6 +54,9 @@ struct NewChatView: View {
                     ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in Text(modeName(m)).tag(Optional(m)) }
                 } label: { Text("Tools").foregroundStyle(palette.ink) }
                 .pickerStyle(.navigationLink)
+                // The selected value is drawn in the secondary style: inkSoft
+                // (about 7:1) rather than the system grey, which sat just under 4.5:1.
+                .foregroundStyle(palette.ink, palette.inkSoft)
             } footer: {
                 Text("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Its default is \(modeName(store.pcSettings.effectiveMode)).")
                     .foregroundStyle(palette.inkSoft)
