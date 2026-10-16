@@ -16,6 +16,8 @@ struct RootView: View {
     @Environment(\.scenePhase) private var phase
     @Environment(\.palette) private var palette
     @State private var path: [Route] = []
+    @State private var selected: Route?
+    @Environment(\.horizontalSizeClass) private var size
 
     var body: some View {
         ZStack {
@@ -29,7 +31,7 @@ struct RootView: View {
         .onChange(of: app.lock.locked) { _, locked in if !locked { app.start() } }
         .onChange(of: app.openChat) { _, id in
             guard let id else { return }
-            path = [.chat(id)]
+            open(.chat(id))
             app.openChat = nil
         }
         .sheet(item: Binding(get: { app.pendingLink.map(LinkBox.init) }, set: { app.pendingLink = $0?.link })) { box in
@@ -42,19 +44,47 @@ struct RootView: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(palette.paper)
         } else if store.computers.isEmpty {
             NavigationStack { WelcomeView() }
+        } else if size == .regular {
+            // iPad and large landscape: chats in the sidebar, the selected one beside it.
+            NavigationSplitView {
+                ChatsView(path: $path, selection: $selected)
+            } detail: {
+                NavigationStack(path: $path) {
+                    Group {
+                        if let selected { destination(selected) } else {
+                            ContentUnavailableView("Pick a chat", systemImage: "bubble.left.and.text.bubble.right",
+                                                   description: Text("Or start a new one on \(store.active?.name ?? "your computer")."))
+                        }
+                    }
+                    .navigationDestination(for: Route.self) { destination($0) }
+                }
+                .id(selected)
+            }
         } else {
             NavigationStack(path: $path) {
                 ChatsView(path: $path)
-                    .navigationDestination(for: Route.self) { route in
-                        switch route {
-                        case .chat(let id): ChatView(sessionId: id)
-                        case .newChat: NewChatView(path: $path)
-                        case .computers: ComputersView()
-                        case .settings: SettingsView()
-                        case .pair: PairView { path.removeAll() }
-                        }
-                    }
+                    .navigationDestination(for: Route.self) { destination($0) }
             }
+        }
+    }
+
+    @ViewBuilder private func destination(_ route: Route) -> some View {
+        switch route {
+        case .chat(let id): ChatView(sessionId: id)
+        case .newChat: NewChatView(path: $path, opened: { id in open(.chat(id)) })
+        case .computers: ComputersView()
+        case .settings: SettingsView()
+        case .pair: PairView { path.removeAll() }
+        }
+    }
+
+    /// Show a route: in the split view's detail on iPad, pushed on iPhone.
+    private func open(_ r: Route) {
+        if size == .regular {
+            path = []
+            selected = r
+        } else {
+            path = [r]
         }
     }
 }

@@ -7,6 +7,8 @@ import SwiftUI
 /// complete / delete, and the computer switcher in the title.
 struct ChatsView: View {
     @Binding var path: [Route]
+    /// iPad (regular width): the split view's selected chat. Nil on iPhone, where rows push.
+    var selection: Binding<Route?>? = nil
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -18,7 +20,43 @@ struct ChatsView: View {
     @State private var actionError: String?
 
     var body: some View {
-        List {
+        Group {
+            if let selection {
+                List(selection: selection) { rows }
+            } else {
+                List { rows }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(palette.paper)
+        .searchable(text: $query, prompt: "Search chats")
+        .refreshable { await store.refresh() }
+        .navigationTitle(store.active?.name ?? "Chats")
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path) }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { open(.newChat) } label: { Image(systemName: "square.and.pencil") }
+                    .accessibilityLabel("New chat")
+                    .disabled(store.conn != .online)
+            }
+        }
+        .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
+        .modifier(dialogs)
+    }
+
+    private func open(_ r: Route) {
+        if let selection { selection.wrappedValue = r } else { path.append(r) }
+    }
+
+    private var dialogs: ChatDialogs {
+        ChatDialogs(renaming: $renaming, renameText: $renameText, confirmDelete: $confirmDelete, actionError: $actionError,
+                    rename: { s in act { try await store.renameChat(s.id, to: renameText) } },
+                    delete: { s in act { try await store.deleteChat(s.id) } },
+                    computer: store.active?.name ?? "your computer")
+    }
+
+    @ViewBuilder private var rows: some View {
             ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
             if store.conn == .online && store.summaries.isEmpty && !store.summariesLoading {
                 ContentUnavailableView {
@@ -26,7 +64,7 @@ struct ChatsView: View {
                 } description: {
                     Text("Start one here, or on \(store.active?.name ?? "your computer").")
                 } actions: {
-                    Button("New chat") { path.append(.newChat) }.buttonStyle(.borderedProminent)
+                    Button("New chat") { open(.newChat) }.buttonStyle(.borderedProminent)
                 }
                 .listRowBackground(Color.clear)
             }
@@ -51,45 +89,6 @@ struct ChatsView: View {
                     Text(g.name)
                 }
             }
-        }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
-        .searchable(text: $query, prompt: "Search chats")
-        .refreshable { await store.refresh() }
-        .navigationTitle(store.active?.name ?? "Chats")
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path) }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { path.append(.newChat) } label: { Image(systemName: "square.and.pencil") }
-                    .accessibilityLabel("New chat")
-                    .disabled(store.conn != .online)
-            }
-        }
-        .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
-        .alert("Rename chat", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Title", text: $renameText)
-            Button("Cancel", role: .cancel) {}
-            Button("Rename") {
-                guard let s = renaming else { return }
-                act { try await store.renameChat(s.id, to: renameText) }
-            }
-        }
-        .confirmationDialog("Delete this chat on \(store.active?.name ?? "your computer")?",
-                            isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }),
-                            titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
-                guard let s = confirmDelete else { return }
-                act { try await store.deleteChat(s.id) }
-            }
-        } message: {
-            Text("It is removed from the computer for good.")
-        }
-        .alert("Couldn’t do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(actionError ?? "")
-        }
     }
 
     private var filtered: [SessionSummary] {
@@ -229,5 +228,37 @@ struct ComputerMenu: View {
         case .denied: return palette.danger
         case .idle: return palette.inkFaint
         }
+    }
+}
+
+/// Rename / delete / error dialogs for the chat list.
+struct ChatDialogs: ViewModifier {
+    @Binding var renaming: SessionSummary?
+    @Binding var renameText: String
+    @Binding var confirmDelete: SessionSummary?
+    @Binding var actionError: String?
+    var rename: (SessionSummary) -> Void
+    var delete: (SessionSummary) -> Void
+    var computer: String
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Rename chat", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField("Title", text: $renameText)
+                Button("Cancel", role: .cancel) {}
+                Button("Rename") { if let s = renaming { rename(s) } }
+            }
+            .confirmationDialog("Delete this chat on \(computer)?",
+                                isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }),
+                                titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { if let s = confirmDelete { delete(s) } }
+            } message: {
+                Text("It is removed from the computer for good.")
+            }
+            .alert("Couldn’t do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(actionError ?? "")
+            }
     }
 }

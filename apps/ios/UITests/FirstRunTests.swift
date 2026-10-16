@@ -12,7 +12,7 @@ final class FirstRunTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Connect over Tailscale (recommended)"].exists)
         attach(app, "Welcome")
         pair.tap()
-        let field = app.textFields["nekko-agent-pair:?relay=…"]
+        let field = app.input("nekko-agent-pair:?relay=…")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         field.typeText("not a link")
@@ -27,7 +27,7 @@ final class FirstRunTests: XCTestCase {
         app.launchArguments = ["-appLock", "NO"]
         app.launch()
         app.buttons["Pair with your computer"].tap()
-        let field = app.textFields["nekko-agent-pair:?relay=…"]
+        let field = app.input("nekko-agent-pair:?relay=…")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         field.typeText("relay=ws://relay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff")
@@ -41,5 +41,16 @@ final class FirstRunTests: XCTestCase {
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)
+    }
+}
+
+extension XCUIApplication {
+    /// A SwiftUI text input by its title: a one-line TextField is a text field,
+    /// a vertical-axis one is a text view.
+    func input(_ label: String) -> XCUIElement {
+        let types = [XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue]
+        return descendants(matching: .any).matching(NSPredicate(
+            format: "(elementType == %d OR elementType == %d) AND (label == %@ OR placeholderValue == %@ OR identifier == %@)",
+            types[0], types[1], label, label, label)).firstMatch
     }
 }
