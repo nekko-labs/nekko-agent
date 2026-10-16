@@ -177,10 +177,9 @@ impl AgentCore {
         if channel == "agent:event" && payload.get("type").and_then(Value::as_str) == Some("done") {
             out.push(frame(json!({ "type": "notify", "title": "Nekko finished", "body": "Your task is ready." })));
         }
-        if channel == "agent:event" {
-            if let Some(a) = self.activity_frame(payload) {
-                out.push(frame(a));
-            }
+        let activity = if channel == "agent:event" { self.activity_frame(payload) } else { None };
+        if let Some(a) = activity {
+            out.push(frame(a));
         }
         let welcomed: Vec<String> = self.conns.iter().filter(|(_, d)| d.is_some()).map(|(c, _)| c.clone()).collect();
         if welcomed.is_empty() {
