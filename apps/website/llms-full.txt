@@ -251,6 +251,16 @@ list dirs, run shell commands).
 
 ![Command palette](https://nekkoagent.com/docs/media/command-palette.png)
 
+**Copy and paste in a terminal.** Right-click a terminal for **Copy**, **Paste**, **Select all** and **Clear terminal**. On Windows and Linux the keys work the same way as in Windows Terminal and VS Code:
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl + C` | Copy the selection; with nothing selected it interrupts the running program, as always |
+| `Ctrl + Shift + C`, `Ctrl + Insert` | Copy the selection |
+| `Ctrl + V`, `Ctrl + Shift + V`, `Shift + Insert` | Paste |
+
+On macOS, `Cmd + C` and `Cmd + V` copy and paste, and `Ctrl + C` always interrupts. The read-only Agent commands log can be copied but not pasted into. **Clear terminal** clears the screen and scrollback in the window only; the shell keeps running.
+
 ---
 
 ### Add windows and read the dock
