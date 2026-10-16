@@ -1,0 +1,337 @@
+import Foundation
+import XCTest
+@testable import NekkoKit
+@testable import NekkoProtocol
+
+final class MemoryStore: SecureStore, @unchecked Sendable {
+    let lock = NSLock()
+    var values: [String: String] = [:]
+    func get(_ key: String) -> String? { lock.lock(); defer { lock.unlock() }; return values[key] }
+    func set(_ key: String, _ value: String?) { lock.lock(); values[key] = value; lock.unlock() }
+}
+
+/// A scripted computer: answers channels from `replies`, records calls, and
+/// lets the test push status changes and events like the relay client would.
+final class FakeConnection: RemoteConnection, @unchecked Sendable {
+    let config: RelayConfig
+    let lock = NSLock()
+    var calls: [(String, [JSONValue])] = []
+    var replies: [String: ([JSONValue]) throws -> JSONValue] = [:]
+    var connected = false
+    var closed = false
+    var pushTokens: [String] = []
+    private var onStatus: (@Sendable (RelayStatus) -> Void)?
+    private var onEvent: (@Sendable (String, JSONValue) -> Void)?
+    private var onWelcome: (@Sendable (WelcomedDevice) -> Void)?
+
+    init(config: RelayConfig) { self.config = config }
+
+    func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)?, onEvent: (@Sendable (String, JSONValue) -> Void)?,
+                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) {
+        self.onStatus = onStatus
+        self.onEvent = onEvent
+        self.onWelcome = onWelcome
+    }
+
+    func connect() { connected = true }
+    func close() { closed = true }
+    func nudge() {}
+    func reconnect() {}
+    func registerPush(token: String) async throws { lock.lock(); pushTokens.append(token); lock.unlock() }
+    var activities: [(String, String)] = []
+    func registerActivity(tag: String, token: String) async throws { lock.lock(); activities.append((tag, token)); lock.unlock() }
+
+    func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
+        lock.lock()
+        calls.append((channel, args))
+        let r = replies[channel]
+        lock.unlock()
+        guard let r else { return .null }
+        return try r(args)
+    }
+
+    func callsTo(_ channel: String) -> [[JSONValue]] {
+        lock.lock(); defer { lock.unlock() }
+        return calls.filter { $0.0 == channel }.map(\.1)
+    }
+
+    func online() {
+        onWelcome?(WelcomedDevice(id: config.deviceId, name: config.deviceName, platform: "ios"))
+        onStatus?(RelayStatus(.online))
+    }
+
+    func status(_ s: RelayStatus) { onStatus?(s) }
+    func event(_ payload: JSONValue) { onEvent?(Events.agentEvent, payload) }
+    func appearance(_ payload: JSONValue) { onEvent?(Events.appearanceUpdated, payload) }
+}
+
+@MainActor
+final class StoreTests: XCTestCase {
+    let room = "a1b2c3d4e5f60718"
+    let key = "00112233445566778899aabbccddeeff"
+    var connections: [FakeConnection] = []
+    var secure = MemoryStore()
+
+    func makeStore() -> ComputersStore {
+        var n = 0
+        return ComputersStore(
+            store: secure,
+            makeConnection: { cfg in
+                let c = FakeConnection(config: cfg)
+                c.replies = self.computerReplies()
+                self.connections.append(c)
+                return c
+            },
+            deviceName: { "Philip’s iPhone" },
+            deriveKey: { _, _ in Data(repeating: 7, count: 32) },
+            newId: { n += 1; return "id-\(n)" },
+            now: { 1_000 },
+            summariesDebounce: 0.01)
+    }
+
+    func computerReplies() -> [String: ([JSONValue]) throws -> JSONValue] {
+        [
+            Channels.sessionsSummaries: { _ in [["id": "s1", "title": "Fix it", "updatedAt": 5], ["id": "sub", "title": "x", "updatedAt": 9, "parentSessionId": "s1"]] },
+            Channels.providersList: { _ in [["id": "p", "kind": "openai", "label": "P", "enabled": true, "apiKey": "sk-x"], ["id": "off", "label": "Off", "enabled": false]] },
+            Channels.settingsGet: { _ in ["defaultProviderId": "p", "defaultModelId": "m", "theme": "dark", "defaultChatMode": "ask"] },
+            Channels.workspaceList: { _ in [["id": "w", "name": "App"]] },
+            Channels.appInfo: { _ in ["version": "0.9.0", "platform": "darwin"] },
+            Channels.chatPending: { _ in ["s1": ["question": ["callId": "q", "questions": []]]] },
+            Channels.modelsList: { args in args.first == "p" ? [["id": "m", "providerId": "p", "name": "Model M"]] : [] },
+        ]
+    }
+
+    func settle() async {
+        for _ in 0..<20 { await Task.yield() }
+        try? await Task.sleep(nanoseconds: 30_000_000)
+        for _ in 0..<20 { await Task.yield() }
+    }
+
+    func testPairsConnectsDropsTheCodeAndReadsTheComputer() async throws {
+        let s = makeStore()
+        s.load()
+        XCTAssertTrue(s.ready)
+        XCTAssertNil(s.activeId)
+        let id = await s.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: room, key: key, pair: "ABCD2345"))
+        XCTAssertEqual(id, "id-1")
+        let c = try XCTUnwrap(connections.last)
+        XCTAssertEqual(c.config.pairCode, "ABCD2345")
+        XCTAssertEqual(c.config.deviceName, "Philip’s iPhone")
+        XCTAssertEqual(c.config.platform, "ios")
+        XCTAssertEqual(c.config.keyBytes, Data(repeating: 7, count: 32))
+        XCTAssertTrue(c.connected)
+        XCTAssertEqual(s.conn, .connecting)
+        // Secrets only in the secure store, and not in the index.
+        XCTAssertFalse(secure.get(ComputersStore.indexKey)!.contains(key))
+        XCTAssertTrue(secure.get(ComputersStore.secretKey(id))!.contains("ABCD2345"))
+
+        c.online()
+        await settle()
+        XCTAssertEqual(s.conn, .online)
+        XCTAssertFalse(secure.get(ComputersStore.secretKey(id))!.contains("ABCD2345"), "the spent code is forgotten")
+        XCTAssertEqual(s.summaries.map(\.id), ["s1"])
+        XCTAssertEqual(s.providers.map(\.id), ["p", "off"])
+        XCTAssertEqual(s.defaults.defaultModelId, "m")
+        XCTAssertEqual(s.appearance?.theme, .dark)
+        XCTAssertEqual(s.pcSettings.effectiveMode, .ask)
+        XCTAssertEqual(s.workspaces.map(\.name), ["App"])
+        XCTAssertEqual(s.activity["s1"], .needsYou)
+        XCTAssertEqual(s.active?.name, "Mac", "named after its OS on first contact")
+        XCTAssertEqual(s.hostVersion, "0.9.0")
+        XCTAssertEqual(s.active?.route, .tailscale)
+
+        // A reconnect after relaunch uses the stored pairing without the code.
+        let s2 = makeStore()
+        s2.load()
+        XCTAssertEqual(s2.activeId, id)
+        XCTAssertNil(connections.last?.config.pairCode)
+        XCTAssertEqual(connections.last?.config.deviceId, c.config.deviceId, "same device id")
+    }
+
+    func testRepairingAKnownComputerKeepsItsIdAndName() async {
+        let s = makeStore()
+        s.load()
+        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, pair: "AAAA2222"))
+        s.rename(id, to: "  Studio  ")
+        let again = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, pair: "BBBB3333"))
+        XCTAssertEqual(again, id)
+        XCTAssertEqual(s.computers.map(\.name), ["Studio"])
+    }
+
+    func testEventsTrackActivityAppearanceAndRefreshTheList() async throws {
+        let s = makeStore()
+        s.load()
+        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let c = try XCTUnwrap(connections.last)
+        c.online()
+        await settle()
+        var seen: [AgentEvent] = []
+        let sub = s.subscribe { seen.append($0) }
+        let before = c.callsTo(Channels.sessionsSummaries).count
+        c.event(["type": "text", "sessionId": "s2", "delta": "hi"])
+        await settle()
+        XCTAssertEqual(s.activity["s2"], .running)
+        c.event(["type": "done", "sessionId": "s2"])
+        c.appearance(["theme": "light", "accent": "#112233"])
+        await settle()
+        XCTAssertNil(s.activity["s2"])
+        XCTAssertEqual(s.appearance, Appearance(theme: .light, accent: 0x112233))
+        XCTAssertEqual(seen.count, 2)
+        XCTAssertGreaterThan(c.callsTo(Channels.sessionsSummaries).count, before, "a finished turn re-reads the list")
+        s.unsubscribe(sub)
+    }
+
+    func testDenialAndForget() async throws {
+        let s = makeStore()
+        s.load()
+        let a = await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key))
+        let b = await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key))
+        XCTAssertEqual(s.activeId, b)
+        connections.last!.status(RelayStatus(.denied, detail: "revoked", denied: .revoked))
+        await settle()
+        XCTAssertEqual(s.denied, .revoked)
+        s.forget(b)
+        XCTAssertTrue(connections[connections.count - 2].closed)
+        XCTAssertEqual(s.activeId, a)
+        XCTAssertNil(s.denied)
+        XCTAssertNil(secure.get(ComputersStore.secretKey(b)))
+        s.forget(a)
+        XCTAssertNil(s.activeId)
+        XCTAssertTrue(s.computers.isEmpty)
+    }
+
+    func testChatOperationsCallTheComputerWithPhoneKeysOnly() async throws {
+        let s = makeStore()
+        s.load()
+        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let c = try XCTUnwrap(connections.last)
+        c.replies[Channels.sessionCreate] = { _ in ["id": "new", "title": ""] }
+        c.replies[Channels.settingsUpdate] = { _ in ["defaultChatMode": "yolo"] }
+        c.online()
+        await settle()
+        try await s.completeChat("s1")
+        XCTAssertEqual(s.summaries.first?.archived, true)
+        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["s1", ["archivedAt": 1000]])
+        try await s.restoreChat("s1")
+        XCTAssertEqual(s.summaries.first?.archived, false)
+        try await s.renameChat("s1", to: " New name ")
+        XCTAssertEqual(s.summaries.first?.title, "New name")
+        let id = try await s.createChat(providerId: "p", modelId: "m", workspaceId: "w", mode: .guardrails)
+        XCTAssertEqual(id, "new")
+        XCTAssertEqual(c.callsTo(Channels.sessionCreate).last, ["w"])
+        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["new", ["providerId": "p", "modelId": "m", "mode": "guardrails"]])
+        try await s.updatePcSettings(PcSettings.patch(mode: .yolo))
+        XCTAssertEqual(s.pcSettings.effectiveMode, .yolo)
+        try await s.deleteChat("s1")
+        XCTAssertTrue(s.summaries.isEmpty)
+        await s.loadAllModels()
+        XCTAssertEqual(s.modelGroups.map(\.provider.id), ["p"], "only enabled providers")
+        XCTAssertEqual(s.modelGroups.first?.models?.map(\.name), ["Model M"])
+        s.setPushToken("apns-token")
+        await settle()
+        XCTAssertEqual(c.pushTokens.last, "apns-token")
+        await s.registerActivity(sessionId: "s1", token: "abcd")
+        XCTAssertEqual(c.activities.last?.0, E2E.activityTag("s1"))
+        XCTAssertEqual(c.activities.last?.1, "abcd")
+    }
+}
+
+@MainActor
+final class ChatModelTests: XCTestCase {
+    func makeOnline() async throws -> (ComputersStore, FakeConnection) {
+        var conns: [FakeConnection] = []
+        let s = ComputersStore(store: MemoryStore(), makeConnection: { cfg in
+            let c = FakeConnection(config: cfg)
+            c.replies = [
+                Channels.settingsGet: { _ in ["defaultProviderId": "p", "defaultModelId": "m"] },
+                Channels.sessionGet: { _ in ["id": "s", "title": "T", "messages": [["id": "u", "role": "user", "content": "earlier"]], "queue": []] },
+                Channels.chatPending: { _ in [:] },
+                Channels.skillsRunnable: { _ in [["name": "review", "description": "Review", "template": "SECRET"]] },
+            ]
+            conns.append(c)
+            return c
+        }, deviceName: { "iPhone" }, deriveKey: { _, _ in Data(repeating: 1, count: 32) })
+        s.load()
+        await s.pair(PairingLink(relayUrl: "wss://r", room: "a1b2c3d4e5f60718", key: "00112233445566778899aabbccddeeff"))
+        conns[0].online()
+        for _ in 0..<50 { await Task.yield() }
+        try await Task.sleep(nanoseconds: 30_000_000)
+        return (s, conns[0])
+    }
+
+    func settle() async {
+        for _ in 0..<20 { await Task.yield() }
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        for _ in 0..<20 { await Task.yield() }
+    }
+
+    func testStreamsATurnAndReReadsWhenItEnds() async throws {
+        let (s, c) = try await makeOnline()
+        let chat = ChatModel(sessionId: "s", store: s, now: { 42 })
+        chat.start()
+        await settle()
+        XCTAssertEqual(chat.title, "T")
+        XCTAssertEqual(chat.skills.map(\.name), ["review"])
+        XCTAssertNil(chat.blocked)
+        try await chat.send("go", skill: SkillSummary(name: "review"))
+        XCTAssertTrue(chat.turn.running)
+        await settle()
+        let send = try XCTUnwrap(c.callsTo(Channels.chatSend).last?.first)
+        XCTAssertEqual(send["skill"], ["name": "review", "input": "go"])
+        XCTAssertEqual(send.str("modelId"), "m")
+
+        c.event(["type": "text", "sessionId": "s", "delta": "Hi"])
+        c.event(["type": "text", "sessionId": "other", "delta": "not mine"])
+        await settle()
+        XCTAssertEqual(chat.blocks.map(\.id), ["u", "pending-42", "live-1"])
+
+        // Mid-run prompts queue instead of starting a turn.
+        c.replies[Channels.chatQueue] = { _ in ["id": "s", "title": "T", "messages": [], "queue": ["later"]] }
+        try await chat.send("later")
+        XCTAssertEqual(chat.queued, ["later"])
+
+        c.replies[Channels.sessionGet] = { _ in
+            ["id": "s", "title": "T", "messages": [["id": "u", "role": "user", "content": "earlier"], ["id": "u2", "role": "user", "content": "/review go"],
+                                                  ["id": "a2", "role": "assistant", "content": "Hi"]], "queue": []]
+        }
+        c.event(["type": "done", "sessionId": "s"])
+        await settle()
+        XCTAssertFalse(chat.turn.running)
+        XCTAssertEqual(chat.blocks.map(\.id), ["u", "u2", "a2"])
+        chat.stop()
+    }
+
+    func testApprovalsQuestionsAndStop() async throws {
+        let (s, c) = try await makeOnline()
+        let chat = ChatModel(sessionId: "s", store: s)
+        chat.start()
+        await settle()
+        c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
+        await settle()
+        XCTAssertEqual(chat.turn.approval?.severity, .high)
+        try await chat.approve(true)
+        XCTAssertNil(chat.turn.approval)
+        XCTAssertEqual(c.callsTo(Channels.toolApprove).last, ["s", "t", true])
+
+        c.event(["type": "question", "sessionId": "s", "request": ["callId": "q", "questions": [["id": "x", "question": "Which?", "options": [["label": "A"]]]]]])
+        await settle()
+        XCTAssertEqual(chat.turn.question?.callId, "q")
+        try await chat.answer([AskAnswer(questionId: "x", labels: ["A"])])
+        XCTAssertEqual(c.callsTo(Channels.chatAnswer).last, ["s", "q", [["questionId": "x", "labels": ["A"]]]])
+        chat.abort()
+        await settle()
+        XCTAssertEqual(c.callsTo(Channels.chatAbort).last, ["s"])
+    }
+
+    func testBlockedReasons() async throws {
+        let (s, c) = try await makeOnline()
+        let chat = ChatModel(sessionId: "s", store: s)
+        c.status(RelayStatus(.offline))
+        await settle()
+        XCTAssertEqual(chat.blocked, "Mac is offline.".replacingOccurrences(of: "Mac", with: s.active!.name))
+        c.status(RelayStatus(.denied, denied: .revoked))
+        await settle()
+        XCTAssertEqual(chat.blocked, "This phone is no longer paired.")
+        XCTAssertEqual(ChatModel.resolveModel(nil, RemoteDefaults()).1, nil)
+    }
+}

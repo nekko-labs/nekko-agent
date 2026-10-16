@@ -7,6 +7,7 @@
 // back, or for any other prompt, it streams "Hello from your computer.".
 // Prompts containing "slow" stream one word a second for ~20 s, so a run can be
 // watched with the app in the background (keep-alive, local notifications).
+// Prompts containing "ask me" call `ask_user` with one two-option question.
 import { createServer } from 'node:http';
 
 const port = Number(process.argv[2] || 4700);
@@ -35,6 +36,11 @@ createServer((req, res) => {
     if (last?.role === 'user' && /approve/i.test(userText)) {
       res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_itest', type: 'function', function: { name: 'bash', arguments: '' } }] }));
       res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify({ command: 'rm -rf ./nekko-itest-dist' }) } }] }));
+      res.write(chunk({}, 'tool_calls'));
+    } else if (last?.role === 'user' && /ask me/i.test(userText)) {
+      const args = { questions: [{ header: 'Target', question: 'Which platform should I build first?', options: ['iOS', 'Android'] }] };
+      res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_ask', type: 'function', function: { name: 'ask_user', arguments: '' } }] }));
+      res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }));
       res.write(chunk({}, 'tool_calls'));
     } else if (last?.role === 'user' && /slow/i.test(userText)) {
       const words = Array.from({ length: 20 }, (_, i) => `word${i + 1} `);

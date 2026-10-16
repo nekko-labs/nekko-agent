@@ -123,6 +123,16 @@ It also runs **models on the phone itself** (llama.cpp, curated small GGUF model
 sized to the phone's memory), so you can keep chatting when the computer is off. Those chats never
 leave the phone and don't use the relay.
 
+**The native iPhone app** (`apps/ios`, SwiftUI) does the same over the same encrypted relay, and
+adds what only iOS can: a **Live Activity** for each running chat on the Lock Screen and in the
+Dynamic Island, with **Allow / Deny** for a waiting tool and **Stop**; notifications with Allow /
+Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
+and dictation (Whisper on your computer when Nekko Voice is installed, else the iPhone's own
+speech recognition). Its pairing screen leads with Tailscale and shows whether Tailscale is on on
+the iPhone. If a Tailscale relay can't be reached, the app says which side is the problem:
+Tailscale is off on the phone, or the computer isn't answering. With the app lock on (Face ID or
+passcode, on by default), the Lock Screen and notifications never show chat titles or commands.
+
 On the phone, the pairing key and the derived encryption key live in the iOS Keychain / Android
 Keystore. The app drops any provider API keys your computer sends with its settings and never
 stores them.
@@ -192,19 +202,42 @@ Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts
 tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
 network you already own.
 
+**In the desktop app:** Settings → Remote access → **Relay on this computer** → **Start relay**.
+The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
+bundled relay bound to that address only, and shows the URL phones use. That is the MagicDNS name
+(for example `ws://gomi.tailfd6474.ts.net:4400`) when the Tailscale CLI reports one, else the
+`100.x.y.z` address. **Use this relay** fills it in; then Enable, **Pair a device**, and scan the QR
+from the phone with Tailscale switched on.
+
+- **It stays on:** once started it comes back with the app.
+- **It waits for Tailscale:** with Tailscale off it binds nowhere and waits, and starts when
+  Tailscale connects.
+- **It follows address changes:** it moves when the tailnet address changes.
+- **It says why it isn't running:** for example Tailscale off, or the port (4400) already in use.
+
+It runs as its own process (`out/main/relay.js`, under the app's own runtime) and exits with the
+app. It has no push keys, so phones get no "finished" notifications through it; the in-app
+connection and Live Activities while the app is open work as usual.
+
+**Headless or without the desktop app**, the scripts do the same by hand:
+
 ```bash
 npm run relay:tailscale        # Windows (PowerShell); or scripts/private-relay.sh on macOS/Linux
 ```
 
-The script prints the URL to paste into **Settings → Remote access** (for example
-`ws://gomi.tailfd6474.ts.net:4400`; the MagicDNS name resolves on any device in the tailnet, the
-`100.x.y.z` address works too). Enable, **Pair a device**, scan the QR from the phone with
-Tailscale switched on. The relay only listens on the Tailscale interface, so
-`NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` is safe here; never use that flag on a public bind.
+The script prints the URL to paste into **Settings → Remote access**. Either way the relay only
+listens on the Tailscale interface, so agent enrollment without an access token
+(`NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` in the script) is safe here; never use that flag on a public
+bind.
+
+The computer refuses a plain `ws://` relay on the open internet, whether you press Enable or start
+a headless agent with `NEKKO_RELAY_URL`. It uses the same rule as the phones, below.
 
 Plain `ws://` is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
-the app's own end-to-end encryption sits on top. The iOS app ships with Expo's default App Transport
-Security (arbitrary loads allowed). **The Android app allows plain `ws://` only to Tailscale
+the app's own end-to-end encryption sits on top. The Expo iOS app ships with Expo's default App
+Transport Security (arbitrary loads allowed). **The native iPhone app allows plain `ws://` only toward
+private networks**: Tailscale (`*.ts.net` names and `100.x.y.z` addresses) and your local network.
+It refuses a `ws://` link to anything on the open internet before dialing; use `wss://` there. **The Android app allows plain `ws://` only to Tailscale
 MagicDNS names (`*.ts.net`)**, so use the name the script prints (`ws://gomi.tailfd6474.ts.net:4400`),
 not the `100.x.y.z` address: Android can't allow an IP range, and blocks the bare address. If you
 use an address the phone can't reach (a bare Tailscale IP, `localhost`, or any other plain `ws://`

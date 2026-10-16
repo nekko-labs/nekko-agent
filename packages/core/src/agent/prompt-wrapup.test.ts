@@ -25,3 +25,14 @@ describe('end-of-turn wrap-up format', () => {
     expect(rust).toContain(line);
   });
 });
+
+describe('source priority', () => {
+  it('prefers folders, then connectors, then the CLI, in both prompts', () => {
+    const at = (s: string) => prompt.indexOf(s);
+    const line = prompt.slice(at('- Pick sources in this order'), prompt.indexOf('\n- ', at('- Pick sources in this order') + 1)).replace(/\n/g, '');
+    expect(at('workspace folders (read')).toBeLessThan(at('then connected connectors'));
+    expect(at('then connected connectors')).toBeLessThan(at('only then command-line tools'));
+    const rust = readFileSync(new URL('../../../../crates/nekko-context/src/prompt.rs', import.meta.url), 'utf8');
+    expect(rust).toContain(line);
+  });
+});

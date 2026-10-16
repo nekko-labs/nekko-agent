@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'fs';
 // importing the package root would load all of it (node-pty included) here.
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/host/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
-import { registerIpc } from './ipc.js';
+import { pickFolderDialog, registerIpc } from './ipc.js';
 import { checkForUpdates } from './update.js';
 import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
@@ -114,6 +114,36 @@ function deliverLink(url: string): void {
   win.show();
   win.focus();
   win.webContents.send(IpcEvents.deepLink, url);
+}
+
+/**
+ * macOS keeps the system menu bar. Electron's default app menu is kept for
+ * everything else, but its "Nekko Agent" menu gains Settings… (⌘,) and its
+ * About item opens the in-app About page instead of the stock panel.
+ */
+function installMacAppMenu(): void {
+  const send = (url: string) => () => deliverLink(url);
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: app.name,
+      submenu: [
+        { label: `About ${app.name}`, click: send('nekko-agent://about') },
+        { type: 'separator' },
+        { label: 'Settings…', accelerator: 'Cmd+,', click: send('nekko-agent://settings') },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ]));
 }
 
 function resolveWindowIcon(): string | undefined {
@@ -349,6 +379,7 @@ app.whenReady().then(async () => {
   // it lives in the system bar rather than in the window, and ⌘Q/⌘H/⌘W come
   // from it.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
+  else installMacAppMenu();
 
   // Where user data lives is decided here, before the engine starts, because a
   // move from an older profile needs a native dialog and the user's answer.
@@ -383,7 +414,7 @@ app.whenReady().then(async () => {
   // The engine runs in its own processes (see engine-process.ts); the window
   // only needs to know where it listens.
   const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
-  const agentBrowser = await startAgentBrowser();
+  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog });
   app.once('will-quit', () => agentBrowser.close());
   engine = new EngineProcess({
     browserBridge: { url: agentBrowser.url, token: agentBrowser.token },

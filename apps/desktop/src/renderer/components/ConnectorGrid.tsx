@@ -3,6 +3,7 @@ import type { ConnectorConfig, ConnectorKind, ConnectorMeta, ConnectorResource }
 import { CONNECTOR_CATALOG } from '@nekko-agent/shared';
 import { ConnectorIcon } from '../connectorIcons.js';
 import { Badge } from './primitives/index.js';
+import { useStore } from '../store.js';
 
 /** Where to get each connector's credentials, with a link to open. */
 const HELP: Record<ConnectorKind, { hint: string; url: string }> = {
@@ -15,6 +16,11 @@ const HELP: Record<ConnectorKind, { hint: string; url: string }> = {
   teams: { hint: 'Incoming webhook: Teams channel → ⋯ → Manage channel → Connectors → Incoming Webhook. Graph token (optional): Graph Explorer with Team.ReadBasic.All.', url: 'https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook' },
   gmail: { hint: 'OAuth access token with the gmail.readonly scope (one-click OAuth coming; for now grab a token from the OAuth Playground).', url: 'https://developers.google.com/oauthplayground' },
   gdrive: { hint: 'OAuth access token with the drive.readonly scope (one-click OAuth coming; for now grab a token from the OAuth Playground).', url: 'https://developers.google.com/oauthplayground' },
+  trello: { hint: 'Create a Power-Up to get an API key, then generate a token from that key’s page.', url: 'https://trello.com/power-ups/admin' },
+  asana: { hint: 'Personal access token, Asana → Settings → Apps → Developer apps → Create new token.', url: 'https://app.asana.com/0/my-apps' },
+  todoist: { hint: 'API token, Todoist → Settings → Integrations → Developer.', url: 'https://app.todoist.com/app/settings/integrations/developer' },
+  clickup: { hint: 'Personal API token (pk_…), ClickUp → Settings → Apps → API Token.', url: 'https://app.clickup.com/settings/apps' },
+  tasksfile: { hint: 'Absolute path to a Markdown file. Each "- [ ] …" line shows as a task; "- [x]" lines are treated as done.', url: 'https://docs.github.com/get-started/writing-on-github/working-with-advanced-formatting/about-task-lists' },
 };
 
 interface ConnectorField {
@@ -36,11 +42,19 @@ const EXTRA_FIELDS: Partial<Record<ConnectorKind, ConnectorField[]>> = {
   ],
   gitlab: [{ key: 'site', label: 'Instance URL (optional)', placeholder: 'https://gitlab.com' }],
   teams: [{ key: 'webhookUrl', label: 'Incoming webhook URL', placeholder: 'https://….webhook.office.com/…' }],
+  trello: [{ key: 'key', label: 'API key', placeholder: 'your Power-Up API key' }],
+  asana: [{ key: 'workspace', label: 'Workspace id (optional)', placeholder: 'first workspace' }],
+  clickup: [{ key: 'team', label: 'Workspace id (optional)', placeholder: 'first workspace' }],
+  tasksfile: [{ key: 'path', label: 'File path', placeholder: '/Users/you/project/TASKS.md' }],
 };
+
+/** Connectors that need no secret at all: the token input is hidden. */
+const NO_TOKEN: ReadonlySet<ConnectorKind> = new Set(['tasksfile']);
 
 const TOKEN_LABEL: Partial<Record<ConnectorKind, string>> = {
   jira: 'Jira API token',
   teams: 'Microsoft Graph token (optional, enables reads)',
+  trello: 'Trello token',
 };
 
 /** What a card needs before Connect lights up. */
@@ -48,6 +62,8 @@ function canConnect(kind: ConnectorKind, token: string, fields: Record<string, s
   if (kind === 'jira') return Boolean(token && fields.site?.trim() && fields.email?.trim());
   // Either half of Teams is useful on its own: the webhook posts, the token reads.
   if (kind === 'teams') return Boolean(token || fields.webhookUrl?.trim());
+  if (kind === 'trello') return Boolean(token && fields.key?.trim());
+  if (kind === 'tasksfile') return Boolean(fields.path?.trim());
   return Boolean(token);
 }
 
@@ -62,7 +78,13 @@ function canConnect(kind: ConnectorKind, token: string, fields: Record<string, s
  * Connectors tab later.
  */
 export function ConnectorGrid({ compact = false }: { compact?: boolean }) {
-  const [configs, setConfigs] = useState<ConnectorConfig[]>([]);
+  const [configs, setLocalConfigs] = useState<ConnectorConfig[]>([]);
+  // Mirror into the store so surfaces keyed on connectors (the Agent Monitor's
+  // Tasks section) appear or disappear as soon as one is connected.
+  const setConfigs = (next: ConnectorConfig[]) => {
+    setLocalConfigs(next);
+    useStore.setState((s) => (s.settings ? { settings: { ...s.settings, connectors: next } } : {}));
+  };
   const [tokens, setTokens] = useState<Record<string, string>>({});
   const [fields, setFields] = useState<Record<string, Record<string, string>>>({});
   const [preview, setPreview] = useState<Record<string, ConnectorResource[] | string | undefined>>({});
@@ -214,7 +236,7 @@ function ConnectorCard({
             />
           ))}
           <div className="flex gap-2">
-            <input
+            {!NO_TOKEN.has(meta.kind) && <input
               className="input py-1.5 text-[12px]"
               type="password"
               placeholder={TOKEN_LABEL[meta.kind] ?? (meta.auth === 'oauth' ? 'OAuth access token' : 'API token')}
@@ -224,7 +246,7 @@ function ConnectorCard({
                 if (e.key === 'Enter') onConnect();
               }}
               disabled={busy}
-            />
+            />}
             <button
               className="btn btn-primary py-1.5 text-[12px]"
               disabled={busy || !canConnect(meta.kind, token.trim(), fields)}

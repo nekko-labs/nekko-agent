@@ -5,6 +5,19 @@ import type { EngineProcess } from './engine-process.js';
 import { setSessionOptionsCompat } from './session-options-compat.js';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL, type ServiceAction } from '../engineChannels.js';
 
+/**
+ * The native folder picker: the chosen folder, or null when cancelled. The
+ * renderer's picker and the engine daemon's `workspace:add` (through the
+ * agent browser bridge) both open it.
+ */
+export async function pickFolderDialog(): Promise<string | null> {
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  const res = win
+    ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+    : await dialog.showOpenDialog({ properties: ['openDirectory'] });
+  return res.canceled || !res.filePaths[0] ? null : res.filePaths[0];
+}
+
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
 }
@@ -64,11 +77,7 @@ export function registerIpc(engine: EngineProcess, dataDir: string): void {
   });
 
   // Native folder picker. The preload adds the chosen path through the engine.
-  ipcMain.handle(PICK_FOLDER_CHANNEL, async () => {
-    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-    const res = await dialog.showOpenDialog(win!, { properties: ['openDirectory'] });
-    return res.canceled || !res.filePaths[0] ? null : res.filePaths[0];
-  });
+  ipcMain.handle(PICK_FOLDER_CHANNEL, () => pickFolderDialog());
 
   // Native multi-file picker → absolute paths.
   ipcMain.handle(IpcChannels.dialogOpenFiles, async () => {

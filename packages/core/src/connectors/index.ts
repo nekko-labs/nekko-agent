@@ -497,6 +497,140 @@ export const gdriveConnector: Connector = {
   },
 };
 
+/** Narrow a fetched list to resources whose title or body mentions `query`. */
+function matching(items: ConnectorResource[], query?: string): ConnectorResource[] {
+  const q = (query ?? '').trim().toLowerCase();
+  return q ? items.filter((i) => `${i.title}\n${i.body ?? ''}`.toLowerCase().includes(q)) : items;
+}
+
+/** Trello, REST API. Needs the API key (settings.key) and a user token. Lists the user's open cards. */
+export const trelloConnector: Connector = {
+  kind: 'trello',
+  async fetch(token, query, settings) {
+    const key = (settings?.key ?? '').trim();
+    if (!key) throw new Error('Trello needs the API key as well as the token.');
+    const auth = `key=${encodeURIComponent(key)}&token=${encodeURIComponent(token)}`;
+    const res = await fetch(`https://api.trello.com/1/members/me/cards?filter=open&fields=name,desc,shortUrl,due,dateLastActivity&${auth}`);
+    if (!res.ok) throw new Error(`Trello ${res.status}`);
+    const cards = (await res.json()) as any[];
+    return matching(cards.map((c) => ({
+      id: String(c.id),
+      title: c.name ?? '',
+      subtitle: c.due ? `Trello card · due ${String(c.due).slice(0, 10)}` : 'Trello card',
+      url: c.shortUrl,
+      body: c.desc ?? '',
+    })), query);
+  },
+};
+
+/** Asana, REST API with a personal access token. Lists the user's incomplete tasks in a workspace. */
+export const asanaConnector: Connector = {
+  kind: 'asana',
+  async fetch(token, query, settings) {
+    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+    let workspace = (settings?.workspace ?? '').trim();
+    if (!workspace) {
+      const me = await fetch('https://app.asana.com/api/1.0/users/me', { headers });
+      if (!me.ok) throw new Error(`Asana ${me.status}`);
+      workspace = (await me.json() as any).data?.workspaces?.[0]?.gid ?? '';
+      if (!workspace) throw new Error('Asana account has no workspace.');
+    }
+    const qs = `assignee=me&workspace=${encodeURIComponent(workspace)}&completed_since=now&limit=50&opt_fields=name,notes,permalink_url,due_on`;
+    const res = await fetch(`https://app.asana.com/api/1.0/tasks?${qs}`, { headers });
+    if (!res.ok) throw new Error(`Asana ${res.status}`);
+    const json: any = await res.json();
+    return matching((json.data ?? []).map((t: any) => ({
+      id: String(t.gid),
+      title: t.name ?? '',
+      subtitle: t.due_on ? `Asana task · due ${t.due_on}` : 'Asana task',
+      url: t.permalink_url,
+      body: t.notes ?? '',
+    })), query);
+  },
+};
+
+/** Todoist, unified API v1 with an API token. Lists active tasks. */
+export const todoistConnector: Connector = {
+  kind: 'todoist',
+  async fetch(token, query) {
+    const res = await fetch('https://api.todoist.com/api/v1/tasks?limit=100', { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`Todoist ${res.status}`);
+    const json: any = await res.json();
+    const tasks: any[] = Array.isArray(json) ? json : json.results ?? [];
+    return matching(tasks.map((t) => ({
+      id: String(t.id),
+      title: t.content ?? '',
+      subtitle: t.due?.date ? `Todoist · due ${t.due.date}` : 'Todoist task',
+      url: t.url ?? `https://app.todoist.com/app/task/${t.id}`,
+      body: t.description ?? '',
+    })), query);
+  },
+};
+
+/** ClickUp, API v2 with a personal token (sent bare, no Bearer). Lists open tasks in a workspace. */
+export const clickupConnector: Connector = {
+  kind: 'clickup',
+  async fetch(token, query, settings) {
+    const headers = { Authorization: token, Accept: 'application/json' };
+    let team = (settings?.team ?? '').trim();
+    if (!team) {
+      const res = await fetch('https://api.clickup.com/api/v2/team', { headers });
+      if (!res.ok) throw new Error(`ClickUp ${res.status}`);
+      team = String((await res.json() as any).teams?.[0]?.id ?? '');
+      if (!team) throw new Error('ClickUp account has no workspace.');
+    }
+    const res = await fetch(`https://api.clickup.com/api/v2/team/${encodeURIComponent(team)}/task?order_by=updated&subtasks=true`, { headers });
+    if (!res.ok) throw new Error(`ClickUp ${res.status}`);
+    const json: any = await res.json();
+    return matching((json.tasks ?? []).map((t: any) => ({
+      id: String(t.id),
+      title: t.name ?? '',
+      subtitle: ['ClickUp', t.status?.status].filter(Boolean).join(' · '),
+      url: t.url,
+      body: t.description ?? '',
+    })), query);
+  },
+};
+
+/**
+ * Parse a Markdown checklist into tasks: each `- [ ]` / `* [ ]` line is an open
+ * task, `[x]` lines are done and skipped. The nearest heading above becomes the
+ * subtitle so a TASKS.md grouped by section reads the same in the panel.
+ */
+export function parseTasksMarkdown(text: string, path = ''): ConnectorResource[] {
+  const out: ConnectorResource[] = [];
+  let section = '';
+  text.split(/\r?\n/).forEach((line, i) => {
+    // Linear prefix checks, not one backtracking regex (CodeQL polynomial
+    // ReDoS on whitespace-heavy lines); mirrors parse_tasks_markdown in Rust.
+    const hashes = /^#{1,6}/.exec(line)?.[0].length ?? 0;
+    if (hashes && /^\s/.test(line.slice(hashes)) && line[hashes] !== '#') { section = line.slice(hashes).trim(); return; }
+    const body = line.trimStart();
+    if (!'-*+'.includes(body[0] ?? 'z') || !/^\s/.test(body.slice(1))) return;
+    const box = body.slice(1).trimStart();
+    if (!box.startsWith('[ ]') || !/^\s/.test(box.slice(3))) return;
+    out.push({ id: `${path}:${i + 1}`, title: box.slice(3).trim(), subtitle: section || 'Tasks file', url: path ? `file://${path}` : undefined, body: '' });
+  });
+  return out;
+}
+
+/** A local Markdown task file (settings.path). Read on the host; no account. */
+export const tasksFileConnector: Connector = {
+  kind: 'tasksfile',
+  async fetch(_token, query, settings) {
+    const path = (settings?.path ?? '').trim();
+    if (!path) throw new Error('Pick the Markdown file that holds your tasks.');
+    const { readFile } = await import('node:fs/promises');
+    let text: string;
+    try {
+      text = await readFile(path, 'utf8');
+    } catch {
+      throw new Error(`Couldn't read ${path}.`);
+    }
+    return matching(parseTasksMarkdown(text, path), query);
+  },
+};
+
 export const CONNECTORS: Record<ConnectorKind, Connector> = {
   github: githubConnector,
   gitlab: gitlabConnector,
@@ -507,6 +641,11 @@ export const CONNECTORS: Record<ConnectorKind, Connector> = {
   teams: teamsConnector,
   gmail: gmailConnector,
   gdrive: gdriveConnector,
+  trello: trelloConnector,
+  asana: asanaConnector,
+  todoist: todoistConnector,
+  clickup: clickupConnector,
+  tasksfile: tasksFileConnector,
 };
 
 export function getConnector(kind: ConnectorKind): Connector {

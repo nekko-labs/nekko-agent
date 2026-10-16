@@ -4,7 +4,7 @@ options:
   xcodeVersion: "15.4"
   projectFormat: xcode15_3
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.0"
 packages:
   NekkoProtocol:
     path: Protocol
@@ -14,21 +14,44 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "1"
 targets:
   NekkoNative:
     type: application
     platform: iOS
     sources:
       - path: App
+        excludes: ["*.entitlements"]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nekko.native.ios
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        PRODUCT_NAME: NekkoNative
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/NekkoNative.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - package: NekkoProtocol
+        product: NekkoProtocol
+      - package: NekkoProtocol
+        product: NekkoKit
+      - target: NekkoWidgets
+        embed: true
+  NekkoWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+        excludes: ["Info.plist", "*.entitlements"]
+      - path: App/Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nekko.native.ios.widgets
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Widgets/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+        CODE_SIGN_ENTITLEMENTS: Widgets/NekkoWidgets.entitlements
   NekkoNativeTests:
     type: bundle.unit-test
     platform: iOS

@@ -81,8 +81,17 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn new(data_dir: Option<PathBuf>) -> Self {
-        let prs = Arc::new(Prs::default());
+    /// `github_api` is where GitHub's REST API is (`config.githubApiUrl`, else
+    /// `NEKKO_GITHUB_API_URL` for the web edition, whose server writes the
+    /// config). Tests point it at a loopback server, with `NEKKO_GH_PATH`
+    /// naming a `gh` that does not exist so the REST fallback runs.
+    pub fn new(data_dir: Option<PathBuf>, github_api: Option<&str>) -> Self {
+        let gh = std::env::var("NEKKO_GH_PATH").unwrap_or_else(|_| "gh".into());
+        let api = github_api
+            .map(str::to_string)
+            .or_else(|| std::env::var("NEKKO_GITHUB_API_URL").ok())
+            .unwrap_or_else(|| "https://api.github.com".into());
+        let prs = Arc::new(Prs::new(&gh, &api));
         Self {
             data_dir,
             index: Arc::new(Index::new()),
@@ -90,6 +99,18 @@ impl Workspace {
             prs,
             vaizer: skills::Vaizer::default(),
         }
+    }
+
+    /// The PR reads and their caches, shared with the stacked-PR channels.
+    pub fn prs(&self) -> &Prs {
+        &self.prs
+    }
+
+    /// `getVaizerCatalog(refresh)` (`refreshVaizerCatalog` with `true`), for
+    /// the update checks; None without a data directory.
+    pub async fn vaizer_catalog(&self, refresh: bool) -> Option<Value> {
+        let dir = self.data_dir.clone()?;
+        Some(self.vaizer.catalog(&dir, refresh).await)
     }
 
     /// Is this channel answered here (never handed back to the host)?
@@ -143,7 +164,7 @@ async fn session(ctx: &Ctx, id: &str) -> Value {
 
 /// The GitHub token for the REST fallback: the GitHub connector's, else the
 /// environment's (`githubToken` in pr.ts).
-fn github_token(settings: &Value) -> Option<String> {
+pub fn github_token(settings: &Value) -> Option<String> {
     let connector = settings.get("connectors").and_then(Value::as_array).and_then(|list| {
         list.iter().find(|c| {
             c.get("kind") == Some(&json!("github"))
@@ -375,7 +396,7 @@ pub async fn index_snippets(ctx: &Ctx, workspace_ids: &[String], text: &str) -> 
 /// `addWorkspaceByPath(path)`: a folder already saved (by `folderPathKey`)
 /// is reused; a new one is saved through the settings and indexed shortly
 /// after. Returns the list as the host did (its own copy, not the saved one).
-async fn add_folder(ctx: &Ctx, path: Option<&Value>) -> Result<Value, String> {
+pub async fn add_folder(ctx: &Ctx, path: Option<&Value>) -> Result<Value, String> {
     let Some(Value::String(path)) = path else {
         return Err("The \"path\" argument must be of type string.".into());
     };

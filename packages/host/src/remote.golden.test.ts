@@ -402,7 +402,18 @@ it('runs the relay agent protocol frame for frame', async () => {
       // A frame on a connection the relay never announced still counts.
       { client: 'c9', value: { type: 'hello', deviceId: 'phone-2' } },
       { event: IpcEvents.agentEvent, payload: { type: 'text', sessionId: 's1', delta: 'hi 🐱' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'tool_call', sessionId: 's1', call: { id: 'tc1', name: 'bash', input: { command: 'ls' } } } },
+      { event: IpcEvents.agentEvent, payload: { type: 'tool_approval_required', sessionId: 's1', call: { id: 'tc1', name: 'bash', input: { command: 'rm -rf x' } }, reason: 'Deletes files', severity: 'high' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'tool_result', sessionId: 's1', result: { toolCallId: 'tc1', output: 'denied' } } },
+      { event: IpcEvents.agentEvent, payload: { type: 'question', sessionId: 's1', request: { callId: 'q1', questions: [] } } },
+      { event: IpcEvents.agentEvent, payload: { type: 'question_resolved', sessionId: 's1', callId: 'q1' } },
       { event: IpcEvents.agentEvent, payload: { type: 'done', sessionId: 's1', usage: { inputTokens: 3, outputTokens: 0.5 } } },
+      { event: IpcEvents.agentEvent, payload: { type: 'reasoning', sessionId: 's2', delta: 'hm' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'tool_approval_required', sessionId: 's2', call: { id: 'tc2', name: 'write_file', input: {} }, severity: 'odd' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'error', sessionId: 's2', message: 'rate limited' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'text', sessionId: 's3', delta: 'x' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'error', sessionId: 's3', message: 'Stopped' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'done', sessionId: 's4' } },
       { event: IpcEvents.terminalEvent, payload: { type: 'data', terminalId: 'term_1', data: '\u001b[31mred\u001b[0m' } },
       { event: IpcEvents.changesUpdated, payload: { sessionId: 's1' } },
       { event: IpcEvents.tasksUpdated, payload: [{ id: 't1' }] },
@@ -539,7 +550,9 @@ it('keeps remote.json and its replies across a run of operations', async () => {
       { op: 'rename', args: ['d', 'New'] },
       { op: 'file', file: 'not json' },
       { op: 'status' },
-      { op: 'enable', args: ['ws://y'] },
+      { op: 'enable', args: ['wss://y'] },
+      // Plain ws:// to the open internet: refused, remote.json untouched (PH1).
+      { op: 'enable', args: ['ws://relay.example.com'] },
       { op: 'file', file: '{"enabled":true}' },
       { op: 'status' },
       { op: 'devices' },
@@ -568,7 +581,11 @@ it('keeps remote.json and its replies across a run of operations', async () => {
           break;
         }
         default:
-          result = (remote as unknown as Record<string, (...a: unknown[]) => unknown>)[step.op](...args);
+          try {
+            result = (remote as unknown as Record<string, (...a: unknown[]) => unknown>)[step.op](...args);
+          } catch (e) {
+            result = { error: (e as Error).message };
+          }
       }
       out.push({ op: step.op, args, now: Date.now(), result: result ?? null, file: read(), kicked: [...kicked] });
     }
@@ -579,3 +596,18 @@ it('keeps remote.json and its replies across a run of operations', async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+it('writes the relay route cases the daemon must agree with', async () => {
+  // The transport rule (PH1): crates/nekko-remote/src/route.rs reads these and
+  // must name the same route and refuse the same URLs with the same words.
+  const { relayRoute, relayUrlProblem } = await import('@nekko-agent/shared');
+  const urls = [
+    'wss://nekko-agent-relay.fly.dev', 'ws://my-mac.tail1234.ts.net:4400', 'ws://100.101.102.103:4400', 'ws://100.128.0.1',
+    'ws://[fd7a:115c:a1e0::1]:4400', 'ws://192.168.1.20:4400', 'ws://10.0.0.5', 'ws://172.16.0.1', 'ws://172.32.0.1',
+    'ws://169.254.3.4', 'ws://studio.local:4400', 'ws://[fe80::1]:4400', 'ws://localhost:4400', 'ws://127.0.0.1:4400',
+    'ws://[::1]:4400', 'ws://ts.net.example.com', 'ws://relay.example.com', 'WS://8.8.8.8:4400', 'wss://u:p@Relay.Example.com:443/relay?x=1',
+    'ws://host/path@not-userinfo', '  ws://h  ', '', 'https://relay.example.com', 'ws://', 'ws://y',
+  ];
+  check(join(crate, 'tests', 'golden', 'relay-route.json'), urls.map((url) => ({ url, route: relayRoute(url), problem: relayUrlProblem(url) ?? null })));
+});
+

@@ -1,0 +1,540 @@
+import Foundation
+import NekkoProtocol
+import Observation
+
+/// Secrets live here only (the Keychain in the app, a dictionary in tests).
+public protocol SecureStore: AnyObject, Sendable {
+    func get(_ key: String) -> String?
+    func set(_ key: String, _ value: String?)
+}
+
+/// Something that can call the computer's channels: the relay client, or a fake.
+public protocol Caller: AnyObject, Sendable {
+    func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue
+}
+
+extension Caller {
+    public func call(_ channel: String, _ args: [JSONValue] = []) async throws -> JSONValue {
+        try await call(channel, args, timeout: nil)
+    }
+}
+
+/// What the store needs of a live connection; `RelayClient` in the app.
+public protocol RemoteConnection: Caller {
+    func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)?, onEvent: (@Sendable (String, JSONValue) -> Void)?,
+                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?)
+    func connect()
+    func close()
+    func nudge()
+    func reconnect()
+    func registerPush(token: String) async throws
+    func registerActivity(tag: String, token: String) async throws
+}
+
+extension RelayClient: RemoteConnection {}
+
+/// A paired computer, as listed. No secrets.
+public struct Computer: Codable, Equatable, Sendable, Identifiable {
+    public let id: String
+    public var name: String
+    public let relayUrl: String
+    public let pairedAt: Int64
+    public var platform: String?
+
+    public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil) {
+        self.id = id
+        self.name = name
+        self.relayUrl = relayUrl
+        self.pairedAt = pairedAt
+        self.platform = platform
+    }
+
+    public var route: RelayRoute { RelayRoute.of(relayUrl) }
+    public var relayHost: String { Pairing.relayHost(relayUrl) }
+}
+
+/// Pairing material for one computer, stored as one Keychain item.
+struct ComputerSecret: Codable, Equatable {
+    var room: String
+    var key: String
+    /// The PBKDF2-derived AES key, so reconnects skip the second of derivation.
+    var keyHex: String
+    /// The one-time code, until the computer has welcomed this phone once.
+    var pair: String?
+}
+
+public struct ModelGroup: Equatable, Sendable, Identifiable {
+    public let provider: PublicProvider
+    public let models: [ModelInfo]?
+    public let error: String?
+    public var id: String { provider.id }
+}
+
+public let defaultComputerName = "My computer"
+
+/// Name the computer after its OS (`app:info` platform), like the other phone apps.
+public func osName(_ platform: String?) -> String {
+    switch platform {
+    case "win32": return "Windows PC"
+    case "darwin": return "Mac"
+    case "linux": return "Linux PC"
+    default: return defaultComputerName
+    }
+}
+
+/// Computers this phone is paired with, and the live connection to the active
+/// one. A port of Android's `ComputersRepository` (itself a port of the Expo
+/// app's `services/computers.ts`). Pairing material lives in `SecureStore`
+/// only; views read the non-secret parts. One relay connection at a time: the
+/// computer you're looking at.
+@MainActor
+@Observable
+public final class ComputersStore {
+    public static let indexKey = "nekko.computers"
+    public static let activeKey = "nekko.activeComputer"
+    public static let deviceKey = "nekko.deviceId"
+    static func secretKey(_ id: String) -> String { "nekko.computer.\(id)" }
+
+    // MARK: State (read by views)
+
+    public private(set) var ready = false
+    public private(set) var computers: [Computer] = []
+    public private(set) var activeId: String?
+    public private(set) var conn: RelayState = .idle
+    public private(set) var connDetail: String?
+    public private(set) var denied: DenyReason?
+    public private(set) var summaries: [SessionSummary] = []
+    public private(set) var summariesLoading = false
+    public private(set) var providers: [PublicProvider] = []
+    public private(set) var defaults = RemoteDefaults()
+    public private(set) var appearance: Appearance?
+    public private(set) var pcSettings = PcSettings()
+    public private(set) var workspaces: [WorkspaceFolder] = []
+    public private(set) var activity: [String: Activity] = [:]
+    public private(set) var models: [String: [ModelInfo]] = [:]
+    public private(set) var modelErrors: [String: String] = [:]
+    public private(set) var hostVersion: String?
+    public private(set) var lastError: String?
+
+    public var active: Computer? { computers.first { $0.id == activeId } }
+    public var groups: [ChatGroup] { ChatGroup.of(summaries, folders: workspaces) }
+    public var needsYouCount: Int { activity.values.filter { $0 == .needsYou }.count }
+    public var runningCount: Int { activity.values.filter { $0 == .running }.count }
+    public var modelGroups: [ModelGroup] {
+        providers.filter(\.enabled).map { ModelGroup(provider: $0, models: models[$0.id], error: modelErrors[$0.id]) }
+    }
+
+    // MARK: Wiring
+
+    private let store: SecureStore
+    private let makeConnection: (RelayConfig) -> RemoteConnection
+    private let deviceName: () -> String
+    private let deriveKey: @Sendable (String, String) async -> Data
+    private let newId: () -> String
+    private let now: () -> Int64
+    private let summariesDebounce: TimeInterval
+    private let modelListTimeout: TimeInterval
+    private let platform: String
+    private let app: String?
+
+    private var client: RemoteConnection?
+    private var generation = 0
+    private var pump: Task<Void, Never>?
+    private var summariesTask: Task<Void, Never>?
+    private var listeners: [UUID: (AgentEvent) -> Void] = [:]
+    private var pushToken: String?
+
+    public init(store: SecureStore,
+                makeConnection: @escaping (RelayConfig) -> RemoteConnection,
+                deviceName: @escaping () -> String,
+                platform: String = "ios",
+                app: String? = nil,
+                deriveKey: @escaping @Sendable (String, String) async -> Data = { s, r in
+                    await Task.detached(priority: .userInitiated) { E2E.deriveKey(secret: s, room: r) }.value
+                },
+                newId: @escaping () -> String = { UUID().uuidString.lowercased() },
+                now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
+                summariesDebounce: TimeInterval = 0.6,
+                modelListTimeout: TimeInterval = 6) {
+        self.store = store
+        self.makeConnection = makeConnection
+        self.deviceName = deviceName
+        self.platform = platform
+        self.app = app
+        self.deriveKey = deriveKey
+        self.newId = newId
+        self.now = now
+        self.summariesDebounce = summariesDebounce
+        self.modelListTimeout = modelListTimeout
+    }
+
+    /// Calls the active computer at call time; throws when none is connected.
+    public func remote() throws -> RemoteConnection {
+        guard let client else { throw RelayError("Not connected to a computer.") }
+        return client
+    }
+
+    /// Every `agent:event` from the active computer. Returns an id for `unsubscribe`.
+    public func subscribe(_ f: @escaping (AgentEvent) -> Void) -> UUID {
+        let id = UUID()
+        listeners[id] = f
+        return id
+    }
+
+    public func unsubscribe(_ id: UUID) { listeners[id] = nil }
+
+    // MARK: Pairing
+
+    /// Read the paired computers and connect to `preferredId` when still paired,
+    /// else the one used last, else the first.
+    public func load(preferredId: String? = nil) {
+        computers = decodeIndex()
+        let ids = computers.map(\.id)
+        let last = store.get(Self.activeKey)
+        activeId = [preferredId, last].compactMap { $0 }.first { ids.contains($0) } ?? ids.first
+        ready = true
+        if let activeId { connect(activeId) }
+    }
+
+    /// Save a scanned/pasted pairing and connect. Returns the computer's id.
+    @discardableResult
+    public func pair(_ link: PairingLink) async -> String {
+        let keyHex = E2E.toHex(await deriveKey(link.key, link.room))
+        // Re-scanning a computer we already know keeps its id and name.
+        let existing = computers.last { c in c.relayUrl == link.relayUrl && secret(c.id)?.room == link.room }
+        let id = existing?.id ?? newId()
+        saveSecret(id, ComputerSecret(room: link.room, key: link.key, keyHex: keyHex, pair: link.pair))
+        if existing == nil {
+            computers.append(Computer(id: id, name: defaultComputerName, relayUrl: link.relayUrl, pairedAt: now()))
+            saveIndex()
+        }
+        connect(id)
+        return id
+    }
+
+    public func rename(_ id: String, to name: String) {
+        let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
+        guard !trimmed.isEmpty, let i = computers.firstIndex(where: { $0.id == id }) else { return }
+        computers[i].name = trimmed
+        saveIndex()
+    }
+
+    public func forget(_ id: String) {
+        let wasActive = activeId == id
+        if wasActive { disconnect() }
+        store.set(Self.secretKey(id), nil)
+        computers.removeAll { $0.id == id }
+        saveIndex()
+        if wasActive {
+            activeId = computers.first?.id
+            store.set(Self.activeKey, activeId)
+            clearComputerState()
+            denied = nil
+            if computers.isEmpty { appearance = nil }
+            if let next = activeId { connect(next) }
+        }
+    }
+
+    // MARK: Connection
+
+    /// Make `id` the active computer and (re)connect to it.
+    public func connect(_ id: String) {
+        disconnect()
+        guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id),
+              let keyBytes = E2E.fromHex(secret.keyHex) else { return }
+        store.set(Self.activeKey, id)
+        activeId = id
+        conn = .connecting
+        denied = nil
+        connDetail = nil
+        clearComputerState()
+        var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
+                                 deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
+        config.requestTimeout = 120
+        config.app = app
+        let c = makeConnection(config)
+        generation += 1
+        let gen = generation
+        client = c
+        let (stream, sink) = AsyncStream<Signal>.makeStream(bufferingPolicy: .unbounded)
+        c.setHandlers(
+            onStatus: { sink.yield(.status($0)) },
+            onEvent: { sink.yield(.event($0, $1)) },
+            onWelcome: { _ in sink.yield(.welcome) })
+        // One consumer, in arrival order, on the main actor.
+        pump = Task { @MainActor [weak self] in
+            for await signal in stream {
+                guard let self, self.generation == gen else { return }
+                self.handle(signal, computerId: id, hadCode: secret.pair != nil)
+            }
+        }
+        c.connect()
+    }
+
+    private enum Signal: Sendable {
+        case status(RelayStatus)
+        case event(String, JSONValue)
+        case welcome
+    }
+
+    private func handle(_ signal: Signal, computerId: String, hadCode: Bool) {
+        switch signal {
+        case .status(let s):
+            conn = s.state
+            connDetail = s.detail
+            if let d = s.denied { denied = d }
+            if s.state == .online {
+                Task { await refresh() }
+                if let pushToken { Task { try? await client?.registerPush(token: pushToken) } }
+            }
+        case .welcome:
+            // Enrollment done: the one-time code must never be sent again.
+            if hadCode { dropPairCode(computerId) }
+        case .event(let channel, let payload):
+            if channel == Events.appearanceUpdated {
+                appearance = Appearance.from(payload)
+                return
+            }
+            guard channel == Events.agentEvent, let e = AgentEvent.from(payload) else { return }
+            for f in listeners.values { f(e) }
+            let next = ActivityTracker.next(activity, e)
+            if next != activity { activity = next }
+            // Keep the list fresh when a turn ends anywhere (another device, a task).
+            switch e {
+            case .done, .sessionMeta: scheduleSummaries()
+            default: break
+            }
+        }
+    }
+
+    /// Drop the live connection (the pairing stays).
+    public func disconnect() {
+        generation += 1
+        pump?.cancel()
+        pump = nil
+        summariesTask?.cancel()
+        summariesTask = nil
+        client?.close()
+        client = nil
+        conn = .idle
+    }
+
+    /// App came to the foreground: reconnect now rather than after the backoff,
+    /// and re-read the list (chats completed or started meanwhile send no event).
+    public func nudge() {
+        client?.nudge()
+        if conn == .online { scheduleSummaries() }
+    }
+
+    /// The phone changed network: dial a fresh socket now.
+    public func reconnect() { client?.reconnect() }
+
+    /// The APNs device token, registered with the relay on every connect.
+    public func setPushToken(_ token: String) {
+        pushToken = token
+        if conn == .online { Task { try? await client?.registerPush(token: token) } }
+    }
+
+    /// A Live Activity's push token for `sessionId` (see `RelayClient.registerActivity`).
+    public func registerActivity(sessionId: String, token: String) async {
+        try? await client?.registerActivity(tag: E2E.activityTag(sessionId), token: token)
+    }
+
+    // MARK: Reading the computer
+
+    public func refresh() async {
+        guard let c = client else { return }
+        summariesLoading = true
+        lastError = nil
+        do {
+            async let summaries = c.call(Channels.sessionsSummaries)
+            async let providers = c.call(Channels.providersList)
+            async let settings = c.call(Channels.settingsGet)
+            async let workspaces = orNil { try await c.call(Channels.workspaceList) }
+            async let info = orNil { try await c.call(Channels.appInfo) }
+            async let pending = orNil { try await c.call(Channels.chatPending) }
+            let s = try await settings
+            let r = (try await summaries, try await providers, s, await workspaces, await info, await pending)
+            guard client === c else { return }
+            self.summaries = SessionSummary.visible(r.0)
+            self.providers = PublicProvider.list(r.1)
+            // Only public projections leave this block.
+            self.defaults = RemoteDefaults.from(r.2)
+            self.appearance = Appearance.from(r.2)
+            self.pcSettings = PcSettings.from(r.2)
+            self.workspaces = WorkspaceFolder.list(r.3)
+            // Approvals and questions already waiting when we (re)connect.
+            for (sid, p) in PendingInput.map(r.5) where p.approval != nil || p.question != nil { activity[sid] = .needsYou }
+            let appInfo = AppInfo.from(r.4)
+            hostVersion = appInfo.version
+            learnPlatform(appInfo.platform)
+            summariesLoading = false
+        } catch {
+            if client === c {
+                summariesLoading = false
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
+    @discardableResult
+    public func loadModels(_ providerId: String) async throws -> [ModelInfo] {
+        if let m = models[providerId] { return m }
+        let list = ModelInfo.list(try await remote().call(Channels.modelsList, [.string(providerId)], timeout: modelListTimeout))
+        models[providerId] = list
+        modelErrors[providerId] = nil
+        return list
+    }
+
+    /// Every enabled provider's models, asked in parallel; a slow or failing
+    /// provider is marked unreachable instead of holding up the others.
+    public func loadAllModels(force: Bool = false) async {
+        let enabled = providers.filter(\.enabled).map(\.id)
+        if force {
+            for id in enabled {
+                models[id] = nil
+                modelErrors[id] = nil
+            }
+        }
+        await withTaskGroup(of: Void.self) { group in
+            for id in enabled {
+                group.addTask { @MainActor in
+                    do {
+                        try await self.loadModels(id)
+                    } catch {
+                        let m = error.localizedDescription
+                        self.modelErrors[id] = m.hasSuffix("timed out") ? "Didn’t answer in time." : m
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Changing chats on the computer
+
+    /// Complete a chat (the desktop's archive): nothing is deleted.
+    public func completeChat(_ sessionId: String) async throws {
+        let at = now()
+        _ = try await remote().call(Channels.sessionSetOptions, [.string(sessionId), ["archivedAt": .int(at)]])
+        setArchived(sessionId, at)
+    }
+
+    public func restoreChat(_ sessionId: String) async throws {
+        _ = try await remote().call(Channels.sessionSetOptions, [.string(sessionId), ["archivedAt": nil]])
+        setArchived(sessionId, nil)
+    }
+
+    public func renameChat(_ sessionId: String, to title: String) async throws {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        _ = try await remote().call(Channels.sessionSetOptions, [.string(sessionId), ["title": .string(t)]])
+        if let i = summaries.firstIndex(where: { $0.id == sessionId }) { summaries[i].title = t }
+    }
+
+    public func setPinned(_ sessionId: String, _ pinned: Bool) async throws {
+        _ = try await remote().call(Channels.sessionSetOptions, [.string(sessionId), ["pinned": .bool(pinned)]])
+        if let i = summaries.firstIndex(where: { $0.id == sessionId }) { summaries[i].pinned = pinned }
+    }
+
+    public func deleteChat(_ sessionId: String) async throws {
+        _ = try await remote().call(Channels.sessionDelete, [.string(sessionId)])
+        summaries.removeAll { $0.id == sessionId }
+        activity[sessionId] = nil
+    }
+
+    /// Start a chat on the computer with a model, a folder and a tool policy.
+    public func createChat(providerId: String, modelId: String, workspaceId: String?, mode: PcSettings.ChatMode?) async throws -> String {
+        let r = try remote()
+        let created = try await r.call(Channels.sessionCreate, workspaceId.map { [.string($0)] } ?? [])
+        guard let session = Session.from(created) else { throw RelayError("Your computer didn’t create the chat.") }
+        var options: [String: JSONValue] = ["providerId": .string(providerId), "modelId": .string(modelId)]
+        if let mode { options["mode"] = .string(mode.rawValue) }
+        _ = try await r.call(Channels.sessionSetOptions, [.string(session.id), .object(options)])
+        scheduleSummaries()
+        return session.id
+    }
+
+    /// Change the computer's phone-settable settings; the reply is what was saved there.
+    public func updatePcSettings(_ patch: JSONValue) async throws {
+        pcSettings = PcSettings.from(try await remote().call(Channels.settingsUpdate, [patch]))
+    }
+
+    // MARK: Internals
+
+    private func setArchived(_ sessionId: String, _ at: Int64?) {
+        guard let i = summaries.firstIndex(where: { $0.id == sessionId }) else { return }
+        summaries[i].archived = at != nil
+        summaries[i].archivedAt = at
+    }
+
+    private func clearComputerState() {
+        summaries = []
+        providers = []
+        models = [:]
+        modelErrors = [:]
+        workspaces = []
+        activity = [:]
+        // Another computer, or the same one later: its settings are unknown until it answers.
+        pcSettings = PcSettings()
+        hostVersion = nil
+        lastError = nil
+    }
+
+    private func scheduleSummaries() {
+        guard summariesTask == nil, let c = client else { return }
+        let delay = summariesDebounce
+        summariesTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1e9))
+            guard let self else { return }
+            defer { self.summariesTask = nil }
+            guard self.client === c, !Task.isCancelled else { return }
+            if let list = try? await c.call(Channels.sessionsSummaries), self.client === c {
+                self.summaries = SessionSummary.visible(list)
+            }
+        }
+    }
+
+    private func learnPlatform(_ platform: String?) {
+        guard let platform, let id = activeId, let i = computers.firstIndex(where: { $0.id == id }),
+              computers[i].platform != platform else { return }
+        // First connection names the computer after its OS, unless the user renamed it.
+        if computers[i].name == defaultComputerName { computers[i].name = osName(platform) }
+        computers[i].platform = platform
+        saveIndex()
+    }
+
+    private func dropPairCode(_ id: String) {
+        guard var s = secret(id), s.pair != nil else { return }
+        s.pair = nil
+        saveSecret(id, s)
+    }
+
+    private func deviceId() -> String {
+        if let id = store.get(Self.deviceKey) { return id }
+        let id = newId()
+        store.set(Self.deviceKey, id)
+        return id
+    }
+
+    private func secret(_ id: String) -> ComputerSecret? {
+        store.get(Self.secretKey(id)).flatMap { try? JSONDecoder().decode(ComputerSecret.self, from: Data($0.utf8)) }
+    }
+
+    private func saveSecret(_ id: String, _ s: ComputerSecret) {
+        let data = (try? JSONEncoder().encode(s)).map { String(decoding: $0, as: UTF8.self) }
+        store.set(Self.secretKey(id), data)
+    }
+
+    private func decodeIndex() -> [Computer] {
+        store.get(Self.indexKey).flatMap { try? JSONDecoder().decode([Computer].self, from: Data($0.utf8)) } ?? []
+    }
+
+    private func saveIndex() {
+        let data = (try? JSONEncoder().encode(computers)).map { String(decoding: $0, as: UTF8.self) }
+        store.set(Self.indexKey, data)
+    }
+}
+
+func orNil<T: Sendable>(_ body: @Sendable () async throws -> T) async -> T? {
+    try? await body()
+}

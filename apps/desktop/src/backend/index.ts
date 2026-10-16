@@ -19,11 +19,13 @@
  * - `NEKKOD_URL` / `NEKKOD_TOKEN`: set when the daemon started us; the ptys are
  *   then the daemon's, and this host forwards terminal calls to it.
  */
+import { join } from 'node:path';
 import { createHost, flushAgentLogs, useEngineDaemon, useTerminalDaemon } from '@nekko-agent/host';
 import { closeApiServer } from '../main/api-server.js';
 import { startLocalAccess, stopLocalAccess, type AppLike } from '../main/local-access.js';
 import { closeWorkflowLoopbackListener, manageWorkflowLoopbackListener } from '../main/workflow-listener.js';
 import { desktopChannels } from './channels.js';
+import { bundledRelayEntry, LocalRelay } from './local-relay.js';
 import { startWire } from './wire.js';
 
 interface AppFacts {
@@ -79,7 +81,11 @@ async function main(): Promise<void> {
   // not need the window touched first.
   startLocalAccess(app, host);
 
-  const wire = await startWire({ host, token, overrides: desktopChannels(app, host), origins });
+  // Relay on this computer: back on at launch if it was switched on.
+  const localRelay = new LocalRelay({ stateFile: join(dataDir, 'local-relay.json'), entry: bundledRelayEntry() });
+  localRelay.resume();
+
+  const wire = await startWire({ host, token, overrides: desktopChannels(app, host, localRelay), origins });
 
   let stopping = false;
   const shutdown = async (code: number) => {
@@ -89,6 +95,7 @@ async function main(): Promise<void> {
       closeWorkflowLoopbackListener();
       closeApiServer();
       stopLocalAccess(host);
+      localRelay.close();
       wire.close();
     } finally {
       try { await flushAgentLogs(); }

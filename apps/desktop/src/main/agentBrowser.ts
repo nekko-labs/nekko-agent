@@ -73,7 +73,11 @@ export function errorLine(error: unknown): string {
 interface ChatBrowser { tabs: Tab[]; active: number; driver: BrowserDriver; lastUsed: number; queue: Promise<unknown> }
 
 /** Private tool bridge. Only the backend receives its capability token, never page content. */
-export async function startAgentBrowser(options: { driver?: BrowserDriverFactory } = {}): Promise<{ url: string; token: string; close: () => void }> {
+export async function startAgentBrowser(options: {
+  driver?: BrowserDriverFactory;
+  /** The engine daemon's `workspace:add` asks for the native folder picker here (`{ tool: 'pickFolder' }`). */
+  pickFolder?: () => Promise<string | null>;
+} = {}): Promise<{ url: string; token: string; close: () => void }> {
   const createDriver = options.driver ?? playwrightDriver;
   const token = randomBytes(32).toString('hex');
   const chats = new Map<string, ChatBrowser>();
@@ -250,6 +254,11 @@ export async function startAgentBrowser(options: { driver?: BrowserDriverFactory
         chunks.push(chunk);
       }
       const input = JSON.parse(Buffer.concat(chunks).toString());
+      // Not a chat's: the daemon's `workspace:add` (crates/nekkod/src/small_services.rs).
+      if (input.tool === 'pickFolder') {
+        if (!options.pickFolder) throw new Error('No folder picker here.');
+        reply(200, { path: await options.pickFolder() }); return;
+      }
       const { sessionId } = input;
       if (typeof sessionId !== 'string' || !sessionId || sessionId.length > 200) throw new Error(input.tool === 'capture' ? 'Invalid capture session' : 'Invalid browser request.');
       if (input.tool === 'capture') {
