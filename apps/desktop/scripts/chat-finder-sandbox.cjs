@@ -52,6 +52,18 @@ app.whenReady().then(async () => {
       await key('Escape'); await sleep(100);
       await check('Esc closes', "!document.querySelector('[data-chat-finder]')");
     }
+    if (version === 'after' && process.env.NEKKO_MOTION) {
+      // Frames for a short recording: open, type, wait line fills, results land.
+      const motion = path.join(dir, 'motion'); fs.rmSync(motion, { recursive: true, force: true }); fs.mkdirSync(motion, { recursive: true });
+      let n = 0; const frame = async () => fs.writeFileSync(path.join(motion, `f${String(n++).padStart(3, '0')}.png`), (await win.capturePage({ x: 0, y: 0, width: 520, height: 460 }, { stayHidden: true })).toPNG());
+      for (let i = 0; i < 4; i++) { await frame(); await sleep(40); }
+      await run("document.querySelector('[data-chat-finder-toggle]').click()");
+      for (let i = 0; i < 6; i++) { await frame(); await sleep(30); }
+      await type('fix');
+      const t0 = Date.now(); while (Date.now() - t0 < 2000) { await frame(); await sleep(60); }
+      for (let i = 0; i < 6; i++) { await frame(); await sleep(60); }
+      checks.push(`motion frames ${n}`);
+    }
     fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify({ checks }, null, 2));
     console.log(JSON.stringify({ version, checks }, null, 2));
   } catch (e) { console.error(e); process.exitCode = 1; }
