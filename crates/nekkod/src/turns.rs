@@ -1238,7 +1238,10 @@ pub const HOST_END_EVENTS: [&str; 2] = ["done", "error"];
 /// runs in TS reads the whole turn, one that only follows how turns end
 /// (agent watches, auto-continue) asks for `done` and `error`.
 fn host_events(facts: &Value) -> Option<HashSet<String>> {
-    facts.get("hostEvents")?.as_array().map(|kinds| kinds.iter().filter_map(Value::as_str).map(str::to_string).collect())
+    facts
+        .get("hostEvents")?
+        .as_array()
+        .map(|kinds| kinds.iter().filter_map(Value::as_str).map(str::to_string).collect())
 }
 
 /// The host's copy of the turn's events, in order, deltas batched. The UI

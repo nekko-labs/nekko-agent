@@ -327,13 +327,17 @@ mod tests {
         ));
         assert!(!is_daemon_copy(r#"{"channel":"agent:event","payload":{"type":"text","sessionId":"s","delta":"x"}}"#));
         // The host's echo of a limit change the daemon published itself.
-        assert!(is_daemon_copy(r#"{"channel":"limits:updated","payload":{"tokenKey":"k","limits":{},"relayOnly":true}}"#));
+        assert!(is_daemon_copy(
+            r#"{"channel":"limits:updated","payload":{"tokenKey":"k","limits":{},"relayOnly":true}}"#
+        ));
         // Only the payload's own flag counts, not text that mentions it.
         assert!(!is_daemon_copy(
             r#"{"channel":"agent:event","payload":{"type":"text","delta":"{\"relayOnly\":true}","inner":{"relayOnly":true}}}"#
         ));
         // Output of a terminal the daemon owns; the agent command logs are the backend's.
-        assert!(is_daemon_copy(r#"{"channel":"terminal:event","payload":{"type":"data","terminalId":"term_1","data":"x"}}"#));
+        assert!(is_daemon_copy(
+            r#"{"channel":"terminal:event","payload":{"type":"data","terminalId":"term_1","data":"x"}}"#
+        ));
         assert!(!is_daemon_copy(
             r#"{"channel":"terminal:event","payload":{"type":"data","terminalId":"agent_s1","data":"x"}}"#
         ));

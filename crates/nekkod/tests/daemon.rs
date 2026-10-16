@@ -1131,10 +1131,11 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     assert!(system.contains("1: export const secret = 'pineapple';"), "{system}");
 }
 
-/// A model that streams `n` words of `word`, one chunk every `gap`.
+/// A model reply of `n` text chunks (`word0 word1 ...`), then a stop.
 fn slow_text(word: &str, n: usize) -> String {
-    let mut chunks: Vec<Value> =
-        (0..n).map(|i| json!({ "choices": [{ "delta": { "content": format!("{word}{i} ") }, "finish_reason": null }] })).collect();
+    let mut chunks: Vec<Value> = (0..n)
+        .map(|i| json!({ "choices": [{ "delta": { "content": format!("{word}{i} ") }, "finish_reason": null }] }))
+        .collect();
     chunks.push(json!({ "choices": [{ "delta": {}, "finish_reason": "stop" }], "usage": { "prompt_tokens": 10, "completion_tokens": n } }));
     sse(&chunks)
 }
@@ -1239,7 +1240,11 @@ async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_tur
     }
 
     // A socket that starts showing a chat mid-turn is sent the turn so far.
-    let model2 = scripted_model(vec![call_tool("c_wait", "ask_user", json!({ "questions": [{ "question": "Go?", "options": ["yes", "no"] }] })), say_text("went")]).await;
+    let model2 = scripted_model(vec![
+        call_tool("c_wait", "ask_user", json!({ "questions": [{ "question": "Go?", "options": ["yes", "no"] }] })),
+        say_text("went"),
+    ])
+    .await;
     let mut three = turn_spec(&rig, &model2, "turn_three", "s_one", json!({}));
     three["facts"]["hostEvents"] = json!(["done", "error"]);
     post(port, "chat:turn", json!([three]), Some(TOKEN)).await;
@@ -1247,18 +1252,29 @@ async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_tur
     let mut late = ws(port, &format!("/api/ws?sessions=s_two&token={TOKEN}"), None).await.unwrap();
     // Connected narrowed: told that s_one is running (its first event).
     let first = next_json(&mut late, Duration::from_secs(5)).await.unwrap();
-    assert_eq!((first["channel"].as_str(), first["payload"]["sessionId"].as_str()), (Some("agent:event"), Some("s_one")), "{first}");
-    late.send(Message::Text(json!({ "id": 7, "channel": "daemon:subscribe", "args": [["s_one", "s_two"]] }).to_string().into()))
-        .await
-        .unwrap();
+    assert_eq!(
+        (first["channel"].as_str(), first["payload"]["sessionId"].as_str()),
+        (Some("agent:event"), Some("s_one")),
+        "{first}"
+    );
+    late.send(Message::Text(
+        json!({ "id": 7, "channel": "daemon:subscribe", "args": [["s_one", "s_two"]] }).to_string().into(),
+    ))
+    .await
+    .unwrap();
     let replay = next_json(&mut late, Duration::from_secs(5)).await.unwrap();
     assert_eq!(replay["channel"], "agent:replay", "{replay}");
-    let types: Vec<&str> = replay["payload"]["events"].as_array().unwrap().iter().map(|e| e["type"].as_str().unwrap()).collect();
+    let types: Vec<&str> =
+        replay["payload"]["events"].as_array().unwrap().iter().map(|e| e["type"].as_str().unwrap()).collect();
     assert!(types.contains(&"tool_call") && types.contains(&"question"), "{types:?}");
     assert_eq!(next_json(&mut late, Duration::from_secs(5)).await.unwrap(), json!({ "id": 7, "result": true }));
-    post(port, "chat:answer", json!(["s_one", "c_wait", [{ "questionId": "q1", "labels": ["yes"] }]]), Some(TOKEN)).await;
+    post(port, "chat:answer", json!(["s_one", "c_wait", [{ "questionId": "q1", "labels": ["yes"] }]]), Some(TOKEN))
+        .await;
     let rest = collect_until_done(&mut late, &["s_one"]).await;
-    assert!(rest.iter().all(|(ch, p)| ch != "agent:event" || p["type"] != "question"), "the question is not sent twice");
+    assert!(
+        rest.iter().all(|(ch, p)| ch != "agent:event" || p["type"] != "question"),
+        "the question is not sent twice"
+    );
     assert_eq!(streamed_text(&rest, "s_one"), "went");
 }
 

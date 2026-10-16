@@ -398,7 +398,9 @@ mod tests {
         let mut rx = hub.subscribe();
         hub.publish_backend(r#"{"channel":"agent:event","payload":{"type":"text","sessionId":"s9","delta":"x"}}"#);
         hub.publish_backend(r#"{"channel":"tasks:updated","payload":[]}"#);
-        assert!(matches!(rx.try_recv().unwrap().scope, Scope::Session { ref id, summary: true, .. } if id.as_ref() == "s9"));
+        assert!(
+            matches!(rx.try_recv().unwrap().scope, Scope::Session { ref id, summary: true, .. } if id.as_ref() == "s9")
+        );
         assert!(matches!(rx.try_recv().unwrap().scope, Scope::Global));
         hub.publish("agent:event", json!({ "type": "text", "sessionId": "d1", "delta": "x" }), false);
         hub.publish("daemon:backend", json!({ "state": "ready" }), false);

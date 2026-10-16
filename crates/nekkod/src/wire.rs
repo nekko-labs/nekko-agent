@@ -394,7 +394,8 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
                     let _ = out_tx.send(Out::Subscribe(id, ids, all));
                 }
                 None => {
-                    let error = json!({ "id": id, "error": "daemon:subscribe takes a list of chat ids, or null for all" });
+                    let error =
+                        json!({ "id": id, "error": "daemon:subscribe takes a list of chat ids, or null for all" });
                     let _ = out_tx.send(Out::Reply(error.to_string()));
                 }
             }
