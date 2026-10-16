@@ -1,0 +1,9 @@
+{
+  "_comment": "Generated with WebCrypto (Node 22 globalThis.crypto.subtle), the same API packages/shared/src/e2e.ts uses. Regenerate with apps/android/scripts/e2e-vector.mjs.",
+  "secret": "00112233445566778899aabbccddeeff",
+  "room": "a1b2c3d4e5f60718",
+  "keyHex": "6f7e2fcd85f000ed6c1922588d70f6d907096c025145a7143427f05a4660bc5a",
+  "ivHex": "0102030405060708090a0b0c",
+  "plaintext": "{\"type\":\"req\",\"id\":7,\"channel\":\"app:info\",\"args\":[\"héllo ✓ 🐱\"]}",
+  "sealed": "AQIDBAUGBwgJCgsMyVIb4b0ER0KvV7jqX9symIG6qzKUwDShPxwuZKbTgxy4IwZyMn4hHpEeDgQVGTD6lGJBMtPOeUI3szh/a1+5bm+4fz4zhhOVcmcKzUUoXQ2Hvr39oQ=="
+}
