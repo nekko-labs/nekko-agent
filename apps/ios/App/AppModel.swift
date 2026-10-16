@@ -28,6 +28,9 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A chat to open (notification tap, Live Activity tap, `nekko-agent://chat/<id>`).
     var openChat: String?
+    /// Text shared from another app (the share extension), waiting for New chat to take it.
+    var sharedText: String?
+    private let shareInbox = ShareInbox(defaults: UserDefaults(suiteName: StatusSnapshot.appGroup) ?? .standard)
 
     init() {
         let keychain = KeychainStore()
@@ -45,6 +48,11 @@ final class AppModel {
             deviceName: { deviceName },
             app: Bundle.main.bundleIdentifier)
         lock = AppLock(enabled: prefs.appLock)
+        #if DEBUG
+        // What the share extension leaves behind, without driving another app's share sheet.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-uiTestShare"), i + 1 < args.count { shareInbox.offer(args[i + 1]) }
+        #endif
     }
 
     /// The relay connection opens only after the first unlock (when the lock is
@@ -78,6 +86,14 @@ final class AppModel {
         foreground = true
         endBackgroundTask()
         if started { store.nudge() }
+        takeShare()
+    }
+
+    /// Moves a share from the extension to New chat. It waits while no computer
+    /// is paired (it expires on its own); once read it is gone from the App Group.
+    func takeShare() {
+        guard store.ready, !store.computers.isEmpty, let text = shareInbox.take() else { return }
+        sharedText = text
     }
 
     func didEnterBackground() {

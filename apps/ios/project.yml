@@ -38,6 +38,8 @@ targets:
         product: NekkoKit
       - target: NekkoWidgets
         embed: true
+      - target: NekkoShare
+        embed: true
   NekkoWidgets:
     type: app-extension
     platform: iOS
@@ -52,6 +54,22 @@ targets:
         INFOPLIST_FILE: Widgets/Info.plist
         APPLICATION_EXTENSION_API_ONLY: YES
         CODE_SIGN_ENTITLEMENTS: Widgets/NekkoWidgets.entitlements
+  NekkoShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Share
+        excludes: ["Info.plist", "*.entitlements"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nekko.native.ios.share
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Share/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+        CODE_SIGN_ENTITLEMENTS: Share/NekkoShare.entitlements
+    dependencies:
+      - package: NekkoProtocol
+        product: NekkoProtocol
   NekkoNativeTests:
     type: bundle.unit-test
     platform: iOS

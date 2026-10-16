@@ -23,6 +23,7 @@ struct NewChatView: View {
         Form {
             Section {
                 TextField("What should your computer do?", text: $text, axis: .vertical).lineLimit(3...10)
+                    .accessibilityIdentifier("newChat.prompt")
             }
             Section("Model") {
                 Button { showModels = true } label: {
@@ -62,8 +63,17 @@ struct NewChatView: View {
             }
         }
         .onAppear(perform: pickDefault)
+        .onAppear(perform: takeShared)
+        .onChange(of: app.sharedText) { _, _ in takeShared() }
         // The computer's defaults may arrive after this screen opened.
         .onChange(of: store.defaults) { _, _ in pickDefault() }
+    }
+
+    /// Text shared from another app becomes the first message, still editable.
+    private func takeShared() {
+        guard let shared = app.sharedText else { return }
+        text = shared
+        app.sharedText = nil
     }
 
     private func modelName(_ m: (String, String)) -> String {

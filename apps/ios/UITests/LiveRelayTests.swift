@@ -86,6 +86,18 @@ final class LiveRelayTests: XCTestCase {
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
         attach(app, "\(theme)-7-chats-after")
+
+        // Shared from another app: relaunch with what the share extension leaves
+        // in the App Group. New chat opens with the text; nothing is sent.
+        app.terminate()
+        let shared = "Summarise https://example.com/release-notes"
+        app.launchArguments = ["-appLock", "NO", "-theme", theme == "dark" ? "dark" : "light", "-uiTestShare", shared]
+        app.launch()
+        let prefilled = app.input("newChat.prompt")
+        XCTAssertTrue(prefilled.waitForExistence(timeout: 15), "New chat opened for the share")
+        XCTAssertEqual(prefilled.value as? String, shared)
+        XCTAssertTrue(app.navigationBars["New chat"].exists)
+        attach(app, "\(theme)-8-shared")
     }
 
     /// The computer's QR opens `nekko-agent-pair:` from the Camera app: iOS asks
