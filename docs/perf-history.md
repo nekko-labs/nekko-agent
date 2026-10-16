@@ -66,6 +66,21 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### Chat scroll bounce under reduced motion (2026-10-16)
+Area: renderer
+Result: improvement (scroll correctness; frame times unchanged within noise)
+Conditions: Windows, local, hidden off-screen Electron window 1100x720, synthetic 120-turn chat (about 56,000 px tall), 60 wheel notches up then 140 down at 16 ms, positions sampled once per rendered frame; `prefers-reduced-motion: reduce` emulated via CDP. Base `main` 8137d54a vs this branch, one run each, dark / light.
+
+| Metric (reduced motion) | Before | After |
+|---|---|---|
+| Frames where visible content moved against the wheel, up pass | 33 / 32 | 0 / 0 |
+| Pixels moved against the wheel, up pass | 5534 / 5596 | 0 / 0 |
+| Frames where visible content moved against the wheel, down pass | 30 / 29 | 0 / 0 |
+| Distance left to the bottom after scrolling down | 245 px / 245 px | 1 px / 1 px |
+| Frame p95, up pass | 8.4 ms / 4.3 ms | 4.3 ms / 4.3 ms |
+
+With reduced motion off, both builds measured 0 backward frames and reached the bottom (1 px). Why: the global reduce-motion rule set `transition-duration: 0.01ms` on `*`, which transitioned every property including the transcript's spacer padding; it is now `0s`. Source: the PR that adds `apps/desktop/scripts/transcript-scroll-integration.cjs`.
+
 ### #597 Completion-status fix: continuing baseline frame investigation (2026-10-16)
 Area: renderer
 Result: no performance improvement established (correctness fix, baseline diagnostic failure)

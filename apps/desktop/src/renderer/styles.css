@@ -1516,7 +1516,13 @@
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    /* 0s, not a tiny duration: transition-property defaults to `all`, so any
+       non-zero value here starts a transition on every changed property of
+       every element, layout included. The windowed transcript's spacer
+       padding then lagged a frame behind each row swap and the chat bounced
+       instead of reaching the bottom. A 0s transition is never started;
+       nothing in the renderer waits on transitionend. */
+    transition-duration: 0s !important;
     scroll-behavior: auto !important;
   }
 }
