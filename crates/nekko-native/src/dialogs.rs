@@ -91,6 +91,7 @@ impl MessageOptions {
 
 /// Run a blocking dialog on a fresh thread (each initializes its own COM
 /// apartment on Windows), waiting for the user without holding a runtime thread.
+#[cfg(any(windows, target_os = "linux"))]
 async fn on_thread<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     std::thread::Builder::new()
