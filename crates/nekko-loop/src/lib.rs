@@ -18,6 +18,7 @@ pub mod runaway;
 pub use fit::is_context_overflow;
 pub use history::{
     COMPACTION_PREAMBLE, as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history,
+    without_images,
 };
 pub use progress::LoopDetector;
 pub use resume::{INTERRUPTED_NOTE, INTERRUPTED_TOOL_OUTPUT, RESUME_PROMPT, repair_interrupted_history};

@@ -41,6 +41,29 @@ describe('runAgent', () => {
     expect(executeTool).not.toHaveBeenCalled();
   });
 
+  it('sends a model that cannot see a note in place of every earlier picture, and keeps them in the transcript', async () => {
+    const pic = 'data:image/png;base64,AAAA';
+    const history: ChatMessage[] = [
+      { ...msg('user', 'what file type for this animation?'), images: [pic] },
+      msg('user', 'hello'),
+    ];
+    const run = async (imageInput: boolean | undefined) => {
+      const provider = scriptedProvider([[{ type: 'text', delta: 'hi' }, { type: 'done' }]]);
+      const chat = vi.spyOn(provider, 'chat');
+      const copy = structuredClone(history);
+      for await (const _ of runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history: copy, imageInput, executeTool: vi.fn() })) { /* drain */ }
+      return { sent: chat.mock.calls[0][0].messages, kept: copy };
+    };
+    const blind = await run(false);
+    expect(blind.sent[0].images).toBeUndefined();
+    expect(blind.sent[0].content).toMatch(/^what file type for this animation\?\n\n\[1 image attachment omitted/);
+    // The transcript the host saves still holds the picture.
+    expect(blind.kept[0].images).toEqual([pic]);
+    // Unknown and sighted models are sent the picture, as before.
+    expect((await run(undefined)).sent[0].images).toEqual([pic]);
+    expect((await run(true)).sent[0].images).toEqual([pic]);
+  });
+
   it.each([
     { cacheReadTokens: 30 },
     { cacheWriteTokens: 20 },

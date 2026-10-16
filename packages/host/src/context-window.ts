@@ -1,5 +1,5 @@
 import type { ModelInfo, ProviderConfig } from '@nekko-agent/shared';
-import { guessContextWindow, isLocalProvider } from '@nekko-agent/shared';
+import { guessContextWindow, isLocalProvider, modelMediaSupport } from '@nekko-agent/shared';
 
 /**
  * The context window a turn actually has, in tokens.
@@ -22,7 +22,14 @@ import { guessContextWindow, isLocalProvider } from '@nekko-agent/shared';
 const CACHE_MS = 60_000;
 const LOOKUP_TIMEOUT_MS = 2_500;
 
-const cache = new Map<string, { at: number; windows: Map<string, number> }>();
+interface Listing {
+  at: number;
+  windows: Map<string, number>;
+  /** The listed rows by id, for what else a turn reads off them (image input). */
+  models: Map<string, ModelInfo>;
+}
+
+const cache = new Map<string, Listing>();
 
 /** Ollama's loaded context per model (`/api/ps`), which the model list does not carry. */
 async function ollamaLoaded(baseUrl: string): Promise<Map<string, number>> {
@@ -38,18 +45,28 @@ async function ollamaLoaded(baseUrl: string): Promise<Map<string, number>> {
   return out;
 }
 
-async function windowsFor(provider: ProviderConfig, list: () => Promise<ModelInfo[]>): Promise<Map<string, number>> {
+async function listingFor(provider: ProviderConfig, list: () => Promise<ModelInfo[]>): Promise<Listing> {
   const hit = cache.get(provider.id);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.windows;
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit;
   const windows = new Map<string, number>();
+  const rows = new Map<string, ModelInfo>();
   const timeout = new Promise<ModelInfo[]>((resolve) => setTimeout(() => resolve([]), LOOKUP_TIMEOUT_MS));
   const models = await Promise.race([list().catch(() => [] as ModelInfo[]), timeout]);
-  for (const m of models) if (m.contextLength && m.contextLength > 0) windows.set(m.id, m.contextLength);
+  for (const m of models) {
+    rows.set(m.id, m);
+    if (m.contextLength && m.contextLength > 0) windows.set(m.id, m.contextLength);
+  }
   if (provider.kind === 'ollama') {
     for (const [id, ctx] of await ollamaLoaded(provider.baseUrl).catch(() => new Map<string, number>())) windows.set(id, ctx);
   }
-  cache.set(provider.id, { at: Date.now(), windows });
-  return windows;
+  const listing = { at: Date.now(), windows, models: rows };
+  cache.set(provider.id, listing);
+  return listing;
+}
+
+/** Providers whose model list is worth asking for per-model facts. */
+function asksList(provider: ProviderConfig): boolean {
+  return isLocalProvider(provider.kind) || provider.kind === 'openai-compat' || provider.kind === 'openrouter';
 }
 
 /**
@@ -59,15 +76,32 @@ async function windowsFor(provider: ProviderConfig, list: () => Promise<ModelInf
  */
 export async function contextWindowFor(provider: ProviderConfig | undefined, modelId: string, list: () => Promise<ModelInfo[]>): Promise<number> {
   const guess = guessContextWindow(modelId);
-  if (!provider) return guess;
-  const asks = isLocalProvider(provider.kind) || provider.kind === 'openai-compat' || provider.kind === 'openrouter';
-  if (!asks) return guess;
+  if (!provider || !asksList(provider)) return guess;
   try {
-    const reported = (await windowsFor(provider, list)).get(modelId);
+    const reported = (await listingFor(provider, list)).windows.get(modelId);
     return reported && reported > 0 ? reported : guess;
   } catch {
     return guess;
   }
+}
+
+/**
+ * Whether a turn may send `modelId` pictures: false only when the model is
+ * known not to take them (the engine's model without a projector, a catalog
+ * listing text only, a text-only family). Unknown stays true, so a server we
+ * cannot classify is not stripped of what it might see. Reads the same cached
+ * list as `contextWindowFor`, so it costs no extra request.
+ */
+export async function imageInputFor(provider: ProviderConfig | undefined, modelId: string, list: () => Promise<ModelInfo[]>): Promise<boolean> {
+  let model: ModelInfo | undefined;
+  if (provider && asksList(provider)) {
+    try {
+      model = (await listingFor(provider, list)).models.get(modelId);
+    } catch {
+      model = undefined;
+    }
+  }
+  return modelMediaSupport({ modelId, providerKind: provider?.kind, model }).image !== 'no';
 }
 
 /** The last window a turn used for `modelId` on `providerId`, without asking anyone. */

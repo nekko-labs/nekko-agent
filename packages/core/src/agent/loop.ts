@@ -7,6 +7,9 @@ import { RUNAWAY_NOTE, createRunawayGuard } from './runaway.js';
 import { INTERRUPTED_NOTE, RESUME_PROMPT, repairInterruptedHistory } from './resume.js';
 import { LOOP_WRAP_UP_PROMPT, createLoopDetector, loopNote, loopNudge } from './progress.js';
 import { MAX_STREAM_ATTEMPTS, ProviderHttpError, isTransientProviderError, retryDelayMs } from '../providers/errors.js';
+import { withoutImages } from '../providers/media.js';
+
+export { withoutImages };
 
 /** Wait, or stop waiting the moment the run is aborted. */
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -60,6 +63,13 @@ export interface RunAgentOptions {
   contextWindow?: number;
   /** Hard cap on tokens one provider response may generate (see MAX_OUTPUT_TOKENS_DEFAULT). */
   maxOutputTokens?: number;
+  /**
+   * False when the model is known not to take images (a local model with no
+   * projector, a catalog that lists text only). Pictures in the history are
+   * then replaced with a note on the way out, so one attachment cannot leave
+   * every later turn failing. Absent or true sends them as before.
+   */
+  imageInput?: boolean;
   /**
    * Continue a run that stopped part-way rather than starting the turn over.
    * `history` is repaired first (see resume.ts) and the model is told to build on
@@ -212,7 +222,8 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
       else opts.signal.addEventListener('abort', onAbort, { once: true });
     }
 
-    const full = [...windowHistory(fromLatestCompaction(opts.history), opts.maxHistoryTurns).map(asSeenByChatModel), ...extraMessages];
+    const seen = windowHistory(fromLatestCompaction(opts.history), opts.maxHistoryTurns).map(asSeenByChatModel);
+    const full = [...(opts.imageInput === false ? seen.map(withoutImages) : seen), ...extraMessages];
     elided = elisionFor(opts.system, sendTools, full, opts.contextWindow, elided);
     sentEligible = elidable(full).length;
     const messages = applyElision(full, elided);

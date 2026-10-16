@@ -49,6 +49,47 @@ pub fn as_seen_by_chat_model(m: &Value) -> Value {
     out
 }
 
+/// `withoutImages` (providers/media.ts): a message as a model that cannot see
+/// is sent it, its pictures replaced by one line saying they were left out.
+pub fn without_images(m: &Value) -> Value {
+    let role = m.get("role").and_then(Value::as_str);
+    let count = |v: Option<&Value>| v.and_then(Value::as_array).map_or(0, Vec::len);
+    let plural = |n: usize| if n == 1 { "" } else { "s" };
+    let join = |text: &str, note: String| if text.is_empty() { note } else { format!("{text}\n\n{note}") };
+    if role == Some("user") {
+        let n = count(m.get("images"));
+        if n > 0 {
+            let mut out = m.clone();
+            let obj = out.as_object_mut().expect("a message is an object");
+            obj.remove("images");
+            let content = m.get("content").and_then(Value::as_str).unwrap_or("");
+            let note = format!(
+                "[{n} image attachment{} omitted: this model does not accept image input. Tell the user if the images matter to the task.]",
+                plural(n)
+            );
+            obj.insert("content".into(), Value::String(join(content, note)));
+            return out;
+        }
+    }
+    if role == Some("tool")
+        && let Some(result) = m.get("toolResult")
+    {
+        let n = count(result.get("images"));
+        if n > 0 {
+            let mut r = result.clone();
+            let obj = r.as_object_mut().expect("a tool result is an object");
+            obj.remove("images");
+            let output = result.get("output").and_then(Value::as_str).unwrap_or("");
+            let note = format!("[{n} screenshot{} omitted: this model does not accept image input.]", plural(n));
+            obj.insert("output".into(), Value::String(join(output, note)));
+            let mut out = m.clone();
+            out["toolResult"] = r;
+            return out;
+        }
+    }
+    m.clone()
+}
+
 /// `COMPACTION_PREAMBLE` (context.ts).
 pub const COMPACTION_PREAMBLE: &str = "Summary of the earlier conversation, compacted to save context:";
 
