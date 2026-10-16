@@ -4391,8 +4391,8 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
         ("tokens.json", "{}".into()),
         (
             "agent-watches.json",
-            json!([{ "id": "w1", "sessionId": "s_a", "kind": "timer", "prompt": "secret", "nextPollAt": 5, "intervalMs": 60000,
-                     "deadlineAt": 9, "status": "active", "failures": 0 }])
+            json!([{ "id": "w1", "sessionId": "s_a", "kind": "timer", "prompt": "secret", "nextPollAt": 4102444800000_u64, "intervalMs": 60000,
+                     "deadlineAt": 4102444800000_u64, "status": "active", "failures": 0 }])
             .to_string(),
         ),
     ] {
@@ -4406,7 +4406,7 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
     let (_, views) = post(d.port, "session:watches", json!(["s_a"]), Some(TOKEN)).await;
     assert_eq!(
         views,
-        json!([{ "id": "w1", "kind": "timer", "status": "active", "deadlineAt": 9, "nextPollAt": 5, "pending": false, "failures": 0 }])
+        json!([{ "id": "w1", "kind": "timer", "status": "active", "deadlineAt": 4102444800000_u64, "nextPollAt": 4102444800000_u64, "pending": false, "failures": 0 }])
     );
 
     let (_, info) = post(d.port, "app:info", json!([]), Some(TOKEN)).await;
