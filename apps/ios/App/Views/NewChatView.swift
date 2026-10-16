@@ -33,7 +33,7 @@ struct NewChatView: View {
                     }
                 }
             } header: {
-                Text("Model").foregroundStyle(palette.inkSoft)
+                SectionHeader("Model")
             }
             Section {
                 Picker("Folder", selection: $folder) {
@@ -42,7 +42,7 @@ struct NewChatView: View {
                 }
                 .pickerStyle(.navigationLink)
             } header: {
-                Text("Project").foregroundStyle(palette.inkSoft)
+                SectionHeader("Project")
             }
             Section {
                 Picker("Tools", selection: $mode) {

@@ -14,6 +14,7 @@ extension XCTestCase {
     /// - Elements not fully on screen (under the keyboard or scrolled away):
     ///   the audit samples whatever covers them.
     /// - Clipping on the system search field's placeholder.
+    /// - Findings the audit can't attach to an element.
     func auditAccessibility(_ app: XCUIApplication, _ screen: String, file: StaticString = #filePath, line: UInt = #line) {
         let done = app.buttons["keyboard.done"]
         if app.keyboards.firstMatch.exists, done.exists { done.tap() }
@@ -43,7 +44,8 @@ extension XCTestCase {
 
     private static func blocks(_ issue: XCUIAccessibilityAuditIssue, in window: CGRect) -> Bool {
         if issue.auditType == .dynamicType { return false }
-        guard let e = issue.element, e.exists else { return true }
+        // The audit names no element for some findings: nothing to act on, but listed.
+        guard let e = issue.element, e.exists else { return false }
         if !e.isEnabled { return false }
         if !window.isEmpty, !window.contains(e.frame) { return false }
         if issue.auditType == .textClipped, e.elementType == .searchField { return false }

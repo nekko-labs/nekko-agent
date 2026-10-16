@@ -64,6 +64,9 @@ struct ChatView: View {
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
             .onChange(of: chat.blocks.last) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+            // An approval or question card grows the bottom bar: keep the latest step above it.
+            .onChange(of: chat.turn.approval?.call.id) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+            .onChange(of: chat.turn.question != nil) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
                     if let a = chat.turn.approval {
@@ -234,9 +237,11 @@ struct ApprovalCard: View {
             if let detail { ScrollView { Text(detail).font(.caption.monospaced()).foregroundStyle(palette.inkSoft).textSelection(.enabled) }.frame(maxHeight: 120) }
             if !approval.reason.isEmpty { Text(approval.reason).font(.footnote).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true) }
             HStack {
-                Button(role: .destructive) { answer(false) } label: { Text("Deny").frame(maxWidth: .infinity) }.buttonStyle(.bordered)
+                Button(role: .destructive) { answer(false) } label: { Text("Deny").frame(maxWidth: .infinity).foregroundStyle(palette.ink) }
+                    .buttonStyle(.bordered).tint(palette.inkSoft)
                 Button { answer(true) } label: { Text("Allow").frame(maxWidth: .infinity).foregroundStyle(palette.onAccent) }.buttonStyle(.borderedProminent)
             }
+            .controlSize(.large)
         }
         .padding(14)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))

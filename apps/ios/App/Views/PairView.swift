@@ -55,6 +55,7 @@ struct TailscaleGuide: View {
             }
             if !tailnet {
                 Link("Get Tailscale for iPhone", destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!).font(.footnote)
+                    .frame(minHeight: 44, alignment: .leading).contentShape(Rectangle())
             }
             Divider().padding(.vertical, 4)
             Text("No Tailscale?").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
@@ -108,7 +109,7 @@ struct PairView: View {
                     .textInputAutocapitalization(.never).autocorrectionDisabled().font(.footnote.monospaced())
                 Button("Pair") { submit(pasted) }.disabled(pasted.trimmingCharacters(in: .whitespaces).isEmpty || busy)
             } header: {
-                Text("Or paste the pairing link").foregroundStyle(palette.inkSoft)
+                SectionHeader("Or paste the pairing link")
             }
             if let error {
                 Section { Text(error).foregroundStyle(palette.danger).font(.footnote) }
