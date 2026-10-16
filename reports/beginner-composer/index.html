@@ -377,7 +377,7 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
   const cbar = (mode = 'Guardrails') => `
     <div class="cbar">
       <button class="ib" type="button" aria-label="Add files, images or a skill" title="Add files, images or a skill">${I.plus}</button>
-      <span class="chip" data-mode title="What Nekko may do without asking">${I.shield}<span>${mode}</span></span>
+      <span class="chip" data-mode title="What Nekko may do without asking">${I.shield}<span>${esc(mode)}</span></span>
       <span class="chip">${I.folder} my-app</span>
       <span class="grow"></span>
       <span class="chip">Auto ${I.caret}</span>
@@ -548,10 +548,10 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
       paint();
     }));
     $('[data-raw]', body).addEventListener('click', (e) => {
-      const card = $('.builder', body);
+      const card = $('.builder', body), written = text(), mode = on('ask') ? 'Ask' : 'Guardrails';
       const f = blankField(win, { placeholder: 'Tell Nekko what you want to do…' });
-      card.replaceChildren(f.el, h(cbar($('[data-mode] span', body).textContent)));
-      f.set(text(), { select: false });
+      card.replaceChildren(f.el, h(cbar(mode)));
+      f.set(written, { select: false });
       e.currentTarget.textContent = 'Your sentence is in the box. Edit it freely.';
       wireSend(win, () => f.ta.value);
     });
