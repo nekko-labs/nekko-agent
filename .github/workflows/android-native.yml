@@ -4,7 +4,6 @@ name: Native Android
 # WebCrypto implementation, the live phone ↔ relay ↔ computer integration test,
 # lint, and debug + release (unsigned, minified) builds.
 on:
-  workflow_dispatch:
   pull_request:
     paths:
       - 'apps/android/**'
