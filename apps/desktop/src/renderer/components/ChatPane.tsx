@@ -41,6 +41,11 @@ import { ImageLiveTurn } from './agent-console/ImageLiveTurn.js';
 import { SubagentInheritedModelContext, SubagentParentContext } from './agent-console/SubagentCue.js';
 import { WatchSessionContext } from '../agentWatches.js';
 import { VirtualTranscript, type VirtualTranscriptHandle } from './agent-console/VirtualTranscript.js';
+import { ChatSearchBar } from './agent-console/ChatSearchBar.js';
+
+/** Window event asking a chat's transcript pane to open its search bar (detail: { sessionId }). */
+const OPEN_CHAT_SEARCH = 'nekko-open-chat-search';
+import { SHORTCUTS } from '../shortcuts.js';
 import { MarkdownEditor, type MarkdownEditorElement } from './agent-console/MarkdownEditor.js';
 import { MarkdownSandbox } from './Markdown.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
@@ -71,7 +76,7 @@ import { FolderPicker } from './FolderPicker.js';
 import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
-import { PanelIcon, DownloadIcon, PlusIcon, CloseIcon, BoltIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon, QuestionIcon } from '../icons.js';
+import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon, QuestionIcon } from '../icons.js';
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 
@@ -752,6 +757,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // "Jump to latest" pill: shown when new content streams in while the reader
   // has scrolled up.
   const [showJump, setShowJump] = useState(false);
+  // Find in this chat. The bar sits over the transcript; each open mounts it
+  // fresh (focused, empty), and closing it clears the highlights.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchEpoch, setSearchEpoch] = useState(0);
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    setSearchEpoch((n) => n + 1);
+  }, []);
   const transcriptRef = useRef<VirtualTranscriptHandle>(null);
   const composerRef = useRef<MarkdownEditorElement>(null);
   // A dragged composer height, or null to size to the draft. See COMPOSER_H_KEY.
@@ -1158,6 +1171,49 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (pinned) setShowJump(false);
   }, []);
   const onGrowWhileUnpinned = useCallback(() => setShowJump(true), []);
+
+  // Ctrl/Cmd+F finds in one chat: the window that has focus. With focus
+  // nowhere in a chat (the wall's composer drives a transcript window that has
+  // no keyboard focus of its own), it goes to the visible full chat, or the
+  // wall's selected transcript. The composer pane has no transcript, so it
+  // hands Ctrl+F to the transcript window it drives.
+  // The search button sends the same request, so the wall composer's button
+  // opens search on the transcript window it drives.
+  const paneShown = usePaneVisible();
+  const searchTargetRef = useRef({ surface, selected, paneShown });
+  searchTargetRef.current = { surface, selected, paneShown };
+  useEffect(() => {
+    const shown = () => {
+      const pane = paneRef.current;
+      return !!pane && pane.offsetParent !== null && searchTargetRef.current.paneShown && searchTargetRef.current.surface !== 'composer';
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (!SHORTCUTS.findInChat.matches(e) || e.defaultPrevented || !shown()) return;
+      const { surface: s, selected: sel } = searchTargetRef.current;
+      const focusedPane = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-chat-surface]');
+      const mine = focusedPane
+        ? focusedPane === paneRef.current || (focusedPane.dataset.chatSurface === 'composer' && focusedPane.dataset.sessionId === sessionId)
+        : s === 'full' || sel === true;
+      if (!mine) return;
+      e.preventDefault();
+      openSearch();
+    };
+    const onRequest = (e: Event) => {
+      if ((e as CustomEvent<{ sessionId: string }>).detail?.sessionId === sessionId && shown()) openSearch();
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener(OPEN_CHAT_SEARCH, onRequest);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener(OPEN_CHAT_SEARCH, onRequest);
+    };
+  }, [sessionId, openSearch]);
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    // Back to where typing goes, so closing search does not strand focus.
+    paneRef.current?.querySelector<HTMLElement>('[contenteditable="true"], textarea')?.focus();
+  }, []);
+  const transcriptScroller = useCallback(() => paneRef.current?.querySelector<HTMLElement>('[data-transcript-scroll]') ?? null, []);
 
   const jumpToLatest = () => {
     setShowJump(false);
@@ -2455,6 +2511,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               {!planRailOpen && planSteps.total > 0 && <span className="plan-rail-toggle-count tabular-nums">{planSteps.done}/{planSteps.total}</span>}
             </button>
           )}
+          {searchOpen && (
+            <ChatSearchBar
+              key={searchEpoch}
+              rows={rows}
+              scrollRoot={transcriptScroller}
+              transcript={transcriptRef}
+              onClose={closeSearch}
+            />
+          )}
           {showJump && (
             <button
               className="fade-in absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-line px-3 py-1 text-[12px] font-medium text-ink-soft shadow-md hover:text-ink"
@@ -3019,6 +3084,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     />
                   </div>
                   </>)}
+                  {/* Find in this chat, beside +: the same 32px button and 16px
+                      icon. In the wall's composer it opens search on the
+                      transcript window this composer drives. */}
+                  <button
+                    type="button"
+                    className={`grid h-8 w-8 place-items-center rounded-lg transition-colors hover:bg-surface-2 hover:text-ink ${searchOpen ? 'bg-surface-2 text-ink' : 'text-ink-faint'}`}
+                    onClick={() => (surface === 'composer'
+                      ? window.dispatchEvent(new CustomEvent(OPEN_CHAT_SEARCH, { detail: { sessionId } }))
+                      : searchOpen ? closeSearch() : openSearch())}
+                    title={`Find in this chat (${SHORTCUTS.findInChat.label})`}
+                    aria-label="Find in this chat"
+                    aria-pressed={surface === 'composer' ? undefined : searchOpen}
+                    data-chat-search-toggle
+                  >
+                    <SearchIcon className="h-4 w-4" />
+                  </button>
                   {header && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
                       <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} toolsInWindow only="mode" />

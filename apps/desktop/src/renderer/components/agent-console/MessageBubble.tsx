@@ -92,7 +92,7 @@ export const MessageBubble = memo(function MessageBubble({
       parts.push(
         <div key="text" className={`group ${entering ? 'fade-in ' : ''}flex justify-start`}>
           <div className="msg-ai">
-            <Markdown basePath={basePath} text={message.content} />
+            <div data-chat-search-text><Markdown basePath={basePath} text={message.content} /></div>
             {!entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
             {displayText && message.content && (
               <div className="mt-1 flex gap-3 text-[11px] text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
@@ -153,7 +153,7 @@ export const MessageBubble = memo(function MessageBubble({
         )}
         {/* Your own messages render as markdown too: people type dashed lists and
             `code` in the composer and expect them to come out formatted. */}
-        {displayText && <Markdown basePath={basePath} text={isUser ? displayText : message.content} />}
+        {displayText && <div data-chat-search-text><Markdown basePath={basePath} text={isUser ? displayText : message.content} /></div>}
         {message.toolCalls?.map((c) => <ToolCard key={c.id} call={c} />)}
         {!isUser && !entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
         {(displayText && message.content || (isUser && (message.images?.length || message.videos?.length))) && (
