@@ -6,6 +6,40 @@ import { RUN_DONE_TOKEN, RUN_MAX_TURNS_DEFAULT, applyPlanUpdate, bestExperiment,
 import { dataDir, getSettings } from './store.js';
 import { getSession, saveSession, createSession, deleteSession } from './sessions.js';
 import { sendChat } from './chat.js';
+import { daemonCall, daemonOwns } from './engine/daemon.js';
+
+/**
+ * What the engine daemon puts in `NEKKOD_OWNS` when it runs training itself
+ * (crates/nekko-automation `training`): it is then the only writer of
+ * training.json and runs the scheduler, so this host neither starts runs nor
+ * writes the file, and its own calls (the local API server, the CLI, a turn
+ * this host runs) go to the daemon.
+ */
+export const DAEMON_TRAINING = 'training';
+
+/** The daemon's door, when it owns training. */
+function trainingDaemon(): ReturnType<typeof daemonCall> {
+  return daemonOwns(DAEMON_TRAINING) ? daemonCall() : undefined;
+}
+
+/**
+ * A run session's `report_experiment`, `report_artifact` or `update_plan`
+ * call from a turn this host runs: the daemon's when it owns training
+ * (`training:tool`), else handled here. Returns the tool's output and the
+ * run's plan after the call (for `update_plan`, mirrored onto the session).
+ */
+export async function trainingTool(sessionId: string, name: string, input: Record<string, unknown>): Promise<{ output: string; plan?: PlanStep[] }> {
+  const call = trainingDaemon();
+  if (call) {
+    const out = await call<{ output?: string; plan?: PlanStep[]; error?: string }>('training:tool', sessionId, name, input);
+    if (out?.error !== undefined) throw new Error(out.error);
+    return { output: String(out?.output ?? ''), plan: out?.plan ?? undefined };
+  }
+  if (name === 'report_experiment') return { output: reportExperiment(sessionId, input) };
+  if (name === 'report_artifact') return { output: reportArtifact(sessionId, input) };
+  const output = updateRunPlan(sessionId, input);
+  return { output, plan: runPlanForSession(sessionId) };
+}
 
 /**
  * Training/goal runs: one engine drives both the Training tab (train a model
@@ -339,7 +373,7 @@ export function runPlanForSession(sessionId: string): PlanStep[] | undefined {
  * status/score. When this is identical two turns running, the turn advanced
  * nothing real (no step completed/revised, no experiment added or changed).
  */
-function progressSignature(run: TrainingRun): string {
+export function progressSignature(run: TrainingRun): string {
   const p = planProgress(run.plan);
   const planSig = (run.plan ?? []).map((s) => `${s.id}:${s.status}`).join(',');
   const expSig = run.experiments.map((e) => `${e.id}:${e.status}:${e.score ?? ''}`).join(',');
@@ -347,7 +381,7 @@ function progressSignature(run: TrainingRun): string {
 }
 
 /** Cheap fingerprint of a turn's final answer, to catch verbatim repetition. */
-function outputSignature(text: string): string {
+export function outputSignature(text: string): string {
   const norm = text.replace(RUN_DONE_TOKEN, '').replace(/\s+/g, ' ').trim();
   return `${norm.length}:${norm.slice(0, 240)}`;
 }
@@ -369,14 +403,14 @@ function treeBrief(run: TrainingRun): string {
       const score = e.score != null ? ` score=${e.score}` : '';
       const parent = e.parentId ? ` parent=${e.parentId}` : '';
       const star = e.id === run.bestExperimentId ? ' ★leader' : '';
-      return `- ${e.id}${parent} [${e.status}]${score}${star} ${e.title}${e.note ? ` — ${e.note}` : ''}`;
+      return `- ${e.id}${parent} [${e.status}]${score}${star} ${e.title}${e.note ? `: ${e.note}` : ''}`;
     });
   const s = runStats(run);
   return `${run.experiments.length} experiments so far (best=${s.best ?? 'n/a'}, success rate=${s.successRate != null ? Math.round(s.successRate * 100) + '%' : 'n/a'}):\n${lines.join('\n')}`;
 }
 
 /** The per-turn brief for a run's agent. */
-function turnPrompt(run: TrainingRun, hints: string[]): string {
+export function turnPrompt(run: TrainingRun, hints: string[]): string {
   const cfg = run.config ?? {};
   const parts: string[] = [];
 
@@ -387,9 +421,9 @@ function turnPrompt(run: TrainingRun, hints: string[]): string {
         `PURPOSE: ${run.goal}`,
       );
       const d = cfg.dataset;
-      if (d) parts.push(`DATASET: ${d.source}:${d.id}${d.split ? ` (split: ${d.split})` : ''}${d.source === 'huggingface' ? ' — load via the datasets library.' : d.source === 'kaggle' ? ' — download via the kaggle CLI (needs KAGGLE_* creds; if missing, say so in a report note and continue with an alternative if possible).' : ''}`);
+      if (d) parts.push(`DATASET: ${d.source}:${d.id}${d.split ? ` (split: ${d.split})` : ''}${d.source === 'huggingface' ? '. Load via the datasets library.' : d.source === 'kaggle' ? '. Download via the kaggle CLI (needs KAGGLE_* creds; if missing, say so in a report note and continue with an alternative if possible).' : ''}`);
       const b = cfg.baseModel;
-      if (b && b.source !== 'none') parts.push(`BASE MODEL: ${b.source}:${b.id ?? ''} — start from it (fine-tune / adapt) where sensible, but compare against a simpler baseline.`);
+      if (b && b.source !== 'none') parts.push(`BASE MODEL: ${b.source}:${b.id ?? ''}. Start from it (fine-tune / adapt) where sensible, but compare against a simpler baseline.`);
       const levers: string[] = [];
       if (cfg.framework && cfg.framework !== 'auto') levers.push(`framework=${cfg.framework}`);
       if (cfg.epochs) levers.push(`epochs≈${cfg.epochs}`);

@@ -1,7 +1,13 @@
 //! Automation owned by the daemon (PF14), from `nekko-automation`: tasks
 //! (`tasks:*`, `task:*`, `tasks.json`, the scheduler) and workflows
 //! (`workflows:list`, `workflow:*`, `workflows.json`, `workflow-runs.json`,
-//! `workflow-cursors.json`, the schedule and the connector listeners).
+//! `workflow-cursors.json`, the schedule and the connector listeners), and
+//! training and goal runs (`training:*`, `training.json`, their turns; a run
+//! chat's tools are answered here too, from turns.rs or, for a turn the host
+//! runs, `training:tool`).
+//!
+//! A run's turn goes through the router's `chat:send`, so the daemon admits it
+//! when it admits the UI's turns.
 //!
 //! A task's or a workflow step's turn is a normal chat turn: the daemon asks
 //! the TS host to admit it (`chat:send`, the same door the UI uses, so the
@@ -18,6 +24,7 @@
 use crate::backend::Backend;
 use crate::hub::Hub;
 use nekko_automation::tasks::{self, TaskHost, Tasks};
+use nekko_automation::training::{Training, TrainingHost};
 use nekko_automation::workflows::{ShellResult, WorkflowHost, Workflows};
 use nekko_store::SessionStore;
 use serde_json::{Value, json};
@@ -27,10 +34,11 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 pub use nekko_automation::tasks::CHANNELS as TASK_CHANNELS;
+pub use nekko_automation::training::{CHANNELS as TRAINING_CHANNELS, TOOL_CHANNEL as TRAINING_TOOL};
 pub use nekko_automation::workflows::CHANNELS as WORKFLOW_CHANNELS;
 
 /// What the backend is told the daemon owns (`NEKKOD_OWNS`).
-pub const OWNS: &str = "tasks,workflows";
+pub const OWNS: &str = "tasks,workflows,training";
 
 /// How long a service waits on the host for the settings before going without.
 const SETTINGS_WAIT: Duration = Duration::from_secs(10);
@@ -43,6 +51,8 @@ pub type Dispatcher = Arc<dyn Fn(String, Vec<Value>) -> BoxFut<'static, Result<V
 pub struct Automation {
     pub tasks: Option<Arc<Tasks>>,
     pub workflows: Option<Arc<Workflows>>,
+    /// Training and goal runs (`training:*`, `training.json`, their turns).
+    pub training: Option<Arc<Training>>,
     dispatch: Arc<OnceLock<Dispatcher>>,
 }
 
@@ -54,7 +64,7 @@ impl Automation {
         hub: Hub,
     ) -> Self {
         let dispatch: Arc<OnceLock<Dispatcher>> = Arc::default();
-        let (tasks, workflows) = match store {
+        let (tasks, workflows, training) = match store {
             Some(store) => {
                 let dir = store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
                 let engine = Arc::new(Engine { store, settings, backend, hub, dispatch: dispatch.clone() });
@@ -62,12 +72,13 @@ impl Automation {
                 let ids: tasks::Ids = Arc::new(tasks::random_uuid);
                 (
                     Some(Tasks::new(&dir, engine.clone(), clock.clone(), ids.clone())),
-                    Some(Workflows::new(&dir, engine, clock, ids)),
+                    Some(Workflows::new(&dir, engine.clone(), clock.clone(), ids.clone())),
+                    Some(Training::new(&dir, engine, clock, ids)),
                 )
             }
-            None => (None, None),
+            None => (None, None, None),
         };
-        Self { tasks, workflows, dispatch }
+        Self { tasks, workflows, training, dispatch }
     }
 
     /// How a workflow stops a chat (`chat:abort`): through the router.
@@ -84,6 +95,14 @@ impl Automation {
             // Reconciling reads and writes files: off the async threads.
             tokio::task::spawn_blocking(move || w.start());
         }
+        // Runs that were mid-flight when the last process stopped resume.
+        if let Some(t) = &self.training {
+            t.start();
+        }
+    }
+
+    pub fn owns_training(&self) -> bool {
+        self.training.is_some()
     }
 
     pub fn owns_tasks(&self) -> bool {
@@ -98,7 +117,12 @@ impl Automation {
         match (&self.tasks, &self.workflows) {
             (Some(t), _) if TASK_CHANNELS.contains(&channel) => t.route(channel, args).await,
             (_, Some(w)) if WORKFLOW_CHANNELS.contains(&channel) => w.route(channel, args).await,
-            _ => Err(format!("{channel} is not served here")),
+            _ => match &self.training {
+                Some(t) if TRAINING_CHANNELS.contains(&channel) || channel == TRAINING_TOOL => {
+                    t.route(channel, args).await
+                }
+                _ => Err(format!("{channel} is not served here")),
+            },
         }
     }
 }
@@ -173,6 +197,42 @@ impl TaskHost for Engine {
 
     fn notify(&self, list: &Value) {
         self.hub.publish("tasks:updated", list.clone(), false);
+    }
+}
+
+impl TrainingHost for Engine {
+    fn settings(&self) -> BoxFut<'_, Value> {
+        Box::pin(Engine::settings(self))
+    }
+
+    fn create_session(
+        &self,
+        workspace_id: Option<Value>,
+        fields: Vec<(&'static str, Value)>,
+    ) -> BoxFut<'_, Result<String, String>> {
+        Box::pin(Engine::create_session(self, workspace_id, fields))
+    }
+
+    fn get_session(&self, id: &str) -> Option<Value> {
+        self.store.get(id)
+    }
+
+    fn delete_session(&self, id: &str) -> BoxFut<'_, ()> {
+        Box::pin(Engine::delete_session(self, id.to_string()))
+    }
+
+    /// A run's turn is a normal chat turn, through the same door as the UI's.
+    fn send_chat(&self, opts: Value) -> BoxFut<'_, Result<(), String>> {
+        Box::pin(async move {
+            match self.dispatch.get() {
+                Some(d) => d("chat:send".into(), vec![opts]).await.map(|_| ()),
+                None => self.backend.call("chat:send", json!([opts])).await.map(|_| ()),
+            }
+        })
+    }
+
+    fn notify(&self, runs: &Value) {
+        self.hub.publish("training:updated", runs.clone(), false);
     }
 }
 
