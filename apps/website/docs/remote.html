@@ -163,6 +163,15 @@ pair several computers and talks to one at a time.</p>
 <p>It also runs <strong>models on the phone itself</strong> (llama.cpp, curated small GGUF models from Hugging Face
 sized to the phone&#39;s memory), so you can keep chatting when the computer is off. Those chats never
 leave the phone and don&#39;t use the relay.</p>
+<p><strong>The native iPhone app</strong> (<code>apps/ios</code>, SwiftUI) does the same over the same encrypted relay, and
+adds what only iOS can: a <strong>Live Activity</strong> for each running chat on the Lock Screen and in the
+Dynamic Island, with <strong>Allow / Deny</strong> for a waiting tool and <strong>Stop</strong>; notifications with Allow /
+Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
+and dictation (Whisper on your computer when Nekko Voice is installed, else the iPhone&#39;s own
+speech recognition). Its pairing screen leads with Tailscale and shows whether Tailscale is on on
+the iPhone. If a Tailscale relay can&#39;t be reached, the app says which side is the problem:
+Tailscale is off on the phone, or the computer isn&#39;t answering. With the app lock on (Face ID or
+passcode, on by default), the Lock Screen and notifications never show chat titles or commands.</p>
 <p>On the phone, the pairing key and the derived encryption key live in the iOS Keychain / Android
 Keystore. The app drops any provider API keys your computer sends with its settings and never
 stores them.</p>
@@ -254,8 +263,10 @@ network you already own.</p>
 Tailscale switched on. The relay only listens on the Tailscale interface, so
 <code>NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1</code> is safe here; never use that flag on a public bind.</p>
 <p>Plain <code>ws://</code> is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
-the app&#39;s own end-to-end encryption sits on top. The iOS app ships with Expo&#39;s default App Transport
-Security (arbitrary loads allowed). <strong>The Android app allows plain <code>ws://</code> only to Tailscale
+the app&#39;s own end-to-end encryption sits on top. The Expo iOS app ships with Expo&#39;s default App
+Transport Security (arbitrary loads allowed). <strong>The native iPhone app allows plain <code>ws://</code> only toward
+private networks</strong>: Tailscale (<code>*.ts.net</code> names and <code>100.x.y.z</code> addresses) and your local network.
+It refuses a <code>ws://</code> link to anything on the open internet before dialing; use <code>wss://</code> there. <strong>The Android app allows plain <code>ws://</code> only to Tailscale
 MagicDNS names (<code>*.ts.net</code>)</strong>, so use the name the script prints (<code>ws://gomi.tailfd6474.ts.net:4400</code>),
 not the <code>100.x.y.z</code> address: Android can&#39;t allow an IP range, and blocks the bare address. If you
 use an address the phone can&#39;t reach (a bare Tailscale IP, <code>localhost</code>, or any other plain <code>ws://</code>

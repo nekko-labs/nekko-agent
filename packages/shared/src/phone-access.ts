@@ -18,7 +18,7 @@ import { skillTurnText } from './skills.js';
 /**
  * Channels a paired phone may call. Built from what the phone clients send
  * (apps/mobile/src/lib/protocol.ts, apps/android/protocol Wire.kt `Channels`,
- * apps/ios/Protocol HostProtocol.swift), plus the ones the next phone
+ * apps/ios/Protocol Wire.swift `Channels`), plus the ones the next phone
  * releases need: settings (filtered), completing or deleting a chat the way
  * the desktop does (`session:setOptions` with `archivedAt`, `session:delete`)
  * and voice input.
