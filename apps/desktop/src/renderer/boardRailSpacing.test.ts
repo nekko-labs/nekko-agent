@@ -1,13 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { railGeometry } from './railGeometry.js';
+import { RAIL_ROW_CLEARANCE, railGeometry } from './railGeometry.js';
 
 describe('rounded mirrored rail geometry', () => {
-  it('rests as one collapsed-width column and opens to the full width, tails included', () => {
+  it('leaves 10px beyond the rows before mirrored shoulders narrow into tails', () => {
     const g = railGeometry({ railHeight: 1200, groupTop: 300, groupHeight: 500 });
     expect(g.extension).toBe(298);
-    expect(g.rest.every(([x]) => x === 52)).toBe(true);
-    expect(g.open.every(([x]) => x === 198)).toBe(true);
+    expect(RAIL_ROW_CLEARANCE).toBe(10);
+    expect(g.rest[2]).toEqual([52, g.top - 10]);
+    expect(g.open[2]).toEqual([198, g.top - 10]);
+    expect(g.rest[0][0]).toBe(26);
+    expect(g.open[0][0]).toBe(52);
+    expect(g.open[5]).toEqual([198, g.bottom + 10]);
     for (let i = 0; i < 4; i++) {
       expect(g.rest[7 - i]).toEqual([g.rest[i][0], g.top + g.bottom - g.rest[i][1]]);
     }

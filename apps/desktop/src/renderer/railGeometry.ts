@@ -12,6 +12,8 @@ type Pt = [number, number];
 
 /** Corner radius for every bend of the outline. */
 export const RAIL_CORNER = 16;
+/** Clear space between the icon rows and the start of either shoulder. */
+export const RAIL_ROW_CLEARANCE = 10;
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -51,8 +53,8 @@ function outline(tip: number, mid: Pt[], bottom: number, radius: number): string
 }
 
 /** Coordinates are rail-local. Only the decoration grows; the menu never moves.
- * At rest the tails are the collapsed width, one even column; expanded, the
- * whole panel, tails included, takes the full body width together. */
+ * Both shoulders start beyond the icon rows and narrow into matching tails.
+ * The menu stays fixed while the expanded body and its tails widen together. */
 export function railGeometry({ railHeight, groupTop, groupHeight, bodyWidth = 198, restWidth = 52 }: RailGeometryInput) {
   const height = Math.max(0, Number.isFinite(railHeight) ? railHeight : 0);
   const top = Math.min(height, Math.max(0, Number.isFinite(groupTop) ? groupTop : 0));
@@ -62,21 +64,21 @@ export function railGeometry({ railHeight, groupTop, groupHeight, bodyWidth = 19
   const extension = Math.max(0, Math.min(top, height - bottom) - 2);
   // Short windows compress the vertical segments without moving the menu.
   const scale = Math.min(1, extension / 240);
-  const shoulder = 72 * scale;
+  const clearance = Math.min(RAIL_ROW_CLEARANCE, extension / 4);
+  const shoulder = 56 * scale;
   const concave = 28 * scale;
   const tipY = top - extension;
   const endY = top + bottom - tipY;
-  // The far edge of each tail and the body share x, so the panel reads as
-  // one rounded column; the shoulder only matters while it widens.
+  // Mirror the body-to-tail shoulder above and below the destination rows.
   const station = (w: number, b: number): Pt[] => [
     [w, tipY + concave],
-    [w, top - shoulder],
-    [b, top],
+    [w, top - clearance - shoulder],
+    [b, top - clearance],
     [b, top + (bottom - top) / 2],
   ];
-  const restPts = station(rest, rest);
-  const openPts = station(width, width);
-  const radius = RAIL_CORNER * Math.max(0.3, scale);
+  const restPts = station(rest / 2, rest);
+  const openPts = station(rest, width);
+  const radius = RAIL_CORNER;
   const restPath = outline(tipY, restPts, endY, radius);
   const openPath = outline(tipY, openPts, endY, radius);
   const mirror = (pts: Pt[]) => [...pts, ...[...pts].reverse().map(([x, y]): Pt => [x, endY + tipY - y])];

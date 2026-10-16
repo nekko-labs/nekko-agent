@@ -29,6 +29,11 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.15), value: app.lock.locked)
         .onChange(of: app.lock.locked) { _, locked in if !locked { app.start() } }
+        // Shared from another app: New chat opens with the text, nothing is sent.
+        .onChange(of: app.sharedText, initial: true) { _, text in
+            if text != nil { open(.newChat) }
+        }
+        .onChange(of: store.ready, initial: true) { _, _ in app.takeShare() }
         .onChange(of: app.openChat) { _, id in
             guard let id else { return }
             open(.chat(id))
