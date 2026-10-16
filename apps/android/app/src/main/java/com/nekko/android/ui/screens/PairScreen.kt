@@ -58,6 +58,8 @@ import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.BuildConfig
 import com.nekko.protocol.RelayHint
+import com.nekko.protocol.Tailnet
+import com.nekko.android.connection.TailnetStatus
 import com.nekko.protocol.PairingLink
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -196,6 +198,9 @@ fun PairScreen(
                     // Say now if this relay can't work from a phone, rather than spinning after pairing.
                     RelayHint.problem(offer.relayUrl, BuildConfig.DEBUG)?.let { problem ->
                         Notice(RelayHint.message(problem, "your computer"), Tone.DANGER)
+                    } ?: Tailnet.hint(offer.relayUrl, TailnetStatus.phoneOnTailnet(), "your computer")?.let { line ->
+                        // Tailscale first: pairing over the tailnet needs it on here too.
+                        Notice(line, Tone.WARNING)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
