@@ -4,6 +4,13 @@ import { ContextAction, ContextMenu } from '../ContextMenu.js';
 import type { MarkdownEdit, MarkdownEditorElement } from './MarkdownEditor.js';
 import { clipboardMarkdown, formatMarkdown, markdownActive, markdownControls, type MarkdownAction } from './composerFormatting.js';
 
+/** A name for a clipboard blob, from its type: `clipboard.png`, `clipboard.pdf`. */
+export function clipboardFileName(type: string): string {
+  const sub = type.split('/')[1]?.split(';')[0].replace(/^x-/, '').replace(/^vnd\..*\.(\w+)$/, '$1') ?? 'bin';
+  const ext = sub === 'jpeg' ? 'jpg' : sub === 'svg+xml' ? 'svg' : sub === 'quicktime' ? 'mov' : sub;
+  return `clipboard.${ext}`;
+}
+
 export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, composing }: {
   editor: React.RefObject<MarkdownEditorElement | null>; disabled: boolean; value: string;
   apply: (el: MarkdownEditorElement, edit: MarkdownEdit) => void;
@@ -75,8 +82,13 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
           for (const item of items) {
             for (const type of item.types) {
               if (type === 'text/plain') plain = await (await item.getType(type)).text();
-              if (type === 'text/html' && mode === 'markdown') html = await (await item.getType(type)).text();
-              if (type.startsWith('image/') && mode === 'paste') data.items.add(new File([await item.getType(type)], 'clipboard-image', { type }));
+              else if (type === 'text/html') { if (mode === 'markdown') html = await (await item.getType(type)).text(); }
+              // Anything that is not text is a file: a photo, a video, a PDF
+              // copied from a browser. The composer decides how each travels.
+              else if (mode === 'paste' && !type.startsWith('text/')) {
+                const blob = await item.getType(type);
+                data.items.add(new File([blob], clipboardFileName(type), { type }));
+              }
             }
           }
         } else plain = await navigator.clipboard.readText();

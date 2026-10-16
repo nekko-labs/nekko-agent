@@ -1,5 +1,5 @@
 import { NOTIFICATION_VISIBILITY_CHANNEL } from '../notificationVisibility.js';
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { PREVIEW_CHANNEL } from '../previewPolicy.js';
 if (process.isMainFrame) contextBridge.exposeInMainWorld('nekkoPreview', { open: (source: string) => ipcRenderer.invoke(PREVIEW_CHANNEL, source) });
 import type {
@@ -200,6 +200,10 @@ const api: NekkoApi = {
   listTools: () => inv(IpcChannels.toolsList),
 
   openFilesDialog: () => inv(IpcChannels.dialogOpenFiles),
+  // Electron hides File.path from the sandboxed renderer; webUtils is the
+  // sanctioned way to learn where a dropped or pasted file lives on disk.
+  pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
+  importAttachment: (sessionId, name, dataUrl) => inv(IpcChannels.attachmentImport, sessionId, name, dataUrl),
   openPath: (path) => inv(IpcChannels.openPath, path),
 
   listMemory: (scope: MemoryScope, workspaceId) => inv(IpcChannels.memoryList, scope, workspaceId),

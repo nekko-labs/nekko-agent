@@ -426,6 +426,9 @@ function makeWebClient(): NekkoApi {
       const p = window.prompt('File path(s) on the server to attach (comma-separated):');
       return p ? p.split(',').map((s) => s.trim()).filter(Boolean) : [];
     },
+    // A browser never learns where a pasted file lives; everything is imported.
+    pathForFile: () => '',
+    importAttachment: (sessionId, name, dataUrl) => call(IpcChannels.attachmentImport, sessionId, name, dataUrl),
     openPath: async (target) => {
       window.open(/^https?:\/\//i.test(target) ? target : `file://${target}`, '_blank');
     },

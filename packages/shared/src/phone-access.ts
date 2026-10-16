@@ -50,6 +50,7 @@ export const PHONE_CHANNELS = [
  */
 export const PHONE_ALWAYS_DENIED = {
   channels: [
+    'attachment:import',
     'connector:connect',
     'connector:disconnect',
     'data:wipe',

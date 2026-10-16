@@ -39,6 +39,32 @@ export function writeFile(path: string, content: string, sessionId?: string): vo
   writeFileSync(path, content, 'utf8');
 }
 
+/** Pasted attachments are capped so a stray paste cannot fill the data dir. */
+const MAX_IMPORT = 50_000_000;
+
+/**
+ * Save bytes the user pasted into the composer (a PDF copied from a browser, a
+ * file from an email) as a real file under `<dataDir>/attachments/<session>/`,
+ * so it can be attached like anything picked from disk. The name is reduced to
+ * a safe basename, and a clash gets a numeric suffix rather than overwriting.
+ */
+export function importAttachment(dataDir: string, sessionId: string, name: string, dataUrl: string): string {
+  const match = /^data:([^;,]*)(?:;[^,]*)?;base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl);
+  if (!match) throw new Error('Attachment must be a base64 data URL.');
+  const bytes = Buffer.from(match[2], 'base64');
+  if (bytes.length > MAX_IMPORT) throw new Error('Attachment is larger than 50 MB.');
+  const safeSession = sessionId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'chat';
+  const dir = join(dataDir, 'attachments', safeSession);
+  mkdirSync(dir, { recursive: true });
+  const base = (name.split(/[\\/]/).pop() ?? '').replace(/[<>:"|?*\u0000-\u001f]/g, '_').trim() || 'pasted';
+  const ext = extname(base);
+  const stem = ext ? base.slice(0, -ext.length) : base;
+  let target = join(dir, base);
+  for (let n = 2; existsSync(target); n += 1) target = join(dir, `${stem}-${n}${ext}`);
+  writeFileSync(target, bytes);
+  return target;
+}
+
 /** List a directory's entries, directories first then files (alphabetical). */
 export function listDir(path: string, sessionId?: string): DirEntry[] {
   assertHostExecution(sessionId, 'Host file access');

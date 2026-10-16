@@ -1,4 +1,5 @@
 import { withToolImages } from './tool-images.js';
+import { withVideoNote } from './media.js';
 import type { ModelInfo, ProviderConfig, ToolCall } from '@nekko-agent/shared';
 import { httpError } from './errors.js';
 import { readWithIdle } from './sse.js';
@@ -188,7 +189,7 @@ export class OllamaProvider implements Provider {
       } else {
         out.push({
           role: m.role,
-          content: m.content,
+          content: m.role === 'user' ? withVideoNote(m) : m.content,
           ...(m.role === 'user' && m.images?.length
             ? { images: m.images.map((image) => image.replace(/^data:[^;]+;base64,/, '')) }
             : {}),

@@ -328,9 +328,12 @@ export function queuePrompt(id: string, input: string | QueuePayload): Session |
   const payload: QueuePayload = typeof input === 'string' ? { text: input } : input;
   const text = payload.text.trim();
   const images = payload.images?.filter(Boolean) ?? [];
+  const videos = payload.videos?.filter(Boolean) ?? [];
   const skill = payload.skill;
-  if (!s || (!text && images.length === 0 && !skill)) return s;
-  const item: QueuedPrompt = images.length || skill ? { text, ...(images.length ? { images } : {}), ...(skill ? { skill } : {}) } : text;
+  if (!s || (!text && images.length === 0 && videos.length === 0 && !skill)) return s;
+  const item: QueuedPrompt = images.length || videos.length || skill
+    ? { text, ...(images.length ? { images } : {}), ...(videos.length ? { videos } : {}), ...(skill ? { skill } : {}) }
+    : text;
   s.queue = [...(s.queue ?? []), item];
   saveSession(s);
   return s;

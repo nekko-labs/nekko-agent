@@ -183,6 +183,7 @@ export const IpcChannels = {
   fileRead: 'file:read',
   fileWrite: 'file:write',
   dirList: 'dir:list',
+  attachmentImport: 'attachment:import',
 
   changesList: 'changes:list',
   changeAccept: 'changes:accept',
@@ -638,6 +639,17 @@ export interface NekkoApi {
 
   /** Open a native file picker (desktop) → chosen paths; browser → prompt. */
   openFilesDialog(): Promise<string[]>;
+  /**
+   * The on-disk path of a File the user dropped or pasted, when the OS handed
+   * one over (a file copied in Explorer or Finder). Empty for a pasted blob
+   * with no home, such as an image copied from a browser; see importAttachment.
+   */
+  pathForFile(file: File): string;
+  /**
+   * Save pasted bytes under the app's data dir so they can be attached like any
+   * other file. Returns the saved path. `dataUrl` is a `data:<mime>;base64,` URL.
+   */
+  importAttachment(sessionId: string, name: string, dataUrl: string): Promise<string>;
   /** Reveal/open a path with the OS (desktop) or a URL (web). */
   openPath(path: string): Promise<void>;
 

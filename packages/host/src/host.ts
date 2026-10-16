@@ -115,7 +115,7 @@ import * as sessions from './sessions.js';
 import * as memory from './memory.js';
 import { usageSummary, clearUsage } from './usage.js';
 import { indexWorkspace, getIndexStatus, searchWorkspace, listIndexedFiles } from './workspace.js';
-import { readFile, writeFile, listDir } from './files.js';
+import { readFile, writeFile, listDir, importAttachment } from './files.js';
 import { getGitStatus } from './git.js';
 import { listChanges, acceptChange, acceptAllChanges, notifyChanges, setChangeNotifier } from './changes.js';
 import { listSessionPrs, getPrDiff, prAction, fetchPrInfo, branchPrHead } from './pr.js';
@@ -461,6 +461,8 @@ export interface Host {
   readFile(path: string): FileContent;
   writeFile(path: string, content: string): void;
   listDir(path: string): DirEntry[];
+  /** Save pasted bytes under the data dir as an attachable file; returns its path. */
+  importAttachment(sessionId: string, name: string, dataUrl: string): string;
 
   /** Files the agent changed this session (for diff/approve). */
   listChanges(sessionId: string): Promise<FileChange[]>;
@@ -1153,7 +1155,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
           throw new Error('Image turn is still stopping. Try again when it finishes.');
         }
         if (isSessionCompacting(sessionId)) throw new Error('This chat is being compacted.');
-        await sendChat({ sessionId, providerId, modelId, text, ...(payload.images?.length ? { images: payload.images } : {}), ...(payload.skill ? { skill: payload.skill } : {}) }, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl, { index, item });
+        await sendChat({ sessionId, providerId, modelId, text, ...(payload.images?.length ? { images: payload.images } : {}), ...(payload.videos?.length ? { videos: payload.videos } : {}), ...(payload.skill ? { skill: payload.skill } : {}) }, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl, { index, item });
       } finally {
         interrupting.delete(sessionId);
       }
@@ -1240,6 +1242,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     readFile,
     writeFile,
     listDir,
+    importAttachment: (sessionId, name, dataUrl) => importAttachment(dataDir(), sessionId, name, dataUrl),
     listChanges,
     acceptChange,
     acceptAllChanges,

@@ -6,6 +6,15 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Composer media, paste anything, rich replies (2026-10-15)
+
+- [x] `modelMediaSupport` (shared/media-support.ts): image/video support per model from OpenRouter `input_modalities`, id/family rules and vendor fallback; 7 unit tests. See [SPEC](SPEC.md#composer-attachments--the--menu).
+- [x] `videos` beside `images` on ChatMessage, SendOptions, QueuePayload, drafts; `video_url` parts for openai-compat, omission note for Anthropic/ChatGPT/Ollama; Rust `nekko-turn` input port and goldens regenerated.
+- [x] Composer: icons on + menu rows, **Photo / Video** disabled with a sentence when the model is text-only, *photos only* hint; paste/drop/pick of any file through `composerAttachments.ts`; `attachment:import` channel saves pathless pastes; name-only chips for unreadable files; file chips with remove.
+- [x] Mermaid Expand overlay with zoom/pan (`ZoomFrame`), scriptless sandboxed frames; "Rich replies in chat" prompt block (TS + Rust, context golden regenerated).
+- [x] Verified: typecheck, shared/core/host/desktop vitest, cargo nekko-context/nekko-turn/nekko-remote/nekkod context tests, isolated before/after Electron captures inspected (dark + light). Baseline-only failures: `chat-worktrees` (fails on main too), `session-clear.daemon` (needs built nekkod.exe).
+- [ ] Not done: PDF text extraction; video for providers with no API for it; web edition cannot learn file paths (imports everything).
+
 ## New agent window defaults
 
 - [x] Persist explicit ChatPane and Add window model choices as provider/model pairs without changing other panes; preserve Auto and session-specific choices. See [SPEC](SPEC.md#new-agent-window-defaults).
