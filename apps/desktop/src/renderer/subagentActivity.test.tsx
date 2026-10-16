@@ -128,6 +128,16 @@ it('restarts terminal activity while retaining live waiting and pending-input st
   expect(childActivity(child, true, { question: {} } as PendingInput).detail).toBe('Waiting for your answer.');
 });
 
+it('preserves excerpt whitespace, sentence lookahead and truncation boundaries', () => {
+  expect(compactSentence('  \u0000\tHello\u00a0 world!\nMore')).toBe('Hello world!');
+  expect(compactSentence('abc.def xyz', 6)).toBe('abc.d…');
+  expect(compactSentence('abcd. more', 5)).toBe('abcd.');
+  expect(compactSentence('abcd.! more', 5)).toBe('abcd…');
+  expect(compactSentence('abc  d', 4)).toBe('abc…');
+  expect(compactSentence('猫\u2003😀\ufeffok. more')).toBe('猫 😀 ok.');
+  expect(compactSentence(' '.repeat(1999) + 'xTAIL')).toBe('x');
+});
+
 it('bounds safe plain-text summaries and long prompt/result collapsed markup', () => {
   expect(compactSentence('One sentence. SECRET NEXT')).toBe('One sentence.');
   expect(compactSentence('x'.repeat(10000)).length).toBeLessThanOrEqual(140);
