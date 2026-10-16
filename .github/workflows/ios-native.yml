@@ -119,7 +119,7 @@ jobs:
           # Small JPEG copies in the log, for reviewers who can't download artifacts.
           i=0
           find evidence/shots -name '*.png' | sort | while read -r f; do
-            i=$((i+1)); [ "$i" -gt 24 ] && break
+            i=$((i+1)); [ "$i" -gt 40 ] && break
             sips -s format jpeg -s formatOptions 60 -Z 900 "$f" --out /tmp/shot.jpg >/dev/null 2>&1 || continue
             echo "SHOT-BEGIN $(basename "$(dirname "$f")")/$(basename "$f" .png)"
             base64 -i /tmp/shot.jpg | tr -d '\n'; echo
