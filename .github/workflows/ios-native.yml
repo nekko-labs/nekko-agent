@@ -94,6 +94,18 @@ jobs:
             # The app is reinstalled per run; wipe it so the next theme pairs from scratch.
             xcrun simctl uninstall "$DEVICE" com.nekko.native.ios || true
           done
+          # The deep link from the computer's QR (camera app → nekko-agent-pair:) opens the confirmation sheet.
+          xcrun simctl ui "$DEVICE" appearance light
+          xcrun simctl install "$DEVICE" DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app
+          xcrun simctl launch "$DEVICE" com.nekko.native.ios -appLock NO -uiTestReset YES
+          sleep 4
+          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-link.env
+          . /tmp/stack-link.env
+          xcrun simctl openurl "$DEVICE" "$NEKKO_ITEST_LINK"
+          sleep 4
+          mkdir -p evidence/shots/deeplink
+          xcrun simctl io "$DEVICE" screenshot evidence/shots/deeplink/confirm-sheet.png
+          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
       - name: Export screenshots from the test results
         if: always()
         working-directory: apps/ios
@@ -107,7 +119,7 @@ jobs:
           # Small JPEG copies in the log, for reviewers who can't download artifacts.
           i=0
           find evidence/shots -name '*.png' | sort | while read -r f; do
-            i=$((i+1)); [ "$i" -gt 24 ] && break
+            i=$((i+1)); [ "$i" -gt 40 ] && break
             sips -s format jpeg -s formatOptions 60 -Z 900 "$f" --out /tmp/shot.jpg >/dev/null 2>&1 || continue
             echo "SHOT-BEGIN $(basename "$(dirname "$f")")/$(basename "$f" .png)"
             base64 -i /tmp/shot.jpg | tr -d '\n'; echo

@@ -126,6 +126,25 @@ final class RelayIntegrationTests: XCTestCase {
         XCTAssertNil(PendingInput.map(pendingAfter)[s2.id]?.approval)
         print("itest: approval for `\(a.call.input["command"]?.string ?? "")` (\(a.severity)) denied from the phone")
 
+        // 2b. The agent asks a question; the phone answers it and the turn carries on.
+        let createdQ = try await c.call(Channels.sessionCreate)
+        let sq = try XCTUnwrap(Session.from(createdQ))
+        let markQ = r.lock.sync { r.events.count }
+        let sendQ = Task { try? await c.call(Channels.chatSend, [sendOptions(sessionId: sq.id, providerId: "fake", modelId: "fake-model", text: "ask me which platform")], timeout: 60) }
+        var asked: AskRequest?
+        await waitFor(30, "question") {
+            asked = self.events(r, session: sq.id, from: markQ).lazy.compactMap { if case .question(_, let q) = $0 { return q } else { return nil } }.first
+            return asked != nil
+        }
+        let q = try XCTUnwrap(asked)
+        XCTAssertEqual(q.questions.first?.options.map(\.label), ["iOS", "Android"])
+        _ = try await c.call(Channels.chatAnswer, [.string(sq.id), .string(q.callId), .array([AskAnswer(questionId: q.questions[0].id, labels: ["iOS"]).json])])
+        await waitFor(60, "turn end after the answer") { self.events(r, session: sq.id, from: markQ).contains(where: \.endsTurn) }
+        _ = await sendQ.value
+        let replyQ = self.events(r, session: sq.id, from: markQ).compactMap { if case .text(_, let d) = $0 { return d } else { return nil } }.joined()
+        XCTAssertEqual(replyQ, "Hello from your computer.")
+        print("itest: question answered from the phone (\(q.questions.count) question)")
+
         // 3. Skills: names only reach the phone, and a skill turn is expanded on the computer.
         let rawSkills = try await c.call(Channels.skillsRunnable)
         let skills = SkillSummary.list(rawSkills)
