@@ -11,3 +11,6 @@ captures/
 *.aab
 *.keystore
 *.jks
+
+# Emulator journey screenshots (scripts/emulator-journey.sh)
+evidence/
