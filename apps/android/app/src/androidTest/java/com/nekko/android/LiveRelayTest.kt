@@ -14,6 +14,8 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -57,13 +59,15 @@ class LiveRelayTest {
             app.themePrefs.set(if (theme == "dark") ThemeChoice.DARK else ThemeChoice.LIGHT)
         }
 
-        ActivityScenario.launch(MainActivity::class.java).use {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             waitFor(hasText("Pair a computer"))
             shot("0-welcome")
             tap(hasText("Pair a computer"))
 
             waitFor(hasText("Pairing link"))
             compose.onNode(hasText("Pairing link")).performTextInput(link!!)
+            // The keyboard covers the Pair button on a small screen; a user closes it first.
+            hideKeyboard(scenario)
             shot("1-pair")
             tap(hasText("Pair"))
 
@@ -104,6 +108,11 @@ class LiveRelayTest {
     private fun tap(matcher: SemanticsMatcher) {
         waitFor(matcher)
         compose.onAllNodes(matcher, useUnmergedTree = true).onFirst().performClick()
+    }
+
+    private fun hideKeyboard(scenario: ActivityScenario<MainActivity>) {
+        scenario.onActivity { a -> WindowCompat.getInsetsController(a.window, a.window.decorView).hide(WindowInsetsCompat.Type.ime()) }
+        compose.waitForIdle()
     }
 
     private fun send(text: String) {
