@@ -601,11 +601,15 @@ export function parseTasksMarkdown(text: string, path = ''): ConnectorResource[]
   const out: ConnectorResource[] = [];
   let section = '';
   text.split(/\r?\n/).forEach((line, i) => {
-    const heading = /^#{1,6}\s+(.*)$/.exec(line);
-    if (heading) { section = heading[1].trim(); return; }
-    const task = /^\s*[-*+]\s+\[( |x|X)\]\s+(.*)$/.exec(line);
-    if (!task || task[1] !== ' ') return;
-    out.push({ id: `${path}:${i + 1}`, title: task[2].trim(), subtitle: section || 'Tasks file', url: path ? `file://${path}` : undefined, body: '' });
+    // Linear prefix checks, not one backtracking regex (CodeQL polynomial
+    // ReDoS on whitespace-heavy lines); mirrors parse_tasks_markdown in Rust.
+    const hashes = /^#{1,6}/.exec(line)?.[0].length ?? 0;
+    if (hashes && /^\s/.test(line.slice(hashes)) && line[hashes] !== '#') { section = line.slice(hashes).trim(); return; }
+    const body = line.trimStart();
+    if (!'-*+'.includes(body[0] ?? 'z') || !/^\s/.test(body.slice(1))) return;
+    const box = body.slice(1).trimStart();
+    if (!box.startsWith('[ ]') || !/^\s/.test(box.slice(3))) return;
+    out.push({ id: `${path}:${i + 1}`, title: box.slice(3).trim(), subtitle: section || 'Tasks file', url: path ? `file://${path}` : undefined, body: '' });
   });
   return out;
 }
