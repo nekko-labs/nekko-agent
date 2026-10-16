@@ -1,11 +1,13 @@
-name: Native iOS foundation
+name: Native iOS
 on:
   pull_request:
     paths:
       - 'apps/ios/**'
+      - 'apps/relay/src/**'
+      - 'packages/shared/src/phone-access.ts'
       - '.github/workflows/ios-native.yml'
   push:
-    branches: [main, 'nekko/bright-ochre-puffin']
+    branches: [main]
     paths:
       - 'apps/ios/**'
       - '.github/workflows/ios-native.yml'
@@ -15,19 +17,42 @@ permissions:
 jobs:
   protocol-and-build:
     runs-on: macos-14
-    timeout-minutes: 20
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
-      - name: Test Foundation protocol
+      - name: Use the newest installed Xcode
+        run: |
+          x="$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -v beta | sort -V | tail -n1)"
+          [ -n "$x" ] && sudo xcode-select -s "$x/Contents/Developer"
+          xcodebuild -version
+          swift --version
+      - name: Protocol and app-state tests (NekkoProtocol, NekkoKit)
         working-directory: apps/ios/Protocol
         run: swift test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build the relay and a headless agent
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --no-audit --no-fund --ignore-scripts
+          npm run build:core
+          npm run build -w @nekko-agent/host
+          npm run build --workspace=apps/cli
+          npm run build -w @nekko-agent/server
+          npm run build -w @nekko-agent/relay
+      - name: Phone ↔ relay ↔ computer over URLSessionTransport
+        run: apps/ios/scripts/itest.sh
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate native project
         working-directory: apps/ios
         run: xcodegen generate
-      - name: Validate plist
-        run: plutil -lint apps/ios/Info.plist
+      - name: Validate plists
+        run: |
+          plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements
       - name: Build unsigned iOS Simulator app
         working-directory: apps/ios
         run: >-
@@ -35,31 +60,54 @@ jobs:
           -configuration Debug -sdk iphonesimulator
           -destination 'generic/platform=iOS Simulator'
           -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build
-      - name: Verify launch screen survives project generation
+      - name: Verify bundle (launch screen, widget extension, URL schemes)
         run: |
-          test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchStoryboardName' apps/ios/DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app/Info.plist)" = LaunchScreen
-          test -d apps/ios/DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app/LaunchScreen.storyboardc
-      - name: Isolated simulator launch and appearance evidence
+          APP=apps/ios/DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app
+          test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchStoryboardName' $APP/Info.plist)" = LaunchScreen
+          test -d $APP/LaunchScreen.storyboardc
+          test -d $APP/PlugIns/NekkoWidgets.appex
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes' $APP/Info.plist | grep -q nekko-agent-pair
+      - name: Simulator tests and live screenshots (light, dark)
         working-directory: apps/ios
         run: |
           set -euo pipefail
           mkdir -p evidence
           RUNTIME=$(xcrun simctl list runtimes -j | ruby -rjson -e 'puts JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.last.fetch("identifier")')
-          DEVICE=$(xcrun simctl create Nekko-CI-Smoke com.apple.CoreSimulator.SimDeviceType.iPhone-15 "$RUNTIME")
-          trap 'xcrun simctl shutdown "$DEVICE" || true; xcrun simctl delete "$DEVICE" || true' EXIT
+          TYPE=$(xcrun simctl list devicetypes -j | ruby -rjson -e 't = JSON.parse(STDIN.read)["devicetypes"].map { |d| d["identifier"] }; puts(t.select { |i| i =~ /iPhone-1[5-9]-Pro$/ }.last || t.select { |i| i.include?("iPhone") }.last)')
+          DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")
+          trap 'xcrun simctl shutdown "$DEVICE" || true; xcrun simctl delete "$DEVICE" || true; kill ${NEKKO_ITEST_PIDS:-} 2>/dev/null || true' EXIT
           xcrun simctl boot "$DEVICE"
           xcrun simctl bootstatus "$DEVICE" -b
-          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" test
-          xcrun simctl install "$DEVICE" DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app
-          xcrun simctl launch "$DEVICE" com.nekko.native.ios
-          sleep 5
+          xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100 || true
+          COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="")
+          # Unit tests and first-run UI tests.
+          xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test -skip-testing:NekkoNativeUITests/LiveRelayTests
+          # The live journey, once per theme, each against a fresh stack (pairing codes are single-use).
           for THEME in light dark; do
             xcrun simctl ui "$DEVICE" appearance "$THEME"
-            sleep 2
-            xcrun simctl io "$DEVICE" screenshot "evidence/ios-first-run-$THEME.png"
+            ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env"
+            . "/tmp/stack-$THEME.env"
+            TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_THEME="$THEME" \
+              xcodebuild "${COMMON[@]}" -resultBundlePath "evidence/live-$THEME.xcresult" test-without-building \
+              -only-testing:NekkoNativeUITests/LiveRelayTests
+            kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+            # The app is reinstalled per run; wipe it so the next theme pairs from scratch.
+            xcrun simctl uninstall "$DEVICE" com.nekko.native.ios || true
           done
+      - name: Export screenshots from the test results
+        if: always()
+        working-directory: apps/ios
+        run: |
+          mkdir -p evidence/shots
+          for r in evidence/*.xcresult; do
+            [ -d "$r" ] || continue
+            xcrun xcresulttool export attachments --path "$r" --output-path "evidence/shots/$(basename "$r" .xcresult)" || true
+          done
+          find evidence/shots -name '*.png' | head -n 40
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: native-ios-first-run-evidence
-          path: apps/ios/evidence/*.png
-          if-no-files-found: error
+          name: native-ios-evidence
+          path: |
+            apps/ios/evidence/shots/**
+          if-no-files-found: warn
