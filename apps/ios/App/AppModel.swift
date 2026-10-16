@@ -41,7 +41,8 @@ final class AppModel {
         store = ComputersStore(
             store: keychain,
             makeConnection: { RelayClient(config: $0, transport: URLSessionTransport()) },
-            deviceName: { deviceName })
+            deviceName: { deviceName },
+            app: Bundle.main.bundleIdentifier)
         lock = AppLock(enabled: prefs.appLock)
     }
 
@@ -58,6 +59,10 @@ final class AppModel {
         IntentRouter.stop = { [weak self] sid in await self?.stopChat(sid) }
         activities.enabled = { [weak self] in self?.prefs.liveActivities ?? false }
         activities.hideDetails = { [weak self] in self?.prefs.appLock ?? true }
+        activities.onPushToken = { [weak self] sid, token in
+            guard let self else { return }
+            Task { await self.store.registerActivity(sessionId: sid, token: token) }
+        }
         _ = store.subscribe { [weak self] e in self?.onEvent(e) }
         network.onChange = { [weak self] in Task { @MainActor in self?.store.reconnect() } }
         network.start()

@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import websocket from '@fastify/websocket';
-import { createPushSender, type PushSender } from './push.js';
+import { createPushSender, type ActivityPush, type PushSender } from './push.js';
 
 /**
  * Nekko Agent relay v2, the piece that lets a paired phone reach a local agent
@@ -19,6 +19,11 @@ import { createPushSender, type PushSender } from './push.js';
  *   - push: clients register tokens per device; the agent's content-free
  *     { type:'notify' } fans out to registered phones when none are connected,
  *     and { type:'push-remove', deviceId } drops a revoked device's token.
+ *   - Live Activities: an iPhone registers an ActivityKit push token per chat
+ *     under an opaque tag (a hash of the session id; { type:'register-activity' }),
+ *     and the agent's content-free { type:'activity', tag, phase } updates or
+ *     ends it, whether or not the phone looks connected (a suspended app's
+ *     socket can linger).
  *
  * Hardening: pairing-key hashes compared in constant time, frame-size cap, a
  * per-connection token-bucket rate limit, client + room caps, and an optional
@@ -65,9 +70,17 @@ interface Room {
   /** sha256 of the pairing key, claimed by the agent; clients must match. */
   keyHash: Buffer | null;
   /** Push tokens registered by paired devices, keyed by deviceId. */
-  pushTokens: Map<string, { token: string; platform: 'ios' | 'android' }>;
+  pushTokens: Map<string, { token: string; platform: 'ios' | 'android'; app?: string }>;
   pushOwners: Map<string, string>;
+  /** Live Activity push tokens: tag → deviceId → token. */
+  activities: Map<string, Map<string, { token: string; app?: string; at: number }>>;
 }
+
+/** At most this many Live Activities per room, and how long one is kept without an end. */
+const MAX_ACTIVITIES = 64;
+const ACTIVITY_TTL_MS = 12 * 60 * 60 * 1000;
+const PHASES = new Set(['approval', 'question', 'running', 'done', 'failed']);
+const APP_ID = /^[A-Za-z0-9.-]{3,155}$/;
 
 interface Bucket {
   tokens: number;
@@ -107,7 +120,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
     let r = rooms.get(code);
     if (!r) {
       if (rooms.size >= limits.maxRooms) return null;
-      r = { agent: null, clients: new Map(), keyHash: null, pushTokens: new Map(), pushOwners: new Map() };
+      r = { agent: null, clients: new Map(), keyHash: null, pushTokens: new Map(), pushOwners: new Map(), activities: new Map() };
       rooms.set(code, r);
     }
     return r;
@@ -213,12 +226,29 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
                   title: String(ctrl.title || 'Nekko Agent'),
                   body: String(ctrl.body || 'Your task finished.'),
                 };
-                for (const { token, platform } of r.pushTokens.values()) void pushSender.send(token, platform, payload);
+                for (const { token, platform, app } of r.pushTokens.values()) void pushSender.send(token, platform, payload, app);
               }
               return;
             }
             case 'push-remove': {
-              if (typeof ctrl.deviceId === 'string') r.pushTokens.delete(ctrl.deviceId);
+              if (typeof ctrl.deviceId === 'string') {
+                r.pushTokens.delete(ctrl.deviceId);
+                for (const devices of r.activities.values()) devices.delete(ctrl.deviceId);
+              }
+              return;
+            }
+            case 'activity': {
+              const tag = typeof ctrl.tag === 'string' ? ctrl.tag : '';
+              const devices = r.activities.get(tag);
+              if (!devices || !PHASES.has(ctrl.phase)) return;
+              const end = ctrl.phase === 'done' || ctrl.phase === 'failed';
+              const push: ActivityPush = { event: end ? 'end' : 'update', phase: ctrl.phase };
+              if (ctrl.phase === 'approval' && typeof ctrl.callId === 'string' && ctrl.callId.length <= 200) {
+                push.callId = ctrl.callId;
+                push.severity = ctrl.severity === 'high' || ctrl.severity === 'medium' ? ctrl.severity : 'low';
+              }
+              for (const { token, app } of devices.values()) void pushSender.sendActivity?.(token, push, app);
+              if (end) r.activities.delete(tag);
               return;
             }
             default:
@@ -262,12 +292,41 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
             // APNs tokens are hex; FCM registration tokens also carry ':'.
             const validToken = /^[A-Za-z0-9_:-]{20,4096}$/.test(token);
             const owner = r.pushOwners.get(deviceId);
+            const app = typeof ctrl.app === 'string' && APP_ID.test(ctrl.app) ? ctrl.app : undefined;
             if (validDevice && validToken && platform && (!owner || owner === cid)) {
               r.pushOwners.set(deviceId, cid);
               r.pushTokens.set(deviceId, {
                 token,
                 platform,
+                ...(app ? { app } : {}),
               });
+            }
+            return;
+          }
+          if (ctrl?.type === 'register-activity') {
+            const deviceId = typeof ctrl.deviceId === 'string' ? ctrl.deviceId : '';
+            const token = typeof ctrl.token === 'string' ? ctrl.token : '';
+            const tag = typeof ctrl.tag === 'string' ? ctrl.tag : '';
+            const app = typeof ctrl.app === 'string' && APP_ID.test(ctrl.app) ? ctrl.app : undefined;
+            const valid =
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(deviceId) &&
+              /^[0-9a-f]{32}$/.test(tag) &&
+              /^[0-9a-fA-F]{20,512}$/.test(token);
+            const owner = r.pushOwners.get(deviceId);
+            if (valid && (!owner || owner === cid)) {
+              r.pushOwners.set(deviceId, cid);
+              const now = Date.now();
+              for (const [t, devices] of r.activities) {
+                for (const [d, a] of devices) if (now - a.at > ACTIVITY_TTL_MS) devices.delete(d);
+                if (devices.size === 0) r.activities.delete(t);
+              }
+              if (!r.activities.has(tag) && r.activities.size >= MAX_ACTIVITIES) {
+                const oldest = r.activities.keys().next().value;
+                if (oldest !== undefined) r.activities.delete(oldest);
+              }
+              const devices = r.activities.get(tag) ?? new Map();
+              devices.set(deviceId, { token, at: now, ...(app ? { app } : {}) });
+              r.activities.set(tag, devices);
             }
             return;
           }

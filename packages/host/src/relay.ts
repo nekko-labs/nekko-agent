@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { IpcEvents, PHONE_MAX_FRAME_BYTES, callFromPhone, deriveKey, open, phoneFrameTooLarge, seal, type RemoteHelloReply } from '@nekko-agent/shared';
 import { createDispatcher } from './dispatch.js';
 import type { Host } from './host.js';
@@ -101,6 +102,7 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
     });
   };
 
+  const phases = new Map<string, ActivityPhase>();
   const onAgent = (e: unknown) => {
     void broadcast({ type: 'event', channel: IpcEvents.agentEvent, payload: e });
     // On run completion, ping the relay (plain, content-free control frame) so it
@@ -108,6 +110,8 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
     if ((e as { type?: string })?.type === 'done') {
       sendRaw({ type: 'notify', title: 'Nekko finished', body: 'Your task is ready.' });
     }
+    const activity = activityFrame(phases, e);
+    if (activity) sendRaw(activity);
   };
   const onIndex = (s: unknown) => void broadcast({ type: 'event', channel: IpcEvents.indexProgress, payload: s });
   const onTerminal = (e: unknown) => void broadcast({ type: 'event', channel: IpcEvents.terminalEvent, payload: e });
@@ -272,4 +276,72 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
     isOnline: () => online,
     lastError: () => lastError,
   };
+}
+
+export type ActivityPhase = 'approval' | 'question' | 'running' | 'done' | 'failed';
+
+/**
+ * The relay-visible tag of a chat's Live Activity on an iPhone: a hash of the
+ * session id, so the relay can match a phone's ActivityKit push token to a
+ * chat without learning which chat it is. The phone computes the same tag.
+ */
+export function activityTag(sessionId: string): string {
+  return createHash('sha256').update(`nekko-activity:${sessionId}`).digest('hex').slice(0, 32);
+}
+
+/**
+ * A content-free `activity` control frame when a chat's phase changes (waits
+ * on an approval or a question, runs again, ends), so the relay can update a
+ * phone's Live Activity while iOS has suspended the app. Only the phase, and
+ * for an approval the opaque call id and the risk level: never text. `phases`
+ * holds each chat's last phase and is updated in place. Mirrored by
+ * `AgentCore::activity_frame` in crates/nekko-remote/src/agent.rs.
+ */
+export function activityFrame(phases: Map<string, ActivityPhase>, e: unknown): Record<string, unknown> | null {
+  const ev = e as { type?: unknown; sessionId?: unknown; call?: { id?: unknown }; severity?: unknown; message?: unknown } | null;
+  if (!ev || typeof ev.sessionId !== 'string' || typeof ev.type !== 'string') return null;
+  const sid = ev.sessionId;
+  const prev = phases.get(sid);
+  let phase: ActivityPhase;
+  const extra: Record<string, unknown> = {};
+  switch (ev.type) {
+    case 'tool_approval_required':
+      if (typeof ev.call?.id !== 'string') return null;
+      phase = 'approval';
+      extra.callId = ev.call.id;
+      extra.severity = ev.severity === 'high' || ev.severity === 'medium' ? ev.severity : 'low';
+      break;
+    case 'question':
+      phase = 'question';
+      break;
+    case 'tool_result':
+    case 'question_resolved':
+      if (prev !== 'approval' && prev !== 'question') return null;
+      phase = 'running';
+      break;
+    case 'text':
+    case 'reasoning':
+    case 'tool_call':
+      // The first sign of a turn: once, so the relay can end it later.
+      if (prev !== undefined) return null;
+      phase = 'running';
+      break;
+    case 'done':
+      phase = 'done';
+      break;
+    case 'error':
+      phase = typeof ev.message === 'string' && /^(stopped|aborted)$/i.test(ev.message) ? 'done' : 'failed';
+      break;
+    default:
+      return null;
+  }
+  if (phase === prev && phase !== 'approval') return null;
+  if (phase === 'done' || phase === 'failed') {
+    // A turn this agent never saw start (it reconnected mid-turn) has nothing to end.
+    if (prev === undefined) return null;
+    phases.delete(sid);
+  } else {
+    phases.set(sid, phase);
+  }
+  return { type: 'activity', tag: activityTag(sid), phase, ...extra };
 }

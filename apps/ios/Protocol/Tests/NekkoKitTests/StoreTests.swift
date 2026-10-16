@@ -38,6 +38,8 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     func nudge() {}
     func reconnect() {}
     func registerPush(token: String) async throws { lock.lock(); pushTokens.append(token); lock.unlock() }
+    var activities: [(String, String)] = []
+    func registerActivity(tag: String, token: String) async throws { lock.lock(); activities.append((tag, token)); lock.unlock() }
 
     func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
         lock.lock()
@@ -228,6 +230,9 @@ final class StoreTests: XCTestCase {
         s.setPushToken("apns-token")
         await settle()
         XCTAssertEqual(c.pushTokens.last, "apns-token")
+        await s.registerActivity(sessionId: "s1", token: "abcd")
+        XCTAssertEqual(c.activities.last?.0, E2E.activityTag("s1"))
+        XCTAssertEqual(c.activities.last?.1, "abcd")
     }
 }
 

@@ -45,6 +45,12 @@ final class E2ETests: XCTestCase {
         XCTAssertEqual(try E2E.open(key: key, blob: a), v)
     }
 
+    /// Pinned to the computer's golden (crates/nekko-remote/tests/golden/agent.json).
+    func testActivityTagMatchesTheComputers() {
+        XCTAssertEqual(E2E.activityTag("s1"), "7536af24f84b356f893a72f0def58cce")
+        XCTAssertEqual(E2E.activityTag("s2"), "c999df987ff9835d74f4acf7bae0b592")
+    }
+
     func testHex() {
         XCTAssertEqual(E2E.toHex(Data([0, 1, 0xab, 0xff])), "0001abff")
         XCTAssertEqual(E2E.fromHex("0001ABff"), Data([0, 1, 0xab, 0xff]))

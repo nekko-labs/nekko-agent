@@ -22,6 +22,43 @@ struct AgentRunAttributes: ActivityAttributes {
         var severity: String?
         var steps: Int
         var startedAt: Date
+
+        init(phase: Phase, step: String, callId: String?, severity: String?, steps: Int, startedAt: Date) {
+            self.phase = phase
+            self.step = step
+            self.callId = callId
+            self.severity = severity
+            self.steps = steps
+            self.startedAt = startedAt
+        }
+
+        /// Pushes from the relay carry only the phase (and an approval's call id
+        /// and risk): everything else falls back, and an empty step reads as the
+        /// phase's generic line (`displayStep`).
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            phase = try c.decode(Phase.self, forKey: .phase)
+            step = try c.decodeIfPresent(String.self, forKey: .step) ?? ""
+            callId = try c.decodeIfPresent(String.self, forKey: .callId)
+            severity = try c.decodeIfPresent(String.self, forKey: .severity)
+            steps = try c.decodeIfPresent(Int.self, forKey: .steps) ?? 0
+            startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt) ?? .distantPast
+        }
+
+        /// The step line, or a generic one for the phase when a push left it empty.
+        var displayStep: String {
+            if !step.isEmpty { return step }
+            switch phase {
+            case .running: return "Working…"
+            case .approval: return "A tool needs your approval"
+            case .question: return "Your computer has a question"
+            case .done: return "Finished"
+            case .failed: return "Stopped with an error"
+            }
+        }
+
+        /// Whether `startedAt` is real (a push doesn't know it).
+        var hasStart: Bool { startedAt > Date(timeIntervalSince1970: 0) }
     }
 
     var sessionId: String
