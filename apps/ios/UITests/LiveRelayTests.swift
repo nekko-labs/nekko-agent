@@ -59,6 +59,32 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(waitGone(card, 15))
         attach(app, "\(theme)-6-denied")
 
+        // The agent asks; the phone answers.
+        message.tap()
+        message.typeText("ask me which platform")
+        app.buttons["Send"].tap()
+        let question = app.staticTexts["Which platform should I build first?"]
+        XCTAssertTrue(question.waitForExistence(timeout: 30), "the question reaches the phone")
+        attach(app, "\(theme)-6b-question")
+        app.buttons["iOS"].firstMatch.tap()
+        app.buttons["Answer"].tap()
+        XCTAssertTrue(waitGone(question, 15))
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: 30))
+
+        // A longer run, then Home: the Live Activity takes over in the Dynamic Island.
+        message.tap()
+        message.typeText("a slow one please")
+        app.buttons["Send"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word2")).firstMatch.waitForExistence(timeout: 20))
+        XCUIDevice.shared.press(.home)
+        sleep(3)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let shot = XCTAttachment(screenshot: springboard.screenshot())
+        shot.name = "\(theme)-6c-live-activity"
+        shot.lifetime = .keepAlways
+        add(shot)
+        app.activate()
+
         app.navigationBars.buttons.element(boundBy: 0).tap()
         attach(app, "\(theme)-7-chats-after")
     }
