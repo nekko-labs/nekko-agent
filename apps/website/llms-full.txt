@@ -737,8 +737,10 @@ this model does not accept image input") and the chat keeps working. The picture
 the chat itself, so switching back to a vision model sends it again.
 
 A server that does not say what its models take still receives the pictures. If such a
-model refuses them, use **Reset here** on an earlier message, or switch to a model with
-vision input.
+model refuses them, click **Delete last message** in the failure notice (or **Delete** on
+the message itself). That removes the message with the picture and anything after it, and
+the chat answers again. You can then ask again without the picture, or switch to a model
+with vision input.
 
 ## What is not here yet
 
