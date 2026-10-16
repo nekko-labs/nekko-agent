@@ -17,8 +17,10 @@
 //! (`loop:log`); and connector and workspace-index snippets are asked of it
 //! (`chat:connectorSnippets`, `chat:indexSnippets`) only when a connector is
 //! connected or the prompt has words to search for, until those services
-//! move. A sandbox chat, and every chat under `NEKKO_AGENT_LOOP=ts`, goes to
-//! the host whole, as before.
+//! move. A sandbox chat is admitted here too (its setup checked, ask mode,
+//! only its copied folders, no host context, MCP, decision runner, hooks or
+//! sub-agents) and its turn runs every tool in the daemon's container for it
+//! (sandbox.rs). Every chat under `NEKKO_AGENT_LOOP=ts` goes to the host whole.
 
 use crate::routes::Ctx;
 use nekko_loop::Cancel;
@@ -355,8 +357,8 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
     let (st, id) = (store.clone(), session_id.clone());
     let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
     let session = session.ok_or("Session not found.")?;
-    // A sandbox chat, and the kill switch, keep the whole thing in the host.
-    if adm.ts_loop || crate::worktrees::execution_mode(&session) == "sandbox" {
+    // The kill switch keeps the whole thing in the host, as does a sandbox chat without containers here.
+    if adm.ts_loop || (crate::worktrees::execution_mode(&session) == "sandbox" && ctx.sandboxes.is_none()) {
         return ctx.backend.call("chat:interruptQueued", Value::Array(args)).await;
     }
     let index = nekko_turn::variants::queued_index_valid(&session, &index).ok_or("Queued prompt not found.")?;
@@ -427,8 +429,10 @@ async fn admit(
         let (st, id) = (store.clone(), session_id.clone());
         tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?
     };
-    // A sandbox chat runs in the host's container router; the kill switch keeps everything there.
-    if adm.ts_loop || session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox") {
+    // The kill switch keeps everything in the host; so does a sandbox chat
+    // when this daemon has no containers (no data directory).
+    let sandbox = session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox");
+    if adm.ts_loop || (sandbox && ctx.sandboxes.is_none()) {
         return Ok(Admit::Host);
     }
     // A chained queued prompt was admitted by the host without this check; so it stays.
@@ -444,6 +448,9 @@ async fn admit(
         return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
     let Some(mut session) = session else { return ended(ctx, &session_id, "Session not found.").await };
+    if sandbox && let Some(refusal) = nekko_turn::variants::sandbox_admission_refusal(&session, &opts) {
+        return ended(ctx, &session_id, refusal).await;
+    }
 
     let mode_name = crate::worktrees::execution_mode(&session);
     let offline = nekko_js::truthy(session.get("offline"));
@@ -460,9 +467,16 @@ async fn admit(
     }
     let mut chat = session.clone();
     chat["gitIsolation"] = json!(mode_name == "worktree");
-    let workspaces = crate::worktrees::chat_workspaces(Some(&chat), &settings);
+    // A sandbox chat sees only its copied folders (`folder-N`), never the host's.
+    let workspaces = if sandbox {
+        nekko_turn::variants::sandbox_workspaces(&session)
+    } else {
+        crate::worktrees::chat_workspaces(Some(&chat), &settings)
+    };
 
+    // A sandbox chat always asks.
     let mode = match session.get("mode").filter(|m| !m.is_null()) {
+        _ if sandbox => json!("ask"),
         Some(m) => m.clone(),
         None => settings.get("defaultChatMode").filter(|m| !m.is_null()).cloned().unwrap_or(json!("guardrails")),
     };
@@ -482,7 +496,7 @@ async fn admit(
         .get("disabledTools")
         .and_then(Value::as_array)
         .is_some_and(|d| d.iter().any(|t| t.as_str() == Some("decide")));
-    let decide_with = if offline || disabled_decide {
+    let decide_with = if offline || disabled_decide || sandbox {
         Value::Null
     } else if ctx.engine.decide.status()["loaded"] == json!(true) {
         json!("local")
@@ -499,7 +513,8 @@ async fn admit(
         .get("connectors")
         .and_then(Value::as_array)
         .is_some_and(|cs| cs.iter().any(|c| nekko_js::truthy(c.get("connected")) && nekko_js::truthy(c.get("token"))));
-    let connector_snippets = if offline || !connected {
+    // Context is not silently read from host connectors or indices for a sandbox chat.
+    let connector_snippets = if offline || !connected || sandbox {
         json!([])
     } else {
         Value::Array(crate::connectors::snippets(ctx, Some(&text)).await)
@@ -507,7 +522,7 @@ async fn admit(
     let has_worktrees = session.get("gitWorktrees").and_then(Value::as_object).is_some_and(|m| !m.is_empty());
     let ids = crate::worktrees::session_workspace_ids(&session);
     let index_snippets =
-        if has_worktrees || ids.is_empty() || nekko_js::trim(&text).is_empty() || !has_index_words(&text) {
+        if sandbox || has_worktrees || ids.is_empty() || nekko_js::trim(&text).is_empty() || !has_index_words(&text) {
             json!([])
         } else {
             Value::Array(crate::workspace::index_snippets(ctx, &ids, &text).await)
@@ -535,7 +550,7 @@ async fn admit(
     );
     facts.insert(
         "mcpServers".into(),
-        if offline {
+        if offline || sandbox {
             json!([])
         } else {
             settings.get("mcpServers").filter(|v| !v.is_null()).cloned().unwrap_or(json!([]))
@@ -543,7 +558,9 @@ async fn admit(
     );
     facts.insert("decide".into(), json!(!decide_with.is_null()));
     facts.insert("decideWith".into(), decide_with.clone());
-    facts.insert("hooks".into(), json!(has_tool_hooks(&settings)));
+    facts.insert("hooks".into(), json!(!sandbox && has_tool_hooks(&settings)));
+    // The turn runs its tools in this daemon's container for the chat (turns.rs).
+    facts.insert("sandbox".into(), json!(sandbox));
     facts.insert("connectorSnippets".into(), connector_snippets);
     facts.insert("indexSnippets".into(), index_snippets);
     facts.insert("platform".into(), json!(platform()));
@@ -571,7 +588,7 @@ async fn admit(
             kind == "anthropic" && s(&provider, "auth") == "subscription" && nekko_js::truthy(provider.get("tokenKey"))
         ),
     );
-    facts.insert("spawn".into(), json!(true));
+    facts.insert("spawn".into(), json!(!sandbox));
     let mut account = pick(&provider, &["auth", "kind", "tokenKey"]);
     account["incognito"] = json!(incognito);
     facts.insert("account".into(), account);

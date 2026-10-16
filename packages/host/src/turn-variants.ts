@@ -1,5 +1,5 @@
 import type { ChatMessage, ImageGenerationRequest, ImageGenerationResult, ImageTurnOptions, ProviderConfig, QueuedPrompt, SendOptions, Session, UsageRecord } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, estimateTranscriptTokens, latestCompactionIndex, queueItemPayload } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, estimateTranscriptTokens, getSessionWorkspaceIds, latestCompactionIndex, queueItemPayload } from '@nekko-agent/shared';
 
 /**
  * The pure half of the turns that are not ordinary replies: compacting a
@@ -279,6 +279,29 @@ export function imageFailure(stopped: boolean, message: string, now: number): Ch
     interrupted: stopped || undefined,
     createdAt: now,
   };
+}
+
+/* ----------------------------------------------------- sandbox chat turns */
+
+/** The only tools a sandbox chat offers, all run in its container. */
+export const SANDBOX_TOOLS = new Set(['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash']);
+
+/** Context is not silently read from host attachments, guidelines, memory or indices. */
+export function sandboxWorkspaces(s: Pick<Session, 'sandbox' | 'workspaceId' | 'supportingWorkspaceIds'>) {
+  return (s.sandbox?.sourceWorkspaceIds ?? getSessionWorkspaceIds(s)).map((_, i) => ({ id: `sandbox-${i}`, name: `folder-${i}`, path: `folder-${i}`, addedAt: 0 }));
+}
+
+/** Why a sandbox chat's turn cannot start (no setup, an image chat, a host skill), or null. */
+export function sandboxAdmissionRefusal(session: Pick<Session, 'sandbox' | 'chatType'>, opts: Pick<SendOptions, 'skill'>): string | null {
+  return !session.sandbox || session.chatType === 'image' || opts.skill
+    ? 'Sandbox requires explicit setup and supports text chat without host skills only.'
+    : null;
+}
+
+/** A sandbox tool call: refused outright, or the approval it asks for first. */
+export function sandboxToolCheck(name: string): { error: string } | { reason: string; severity: 'low' | 'medium' | 'high' } {
+  if (!SANDBOX_TOOLS.has(name)) return { error: `Unsupported sandbox tool: ${name}. Host controls, network, connectors, MCP and delegation are denied. No host fallback.` };
+  return { reason: `Sandbox ${name}: access only the copied workspace`, severity: name === 'bash' ? 'high' : name === 'write_file' || name === 'edit_file' ? 'medium' : 'low' };
 }
 
 /* ------------------------------------------------ starting a queued prompt */

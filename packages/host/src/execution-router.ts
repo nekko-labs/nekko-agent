@@ -6,11 +6,12 @@ import { ContainerSandbox } from './container-sandbox.js';
 import { dataDir, getSettings } from './store.js';
 import { getSession, saveSession } from './sessions.js';
 import { daemonCall, daemonOwns } from './engine/daemon.js';
+import { sandboxToolCheck } from './turn-variants.js';
 
 /** The engine daemon owns the containers (crates/nekkod/src/sandbox.rs). */
 export const DAEMON_SANDBOX = 'sandbox';
 
-export const SANDBOX_TOOLS = new Set(['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash']);
+export { SANDBOX_TOOLS, sandboxWorkspaces } from './turn-variants.js';
 const runtimes = new Map<string, { sandbox: ContainerSandbox; identity: string; signal?: AbortSignal; error?: string; ready: boolean }>();
 const activeTools = new WeakSet<object>();
 function sessionFor(id: string): Session {
@@ -117,10 +118,11 @@ export async function applySandboxDiff(sessionId: string, identity: string, diff
 }
 export async function executeSandboxTool(sessionId: string, call: ToolCall, approve: (call: ToolCall, reason: string, severity: 'low' | 'medium' | 'high') => Promise<boolean>, signal?: AbortSignal): Promise<ToolResult> {
   const failure = (output: string): ToolResult => ({ toolCallId: call.id, output, isError: true });
-  if (!SANDBOX_TOOLS.has(call.name)) return failure(`Unsupported sandbox tool: ${call.name}. Host controls, network, connectors, MCP and delegation are denied. No host fallback.`);
+  const check = sandboxToolCheck(call.name);
+  if ('error' in check) return failure(check.error);
   try {
     if (signal?.aborted) return failure('Sandbox execution cancelled');
-    if (!await approve(call, `Sandbox ${call.name}: access only the copied workspace`, call.name === 'bash' ? 'high' : call.name === 'write_file' || call.name === 'edit_file' ? 'medium' : 'low')) return failure('Sandbox action not approved');
+    if (!await approve(call, check.reason, check.severity)) return failure('Sandbox action not approved');
     if (signal?.aborted) return failure('Sandbox execution cancelled');
     // Under a daemon that owns the containers, the call runs there; a Stop stops it there.
     const call_ = daemonOwns(DAEMON_SANDBOX) ? daemonCall() : undefined;
@@ -145,8 +147,4 @@ export async function executeSandboxTool(sessionId: string, call: ToolCall, appr
       return { toolCallId: call.id, output: typeof result === 'string' ? result : JSON.stringify(result) };
     } finally { r.signal = undefined; activeTools.delete(r); }
   } catch (error) { return failure((error as Error).message); }
-}
-/** Context is not silently read from host attachments, guidelines, memory or indices. */
-export function sandboxWorkspaces(s: Session) {
-  return (s.sandbox?.sourceWorkspaceIds ?? getSessionWorkspaceIds(s)).map((_, i) => ({ id: `sandbox-${i}`, name: `folder-${i}`, path: `folder-${i}`, addedAt: 0 }));
 }

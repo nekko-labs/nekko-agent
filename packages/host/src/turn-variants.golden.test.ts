@@ -2,7 +2,13 @@ import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { expect, it } from 'vitest';
 import type { ChatMessage, Session } from '@nekko-agent/shared';
+import { assembleContext, renderContextBlock } from '@nekko-agent/core';
+import { turnSystemPrompt, turnTools } from './turn-plan.js';
 import {
+  SANDBOX_TOOLS,
+  sandboxAdmissionRefusal,
+  sandboxToolCheck,
+  sandboxWorkspaces,
   SUMMARY_SYSTEM,
   clip,
   compactedTranscript,
@@ -162,6 +168,28 @@ const INTERRUPTS: Array<{ chat: number; index: number; brain: unknown; defaults:
   { chat: 1, index: 0, brain: { providerId: 'bp' }, defaults: { defaultModelId: 'dm' } },
 ];
 
+/** A sandbox chat's turn, composed as chat.ts composes it (`admitTurn` and `turnSystemPrompt`). */
+const SANDBOX_CHATS: Array<Record<string, unknown>> = [
+  { id: 'b1', title: 'Box', workspaceId: 'w1', executionMode: 'sandbox', mode: 'ask', sandbox: { image: 'node:22@sha256:abc', identity: 'i1', configuredAt: 1, sourceWorkspaceIds: ['w1', 'w2'] }, supportingWorkspaceIds: ['w2'], messages: [] },
+  { id: 'b2', title: 'Box', workspaceId: 'w1', executionMode: 'sandbox', messages: [], disabledTools: ['grep', 'bash'] },
+  { id: 'b3', title: 'Box', executionMode: 'sandbox', sandbox: { image: 'x@sha256:1', identity: 'i3', configuredAt: 1, sourceWorkspaceIds: [] }, chatType: 'image', messages: [] },
+  { id: 'b4', title: 'Box', executionMode: 'sandbox', offline: true, workspaceId: 'w9', sandbox: { image: 'x@sha256:1', identity: 'i4', configuredAt: 1, sourceWorkspaceIds: ['w9'] }, messages: [] },
+];
+const SANDBOX_SETTINGS = [
+  { providers: [{ id: 'p1', label: 'Local', enabled: true }], systemInstructions: 'Host-only instructions.', aboutUser: 'Philip', turnWrapper: 'Custom', orchestration: { strategy: 'swarm', maxDepth: 1, maxParallel: 2 } },
+  { providers: [] },
+];
+const SANDBOX_TOOL_NAMES = ['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash', 'fetch_url', 'browser', 'spawn_agent', 'mcp__x__y', 'update_plan', 'ask_user', 'start_process', ''];
+
+function sandboxCases() {
+  return SANDBOX_CHATS.flatMap((session) => SANDBOX_SETTINGS.map((settings) => {
+    const tools = turnTools({ session: session as never, offline: !!session.offline, orchestration: settings.orchestration as never, allowBrowserControl: true, mcpTools: [], decide: false }).filter((t) => SANDBOX_TOOLS.has(t.name));
+    const workspaces = sandboxWorkspaces(session as never);
+    const system = turnSystemPrompt({ workspaces, tools, settings: settings as never, sandbox: true, executionMode: 'sandbox', worktreeNotices: [], contextBlock: renderContextBlock(assembleContext({ attached: [], guidelines: [], memory: [], connectorSnippets: [], indexSnippets: [] }), new Map()), platform: 'linux' });
+    return { input: { session, settings }, output: { tools: tools.map((t) => t.name), workspaces, system } };
+  }));
+}
+
 it('turn variants match the daemon golden set', async () => {
   const summaries = [];
   for (const c of SUMMARIES) {
@@ -224,6 +252,9 @@ it('turn variants match the daemon golden set', async () => {
     indices: QUEUED_CHATS.flatMap((session, c) => INDICES.map((index) => ({ input: { chat: c, index }, output: queuedIndexValid(session, index as number) }))),
     queuedChats: QUEUED_CHATS,
     interrupts: INTERRUPTS.map((c) => ({ input: c, output: interruptQueuedPlan(QUEUED_CHATS[c.chat], c.index, c.brain as never, c.defaults) })),
+    sandboxTurns: sandboxCases(),
+    sandboxRefusals: SANDBOX_CHATS.flatMap((session) => [{}, { skill: { name: 'review', input: 'x' } }].map((opts) => ({ input: { session, opts }, output: sandboxAdmissionRefusal(session as never, opts as never) }))),
+    sandboxTools: SANDBOX_TOOL_NAMES.map((name) => ({ input: name, output: sandboxToolCheck(name) })),
   };
   const actual = JSON.parse(JSON.stringify(out));
   if (process.env.UPDATE_GOLDEN) writeFileSync(golden, `${JSON.stringify(actual, null, 2)}\n`);
