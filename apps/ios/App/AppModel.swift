@@ -28,12 +28,18 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A chat to open (notification tap, Live Activity tap, `nekko-agent://chat/<id>`).
     var openChat: String?
+    /// Text shared from another app (the share extension), waiting for New chat to take it.
+    var sharedText: String?
+    private let shareInbox = ShareInbox(defaults: UserDefaults(suiteName: StatusSnapshot.appGroup) ?? .standard)
 
     init() {
         let keychain = KeychainStore()
         #if DEBUG
         // UI tests start from a fresh install; the Keychain outlives uninstalling the app.
         if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { keychain.wipe() }
+        // What the share extension leaves behind, without driving another app's share sheet.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-uiTestShare"), i + 1 < args.count { shareInbox.offer(args[i + 1]) }
         #endif
         let prefs = Prefs()
         let deviceName = UIDevice.current.name
@@ -78,6 +84,14 @@ final class AppModel {
         foreground = true
         endBackgroundTask()
         if started { store.nudge() }
+        takeShare()
+    }
+
+    /// Moves a share from the extension to New chat. It waits while no computer
+    /// is paired (it expires on its own); once read it is gone from the App Group.
+    func takeShare() {
+        guard store.ready, !store.computers.isEmpty, let text = shareInbox.take() else { return }
+        sharedText = text
     }
 
     func didEnterBackground() {
