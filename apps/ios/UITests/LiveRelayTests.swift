@@ -34,6 +34,7 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(newChat.waitForExistence(timeout: 20))
         XCTAssertTrue(waitEnabled(newChat, 20), "connected to the computer")
         attach(app, "\(theme)-2-chats")
+        auditAccessibility(app, "\(theme)-chats")
 
         newChat.tap()
         let prompt = app.input("What should your computer do?")
@@ -41,6 +42,7 @@ final class LiveRelayTests: XCTestCase {
         prompt.tap()
         prompt.typeText("Say hello")
         attach(app, "\(theme)-3-new-chat")
+        auditAccessibility(app, "\(theme)-new-chat")
         app.buttons["Start"].tap()
 
         XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the reply streamed in")
@@ -54,6 +56,7 @@ final class LiveRelayTests: XCTestCase {
         let card = app.staticTexts["Approve this tool?"]
         XCTAssertTrue(card.waitForExistence(timeout: 30), "the guarded tool asks the phone")
         attach(app, "\(theme)-5-approval")
+        auditAccessibility(app, "\(theme)-approval")
         app.buttons["Deny"].tap()
         XCTAssertTrue(waitGone(card, 15))
         attach(app, "\(theme)-6-denied")
@@ -65,6 +68,7 @@ final class LiveRelayTests: XCTestCase {
         let question = app.staticTexts["Which platform should I build first?"]
         XCTAssertTrue(question.waitForExistence(timeout: 30), "the question reaches the phone")
         attach(app, "\(theme)-6b-question")
+        auditAccessibility(app, "\(theme)-question")
         app.buttons["iOS"].firstMatch.tap()
         app.buttons["Answer"].tap()
         XCTAssertTrue(waitGone(question, 15))

@@ -11,6 +11,7 @@ final class FirstRunTests: XCTestCase {
         XCTAssertTrue(pair.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Connect over Tailscale (recommended)"].exists)
         attach(app, "Welcome")
+        auditAccessibility(app, "welcome")
         pair.tap()
         let field = app.input("nekko-agent-pair:?relay=…")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -19,6 +20,7 @@ final class FirstRunTests: XCTestCase {
         app.buttons["Pair"].tap()
         XCTAssertTrue(app.staticTexts["That isn’t a Nekko Agent pairing link."].waitForExistence(timeout: 5))
         attach(app, "Pair")
+        auditAccessibility(app, "pair")
     }
 
     /// A plain ws:// relay on the open internet is refused before anything is dialed.
