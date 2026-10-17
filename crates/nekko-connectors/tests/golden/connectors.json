@@ -1811,6 +1811,9 @@
        "repo": {
         "name": "o/r"
        },
+       "actor": {
+        "login": "octo"
+       },
        "payload": {
         "ref": "main"
        }
@@ -1828,6 +1831,9 @@
        "id": "3",
        "type": "PullRequestEvent",
        "created_at": "2026-01-02T03:04:10.006Z",
+       "actor": {
+        "login": ""
+       },
        "payload": {
         "number": 4,
         "action": "closed"
@@ -1872,7 +1878,8 @@
       "source": "o/r",
       "payload": {
        "ref": "main"
-      }
+      },
+      "actor": "octo"
      },
      {
       "id": "3",
@@ -1913,6 +1920,9 @@
        "id": "3",
        "type": "PullRequestEvent",
        "created_at": "2026-01-02T03:04:10.006Z",
+       "actor": {
+        "login": "octo"
+       },
        "payload": {
         "number": 4,
         "action": "closed"
@@ -1922,6 +1932,9 @@
        "id": "5",
        "type": "PullRequestEvent",
        "created_at": "2026-01-02T03:04:11.006Z",
+       "actor": {
+        "login": "octo"
+       },
        "payload": {
         "number": 5,
         "action": "opened"
@@ -1971,7 +1984,8 @@
       "payload": {
        "number": 4,
        "action": "closed"
-      }
+      },
+      "actor": "octo"
      }
     ],
     "nextCursor": 1767323050006

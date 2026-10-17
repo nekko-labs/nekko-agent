@@ -649,6 +649,7 @@ function ConnectorTriggerFields({
   const intervalMin = trigger.pollIntervalMs ? Math.max(1, Math.round(trigger.pollIntervalMs / 60_000)) : '';
   const isRepo = trigger.connector === 'github' || trigger.connector === 'gitlab';
   const isChannel = trigger.connector === 'slack' || trigger.connector === 'discord';
+  const isGitHub = trigger.connector === 'github';
   return (
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
       <label className="block">
@@ -656,7 +657,7 @@ function ConnectorTriggerFields({
         <select
           className="input w-full py-1! text-[12px]"
           value={trigger.connector ?? ''}
-          onChange={(e) => onPatch({ connector: e.target.value as ConnectorKind, event: undefined, channel: undefined, repo: undefined })}
+          onChange={(e) => onPatch({ connector: e.target.value as ConnectorKind, event: undefined, channel: undefined, repo: undefined, action: undefined, actor: undefined })}
         >
           <option value="">Pick a connector…</option>
           {POLLABLE_CONNECTORS.map((k) => (
@@ -706,6 +707,28 @@ function ConnectorTriggerFields({
             onChange={(e) => onPatch({ repo: e.target.value || undefined })}
           />
         </label>
+      )}
+      {isGitHub && (
+        <>
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Action</span>
+            <input
+              className="input w-full text-[12px]"
+              placeholder="opened (any)"
+              value={trigger.action ?? ''}
+              onChange={(e) => onPatch({ action: e.target.value.trim() || undefined })}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Only by</span>
+            <input
+              className="input w-full text-[12px]"
+              placeholder="GitHub username (anyone)"
+              value={trigger.actor ?? ''}
+              onChange={(e) => onPatch({ actor: e.target.value.trim() || undefined })}
+            />
+          </label>
+        </>
       )}
       <label className="block sm:col-span-2">
         <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Filter</span>

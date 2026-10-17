@@ -13,7 +13,7 @@ CI on your machine, see [Local CI runner](git-runner.md).
 | Automation | When it runs | What it needs |
 |---|---|---|
 | Summarize my GitHub notifications every morning | Weekdays at a time you pick | GitHub connected, the `gh` CLI signed in, a default model |
-| Review every PR I open | Each new pull request in a repo you pick (checked every 2 minutes) | GitHub connected, the `gh` CLI signed in, a default model |
+| Review every PR I open | Each pull request you open in a repo you pick (checked every 2 minutes) | GitHub connected, the `gh` CLI signed in, a default model |
 | Nightly dependency check | Every night at a time you pick | A project folder, a default model |
 | Daily digest of my Linear or Jira tickets | Weekdays at a time you pick | Linear or Jira connected, a default model |
 
@@ -21,8 +21,9 @@ Each card marks what you already have. Click one to open its setup sheet:
 
 1. **What it needs.** Anything missing has a button: **Connect** opens Connectors, **Choose a
    model** opens Models. A template that runs in a project asks which folder.
-2. **Its questions.** A time of day, or a repository (`owner/name`) and, optionally, a GitHub
-   username so only that person's PRs are reviewed.
+2. **Its questions.** A time of day, or a repository (`owner/name`) and your GitHub username.
+   Only PRs you open start a review: the trigger checks the event's author and its `opened`
+   action exactly, so other people's PRs, reopened PRs and closed ones never reach the agent.
 3. **Notify me.** Digests default to *After every run*; change it here or later in the editor.
 4. **Turn on.** The automation is created, enabled and armed. The toast says when it runs first.
 

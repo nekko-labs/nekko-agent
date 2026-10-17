@@ -20,9 +20,9 @@ const workflows = [
   },
   {
     id: 'w2', name: 'Review every PR I open', category: 'Code review', enabled: true, templateId: 'review-my-prs',
-    description: 'Watches a GitHub repo for new pull requests and reviews each diff.',
+    description: 'Watches a GitHub repo for pull requests you open and reviews each diff.',
     steps: [step('r', 'Review the diff', 'prompt', 'Review the pull request that triggered this run.')],
-    triggers: [{ id: 't2', kind: 'connector', connector: 'github', event: 'PullRequestEvent', repo: 'acme/app', filter: 'opened', pollIntervalMs: 120_000 }],
+    triggers: [{ id: 't2', kind: 'connector', connector: 'github', event: 'PullRequestEvent', repo: 'acme/app', action: 'opened', actor: 'octocat', pollIntervalMs: 120_000 }],
     createdAt: now - 2 * 86_400_000, updatedAt: now - 2 * 86_400_000, lastRunAt: now - 25 * min, lastStatus: 'failure', runCount: 2,
   },
   {

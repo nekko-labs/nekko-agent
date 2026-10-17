@@ -106,8 +106,13 @@ export function WorkflowsView() {
     useStore.setState({ workflowFocus: null });
   }, [workflowFocus]);
 
+  // Scroll once, when the row exists (the snapshot may still be loading), then let go.
   useEffect(() => {
-    if (focusRun) document.querySelector(`[data-workflow-row="${CSS.escape(focusRun.workflowId)}"]`)?.scrollIntoView({ block: 'nearest' });
+    if (!focusRun) return;
+    const row = document.querySelector(`[data-workflow-row="${CSS.escape(focusRun.workflowId)}"]`);
+    if (!row) return;
+    row.scrollIntoView({ block: 'nearest' });
+    setFocusRun(null);
   }, [focusRun, snapshot]);
 
   const togglePaused = async (next: boolean) => {

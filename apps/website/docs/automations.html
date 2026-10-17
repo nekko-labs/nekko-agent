@@ -78,7 +78,7 @@ CI on your machine, see <a href="/docs/local-ci-runner">Local CI runner</a>.</p>
 </tr>
 <tr>
 <td>Review every PR I open</td>
-<td>Each new pull request in a repo you pick (checked every 2 minutes)</td>
+<td>Each pull request you open in a repo you pick (checked every 2 minutes)</td>
 <td>GitHub connected, the <code>gh</code> CLI signed in, a default model</td>
 </tr>
 <tr>
@@ -96,8 +96,9 @@ CI on your machine, see <a href="/docs/local-ci-runner">Local CI runner</a>.</p>
 <ol>
 <li><strong>What it needs.</strong> Anything missing has a button: <strong>Connect</strong> opens Connectors, <strong>Choose a
 model</strong> opens Models. A template that runs in a project asks which folder.</li>
-<li><strong>Its questions.</strong> A time of day, or a repository (<code>owner/name</code>) and, optionally, a GitHub
-username so only that person&#39;s PRs are reviewed.</li>
+<li><strong>Its questions.</strong> A time of day, or a repository (<code>owner/name</code>) and your GitHub username.
+Only PRs you open start a review: the trigger checks the event&#39;s author and its <code>opened</code>
+action exactly, so other people&#39;s PRs, reopened PRs and closed ones never reach the agent.</li>
 <li><strong>Notify me.</strong> Digests default to <em>After every run</em>; change it here or later in the editor.</li>
 <li><strong>Turn on.</strong> The automation is created, enabled and armed. The toast says when it runs first.</li>
 </ol>

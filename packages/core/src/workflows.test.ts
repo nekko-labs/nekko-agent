@@ -25,7 +25,7 @@ import {
   unreachableSteps,
   workflowEdges,
 } from '@nekko-agent/shared';
-import type { Workflow, WorkflowStep, WorkflowTrigger } from '@nekko-agent/shared';
+import type { Workflow, WorkflowEvent, WorkflowStep, WorkflowTrigger } from '@nekko-agent/shared';
 
 function step(id: string, over: Partial<WorkflowStep> = {}): WorkflowStep {
   return { id, name: id, kind: 'prompt', run: `do ${id}`, ...over };
@@ -357,12 +357,24 @@ describe('gallery templates', () => {
     expect(byId('github-notifications').build({ time: '07:15' }).triggers[0].cron).toBe('15 7 * * 1-5');
   });
 
-  it('keeps the PR watcher disarmed until it has a repo', () => {
+  it('keeps the PR watcher disarmed until it has a repo and an author', () => {
     const t = byId('review-my-prs');
     expect(t.build({}).triggers[0].enabled).toBe(false);
-    const armed = t.build({ repo: 'o/r', author: 'octo' });
-    expect(armed.triggers[0]).toMatchObject({ kind: 'connector', connector: 'github', repo: 'o/r', enabled: true });
-    expect(armed.steps[0].run).toContain('octo');
+    expect(t.build({ repo: 'o/r' }).triggers[0].enabled).toBe(false);
+    expect(t.build({ author: 'octo' }).triggers[0].enabled).toBe(false);
+    const armed = t.build({ repo: 'o/r', author: ' octo ' });
+    expect(armed.triggers[0]).toMatchObject({ kind: 'connector', connector: 'github', repo: 'o/r', action: 'opened', actor: 'octo', enabled: true });
+    expect(armed.triggers[0].filter).toBeUndefined();
+  });
+
+  it('starts the PR review only for PRs the author opens', () => {
+    const reviewer = wf({ id: 'r', ...byId('review-my-prs').build({ repo: 'o/r', author: 'octo' }) });
+    const opened: WorkflowEvent = { kind: 'connector', connector: 'github', event: 'PullRequestEvent', actor: 'Octo', payload: { action: 'opened', number: 1 } };
+    expect(matchWorkflows([reviewer], opened).map((w) => w.id)).toEqual(['r']);
+    expect(matchWorkflows([reviewer], { ...opened, payload: { action: 'reopened' } })).toEqual([]);
+    expect(matchWorkflows([reviewer], { ...opened, payload: { action: 'closed', title: 'opened' } })).toEqual([]);
+    expect(matchWorkflows([reviewer], { ...opened, actor: 'mallory' })).toEqual([]);
+    expect(matchWorkflows([reviewer], { ...opened, actor: undefined })).toEqual([]);
   });
 
   it('checks inputs', () => {
@@ -370,7 +382,7 @@ describe('gallery templates', () => {
     expect(templateInputProblem(repo, '')).toMatch(/required/);
     expect(templateInputProblem(repo, 'nope')).toMatch(/owner\/name/);
     expect(templateInputProblem(repo, 'o/r')).toBeUndefined();
-    expect(templateInputProblem(author, '')).toBeUndefined();
+    expect(templateInputProblem(author, '')).toMatch(/required/);
     expect(templateInputProblem(byId('ticket-digest').inputs![0], '9am')).toMatch(/time/);
   });
 

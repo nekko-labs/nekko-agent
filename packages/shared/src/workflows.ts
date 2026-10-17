@@ -393,6 +393,10 @@ export interface WorkflowTrigger {
   event?: string;
   /** connector: how often to poll, in ms. Defaults to 60 seconds. */
   pollIntervalMs?: number;
+  /** connector: the payload's `action`, matched exactly ('opened' never takes 'reopened'). */
+  action?: string;
+  /** connector: only events this person caused (GitHub login, any case). */
+  actor?: string;
   /** connector/webhook: a simple substring filter applied to event text/payload. */
   filter?: string;
   /** webhook: a per-trigger secret passed in the URL (?key=...) or header. */
@@ -991,6 +995,8 @@ export interface WorkflowEvent {
   workflowId?: string;
   /** Free-form payload handed to the run as context. */
   payload?: Record<string, unknown>;
+  /** connector: who caused it (GitHub `actor.login`). */
+  actor?: string;
 }
 
 /** Whether one trigger accepts an inbound event. */
@@ -1017,6 +1023,9 @@ export function triggerAccepts(wf: Workflow, t: WorkflowTrigger, e: WorkflowEven
     case 'connector': {
       if (t.connector && t.connector !== e.connector) return false;
       if (t.event && t.event !== e.event) return false;
+      if (t.action?.trim() && t.action.trim() !== e.payload?.action) return false;
+      // Fails closed: an event with no actor never passes a trigger that names one.
+      if (t.actor?.trim() && t.actor.trim().toLowerCase() !== e.actor?.toLowerCase()) return false;
       return filterMatches(t.filter, e);
     }
     case 'webhook': {
@@ -1255,16 +1264,17 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   {
     id: 'review-my-prs',
     name: 'Review every PR I open',
-    summary: 'When a pull request opens in a repo you pick, the agent reviews the diff and tells you what it found.',
+    summary: 'When you open a pull request in a repo you pick, the agent reviews the diff and tells you what it found.',
     description:
-      'Watches a GitHub repo for new pull requests. For each one, the agent reads the diff and writes a review: correctness bugs first, then simplifications. The review lands in the run history and a notification; nothing is posted to GitHub.',
+      'Watches a GitHub repo for pull requests you open. For each one, the agent reads the diff and writes a review: correctness bugs first, then simplifications. PRs opened by anyone else never start a run. The review lands in the run history and a notification; nothing is posted to GitHub.',
     category: 'Code review',
     featured: true,
     requires: { connectors: ['github'], model: true },
     notes: ['The GitHub CLI (gh) signed in on this computer.'],
     inputs: [
       { key: 'repo', label: 'Repository', kind: 'repo', placeholder: 'owner/name', required: true },
-      { key: 'author', label: 'Only PRs by', kind: 'text', placeholder: 'your GitHub username', hint: 'Leave empty to review every new PR.' },
+      // Required: other people's PRs are untrusted input to an unattended agent.
+      { key: 'author', label: 'Your GitHub username', kind: 'text', placeholder: 'octocat', hint: 'Only PRs you open start a run.', required: true },
     ],
     notify: 'always',
     build: (inputs = {}) => {
@@ -1277,7 +1287,6 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
             kind: 'prompt',
             run: [
               'Review the pull request that triggered this run. Read it with `gh pr view <number> -R <repo>` and `gh pr diff <number> -R <repo>`.',
-              ...(author ? [`If the PR was not opened by ${author}, say so in one line and stop.`] : []),
               'Report correctness bugs first, then simplifications, each with the file and line.',
               'Do not comment on, approve, or change anything on GitHub.',
             ].join('\n'),
@@ -1290,10 +1299,11 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
             connector: 'github',
             event: 'PullRequestEvent',
             repo: inputs.repo || undefined,
-            filter: 'opened',
+            action: 'opened',
+            actor: author || undefined,
             pollIntervalMs: 120_000,
-            // A poll with no repo would watch every repo the token sees.
-            enabled: !!inputs.repo,
+            // A poll with no repo would watch every repo the token sees; no author would take anyone's PR.
+            enabled: !!(inputs.repo && author),
           },
         ],
       };

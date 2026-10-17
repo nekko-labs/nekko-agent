@@ -1223,6 +1223,7 @@ impl Workflows {
                 ("channel", t.get("channel")),
                 ("text", ev.get("text")),
                 ("payload", ev.get("payload")),
+                ("actor", ev.get("actor")),
             ] {
                 if let Some(v) = v {
                     event.insert(k.into(), v.clone());
