@@ -13,14 +13,14 @@
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
-		<!-- NekkoWatchApp.swift: the last counts the iPhone sent, kept in the watch
-		     app's own defaults so the glance shows them at launch (CA92.1). -->
+		<!-- The last counts the iPhone sent, kept in the App Group's defaults so the
+		     glance shows them at launch and the complication can read them (1C8F.1). -->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
-				<string>CA92.1</string>
+				<string>1C8F.1</string>
 			</array>
 		</dict>
 	</array>

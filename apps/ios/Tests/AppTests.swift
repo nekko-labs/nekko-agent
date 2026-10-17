@@ -124,6 +124,16 @@ final class DeepLinkTests: XCTestCase {
 }
 
 final class StatusWidgetTests: XCTestCase {
+    func testTheWatchKeepsTheLastCountsForItsComplication() throws {
+        let suite = "nekko.tests.watch.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(WatchStatus.load(defaults), .empty)
+        let s = StatusSnapshot(computer: "Mac", online: false, needsYou: 0, running: 3, at: Date(timeIntervalSince1970: 1_800_000_000))
+        WatchStatus.save(s, defaults)
+        XCTAssertEqual(WatchStatus.load(defaults), s)
+    }
+
     func testTheWatchGetsTheSameCountsAndNothingElse() throws {
         let s = StatusSnapshot(computer: "Mac", online: true, needsYou: 2, running: 1, at: Date(timeIntervalSince1970: 1_800_000_000))
         let context = s.watchContext
