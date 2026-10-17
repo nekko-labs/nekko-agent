@@ -9,8 +9,10 @@ name: Auto-merge
 # auto-merging it would fold it into that branch rather than queue it. Stacks
 # are queued with `gh stack merge`.
 #
-# The merge method comes from the queue's settings; `--squash` here is ignored
-# by GitHub when a queue is required, and kept for a main without one.
+# No merge method on purpose. With a method (`--squash`), `gh pr merge --auto`
+# arms GitHub's classic auto-merge, which waits outside the queue forever on a
+# branch that requires one (#751 and #755 sat green and never queued). Without
+# one, gh enqueues the PR, and the queue's own setting (squash) merges it.
 #
 # Why this also dispatches version-release: a merge performed with
 # GITHUB_TOKEN never starts a workflow run, so the `push` trigger on
@@ -42,11 +44,44 @@ jobs:
     # enough that a PR left open for review does not hold a runner all afternoon.
     timeout-minutes: 45
     steps:
-      - name: Enable auto-merge (squash)
-        run: gh pr merge --auto --squash "$PR_URL"
+      - name: Queue the PR
+        run: gh pr merge --auto "$PR_URL"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
+
+      # Armed on `opened`, before any check has run, `--auto` on a queue-required
+      # branch records an auto-merge request that GitHub does not always turn
+      # into a queue entry when `gate` goes green (#756 sat 25 minutes like
+      # that). So wait for `gate` here and enqueue explicitly once it passes;
+      # an enqueue of a PR already in the queue is a no-op.
+      - name: Enqueue once gate passes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_ID: ${{ github.event.pull_request.node_id }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          for _ in $(seq 1 60); do
+            pr=$(gh pr view "$PR_URL" --json state,isDraft,headRefOid,statusCheckRollup)
+            state=$(jq -r .state <<<"$pr")
+            [ "$state" = OPEN ] || { echo "PR is $state."; exit 0; }
+            if [ "$(jq -r .isDraft <<<"$pr")" = true ]; then echo 'Back in draft; not queueing.'; exit 0; fi
+            gate=$(jq -r '[.statusCheckRollup[] | select(.name == "gate")] | last | .conclusion // ""' <<<"$pr")
+            case "$gate" in
+              SUCCESS)
+                head=$(jq -r .headRefOid <<<"$pr")
+                gh api graphql -f query='mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{state position}}}' \
+                  -f id="$PR_ID" -f head="$head" || echo '::warning::Enqueue failed; auto-merge stays armed.'
+                exit 0
+                ;;
+              FAILURE|CANCELLED|TIMED_OUT)
+                echo "gate is $gate; the author re-queues after a fix (push re-runs gate, then gh pr merge --auto)."
+                exit 0
+                ;;
+            esac
+            sleep 20
+          done
+          echo '::warning::gate did not finish within 20 minutes; auto-merge stays armed.'
 
       # Dispatched for every merge, not just version bumps: version-release is
       # idempotent (it stops when the version is already tagged), so a merge
