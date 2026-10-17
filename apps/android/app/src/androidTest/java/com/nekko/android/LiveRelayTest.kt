@@ -97,6 +97,16 @@ class LiveRelayTest {
             tap(hasText("Submit"))
             waitGone(hasText("Which platform should I build first?"), 15_000)
             shot("7-answered")
+
+            // The agent writes a file; the phone reads the change, read only (the
+            // stack turns the computer's "Let phones see changes" on).
+            send("write a note")
+            waitFor(hasText("nekko-itest-note.txt", substring = true), 30_000)
+            Thread.sleep(2_000)
+            tap(hasContentDescription("Changes"))
+            waitFor(hasContentDescription("nekko-itest-note.txt, new file, 2 added", substring = true), 20_000)
+            waitFor(hasText("Read only", substring = true))
+            shot("8-changes")
         }
     }
 
