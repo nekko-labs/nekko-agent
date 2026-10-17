@@ -132,7 +132,9 @@ final class LiveRelayTests: XCTestCase {
         // A coordinate tap: right after going back, XCTest can't "scroll to" the nav bar button.
         let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
         XCTAssertTrue(menu.waitForExistence(timeout: 10))
-        _ = waitUntilHittable(menu, 5)
+        // Mid-transition the button exists with no frame yet, and asking XCTest whether it is
+        // hittable then fails the test outright; wait for a real frame instead.
+        XCTAssertTrue(waitForFrame(menu, in: app, 10), "the computer menu never got a frame")
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         app.buttons["Settings"].firstMatch.tap()
         let connection = app.buttons["Connection"].firstMatch
@@ -208,9 +210,15 @@ final class LiveRelayTests: XCTestCase {
         return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
     }
 
-    private func waitUntilHittable(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
-        let p = NSPredicate(format: "isHittable == true")
-        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: p, object: e)], timeout: seconds) == .completed
+    /// Polls until the element has a non-empty frame inside the app's window.
+    private func waitForFrame(_ e: XCUIElement, in app: XCUIApplication, _ seconds: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        repeat {
+            let f = e.frame
+            if e.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        } while Date() < deadline
+        return false
     }
 
     private func waitGone(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
