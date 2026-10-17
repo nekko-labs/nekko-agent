@@ -518,7 +518,7 @@ Drag a project group header in the agent panel onto another group to place it be
 
 Changes is the leftmost header control. When the agent edits files it uses a muted background without an outer glow and shows added/deleted line totals plus the changed-file count. Click it to review the diff. Zen focuses that window; a small divider separates this action from the Files, Browser and Logs panel buttons. The activity icon is at the top left before the numbered agent icon.
 
-**Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
+**Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label and shows only while the rail is minimized; the conversation starts below it so it never covers your first message. With the rail open, the minimize button at the far right of its header puts it away again. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
 
 ## Reports and artifacts in chat
 
