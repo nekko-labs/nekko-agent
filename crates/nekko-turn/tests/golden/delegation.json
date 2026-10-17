@@ -19,11 +19,11 @@
   },
   {
    "input": "ECONNRESET",
-   "output": true
+   "output": false
   },
   {
    "input": "fetch failed",
-   "output": true
+   "output": false
   },
   {
    "input": "Stopped",
@@ -47,11 +47,11 @@
   },
   {
    "input": "Network Error while reading",
-   "output": true
+   "output": false
   },
   {
    "input": "terminated",
-   "output": true
+   "output": false
   },
   {
    "input": "approval timed out",
