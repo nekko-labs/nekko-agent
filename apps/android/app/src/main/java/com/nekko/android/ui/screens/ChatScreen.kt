@@ -110,7 +110,10 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
         if (nearBottom || info.totalItemsCount == 0) list.scrollToItem(lastIndex)
     }
 
-    if (showChanges && changesAllowed) ChangesSheet(load = vm::changes, onDismiss = { showChanges = false })
+    if (showChanges && changesAllowed) {
+        val changes by vm.changes.collectAsStateWithLifecycle()
+        ChangesSheet(changes.changes, changes.error, onRefresh = vm::loadChanges, onDismiss = { showChanges = false })
+    }
 
     Scaffold(
         containerColor = p.paper,
@@ -119,7 +122,7 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 actions = {
                     if (changesAllowed) {
-                        IconButton(onClick = { showChanges = true }) {
+                        IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
                             Icon(Icons.Filled.Difference, contentDescription = "Changes")
                         }
                     }
