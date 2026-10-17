@@ -141,33 +141,72 @@ for (let x = arcStart; x <= arcEnd - 10; x += 14) {
 }
 sprite(['#######', '.#####.', '..###..', '...#...'], arcEnd - 7, arcBase - 2, 2, { '#': SAGE });
 
-// The leaping cat, side view facing right, at the apex. c = cream,
-// e = dark eye, n = sage nose, s = sage stripes.
-const CAT = [
-  '......................c...c.',
-  '......................cc.cc.',
-  '..ccc................cccccc.',
-  '.c..................ccccecc.',
-  '.c..................cccccccn',
-  '..c.......cccccccccccccccc..',
-  '...cccccccccccccccccccccc...',
-  '....cccccsscccsscccccccc....',
-  '.....cccccccccccccccccccc...',
-  '....ccc..............ccccc..',
-  '...ccc................cccc..',
-  '..ccc..................cccc.',
-  '.cc.....................ccc.',
-];
-const catPx = 4;
-const catW = CAT[0].length * catPx;
-const catX = W / 2 - catW / 2;
-const catY = apex - 30;
-sprite(CAT, catX, catY, catPx, { c: CREAM, e: DARK, n: SAGE, s: SAGE });
+// The leaping cat, in the brand style: the app's own pixel head (the path in
+// renderer/components/Mascot.tsx, on its 32-unit grid) on a black leaping body,
+// all filled #101714 with the same 2-unit cream outline centred on the edge,
+// cream 2x3 eyes and the sage mouth. Built as a mask so head, body, legs and
+// tail share one continuous outline.
+const INK = rgb(0x101714);
+const HEAD = [[4, 5], [6, 5], [6, 7], [8, 7], [8, 9], [11, 9], [11, 10], [21, 10], [21, 9], [24, 9], [24, 7], [26, 7], [26, 5], [28, 5], [28, 19], [27, 19], [27, 22], [25, 22], [25, 24], [22, 24], [22, 26], [10, 26], [10, 24], [7, 24], [7, 22], [5, 22], [5, 19], [4, 19]];
+const inPoly = (poly, x, y) => {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+const GW = 72;
+const GH = 36;
+const HX = 40; // head offset on the cat grid
+const HY = 0;
+const mask = Array.from({ length: GH }, () => new Array(GW).fill(false));
+const fill = (x, y, w, h) => {
+  for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) if (yy >= 0 && yy < GH && xx >= 0 && xx < GW) mask[yy][xx] = true;
+};
+for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) if (inPoly(HEAD, x + 0.5, y + 0.5)) mask[y + HY][x + HX] = true;
+// Body: a short loaf behind the head, stepped at the corners.
+fill(24, 11, 22, 13);
+fill(22, 12, 26, 11);
+fill(20, 13, 28, 9);
+// Front legs reach forward and down from under the chin.
+for (let i = 0; i < 11; i++) fill(42 + i, 20 + i, 6, 1);
+fill(52, 30, 8, 3);
+// Back legs kick out behind.
+for (let i = 0; i < 11; i++) fill(22 - i, 19 + i, 6, 1);
+fill(10, 29, 8, 3);
+// Tail rises from the rump and curls over at the tip.
+for (let i = 0; i < 6; i++) fill(20 - i, 15 - i, 4, 1);
+fill(14, 4, 4, 7);
+fill(15, 2, 7, 3);
+fill(19, 5, 3, 1);
+const at = (x, y) => y >= 0 && y < GH && x >= 0 && x < GW && mask[y][x];
+const nearEdge = (x, y, want) => {
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && at(x + dx, y + dy) === want) return true;
+  return false;
+};
+const u = 2; // 1x pixels per grid unit
+const catW = GW * u;
+const catX = Math.round((W / 2 - catW / 2) / 2) * 2;
+const catY = apex - 40;
+for (let y = 0; y < GH; y++)
+  for (let x = 0; x < GW; x++) {
+    let c;
+    if (at(x, y)) c = nearEdge(x, y, false) ? CREAM : INK; // inner half of the outline
+    else if (nearEdge(x, y, true)) c = CREAM; // outer half
+    if (c !== undefined) rect(catX + x * u, catY + y * u, u, u, c);
+  }
+// Face, on the head's own grid.
+const face = (x, y, w, h, c) => rect(catX + (HX + x) * u, catY + (HY + y) * u, w * u, h * u, c);
+face(11, 15, 2, 3, CREAM);
+face(20, 15, 2, 3, CREAM);
+face(15, 20, 2, 1, SAGE);
 
 // Motion streaks behind the cat.
-rect(catX - 28, catY + 18, 16, 2, SAGE);
-rect(catX - 38, catY + 26, 22, 2, SAGE);
-rect(catX - 26, catY + 34, 12, 2, SAGE);
+rect(catX - 4, catY + 34, 14, 2, SAGE);
+rect(catX - 14, catY + 42, 22, 2, SAGE);
+rect(catX - 2, catY + 50, 10, 2, SAGE);
 
 await img.write(resolve(build, 'background@2x.png'));
 const one = img.clone().resize({ w: W, h: H, mode: 'nearestNeighbor' });
