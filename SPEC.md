@@ -559,6 +559,7 @@ New-chat details belong **inside the same bordered Add to the wall box**, never 
   - paths cut to their last two parts, never the full path on the computer;
   - a unified diff with 3 lines of context; at most 50 files, 400 lines and 64 KB a file, 512 KB in all; past that a file says how many lines changed, and the rest are counted;
   - files that may hold secrets (`.env*`, keys and certificates, `.ssh/`, `.aws/`, `.gnupg/`, `.npmrc`, `.netrc`, `credentials`) counted but never shown; binary files named only.
+  - **Ask about a change:** touch and hold a change (a hunk) for *Ask about this change*, or a file's header for *Ask about this file*. The sheet closes and the message box gets the file, the line range and the changed lines quoted as a diff (at most 12), after anything already typed, unsent, like Orca's diff comments. A hunk rather than a single line, so the target is big enough to hit (the accessibility audit flagged single lines). VoiceOver offers the file action; TalkBack offers both.
   - Accepting or reverting changes, reading other files and listing folders stay refused (`PHONE_ALWAYS_DENIED`). With the switch off the computer refuses `changes:list` and the phone hides the menu item.
 
 **Not in this version:** files and terminals (the computer refuses those channels to phones, `PHONE_ALWAYS_DENIED`; adding them is a security decision), accepting or reverting changes from a phone, Bonjour discovery (PH3, waits on the desktop advertising, PH2), on-device models (gate 5), a watchOS app.

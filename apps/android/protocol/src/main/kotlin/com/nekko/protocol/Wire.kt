@@ -422,6 +422,24 @@ data class PhoneChanges(val files: List<File>, val omittedFiles: Int = 0) {
     val linesRemoved: Int get() = files.sumOf { it.linesRemoved }
 
     companion object {
+        /** Changed lines quoted at most, so a big hunk stays a short message. */
+        const val QUOTE_LINES = 12
+
+        /** What "Ask about this change" puts in the message box: the hunk's changed lines as a diff. Never sent on its own. */
+        fun quote(file: File, hunk: Hunk): String {
+            val changed = hunk.lines.filter { it.kind != Kind.SAME }
+            val lo = changed.minOfOrNull { it.number }
+            val hi = changed.maxOfOrNull { it.number }
+            val range = when { lo == null -> ""; lo == hi -> " line $lo"; else -> " lines $lo–$hi" }
+            val body = changed.take(QUOTE_LINES).map { (if (it.kind == Kind.ADDED) "+" else "-") + it.text } +
+                (if (changed.size > QUOTE_LINES) listOf("… ${changed.size - QUOTE_LINES} more") else emptyList())
+            return "About `${file.path}`$range:\n```diff\n${body.joinToString("\n")}\n```\n\n"
+        }
+
+        /** The same for a whole file. */
+        fun quote(file: File): String =
+            "About `${file.path}` (${if (file.added) "new, " else ""}+${file.linesAdded} −${file.linesRemoved}):\n\n"
+
         fun from(e: JsonElement?): PhoneChanges {
             val o = e.obj() ?: return PhoneChanges(emptyList())
             val files = o["files"].arr()?.mapNotNull { el ->

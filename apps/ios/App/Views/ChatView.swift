@@ -521,6 +521,7 @@ struct Composer: View {
                 .accessibilityLabel("Add")
                 TextField(chat.running ? "Queue a follow-up" : "Message", text: $text, axis: .vertical)
                     .lineLimit(1...6)
+                    .accessibilityIdentifier("chat.message")
                     .focused($focused)
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
@@ -569,6 +570,11 @@ struct Composer: View {
         .onChange(of: dictation.error) { _, e in if let e { error = e } }
         // Tapped stop or hit the 30-second limit: the words go into the message, never sent.
         .onChange(of: dictation.result) { _, r in if let r { text += (text.isEmpty ? "" : " ") + r.text } }
+        // "Ask about this" in Changes: the quote goes after what's typed, never sent.
+        .onChange(of: chat.insert) { _, q in
+            guard q != nil, let quote = chat.takeInsert() else { return }
+            text += (text.isEmpty || text.hasSuffix("\n") ? "" : "\n\n") + quote
+        }
         // A prompt that never reached the computer comes back, with its skill and photos.
         .onChange(of: chat.unsent) { _, u in
             guard u != nil, let back = chat.takeUnsent() else { return }
