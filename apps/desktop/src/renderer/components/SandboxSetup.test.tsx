@@ -23,7 +23,9 @@ describe('sandbox renderer safety regressions', () => {
   });
   it('keeps execution and permissions separate and persists the default', () => {
     const controls = source('./ChatControls.tsx');
-    expect(controls).toContain('grid grid-cols-2');
+    // Execution, Permissions and Work mode each get their own column.
+    expect(controls).toContain('sm:grid-cols-3');
+    expect(controls).toContain('aria-label="Work mode"');
     expect(controls).toContain('getExecutionMode(session)');
     expect(controls).toContain('defaultExecutionMode: executionMode');
     expect(controls).toContain('(recommended)');

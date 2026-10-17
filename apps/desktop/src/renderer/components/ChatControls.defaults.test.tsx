@@ -71,3 +71,25 @@ it('keeps offline session-only', async () => {
   expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { offline: true });
   expect(window.nekko.updateSettings).not.toHaveBeenCalled();
 });
+
+describe('work mode', () => {
+  it('offers every work mode beside the permissions', () => {
+    const view = controls();
+    expect(view.nodes.filter((n) => n.props['data-work-mode']).map((n) => n.props['data-work-mode'])).toEqual(['default', 'better-review', 'design', 'best-output']);
+    expect(view.nodes.find((n) => n.props['data-work-mode'] === 'default')!.props['aria-checked']).toBe(true);
+  });
+  it('sets only this chat, never the permission mode or a saved default', async () => {
+    const view = controls();
+    view.nodes.find((n) => n.props['data-work-mode'] === 'better-review')!.props.onClick();
+    await vi.waitFor(() => expect(view.onChange).toHaveBeenCalled());
+    expect(window.nekko.setSessionOptions).toHaveBeenCalledExactlyOnceWith('chat', { workMode: 'better-review' });
+    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
+  });
+  it('reports a failed change instead of pretending it applied', async () => {
+    vi.mocked(window.nekko.setSessionOptions).mockRejectedValue(new Error('unavailable'));
+    const view = controls();
+    view.nodes.find((n) => n.props['data-work-mode'] === 'design')!.props.onClick();
+    await vi.waitFor(() => expect(store.pushToast).toHaveBeenCalledWith('error', 'Error: unavailable'));
+    expect(view.onChange).not.toHaveBeenCalled();
+  });
+});
