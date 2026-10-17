@@ -13,6 +13,9 @@ import com.nekko.protocol.Channels
 import com.nekko.protocol.PhoneChanges
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SkillSummary
+import android.content.ContentResolver
+import android.net.Uri
+import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -105,8 +108,31 @@ class ChatViewModel(
         }
     }
 
-    suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) =
-        controller.send(text, skill, images)
+    suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) = controller.send(text, skill, images)
+
+    /** Photos waiting in the message box; kept here so a rotation doesn't drop them. */
+    val photos = PhotoTray<ImageBitmap>()
+
+    /** Picked files or a camera shot → the tray, scaled and encoded off the main thread. */
+    fun addPhotos(resolver: ContentResolver, uris: List<Uri>, afterEach: (Uri) -> Unit = {}) {
+        if (uris.isEmpty()) return
+        val n = photos.begin(uris.size)
+        uris.drop(n).forEach(afterEach)
+        uris.take(n).forEach { uri ->
+            viewModelScope.launch {
+                try {
+                    val (url, preview) = ImageAttachments.encode(resolver, uri)
+                    photos.added(url, preview)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    photos.failed("Couldn’t read that image.")
+                } finally {
+                    afterEach(uri)
+                }
+            }
+        }
+    }
     fun stop() = controller.stop()
     suspend fun approve(ok: Boolean) = controller.approve(ok)
     suspend fun answer(answers: List<AskAnswer>) = controller.answer(answers)
