@@ -12,7 +12,9 @@ See [SPEC](SPEC.md#per-step-plan-working-icons-2026-10-17).
 
 - [x] Static Working glyph per active entry, independent of streaming and other active steps; explicit interrupted idle chats show Paused; accessible status tooltips and distinct pending/done/skipped shapes.
 - [x] 11 PlanRail component tests pass, including simultaneous active statuses and interruption/resume behavior. Hidden fixture captures before/after working/paused at 240/360px in both themes, with no focus or horizontal overflow.
-- [ ] Parent pixel inspection of corrected v2 matching screenshots, then landing after required checks. Initial evidence had invalid theme matching; v2 asserts computed colors and captured background pixels with fresh profiles. Captured evidence alone is not visual verification.
+- [x] Parent actual-pixel inspection and affected-surface signoff (2026-10-17): browser-owned corrected v2 matching working 240px dark/light before/after pairs show two legible, unclipped Working icons; paused 240px dark/light pairs show two correct pause icons; working 360px light also inspected and visible. Initial evidence had invalid theme matching; v2 asserts computed colors and captured background pixels with fresh profiles. Inspection covers these cases only. Synthetic hidden Windows Electron fixtures do not verify a packaged build or native platform behavior.
+- [x] Docs checklist and public evidence verified (2026-10-17): 5 docs tests pass, docs regeneration is unchanged, and all 16 published v2 PNG links return HTTP 200 with PNG bytes. Focused rerun passes 11 implementation tests and 8 archived-base tests.
+- [ ] Land PR #746 after final CI gates. Packaged/native verification remains a non-blocking limitation for this renderer-only change.
 
 ## Focused mode transitions and layout controls (added 2026-10-17)
 
