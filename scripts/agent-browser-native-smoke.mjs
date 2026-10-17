@@ -7,7 +7,7 @@
 // killed on exit. Set NEKKO_SMOKE_ELECTRON to an electron binary when this
 // checkout has no downloaded Electron (for example a fresh worktree).
 import { build } from 'esbuild';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve, join } from 'node:path';
@@ -31,7 +31,9 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { createNativeDriver } from ${JSON.stringify(join(root, 'apps/desktop/src/main/agentNativeDriver.ts'))};
-const nativeDriver = () => createNativeDriver(${JSON.stringify(join(root, 'apps/desktop/resources/agent-browser', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'agent-browser.exe' : 'agent-browser'))});
+import { playwrightDriver } from ${JSON.stringify(join(root, 'apps/desktop/src/main/agentPlaywrightDriver.ts'))};
+const benchmarkBaseline = ${JSON.stringify(process.env.NEKKO_BENCH_DRIVER === 'playwright-baseline')};
+const nativeDriver = benchmarkBaseline ? playwrightDriver : () => createNativeDriver(${JSON.stringify(join(root, 'apps/desktop/resources/agent-browser', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'agent-browser.exe' : 'agent-browser'))});
 import { startAgentBrowser } from ${JSON.stringify(join(root, 'apps/desktop/src/main/agentBrowser.ts'))};
 import { AgentCdpTransport } from ${JSON.stringify(join(root, 'apps/desktop/src/main/agentCdpTransport.ts'))};
 const out = ${JSON.stringify(out)};
@@ -54,7 +56,7 @@ const fixture = page('Smoke fixture', [
   '<script>console.error("fixture console error"); fetch("/missing"); setTimeout(() => { document.querySelector("#late").textContent = "Arrived late"; }, 700);</script>',
 ].join(''));
 app.whenReady().then(async () => {
-  const result = { platform: process.platform, versions: process.versions, driver: 'native-candidate-experimental', revision: '4fc3cc5c', samples: {cold: [], warm: []}, steps: {} };
+  const result = { platform: process.platform, versions: process.versions, driver: benchmarkBaseline ? 'playwright-baseline-explicit' : 'native-default', revision: ${JSON.stringify(execFileSync('git', ['rev-parse', 'HEAD'], {cwd:root, encoding:'utf8'}).trim())}, samples: {cold: [], warm: []}, steps: {} };
   let bridge, server, ui;
   try {
     const before = foreground();
@@ -87,6 +89,11 @@ app.whenReady().then(async () => {
     await step('navigate', { action: 'navigate', url }, b => b.output.startsWith('Smoke fixture'));
     for (let i=0; i<20; i++) { const start=performance.now(); await post({action:'inspect'}); result.samples.warm.push(performance.now()-start); }
     result.memory = app.getAppMetrics();
+    if (process.platform === 'win32') {
+      const { execFileSync } = await import('node:child_process');
+      const expression = 'Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq ' + process.pid + ' } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,WorkingSet64,PrivateMemorySize64 } | ConvertTo-Json -Compress';
+      result.childMemory = JSON.parse(execFileSync('powershell', ['-NoProfile','-Command', expression], {encoding:'utf8', windowsHide:true}) || '[]');
+    }
     result.fixture = {url, outer:[1100,760], theme:'light', sampleMeaning:{cold:'new chat driver and renderer through navigation',warm:'inspect existing loaded fixture'}};
     const owned = BrowserWindow.getAllWindows().find(w => w !== ui);
     let activations = 0; owned.on('focus', () => activations++); owned.on('show', () => activations++);

@@ -53,6 +53,21 @@ Conditions: Windows x64, unchanged revision `4fc3cc5c`, Playwright 1.63.0, Elect
 
 Source: [raw samples and Electron process memory](../reports/agent-browser/playwright-baseline.json). Cold means new driver/renderer, not new Electron process or flushed caches. The [experimental native v2 candidate](../reports/agent-browser/native-candidate-v2.json) passed the smoke suite but measured higher latency in both workloads. These sequential batches are not a causal speedup/regression estimate; no performance win is claimed. Screenshot was 1359x873 device pixels at OS scaling, viewport height 698 DIP. Candidate must match these conditions; native-child memory is not included in Electron metrics and needs separate collection.
 
+### Matched alternating driver benchmark (2026-10-17)
+
+Raw [four batches and exact memory snapshots](../reports/agent-browser/matched-benchmark.json), order PW/native/PW/native, 20 cold + 20 warm per batch (40 samples per driver/workload), same common fixture bundle, Electron 44.7.0 / Chromium 152.0.7977.130, 1100x760 DIP outer and 1359x873 screenshots, light theme. Runtime native `7ff28b02`, harness-only explicit driver switch/memory probe. Nearest-rank percentiles:
+
+| Metric | Playwright before | Native after | Result |
+|---|---:|---:|---|
+| Cold chat navigation p50 ms | 66.36300000000006 | 93.87869999999998 | Slower native |
+| Cold chat navigation p95 ms | 74.38070000000016 | 102.51769999999999 | Slower native |
+| Warm inspect p50 ms | 1.006199999999808 | 1.1442999999999302 | Slightly slower native |
+| Warm inspect p95 ms | 1.4304999999999382 | 1.4756999999999607 | Near-null tail; no win |
+| Total working set bytes, batch 1 | 513273856 | 471531520 | Lower native snapshot |
+| Total working set bytes, batch 2 | 515989504 | 471937024 | Lower native snapshot |
+
+Memory totals include all Electron process metrics plus the native child (14,360,576 / 14,323,712 working-set bytes, 4,759,552 / 4,718,592 private bytes), exclude the PowerShell measurement process, and are one snapshot per warm batch—not unique committed memory or a long-run distribution. The common fixture bundle includes the baseline helper for both; production native main excludes Playwright. Two alternating batches are not randomized per-sample causal evidence. Cold is fresh chat driver/renderer, not whole-app startup; warm sub-ms deltas can be scheduler noise. Both drivers passed the same expanded actions/security fixture; screenshots await parent actual-pixel inspection. This is a latency/memory trade-off, not an across-the-board speedup.
+
 ## Themes
 
 Threads worth an article, with the entries that tell each story:
