@@ -17,6 +17,14 @@
     <array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationPortraitUpsideDown</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+    <key>UIApplicationShortcutItems</key>
+    <array>
+        <dict>
+            <key>UIApplicationShortcutItemType</key><string>com.nekko.native.ios.new-chat</string>
+            <key>UIApplicationShortcutItemTitle</key><string>New chat</string>
+            <key>UIApplicationShortcutItemIconType</key><string>UIApplicationShortcutIconTypeCompose</string>
+        </dict>
+    </array>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
