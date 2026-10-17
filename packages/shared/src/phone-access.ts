@@ -176,10 +176,15 @@ export const PHONE_CHAT_MODES = ['ask', 'guardrails', 'yolo'] as const;
  * - the newest `messages` messages (older ones are counted in `omittedMessages`);
  * - tool results without their images (counted in `omittedImages`);
  * - tool output and long string tool arguments cut to `textChars`
- *   characters, with `truncated: true` and the original length.
+ *   characters, with `truncated: true` and the original length;
+ * - a message's own photos (`images`, the ones a user attached) as small
+ *   thumbnails: the relay agent shrinks them first (`thumbSide` px on the long
+ *   side, `thumbnailPhoneImages`), then only the newest `images` of them, each
+ *   at most `thumbChars` long, are kept. Any other photo becomes `''`, so the
+ *   phone still knows how many there were.
  * The computer keeps the whole chat; the desktop is where the full detail lives.
  */
-export const PHONE_SESSION_VIEW = { messages: 300, textChars: 4000 } as const;
+export const PHONE_SESSION_VIEW = { messages: 300, textChars: 4000, images: 40, thumbSide: 384, thumbChars: 96 * 1024 } as const;
 
 /**
  * The largest sealed reply frame the agent sends a phone. The relay drops
@@ -465,9 +470,54 @@ export function phoneSessionView(session: unknown): unknown {
   if (!isObj(session) || !Array.isArray(session.messages)) return session;
   const all = session.messages;
   const keep = all.slice(Math.max(0, all.length - PHONE_SESSION_VIEW.messages));
-  const out: Obj = { ...session, messages: keep.map((m) => phoneMessage(m, PHONE_SESSION_VIEW.textChars)) };
+  const messages = keep.map((m) => phoneMessage(m, PHONE_SESSION_VIEW.textChars));
+  // Newest first: the last `images` photos small enough to be thumbnails stay.
+  let room: number = PHONE_SESSION_VIEW.images;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (!isObj(m) || !Array.isArray(m.images)) continue;
+    const imgs = m.images.map((v) => (typeof v === 'string' ? v : ''));
+    for (let j = imgs.length - 1; j >= 0; j--) {
+      const fits = imgs[j] !== '' && imgs[j].length <= PHONE_SESSION_VIEW.thumbChars && room > 0;
+      if (fits) room--;
+      else imgs[j] = '';
+    }
+    messages[i] = { ...m, images: imgs };
+  }
+  const out: Obj = { ...session, messages };
   if (all.length > keep.length) out.omittedMessages = all.length - keep.length;
   return out;
+}
+
+/** Shrinks one image data URL to a thumbnail, or returns `''` when it can't. */
+export type PhoneThumbnailer = (dataUrl: string) => Promise<string>;
+
+/**
+ * The newest photos of a `session:get` result as thumbnails (see
+ * `PHONE_SESSION_VIEW`), before `phoneSessionView` picks which to keep. Only
+ * messages the phone will receive are touched; the computer's copy is not.
+ * A photo the thumbnailer can't read becomes `''`.
+ */
+export async function thumbnailPhoneImages(session: unknown, thumb: PhoneThumbnailer): Promise<unknown> {
+  if (!isObj(session) || !Array.isArray(session.messages)) return session;
+  const all = session.messages;
+  const from = Math.max(0, all.length - PHONE_SESSION_VIEW.messages);
+  const messages = all.slice();
+  let room: number = PHONE_SESSION_VIEW.images;
+  for (let i = messages.length - 1; i >= from; i--) {
+    const m = messages[i];
+    if (!isObj(m) || !Array.isArray(m.images) || m.images.length === 0) continue;
+    const imgs: string[] = [];
+    for (let j = m.images.length - 1; j >= 0; j--) {
+      const v = m.images[j];
+      if (room > 0 && typeof v === 'string' && v) {
+        room--;
+        imgs[j] = await thumb(v).catch(() => '');
+      } else imgs[j] = '';
+    }
+    messages[i] = { ...m, images: imgs };
+  }
+  return { ...session, messages };
 }
 
 /**
@@ -478,6 +528,8 @@ export async function callFromPhone(
   dispatch: (channel: string, args: unknown[]) => unknown,
   channel: string,
   args: unknown[],
+  /** Shrinks a chat's photos for `session:get`; without it they arrive as `''` unless already tiny. */
+  thumb?: PhoneThumbnailer,
 ): Promise<unknown> {
   const { settingsPatch, skill } = screenPhoneCall(channel, args);
   if (channel === 'changes:list') {
@@ -497,7 +549,9 @@ export async function callFromPhone(
       ? [expandPhoneSkill(skill, runnable, args[0] as Obj), ...args.slice(1)]
       : [args[0], expandPhoneSkill(skill, runnable, args[1] as Obj), ...args.slice(2)];
   }
-  return redactPhoneResult(channel, await dispatch(channel, callArgs));
+  const result = await dispatch(channel, callArgs);
+  if (channel === 'session:get' && thumb) return redactPhoneResult(channel, await thumbnailPhoneImages(result, thumb));
+  return redactPhoneResult(channel, result);
 }
 
 /** The policy as data: what `phone-access.json` holds for the Rust gate. */

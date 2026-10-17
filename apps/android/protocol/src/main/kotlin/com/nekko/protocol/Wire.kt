@@ -131,12 +131,15 @@ data class ChatMessage(
     val content: String,
     val reasoning: String? = null,
     val createdAt: Long? = null,
-    val imageCount: Int = 0,
+    /** The message's photos as the computer sent them to the phone: small JPEG data URLs, `""` for one not sent. */
+    val images: List<String> = emptyList(),
     val skill: Pair<String, String>? = null,
     val toolCalls: List<ToolCall> = emptyList(),
     val toolResult: ToolResult? = null,
     val interrupted: Boolean = false,
 ) {
+    val imageCount: Int get() = images.size
+
     companion object {
         fun from(e: JsonElement?): ChatMessage? {
             val o = e.obj() ?: return null
@@ -147,7 +150,7 @@ data class ChatMessage(
                 content = o.str("content") ?: "",
                 reasoning = o.str("reasoning"),
                 createdAt = o.long("createdAt"),
-                imageCount = o["images"].arr()?.size ?: 0,
+                images = o["images"].arr()?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: "" } ?: emptyList(),
                 skill = skill,
                 toolCalls = o["toolCalls"].arr()?.mapNotNull { ToolCall.from(it) } ?: emptyList(),
                 toolResult = ToolResult.from(o["toolResult"]),

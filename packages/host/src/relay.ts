@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { IpcEvents, PHONE_MAX_FRAME_BYTES, callFromPhone, deriveKey, open, phoneFrameTooLarge, seal, type RemoteHelloReply } from '@nekko-agent/shared';
+import { phoneThumbnail } from '@nekko-agent/core';
 import { createDispatcher } from './dispatch.js';
 import type { Host } from './host.js';
 
@@ -169,7 +170,7 @@ export function connectRelayAgent(host: Host, opts: RelayAgentOptions): RelayAge
       // Phones reach only what packages/shared/src/phone-access.ts allows,
       // checked here on the computer, with secrets stripped from replies.
       const args = Array.isArray(frame.args) ? frame.args : [];
-      const result = await callFromPhone(dispatch, String(frame.channel), args);
+      const result = await callFromPhone(dispatch, String(frame.channel), args, phoneThumbnail);
       await reply(cid, frame.id, result ?? null);
     } catch (e) {
       await sendTo(cid, { type: 'res', id: frame.id, error: (e as Error).message });

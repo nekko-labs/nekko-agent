@@ -85,13 +85,15 @@ private fun UserBubble(b: Block.User) {
                 .background(p.userBubble)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            Text(b.text, style = MaterialTheme.typography.bodyLarge, color = p.userInk, modifier = Modifier.copyOnLongPress(b.text))
-            if (b.images > 0) {
+            if (b.thumbs.isNotEmpty()) {
+                PromptPhotos(b.thumbs, tint = p.userInk.copy(alpha = 0.7f), tile = p.userInk.copy(alpha = 0.12f))
+            }
+            if (b.text.isNotEmpty()) {
                 Text(
-                    if (b.images == 1) "1 image" else "${b.images} images",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = p.userInk.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 4.dp),
+                    b.text,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = p.userInk,
+                    modifier = Modifier.padding(top = if (b.thumbs.isNotEmpty()) 8.dp else 0.dp).copyOnLongPress(b.text),
                 )
             }
         }
