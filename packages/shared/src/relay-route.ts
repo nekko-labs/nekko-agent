@@ -93,3 +93,23 @@ export interface LocalRelayStatus {
 }
 
 export const LOCAL_RELAY_PORT = 4400;
+
+/**
+ * "Visible on this network" (Settings → Remote access): the desktop answers
+ * mDNS for `_nekko-agent._tcp` so phones on the same Wi-Fi can list it. Off by
+ * default. It says only the computer's name, its own relay's address when it
+ * runs one, and a version; never anything that gets a phone into the room.
+ */
+export interface NetworkVisibilityStatus {
+  /** False where this edition can't advertise (the web app); the switch is hidden then. */
+  available?: boolean;
+  enabled: boolean;
+  /** Answering on the local network right now. */
+  advertising: boolean;
+  /** What phones see, while advertising. */
+  name?: string;
+  addresses?: string[];
+  relayUrl?: string;
+  /** Why it isn't advertising, in words for the settings card. */
+  error?: string;
+}

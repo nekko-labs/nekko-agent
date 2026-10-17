@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { relayUrlProblem, type LocalRelayStatus, type PairingGrant, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
+import { relayUrlProblem, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
 import { Badge } from './primitives/index.js';
 import { Toggle } from './primitives/Toggle.js';
 import { useStore } from '../store.js';
@@ -189,6 +189,7 @@ export function RemoteAccess() {
             <Field label="Room" value={status.room!} mono />
           </div>
           <LocalRelayCard inUse={status.relayUrl} />
+          <NetworkVisibilitySwitch />
           <PhoneChangesSwitch />
 
           {/* Paired devices */}
@@ -425,6 +426,66 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
  * revert changes, read other files or open terminals, and files that may hold
  * secrets are counted, not shown.
  */
+/**
+ * Visible on this network: the computer answers mDNS so phones on the same
+ * Wi-Fi can list it. Off by default. Pairing still takes the QR code or link.
+ */
+export function NetworkVisibilitySwitch() {
+  const [vis, setVis] = useState<NetworkVisibilityStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    const load = () => void window.nekko.networkVisibilityStatus?.().then((s) => live && setVis(s)).catch(() => {});
+    load();
+    // Joining a network, or a new address, shows without a click.
+    const t = setInterval(load, 5000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  if (!vis || vis.available === false) return null;
+  const set = async (on: boolean) => {
+    setBusy(true);
+    try {
+      setVis(on ? await window.nekko.networkVisibilityStart() : await window.nekko.networkVisibilityStop());
+    } catch (e) {
+      useStore.getState().pushToast('error', String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <NetworkVisibilityView vis={vis} busy={busy} onChange={(on) => void set(on)} />;
+}
+
+export function NetworkVisibilityView({ vis, busy, onChange }: { vis: NetworkVisibilityStatus; busy?: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div data-shot="network-visibility" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium">Visible on this network</div>
+        <p className="mt-0.5 text-[12px] text-ink-faint">
+          Phones on the same Wi-Fi can find this computer by name. Anyone on the network can see the name
+          {vis.relayUrl ? ' and this computer’s relay address' : ''}, nothing else. Pairing still takes this computer’s QR code or link.
+        </p>
+        {vis.enabled && vis.advertising && vis.name && (
+          <p className="mt-1 text-[12px] text-ink-soft">
+            Showing as <span className="font-medium">{vis.name}</span>
+            {vis.addresses?.length ? <span className="font-mono"> ({vis.addresses.join(', ')})</span> : null}
+          </p>
+        )}
+        {vis.enabled && vis.error && (
+          <p className="mt-1 text-[12px]" style={{ color: 'var(--danger)' }}>
+            {vis.error}
+          </p>
+        )}
+      </div>
+      <Toggle value={vis.enabled} onChange={onChange} disabled={busy} label="Visible on this network" />
+    </div>
+  );
+}
+
 export function PhoneChangesSwitch() {
   const on = useStore((s) => s.settings?.phoneChanges === true);
   const set = (v: boolean) => {
