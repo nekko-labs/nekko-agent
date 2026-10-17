@@ -160,8 +160,10 @@ jobs:
       - run: npm run build -w @nekko-agent/host
       - name: Grid model selection and mode-menu regressions
         run: npm run test:grid-bugs -w @nekko-agent/desktop
-      - name: Grouped Agents sidebar regressions
-        run: node apps/desktop/scripts/agent-sidebar-integration.cjs
+      # Consolidated end-to-end journeys (apps/desktop/e2e): hidden, non-focusable
+      # Electron windows over the real renderer; replaces the per-feature sandboxes.
+      - name: End-to-end journeys (Agents sidebar, chat finder)
+        run: npm run test:e2e -w @nekko-agent/desktop
       - name: Fresh settings, server and page recovery regressions
         run: node apps/desktop/scripts/fresh-pages-integration.cjs
       - name: Hidden owned-window screenshots
@@ -178,7 +180,8 @@ jobs:
           path: |
             capture-results/
             .shots/wall-controls-integration/
-            .shots/agent-sidebar-integration/
+            .shots/e2e/report/
+            .shots/e2e/results/
           if-no-files-found: error
 
   # The speed contract (SPEC.md, "Speed & responsiveness"): headless Chrome over

@@ -1,11 +1,12 @@
-// Run with Node. Only this worktree's ignored .shots directory is written.
+// Run with Node: the repository-actions sandbox (npm run test:repo-actions).
+// The Agents sidebar journey itself moved to e2e/sidebar.e2e.ts (npm run test:e2e).
+// Only this worktree's ignored .shots directory is written.
 const fs = require('node:fs');
 const path = require('node:path');
 const cp = require('node:child_process');
 const repo = path.resolve(__dirname, '../../..');
 const modules = process.env.NEKKO_TEST_MODULES || path.join(repo, 'node_modules');
-const repoActions = process.argv.includes('--repo-actions') || !!process.env.NEKKO_REPO_ACTIONS;
-const out = path.join(repo, repoActions ? '.shots/repo-actions-integration' : '.shots/agent-sidebar-integration');
+const out = path.join(repo, '.shots/repo-actions-integration');
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   let entry = path.join(__dirname, 'command-center-fixture.tsx');
@@ -24,7 +25,7 @@ async function main() {
   fs.writeFileSync(path.join(out, 'styled.css'), css.css);
   fs.writeFileSync(path.join(out, 'index.html'), '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\' data: blob:; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; connect-src \'none\'"><link rel="stylesheet" href="styled.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>');
   const env = { ...process.env, NEKKO_INTEGRATION_OUT: out }; delete env.ELECTRON_RUN_AS_NODE;
-  const result = cp.spawnSync(require(path.join(modules, 'electron')), [path.join(__dirname, repoActions ? 'repo-actions-sandbox.cjs' : 'agent-sidebar-sandbox.cjs')], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 240000 });
+  const result = cp.spawnSync(require(path.join(modules, 'electron')), [path.join(__dirname, 'repo-actions-sandbox.cjs')], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 240000 });
   if (result.error) throw result.error;
   process.exitCode = result.status || 0;
 }

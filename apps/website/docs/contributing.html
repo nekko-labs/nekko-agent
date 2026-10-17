@@ -107,6 +107,7 @@ npm test            # tests in every workspace
 npm run typecheck   # every TypeScript workspace</code></pre></div>
 <ul>
 <li>Add tests in <code>packages/core</code> for new engine behavior (providers, guardrails, agent loop, context).</li>
+<li>Desktop UI flows: add a step to a journey in <code>apps/desktop/e2e/</code> (<code>npm run test:e2e -w @nekko-agent/desktop</code>, hidden windows only; see its README) rather than a new one-off script.</li>
 <li>Match the surrounding code style; keep changes focused.</li>
 <li>For provider changes, you can verify against a real local server:
 <code>node scripts/itest-local.mjs http://your-host:port your-model-id</code></li>
