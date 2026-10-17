@@ -80,5 +80,5 @@ app.whenReady().then(async () => {
     }
     report.background = { focused: win.isFocused(), bounds: win.getBounds() };
   } catch (e) { report.errors.push(String(e)); }
-  finally { fs.writeFileSync(path.join(dir, 'status.json'), JSON.stringify(report, null, 2)); console.log(kind, JSON.stringify({ failed: report.checks.filter((c) => !c.passed), passed: report.checks.filter((c) => c.passed).length, errors: report.errors })); win.destroy(); app.exit(report.errors.length ? 1 : 0); }
+  finally { fs.writeFileSync(path.join(dir, 'status.json'), JSON.stringify(report, null, 2)); console.log(kind, JSON.stringify({ failed: report.checks.filter((c) => !c.passed), passed: report.checks.filter((c) => c.passed).length, errors: report.errors })); win.destroy(); app.exit(report.errors.length || report.checks.some((c) => !c.passed) ? 1 : 0); }
 });
