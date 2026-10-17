@@ -32,6 +32,8 @@ final class AppModel {
     var firstMessages: [String: String] = [:]
     /// Text shared from another app (the share extension), waiting for New chat to take it.
     var sharedText: String?
+    /// `nekko-agent://new` (the Control Center control): open New chat once.
+    var newChatRequested = false
     private let shareInbox = ShareInbox(defaults: UserDefaults(suiteName: StatusSnapshot.appGroup) ?? .standard)
 
     init() {
@@ -182,10 +184,14 @@ final class AppModel {
     // MARK: Pairing, links, push
 
     /// `nekko-agent-pair:?relay=…` (QR / camera), `https://…/?relay=…` (web
-    /// edition link) or `nekko-agent://chat/<id>`.
+    /// edition link), `nekko-agent://chat/<id>` or `nekko-agent://new`.
     func handle(url: URL) {
         if url.scheme == "nekko-agent", url.host == "chat" {
             openChat = url.pathComponents.dropFirst().first
+            return
+        }
+        if url.scheme == "nekko-agent", url.host == "new" {
+            newChatRequested = true
             return
         }
         if let link = Pairing.parse(url.absoluteString) { pendingLink = link }
