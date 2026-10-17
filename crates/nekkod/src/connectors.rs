@@ -80,11 +80,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
     }
 }
 
-/// `collectConnectorSnippets(text)`: up to five resources per connected
-/// connector, as `{ label, origin, body }` context snippets, or none if they
-/// take longer than 2.5 s.
-#[allow(dead_code)] // Called by chat:send admission once it moves (rust-core).
-pub async fn snippets(ctx: &Ctx, text: Option<&str>) -> Vec<Value> {
-    let connectors = connectors_of(&crate::settings::current(ctx).await);
+/// `collectConnectorSnippets(text, session)`: up to five resources per
+/// connected connector the chat has not switched off, as `{ label, origin,
+/// body }` context snippets, or none if they take longer than 2.5 s.
+pub async fn snippets(ctx: &Ctx, text: Option<&str>, session: &Value) -> Vec<Value> {
+    let connectors = nekko_turn::chat_connectors(connectors_of(&crate::settings::current(ctx).await), session);
     nekko_connectors::snippets(NET.as_ref(), &connectors, text, SNIPPET_WAIT).await
 }

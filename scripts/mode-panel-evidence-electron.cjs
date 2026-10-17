@@ -23,7 +23,13 @@ app.whenReady().then(async () => {
     for (const theme of ['dark', 'light']) {
       await run(`document.documentElement.dataset.theme='${theme}'`);
       await click('.ctl-menu'); await settle();
-      if (kind === 'before') { await capture(`${kind}-menu-${theme}`); await run(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))`); await settle(); continue; }
+      if (kind === 'before') {
+        await capture(`${kind}-panel-${theme}`);
+        await click('[data-mode-fly="mcp"]'); await settle();
+        await capture(`${kind}-mcp-${theme}`);
+        await click('[data-mode-fly="mcp"]'); await settle();
+        await run(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))`); await settle(); continue;
+      }
       await check(theme + ' panel open', `!!document.querySelector('.mode-panel')`);
       await check(theme + ' panel inside viewport', inView('.mode-panel'));
       await check(theme + ' four sections', `['Environment','Model','Privacy','Approach'].every((t)=>document.querySelector('.mode-panel').innerText.toUpperCase().includes(t.toUpperCase()))`);
@@ -36,15 +42,33 @@ app.whenReady().then(async () => {
       await click('[data-mode-fly="skills"]'); await settle();
       await capture(`${kind}-skills-${theme}`);
       await click('[data-mode-fly="skills"]'); await settle();
+      await click('[data-mode-fly="mcp"]'); await settle();
+      await check(theme + ' MCP flyout lists per-chat switches', `document.querySelectorAll('.mode-fly [data-chat-mcp]').length===3`);
+      await check(theme + ' a server off in Settings is not switchable', `document.querySelector('[data-chat-mcp="hypergate"] .mode-switch').disabled`);
+      await click('[data-chat-mcp="context7"] .mode-switch'); await settle();
+      await check(theme + ' switching a server off writes the chat only', `JSON.stringify(evidence.calls.at(-1))==='{"id":"fixture","patch":{"disabledMcpServers":["context7"]}}'`);
+      await check(theme + ' MCP row counts this chat', `document.querySelector('[data-mode-fly="mcp"]').innerText.includes('1 of 3 on')`);
+      await capture(`${kind}-mcp-${theme}`);
+      await click('[data-chat-mcp="context7"] .mode-switch'); await settle();
+      await click('[data-mode-fly="connectors"]'); await settle();
+      await check(theme + ' connectors flyout lists connected ones only', `document.querySelectorAll('.mode-fly [data-chat-connector]').length===2`);
+      await click('[data-chat-connector="linear"] .mode-switch'); await settle();
+      await check(theme + ' switching a connector off writes the chat only', `JSON.stringify(evidence.calls.at(-1))==='{"id":"fixture","patch":{"disabledConnectors":["linear"]}}'`);
+      await capture(`${kind}-connectors-${theme}`);
+      await click('[data-chat-connector="linear"] .mode-switch'); await settle();
+      await click('[data-mode-fly="connectors"]'); await settle();
+      await click('[data-effort="low"]'); await settle();
+      await check(theme + ' effort writes the chat, not settings', `JSON.stringify(evidence.calls.at(-1))==='{"id":"fixture","patch":{"effort":"low"}}'`);
+      await capture(`${kind}-effort-${theme}`);
       await click('[data-saved-mode="deep-work"]'); await settle();
-      await check(theme + ' applying Deep work is one per-chat write', `JSON.stringify(evidence.calls.filter(c=>c.patch).at(-1).patch)==='{"executionMode":"worktree","gitIsolation":true,"mode":"yolo","offline":false,"incognito":false,"disabledTools":[],"workMode":"best-output"}'`);
+      await check(theme + ' applying Deep work is one per-chat write', `JSON.stringify(evidence.calls.filter(c=>c.patch).at(-1).patch)==='{"executionMode":"worktree","gitIsolation":true,"mode":"yolo","offline":false,"incognito":false,"disabledTools":[],"workMode":"best-output","effort":"high"}'`);
       await check(theme + ' Deep work now active', `document.querySelector('.mode-head h2').innerText.startsWith('Deep work')`);
       await check(theme + ' button names the mode', `document.querySelector('.ctl-menu').innerText.includes('Deep work')`);
       await capture(`${kind}-applied-${theme}`);
       await run(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))`); await settle();
       await check(theme + ' Escape closes the panel', `!document.querySelector('.mode-panel')`);
       await capture(`${kind}-button-${theme}`);
-      await run(`evidence.set({workMode:'best-output',mode:'guardrails'})`);
+      await run(`evidence.set({workMode:'best-output',mode:'guardrails',effort:undefined})`);
     }
     if (kind === 'after') {
       win.setContentSize(600, 900); await settle();
@@ -56,5 +80,5 @@ app.whenReady().then(async () => {
     }
     report.background = { focused: win.isFocused(), bounds: win.getBounds() };
   } catch (e) { report.errors.push(String(e)); }
-  finally { fs.writeFileSync(path.join(dir, 'status.json'), JSON.stringify(report, null, 2)); console.log(kind, JSON.stringify({ failed: report.checks.filter((c) => !c.passed), passed: report.checks.filter((c) => c.passed).length, errors: report.errors })); win.destroy(); app.exit(report.errors.length ? 1 : 0); }
+  finally { fs.writeFileSync(path.join(dir, 'status.json'), JSON.stringify(report, null, 2)); console.log(kind, JSON.stringify({ failed: report.checks.filter((c) => !c.passed), passed: report.checks.filter((c) => c.passed).length, errors: report.errors })); win.destroy(); app.exit(report.errors.length || report.checks.some((c) => !c.passed) ? 1 : 0); }
 });

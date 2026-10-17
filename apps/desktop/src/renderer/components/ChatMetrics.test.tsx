@@ -14,6 +14,11 @@ describe('effort slider', () => {
     expect(html).toContain('max="4"');
     expect(html).toContain('value="1"');
   });
+  it('shows the chat effort when given a chat', () => {
+    const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" session={{ id: 'c', effort: 'max' }} />);
+    expect(html).toContain('value="4"');
+    expect(html).toContain('Reasoning effort for this chat');
+  });
   it('treats picking the default rung explicitly as the default', () => {
     expect(effortRungs('medium', 'claude-opus-5-5').shown).toBe('Default · Medium');
     expect(effortRungs('high', 'claude-opus-5')).toMatchObject({ options: ['low', 'medium', 'normal', 'xhigh', 'max'], index: 2, shown: 'Default · High' });

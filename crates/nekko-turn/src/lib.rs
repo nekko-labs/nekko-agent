@@ -9,6 +9,7 @@
 //! - `plan_update`: `update_plan` on a chat's live plan;
 //! - `stats`: a reply's totals, kept on its last message;
 //! - `delegate`: what a `spawn_agent` child's run comes back as;
+//! - `scope`: effort, MCP servers and connectors narrowed per chat;
 //! - `side`: the suggested-replies and prompt-fill side calls;
 //! - `variants`: compaction, image turns and starting a queued prompt at once.
 //!
@@ -24,6 +25,7 @@ pub mod delegate;
 pub mod input;
 pub mod plan;
 pub mod plan_update;
+pub mod scope;
 pub mod side;
 pub mod stats;
 pub mod variants;
@@ -32,6 +34,7 @@ pub use ask::{format_ask_answers, parse_ask_request};
 pub use input::{apply_turn_input, clean_title, send_options_for_queued_item, title_prompt};
 pub use plan::{host_tool_approval, turn_can_ask, turn_system_prompt, turn_tools};
 pub use plan_update::{PlanOutcome, apply_plan_update, plan_echo};
+pub use scope::{chat_connectors, chat_effort, chat_mcp_tools};
 pub use side::{clean_fill, fill_prompt, parse_reply_suggestions, suggest_prompt};
 pub use stats::{TurnStats, attach_turn_stats};
 

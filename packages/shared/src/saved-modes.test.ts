@@ -33,6 +33,30 @@ describe('saved modes', () => {
     expect(sessionPatchForMode(STARTER_MODES[0].options)).not.toHaveProperty('effort');
   });
 
+  it('reads effort, MCP servers and connectors from the chat', () => {
+    expect(sessionModeOptions({}, { effort: 'high' })).toMatchObject({ effort: 'high', disabledMcpServers: [], disabledConnectors: [] });
+    expect(sessionModeOptions({ effort: 'low', disabledMcpServers: ['web', 'files'], disabledConnectors: ['slack'] }, { effort: 'high' }))
+      .toMatchObject({ effort: 'low', disabledMcpServers: ['files', 'web'], disabledConnectors: ['slack'] });
+  });
+
+  it('matches MCP servers and connectors, and lets an older mode without them match any', () => {
+    const mine = { id: 'mine', name: 'Mine', icon: 'sparkle' as const, options: { ...STARTER_MODES[0].options, disabledMcpServers: ['web'], disabledConnectors: [] } };
+    const chat = sessionModeOptions({ executionMode: 'worktree', mode: 'guardrails', disabledMcpServers: ['web'] });
+    expect(matchSavedMode([mine], chat)?.id).toBe('mine');
+    expect(matchSavedMode([mine], { ...chat, disabledMcpServers: [] })).toBeUndefined();
+    expect(matchSavedMode([mine], { ...chat, disabledConnectors: ['slack'] })).toBeUndefined();
+    // The starter Everyday predates per-chat servers and connectors.
+    expect(matchSavedMode(STARTER_MODES, { ...chat, disabledConnectors: ['slack'] })?.id).toBe('everyday');
+  });
+
+  it('puts effort, MCP servers and connectors in the patch only when the mode sets them', () => {
+    const options = { ...STARTER_MODES[1].options, disabledMcpServers: ['web'], disabledConnectors: ['slack'] };
+    expect(sessionPatchForMode(options)).toMatchObject({ effort: 'high', disabledMcpServers: ['web'], disabledConnectors: ['slack'] });
+    const older = sessionPatchForMode(STARTER_MODES[0].options);
+    expect(older).not.toHaveProperty('disabledMcpServers');
+    expect(older).not.toHaveProperty('disabledConnectors');
+  });
+
   it('summarizes and names modes', () => {
     expect(savedModeSummary(STARTER_MODES[1].options)).toBe('worktree · yolo · high');
     expect(savedModeSummary(STARTER_MODES[0].options)).toBe('worktree');
