@@ -14,6 +14,7 @@
  */
 
 import { skillTurnText } from './skills.js';
+import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
 
 /**
  * Channels a paired phone may call. Built from what the phone clients send
@@ -21,10 +22,12 @@ import { skillTurnText } from './skills.js';
  * apps/ios/Protocol Wire.swift `Channels`), plus the ones the next phone
  * releases need: settings (filtered), completing or deleting a chat the way
  * the desktop does (`session:setOptions` with `archivedAt`, `session:delete`)
- * and voice input.
+ * and voice input. `changes:list` is read only, through `phoneChangesView`, and
+ * only when the computer's `phoneChanges` setting is on.
  */
 export const PHONE_CHANNELS = [
   'app:info',
+  'changes:list',
   'chat:abort',
   'chat:answer',
   'chat:pending',
@@ -54,9 +57,14 @@ export const PHONE_CHANNELS = [
 export const PHONE_ALWAYS_DENIED = {
   channels: [
     'attachment:import',
+    // Changing files, or reading any file: never from a phone (the Changes view is read only).
+    'changes:accept',
+    'changes:acceptAll',
     'connector:connect',
     'connector:disconnect',
     'data:wipe',
+    'dir:list',
+    'file:read',
     'file:write',
     'providers:importCliAuth',
     'providers:remove',
@@ -64,12 +72,13 @@ export const PHONE_ALWAYS_DENIED = {
     'settings:reset',
     'voice:cancel',
     'voice:install',
+    'voice:permission',
     'voice:uninstall',
     'workspace:addByPath',
     'workspace:remove',
   ],
-  /** Whole families: remote access, terminals, MCP servers, OAuth sign-in. */
-  prefixes: ['mcp:', 'oauth:', 'remote:', 'terminal:', 'terminals:'],
+  /** Whole families: remote access, terminals, MCP servers, OAuth sign-in, and the desktop's native dialogs, OS shell and updater. */
+  prefixes: ['dialog:', 'mcp:', 'oauth:', 'remote:', 'shell:', 'terminal:', 'terminals:', 'update:'],
   /** Not forced off by a prefix (it still has to be in `PHONE_CHANNELS` to be callable). */
   except: ['remote:status'],
 };
@@ -101,6 +110,8 @@ export const PHONE_SETTINGS_VIEW = [
   'defaultModelId',
   'defaultProviderId',
   'favoriteModels',
+  // Whether this computer shows phones the agent's changes (set on the computer only).
+  'phoneChanges',
   'skipDeleteConfirmation',
   'theme',
   'themePreset',
@@ -184,7 +195,7 @@ export function phoneFrameTooLarge(bytes: number): string {
   return `This reply is too large to send to a phone (${mb} MB). Open it on the computer.`;
 }
 
-export type PhoneAccessCode = 'channel-denied' | 'setting-denied' | 'option-denied' | 'value-invalid' | 'skill-unknown';
+export type PhoneAccessCode = 'channel-denied' | 'setting-denied' | 'option-denied' | 'value-invalid' | 'skill-unknown' | 'turned-off';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
 export class PhoneAccessError extends Error {
@@ -286,6 +297,9 @@ export function screenPhoneCall(
 ): { settingsPatch?: Array<[string, unknown]>; skill?: { name: string; input: string } } {
   if (!phoneChannelAllowed(channel)) throw new PhoneAccessError('channel-denied', channel);
   switch (channel) {
+    case 'changes:list':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      return {};
     case 'settings:update':
       return { settingsPatch: checkPhoneSettingsPatch(args[0]) };
     case 'session:setOptions': {
@@ -386,6 +400,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return Array.isArray(result) ? result.map((s) => pick(s, PHONE_SKILL_VIEW)) : [];
     case 'session:get':
       return phoneSessionView(result);
+    case 'changes:list':
+      return phoneChangesView(result);
     default:
       return result;
   }
@@ -464,6 +480,11 @@ export async function callFromPhone(
   args: unknown[],
 ): Promise<unknown> {
   const { settingsPatch, skill } = screenPhoneCall(channel, args);
+  if (channel === 'changes:list') {
+    // Off unless the computer's owner turned it on (Settings → Remote access).
+    const settings = await dispatch('settings:get', []);
+    if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
+  }
   let callArgs = args;
   if (settingsPatch) {
     const nested = settingsPatch.some(([path]) => path.includes('.'));
@@ -493,6 +514,7 @@ export function phoneAccessPolicy() {
     chatSendKeys: [...PHONE_CHAT_SEND_KEYS],
     chatModes: [...PHONE_CHAT_MODES],
     sessionView: { ...PHONE_SESSION_VIEW },
+    changesView: { ...PHONE_CHANGES_VIEW },
     maxFrameBytes: PHONE_MAX_FRAME_BYTES,
   };
 }

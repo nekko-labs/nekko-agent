@@ -28,6 +28,7 @@ public protocol RemoteConnection: Caller {
     func nudge()
     func reconnect()
     func registerPush(token: String) async throws
+    func registerActivity(tag: String, token: String) async throws
 }
 
 extension RelayClient: RemoteConnection {}
@@ -104,6 +105,9 @@ public final class ComputersStore {
     public private(set) var denied: DenyReason?
     public private(set) var summaries: [SessionSummary] = []
     public private(set) var summariesLoading = false
+    /// The list has been read (or failed to) since connecting: before that an
+    /// empty list means "not loaded yet", not "no chats".
+    public private(set) var summariesLoaded = false
     public private(set) var providers: [PublicProvider] = []
     public private(set) var defaults = RemoteDefaults()
     public private(set) var appearance: Appearance?
@@ -114,6 +118,9 @@ public final class ComputersStore {
     public private(set) var modelErrors: [String: String] = [:]
     public private(set) var hostVersion: String?
     public private(set) var lastError: String?
+    /// The active computer's connection history (memory only, content-free), for the Connection screen.
+    public private(set) var connectionLog = ConnectionLog()
+    private var loggedComputer: String?
 
     public var active: Computer? { computers.first { $0.id == activeId } }
     public var groups: [ChatGroup] { ChatGroup.of(summaries, folders: workspaces) }
@@ -134,6 +141,7 @@ public final class ComputersStore {
     private let summariesDebounce: TimeInterval
     private let modelListTimeout: TimeInterval
     private let platform: String
+    private let app: String?
 
     private var client: RemoteConnection?
     private var generation = 0
@@ -146,6 +154,7 @@ public final class ComputersStore {
                 makeConnection: @escaping (RelayConfig) -> RemoteConnection,
                 deviceName: @escaping () -> String,
                 platform: String = "ios",
+                app: String? = nil,
                 deriveKey: @escaping @Sendable (String, String) async -> Data = { s, r in
                     await Task.detached(priority: .userInitiated) { E2E.deriveKey(secret: s, room: r) }.value
                 },
@@ -157,6 +166,7 @@ public final class ComputersStore {
         self.makeConnection = makeConnection
         self.deviceName = deviceName
         self.platform = platform
+        self.app = app
         self.deriveKey = deriveKey
         self.newId = newId
         self.now = now
@@ -243,10 +253,16 @@ public final class ComputersStore {
         conn = .connecting
         denied = nil
         connDetail = nil
+        if loggedComputer != id {
+            connectionLog.clear()
+            loggedComputer = id
+        }
+        connectionLog.record(.connecting)
         clearComputerState()
         var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
                                  deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
         config.requestTimeout = 120
+        config.app = app
         let c = makeConnection(config)
         generation += 1
         let gen = generation
@@ -277,6 +293,7 @@ public final class ComputersStore {
         case .status(let s):
             conn = s.state
             connDetail = s.detail
+            connectionLog.record(s.state, detail: s.detail, denied: s.denied)
             if let d = s.denied { denied = d }
             if s.state == .online {
                 Task { await refresh() }
@@ -330,6 +347,11 @@ public final class ComputersStore {
         if conn == .online { Task { try? await client?.registerPush(token: token) } }
     }
 
+    /// A Live Activity's push token for `sessionId` (see `RelayClient.registerActivity`).
+    public func registerActivity(sessionId: String, token: String) async {
+        try? await client?.registerActivity(tag: E2E.activityTag(sessionId), token: token)
+    }
+
     // MARK: Reading the computer
 
     public func refresh() async {
@@ -359,9 +381,11 @@ public final class ComputersStore {
             hostVersion = appInfo.version
             learnPlatform(appInfo.platform)
             summariesLoading = false
+            summariesLoaded = true
         } catch {
             if client === c {
                 summariesLoading = false
+                summariesLoaded = true
                 lastError = error.localizedDescription
             }
         }
@@ -458,6 +482,7 @@ public final class ComputersStore {
     }
 
     private func clearComputerState() {
+        summariesLoaded = false
         summaries = []
         providers = []
         models = [:]

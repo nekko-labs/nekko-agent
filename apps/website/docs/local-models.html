@@ -218,6 +218,13 @@ everything fixed by the launch command, and it is Linux plus NVIDIA plus Python 
 practice. Nekko Agent detects it, shows its live <code>/metrics</code>, and can stop it, but never
 starts it: instead the fit drawer renders the exact <code>vllm serve</code> command for you to run.
 Nothing that could not be verified against real hardware ships as a working button.</p>
+<h3 id="when-a-card-lists-no-models"><a class="anchor" href="#when-a-card-lists-no-models" aria-hidden="true" tabindex="-1">#</a>When a card lists no models</h3>
+<p>A card whose model list fails says why instead of &quot;No models found.&quot; A server that does not
+answer reads <em>&quot;Ollama didn&#39;t answer at <a href="http://localhost:11434" rel="noopener">http://localhost:11434</a>. Is it running?&quot;</em>; any other
+failure shows the provider&#39;s own message, such as a 401 from a refused key, unless the
+connection test above it already says why. <strong>Retry</strong>
+re-tests the connection and asks for the list again. A card with more than eight models
+gets a filter box.</p>
 <h2 id="reading-the-fit-bar"><a class="anchor" href="#reading-the-fit-bar" aria-hidden="true" tabindex="-1">#</a>Reading the fit bar</h2>
 <p>The bar stacks what the model needs against what the device has free:</p>
 <ul>
@@ -350,7 +357,7 @@ pieces of work. Today Nekko Agent manages the runtimes you already have.</p>
           </footer>
         </article>
       </main>
-      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Running models locally</a></li><li class="d2"><a href="#the-nekko-engine">The Nekko engine</a></li><li class="d2"><a href="#servers-you-already-run">Servers you already run</a></li><li class="d3"><a href="#what-each-one-can-do">What each one can do</a></li><li class="d2"><a href="#reading-the-fit-bar">Reading the fit bar</a></li><li class="d2"><a href="#the-verdicts">The verdicts</a></li><li class="d2"><a href="#why-a-model-spills-to-the-cpu">Why a model spills to the CPU</a></li><li class="d2"><a href="#apple-silicon">Apple Silicon</a></li><li class="d2"><a href="#multiple-gpus">Multiple GPUs</a></li><li class="d2"><a href="#settings-that-need-a-restart">Settings that need a restart</a></li><li class="d2"><a href="#stopping-a-server">Stopping a server</a></li><li class="d2"><a href="#long-tasks-on-a-small-context-window">Long tasks on a small context window</a></li><li class="d2"><a href="#pictures-and-models-that-cannot-see">Pictures and models that cannot see</a></li><li class="d2"><a href="#what-is-not-here-yet">What is not here yet</a></li></ul></nav></aside>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Running models locally</a></li><li class="d2"><a href="#the-nekko-engine">The Nekko engine</a></li><li class="d2"><a href="#servers-you-already-run">Servers you already run</a></li><li class="d3"><a href="#what-each-one-can-do">What each one can do</a></li><li class="d3"><a href="#when-a-card-lists-no-models">When a card lists no models</a></li><li class="d2"><a href="#reading-the-fit-bar">Reading the fit bar</a></li><li class="d2"><a href="#the-verdicts">The verdicts</a></li><li class="d2"><a href="#why-a-model-spills-to-the-cpu">Why a model spills to the CPU</a></li><li class="d2"><a href="#apple-silicon">Apple Silicon</a></li><li class="d2"><a href="#multiple-gpus">Multiple GPUs</a></li><li class="d2"><a href="#settings-that-need-a-restart">Settings that need a restart</a></li><li class="d2"><a href="#stopping-a-server">Stopping a server</a></li><li class="d2"><a href="#long-tasks-on-a-small-context-window">Long tasks on a small context window</a></li><li class="d2"><a href="#pictures-and-models-that-cannot-see">Pictures and models that cannot see</a></li><li class="d2"><a href="#what-is-not-here-yet">What is not here yet</a></li></ul></nav></aside>
     </div>
     <dialog class="search-dialog" aria-label="Search the docs">
       <form method="dialog" class="search-box">

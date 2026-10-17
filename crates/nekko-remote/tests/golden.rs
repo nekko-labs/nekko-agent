@@ -255,7 +255,7 @@ fn remote_json_and_replies_match_across_operations() {
             }
             "hello" => svc.verify(&args[0]),
             "pair" => svc.pair(),
-            other => svc.route(&format!("remote:{other}"), args).unwrap(),
+            other => svc.route(&format!("remote:{other}"), args).unwrap_or_else(|e| json!({ "error": e })),
         };
         same(&result, &op["result"], &format!("op {i} {name} result"));
         if name != "file" {
@@ -275,16 +275,19 @@ fn the_phone_gate_decides_as_the_ts_does() {
     let settings = g["settings"].clone();
     let skills = g["skills"].clone();
     let sessions = g["sessions"].clone();
+    let changes = g["changes"].clone();
     let cases = g["cases"].as_array().unwrap();
     assert!(cases.len() >= 30);
     let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
     for case in cases {
         let calls: Arc<Mutex<Vec<Value>>> = Arc::default();
-        let (seen, settings, skills, sessions) = (calls.clone(), settings.clone(), skills.clone(), sessions.clone());
+        let (seen, settings, skills, sessions, changes) =
+            (calls.clone(), settings.clone(), skills.clone(), sessions.clone(), changes.clone());
         let host: nekko_remote::Dispatcher = Arc::new(move |channel: String, args: Value| {
             seen.lock().unwrap().push(json!([channel, args]));
             let out = match channel.as_str() {
                 "session:get" => sessions.get(args[0].as_str().unwrap_or("")).cloned().unwrap_or(Value::Null),
+                "changes:list" => changes.get(args[0].as_str().unwrap_or("")).cloned().unwrap_or(json!([])),
                 "providers:list" => settings["providers"].clone(),
                 "skills:runnable" => skills.clone(),
                 c if c.starts_with("settings:") => settings.clone(),
@@ -331,4 +334,17 @@ fn a_reply_too_large_for_the_relay_becomes_an_error() {
     let e = s(&reply["error"]);
     assert!(e.starts_with("This reply is too large to send to a phone ("), "{e}");
     assert!(e.ends_with(" MB). Open it on the computer."), "{e}");
+}
+
+#[test]
+fn the_relay_route_rule_matches_the_ts() {
+    for case in golden("relay-route.json").as_array().unwrap() {
+        let url = s(&case["url"]);
+        assert_eq!(nekko_remote::route::relay_route(url).as_str(), s(&case["route"]), "route of {url:?}");
+        assert_eq!(
+            nekko_remote::route::relay_url_problem(url).as_deref(),
+            case["problem"].as_str(),
+            "problem with {url:?}"
+        );
+    }
 }

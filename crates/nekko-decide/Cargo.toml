@@ -8,9 +8,11 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-# The Linux prebuilt ONNX Runtime with CUDA also carries TensorRT and needs the CUDA 13 runtime
-# at run time; it is several hundred MB, so it is opt-in (`--features cuda`) rather than what CI
-# and the default Linux build download. Without it Linux runs on the CPU provider.
+# CUDA on Linux, opt-in and not in release builds (docs/decision-models.md, "CUDA on Linux"):
+# it needs the CUDA 13 runtime and cuDNN 9 at run time, and the prebuilt ONNX Runtime this
+# downloads has no kernels for RTX 50-series GPUs, so build it against Microsoft's CUDA build
+# instead (`ORT_LIB_LOCATION=<lib> ORT_PREFER_DYNAMIC_LINK=1`, see
+# scripts/decision-models/cuda-golden.sh). Without it Linux runs on the CPU provider.
 cuda = ["ort/cuda"]
 
 [dependencies]

@@ -1,6 +1,7 @@
 {
  "channels": [
   "app:info",
+  "changes:list",
   "chat:abort",
   "chat:answer",
   "chat:pending",
@@ -24,9 +25,13 @@
  "alwaysDenied": {
   "channels": [
    "attachment:import",
+   "changes:accept",
+   "changes:acceptAll",
    "connector:connect",
    "connector:disconnect",
    "data:wipe",
+   "dir:list",
+   "file:read",
    "file:write",
    "providers:importCliAuth",
    "providers:remove",
@@ -34,16 +39,20 @@
    "settings:reset",
    "voice:cancel",
    "voice:install",
+   "voice:permission",
    "voice:uninstall",
    "workspace:addByPath",
    "workspace:remove"
   ],
   "prefixes": [
+   "dialog:",
    "mcp:",
    "oauth:",
    "remote:",
+   "shell:",
    "terminal:",
-   "terminals:"
+   "terminals:",
+   "update:"
   ],
   "except": [
    "remote:status"
@@ -64,6 +73,7 @@
   "defaultModelId",
   "defaultProviderId",
   "favoriteModels",
+  "phoneChanges",
   "skipDeleteConfirmation",
   "theme",
   "themePreset",
@@ -115,6 +125,14 @@
  "sessionView": {
   "messages": 300,
   "textChars": 4000
+ },
+ "changesView": {
+  "files": 50,
+  "linesPerFile": 400,
+  "bytesPerFile": 65536,
+  "totalBytes": 524288,
+  "context": 3,
+  "diffCells": 4000000
  },
  "maxFrameBytes": 9437184
 }

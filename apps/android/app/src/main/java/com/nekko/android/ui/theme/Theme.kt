@@ -52,18 +52,18 @@ val LightPalette = Palette(
     line = Color(0xFFE8E8EF),
     ink = Color(0xFF17171D),
     inkSoft = Color(0xFF52525E),
-    inkFaint = Color(0xFF8A8A97),
-    accent = Color(0xFF6D5EFC),
+    inkFaint = Color(0xFF6A6A76),
+    accent = Color(0xFF5A4AE8),
     accentInk = Color(0xFFFFFFFF),
-    accentSoft = Color(0x216D5EFC),
-    success = Color(0xFF3AA870),
-    successSoft = Color(0x243AA870),
-    danger = Color(0xFFD24738),
-    dangerSoft = Color(0x24D24738),
-    warning = Color(0xFFC9871F),
-    warningSoft = Color(0x24C9871F),
-    running = Color(0xFF3B82F6),
-    userBubble = Color(0xFF6D5EFC),
+    accentSoft = Color(0x215A4AE8),
+    success = Color(0xFF1E7A4A),
+    successSoft = Color(0x241E7A4A),
+    danger = Color(0xFFB42318),
+    dangerSoft = Color(0x24B42318),
+    warning = Color(0xFF8F5C0A),
+    warningSoft = Color(0x248F5C0A),
+    running = Color(0xFF1D4ED8),
+    userBubble = Color(0xFF5A4AE8),
     userInk = Color(0xFFFFFFFF),
     code = Color(0xFFF2F2F7),
 )
@@ -75,7 +75,7 @@ val DarkPalette = Palette(
     line = Color(0xFF26262F),
     ink = Color(0xFFECEAF3),
     inkSoft = Color(0xFFA3A1B0),
-    inkFaint = Color(0xFF6B6B78),
+    inkFaint = Color(0xFF8E8E9B),
     accent = Color(0xFF8B7DFF),
     accentInk = Color(0xFF0C0C11),
     accentSoft = Color(0x2E8B7DFF),
@@ -99,7 +99,7 @@ val DarkPalette = Palette(
 fun Palette.withAccent(argb: Long?, dark: Boolean): Palette {
     if (argb == null) return this
     val a = Color(argb)
-    val onAccent = if (a.luminance() > 0.45f) Color(0xFF0C0C11) else Color(0xFFFFFFFF)
+    val onAccent = if (contrast(a, Color.White) >= contrast(a, Color(0xFF0C0C11))) Color.White else Color(0xFF0C0C11)
     return copy(
         accent = a,
         accentInk = onAccent,
@@ -107,6 +107,12 @@ fun Palette.withAccent(argb: Long?, dark: Boolean): Palette {
         userBubble = if (dark) userBubble else a,
         userInk = if (dark) userInk else onAccent,
     )
+}
+
+/** WCAG 2 contrast ratio between two colours (1..21). */
+fun contrast(a: Color, b: Color): Float {
+    val (x, y) = a.luminance() to b.luminance()
+    return (maxOf(x, y) + 0.05f) / (minOf(x, y) + 0.05f)
 }
 
 private val LocalPalette = staticCompositionLocalOf { DarkPalette }

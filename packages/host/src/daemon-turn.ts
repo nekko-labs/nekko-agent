@@ -28,9 +28,10 @@ import { daemonOwns, LIVENESS_INTERVAL_MS, LIVENESS_STRIKES } from './daemon-cap
  *   it owns `turn:hooks`) and with Anthropic
  *   rate-limit headers (`turn:headers`); a tool here that needs approval parks it in the daemon
  *   (`turn:approval`) and hears the answer through `turn:approved`;
- * - every event reaches this side too (`turn:event`, deltas batched), marked
- *   `relayOnly` (the UI already has it from the daemon), for the phone relay,
- *   the caller's own listeners, and usage and reply accounting;
+ * - the events this side still reads reach it too (`turn:event`, deltas
+ *   batched; `hostTurnEvents`), marked `relayOnly` (the UI already has them
+ *   from the daemon): every one for a TS phone relay, messaging bridge or
+ *   accounting, otherwise only how the turn ended;
  * - `turn:end` hands back how the reply ended; chat.ts runs the hooks and the
  *   linked spec. The daemon generates the chat's title itself (its usage
  *   comes back through `turn:usage`, its `session_meta` through
@@ -62,7 +63,7 @@ export interface TurnSummary {
 
 export interface HostTurn {
   sessionId: string;
-  /** The caller's listener; every event arrives here marked `relayOnly`. */
+  /** The caller's listener; the events this host asked for arrive here marked `relayOnly`. */
   send: (event: AgentEvent) => void;
   /** Usage and reply accounting for the events of one batch; a `done` comes with the turn's stats and start time. */
   account: (events: AgentEvent[], extra: { stats?: TurnStats; startedAt?: number }) => void;
@@ -204,6 +205,22 @@ export function daemonTurnFor(sessionId: string): boolean {
  * then `account` and `headers` here have nothing to do.
  */
 export const TURN_ACCOUNT = 'turn:account';
+
+/**
+ * The event types this host still reads of a daemon-driven turn, for the
+ * spec's `facts.hostEvents`; undefined for every one.
+ *
+ * The whole turn used to come back here (`turn:event`, deltas batched) for
+ * the phone relay, messaging and accounting. Where the daemon runs all three
+ * (`NEKKOD_OWNS` lists `remote` and `messaging`, and it accounts turns), what
+ * is left here only follows how a turn ends (an agent watch's resume and a
+ * sub-agent's start read the `error`). The UI and the local API server
+ * (apps/desktop main/api-server.ts) take the events from the daemon itself.
+ */
+export function hostTurnEvents(daemonAccounts: boolean): string[] | undefined {
+  const owns = (what: string) => (process.env.NEKKOD_OWNS ?? '').split(',').includes(what);
+  return daemonAccounts && owns('remote') && owns('messaging') ? ['done', 'error'] : undefined;
+}
 
 /** Whether the engine daemon accounts for the turns it drives. */
 export async function daemonAccountsTurns(call: Call): Promise<boolean> {

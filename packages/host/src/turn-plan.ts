@@ -1,5 +1,5 @@
 import type { ChatMessage, ExecutionMode, OrchestrationSettings, ProviderConfig, QueuedPrompt, SendOptions, Session, WorkspaceFolder } from '@nekko-agent/shared';
-import { DEFAULT_ORCHESTRATION, DEFAULT_TURN_WRAPPER, getStrategy, orchestrationPromptHint, queueItemPayload, toolAllowedOffline } from '@nekko-agent/shared';
+import { DEFAULT_ORCHESTRATION, DEFAULT_TURN_WRAPPER, getStrategy, orchestrationPromptHint, queueItemPayload, toolAllowedOffline, workModePrompt, workModePrompts } from '@nekko-agent/shared';
 import {
   ASK_USER_TOOL,
   BUILTIN_TOOLS,
@@ -132,6 +132,8 @@ export interface TurnPromptInput {
   worktreeNotices: string[];
   contextBlock: string;
   platform: string;
+  /** The chat's work mode (see WORK_MODES); its text joins the instructions. */
+  workMode?: string;
 }
 
 /** The system prompt a turn sends. */
@@ -141,7 +143,7 @@ export function turnSystemPrompt(input: TurnPromptInput): string {
   return buildSystemPrompt({
     // The prompt reads only each folder's name and path.
     workspaces: input.workspaces as WorkspaceFolder[],
-    systemInstructions: [sandbox ? SANDBOX_INSTRUCTIONS : settings.systemInstructions, tools.some((t) => t.name === 'agent_watch') ? AGENT_WATCH_INSTRUCTIONS : ''].filter(Boolean).join('\n\n'),
+    systemInstructions: [sandbox ? SANDBOX_INSTRUCTIONS : settings.systemInstructions, tools.some((t) => t.name === 'agent_watch') ? AGENT_WATCH_INSTRUCTIONS : '', workModePrompt(input.workMode)].filter(Boolean).join('\n\n'),
     turnWrapper: sandbox ? DEFAULT_TURN_WRAPPER : settings.turnWrapper ?? DEFAULT_TURN_WRAPPER,
     aboutUser: sandbox ? undefined : settings.aboutUser,
     checkoutNotice: sandbox

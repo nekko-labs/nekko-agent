@@ -52,7 +52,7 @@ jobs:
         run: xcodegen generate
       - name: Validate plists
         run: |
-          plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements
+          plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements apps/ios/Widgets/NekkoWidgets.entitlements apps/ios/Share/Info.plist apps/ios/Share/NekkoShare.entitlements apps/ios/App/PrivacyInfo.xcprivacy
       - name: Build unsigned iOS Simulator app
         working-directory: apps/ios
         run: >-
@@ -60,13 +60,20 @@ jobs:
           -configuration Debug -sdk iphonesimulator
           -destination 'generic/platform=iOS Simulator'
           -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build
-      - name: Verify bundle (launch screen, widget extension, URL schemes)
+      - name: Verify bundle (launch screen, widget and share extensions, URL schemes, icon, privacy manifest)
         run: |
           APP=apps/ios/DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchStoryboardName' $APP/Info.plist)" = LaunchScreen
           test -d $APP/LaunchScreen.storyboardc
           test -d $APP/PlugIns/NekkoWidgets.appex
+          # Share to Nekko: a share-services extension that takes text and one web link.
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' $APP/PlugIns/NekkoShare.appex/Info.plist)" = com.apple.share-services
+          /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationSupportsText' $APP/PlugIns/NekkoShare.appex/Info.plist | grep -q true
           /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes' $APP/Info.plist | grep -q nekko-agent-pair
+          # App Store requirements: the icon compiled into the asset catalog, and the privacy manifest.
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' $APP/Info.plist)" = AppIcon
+          test -f $APP/Assets.car
+          plutil -lint $APP/PrivacyInfo.xcprivacy $APP/PlugIns/NekkoWidgets.appex/PrivacyInfo.xcprivacy $APP/PlugIns/NekkoShare.appex/PrivacyInfo.xcprivacy
       - name: Simulator tests and live screenshots (light, dark)
         working-directory: apps/ios
         run: |
@@ -81,7 +88,9 @@ jobs:
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100 || true
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="")
           # Unit tests and first-run UI tests.
-          xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test -skip-testing:NekkoNativeUITests/LiveRelayTests
+          # Every suite runs even when one fails, so one run shows every failure and keeps its evidence.
+          failed=0
+          xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test -skip-testing:NekkoNativeUITests/LiveRelayTests || failed=1
           # The live journey, once per theme, each against a fresh stack (pairing codes are single-use).
           for THEME in light dark; do
             xcrun simctl ui "$DEVICE" appearance "$THEME"
@@ -89,7 +98,7 @@ jobs:
             . "/tmp/stack-$THEME.env"
             TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_THEME="$THEME" \
               xcodebuild "${COMMON[@]}" -resultBundlePath "evidence/live-$THEME.xcresult" test-without-building \
-              -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone
+              -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone || failed=1
             kill $NEKKO_ITEST_PIDS 2>/dev/null || true
             # The app is reinstalled per run; wipe it so the next theme pairs from scratch.
             xcrun simctl uninstall "$DEVICE" com.nekko.native.ios || true
@@ -100,8 +109,9 @@ jobs:
           . /tmp/stack-link.env
           TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/deeplink.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testPairFromADeepLink
+            -only-testing:NekkoNativeUITests/LiveRelayTests/testPairFromADeepLink || failed=1
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+          exit $failed
       - name: Export screenshots from the test results
         if: always()
         working-directory: apps/ios

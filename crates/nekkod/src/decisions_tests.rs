@@ -70,6 +70,43 @@ impl Prefs for FakePrefs {
     }
 }
 
+/// The download queue as the TS golden test fakes it: each request recorded with
+/// what its check says about a one-byte file and, for a small file, about a
+/// file of the right size but other bytes.
+struct FakeQueue {
+    root: std::path::PathBuf,
+    calls: Arc<Mutex<Vec<Value>>>,
+    checks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
+}
+
+impl Queue for FakeQueue {
+    fn start(&self, d: Download) {
+        let verified = Arc::new(Mutex::new(Map::new()));
+        let slot = {
+            let mut calls = self.calls.lock().unwrap();
+            let mut v = d.to_value();
+            v["verified"] = json!({});
+            calls.push(json!(["downloads.start", v]));
+            calls.len() - 1
+        };
+        let (calls, n) = (self.calls.clone(), self.checks.lock().unwrap().len());
+        let probe = self.root.join(format!("probe-{n}.part")).to_string_lossy().into_owned();
+        let handle = tokio::spawn(async move {
+            std::fs::write(&probe, "x").unwrap();
+            let wrong_size = check_file(&probe, &d.file, d.bytes, d.sha256.as_deref()).await;
+            verified.lock().unwrap().insert("wrongSize".into(), json!(wrong_size));
+            if d.bytes < 4096 {
+                std::fs::write(&probe, vec![0u8; d.bytes as usize]).unwrap();
+                let wrong_bytes = check_file(&probe, &d.file, d.bytes, d.sha256.as_deref()).await;
+                verified.lock().unwrap().insert("wrongBytes".into(), json!(wrong_bytes));
+            }
+            let _ = std::fs::remove_file(&probe);
+            calls.lock().unwrap()[slot][1]["verified"] = Value::Object(verified.lock().unwrap().clone());
+        });
+        self.checks.lock().unwrap().push(handle);
+    }
+}
+
 /// A loopback TypeSafe answering the scripted replies in order, recording each request.
 async fn typesafe(replies: Vec<(u16, String)>, seen: Arc<Mutex<Vec<Value>>>) -> String {
     use axum::http::{HeaderMap, Method, StatusCode, Uri};
@@ -144,7 +181,10 @@ async fn replays_the_host_golden_scripts() {
         }
         let local = Arc::new(FakeLocal { status: Mutex::new(json!({ "loaded": false })), calls: calls.clone() });
         let prefs = Arc::new(FakePrefs { settings: Mutex::new(settings), calls: calls.clone() });
-        let d = Decisions::new(local, prefs, "unused".into(), base);
+        let checks = Arc::new(Mutex::new(Vec::new()));
+        let queue = Arc::new(FakeQueue { root: root.clone(), calls: calls.clone(), checks: checks.clone() });
+        let d = Decisions::new(local, prefs, "unused".into(), base)
+            .with_downloads(queue, golden["testReleaseUrl"].as_str().unwrap().to_string());
         for step in script["steps"].as_array().unwrap() {
             let op = step["op"].as_str().unwrap();
             let args: Vec<Value> = step["args"]
@@ -166,6 +206,10 @@ async fn replays_the_host_golden_scripts() {
             };
             if out["ok"].get("latencyMs").is_some() {
                 out["ok"]["latencyMs"] = json!(0);
+            }
+            let pending: Vec<_> = std::mem::take(&mut *checks.lock().unwrap());
+            for h in pending {
+                h.await.unwrap();
             }
             let got = json!({
                 "op": op,

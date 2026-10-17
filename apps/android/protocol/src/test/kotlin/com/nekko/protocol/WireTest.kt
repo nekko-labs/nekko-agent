@@ -18,6 +18,38 @@ class WireTest {
         for (ch in Channels.ALL + Events.AGENT_EVENT) assertTrue("missing $ch in ipc.ts", text.contains("'$ch'"))
     }
 
+    @Test fun `phone changes decode hunks, hidden, binary and too-large files`() {
+        val c = PhoneChanges.from(json("""
+            {"files":[
+              {"path":"…/src/main.ts","status":"modified","added":2,"removed":1,"hunks":[{"oldStart":2,"newStart":2,"lines":[" b","-e","+E","+j"," f"]}]},
+              {"path":"new.txt","status":"added","added":1,"removed":0,"hunks":[]},
+              {"path":".env","status":"modified","added":1,"removed":1,"hunks":[],"hidden":true},
+              {"path":"blob.bin","status":"modified","added":1,"removed":1,"hunks":[],"binary":true},
+              {"path":"big.txt","status":"modified","added":900,"removed":0,"hunks":[],"tooLarge":true,"lines":903},
+              {"status":"added"}
+            ],"omittedFiles":3}
+        """))
+        assertEquals(listOf("…/src/main.ts", "new.txt", ".env", "blob.bin", "big.txt"), c.files.map { it.path })
+        assertEquals(3, c.omittedFiles)
+        assertEquals(905, c.linesAdded)
+        assertTrue(c.files[1].added)
+        assertEquals(
+            listOf(PhoneChanges.Shown.Diff, PhoneChanges.Shown.Diff, PhoneChanges.Shown.Hidden, PhoneChanges.Shown.Binary, PhoneChanges.Shown.TooLarge(903)),
+            c.files.map { it.shown },
+        )
+        val lines = c.files[0].hunks[0].lines
+        assertEquals(listOf(PhoneChanges.Kind.SAME, PhoneChanges.Kind.REMOVED, PhoneChanges.Kind.ADDED, PhoneChanges.Kind.ADDED, PhoneChanges.Kind.SAME), lines.map { it.kind })
+        assertEquals(listOf(2, 3, 3, 4, 5), lines.map { it.number })
+        assertEquals("E", lines[2].text)
+        assertEquals(PhoneChanges(emptyList()), PhoneChanges.from(null))
+        assertEquals("About `…/src/main.ts` lines 3–4:\n```diff\n-e\n+E\n+j\n```\n\n", PhoneChanges.quote(c.files[0], c.files[0].hunks[0]))
+        val big = PhoneChanges.Hunk.of(1, 1, (1..20).map { "+l$it" })
+        assertTrue(PhoneChanges.quote(c.files[0], big).contains("+l12\n… 8 more\n```"))
+        assertEquals("About `new.txt` (new, +1 −0):\n\n", PhoneChanges.quote(c.files[1]))
+        assertTrue(PcSettings.from(json("""{"phoneChanges":true}""")).phoneChanges)
+        assertFalse(PcSettings.from(json("""{"phoneChanges":"yes"}""")).phoneChanges)
+    }
+
     @Test fun `providers drop secrets and keep only public fields`() {
         val list = PublicProvider.list(json("""[{"id":"fake","kind":"openai-compat","label":"Fake","baseUrl":"http://x","apiKey":"sk-secret","enabled":true},{"nope":1}]"""))
         assertEquals(listOf(PublicProvider("fake", "openai-compat", "Fake", true)), list)
@@ -128,6 +160,15 @@ class WireTest {
         assertEquals("\"plain\"", queuePrompt("plain").toString())
     }
 
+    @Test fun `photos ride chat send and chat queue as data urls`() {
+        val img = "data:image/jpeg;base64,AAAA"
+        assertEquals(
+            """{"sessionId":"s","providerId":"p","modelId":"m","text":"what is this","images":["$img"]}""",
+            sendOptions("s", "p", "m", "what is this", images = listOf(img)).toString(),
+        )
+        assertEquals("""{"text":"","images":["$img","$img"]}""", queuePrompt("", images = listOf(img, img)).toString())
+    }
+
     /** Every channel the phone calls must be one the computer lets a phone call (#529's allowlist). */
     @Test fun `the computer allows every channel and setting the phone uses`() {
         val f = File(System.getenv("NEKKO_REPO_ROOT") ?: "../../..", "crates/nekko-remote/src/phone-access.json")
@@ -142,9 +183,9 @@ class WireTest {
         for (m in PcSettings.ChatMode.entries) assertTrue("the computer refuses chat mode ${m.wire} from a phone", m.wire in modes)
         val skill = SkillSummary("r", "", "", "")
         val sendKeys = policy["chatSendKeys"].arr()!!.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toSet()
-        for (k in sendOptions("s", "p", "m", "x", skill).keys) assertTrue("the computer refuses chat:send $k", k in sendKeys)
+        for (k in sendOptions("s", "p", "m", "x", skill, listOf("data:image/jpeg;base64,AA")).keys) assertTrue("the computer refuses chat:send $k", k in sendKeys)
         val queueKeys = policy["queueKeys"].arr()!!.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toSet()
-        for (k in queuePrompt("x", skill).obj()!!.keys) assertTrue("the computer refuses chat:queue $k", k in queueKeys)
+        for (k in queuePrompt("x", skill, listOf("data:image/jpeg;base64,AA")).obj()!!.keys) assertTrue("the computer refuses chat:queue $k", k in queueKeys)
     }
 
     @Test fun `pc settings read only the phone-visible keys, unset keys use the computer's defaults`() {

@@ -2,6 +2,19 @@ import Foundation
 import NekkoProtocol
 import Observation
 
+/// A prompt that didn't reach the computer, with what was attached to it.
+public struct UnsentPrompt: Equatable, Sendable {
+    public let text: String
+    public let skill: SkillSummary?
+    public let images: [String]
+
+    public init(text: String, skill: SkillSummary?, images: [String]) {
+        self.text = text
+        self.skill = skill
+        self.images = images
+    }
+}
+
 /// A turn can run for hours (long agent runs); don't time the request out.
 public let turnTimeout: TimeInterval = 12 * 60 * 60
 
@@ -14,8 +27,21 @@ public let turnTimeout: TimeInterval = 12 * 60 * 60
 @Observable
 public final class ChatModel {
     public let sessionId: String
-    public private(set) var session: Session?
-    public private(set) var turn = LiveTurn()
+    public private(set) var session: Session? {
+        // Parsed once per read, not on every streamed token.
+        didSet { savedBlocks = session.map { Transcript.fromMessages($0.messages) } ?? [] }
+    }
+    private var savedBlocks: [Block] = []
+    /// Saved block id → the live id the view already shows it under (see `Transcript.carriedIds`).
+    private var shownIds: [String: String] = [:]
+    public private(set) var turn = LiveTurn() {
+        didSet { if running != turn.running { running = turn.running } }
+    }
+    /// `turn.running`, changing only when it does: views that need just this
+    /// (the composer's Send / Stop) don't redraw on every streamed token.
+    public private(set) var running = false
+    /// A prompt the computer never started on, handed back to the composer.
+    public private(set) var unsent: UnsentPrompt?
     public private(set) var loadError: String?
     /// The computer's runnable skills, re-read with the chat.
     public private(set) var skills: [SkillSummary] = []
@@ -63,6 +89,7 @@ public final class ChatModel {
                 return
             }
             let mine = PendingInput.map(p)[sessionId]
+            let shown = blocks
             self.session = session
             loadError = nil
             // Mid-turn the overlay keeps streaming; mergeLive hides what the
@@ -73,9 +100,17 @@ public final class ChatModel {
             t.question = mine?.question
             t.running = t.running || mine != nil
             turn = t
+            // Keep the ids of what was on screen when the saved transcript replaces the live one.
+            let carried = Transcript.carriedIds(shown: shown, next: Transcript.mergeLive(saved: savedBlocks, live: turn.blocks))
+            if !carried.isEmpty { shownIds.merge(carried) { a, _ in a } }
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    /// What the agent changed in this chat; the computer refuses unless it allows phones to see changes.
+    public func changes() async throws -> PhoneChanges {
+        PhoneChanges.from(try await store.remote().call(Channels.changesList, [.string(sessionId)]))
     }
 
     public func loadSkills() async {
@@ -126,6 +161,13 @@ public final class ChatModel {
                                                                      text: text, skill: skill, images: images)], timeout: turnTimeout)
             } catch {
                 var t = self.turn
+                // Nothing came back for it: give the prompt back instead of
+                // leaving a bubble that was never delivered.
+                let started = t.blocks.contains { $0.id != "pending-\(at)" }
+                if !started {
+                    t.blocks.removeAll { $0.id == "pending-\(at)" }
+                    self.unsent = UnsentPrompt(text: text, skill: skill, images: images)
+                }
                 t.running = false
                 t.error = error.localizedDescription
                 self.turn = t
@@ -142,13 +184,41 @@ public final class ChatModel {
     public func approve(_ ok: Bool) async throws {
         guard let a = turn.approval else { return }
         turn.approval = nil
-        _ = try await store.remote().call(Channels.toolApprove, [.string(sessionId), .string(a.call.id), .bool(ok)])
+        do {
+            _ = try await store.remote().call(Channels.toolApprove, [.string(sessionId), .string(a.call.id), .bool(ok)])
+        } catch {
+            // The computer is still waiting: keep the card so the user can try again.
+            if turn.approval == nil { turn.approval = a }
+            throw error
+        }
     }
 
     public func answer(_ answers: [AskAnswer]) async throws {
         guard let q = turn.question else { return }
         turn.question = nil
-        _ = try await store.remote().call(Channels.chatAnswer, [.string(sessionId), .string(q.callId), .array(answers.map(\.json))])
+        do {
+            _ = try await store.remote().call(Channels.chatAnswer, [.string(sessionId), .string(q.callId), .array(answers.map(\.json))])
+        } catch {
+            if turn.question == nil { turn.question = q }
+            throw error
+        }
+    }
+
+    /// Put a prompt back in the composer (it couldn't be sent from elsewhere).
+    public func handBack(_ prompt: UnsentPrompt) { unsent = prompt }
+
+    /// Text to add to the message box (a quoted line from Changes), taken once by the composer.
+    public private(set) var insert: String?
+    public func quote(_ text: String) { insert = text }
+    public func takeInsert() -> String? {
+        defer { insert = nil }
+        return insert
+    }
+
+    /// The prompt to put back in the composer after a failed send, once.
+    public func takeUnsent() -> UnsentPrompt? {
+        defer { unsent = nil }
+        return unsent
     }
 
     /// Change this chat's model or tool policy on the computer.
@@ -179,7 +249,9 @@ public final class ChatModel {
     public var modelId: String? { Self.resolveModel(session, store.defaults).1 }
 
     public var blocks: [Block] {
-        Transcript.mergeLive(saved: session.map { Transcript.fromMessages($0.messages) } ?? [], live: turn.blocks)
+        let merged = Transcript.mergeLive(saved: savedBlocks, live: turn.blocks)
+        guard !shownIds.isEmpty else { return merged }
+        return merged.map { b in shownIds[b.id].map { b.withId($0) } ?? b }
     }
 
     public var queued: [String] { session?.queue ?? [] }

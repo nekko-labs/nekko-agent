@@ -83,6 +83,8 @@ public struct RelayConfig: Sendable {
     /// One-time enrollment code from the QR; dropped once welcomed.
     public var pairCode: String?
     public var platform: String
+    /// The iPhone app's bundle id, so a relay serving several apps pushes to the right one.
+    public var app: String?
     public var handshakeTimeout: TimeInterval = 15
     public var requestTimeout: TimeInterval = 120
     /// Backoff knobs; tests shrink them.
@@ -257,9 +259,21 @@ public final class RelayClient: @unchecked Sendable {
     /// An unsealed control frame: the relay itself keeps the token.
     public func registerPush(token: String) async throws {
         try await awaitReady()
-        let frame: JSONValue = ["type": "register-push", "token": .string(token), "platform": .string(config.platform),
+        var frame: JSONValue = ["type": "register-push", "token": .string(token), "platform": .string(config.platform),
                                 "deviceId": .string(config.deviceId)]
+        if let app = config.app, case .object(var o) = frame { o["app"] = .string(app); frame = .object(o) }
         guard let c = locked({ conn }), c.send(frame.serialized()) else { throw RelayError("Could not reach your computer.") }
+    }
+
+    /// Hand the relay a Live Activity's ActivityKit push token under the chat's
+    /// opaque tag (`E2E.activityTag`), so the computer's content-free `activity`
+    /// frames can update it while iOS has suspended the app.
+    public func registerActivity(tag: String, token: String) async throws {
+        try await awaitReady()
+        var o: [String: JSONValue] = ["type": "register-activity", "tag": .string(tag), "token": .string(token),
+                                      "deviceId": .string(config.deviceId)]
+        if let app = config.app { o["app"] = .string(app) }
+        guard let c = locked({ conn }), c.send(JSONValue.object(o).serialized()) else { throw RelayError("Could not reach your computer.") }
     }
 
     private func awaitReady() async throws {

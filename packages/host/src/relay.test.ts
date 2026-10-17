@@ -66,7 +66,8 @@ describe('relay agent', () => {
     // A long first delta seals slower than the short ones after it.
     const deltas = ['x'.repeat(200_000), 'Hello ', 'from ', 'your ', 'computer.'];
     for (const delta of deltas) events.emit('agentEvent', { type: 'text', sessionId: 's', delta });
-    await vi.waitFor(() => expect(ws.sent.length).toBe(1 + deltas.length));
+    // The HELLO reply and one frame per delta (the relay-only `activity` frame aside).
+    await vi.waitFor(() => expect(ws.sent.filter((raw) => JSON.parse(raw).type === 'd').length).toBe(1 + deltas.length));
     const frames = (await framesFor(ws, key, 'c1')).filter((f) => f.type === 'event');
     expect(frames.every((f) => f.channel === IpcEvents.agentEvent)).toBe(true);
     expect(frames.map((f) => f.payload.delta)).toEqual(deltas);

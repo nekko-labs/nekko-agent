@@ -2,7 +2,7 @@
 //! settings.json, local server discovery, connection tests, model lists and
 //! LM Studio's `lms` probe.
 //!
-//! `providers:list/save/remove/discover/probe/test/testConfig`, `models:list`
+//! `providers:list/save/remove/discover/probe/test/testConfig`, `models:list/listStatus`
 //! and `lms:probe`, ported from the TS host (host.ts, `discoverLocalProviders`,
 //! lms.ts). The provider list is a setting, so writes go through
 //! `crate::settings::update` and the host hears of them. A provider signed in
@@ -25,6 +25,7 @@ pub const CHANNELS: &[&str] = &[
     "providers:test",
     "providers:testConfig",
     "models:list",
+    "models:listStatus",
     "lms:probe",
 ];
 
@@ -94,6 +95,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         }
         "providers:testConfig" => Ok(test(ctx, &arg(0)).await),
         "models:list" => Ok(list_models(ctx, &id(0)).await),
+        "models:listStatus" => Ok(list_models_status(ctx, &id(0)).await),
         "lms:probe" => {
             let Some(p) = find(&providers(ctx).await, &id(0)).cloned() else {
                 return Ok(json!({ "available": false }));
@@ -196,16 +198,25 @@ async fn test(ctx: &Ctx, config: &Value) -> Value {
 
 /// `listModels(providerId)`: the provider's models, `[]` on any failure.
 pub async fn list_models(ctx: &Ctx, id: &str) -> Value {
+    list_models_status(ctx, id).await.get("models").cloned().unwrap_or(json!([]))
+}
+
+/// `listModelsStatus(providerId)`: `{ models, error? }`, where `error` says why
+/// the list failed. A disabled or unknown provider is `{ models: [] }`.
+pub async fn list_models_status(ctx: &Ctx, id: &str) -> Value {
     use nekko_agent::Provider;
     // Checked before resolving, so a disabled subscription is not refreshed either.
-    if find(&providers(ctx).await, id).is_some_and(|p| !is_enabled(p)) {
-        return json!([]);
+    if find(&providers(ctx).await, id).is_none_or(|p| !is_enabled(p)) {
+        return json!({ "models": [] });
     }
-    let Ok(config) = resolve_provider(ctx, id).await else { return json!([]) };
-    let Ok(provider) = build(&config) else { return json!([]) };
-    match provider.list_models().await {
-        Ok(models) => serde_json::to_value(models).unwrap_or(json!([])),
-        Err(_) => json!([]),
+
+    let listed = match resolve_provider(ctx, id).await.and_then(|c| build(&c)) {
+        Ok(provider) => provider.list_models().await.map_err(|e| e.to_string()),
+        Err(e) => Err(e),
+    };
+    match listed {
+        Ok(models) => json!({ "models": serde_json::to_value(models).unwrap_or(json!([])) }),
+        Err(e) => json!({ "models": [], "error": e }),
     }
 }
 

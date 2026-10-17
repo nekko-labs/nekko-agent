@@ -34,7 +34,7 @@ function setup(context = () => ({ windowHidden: true, visibleSessionId: null as 
 describe('main desktop notifications', () => {
   it('subscribes directly with token, defaults on and deduplicates without any renderer', async () => {
     const s = setup(); await flush();
-    expect(s.urls).toEqual(['ws://127.0.0.1:123/api/ws?token=a%20b']);
+    expect(s.urls).toEqual(['ws://127.0.0.1:123/api/ws?sessions=&token=a%20b']);
     s.sockets[0].onopen?.();
     s.sockets[0].event(done); s.sockets[0].event(done); await flush();
     expect(s.post).toHaveBeenCalledTimes(1);
@@ -65,7 +65,7 @@ describe('main desktop notifications', () => {
     await vi.advanceTimersByTimeAsync(250);
     s.endpoint.mockResolvedValue({ url: 'http://127.0.0.1:456', token: 'new', mode: 'daemon' });
     await vi.advanceTimersByTimeAsync(500);
-    expect(s.urls[1]).toBe('ws://127.0.0.1:456/api/ws?token=new');
+    expect(s.urls[1]).toBe('ws://127.0.0.1:456/api/ws?sessions=&token=new');
     expect(s.endpoint).toHaveBeenCalledTimes(3);
     // Late frames on a dead socket cannot create notices.
     s.sockets[0].event(done); await flush(); expect(s.post).not.toHaveBeenCalled();

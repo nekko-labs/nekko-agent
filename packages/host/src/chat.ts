@@ -54,7 +54,7 @@ import { buildSpec } from './spec.js';
 import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool, DAEMON_MCP } from './mcp.js';
 import { daemonCall } from './engine/daemon.js';
 import { daemonOwns } from './daemon-caps.js';
-import { adoptTurn, answerInDaemon, chainOf, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
+import { adoptTurn, answerInDaemon, chainOf, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, hostTurnEvents, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
 import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
 import { applyTurnInput, cleanFill, cleanTitle, fillPrompt, hostToolApproval, sendOptionsForQueuedItem, suggestPrompt, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
 import { sandboxAdmissionRefusal } from './turn-variants.js';
@@ -985,6 +985,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
     worktreeNotices: Object.values(session.gitWorktrees ?? {}).map((w) => w.notice),
     contextBlock,
     platform: process.platform,
+    workMode: session.workMode,
   });
 
   if (abort.signal.aborted) {
@@ -1367,6 +1368,9 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
         tokenKey: provider.tokenKey,
         incognito,
       },
+      // What this host still reads of the turn's events (daemon-turn.ts
+      // `hostTurnEvents`); left out, the daemon sends every one.
+      ...(hostTurnEvents(daemonAccounts) ? { hostEvents: hostTurnEvents(daemonAccounts) } : {}),
     },
   };
   return { spec, hostTurn: hostTurnFor(t, turnId, resolvedProvider, daemonAccounts) };

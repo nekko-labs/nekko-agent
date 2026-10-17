@@ -39,6 +39,7 @@ export const IpcChannels = {
   providersTestConfig: 'providers:testConfig',
 
   modelsList: 'models:list',
+  modelsListStatus: 'models:listStatus',
   modelPull: 'model:pull',
   modelLoad: 'model:load',
   modelUnload: 'model:unload',
@@ -285,6 +286,10 @@ export const IpcChannels = {
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
   remoteRotate: 'remote:rotate',
+  // Desktop only: the relay this computer can run on its Tailscale address.
+  localRelayStatus: 'localRelay:status',
+  localRelayStart: 'localRelay:start',
+  localRelayStop: 'localRelay:stop',
 
   appInfo: 'app:info',
   mcpStatus: 'mcp:status',
@@ -328,6 +333,23 @@ export const IpcEvents = {
   deepLink: 'app:deepLink',
 } as const;
 
+/**
+ * What the engine daemon sends a socket that just added a chat to its agent
+ * event subscription (`daemon:subscribe`) while the chat's turn runs. Not a
+ * host event, so not in `IpcEvents`.
+ */
+export const AGENT_REPLAY = 'agent:replay';
+
+/** A running turn's events so far: text and reasoning deltas joined, oldest dropped past 4 MB. */
+export interface AgentReplay {
+  sessionId: string;
+  events: AgentEvent[];
+  /** When each event arrived (ms since the epoch), parallel to `events`. */
+  at: number[];
+  /** The oldest events were dropped. */
+  truncated: boolean;
+}
+
 /** The typed API the preload bridge exposes as window.nekko. */
 export interface NekkoApi {
   voiceStatus(): Promise<import('./voice.js').VoiceStatus>;
@@ -355,6 +377,8 @@ export interface NekkoApi {
   testProviderConfig(cfg: ProviderConfig): Promise<{ ok: boolean; message: string }>;
 
   listModels(providerId: string): Promise<ModelInfo[]>;
+  /** listModels plus why it failed: `error` is set when the provider could not list (bad key, timeout). */
+  listModelsStatus(providerId: string): Promise<{ models: ModelInfo[]; error?: string }>;
   pullModel(providerId: string, model: string): Promise<{ ok: boolean; message: string }>;
   loadModel(providerId: string, model: string): Promise<{ ok: boolean; message?: string }>;
   unloadModel(providerId: string, model: string): Promise<{ ok: boolean; message?: string }>;
@@ -624,7 +648,7 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
@@ -825,6 +849,14 @@ export interface NekkoApi {
   renameRemoteDevice(deviceId: string, name: string): Promise<import('./remote.js').RemoteDevice[]>;
   /** Rotate the pairing secret: re-keys the room; every device must re-pair. */
   rotateRemoteSecret(): Promise<import('./remote.js').RemoteStatus>;
+  /**
+   * The relay this computer runs itself, bound to its Tailscale address, so
+   * phones on the tailnet reach it with nothing in between. Desktop only.
+   */
+  localRelayStatus(): Promise<import('./relay-route.js').LocalRelayStatus>;
+  /** Switch it on (and keep it on across restarts); reports why if it can't start. */
+  localRelayStart(): Promise<import('./relay-route.js').LocalRelayStatus>;
+  localRelayStop(): Promise<import('./relay-route.js').LocalRelayStatus>;
 
   /** Running version + edition. */
   getAppInfo(): Promise<AppInfo>;
@@ -850,6 +882,17 @@ export interface NekkoApi {
   runUpdateChecks(): Promise<void>;
 
   onAgentEvent(cb: (e: AgentEvent) => void): () => void;
+  /**
+   * Take the agent event stream of these chats only (null: every chat's, the
+   * default). Every chat's summary events still arrive: a turn's first event,
+   * a wait on a person and the event after it, `session_meta`, `compaction`,
+   * `done` and `error` (crates/nekkod/src/hub.rs). A chat added while its turn
+   * runs is sent what it missed through `onAgentReplay`. Absent, or a no-op,
+   * where the engine has no daemon.
+   */
+  subscribeAgentEvents?(sessionIds: string[] | null): void;
+  /** A running turn's events so far, for a chat just added to `subscribeAgentEvents`. */
+  onAgentReplay?(cb: (r: AgentReplay) => void): () => void;
   onOAuthStatus(cb: (s: OAuthStatus) => void): () => void;
   onIndexProgress(cb: (s: IndexStatus) => void): () => void;
   onUpdateEvent(cb: (u: UpdateInfo) => void): () => void;

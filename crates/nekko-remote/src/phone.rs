@@ -31,6 +31,8 @@ pub struct Policy {
     pub session_text_chars: usize,
     /// `PHONE_MAX_FRAME_BYTES`: the largest sealed reply frame sent to a phone.
     pub max_frame_bytes: usize,
+    /// `PHONE_CHANGES_VIEW`: the limits of a phone's Changes view.
+    pub changes_view: crate::phone_changes::Limits,
 }
 
 fn strings(v: &Value) -> Vec<String> {
@@ -60,6 +62,7 @@ pub fn policy() -> &'static Policy {
             session_messages: v["sessionView"]["messages"].as_u64().unwrap_or(0) as usize,
             session_text_chars: v["sessionView"]["textChars"].as_u64().unwrap_or(0) as usize,
             max_frame_bytes: v["maxFrameBytes"].as_u64().unwrap_or(9 * 1024 * 1024) as usize,
+            changes_view: crate::phone_changes::Limits::from_policy(&v["changesView"]),
         }
     })
 }
@@ -193,6 +196,11 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
     let mut out = Screened::default();
     match channel {
+        "changes:list" => {
+            if arg(0).as_str().is_none_or(|s| s.is_empty()) {
+                return Err(denied("value-invalid", "chat id"));
+            }
+        }
         "settings:update" => out.settings = Some(check_settings_patch(arg(0))?),
         "session:setOptions" => {
             keys_within(arg(1), &policy().session_option_keys, "chat options")?;
@@ -310,6 +318,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
             _ => json!([]),
         },
         "session:get" => session_view(result),
+        "changes:list" => crate::phone_changes::view(&result, &policy().changes_view),
         _ => result,
     }
 }
@@ -425,6 +434,13 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         _ => Vec::new(),
     };
     let screened = screen(&channel, &args).map_err(|d| d.to_string())?;
+    if channel == "changes:list" {
+        // Off unless the computer's owner turned it on (Settings → Remote access).
+        let settings = run("settings:get".to_string(), json!([])).await?;
+        if settings.get("phoneChanges") != Some(&Value::Bool(true)) {
+            return Err(denied("turned-off", "changes:list").to_string());
+        }
+    }
     let mut args = match screened.settings {
         Some(sets) => {
             let current = if sets.iter().any(|(p, _)| p.contains('.')) {

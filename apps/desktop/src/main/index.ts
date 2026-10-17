@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'fs';
 // importing the package root would load all of it (node-pty included) here.
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/host/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
-import { pickFolderDialog, registerIpc } from './ipc.js';
+import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
 import { checkForUpdates } from './update.js';
 import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
@@ -414,7 +414,10 @@ app.whenReady().then(async () => {
   // The engine runs in its own processes (see engine-process.ts); the window
   // only needs to know where it listens.
   const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
-  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog });
+  // The bridge also carries what nekkod asks of the window shell: the app
+  // window's handle for owning its dialogs, dialogs it cannot draw (macOS),
+  // and quitting so an update can install.
+  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog, shell: shellBridge(() => app.quit()) });
   app.once('will-quit', () => agentBrowser.close());
   engine = new EngineProcess({
     browserBridge: { url: agentBrowser.url, token: agentBrowser.token },
@@ -425,6 +428,8 @@ app.whenReady().then(async () => {
       userData: app.getPath('userData'),
       version: app.getVersion(),
       resourcesPath: app.isPackaged ? process.resourcesPath : undefined,
+      exePath: process.execPath,
+      pid: process.pid,
     },
     // A packaged page is a file:// document: fetch reports its origin as
     // `null`, a WebSocket handshake as `file://`.
@@ -445,7 +450,7 @@ app.whenReady().then(async () => {
     if (!trustedNotificationReporter(applicationWindows.has(event.sender.id), event.senderFrame, event.sender.mainFrame)) return;
     notificationSessions.set(event.sender.id, visibleNotificationSession(report));
   });
-  registerIpc(engine, dataDir);
+  registerIpc(engine);
   setWindowStateDir(dataDir);
   registerTitleBarOverlaySync();
   // A link that launched the app is already on this process's command line
@@ -483,8 +488,13 @@ app.whenReady().then(async () => {
     .catch(() => reportDevReady({ version: app.getVersion(), api: null, dataDir }));
 
   // Auto-check for updates a few seconds after launch, if the user opted in.
-  void engine.call<AppSettings>('settings:get').then((settings) => {
-    if (settings?.autoUpdate) setTimeout(() => { void checkForUpdates(); }, 4000);
+  // nekkod does this itself (crates/nekkod/src/native.rs); only the no-daemon
+  // path still needs main to.
+  const started = engine;
+  void started.endpoint().then(async (e) => {
+    if (e.mode === 'daemon') return;
+    const settings = await started.call<AppSettings>('settings:get');
+    if (settings?.updates?.app ?? settings?.autoUpdate) setTimeout(() => { void checkForUpdates(); }, 4000);
   }).catch(() => {});
 
   app.on('activate', () => {

@@ -29,9 +29,10 @@
 //! tools for a host that keeps them), `turn:hook` (tool
 //! hooks, for a host that keeps them; given `facts.hookRules` they run here),
 //! `turn:headers` (Anthropic subscription rate
-//! limits), `loop:log` (the agent terminal); and it sends the host every
-//! event (`turn:event`, deltas batched) for the phone relay and usage and
-//! reply accounting, then `turn:end`.
+//! limits), `loop:log` (the agent terminal); and it sends the host the events
+//! it asks for (`turn:event`, deltas batched; `facts.hostEvents`, every one
+//! when the host does not say, which a TS phone relay, messaging bridge or
+//! accounting needs), then `turn:end`.
 //!
 //! After a turn (step 4) the daemon starts the chat's generated title and
 //! runs its next queued prompt: the host admits that prompt (`turn:prepare`)
@@ -655,7 +656,8 @@ impl Turns {
         // The host's copy of every event, in order and batched; the UI never
         // waits on it. Drained before `turn:end`.
         let (host_tx, host_rx) = mpsc::unbounded_channel::<HostMsg>();
-        let host_task = tokio::spawn(forward_to_host(host_rx, backend.clone(), shared.turn_id.clone()));
+        let wanted = host_events(&spec["facts"]);
+        let host_task = tokio::spawn(forward_to_host(host_rx, backend.clone(), shared.turn_id.clone(), wanted));
         let summary = self.run_turn(backend, &hub, store, spec, &shared, rx, &host_tx).await;
         drop(host_tx);
         let _ = host_task.await;
@@ -762,6 +764,7 @@ impl Turns {
             "worktreeNotices": notices,
             "contextBlock": block,
             "platform": facts.get("platform").cloned().unwrap_or(json!(std::env::consts::OS)),
+            "workMode": loaded.get("workMode").cloned().unwrap_or(Value::Null),
         }));
 
         if shared.cancel.is_cancelled() {
@@ -1228,9 +1231,28 @@ fn coalesce(batch: Vec<Value>) -> Vec<Value> {
     out
 }
 
+/// What a host with no TS relay, messaging or accounting asks for.
+pub const HOST_END_EVENTS: [&str; 2] = ["done", "error"];
+
+/// The event types the host asked for (`facts.hostEvents`), or `None` for
+/// every one: a host whose phone relay, messaging bridge or accounting still
+/// runs in TS reads the whole turn, one that only follows how turns end
+/// (agent watches, auto-continue) asks for `done` and `error`.
+fn host_events(facts: &Value) -> Option<HashSet<String>> {
+    facts
+        .get("hostEvents")?
+        .as_array()
+        .map(|kinds| kinds.iter().filter_map(Value::as_str).map(str::to_string).collect())
+}
+
 /// The host's copy of the turn's events, in order, deltas batched. The UI
 /// never waits on this: it has each event already.
-async fn forward_to_host(mut rx: mpsc::UnboundedReceiver<HostMsg>, backend: Arc<Backend>, turn_id: String) {
+async fn forward_to_host(
+    mut rx: mpsc::UnboundedReceiver<HostMsg>,
+    backend: Arc<Backend>,
+    turn_id: String,
+    wanted: Option<HashSet<String>>,
+) {
     let mut deltas: Vec<Value> = Vec::new();
     let send = |payload: Value| {
         let (backend, turn_id) = (backend.clone(), turn_id.clone());
@@ -1251,6 +1273,9 @@ async fn forward_to_host(mut rx: mpsc::UnboundedReceiver<HostMsg>, backend: Arc<
             }
         };
         let Some(msg) = next else { break };
+        if wanted.as_ref().is_some_and(|w| !str_at(&msg.event, "type").is_some_and(|t| w.contains(t))) {
+            continue;
+        }
         if is_delta(&msg.event) {
             deltas.push(msg.event);
             continue;

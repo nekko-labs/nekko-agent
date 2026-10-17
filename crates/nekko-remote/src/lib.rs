@@ -14,6 +14,8 @@ pub mod e2e;
 pub mod hello;
 pub mod jsobj;
 pub mod phone;
+pub mod phone_changes;
+pub mod route;
 pub mod service;
 pub mod socket;
 

@@ -66,6 +66,11 @@ export function useEngineDaemon(link: { url: string; token: string } | null): vo
   currentLink = link ?? undefined;
 }
 
+/** Where the daemon this host runs under listens, and its token; undefined without one. */
+export function daemonLink(): { url: string; token: string } | undefined {
+  return currentLink;
+}
+
 /**
  * Call any daemon channel, when this host runs under the daemon (the desktop
  * backend); undefined in the web and server editions.

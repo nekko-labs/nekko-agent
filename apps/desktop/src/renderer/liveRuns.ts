@@ -28,7 +28,7 @@
  */
 
 import { useCallback, useSyncExternalStore } from 'react';
-import type { AgentEvent, ToolCall } from '@nekko-agent/shared';
+import type { AgentEvent, AgentReplay, ToolCall } from '@nekko-agent/shared';
 import type { Activity } from './components/agent-console/transcript.js';
 import { accumulateDecodeMs, describeLiveActivity, emptyLiveActivity, reduceLiveActivity, type LiveActivity } from '@nekko-agent/shared';
 
@@ -69,7 +69,7 @@ export interface LiveRun {
   retrying?: { attempt: number; maxAttempts: number; delayMs: number; reason: string; at: number };
 }
 
-import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity } from './subagentActivity.js';
+import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity, resetSubagentActivityFor } from './subagentActivity.js';
 
 const runs = new Map<string, LiveRun>();
 /**
@@ -278,9 +278,32 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
   markDirty(id);
 }
 
+/**
+ * A running turn's events so far, sent when this window starts showing a chat
+ * mid-turn (agentSubscription.ts): until then it had only the turn's summary
+ * events, so the run is rebuilt from the replay, at the times the events
+ * happened, replacing what was folded from the summaries. The engine sends it
+ * in order with the live events (only while the turn runs), so it is never
+ * older than a `done` already folded here.
+ */
+export function applyReplay(replay: AgentReplay): void {
+  const id = replay.sessionId;
+  const events = replay.events ?? [];
+  if (!events.length) return;
+  const keepStart = runs.get(id)?.startedAt;
+  runs.delete(id);
+  resetSubagentActivityFor(id);
+  events.forEach((e, i) => applyEvent({ ...e, sessionId: id } as AgentEvent, replay.at?.[i] ?? Date.now()));
+  const run = runs.get(id);
+  if (run && keepStart !== undefined && keepStart < run.startedAt) runs.set(id, { ...run, startedAt: keepStart });
+  markDirty(id);
+}
+
 /** Start folding events for the whole app. Called once, at launch. */
 export function startLiveRuns(): () => void {
-  return window.nekko.onAgentEvent((e: AgentEvent) => applyEvent(e));
+  const offEvents = window.nekko.onAgentEvent((e: AgentEvent) => applyEvent(e));
+  const offReplay = window.nekko.onAgentReplay?.((r) => applyReplay(r));
+  return () => { offEvents(); offReplay?.(); };
 }
 
 /** The run in flight for a session, or undefined when it is idle. */

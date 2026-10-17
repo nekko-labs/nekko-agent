@@ -3,6 +3,7 @@ import NekkoKit
 import NekkoProtocol
 import Observation
 import UIKit
+import WidgetKit
 
 /// The app's root object: the computers store plus the iOS glue around it
 /// (Keychain, lifecycle, network changes, haptics, notifications, Live
@@ -27,6 +28,11 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A chat to open (notification tap, Live Activity tap, `nekko-agent://chat/<id>`).
     var openChat: String?
+    /// The first message typed on New chat, sent by that chat's screen once it opens.
+    var firstMessages: [String: String] = [:]
+    /// Text shared from another app (the share extension), waiting for New chat to take it.
+    var sharedText: String?
+    private let shareInbox = ShareInbox(defaults: UserDefaults(suiteName: StatusSnapshot.appGroup) ?? .standard)
 
     init() {
         let keychain = KeychainStore()
@@ -41,8 +47,14 @@ final class AppModel {
         store = ComputersStore(
             store: keychain,
             makeConnection: { RelayClient(config: $0, transport: URLSessionTransport()) },
-            deviceName: { deviceName })
+            deviceName: { deviceName },
+            app: Bundle.main.bundleIdentifier)
         lock = AppLock(enabled: prefs.appLock)
+        #if DEBUG
+        // What the share extension leaves behind, without driving another app's share sheet.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-uiTestShare"), i + 1 < args.count { shareInbox.offer(args[i + 1]) }
+        #endif
     }
 
     /// The relay connection opens only after the first unlock (when the lock is
@@ -58,7 +70,12 @@ final class AppModel {
         IntentRouter.stop = { [weak self] sid in await self?.stopChat(sid) }
         activities.enabled = { [weak self] in self?.prefs.liveActivities ?? false }
         activities.hideDetails = { [weak self] in self?.prefs.appLock ?? true }
+        activities.onPushToken = { [weak self] sid, token in
+            guard let self else { return }
+            Task { await self.store.registerActivity(sessionId: sid, token: token) }
+        }
         _ = store.subscribe { [weak self] e in self?.onEvent(e) }
+        watchWidget()
         network.onChange = { [weak self] in Task { @MainActor in self?.store.reconnect() } }
         network.start()
         store.load(preferredId: prefs.defaultComputer)
@@ -71,6 +88,14 @@ final class AppModel {
         foreground = true
         endBackgroundTask()
         if started { store.nudge() }
+        takeShare()
+    }
+
+    /// Moves a share from the extension to New chat. It waits while no computer
+    /// is paired (it expires on its own); once read it is gone from the App Group.
+    func takeShare() {
+        guard store.ready, !store.computers.isEmpty, let text = shareInbox.take() else { return }
+        sharedText = text
     }
 
     func didEnterBackground() {
@@ -86,6 +111,25 @@ final class AppModel {
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid
+    }
+
+    // MARK: Home Screen widget
+
+    /// Keeps the widget's snapshot (counts only) in step with the store.
+    private func watchWidget() {
+        withObservationTracking {
+            publishWidget()
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.watchWidget() }
+        }
+    }
+
+    private func publishWidget() {
+        let snapshot = StatusSnapshot(
+            computer: store.active?.name, online: store.conn == .online,
+            needsYou: store.needsYouCount, running: store.runningCount, at: .now
+        )
+        if snapshot.save() { WidgetCenter.shared.reloadTimelines(ofKind: StatusSnapshot.kind) }
     }
 
     // MARK: Events → haptics, notifications, Live Activities

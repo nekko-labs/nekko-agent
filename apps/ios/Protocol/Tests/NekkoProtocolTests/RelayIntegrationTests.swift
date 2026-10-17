@@ -145,6 +145,30 @@ final class RelayIntegrationTests: XCTestCase {
         XCTAssertEqual(replyQ, "Hello from your computer.")
         print("itest: question answered from the phone (\(q.questions.count) question)")
 
+        // 2c. The agent writes a file; the phone reads the change, read only.
+        let createdW = try await c.call(Channels.sessionCreate)
+        let sw = try XCTUnwrap(Session.from(createdW))
+        let markW = r.lock.sync { r.events.count }
+        _ = try await c.call(Channels.chatSend, [sendOptions(sessionId: sw.id, providerId: "fake", modelId: "fake-model", text: "write a note")], timeout: 60)
+        await waitFor(60, "turn end after the write") { self.events(r, session: sw.id, from: markW).contains(where: \.endsTurn) }
+        let rawPc = try await c.call(Channels.settingsGet)
+        XCTAssertTrue(PcSettings.from(rawPc).phoneChanges)
+        let rawChanges = try await c.call(Channels.changesList, [.string(sw.id)])
+        let changes = PhoneChanges.from(rawChanges)
+        let note = try XCTUnwrap(changes.files.first { $0.path.hasSuffix("nekko-itest-note.txt") }, "changes: \(rawChanges.serialized())")
+        XCTAssertTrue(note.added)
+        XCTAssertEqual(note.linesAdded, 2)
+        XCTAssertEqual(note.hunks.first?.lines.map(\.text), ["first line", "written by the agent"])
+        XCTAssertFalse(rawChanges.serialized().contains("\"original\""), "the phone never gets whole files")
+        XCTAssertLessThanOrEqual(note.path.split(separator: "/").count, 3, "the path is cut to its last parts")
+        do {
+            _ = try await c.call("changes:accept", [.string(sw.id), .string("nekko-itest-note.txt")])
+            XCTFail("a phone accepted a change")
+        } catch {
+            XCTAssertTrue("\(error)".contains("Not allowed from a paired phone"), "\(error)")
+        }
+        print("itest: the phone read \(changes.files.count) changed file(s), and accepting from it was refused")
+
         // 3. Skills: names only reach the phone, and a skill turn is expanded on the computer.
         let rawSkills = try await c.call(Channels.skillsRunnable)
         let skills = SkillSummary.list(rawSkills)

@@ -23,8 +23,9 @@ struct NewChatView: View {
         Form {
             Section {
                 TextField("What should your computer do?", text: $text, axis: .vertical).lineLimit(3...10)
+                    .accessibilityIdentifier("newChat.prompt")
             }
-            Section("Model") {
+            Section {
                 Button { showModels = true } label: {
                     HStack {
                         Text(model.map { modelName($0) } ?? "Choose a model").foregroundStyle(model == nil ? palette.inkFaint : palette.ink)
@@ -32,24 +33,38 @@ struct NewChatView: View {
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(palette.inkFaint)
                     }
                 }
-            }
-            Section("Project") {
-                Picker("Folder", selection: $folder) {
-                    Text("General").tag(String?.none)
-                    ForEach(store.workspaces) { w in Text(w.name).tag(Optional(w.id)) }
-                }
+            } header: {
+                SectionHeader("Model")
             }
             Section {
-                Picker("Tools", selection: $mode) {
-                    Text("Computer default (\(modeName(store.pcSettings.effectiveMode)))").tag(PcSettings.ChatMode?.none)
+                Picker(selection: $folder) {
+                    Text("General").tag(String?.none)
+                    ForEach(store.workspaces) { w in Text(w.name).tag(Optional(w.id)) }
+                } label: { Text("Folder").foregroundStyle(palette.ink) }
+                .pickerStyle(.navigationLink)
+                // The selected value is drawn in the secondary style: inkSoft
+                // (about 7:1) rather than the system grey, which sat just under 4.5:1.
+                .foregroundStyle(palette.ink, palette.inkSoft)
+            } header: {
+                SectionHeader("Project")
+            }
+            Section {
+                Picker(selection: $mode) {
+                    Text("Computer default").tag(PcSettings.ChatMode?.none)
                     ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in Text(modeName(m)).tag(Optional(m)) }
-                }
+                } label: { Text("Tools").foregroundStyle(palette.ink) }
+                .pickerStyle(.navigationLink)
+                // The selected value is drawn in the secondary style: inkSoft
+                // (about 7:1) rather than the system grey, which sat just under 4.5:1.
+                .foregroundStyle(palette.ink, palette.inkSoft)
             } footer: {
-                Text("How the agent asks before it runs tools on \(store.active?.name ?? "your computer").")
+                Text("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Its default is \(modeName(store.pcSettings.effectiveMode)).")
+                    .foregroundStyle(palette.inkSoft)
             }
             if let error { Section { Text(error).foregroundStyle(palette.danger) } }
         }
         .navigationTitle("New chat")
+        .keyboardDoneButton()
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Start", action: start).disabled(busy || model == nil || store.conn != .online)
@@ -62,8 +77,17 @@ struct NewChatView: View {
             }
         }
         .onAppear(perform: pickDefault)
+        .onAppear(perform: takeShared)
+        .onChange(of: app.sharedText) { _, _ in takeShared() }
         // The computer's defaults may arrive after this screen opened.
         .onChange(of: store.defaults) { _, _ in pickDefault() }
+    }
+
+    /// Text shared from another app becomes the first message, still editable.
+    private func takeShared() {
+        guard let shared = app.sharedText else { return }
+        text = shared
+        app.sharedText = nil
     }
 
     private func modelName(_ m: (String, String)) -> String {
@@ -93,13 +117,11 @@ struct NewChatView: View {
         Task {
             do {
                 let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: mode)
-                opened(id)
+                // The chat's own model sends the first message, so a failure shows
+                // there and the text comes back in its composer.
                 let first = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !first.isEmpty {
-                    let chat = ChatModel(sessionId: id, store: store)
-                    await chat.reload()
-                    try? await chat.send(first)
-                }
+                if !first.isEmpty { app.firstMessages[id] = first }
+                opened(id)
             } catch {
                 self.error = error.localizedDescription
             }
@@ -173,5 +195,6 @@ struct ModelPicker: View {
                 if selected.0 == p && selected.1 == m { Image(systemName: "checkmark").foregroundStyle(palette.accent) }
             }
         }
+        .accessibilityAddTraits(selected.0 == p && selected.1 == m ? .isSelected : [])
     }
 }

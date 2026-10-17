@@ -94,10 +94,14 @@ async fn add_folder(ctx: &Ctx) -> Result<Value, String> {
     }
 }
 
-/// The native folder picker, or `None` without one. One function on purpose:
-/// it asks Electron main through the agent browser bridge for now, and moves
-/// to the daemon's own dialogs when those land.
+/// The native folder picker, or `None` without one. The daemon draws it
+/// itself, owned by the app window (native.rs); an app that launched the
+/// daemon without `native` (an older desktop main) still answers the bridge's
+/// `pickFolder`.
 pub async fn pick_folder(ctx: &Ctx) -> Result<Option<String>, String> {
+    if let Some(native) = &ctx.native {
+        return native.pick_folder(ctx, &Value::Null).await;
+    }
     let Some(bridge) = &ctx.app.bridge else { return Ok(None) };
     // No time limit: the user may take a while to choose.
     let res = reqwest::Client::builder()

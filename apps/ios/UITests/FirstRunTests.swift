@@ -11,6 +11,10 @@ final class FirstRunTests: XCTestCase {
         XCTAssertTrue(pair.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Connect over Tailscale (recommended)"].exists)
         attach(app, "Welcome")
+        // At first launch the guide's last link sits under the pinned, translucent
+        // Pair bar, so the audit measures it against the bar. The same guide is
+        // audited fully visible on the pairing screen below.
+        auditAccessibility(app, "welcome", ignoring: ["Get Tailscale for iPhone"])
         pair.tap()
         let field = app.input("nekko-agent-pair:?relay=…")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -19,6 +23,7 @@ final class FirstRunTests: XCTestCase {
         app.buttons["Pair"].tap()
         XCTAssertTrue(app.staticTexts["That isn’t a Nekko Agent pairing link."].waitForExistence(timeout: 5))
         attach(app, "Pair")
+        auditAccessibility(app, "pair")
     }
 
     /// A plain ws:// relay on the open internet is refused before anything is dialed.

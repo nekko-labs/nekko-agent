@@ -48,6 +48,10 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
+            <!-- Long-press the launcher icon: New chat (res/xml/shortcuts.xml). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -73,11 +77,38 @@
             </intent-filter>
         </activity>
 
+        <!-- Composer → + → Take photo: the camera app writes one shot into the app's cache
+             (camera_photos.xml); it is read into memory and deleted at once. No CAMERA permission. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/camera_photos" />
+        </provider>
+
         <!-- remoteMessaging: carries the conversation between the user's computer and this
              phone; no runtime permission and, unlike dataSync, no daily time limit. -->
         <service
             android:name=".connection.KeepAliveService"
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
+
+        <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
+        <receiver
+            android:name=".connection.DenyReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".widget.StatusWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/status_widget_info" />
+        </receiver>
     </application>
 </manifest>

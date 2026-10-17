@@ -28,6 +28,18 @@ export interface BrowserDriver {
 }
 export type BrowserDriverFactory = () => Promise<BrowserDriver>;
 
+/** The dialogs the daemon may ask main to draw (`{ tool: 'dialog', kind }`). */
+export const SHELL_DIALOGS = new Set(['openFiles', 'pickFolder', 'saveFile', 'message']);
+export type ShellDialog = 'openFiles' | 'pickFolder' | 'saveFile' | 'message';
+
+/** What the window shell answers for the engine daemon (see `shellBridge` in ipc.ts). */
+export interface ShellBridge {
+  /** The app window's native handle as a decimal string (HWND, X11 id, NSView pointer), or null. */
+  nativeWindow(): string | null;
+  dialog(kind: ShellDialog, options: Record<string, unknown>): Promise<unknown>;
+  quitForUpdate(): void;
+}
+
 /** Connect playwright-core to this chat's windows only, with no debugging port. */
 export const playwrightDriver: BrowserDriverFactory = async () => {
   // A plain require: the main bundle is CommonJS and playwright-core stays an
@@ -75,8 +87,16 @@ interface ChatBrowser { tabs: Tab[]; active: number; driver: BrowserDriver; last
 /** Private tool bridge. Only the backend receives its capability token, never page content. */
 export async function startAgentBrowser(options: {
   driver?: BrowserDriverFactory;
-  /** The engine daemon's `workspace:add` asks for the native folder picker here (`{ tool: 'pickFolder' }`). */
+  /** An older daemon's `workspace:add` asks for the native folder picker here (`{ tool: 'pickFolder' }`). */
   pickFolder?: () => Promise<string | null>;
+  /**
+   * What the engine daemon asks of the window shell now that it answers the
+   * native channels itself (crates/nekkod/src/native.rs): the app window's
+   * native handle to own its dialogs (`nativeWindow`), a dialog drawn here
+   * where the daemon cannot draw one (`dialog`: macOS), and quitting so a
+   * downloaded update can install (`quitForUpdate`).
+   */
+  shell?: ShellBridge;
 } = {}): Promise<{ url: string; token: string; close: () => void }> {
   const createDriver = options.driver ?? playwrightDriver;
   const token = randomBytes(32).toString('hex');
@@ -258,6 +278,13 @@ export async function startAgentBrowser(options: {
       if (input.tool === 'pickFolder') {
         if (!options.pickFolder) throw new Error('No folder picker here.');
         reply(200, { path: await options.pickFolder() }); return;
+      }
+      if (input.tool === 'nativeWindow' || input.tool === 'dialog' || input.tool === 'quitForUpdate') {
+        if (!options.shell) throw new Error('No window shell here.');
+        if (input.tool === 'nativeWindow') { reply(200, { handle: options.shell.nativeWindow() }); return; }
+        if (input.tool === 'quitForUpdate') { options.shell.quitForUpdate(); reply(200, { ok: true }); return; }
+        if (!SHELL_DIALOGS.has(input.kind)) throw new Error('Unknown dialog.');
+        reply(200, { result: await options.shell.dialog(input.kind, input.options ?? {}) }); return;
       }
       const { sessionId } = input;
       if (typeof sessionId !== 'string' || !sessionId || sessionId.length > 200) throw new Error(input.tool === 'capture' ? 'Invalid capture session' : 'Invalid browser request.');

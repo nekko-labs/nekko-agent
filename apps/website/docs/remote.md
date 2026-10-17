@@ -72,7 +72,13 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > on the phone the next time the list refreshes: when a reply finishes, when you pull down, or when
 > you come back to the app.
 >
-> **Dictation** (Android): tap the microphone in a chat's message box, speak, and tap again (or stop
+> **Photos and dictation** (Android): the **+** on the left of a chat's message box opens **Dictate**,
+> **Image from files** (the phone's photo picker; Nekko only sees the photos you pick) and **Take
+> photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails you
+> can remove; they are scaled to 1600 px and sent end-to-end encrypted to the computer, which hands
+> them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
+>
+> **Dictation** (Android): tap **+ → Dictate**, speak, and tap ■ (or stop
 > at 30 seconds). The words go into the message box for you to check and send; nothing is sent by
 > itself. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
 > end-to-end encrypted, the audio never reaches anyone else); install and switch it on there under
@@ -155,7 +161,7 @@ changes how the computer itself is set up:
   approvals and the agent's questions; pick a model from the computer's providers and a folder from
   its list; voice status and transcription; and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
-  revoking, rotating the secret), terminals, writing files, adding or removing folders, installing
+  revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes, adding or removing folders, installing
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
   servers and hooks. Everything not on the allowed list is refused too, with an error that starts
   *Not allowed from a paired phone*.
@@ -165,6 +171,11 @@ changes how the computer itself is set up:
 - **Settings a phone can read:** only the theme and accents, the default and starred models, and
   the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
   instructions never leave the computer this way; provider lists arrive as name and type only.
+- **A chat's changes, read only, only if you allow it:** with *Let phones see changes* on (off
+  unless you turn it on, in Remote access on the computer), a phone can see a diff of the files the
+  agent changed in a chat. Your computer works out the diff and sends only that: short paths, a
+  capped number of lines, and files that may hold secrets (`.env`, keys, `.ssh`, `.aws`) counted but
+  never shown. A phone still can't accept or revert changes or read any other file.
 - **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer.
@@ -187,6 +198,8 @@ and it's why relayed local-model use is inherently zero-data-retention for conte
 
 ## Choosing a relay
 
+How the Android and iOS apps each handle the connection (URL rules, pairing, reconnects, push, background) is compared in [phone-connection.md](https://github.com/nekko-labs/nekko-agent/blob/main/docs/phone-connection.md).
+
 ### Managed relay (default): `wss://nekko-agent-relay.fly.dev`
 
 Zero setup; free during beta with per-connection rate limits. When Nekko Agent Cloud launches, the
@@ -202,15 +215,36 @@ Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts
 tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
 network you already own.
 
+**In the desktop app:** Settings → Remote access → **Relay on this computer** → **Start relay**.
+The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
+bundled relay bound to that address only, and shows the URL phones use. That is the MagicDNS name
+(for example `ws://gomi.tailfd6474.ts.net:4400`) when the Tailscale CLI reports one, else the
+`100.x.y.z` address. **Use this relay** fills it in; then Enable, **Pair a device**, and scan the QR
+from the phone with Tailscale switched on.
+
+- **It stays on:** once started it comes back with the app.
+- **It waits for Tailscale:** with Tailscale off it binds nowhere and waits, and starts when
+  Tailscale connects.
+- **It follows address changes:** it moves when the tailnet address changes.
+- **It says why it isn't running:** for example Tailscale off, or the port (4400) already in use.
+
+It runs as its own process (`out/main/relay.js`, under the app's own runtime) and exits with the
+app. It has no push keys, so phones get no "finished" notifications through it; the in-app
+connection and Live Activities while the app is open work as usual.
+
+**Headless or without the desktop app**, the scripts do the same by hand:
+
 ```bash
 npm run relay:tailscale        # Windows (PowerShell); or scripts/private-relay.sh on macOS/Linux
 ```
 
-The script prints the URL to paste into **Settings → Remote access** (for example
-`ws://gomi.tailfd6474.ts.net:4400`; the MagicDNS name resolves on any device in the tailnet, the
-`100.x.y.z` address works too). Enable, **Pair a device**, scan the QR from the phone with
-Tailscale switched on. The relay only listens on the Tailscale interface, so
-`NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` is safe here; never use that flag on a public bind.
+The script prints the URL to paste into **Settings → Remote access**. Either way the relay only
+listens on the Tailscale interface, so agent enrollment without an access token
+(`NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` in the script) is safe here; never use that flag on a public
+bind.
+
+The computer refuses a plain `ws://` relay on the open internet, whether you press Enable or start
+a headless agent with `NEKKO_RELAY_URL`. It uses the same rule as the phones, below.
 
 Plain `ws://` is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
 the app's own end-to-end encryption sits on top. The Expo iOS app ships with Expo's default App

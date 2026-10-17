@@ -52,8 +52,8 @@ class RelayIntegrationTest {
 
         private fun freePort() = ServerSocket(0).use { it.localPort }
 
-        private fun node(vararg args: String, env: Map<String, String> = emptyMap()): Process =
-            ProcessBuilder("node", *args).directory(root).apply {
+        private fun node(vararg args: String, env: Map<String, String> = emptyMap(), dir: File = root): Process =
+            ProcessBuilder("node", *args.map { if (it.endsWith(".js") || it.endsWith(".mjs")) File(root, it).absolutePath else it }.toTypedArray()).directory(dir).apply {
                 environment().putAll(env)
                 redirectErrorStream(true)
             }.start().also { procs += it }
@@ -76,12 +76,12 @@ class RelayIntegrationTest {
             val data = Files.createTempDirectory("nekko-android-itest-").toFile()
             File(data, "settings.json").writeText("""
                 {"providers":[{"id":"fake","kind":"openai-compat","label":"Fake","baseUrl":"http://127.0.0.1:$modelPort/v1","apiKey":"sk-should-never-reach-the-phone","enabled":true}],
-                 "defaultProviderId":"fake","defaultModelId":"fake-model"}
+                 "defaultProviderId":"fake","defaultModelId":"fake-model","phoneChanges":true}
             """.trimIndent())
             val agent = node("apps/server/dist/index.js", env = mapOf(
                 "NEKKO_RELAY_URL" to relayUrl, "NEKKO_ROOM" to room, "NEKKO_PAIR_KEY" to key,
                 "NEKKO_DATA_DIR" to data.absolutePath, "NEKKO_AGENT_LOOP" to "ts",
-            ))
+            ), dir = data) // so files the fake model writes land in the data dir, not the repo
             Thread {
                 agent.inputStream.bufferedReader().forEachLine { line ->
                     Regex("pairing code \\(10 min\\): ([A-Z2-9]+)").find(line)?.let { pairCode = it.groupValues[1] }
@@ -169,6 +169,22 @@ class RelayIntegrationTest {
         assertEquals(a.call.id, tool.id)
         assertTrue(PendingInput.map(c.call(Channels.CHAT_PENDING))[s2.id]?.approval == null)
         println("itest: approval for `${a.call.input["command"]}` (${a.severity}) denied from the phone; tool ${tool.status}")
+
+        // 2b. The agent writes a file; the phone reads the change, read only.
+        val sw = Session.from(c.call(Channels.SESSION_CREATE))!!
+        c.callWithTimeout(60_000, Channels.CHAT_SEND, sendOptions(sw.id, "fake", "fake-model", "write a note"))
+        assertTrue(PcSettings.from(c.call(Channels.SETTINGS_GET)).phoneChanges)
+        val rawChanges = c.call(Channels.CHANGES_LIST, JsonPrimitive(sw.id))
+        val changes = PhoneChanges.from(rawChanges)
+        val note = changes.files.firstOrNull { it.path.endsWith("nekko-itest-note.txt") }
+        assertTrue("changes: $rawChanges", note != null)
+        assertTrue(note!!.added)
+        assertEquals(2, note.linesAdded)
+        assertEquals(listOf("first line", "written by the agent"), note.hunks.first().lines.map { it.text })
+        assertFalse("the phone never gets whole files", rawChanges.toString().contains("\"original\""))
+        val refused = runCatching { c.call("changes:accept", JsonPrimitive(sw.id), JsonPrimitive("nekko-itest-note.txt")) }.exceptionOrNull()
+        assertTrue("accepting from a phone is refused: $refused", refused?.message?.contains("Not allowed from a paired phone") == true)
+        println("itest: the phone read ${changes.files.size} changed file(s), and accepting from it was refused")
 
         // 3. The computer's skills: names only reach the phone, and a skill turn is expanded there.
         val rawSkills = c.call(Channels.SKILLS_RUNNABLE)

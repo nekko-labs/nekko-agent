@@ -94,6 +94,15 @@ class ConnectionTest {
     }
 
     @Test
+    fun `only an approval with its call offers deny`() {
+        assertTrue(EventNotice.of("s1", PhoneEvent.APPROVAL, "Fix", "Mac", hideContent = true, callId = "call_1").canDeny)
+        assertFalse(EventNotice.of("s1", PhoneEvent.APPROVAL, "Fix", "Mac", hideContent = false).canDeny)
+        val question = EventNotice.of("s1", PhoneEvent.NEEDS_INPUT, "Fix", "Mac", hideContent = false, callId = "call_1")
+        assertFalse(question.canDeny)
+        assertEquals(null, question.callId)
+    }
+
+    @Test
     fun `with the app lock on a notice does not name the chat`() {
         val n = EventNotice.of("s1", PhoneEvent.APPROVAL, "Rotate prod keys", "Mac", hideContent = true)
         assertEquals("Open Nekko to see it.", n.text)

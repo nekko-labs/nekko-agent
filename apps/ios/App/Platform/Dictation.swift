@@ -4,6 +4,7 @@ import NekkoKit
 import NekkoProtocol
 import Observation
 import Speech
+import SwiftUI
 
 /// Dictation into the message box; the text is inserted, never sent. Records
 /// a mono 16 kHz 16-bit WAV (at most 30 s, so it fits one relay frame), then
@@ -16,8 +17,18 @@ final class Dictation {
     static let maxSeconds: TimeInterval = 30
 
     private(set) var recording = false
+    /// Recording stopped, the words are being worked out (on the computer or the phone).
+    private(set) var transcribing = false
     private(set) var status = ""
     private(set) var error: String?
+    /// The words, once per dictation: the composer inserts them. Set whether the
+    /// user tapped stop or the 30-second limit ended the recording.
+    private(set) var result: Words?
+
+    struct Words: Equatable {
+        let id = UUID()
+        let text: String
+    }
     var available: Bool { AVAudioApplication.shared.recordPermission != .denied }
 
     private var recorder: AVAudioRecorder?
@@ -43,25 +54,43 @@ final class Dictation {
             url = file
             recording = true
             status = "Listening… tap stop when you’re done"
+            AccessibilityNotification.Announcement("Listening").post()
+            // The recorder stops itself at the limit; finish the dictation then
+            // too, instead of leaving "Listening…" up with nothing recording.
+            timer?.cancel()
+            timer = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(Self.maxSeconds * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                await self?.finish(store: store)
+            }
         } catch {
             self.error = error.localizedDescription
         }
     }
 
-    /// Stop and transcribe. Returns the text, or nil (with `error` set).
-    func stop(store: ComputersStore) async -> String? {
-        guard let recorder, let url else { return nil }
+    /// Stop and transcribe; the text arrives as `result` (or `error` is set).
+    func finish(store: ComputersStore) async {
+        guard let recorder, let url else { return }
+        timer?.cancel()
+        timer = nil
         recorder.stop()
         self.recorder = nil
         recording = false
+        transcribing = true
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         defer {
             try? FileManager.default.removeItem(at: url)
             self.url = nil
+            transcribing = false
             status = ""
         }
-        if await computerHasWhisper(store), let text = await transcribeOnComputer(url, store) { return text }
-        return await transcribeOnPhone(url)
+        var text: String?
+        if await computerHasWhisper(store) { text = await transcribeOnComputer(url, store) }
+        if text == nil { text = await transcribeOnPhone(url) }
+        if let text {
+            result = Words(text: text)
+            AccessibilityNotification.Announcement("Dictation added to your message").post()
+        }
     }
 
     private func computerHasWhisper(_ store: ComputersStore) async -> Bool {

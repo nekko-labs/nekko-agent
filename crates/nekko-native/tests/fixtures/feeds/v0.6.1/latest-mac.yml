@@ -1,0 +1,11 @@
+version: 0.6.1
+files:
+  - url: Kotrain-0.6.1-arm64.zip
+    sha512: gfK7WYXJ3VnBqTXkUXd3jnxp/uvAlZjXkXn0Wqh3nj4axGLH4YbUydgDqDNQZAlFmry3He8fG5D8aqLG1lojag==
+    size: 122341818
+  - url: Kotrain-0.6.1-arm64.dmg
+    sha512: Thd+uMN4s23IeRB+BUt5FXwy2EXk6wKj4BLqcWtMPKzO+rI/ctZCBsnn7+cWke0EutCI2mJ0KJJsIWn8ZmOp+w==
+    size: 123309472
+path: Kotrain-0.6.1-arm64.zip
+sha512: gfK7WYXJ3VnBqTXkUXd3jnxp/uvAlZjXkXn0Wqh3nj4axGLH4YbUydgDqDNQZAlFmry3He8fG5D8aqLG1lojag==
+releaseDate: '2026-08-28T07:40:01.841Z'

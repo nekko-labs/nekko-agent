@@ -1,6 +1,16 @@
 package com.nekko.android.ui.screens
 
 import com.nekko.android.voice.DictationController
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.net.Uri
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.core.content.FileProvider
+import com.nekko.android.chat.PhotoTray
+import com.nekko.android.lock.LocalAppLock
+import com.nekko.android.ui.chat.AttachUi
+import java.io.File
 import com.nekko.android.ui.chat.MicUi
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
@@ -33,6 +43,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Difference
+import com.nekko.android.ui.chat.ChangesSheet
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -68,11 +80,15 @@ import java.util.Locale
 fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boolean = false, onBack: () -> Unit) {
     val chat by vm.ui.collectAsStateWithLifecycle()
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
+    val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
+    val insert by vm.insert.collectAsStateWithLifecycle()
+    var showChanges by remember { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val p = Nekko.palette
     val mic = rememberMic(vm.dictation.takeIf { dictationOn })
+    val attach = rememberAttach(vm)
     val list = rememberLazyListState()
 
     // Stable keys: a provider that reuses a call id across turns gets a suffix.
@@ -106,11 +122,26 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
         if (nearBottom || info.totalItemsCount == 0) list.scrollToItem(lastIndex)
     }
 
+    if (showChanges && changesAllowed) {
+        val changes by vm.changes.collectAsStateWithLifecycle()
+        ChangesSheet(
+            changes.changes, changes.error, onRefresh = vm::loadChanges, onDismiss = { showChanges = false },
+            onAsk = { quote -> vm.quote(quote); showChanges = false },
+        )
+    }
+
     Scaffold(
         containerColor = p.paper,
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                actions = {
+                    if (changesAllowed) {
+                        IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
+                            Icon(Icons.Filled.Difference, contentDescription = "Changes")
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -209,11 +240,14 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                 running = chat.running,
                 blocked = chat.blocked,
                 queued = chat.queued,
-                onSend = vm::send,
+                onSend = { text, skill, images -> vm.send(text, skill, images) },
                 onStop = vm::stop,
                 modifier = Modifier.navigationBarsPadding(),
                 mic = mic,
                 skills = chat.skills,
+                insert = insert,
+                onInserted = vm::inserted,
+                attach = attach,
             )
         }
     }
@@ -268,3 +302,66 @@ private fun rememberMic(d: DictationController?): MicUi? {
         }
     }
 }
+
+/**
+ * The **+** menu's photos: the system photo picker (no storage permission) and
+ * the phone's camera app writing one shot into the cache through a
+ * FileProvider (no CAMERA permission). The shot is deleted once it is read;
+ * photos only ever live in memory. Both trips out of the app are announced to
+ * the app lock, so coming back doesn't ask to unlock.
+ */
+@Composable
+private fun rememberAttach(vm: ChatViewModel): AttachUi {
+    val context = LocalContext.current
+    val lock = LocalAppLock.current
+    val state by vm.photos.state.collectAsStateWithLifecycle()
+    // Where the camera app was asked to write; survives the activity being recreated meanwhile.
+    var shot by rememberSaveable { mutableStateOf<String?>(null) }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PhotoTray.MAX_PHOTOS)) { uris ->
+        lock?.returned()
+        vm.addPhotos(context.contentResolver, uris)
+    }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        lock?.returned()
+        val path = shot ?: return@rememberLauncherForActivityResult
+        shot = null
+        val file = File(path)
+        if (ok && file.length() > 0) {
+            vm.addPhotos(context.contentResolver, listOf(cameraUri(context, file))) { file.delete() }
+        } else {
+            file.delete()
+        }
+    }
+    val hasCamera = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
+    return AttachUi(
+        state = state,
+        onPickFiles = {
+            lock?.expectReturn()
+            pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        },
+        onTakePhoto = if (!hasCamera) null else {
+            {
+                val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+                dir.listFiles()?.forEach { it.delete() } // a shot left by an interrupted trip
+                val file = File(dir, "shot-${System.currentTimeMillis()}.jpg")
+                shot = file.path
+                lock?.expectReturn()
+                try {
+                    camera.launch(cameraUri(context, file))
+                } catch (_: ActivityNotFoundException) {
+                    lock?.returned()
+                    shot = null
+                    vm.photos.begin(1)
+                    vm.photos.failed("No camera app on this phone.")
+                }
+            }
+        },
+        onRemove = vm.photos::remove,
+        take = vm.photos::take,
+        restore = vm.photos::restore,
+        clearError = vm.photos::clearError,
+    )
+}
+
+private fun cameraUri(context: Context, file: File): Uri =
+    FileProvider.getUriForFile(context, "${context.packageName}.photos", file)

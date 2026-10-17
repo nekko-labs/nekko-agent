@@ -1,0 +1,127 @@
+[
+ {
+  "url": "wss://nekko-agent-relay.fly.dev",
+  "route": "internet",
+  "problem": null
+ },
+ {
+  "url": "ws://my-mac.tail1234.ts.net:4400",
+  "route": "tailscale",
+  "problem": null
+ },
+ {
+  "url": "ws://100.101.102.103:4400",
+  "route": "tailscale",
+  "problem": null
+ },
+ {
+  "url": "ws://100.128.0.1",
+  "route": "internet",
+  "problem": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+ },
+ {
+  "url": "ws://[fd7a:115c:a1e0::1]:4400",
+  "route": "tailscale",
+  "problem": null
+ },
+ {
+  "url": "ws://192.168.1.20:4400",
+  "route": "lan",
+  "problem": null
+ },
+ {
+  "url": "ws://10.0.0.5",
+  "route": "lan",
+  "problem": null
+ },
+ {
+  "url": "ws://172.16.0.1",
+  "route": "lan",
+  "problem": null
+ },
+ {
+  "url": "ws://172.32.0.1",
+  "route": "internet",
+  "problem": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+ },
+ {
+  "url": "ws://169.254.3.4",
+  "route": "lan",
+  "problem": null
+ },
+ {
+  "url": "ws://studio.local:4400",
+  "route": "lan",
+  "problem": null
+ },
+ {
+  "url": "ws://[fe80::1]:4400",
+  "route": "lan",
+  "problem": null
+ },
+ {
+  "url": "ws://localhost:4400",
+  "route": "loopback",
+  "problem": null
+ },
+ {
+  "url": "ws://127.0.0.1:4400",
+  "route": "loopback",
+  "problem": null
+ },
+ {
+  "url": "ws://[::1]:4400",
+  "route": "loopback",
+  "problem": null
+ },
+ {
+  "url": "ws://ts.net.example.com",
+  "route": "internet",
+  "problem": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+ },
+ {
+  "url": "ws://relay.example.com",
+  "route": "internet",
+  "problem": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+ },
+ {
+  "url": "WS://8.8.8.8:4400",
+  "route": "internet",
+  "problem": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+ },
+ {
+  "url": "wss://u:p@Relay.Example.com:443/relay?x=1",
+  "route": "internet",
+  "problem": null
+ },
+ {
+  "url": "ws://host/path@not-userinfo",
+  "route": "internet",
+  "problem": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+ },
+ {
+  "url": "  ws://h  ",
+  "route": "internet",
+  "problem": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+ },
+ {
+  "url": "",
+  "route": "internet",
+  "problem": "A relay address starts with wss:// (or ws:// on your Tailscale network or LAN)."
+ },
+ {
+  "url": "https://relay.example.com",
+  "route": "internet",
+  "problem": "A relay address starts with wss:// (or ws:// on your Tailscale network or LAN)."
+ },
+ {
+  "url": "ws://",
+  "route": "internet",
+  "problem": "A relay address starts with wss:// (or ws:// on your Tailscale network or LAN)."
+ },
+ {
+  "url": "ws://y",
+  "route": "internet",
+  "problem": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+ }
+]

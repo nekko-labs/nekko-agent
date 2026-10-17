@@ -1,5 +1,9 @@
 package com.nekko.android.data
 
+import com.nekko.protocol.ConnectionLog
+import com.nekko.protocol.Tailnet
+import com.nekko.protocol.RelayHint
+import com.nekko.protocol.DenyReason
 import com.nekko.protocol.Activity
 import com.nekko.protocol.ActivityTracker
 import com.nekko.protocol.AgentEvent
@@ -86,6 +90,23 @@ class ComputersRepository(
 ) {
     private val _state = MutableStateFlow(ComputersState())
     val state: StateFlow<ComputersState> = _state.asStateFlow()
+
+    private val log = ConnectionLog()
+    private var loggedComputer: String? = null
+    private val _connectionLog = MutableStateFlow<List<ConnectionLog.Entry>>(emptyList())
+    /** The active computer's connection history (memory only, content-free), for Settings → Connection. */
+    val connectionLog: StateFlow<List<ConnectionLog.Entry>> = _connectionLog.asStateFlow()
+
+    /** The connection log as plain text for a bug report: times, states and the relay's host only. */
+    fun connectionLogText(): String {
+        val url = _state.value.active?.relayUrl.orEmpty()
+        return log.text(RelayHint.host(url), Tailnet.isTailnetRelay(url))
+    }
+
+    private fun logStatus(state: RelayState, detail: String? = null, denied: DenyReason? = null) {
+        log.record(state, detail, denied)
+        _connectionLog.value = log.entries
+    }
 
     /** The computer's theme alone, so the app's root only recomposes when it changes. */
     val appearance: StateFlow<Appearance?> = _state.map { it.appearance }.distinctUntilChanged()
@@ -180,6 +201,11 @@ class ComputersRepository(
         val computer = _state.value.computers.firstOrNull { it.id == id } ?: return@withLock
         val secret = StoredJson.decodeSecret(store.get(secretKey(id))) ?: return@withLock
         store.set(ACTIVE_KEY, id)
+        if (loggedComputer != id) {
+            log.clear()
+            loggedComputer = id
+        }
+        logStatus(RelayState.CONNECTING)
         _state.update {
             it.copy(
                 activeId = id, conn = RelayState.CONNECTING, denied = null, connDetail = null,
@@ -206,6 +232,7 @@ class ComputersRepository(
                 c.status.collect { s ->
                     if (client !== c) return@collect
                     _state.update { it.copy(conn = s.state, connDetail = s.detail, denied = s.denied ?: it.denied) }
+                    logStatus(s.state, s.detail, s.denied)
                     if (s.state == RelayState.ONLINE) scope.launch { refresh() }
                 }
             }

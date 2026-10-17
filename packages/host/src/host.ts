@@ -252,6 +252,7 @@ export interface Host {
   testProviderConfig(cfg: ProviderConfig): Promise<{ ok: boolean; message: string }>;
 
   listModels(providerId: string): Promise<ModelInfo[]>;
+  listModelsStatus(providerId: string): Promise<{ models: ModelInfo[]; error?: string }>;
   pullModel(providerId: string, model: string): Promise<{ ok: boolean; message: string }>;
   loadModel(providerId: string, model: string): Promise<{ ok: boolean; message?: string }>;
   unloadModel(providerId: string, model: string): Promise<{ ok: boolean; message?: string }>;
@@ -432,7 +433,7 @@ export interface Host {
   specPath(sessionId: string): string | null;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
   ): Session | null;
   truncateSession(id: string, messageId: string): Session | null;
   clearSessions(scope: 'today' | 'month' | 'all'): number;
@@ -917,14 +918,17 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
       }
     },
 
-    listModels: async (providerId) => {
+    listModels: async (providerId) => (await host.listModelsStatus(providerId)).models,
+
+    listModelsStatus: async (providerId) => {
       const p = findProvider(providerId);
-      if (!p || p.enabled === false) return [];
+      if (!p || p.enabled === false) return { models: [] };
+
       try {
         const resolved = await resolveSubscriptionProvider(p);
-        return await createProvider(resolved).listModels();
-      } catch {
-        return [];
+        return { models: await createProvider(resolved).listModels() };
+      } catch (e) {
+        return { models: [], error: (e as Error).message };
       }
     },
     pullModel: async (providerId, model) => {

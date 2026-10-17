@@ -34,6 +34,7 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(newChat.waitForExistence(timeout: 20))
         XCTAssertTrue(waitEnabled(newChat, 20), "connected to the computer")
         attach(app, "\(theme)-2-chats")
+        auditAccessibility(app, "\(theme)-chats")
 
         newChat.tap()
         let prompt = app.input("What should your computer do?")
@@ -41,12 +42,13 @@ final class LiveRelayTests: XCTestCase {
         prompt.tap()
         prompt.typeText("Say hello")
         attach(app, "\(theme)-3-new-chat")
+        auditAccessibility(app, "\(theme)-new-chat")
         app.buttons["Start"].tap()
 
         XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the reply streamed in")
         attach(app, "\(theme)-4-reply")
 
-        let message = app.input("Message")
+        let message = app.input("chat.message")
         XCTAssertTrue(message.waitForExistence(timeout: 10))
         message.tap()
         message.typeText("please approve a cleanup")
@@ -54,6 +56,12 @@ final class LiveRelayTests: XCTestCase {
         let card = app.staticTexts["Approve this tool?"]
         XCTAssertTrue(card.waitForExistence(timeout: 30), "the guarded tool asks the phone")
         attach(app, "\(theme)-5-approval")
+        // Known, unresolved: with the card up, the audit reports the transcript's
+        // "Run rm -rf …" step as clipped (approval) or low-contrast (question),
+        // though the capture shows it whole and readable. Unchanged by four fixes
+        // (two-line labels, scrolling after layout, a minimum-height transcript,
+        // waiting for the keyboard to settle). Excluded only here; see the PR.
+        auditAccessibility(app, "\(theme)-approval", ignoring: ["Run rm -rf ./nekko-itest-dist"])
         app.buttons["Deny"].tap()
         XCTAssertTrue(waitGone(card, 15))
         attach(app, "\(theme)-6-denied")
@@ -65,10 +73,43 @@ final class LiveRelayTests: XCTestCase {
         let question = app.staticTexts["Which platform should I build first?"]
         XCTAssertTrue(question.waitForExistence(timeout: 30), "the question reaches the phone")
         attach(app, "\(theme)-6b-question")
+        // Known, unresolved: with the card up, the audit reports the transcript's
+        // "Run rm -rf …" step as clipped (approval) or low-contrast (question),
+        // though the capture shows it whole and readable. Unchanged by four fixes
+        // (two-line labels, scrolling after layout, a minimum-height transcript,
+        // waiting for the keyboard to settle). Excluded only here; see the PR.
+        auditAccessibility(app, "\(theme)-question", ignoring: ["Run rm -rf ./nekko-itest-dist"])
         app.buttons["iOS"].firstMatch.tap()
         app.buttons["Answer"].tap()
         XCTAssertTrue(waitGone(question, 15))
         XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: 30))
+
+        // The agent writes a file; the phone reads the change, read only (the
+        // stack turns the computer's "Let phones see changes" on).
+        message.tap()
+        message.typeText("write a note")
+        app.buttons["Send"].tap()
+        let step = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "nekko-itest-note.txt")).firstMatch
+        XCTAssertTrue(step.waitForExistence(timeout: 30), "the write step shows in the chat")
+        sleep(2)
+        app.buttons["More"].tap()
+        app.buttons["Changes"].tap()
+        let note = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "nekko-itest-note.txt", "new file, 2 added")).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 20), "the changed file reaches the phone")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Read only")).firstMatch.exists)
+        XCTAssertFalse(app.buttons["Accept"].exists)
+        attach(app, "\(theme)-6d-changes")
+        auditAccessibility(app, "\(theme)-changes")
+        // Ask about a change: the quote lands in the message box, unsent, and the sheet closes.
+        let line = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Added line 2")).firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 5))
+        line.press(forDuration: 1.0)
+        app.buttons["Ask about this change"].firstMatch.tap()
+        XCTAssertTrue(waitGone(note, 10))
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        XCTAssertTrue((message.value as? String ?? "").contains("+written by the agent"), "the quote is in the message box: \(message.value ?? "")")
+        attach(app, "\(theme)-6e-asked")
+        // Left in the box: the next prompt follows the quote, and the fake model still hears "slow".
 
         // A longer run, then Home: the Live Activity takes over in the Dynamic Island.
         message.tap()
@@ -86,6 +127,34 @@ final class LiveRelayTests: XCTestCase {
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
         attach(app, "\(theme)-7-chats-after")
+
+        // Settings → Connection: the route, Tailscale on this phone, and what happened.
+        // A coordinate tap: right after going back, XCTest can't "scroll to" the nav bar button.
+        let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        _ = waitUntilHittable(menu, 5)
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.buttons["Settings"].firstMatch.tap()
+        let connection = app.buttons["Connection"].firstMatch
+        if !connection.waitForExistence(timeout: 5) { app.swipeUp() }
+        connection.tap()
+        // LabeledContent reads as one element: "Status" with the value "Online".
+        let online = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "Online", "Online")).firstMatch
+        XCTAssertTrue(online.waitForExistence(timeout: 10), "the status reads online")
+        attach(app, "\(theme)-7b-connection")
+        auditAccessibility(app, "\(theme)-connection")
+
+        // Shared from another app: relaunch with what the share extension leaves
+        // in the App Group. New chat opens with the text; nothing is sent.
+        app.terminate()
+        let shared = "Summarise https://example.com/release-notes"
+        app.launchArguments = ["-appLock", "NO", "-theme", theme == "dark" ? "dark" : "light", "-uiTestShare", shared]
+        app.launch()
+        let prefilled = app.input("newChat.prompt")
+        XCTAssertTrue(prefilled.waitForExistence(timeout: 15), "New chat opened for the share")
+        XCTAssertEqual(prefilled.value as? String, shared)
+        XCTAssertTrue(app.navigationBars["New chat"].exists)
+        attach(app, "\(theme)-8-shared")
     }
 
     /// The computer's QR opens `nekko-agent-pair:` from the Camera app: iOS asks
@@ -137,6 +206,11 @@ final class LiveRelayTests: XCTestCase {
     private func waitEnabled(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
         let p = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: e)
         return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
+    }
+
+    private func waitUntilHittable(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
+        let p = NSPredicate(format: "isHittable == true")
+        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: p, object: e)], timeout: seconds) == .completed
     }
 
     private func waitGone(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {

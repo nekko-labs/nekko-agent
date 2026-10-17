@@ -45,6 +45,12 @@ final class E2ETests: XCTestCase {
         XCTAssertEqual(try E2E.open(key: key, blob: a), v)
     }
 
+    /// Pinned to the computer's golden (crates/nekko-remote/tests/golden/agent.json).
+    func testActivityTagMatchesTheComputers() {
+        XCTAssertEqual(E2E.activityTag("s1"), "7536af24f84b356f893a72f0def58cce")
+        XCTAssertEqual(E2E.activityTag("s2"), "c999df987ff9835d74f4acf7bae0b592")
+    }
+
     func testHex() {
         XCTAssertEqual(E2E.toHex(Data([0, 1, 0xab, 0xff])), "0001abff")
         XCTAssertEqual(E2E.fromHex("0001ABff"), Data([0, 1, 0xab, 0xff]))
@@ -221,6 +227,36 @@ final class WireTests: XCTestCase {
         XCTAssertTrue(pc.voiceEnabled)
         XCTAssertTrue(pc.known)
         XCTAssertEqual(PcSettings.patch(mode: .ask), ["defaultChatMode": "ask"])
+    }
+
+    func testDecodesPhoneChanges() throws {
+        let v = try JSONValue.parse(#"""
+        {"files":[
+          {"path":"…/src/main.ts","status":"modified","added":2,"removed":1,"hunks":[{"oldStart":2,"newStart":2,"lines":[" b","-e","+E","+j"," f"]}]},
+          {"path":"new.txt","status":"added","added":1,"removed":0,"hunks":[]},
+          {"path":".env","status":"modified","added":1,"removed":1,"hunks":[],"hidden":true},
+          {"path":"blob.bin","status":"modified","added":1,"removed":1,"hunks":[],"binary":true},
+          {"path":"big.txt","status":"modified","added":900,"removed":0,"hunks":[],"tooLarge":true,"lines":903},
+          {"status":"added"}
+        ],"omittedFiles":3}
+        """#)
+        let c = PhoneChanges.from(v)
+        XCTAssertEqual(c.files.map(\.path), ["…/src/main.ts", "new.txt", ".env", "blob.bin", "big.txt"])
+        XCTAssertEqual(c.omittedFiles, 3)
+        XCTAssertEqual(c.linesAdded, 905)
+        XCTAssertTrue(c.files[1].added)
+        XCTAssertEqual(c.files.map(\.shown), [.diff, .diff, .hidden, .binary, .tooLarge(lines: 903)])
+        let lines = c.files[0].hunks[0].lines
+        XCTAssertEqual(lines.map(\.kind), [.same, .removed, .added, .added, .same])
+        XCTAssertEqual(lines.map(\.number), [2, 3, 3, 4, 5])
+        XCTAssertEqual(lines[2].text, "E")
+        XCTAssertEqual(PhoneChanges.from(nil), PhoneChanges(files: [], omittedFiles: 0))
+        XCTAssertEqual(PhoneChanges.quote(c.files[0], hunk: c.files[0].hunks[0]), "About `…/src/main.ts` lines 3–4:\n```diff\n-e\n+E\n+j\n```\n\n")
+        let big = PhoneChanges.Hunk(oldStart: 1, newStart: 1, raw: (1...20).map { "+l\($0)" })
+        XCTAssertTrue(PhoneChanges.quote(c.files[0], hunk: big).contains("+l12\n… 8 more\n```"))
+        XCTAssertEqual(PhoneChanges.quote(c.files[1]), "About `new.txt` (new, +1 −0):\n\n")
+        XCTAssertTrue(PcSettings.from(try JSONValue.parse(#"{"phoneChanges":true}"#)).phoneChanges)
+        XCTAssertFalse(PcSettings.from(try JSONValue.parse(#"{"phoneChanges":"yes"}"#)).phoneChanges)
     }
 
     func testDecodesEventsAndPending() throws {

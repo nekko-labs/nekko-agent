@@ -40,7 +40,8 @@
    "language": "en",
    "modelPath": "/m.bin",
    "sensitivity": 50
-  }
+  },
+  "phoneChanges": true
  },
  "skills": [
   {
@@ -1673,6 +1674,315 @@
    ]
   }
  },
+ "changes": {
+  "edits": [
+   {
+    "path": "/Users/me/work/app/src/main.ts",
+    "original": "a\nb\nc\nd\ne\nf\ng\nh\ni\n",
+    "current": "a\nb\nc\nd\nE\nf\ng\nh\ni\nj\n"
+   },
+   {
+    "path": "C:\\code\\app\\new.txt",
+    "original": "",
+    "current": "one\ntwo"
+   },
+   {
+    "path": "/w/same.txt",
+    "original": "z",
+    "current": "z"
+   },
+   {
+    "path": "/w/.env",
+    "original": "KEY=1\n",
+    "current": "KEY=2\n"
+   },
+   {
+    "path": "/w/blob.bin",
+    "original": "a\u0000",
+    "current": "b\u0000"
+   },
+   {
+    "path": "/w/emoji.md",
+    "original": "héllo 😀\n",
+    "current": "héllo 🐱\n"
+   },
+   {
+    "path": "/w/scatter.txt",
+    "original": "l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\nl11\nl12\nl13\nl14\nl15\nl16\nl17\nl18\nl19",
+    "current": "l0\nX\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\nl11\nl12\nl13\nl14\nl15\nl16\nl17\nY\nl19"
+   }
+  ],
+  "big": [
+   {
+    "path": "/w/big.txt",
+    "original": "",
+    "current": "n0\nn1\nn2\nn3\nn4\nn5\nn6\nn7\nn8\nn9\nn10\nn11\nn12\nn13\nn14\nn15\nn16\nn17\nn18\nn19\nn20\nn21\nn22\nn23\nn24\nn25\nn26\nn27\nn28\nn29\nn30\nn31\nn32\nn33\nn34\nn35\nn36\nn37\nn38\nn39\nn40\nn41\nn42\nn43\nn44\nn45\nn46\nn47\nn48\nn49\nn50\nn51\nn52\nn53\nn54\nn55\nn56\nn57\nn58\nn59\nn60\nn61\nn62\nn63\nn64\nn65\nn66\nn67\nn68\nn69\nn70\nn71\nn72\nn73\nn74\nn75\nn76\nn77\nn78\nn79\nn80\nn81\nn82\nn83\nn84\nn85\nn86\nn87\nn88\nn89\nn90\nn91\nn92\nn93\nn94\nn95\nn96\nn97\nn98\nn99\nn100\nn101\nn102\nn103\nn104\nn105\nn106\nn107\nn108\nn109\nn110\nn111\nn112\nn113\nn114\nn115\nn116\nn117\nn118\nn119\nn120\nn121\nn122\nn123\nn124\nn125\nn126\nn127\nn128\nn129\nn130\nn131\nn132\nn133\nn134\nn135\nn136\nn137\nn138\nn139\nn140\nn141\nn142\nn143\nn144\nn145\nn146\nn147\nn148\nn149\nn150\nn151\nn152\nn153\nn154\nn155\nn156\nn157\nn158\nn159\nn160\nn161\nn162\nn163\nn164\nn165\nn166\nn167\nn168\nn169\nn170\nn171\nn172\nn173\nn174\nn175\nn176\nn177\nn178\nn179\nn180\nn181\nn182\nn183\nn184\nn185\nn186\nn187\nn188\nn189\nn190\nn191\nn192\nn193\nn194\nn195\nn196\nn197\nn198\nn199\nn200\nn201\nn202\nn203\nn204\nn205\nn206\nn207\nn208\nn209\nn210\nn211\nn212\nn213\nn214\nn215\nn216\nn217\nn218\nn219\nn220\nn221\nn222\nn223\nn224\nn225\nn226\nn227\nn228\nn229\nn230\nn231\nn232\nn233\nn234\nn235\nn236\nn237\nn238\nn239\nn240\nn241\nn242\nn243\nn244\nn245\nn246\nn247\nn248\nn249\nn250\nn251\nn252\nn253\nn254\nn255\nn256\nn257\nn258\nn259\nn260\nn261\nn262\nn263\nn264\nn265\nn266\nn267\nn268\nn269\nn270\nn271\nn272\nn273\nn274\nn275\nn276\nn277\nn278\nn279\nn280\nn281\nn282\nn283\nn284\nn285\nn286\nn287\nn288\nn289\nn290\nn291\nn292\nn293\nn294\nn295\nn296\nn297\nn298\nn299\nn300\nn301\nn302\nn303\nn304\nn305\nn306\nn307\nn308\nn309\nn310\nn311\nn312\nn313\nn314\nn315\nn316\nn317\nn318\nn319\nn320\nn321\nn322\nn323\nn324\nn325\nn326\nn327\nn328\nn329\nn330\nn331\nn332\nn333\nn334\nn335\nn336\nn337\nn338\nn339\nn340\nn341\nn342\nn343\nn344\nn345\nn346\nn347\nn348\nn349\nn350\nn351\nn352\nn353\nn354\nn355\nn356\nn357\nn358\nn359\nn360\nn361\nn362\nn363\nn364\nn365\nn366\nn367\nn368\nn369\nn370\nn371\nn372\nn373\nn374\nn375\nn376\nn377\nn378\nn379\nn380\nn381\nn382\nn383\nn384\nn385\nn386\nn387\nn388\nn389\nn390\nn391\nn392\nn393\nn394\nn395\nn396\nn397\nn398\nn399\nn400"
+   }
+  ],
+  "many": [
+   {
+    "path": "/w/f0.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f1.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f2.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f3.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f4.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f5.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f6.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f7.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f8.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f9.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f10.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f11.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f12.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f13.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f14.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f15.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f16.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f17.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f18.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f19.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f20.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f21.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f22.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f23.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f24.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f25.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f26.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f27.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f28.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f29.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f30.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f31.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f32.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f33.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f34.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f35.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f36.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f37.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f38.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f39.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f40.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f41.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f42.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f43.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f44.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f45.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f46.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f47.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f48.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f49.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f50.txt",
+    "original": "",
+    "current": "x"
+   },
+   {
+    "path": "/w/f51.txt",
+    "original": "",
+    "current": "x"
+   }
+  ],
+  "empty": []
+ },
  "cases": [
   {
    "channel": "data:wipe",
@@ -1847,6 +2157,7 @@
     "favoriteModels": [
      "p1::m1"
     ],
+    "phoneChanges": true,
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -1873,6 +2184,7 @@
     "favoriteModels": [
      "p1::m1"
     ],
+    "phoneChanges": true,
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -1927,6 +2239,7 @@
     "favoriteModels": [
      "p1::m1"
     ],
+    "phoneChanges": true,
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -1961,6 +2274,7 @@
     "favoriteModels": [
      "p1::m1"
     ],
+    "phoneChanges": true,
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -1995,6 +2309,7 @@
     "favoriteModels": [
      "p1::m1"
     ],
+    "phoneChanges": true,
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -2061,6 +2376,7 @@
     "favoriteModels": [
      "p1::m1"
     ],
+    "phoneChanges": true,
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -4124,6 +4440,996 @@
      }
     ]
    }
+  },
+  {
+   "channel": "changes:list",
+   "args": [
+    "edits"
+   ],
+   "calls": [
+    [
+     "settings:get",
+     []
+    ],
+    [
+     "changes:list",
+     [
+      "edits"
+     ]
+    ]
+   ],
+   "result": {
+    "files": [
+     {
+      "path": "…/src/main.ts",
+      "status": "modified",
+      "added": 2,
+      "removed": 1,
+      "hunks": [
+       {
+        "oldStart": 2,
+        "newStart": 2,
+        "lines": [
+         " b",
+         " c",
+         " d",
+         "-e",
+         "+E",
+         " f",
+         " g",
+         " h",
+         " i",
+         "+j"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "…/app/new.txt",
+      "status": "added",
+      "added": 2,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+one",
+         "+two"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/.env",
+      "status": "modified",
+      "added": 1,
+      "removed": 1,
+      "hunks": [],
+      "hidden": true
+     },
+     {
+      "path": "w/blob.bin",
+      "status": "modified",
+      "added": 1,
+      "removed": 1,
+      "hunks": [],
+      "binary": true
+     },
+     {
+      "path": "w/emoji.md",
+      "status": "modified",
+      "added": 1,
+      "removed": 1,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "-héllo 😀",
+         "+héllo 🐱"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/scatter.txt",
+      "status": "modified",
+      "added": 2,
+      "removed": 2,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         " l0",
+         "-l1",
+         "+X",
+         " l2",
+         " l3",
+         " l4"
+        ]
+       },
+       {
+        "oldStart": 16,
+        "newStart": 16,
+        "lines": [
+         " l15",
+         " l16",
+         " l17",
+         "-l18",
+         "+Y",
+         " l19"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "channel": "changes:list",
+   "args": [
+    "big"
+   ],
+   "calls": [
+    [
+     "settings:get",
+     []
+    ],
+    [
+     "changes:list",
+     [
+      "big"
+     ]
+    ]
+   ],
+   "result": {
+    "files": [
+     {
+      "path": "w/big.txt",
+      "status": "added",
+      "added": 401,
+      "removed": 0,
+      "hunks": [],
+      "tooLarge": true,
+      "lines": 401
+     }
+    ]
+   }
+  },
+  {
+   "channel": "changes:list",
+   "args": [
+    "many"
+   ],
+   "calls": [
+    [
+     "settings:get",
+     []
+    ],
+    [
+     "changes:list",
+     [
+      "many"
+     ]
+    ]
+   ],
+   "result": {
+    "files": [
+     {
+      "path": "w/f0.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f1.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f2.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f3.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f4.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f5.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f6.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f7.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f8.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f9.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f10.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f11.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f12.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f13.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f14.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f15.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f16.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f17.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f18.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f19.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f20.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f21.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f22.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f23.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f24.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f25.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f26.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f27.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f28.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f29.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f30.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f31.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f32.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f33.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f34.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f35.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f36.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f37.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f38.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f39.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f40.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f41.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f42.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f43.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f44.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f45.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f46.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f47.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f48.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     },
+     {
+      "path": "w/f49.txt",
+      "status": "added",
+      "added": 1,
+      "removed": 0,
+      "hunks": [
+       {
+        "oldStart": 1,
+        "newStart": 1,
+        "lines": [
+         "+x"
+        ]
+       }
+      ]
+     }
+    ],
+    "omittedFiles": 2
+   }
+  },
+  {
+   "channel": "changes:list",
+   "args": [
+    "empty"
+   ],
+   "calls": [
+    [
+     "settings:get",
+     []
+    ],
+    [
+     "changes:list",
+     [
+      "empty"
+     ]
+    ]
+   ],
+   "result": {
+    "files": []
+   }
+  },
+  {
+   "channel": "changes:list",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): chat id"
+  },
+  {
+   "channel": "changes:list",
+   "args": [
+    7
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): chat id"
+  },
+  {
+   "channel": "changes:accept",
+   "args": [
+    "edits",
+    "/w/a"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): changes:accept"
+  },
+  {
+   "channel": "file:read",
+   "args": [
+    "/etc/passwd"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): file:read"
+  },
+  {
+   "channel": "dir:list",
+   "args": [
+    "/"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): dir:list"
   }
  ]
 }

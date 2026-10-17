@@ -32,9 +32,18 @@ const OP_ACK = 2;
 
 export interface EngineSocket {
   call(channel: string, args: unknown[]): Promise<unknown>;
+  /** Which engine answers: nekkod, or the TS backend alone (`backend`, no daemon build). */
+  mode(): Promise<EngineEndpoint['mode'] | null>;
   on(channel: string, listener: Listener): void;
   off(channel: string, listener: Listener): void;
   openTerminal(id: string, handlers: TerminalStreamHandlers): Promise<TerminalStream | null>;
+  /**
+   * Take the agent event stream of these chats only (null: every chat's).
+   * Every chat's summary events still arrive (a turn starting, waiting,
+   * ending; see crates/nekkod/src/hub.rs). Kept across reconnects. Only the
+   * daemon narrows; the backend-only mode sends everything, as before.
+   */
+  subscribe(sessionIds: string[] | null): void;
 }
 
 export function createEngineSocket(getEndpoint: (operation?: string) => Promise<EngineEndpoint | null>): EngineSocket {
@@ -46,8 +55,13 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
   let queued: string[] = [];
   let endpoint: EngineEndpoint | null = null;
   let retry = 100;
+  /** The chats whose stream this window takes; null for every chat. */
+  let sessions: string[] | null = null;
+  /** What the open socket was last told (or connected with). */
+  let told: string | null = null;
 
   const wsBase = (e: EngineEndpoint) => e.url.replace(/^http/, 'ws');
+  const key = (ids: string[] | null) => (ids ? [...ids].sort().join(',') : '*');
 
   const onFrame = (raw: string) => {
     let msg: { id?: number; result?: unknown; error?: string; channel?: string; payload?: unknown };
@@ -68,6 +82,15 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
     set?.forEach((l) => l(undefined, msg.payload));
   };
 
+  /** Tell the open socket which chats this window shows, if it changed. */
+  const sendSubscription = () => {
+    if (!open || !socket || endpoint?.mode !== 'daemon' || told === key(sessions)) return;
+    told = key(sessions);
+    // Fire and forget: the reply carries nothing, and a replay (if any)
+    // arrives before it as an `agent:replay` event.
+    socket.send(JSON.stringify({ id: nextId++, channel: 'daemon:subscribe', args: [sessions] }));
+  };
+
   const connect = async () => {
     try {
       endpoint = await getEndpoint([...pending.values()].map(p => p.channel).join(', ') || 'connection retry');
@@ -83,14 +106,20 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
       retry = Math.min(retry * 2, 2000);
       return;
     }
-    const ws = new WebSocket(`${wsBase(endpoint)}/api/ws?token=${encodeURIComponent(endpoint.token)}`);
+    // Narrowed from the start, so a reconnect is never sent every chat's
+    // stream in between; the daemon then names the running turns of the chats
+    // left out, and replays the ones named.
+    const narrowed = endpoint.mode === 'daemon' && sessions ? `sessions=${encodeURIComponent(sessions.join(','))}&` : '';
+    const ws = new WebSocket(`${wsBase(endpoint)}/api/ws?${narrowed}token=${encodeURIComponent(endpoint.token)}`);
     socket = ws;
+    told = narrowed ? key(sessions) : null;
     ws.onopen = () => {
       open = true;
       retry = 100;
       const out = queued;
       queued = [];
       out.forEach((f) => ws.send(f));
+      sendSubscription();
     };
     ws.onmessage = (ev) => onFrame(String(ev.data));
     ws.onclose = () => {
@@ -124,6 +153,10 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
         send(JSON.stringify({ id, channel, args }));
       });
     },
+    async mode() {
+      const e = endpoint ?? (await getEndpoint('engine mode').catch(() => null));
+      return e?.mode ?? null;
+    },
     on(channel, listener) {
       let set = listeners.get(channel);
       if (!set) listeners.set(channel, (set = new Set()));
@@ -131,6 +164,10 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
     },
     off(channel, listener) {
       listeners.get(channel)?.delete(listener);
+    },
+    subscribe(ids) {
+      sessions = ids ? [...new Set(ids)] : null;
+      sendSubscription();
     },
     async openTerminal(id, h) {
       const e = endpoint ?? (await getEndpoint(`terminal:${id}`));

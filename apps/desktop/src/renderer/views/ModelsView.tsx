@@ -1,6 +1,7 @@
 import { FirstProviderSetup } from '../components/providers/FirstProviderSetup.js';
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { columnsFor, packGroups } from './providerLayout.js';
 import type { LimitWindow, ModelInfo, OAuthProvider, OAuthStatus, ProviderConfig, ProviderKind, SubscriptionLimits } from '@nekko-agent/shared';
 import { formatUSD, isLocalProvider, isRuntimeKind, formatModelPriceLabel, modelPricing } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -12,6 +13,8 @@ import { PlusIcon, TrashIcon, CheckIcon, StarIcon } from '../icons.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { RuntimeCard } from '../components/runtimes/RuntimeCard.js';
 import { hasAppChrome } from '../chrome.js';
+import { matchesModelQuery } from '../components/agent-console/modelPickerInteractions.js';
+import { MODEL_FILTER_THRESHOLD, modelListProblem } from './modelListProblem.js';
 
 const isLocal = (k: ProviderKind) => isLocalProvider(k);
 
@@ -85,7 +88,7 @@ export function ModelsView() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-4xl px-8 py-8">
+      <div className="mx-auto max-w-6xl px-8 py-8">
         <div className="flex items-center justify-between">
           <div>
             {!hasAppChrome && <h1 className="view-title">Model Providers</h1>}
@@ -106,18 +109,23 @@ export function ModelsView() {
 
         {adding && <AddProvider onDone={() => { setAdding(false); refreshProviders(); }} />}
 
-        <ProviderSection
-          title="Connected local servers"
-          accent="var(--success)"
-          subtitle="Servers you already run: Ollama, LM Studio, vLLM."
-          providers={local}
-          onChanged={refreshProviders}
-        />
-        <ProviderSection
-          title="Cloud"
-          accent="var(--info)"
-          subtitle="Hosted APIs, Anthropic, OpenAI, OpenRouter, or any compatible endpoint."
-          providers={cloud}
+        <ProviderSections
+          groups={[
+            {
+              key: 'local',
+              title: 'Connected local servers',
+              accent: 'var(--success)',
+              subtitle: 'Servers you already run: Ollama, LM Studio, vLLM.',
+              providers: local,
+            },
+            {
+              key: 'cloud',
+              title: 'Cloud',
+              accent: 'var(--info)',
+              subtitle: 'Hosted APIs, Anthropic, OpenAI, OpenRouter, or any compatible endpoint.',
+              providers: cloud,
+            },
+          ]}
           onChanged={refreshProviders}
         />
 
@@ -187,34 +195,89 @@ function LimitsPanel({ limits, now, subName }: { limits: SubscriptionLimits | nu
   );
 }
 
-function ProviderSection({
-  title,
-  subtitle,
-  accent,
-  providers,
-  onChanged,
-}: {
+interface ProviderGroup {
+  key: string;
   title: string;
   subtitle: string;
   accent: string;
   providers: ProviderConfig[];
-  onChanged: () => void;
-}) {
-  if (providers.length === 0) return null;
+}
+
+const CARD_MIN_WIDTH = 340;
+const CARD_GAP = 16;
+
+/**
+ * Provider groups laid out side by side when there is room. A group's cards stay
+ * together; only the cards left over after a group's full rows share a line with
+ * another group (see packGroups).
+ */
+function ProviderSections({ groups, onChanged }: { groups: ProviderGroup[]; onChanged: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState(1);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setColumns(columnsFor(el.clientWidth, CARD_MIN_WIDTH, CARD_GAP));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const byKey = new Map(groups.map((g) => [g.key, g]));
+  const rows = packGroups(groups.map((g) => ({ key: g.key, items: g.providers })), columns);
+  const headed = new Set<string>();
+
   return (
-    <section className="mt-7">
-      <div className="flex items-center gap-2">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: accent }} />
-        <h2 className="text-[15px] font-semibold">{title} models</h2>
-        <span className="chip">{providers.length}</span>
-      </div>
-      <p className="mt-0.5 text-[12px] text-ink-faint">{subtitle}</p>
-      <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-        {providers.map((p) => (
-          <ProviderCard key={p.id} provider={p} onChanged={onChanged} />
-        ))}
-      </div>
-    </section>
+    <div ref={ref}>
+      {rows.map((row, i) => (
+        <div
+          key={row.map((s) => `${s.group}:${s.items[0]?.id}`).join('|') || i}
+          className="mt-7 grid items-start"
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, columnGap: CARD_GAP }}
+        >
+          {(() => {
+            let start = 1;
+            return row.map((seg) => {
+              const g = byKey.get(seg.group)!;
+              const showHeader = !headed.has(g.key);
+              headed.add(g.key);
+              const gridColumn = `${start} / span ${seg.items.length}`;
+              start += seg.items.length;
+              // Headings sit on grid row 1 and cards on row 2, so cards sharing a
+              // line stay top-aligned even when only one of them carries a heading.
+              return (
+                <React.Fragment key={g.key}>
+                  {showHeader && (
+                    <div className="mb-3 min-w-0" style={{ gridColumn, gridRow: 1 }}>
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: g.accent }} />
+                        <h2 className="text-[15px] font-semibold">{g.title} models</h2>
+                        <span className="chip">{g.providers.length}</span>
+                      </div>
+                      <p className="mt-0.5 text-[12px] text-ink-faint">{g.subtitle}</p>
+                    </div>
+                  )}
+                  <div
+                    className="grid min-w-0 items-start"
+                    style={{
+                      gridColumn,
+                      gridRow: 2,
+                      gridTemplateColumns: `repeat(${seg.items.length}, minmax(0, 1fr))`,
+                      gap: CARD_GAP,
+                    }}
+                  >
+                    {seg.items.map((p) => (
+                      <ProviderCard key={p.id} provider={p} onChanged={onChanged} />
+                    ))}
+                  </div>
+                </React.Fragment>
+              );
+            });
+          })()}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -225,11 +288,15 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   // Only an explicit off switch disables; older entries without the field stay on.
   const enabled = provider.enabled !== false;
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [listError, setListError] = useState<string | undefined>();
+  const [query, setQuery] = useState('');
   const [conn, setConn] = useState<{ state: 'unknown' | 'testing' | 'ok' | 'fail'; message?: string }>({ state: 'unknown' });
   const defaultSettings = useStore(s => s.settings);
   const [defaultMenu, setDefaultMenu] = useState<{x:number; y:number; id:string} | null>(null);
   const defaultId = defaultSettings?.defaultProviderId === provider.id ? defaultSettings.defaultModelId : undefined;
-  const listedModels = [...models].sort((a,b) => Number(b.id === defaultId) - Number(a.id === defaultId));
+  // The query only applies while its box is shown, so a list that shrinks cannot hide every model.
+  const filtering = models.length > MODEL_FILTER_THRESHOLD;
+  const listedModels = models.filter((m) => !filtering || matchesModelQuery(m, query)).sort((a,b) => Number(b.id === defaultId) - Number(a.id === defaultId));
   const [pullName, setPullName] = useState('');
   const [busy, setBusy] = useState<string | null>(null); // model id being (un)loaded
   const [stopping, setStopping] = useState(false);
@@ -274,7 +341,14 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   };
 
   const load = async () => {
-    setModels(await window.nekko.listModels(provider.id).catch(() => []));
+    const r = await window.nekko.listModelsStatus(provider.id).catch((e) => ({ models: [], error: String((e as Error)?.message ?? e) }));
+    setModels(r.models);
+    setListError(r.error);
+  };
+
+  const retry = () => {
+    void load();
+    void test();
   };
 
   const test = async () => {
@@ -286,7 +360,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   // Auto-check connectivity (and load models) when the card mounts, but only
   // for an enabled provider: a disabled one is never contacted.
   useEffect(() => {
-    if (!enabled) { setModels([]); setConn({ state: 'unknown' }); return; }
+    if (!enabled) { setModels([]); setListError(undefined); setConn({ state: 'unknown' }); return; }
     load();
     test();
     if (provider.kind === 'lmstudio') {
@@ -404,6 +478,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   const isOllama = provider.kind === 'ollama';
   const local = isLocal(provider.kind);
   const anyLoaded = models.some((m) => m.loaded);
+  const problem = modelListProblem({ error: listError, connFailed: conn.state === 'fail', local, label: provider.label, baseUrl: provider.baseUrl });
   // Ollama always supports per-model load/unload; LM Studio does too once its
   // `lms` CLI is reachable. Others fall back to the static badge + Stop server.
   const canManage = isOllama || (provider.kind === 'lmstudio' && lms?.available === true);
@@ -650,8 +725,26 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
         </div>
       )}
 
+      {filtering && (
+        <input
+          className="input mt-2 rounded-lg px-2.5 py-1 text-[12px]"
+          placeholder="Filter models…"
+          aria-label="Filter models"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      )}
+
       <div className="mt-2 max-h-44 space-y-1 overflow-y-auto">
-        {models.length === 0 && <p className="text-[12px] text-ink-faint">No models found.</p>}
+        {models.length === 0 && (problem ? (
+          <div className="flex items-start justify-between gap-2 text-[12px]" role="alert">
+            <p className="min-w-0 break-words" style={{ color: 'var(--danger)' }}>{problem}</p>
+            <button className="btn btn-outline shrink-0 px-2 py-0.5 text-[11px]" onClick={retry}>Retry</button>
+          </div>
+        ) : (
+          <p className="text-[12px] text-ink-faint">No models found.</p>
+        ))}
+        {models.length > 0 && listedModels.length === 0 && <p className="text-[12px] text-ink-faint">No models match.</p>}
         {defaultMenu && <ContextMenu x={defaultMenu.x} y={defaultMenu.y} onClose={() => setDefaultMenu(null)}><ContextAction onClick={() => { void window.nekko.updateSettings({defaultProviderId:provider.id,defaultModelId:defaultMenu.id}).then(() => useStore.getState().refreshSettings()).catch(e => pushToast("error",String(e))); setDefaultMenu(null); }}>Set as default</ContextAction></ContextMenu>}
         {defaultId && !models.some(m => m.id === defaultId) && <div aria-disabled="true" className="rounded-lg px-2 py-1.5 text-[12px] text-ink-faint">{defaultId} <span className="text-[10px]">Default · unavailable</span></div>}
         {listedModels.map((m) => {
