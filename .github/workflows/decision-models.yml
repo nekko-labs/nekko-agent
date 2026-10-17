@@ -78,7 +78,7 @@ jobs:
       # call costs. This is the answer the job exists for; the golden set below takes much longer
       # under CoreML in a VM, and a run that hits the time limit loses its log.
       - name: Provider, fallbacks and latency (laya-en)
-        timeout-minutes: 30
+        timeout-minutes: 25
         env:
           EP: ${{ matrix.ep }}
         shell: bash
@@ -88,10 +88,13 @@ jobs:
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
           for p in $PRECISIONS; do
             echo "-- laya-en $p" | tee -a "$GITHUB_STEP_SUMMARY"
-            ./target/release/examples/latency models/laya-en "$EP" "$p" 5 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+            perl -e 'alarm shift; exec @ARGV' 600 ./target/release/examples/latency models/laya-en "$EP" "$p" 3 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
           done
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+      # By hand only on CoreML: in the VM it takes about 33 s a question, so the 86-question set
+      # is close to an hour per precision (measured 2026-10-17, docs/decision-models.md).
       - name: Golden set on ${{ matrix.ep }}
+        if: github.event_name == 'workflow_dispatch' || matrix.ep != 'coreml'
         timeout-minutes: 80
         env:
           EP: ${{ matrix.ep }}
