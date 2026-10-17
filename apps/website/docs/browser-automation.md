@@ -1,30 +1,28 @@
 # Browser automation
 
-## Current dedicated browser
+## Dedicated browser
 
-The desktop `browser` tool opens a hidden, sandboxed Chromium window owned by the current chat. It does not attach to your personal browser. Each chat has a separate in-memory session and up to eight tabs. Every browser action goes through Nekko's approval policy. Explicit visibility shows the owned window without activating it.
+The desktop `browser` tool opens hidden, sandboxed Electron Chromium windows owned by the current chat, never your personal browser. Each chat has a separate in-memory session and up to eight tabs. Every browser action goes through Nekko's existing approval policy. Explicit visibility shows the owned window without activating it.
 
-You can navigate HTTP(S) pages, inspect text, click or fill the first matching element, type, press keys, wait for content, scroll, extract text or links, evaluate page JavaScript, take screenshots, manage tabs and read logs. Screenshots are sent to the selected model when approved. Evaluation runs in the page, not in the app; pages can see text you enter.
+Navigate HTTP(S), inspect, click/fill the first match, type, press keys/chords, wait for content, scroll, extract text/links, evaluate page JavaScript, screenshot, manage tabs and read logs. Approved screenshots go to the selected model. Evaluation runs in the page, not the app; pages can see text you enter.
 
-Popups, downloads, JavaScript dialogs and device permissions are blocked. Local file navigation and uploads are blocked. Idle hidden sessions close after ten minutes. Browser control requires a local desktop chat; this dedicated browser is not supplied by web/server/CLI or sandboxed execution.
+Popups, downloads, JavaScript dialogs and device permissions are blocked. Local file navigation/uploads are blocked. Idle hidden sessions close after ten minutes. Requires a local desktop chat, not web/server/CLI or sandboxed execution.
 
-## Native agent-browser migration status
+## Native default (2026-10-17, release verification incomplete)
 
-**Not migrated (2026-10-17).** Dedicated mode still requires pinned `playwright-core@1.63.0`, driving Electron's own Chromium through a per-chat in-process CDP transport without an app debugging port. This is an explicit security limitation, not a silent fallback.
+The default now uses pinned native Rust agent-browser 0.39.1 against Electron's existing Chromium. No extra browser download or global driver. Each adopted tab has a native process and a single-client authenticated loopback CDP relay restricted to its Electron debugger. There is no app-wide remote debugging port and no silent Playwright fallback. Missing native resources produce an explicit error.
 
-Vercel `agent-browser@0.39.1` was evaluated as the native Rust/Chrome replacement. Its Windows daemon accepts unauthenticated commands over a loopback TCP socket. That would create a second action entry point outside Nekko's approvals. Random session names and a token-protected CDP relay do not protect that command socket. MCP stdio uses the same daemon.
+The unmodified upstream Windows command daemon is unsafe for this boundary: it accepts unauthenticated TCP commands, and MCP stdio delegates to it. The user selected a maintained patch instead. Its only binary entrypoint uses inherited stdin/stdout, authenticates every command using a random capability delivered on inherited stdin, rejects all argv, clears upstream configuration and denies implicit browser launch and extra entrypoints. The CDP relay's distinct capability is also delivered privately on inherited stdin, not environment/argv.
 
-Do not install a global browser driver, enable Electron remote debugging, attach a user browser or replace the default with raw CLI commands to work around this blocker. Native migration requires authenticated/private command IPC first, followed by security and behavior parity tests and matched before/after measurements. No performance comparison has been established.
+Build the exact patch with `node scripts/build-agent-browser.mjs` (Rust toolchain and native linker required). Dist/release call this builder and package the native binary, license and pin outside asar. Source/dependency pinning is verified, not bit-identical output across toolchains. Windows x64 has been tested; installer/signing and macOS/Linux/arm64 remain unverified.
 
-## Testing and diagnostics
+## Checks and evidence
 
-Existing checks remain at their actual paths:
+- `node --test scripts/agent-browser-native.test.mjs`: native framing/auth/argv/no-listener security.
+- `node scripts/agent-browser-native-smoke.mjs [outDir]`: isolated hidden Electron native action/security fixture plus 20 cold-chat and 20 warm-inspect samples. Set `NEKKO_SMOKE_ELECTRON` to a matching owned Electron executable when needed.
+- `apps/desktop/src/main/agentNativeRelay.test.ts`: wrong/missing auth, Origin, second-client and owned-target negative checks.
+- `apps/desktop/src/main/agentCdpTransport.test.ts`, `agentBrowserActions.test.ts`, `agentBrowser.test.ts`: transport/page/bridge behavior.
+- `scripts/agent-browser-benchmark.mjs`: explicit Playwright baseline-only helper; not the production default.
+- `scripts/perf/lib/browser.mjs`: existing separate renderer-performance helper, not yet migrated by this task.
 
-- `apps/desktop/scripts/browser-automation-smoke.mjs`: dedicated Electron browser behavior/security smoke.
-- `apps/desktop/src/main/agentCdpTransport.test.ts`: CDP policy and owned-target tests.
-- `apps/desktop/src/main/agentBrowserActions.test.ts`: page-action behavior.
-- `apps/desktop/src/main/agentBrowser.test.ts`: private bridge behavior.
-- `scripts/perf/lib/browser.mjs`: owned Chromium helper for the existing performance harness.
-- `scripts/agent-browser-ipc-probe.mjs`: Windows-only native daemon authentication diagnostic; it does not launch a browser or switch defaults.
-
-See the [feasibility report](https://github.com/nekko-labs/nekko-agent/blob/main/reports/agent-browser/feasibility.md) for immutable upstream sources, exact executable provenance, raw probe output, safe reproduction commands and the implementation/measurement acceptance criteria. The separate E2E worktree has not been changed by this investigation.
+Full workspace typecheck/build and all 1362 desktop tests pass. Native fixture covers four wait states, duplicate-selector first match, keyboard submission, extraction, logs/page errors, tabs and popup/dialog/permission/file-navigation boundaries. Matching screenshot dimensions are 1359x873; parent actual-pixel review and public evidence publication are pending. Host checks have a missing debug-daemon fixture and a git-worktree timeout under diagnosis. Native-child memory, benchmark alternation and remaining workflow migration are unfinished. Initial sequential comparisons show higher native cold/warm latency; no speed or memory win is claimed. See [performance history](https://github.com/nekko-labs/nekko-agent/blob/main/docs/perf-history.md), [raw baseline](https://github.com/nekko-labs/nekko-agent/blob/main/reports/agent-browser/playwright-baseline.json), [initial candidate](https://github.com/nekko-labs/nekko-agent/blob/main/reports/agent-browser/native-candidate-v2.json), [patch documentation](https://github.com/nekko-labs/nekko-agent/blob/main/vendor/agent-browser/README.md) and [original feasibility](https://github.com/nekko-labs/nekko-agent/blob/main/reports/agent-browser/feasibility.md).
