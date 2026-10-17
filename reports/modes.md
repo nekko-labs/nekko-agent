@@ -1,6 +1,6 @@
 # Modes: one click for a better chat, without remembering skills
 
-Status: **design proposal, not implemented.** Nothing in this document exists in the app yet.
+Status: **v1 implemented (2026-10-17), prompt-level only.** The Mode menu's Work mode column and `workMode` per chat exist; a mode's instructions and skill text join the system prompt in both engines. Phase-bound injection, `load_skill`, the critic on a different model, cost display from measurements and the evaluation gate are still planned. The UI name question was settled as **Work mode**, a column inside the existing Mode menu.
 
 ## Problem
 
