@@ -6,13 +6,14 @@ owner:
 
 # Execution Plan, Nekko Agent
 
-## Automations: diagnose failed GitHub Actions runs with a local model (added 2026-10-17)
+## Automations: local-model GitHub automations, CI diagnosis and skill-based PR review (added 2026-10-17)
 
 Tracked in [#680](https://github.com/nekko-labs/nekko-agent/issues/680), part of [#612](https://github.com/nekko-labs/nekko-agent/issues/612). Execution plans live in each sub-issue. See [SPEC](SPEC.md#workflows-procedural-automation).
 
-- [ ] [#681](https://github.com/nekko-labs/nekko-agent/issues/681) PR 1: per-workflow and per-step model picker, `localModelOnly`, `toolAccess` (none / read / workspace), approval auto-deny for every workflow run, `ask_user` off in runs. TS and Rust with golden parity. Independent of #682.
-- [ ] [#682](https://github.com/nekko-labs/nekko-agent/issues/682) PR 2: GitHub connector `workflow_run_failed` poll source (Actions runs API, fork PR lookup by SHA), `github.runFailureLogs` (redirect without auth, `##[error]` windowing) and `github.upsertPRComment` actions. TS and Rust with golden parity. Independent of #681.
+- [ ] [#681](https://github.com/nekko-labs/nekko-agent/issues/681) PR 1: per-workflow and per-step model picker, `localModelOnly`, `toolAccess` (none / read / allowlist / workspace), approval auto-deny for every workflow run, `ask_user` off in runs. TS and Rust with golden parity. Independent of #682.
+- [ ] [#682](https://github.com/nekko-labs/nekko-agent/issues/682) PR 2: GitHub connector `workflow_run_failed` poll source (Actions runs API, fork PR lookup by SHA), `github.runFailureLogs` (redirect without auth, `##[error]` windowing) and `github.upsertPRComment` actions; `pr_opened`/`pr_updated` poll source (pulls API, head SHA tracking). TS and Rust with golden parity. Independent of #681.
 - [ ] [#683](https://github.com/nekko-labs/nekko-agent/issues/683) PR 3: "Diagnose failed CI" template (local model, no tools, sticky comment), template picker card, `docs/git-runner.md`, live smoke on a scratch repo. Blocked on #681 and #682.
+- [ ] [#686](https://github.com/nekko-labs/nekko-agent/issues/686) PR 4: skill steps resolve any skill (built-in, Nekko installs, external `SKILL.md`, enabled Claude Code plugin skills and commands such as `nyaa:cr`), `args` with `$ARGUMENTS` and `${CLAUDE_PLUGIN_ROOT}`, allowlist from `allowed-tools`, per-run PR worktree, untrusted PRs never run repo code; "Review new PRs with a skill" template. Blocked on #681 and #682.
 
 ## Composer media, paste anything, rich replies (2026-10-15)
 
