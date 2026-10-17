@@ -9,15 +9,22 @@ import com.nekko.android.voice.Dictation
 import com.nekko.android.voice.DictationController
 import com.nekko.android.voice.MicHardware
 import com.nekko.protocol.AskAnswer
+import com.nekko.protocol.Channels
+import com.nekko.protocol.PhoneChanges
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SkillSummary
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
 
 /** Android wrapper around [ChatController]: wires it to the repository's state and events. */
 class ChatViewModel(
@@ -67,6 +74,30 @@ class ChatViewModel(
 
     /** Bring this completed chat back to the active list. */
     suspend fun restore() = repo.restoreChat(sessionId)
+
+    /** Whether the computer lets phones see a chat's changes (`phoneChanges`, set on the computer). */
+    val changesAllowed: StateFlow<Boolean> = repo.state.map { it.pcSettings.phoneChanges }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.pcSettings.phoneChanges)
+
+    /** The Changes sheet's state: loading (null fields), loaded, or the reason it couldn't. */
+    data class ChangesLoad(val changes: PhoneChanges? = null, val error: String? = null)
+
+    private val _changes = MutableStateFlow(ChangesLoad())
+    val changes: StateFlow<ChangesLoad> = _changes.asStateFlow()
+
+    /** What the agent changed in this chat; the computer refuses unless it allows phones to see changes. */
+    fun loadChanges() {
+        _changes.update { it.copy(error = null) }
+        viewModelScope.launch {
+            _changes.value = try {
+                ChangesLoad(PhoneChanges.from(repo.caller.callWithTimeout(30_000, Channels.CHANGES_LIST, JsonPrimitive(sessionId))))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ChangesLoad(_changes.value.changes, e.message ?: "Couldn’t load changes.")
+            }
+        }
+    }
 
     suspend fun send(text: String, skill: SkillSummary? = null) = controller.send(text, skill)
     fun stop() = controller.stop()

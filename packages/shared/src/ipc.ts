@@ -333,6 +333,23 @@ export const IpcEvents = {
   deepLink: 'app:deepLink',
 } as const;
 
+/**
+ * What the engine daemon sends a socket that just added a chat to its agent
+ * event subscription (`daemon:subscribe`) while the chat's turn runs. Not a
+ * host event, so not in `IpcEvents`.
+ */
+export const AGENT_REPLAY = 'agent:replay';
+
+/** A running turn's events so far: text and reasoning deltas joined, oldest dropped past 4 MB. */
+export interface AgentReplay {
+  sessionId: string;
+  events: AgentEvent[];
+  /** When each event arrived (ms since the epoch), parallel to `events`. */
+  at: number[];
+  /** The oldest events were dropped. */
+  truncated: boolean;
+}
+
 /** The typed API the preload bridge exposes as window.nekko. */
 export interface NekkoApi {
   voiceStatus(): Promise<import('./voice.js').VoiceStatus>;
@@ -865,6 +882,17 @@ export interface NekkoApi {
   runUpdateChecks(): Promise<void>;
 
   onAgentEvent(cb: (e: AgentEvent) => void): () => void;
+  /**
+   * Take the agent event stream of these chats only (null: every chat's, the
+   * default). Every chat's summary events still arrive: a turn's first event,
+   * a wait on a person and the event after it, `session_meta`, `compaction`,
+   * `done` and `error` (crates/nekkod/src/hub.rs). A chat added while its turn
+   * runs is sent what it missed through `onAgentReplay`. Absent, or a no-op,
+   * where the engine has no daemon.
+   */
+  subscribeAgentEvents?(sessionIds: string[] | null): void;
+  /** A running turn's events so far, for a chat just added to `subscribeAgentEvents`. */
+  onAgentReplay?(cb: (r: AgentReplay) => void): () => void;
   onOAuthStatus(cb: (s: OAuthStatus) => void): () => void;
   onIndexProgress(cb: (s: IndexStatus) => void): () => void;
   onUpdateEvent(cb: (u: UpdateInfo) => void): () => void;

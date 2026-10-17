@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LocalRelayStatus } from '@nekko-agent/shared';
 import { LocalRelayView } from './RemoteAccess.js';
 
+vi.mock('../store.js', () => ({ useStore: Object.assign(() => undefined, { getState: () => ({}) }) }));
+
 const base: LocalRelayStatus = { available: true, running: false, enabled: false, port: 4400 };
 const html = (relay: LocalRelayStatus, extra: Partial<React.ComponentProps<typeof LocalRelayView>> = {}) =>
   renderToStaticMarkup(<LocalRelayView relay={relay} onToggle={vi.fn()} {...extra} />);

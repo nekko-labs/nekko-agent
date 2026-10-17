@@ -1,0 +1,12 @@
+# Build-time only: exporting Laya to ONNX and recording the reference answers.
+# Nekko Agent never runs Python; these are for scripts/decision-models/*.py.
+# Install torch from the CPU index (see README.md).
+laya==0.3.22
+torch==2.14.1
+transformers==5.20.1
+onnx==1.23.2
+onnxscript==0.7.2
+onnxruntime==1.31.0
+huggingface_hub
+safetensors
+numpy

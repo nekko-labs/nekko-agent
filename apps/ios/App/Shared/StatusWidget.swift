@@ -85,7 +85,8 @@ struct StatusWidgetView: View {
                 }
                 if snapshot.at > .distantPast {
                     // The app is suspended most of the time: say how old this is.
-                    Text(snapshot.at, format: .relative(presentation: .named)).font(.caption2).foregroundStyle(.secondary)
+                    // A relative-style date keeps counting on the Home Screen; a formatted one froze at "now".
+                    Text("Updated \(snapshot.at, style: .relative) ago").font(.caption2).foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)

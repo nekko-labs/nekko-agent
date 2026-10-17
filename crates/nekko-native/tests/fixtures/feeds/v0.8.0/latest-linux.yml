@@ -1,0 +1,12 @@
+version: 0.8.0
+files:
+  - url: AgentNekko-0.8.0-x86_64.AppImage
+    sha512: WppZV96SmH66U/yIIUobfrqQuYbB1MR4bmPHIVXeKT9nEnjS1v3zjzlSCJdUpgOf3T3vAw9yd/JMQFsoSjqO8g==
+    size: 151015514
+    blockMapSize: 159854
+  - url: AgentNekko-0.8.0-amd64.deb
+    sha512: EvFyQ+iTmuYPQAr6SbVvembaK4sNUPyjDiCGKEoveZf+lwG2AUpNHuIsMHfXq3120Ooe6xCO8I8fKgGOYUT0xQ==
+    size: 115687696
+path: AgentNekko-0.8.0-x86_64.AppImage
+sha512: WppZV96SmH66U/yIIUobfrqQuYbB1MR4bmPHIVXeKT9nEnjS1v3zjzlSCJdUpgOf3T3vAw9yd/JMQFsoSjqO8g==
+releaseDate: '2026-10-03T13:34:52.315Z'

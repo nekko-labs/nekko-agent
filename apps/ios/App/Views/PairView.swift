@@ -22,6 +22,7 @@ struct WelcomeView: View {
         .safeAreaInset(edge: .bottom) {
             NavigationLink(value: Route.pair) {
                 Label("Pair with your computer", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity).padding(.vertical, 6)
+                    .foregroundStyle(palette.onAccent)
             }
             .buttonStyle(.borderedProminent)
             .padding(.horizontal, 20)
@@ -39,6 +40,7 @@ struct WelcomeView: View {
 struct TailscaleGuide: View {
     @Environment(\.palette) private var palette
     @State private var tailnet = Tailnet.isConnected
+    @Environment(\.scenePhase) private var phase
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -54,6 +56,7 @@ struct TailscaleGuide: View {
             }
             if !tailnet {
                 Link("Get Tailscale for iPhone", destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!).font(.footnote)
+                    .frame(minHeight: 44, alignment: .leading).contentShape(Rectangle())
             }
             Divider().padding(.vertical, 4)
             Text("No Tailscale?").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
@@ -64,6 +67,8 @@ struct TailscaleGuide: View {
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(palette.line))
         .onAppear { tailnet = Tailnet.isConnected }
+        // Back from the Tailscale app: show the new state.
+        .onChange(of: phase) { _, p in if p == .active { tailnet = Tailnet.isConnected } }
     }
 
     private func step(_ n: Int, _ text: LocalizedStringKey) -> some View {
@@ -90,8 +95,13 @@ struct PairView: View {
             Section {
                 ZStack {
                     if cameraDenied {
-                        Text("Camera access is off. Allow it in Settings → Nekko Agent, or paste the link below.")
-                            .font(.footnote).multilineTextAlignment(.center).padding()
+                        VStack(spacing: 10) {
+                            Text("Camera access is off. Allow it in Settings → Nekko Agent, or paste the link below.")
+                                .font(.footnote).multilineTextAlignment(.center)
+                            Link("Open Settings", destination: URL(string: UIApplication.openSettingsURLString)!)
+                                .font(.footnote.weight(.semibold))
+                        }
+                        .padding()
                     } else {
                         QRScanner { code in submit(code) }
                     }
@@ -100,12 +110,26 @@ struct PairView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .listRowInsets(EdgeInsets())
             } footer: {
-                Text("On the computer: Settings → Remote access → Pair a phone.")
+                Text("On the computer: Settings → Remote access → Pair a phone.").foregroundStyle(palette.inkSoft)
             }
-            Section("Or paste the pairing link") {
+            Section {
                 TextField("nekko-agent-pair:?relay=…", text: $pasted, axis: .vertical)
                     .textInputAutocapitalization(.never).autocorrectionDisabled().font(.footnote.monospaced())
-                Button("Pair") { submit(pasted) }.disabled(pasted.trimmingCharacters(in: .whitespaces).isEmpty || busy)
+                HStack(spacing: 12) {
+                    // The system Paste button reads the clipboard without the
+                    // "allow paste" prompt (Android has the same button).
+                    PasteButton(payloadType: String.self) { strings in
+                        if let s = strings.first { pasted = s.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    }
+                    .labelStyle(.titleAndIcon)
+                    .buttonBorderShape(.capsule)
+                    Spacer()
+                    Button("Pair") { submit(pasted) }.disabled(pasted.trimmingCharacters(in: .whitespaces).isEmpty || busy)
+                }
+                // Two buttons in one list row: each takes only its own taps.
+                .buttonStyle(.borderless)
+            } header: {
+                SectionHeader("Or paste the pairing link")
             }
             if let error {
                 Section { Text(error).foregroundStyle(palette.danger).font(.footnote) }
@@ -113,6 +137,7 @@ struct PairView: View {
             Section { TailscaleGuide().listRowInsets(EdgeInsets()) }
         }
         .navigationTitle("Pair")
+        .keyboardDoneButton()
         .overlay { if busy { ProgressView("Pairing…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
         .task {
             if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
@@ -210,6 +235,7 @@ struct QRScanner: UIViewControllerRepresentable {
         private let session = AVCaptureSession()
         private var preview: AVCaptureVideoPreviewLayer?
         private var lastCode: String?
+        private var lastAt = Date.distantPast
 
         override func viewDidLoad() {
             super.viewDidLoad()
@@ -249,8 +275,11 @@ struct QRScanner: UIViewControllerRepresentable {
             guard let code = (objects.first as? AVMetadataMachineReadableCodeObject)?.stringValue, Pairing.parse(code) != nil else { return }
             // Delivered on the main queue (setMetadataObjectsDelegate above).
             MainActor.assumeIsolated {
-                guard code != lastCode else { return }
+                // The same code again after a pause is a retry (say, after turning
+                // Tailscale on); without the pause one scan would fire many times.
+                guard code != lastCode || Date().timeIntervalSince(lastAt) > 3 else { return }
                 lastCode = code
+                lastAt = Date()
                 onCode?(code)
             }
         }

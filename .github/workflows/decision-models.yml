@@ -1,0 +1,130 @@
+# The decision runtime (crates/nekko-decide) against the hosted Laya exports, on the
+# accelerators CI can reach. Run by hand: it downloads about 1 GB per checkpoint.
+#
+# macOS (Apple silicon runner): asks for CoreML and reports whether CoreML actually ran the
+# model or the runtime fell back to the CPU. GitHub's macOS runners are virtual machines, so a
+# fallback here does not prove it falls back on a real Mac; a CoreML pass does prove the graph
+# compiles and answers correctly under CoreML. The real-hardware check is in
+# docs/decision-models.md ("Checking CoreML on a Mac").
+name: Decision models
+
+on:
+  workflow_dispatch:
+    inputs:
+      checkpoints:
+        description: Checkpoints to check (space separated)
+        default: laya-en laya-multilingual laya-typed-decisions
+      precisions:
+        description: Precisions to check (space separated)
+        default: fp16 fp32
+  # A change to the runtime or this workflow checks the English model only (about 2.5 GB).
+  pull_request:
+    paths:
+      - .github/workflows/decision-models.yml
+      - crates/nekko-decide/**
+
+permissions:
+  contents: read
+
+env:
+  CHECKPOINTS: ${{ inputs.checkpoints || 'laya-en' }}
+  PRECISIONS: ${{ inputs.precisions || 'fp16 fp32' }}
+
+jobs:
+  golden:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            ep: coreml
+          - os: ubuntu-latest
+            ep: cpu
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked -p nekko-decide --tests --examples
+      - name: Download the exports and check their SHA-256 sums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p models && cd models
+          gh release download decision-models-v1 --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
+          for c in $CHECKPOINTS; do
+            files="tokenizer.json tokenizer_config.json rl_agent_config.json config.json"
+            for p in $PRECISIONS; do
+              case $p in fp16) files="$files model_fp16.onnx" ;; fp32) files="$files model.onnx" ;; int8) files="$files model_int8.onnx" ;; esac
+            done
+            for f in $files; do
+              grep -q " $c.$f\$" SHA256SUMS || continue
+              gh release download decision-models-v1 --repo "$GITHUB_REPOSITORY" --pattern "$c.$f"
+            done
+          done
+          : > want
+          for f in *; do
+            [ "$f" = SHA256SUMS ] || [ "$f" = want ] || awk -v f="$f" '$2 == f' SHA256SUMS >> want
+          done
+          if command -v sha256sum >/dev/null; then sha256sum -c want; else shasum -a 256 -c want; fi
+          for c in $CHECKPOINTS; do
+            mkdir -p "$c"
+            for f in "$c".*; do mv "$f" "$c/${f#$c.}"; done
+          done
+      # First, and quick: which provider took the model (and why not, on a fallback) and what a
+      # call costs. This is the answer the job exists for; the golden set below takes much longer
+      # under CoreML in a VM, and a run that hits the time limit loses its log.
+      - name: Provider, fallbacks and latency (laya-en)
+        timeout-minutes: 25
+        env:
+          EP: ${{ matrix.ep }}
+        shell: bash
+        run: |
+          [ -d models/laya-en ] || exit 0
+          echo "### Decision models on ${{ matrix.os }}, ${EP} requested" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          for p in $PRECISIONS; do
+            echo "-- laya-en $p" | tee -a "$GITHUB_STEP_SUMMARY"
+            perl -e 'alarm shift; exec @ARGV' 600 ./target/release/examples/latency models/laya-en "$EP" "$p" 3 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
+          done
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      # By hand only on CoreML: in the VM it takes about 33 s a question, so the 86-question set
+      # is close to an hour per precision (measured 2026-10-17, docs/decision-models.md).
+      - name: Golden set on ${{ matrix.ep }}
+        if: github.event_name == 'workflow_dispatch' || matrix.ep != 'coreml'
+        timeout-minutes: 80
+        env:
+          EP: ${{ matrix.ep }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          golden=$(ls -t target/release/deps/golden-* | grep -v '[.]d$' | head -n1)
+          summary=$GITHUB_STEP_SUMMARY
+          echo "" >> "$summary"
+          echo "| checkpoint | precision | ran on | tokens | answers | max abs error | seconds |" >> "$summary"
+          echo "| --- | --- | --- | --- | --- | --- | --- |" >> "$summary"
+          status=0
+          for c in $CHECKPOINTS; do
+            case $c in laya-en) g=en ;; laya-multilingual) g=multilingual ;; laya-typed-decisions) g=typed-decisions ;; esac
+            for p in $PRECISIONS; do
+              [ -d "models/$c" ] || continue
+              echo "== $c $p, $EP requested"
+              t0=$(date +%s)
+              # Streamed to the log as it runs, and each run bounded (macOS has no timeout(1)).
+              LAYA_MODEL_DIR="models/$c" LAYA_GOLDEN=$g LAYA_PRECISION=$p LAYA_EP=$EP \
+                perl -e 'alarm shift; exec @ARGV' 1500 "$golden" --test-threads 1 --nocapture 2>&1 | tee run.log
+              rc=${PIPESTATUS[0]}
+              secs=$(( $(date +%s) - t0 ))
+              [ "$rc" = 0 ] || status=1
+              ran=$(sed -n 's/.*answers ([A-Za-z0-9]* on \([a-z]*\)).*/\1/p' run.log | head -n1)
+              tokens=$(sed -n 's/.*preprocessing: \([0-9]*\) question rows identical.*/\1\/86/p' run.log | head -n1)
+              agree=$(sed -n 's/.*argmax agreement \([0-9]*\/[0-9]*\).*/\1/p' run.log | head -n1)
+              err=$(sed -n 's/.*max |dp| \([0-9.]*\).*/\1/p' run.log | head -n1)
+              [ "$rc" = 142 ] && ran="timed out"
+              echo "| $c | $p | ${ran:-failed} | ${tokens:-?} | ${agree:-?} | ${err:-?} | $secs |" >> "$summary"
+            done
+          done
+          exit $status

@@ -12,9 +12,13 @@ struct ChatView: View {
     @Environment(\.palette) private var palette
     @State private var chat: ChatModel?
     @State private var showModels = false
+    @State private var showChanges = false
     @State private var renaming = false
     @State private var renameText = ""
     @State private var actionError: String?
+    /// Whether the end of the transcript is on screen: only then does it follow new output.
+    @State private var atBottom = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -26,11 +30,23 @@ struct ChatView: View {
         }
         .background(palette.paper)
         .navigationBarTitleDisplayMode(.inline)
+        .keyboardDoneButton()
         .task(id: sessionId) {
-            let c = ChatModel(sessionId: sessionId, store: store)
-            chat = c
-            c.start()
+            // Coming back to the same chat (a pushed screen popped) keeps the
+            // model and what has streamed so far; start() re-subscribes and re-reads.
+            if chat?.sessionId != sessionId {
+                chat?.stop()
+                chat = ChatModel(sessionId: sessionId, store: store)
+            }
+            chat?.start()
             app.notifier.clear(sessionId: sessionId)
+            if let first = app.firstMessages.removeValue(forKey: sessionId), let chat {
+                await chat.reload()
+                do { try await chat.send(first) } catch {
+                    chat.handBack(UnsentPrompt(text: first, skill: nil, images: []))
+                    actionError = error.localizedDescription
+                }
+            }
         }
         .onDisappear { chat?.stop() }
         .onChange(of: store.conn) { _, s in chat?.connectionChanged(s) }
@@ -38,6 +54,10 @@ struct ChatView: View {
 
     @ViewBuilder private func content(_ chat: ChatModel) -> some View {
         ScrollViewReader { proxy in
+          // At least as tall as the space above the bottom bar, bottom-aligned:
+          // a short transcript then moves up when an approval or question card
+          // grows the bar, instead of staying pinned where the card now covers it.
+          GeometryReader { geo in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if let n = chat.session?.omittedMessages, n > 0 {
@@ -57,19 +77,41 @@ struct ChatView: View {
                         Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
                     }
                     Color.clear.frame(height: 1).id("bottom")
+                        .onAppear { atBottom = true }
+                        .onDisappear { atBottom = false }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(minHeight: geo.size.height, alignment: .bottom)
             }
             .scrollDismissesKeyboard(.interactively)
             .defaultScrollAnchor(.bottom)
-            .onChange(of: chat.blocks.last) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+          }
+            // Follow streamed output only while the reader is at the end, and
+            // without animating every token (overlapping animations shudder).
+            .onChange(of: chat.blocks.last) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
+            // An approval or question card grows the bottom bar: keep the latest step above it.
+            // After the card has been laid out: scrolling in the same update used the old inset.
+            .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
+            .onChange(of: chat.turn.question != nil) { _, _ in scrollAfterLayout(proxy) }
+            .overlay(alignment: .bottomTrailing) {
+                if !atBottom && chat.running {
+                    Button { scrollToEnd(proxy) } label: {
+                        Label("Jump to latest", systemImage: "arrow.down").labelStyle(.iconOnly)
+                            .font(.body.weight(.semibold)).frame(width: 44, height: 44)
+                            .background(.regularMaterial, in: Circle())
+                    }
+                    .padding(16)
+                    .transition(.opacity)
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
                     if let a = chat.turn.approval {
-                        ApprovalCard(approval: a) { ok in act { try await chat.approve(ok) } }
+                        ApprovalCard(approval: a) { ok in try await chat.approve(ok) }.id(a.call.id)
                     }
                     if let q = chat.turn.question {
-                        QuestionCard(request: q) { answers in act { try await chat.answer(answers) } }
+                        // A new question starts with nothing picked.
+                        QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
                     }
                     if !chat.queued.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -104,10 +146,13 @@ struct ChatView: View {
                             }
                         }
                     } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
+                    if store.pcSettings.phoneChanges {
+                        Button { showChanges = true } label: { Label("Changes", systemImage: "plusminus") }
+                    }
                     Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                     Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     Button { Task { await chat.reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-                } label: { Image(systemName: "ellipsis.circle") }
+                } label: { Label("More", systemImage: "ellipsis.circle") }
             }
         }
         .sheet(isPresented: $showModels) {
@@ -115,6 +160,7 @@ struct ChatView: View {
                 act { try await chat.setOptions(providerId: p, modelId: m) }
             }
         }
+        .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
         .alert("Rename chat", isPresented: $renaming) {
             TextField("Title", text: $renameText)
             Button("Cancel", role: .cancel) {}
@@ -123,6 +169,17 @@ struct ChatView: View {
         .alert("Couldn’t do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(actionError ?? "") }
+    }
+
+    private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+    }
+
+    private func scrollAfterLayout(_ proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            scrollToEnd(proxy)
+        }
     }
 
     private func act(_ body: @escaping () async throws -> Void) {
@@ -160,6 +217,8 @@ struct BlockView: View {
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(images > 0 ? "You: \(text), with \(images == 1 ? "1 image" : "\(images) images")" : "You: \(text)")
         case .assistant(_, let text, let reasoning, let streaming, let interrupted):
             VStack(alignment: .leading, spacing: 6) {
                 if let reasoning, !reasoning.isEmpty {
@@ -179,12 +238,17 @@ struct BlockView: View {
                 } label: {
                     HStack(spacing: 8) {
                         statusIcon(status)
-                        Text(label).font(.footnote.monospaced()).foregroundStyle(palette.inkSoft).lineLimit(expanded ? nil : 1)
+                        // Two lines collapsed: one line truncated even short commands by a fraction of a point.
+                        Text(label).font(.footnote.monospaced()).foregroundStyle(palette.inkSoft).lineLimit(expanded ? nil : 2)
+                            .multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                         if output != nil { Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(palette.inkFaint) }
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("\(label), \(statusName(status))")
+                .accessibilityValue(output == nil ? "" : (expanded ? "Output shown" : "Output hidden"))
+                .accessibilityHint(output == nil ? "" : "Shows or hides the output")
                 if expanded, let output {
                     let split = Transcript.splitNotes(output)
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -203,6 +267,15 @@ struct BlockView: View {
         }
     }
 
+    private func statusName(_ s: ToolStatus) -> String {
+        switch s {
+        case .running: return "running"
+        case .waiting: return "waiting for you"
+        case .ok: return "done"
+        case .error: return "failed"
+        }
+    }
+
     @ViewBuilder private func statusIcon(_ s: ToolStatus) -> some View {
         switch s {
         case .running: ProgressView().controlSize(.mini)
@@ -216,29 +289,57 @@ struct BlockView: View {
 /// The computer asks before running a tool: show exactly what, and why.
 struct ApprovalCard: View {
     let approval: Approval
-    var answer: (Bool) -> Void
+    var answer: (Bool) async throws -> Void
     @Environment(\.palette) private var palette
+    @State private var busy = false
+    @State private var failed: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("Approve this tool?", systemImage: "hand.raised").font(.subheadline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Text(approval.severity.rawValue.capitalized).font(.caption2.weight(.bold)).padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(color.opacity(0.18), in: Capsule()).foregroundStyle(color)
+                    .background(color.opacity(0.12), in: Capsule()).foregroundStyle(color)
             }
             Text(Transcript.toolLabel(approval.call)).font(.footnote.monospaced()).foregroundStyle(palette.ink).lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
             if let detail { ScrollView { Text(detail).font(.caption.monospaced()).foregroundStyle(palette.inkSoft).textSelection(.enabled) }.frame(maxHeight: 120) }
-            if !approval.reason.isEmpty { Text(approval.reason).font(.footnote).foregroundStyle(palette.inkSoft) }
-            HStack {
-                Button(role: .destructive) { answer(false) } label: { Text("Deny").frame(maxWidth: .infinity) }.buttonStyle(.bordered)
-                Button { answer(true) } label: { Text("Allow").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent)
+            if !approval.reason.isEmpty { Text(approval.reason).font(.footnote).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true) }
+            if let failed {
+                Label(failed, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
             }
+            HStack {
+                Button(role: .destructive) { decide(false) } label: { Text("Deny").frame(maxWidth: .infinity).foregroundStyle(palette.ink) }
+                    .buttonStyle(.bordered).tint(palette.inkSoft)
+                // Drawn rather than .borderedProminent, which the audit reports as clipping its label.
+                Button { decide(true) } label: {
+                    Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Allow").font(.body.weight(.semibold)) } }
+                        .foregroundStyle(palette.onAccent)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(palette.accent, in: RoundedRectangle(cornerRadius: 12))
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+            }
+            .controlSize(.large)
+            .disabled(busy)
         }
         .padding(14)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(color.opacity(0.5)))
-        .onAppear { Haptics.needsYou() }
+        // The haptic comes from AppModel, per the user's vibration setting; VoiceOver gets told here.
+        .onAppear { AccessibilityNotification.Announcement("Approval needed: \(Transcript.toolLabel(approval.call))").post() }
+    }
+
+    private func decide(_ ok: Bool) {
+        busy = true
+        failed = nil
+        Task {
+            do { try await answer(ok) } catch { failed = "Couldn’t send that: \(error.localizedDescription) Try again." }
+            busy = false
+        }
     }
 
     private var color: Color {
@@ -261,17 +362,19 @@ struct ApprovalCard: View {
 /// The agent's `ask_user` questions: options, multi-select, or "Something else" with a note.
 struct QuestionCard: View {
     let request: AskRequest
-    var submit: ([AskAnswer]) -> Void
+    var submit: ([AskAnswer]) async throws -> Void
     @Environment(\.palette) private var palette
     @State private var picked: [String: Set<String>] = [:]
     @State private var notes: [String: String] = [:]
+    @State private var busy = false
+    @State private var failed: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(request.questions) { q in
                 VStack(alignment: .leading, spacing: 6) {
                     if !q.header.isEmpty { Text(q.header).font(.caption.weight(.semibold)).foregroundStyle(palette.accent) }
-                    Text(q.question).font(.subheadline).foregroundStyle(palette.ink)
+                    Text(q.question).font(.subheadline).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
                     FlowOptions(options: q.options.map(\.label) + [askOtherLabel], selected: picked[q.id] ?? []) { label in
                         var s = picked[q.id] ?? []
                         if q.multiSelect { if s.contains(label) { s.remove(label) } else { s.insert(label) } } else { s = [label] }
@@ -283,15 +386,32 @@ struct QuestionCard: View {
                     }
                 }
             }
-            Button {
-                submit(request.questions.map { q in AskAnswer(questionId: q.id, labels: Array(picked[q.id] ?? []), note: notes[q.id]) })
-            } label: { Text("Answer").frame(maxWidth: .infinity) }
+            if let failed {
+                Label(failed, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
+            }
+            Button(action: send) {
+                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer") } }
+                    .frame(maxWidth: .infinity).foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
+            }
                 .buttonStyle(.borderedProminent)
-                .disabled(request.questions.contains { (picked[$0.id] ?? []).isEmpty })
+                .controlSize(.large)
+                .disabled(!ready || busy)
         }
         .padding(14)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(palette.accent.opacity(0.4)))
+    }
+
+    private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }
+
+    private func send() {
+        let answers = request.questions.map { q in AskAnswer(questionId: q.id, labels: Array(picked[q.id] ?? []), note: notes[q.id]) }
+        busy = true
+        failed = nil
+        Task {
+            do { try await submit(answers) } catch { failed = "Couldn’t send that: \(error.localizedDescription) Try again." }
+            busy = false
+        }
     }
 }
 
@@ -310,11 +430,20 @@ struct FlowOptions: View {
 
     private var chips: some View {
         ForEach(options, id: \.self) { o in
+            let on = selected.contains(o)
             Button { tap(o) } label: {
-                Text(o).font(.footnote).padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(selected.contains(o) ? palette.accent : palette.surface2, in: Capsule())
-                    .foregroundStyle(selected.contains(o) ? palette.onAccent : palette.ink)
-            }.buttonStyle(.plain)
+                // A checkmark as well as the colour, and a 44 pt target.
+                HStack(spacing: 5) {
+                    if on { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
+                    Text(o)
+                }
+                .font(.footnote).padding(.horizontal, 14).frame(minHeight: 44)
+                .background(on ? palette.accent : palette.surface2, in: Capsule())
+                .foregroundStyle(on ? palette.onAccent : palette.ink)
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(on ? .isSelected : [])
         }
     }
 }
@@ -328,6 +457,7 @@ struct Composer: View {
     @State private var skill: SkillSummary?
     @State private var photos: [PhotosPickerItem] = []
     @State private var images: [String] = []
+    @State private var loadingPhotos = false
     @State private var error: String?
     @State private var dictation = Dictation()
     @FocusState private var focused: Bool
@@ -345,7 +475,12 @@ struct Composer: View {
                 }
                 .padding(.horizontal, 10).padding(.vertical, 4).background(palette.accent.opacity(0.15), in: Capsule()).foregroundStyle(palette.accent)
             }
-            if !images.isEmpty {
+            if loadingPhotos {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Adding photos…").font(.caption)
+                }.foregroundStyle(palette.inkSoft)
+            } else if !images.isEmpty {
                 HStack {
                     Label(images.count == 1 ? "1 photo" : "\(images.count) photos", systemImage: "photo").font(.caption)
                     Button { images = []; photos = [] } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove photos")
@@ -381,47 +516,73 @@ struct Composer: View {
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .accessibilityLabel("Add")
-                TextField(chat.turn.running ? "Queue a follow-up" : "Message", text: $text, axis: .vertical)
+                TextField(chat.running ? "Queue a follow-up" : "Message", text: $text, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
-                if dictation.available && text.isEmpty && !dictation.recording {
+                if dictation.transcribing {
+                    ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
+                } else if dictation.available && text.isEmpty && !dictation.recording {
                     Button { Task { await dictation.start(store: store) } } label: {
                         Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Dictate")
                 } else if dictation.recording {
-                    Button { Task { if let t = await dictation.stop(store: store) { text += (text.isEmpty ? "" : " ") + t } } } label: {
+                    Button { Task { await dictation.finish(store: store) } } label: {
                         Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Stop dictation")
                 }
-                if chat.turn.running && text.trimmingCharacters(in: .whitespaces).isEmpty {
+                // Stop while running with nothing to queue; a photo or skill alone can be queued.
+                if chat.running && !hasContent {
                     Button { chat.abort() } label: {
                         Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
                             .background(palette.danger, in: Circle()).foregroundStyle(.white)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Stop")
                 } else {
                     Button(action: send) {
                         Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
                             .background(canSend ? palette.accent : palette.surface2, in: Circle())
                             .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }
                     .disabled(!canSend)
-                    .accessibilityLabel(chat.turn.running ? "Queue" : "Send")
+                    .accessibilityLabel(chat.running ? "Queue" : "Send")
                 }
             }
-            if dictation.recording { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
+            if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
         }
-        .onChange(of: photos) { _, items in Task { images = await ImageAttachments.load(items) } }
+        // Send waits for the photos (it used to send without them, and they came back later).
+        .task(id: photos) {
+            guard !photos.isEmpty else { return }
+            loadingPhotos = true
+            let loaded = await ImageAttachments.load(photos)
+            if !Task.isCancelled { images = loaded }
+            loadingPhotos = false
+        }
         .onChange(of: dictation.error) { _, e in if let e { error = e } }
+        // Tapped stop or hit the 30-second limit: the words go into the message, never sent.
+        .onChange(of: dictation.result) { _, r in if let r { text += (text.isEmpty ? "" : " ") + r.text } }
+        // A prompt that never reached the computer comes back, with its skill and photos.
+        .onChange(of: chat.unsent) { _, u in
+            guard u != nil, let back = chat.takeUnsent() else { return }
+            if text.isEmpty { text = back.text }
+            if skill == nil { skill = back.skill }
+            if images.isEmpty { images = back.images }
+        }
     }
 
-    private var canSend: Bool {
-        chat.blocked == nil && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || skill != nil || !images.isEmpty)
+    private var hasContent: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || skill != nil || !images.isEmpty
     }
+
+    private var canSend: Bool { chat.blocked == nil && !loadingPhotos && hasContent }
 
     /// `/re` → the computer's skills starting with "re".
     private var skillMatches: [SkillSummary] {
@@ -457,6 +618,8 @@ struct Composer: View {
             } catch {
                 self.error = error.localizedDescription
                 text = saved
+                skill = sentSkill
+                images = sentImages
             }
         }
     }
@@ -472,7 +635,10 @@ enum ImageAttachments {
             let maxSide: CGFloat = 1600
             let scale = min(1, maxSide / max(image.size.width, image.size.height))
             let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-            let resized = UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+            // Scale 1: `size` is in pixels. The default (the screen's 3x) made 4,800 px JPEGs.
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = 1
+            let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
             guard let jpeg = resized.jpegData(compressionQuality: 0.8) else { continue }
             out.append("data:image/jpeg;base64," + jpeg.base64EncodedString())
         }

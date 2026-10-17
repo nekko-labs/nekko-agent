@@ -27,11 +27,14 @@ public enum Channels {
     public static let appInfo = "app:info"
     /// Names and descriptions only, never templates.
     public static let skillsRunnable = "skills:runnable"
+    /// What the agent changed in a chat, as a capped read-only diff (`PhoneChanges`);
+    /// refused unless the computer allows it (`phoneChanges`).
+    public static let changesList = "changes:list"
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
-        chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable,
+        chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
     ]
 }
 
@@ -267,14 +270,17 @@ public struct PcSettings: Equatable, Sendable {
     /// False until the computer has answered on this connection.
     public var known: Bool
     public var voiceEnabled: Bool
+    /// Whether the computer lets phones read a chat's changes (set on the computer only).
+    public var phoneChanges: Bool
 
     public init(defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
-                known: Bool = false, voiceEnabled: Bool = false) {
+                known: Bool = false, voiceEnabled: Bool = false, phoneChanges: Bool = false) {
         self.defaultChatMode = defaultChatMode
         self.chatPaneAction = chatPaneAction
         self.skipDeleteConfirmation = skipDeleteConfirmation
         self.known = known
         self.voiceEnabled = voiceEnabled
+        self.phoneChanges = phoneChanges
     }
 
     /// What the computer does when a key is unset (shared/settings.ts defaults).
@@ -287,7 +293,7 @@ public struct PcSettings: Equatable, Sendable {
         return PcSettings(defaultChatMode: v.str("defaultChatMode").flatMap(ChatMode.init(rawValue:)),
                           chatPaneAction: v.str("chatPaneAction").flatMap(ChatAction.init(rawValue:)),
                           skipDeleteConfirmation: v["skipDeleteConfirmation"]?.bool, known: true,
-                          voiceEnabled: v["voice"]?.flag("enabled") == true)
+                          voiceEnabled: v["voice"]?.flag("enabled") == true, phoneChanges: v.flag("phoneChanges"))
     }
 
     /// The `settings:update` patch for one change: never more than the phone-settable keys.
@@ -297,6 +303,72 @@ public struct PcSettings: Equatable, Sendable {
         if let action { o["chatPaneAction"] = .string(action.rawValue) }
         if let skipConfirm { o["skipDeleteConfirmation"] = .bool(skipConfirm) }
         return .object(o)
+    }
+}
+
+/// One chat's changes as the computer shows them to a phone (`phoneChangesView`,
+/// packages/shared/src/phone-changes.ts): paths cut to their last two parts,
+/// secret files counted but never shown, big files summarised.
+public struct PhoneChanges: Equatable, Sendable {
+    public struct Hunk: Equatable, Sendable {
+        public enum Kind: Equatable, Sendable { case same, removed, added }
+        public struct Line: Equatable, Sendable {
+            public let kind: Kind
+            public let text: String
+            /// The line's number in the new file, or the old one for a removed line.
+            public let number: Int
+        }
+        public let oldStart: Int
+        public let newStart: Int
+        public let lines: [Line]
+
+        /// Lines as the computer sent them (`' '`, `'-'` or `'+'` first), numbered from the starts.
+        public init(oldStart: Int, newStart: Int, raw: [String]) {
+            self.oldStart = oldStart
+            self.newStart = newStart
+            var (o, n) = (oldStart, newStart)
+            lines = raw.map { r in
+                let text = String(r.dropFirst())
+                switch r.first {
+                case "-": defer { o += 1 }; return Line(kind: .removed, text: text, number: o)
+                case "+": defer { n += 1 }; return Line(kind: .added, text: text, number: n)
+                default: defer { o += 1; n += 1 }; return Line(kind: .same, text: text, number: n)
+                }
+            }
+        }
+    }
+
+    public struct File: Equatable, Sendable, Identifiable {
+        public enum Shown: Equatable, Sendable { case diff, hidden, binary, tooLarge(lines: Int) }
+        public let path: String
+        public let added: Bool
+        public let linesAdded: Int
+        public let linesRemoved: Int
+        public let hunks: [Hunk]
+        public let shown: Shown
+        public var id: String { path }
+    }
+
+    public let files: [File]
+    /// Changed files past the computer's limit, not listed.
+    public let omittedFiles: Int
+
+    public var linesAdded: Int { files.reduce(0) { $0 + $1.linesAdded } }
+    public var linesRemoved: Int { files.reduce(0) { $0 + $1.linesRemoved } }
+
+    public static func from(_ v: JSONValue?) -> PhoneChanges {
+        let files: [File] = v?["files"]?.array?.compactMap { f in
+            guard let path = f.str("path") else { return nil }
+            let shown: File.Shown = f.flag("hidden") ? .hidden : f.flag("binary") ? .binary
+                : f.flag("tooLarge") ? .tooLarge(lines: Int(f["lines"]?.int64 ?? 0)) : .diff
+            let hunks: [Hunk] = shown == .diff ? (f["hunks"]?.array ?? []).compactMap { h in
+                guard let o = h["oldStart"]?.int64, let n = h["newStart"]?.int64 else { return nil }
+                return Hunk(oldStart: Int(o), newStart: Int(n), raw: h["lines"]?.array?.compactMap(\.string) ?? [])
+            } : []
+            return File(path: path, added: f.str("status") == "added", linesAdded: Int(f["added"]?.int64 ?? 0),
+                        linesRemoved: Int(f["removed"]?.int64 ?? 0), hunks: hunks, shown: shown)
+        } ?? []
+        return PhoneChanges(files: files, omittedFiles: Int(v?["omittedFiles"]?.int64 ?? 0))
     }
 }
 

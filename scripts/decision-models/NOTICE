@@ -1,0 +1,30 @@
+Laya decision models, ONNX exports for Nekko Agent
+
+These files are ONNX conversions of the Laya checkpoints by Convai Innovations,
+published under the Apache License, Version 2.0 (see LICENSE, copied from
+https://github.com/NandhaKishorM/laya):
+
+  laya-en                convaiinnovations/laya @ 55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851
+  laya-multilingual      convaiinnovations/laya-multilingual @ e4e9ddf21a7b1903b7acffd8814ad4307bf63a67
+  laya-typed-decisions   convaiinnovations/laya-typed-decisions @ 1a793eb568e6718f15941d08f85432581df534e3
+
+  https://huggingface.co/convaiinnovations
+
+Changes made by Nekko Labs (scripts/decision-models/ in
+https://github.com/nekko-labs/nekko-agent):
+
+- model.onnx: the checkpoint's weights exported to ONNX with laya's own exporter
+  recipe (torch dynamo, opset 18, dynamic shapes); `allowzero` cleared on every
+  Reshape node, which does not change the computation.
+- model_fp16.onnx: model.onnx converted to float16 weights and activations, with
+  the rotary-embedding angle computation kept in float32.
+- model_int8.onnx: model.onnx with weight-only 8-bit block quantization of its
+  MatMul weights.
+- tokenizer.json, tokenizer_config.json, rl_agent_config.json and config.json
+  are copied unchanged from the checkpoint (config.json is its encoder/config.json).
+
+The weights are otherwise unchanged. The converted models answer the 60-request
+golden set of Nekko Agent's decision runtime the same way the official `laya`
+package (0.3.22) does; see docs/decision-models.md in the Nekko Agent repository.
+Laya, Convai Innovations and their marks belong to their owners; these exports
+are not published or endorsed by them.

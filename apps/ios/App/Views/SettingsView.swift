@@ -15,14 +15,26 @@ struct ComputersView: View {
         List {
             Section {
                 ForEach(store.computers) { c in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(c.name).font(.body.weight(.medium))
-                            if c.id == store.activeId { Text("Connected here").font(.caption2).foregroundStyle(palette.success) }
-                            if c.id == app.prefs.defaultComputer { Image(systemName: "star.fill").font(.caption2).foregroundStyle(palette.warning) }
+                    // A button, so VoiceOver says what tapping does; the connected
+                    // computer isn't torn down and reconnected by a tap.
+                    Button { if c.id != store.activeId { store.connect(c.id) } } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(c.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
+                                if c.id == store.activeId { Text("Connected here").font(.caption2).foregroundStyle(palette.success) }
+                                if c.id == app.prefs.defaultComputer {
+                                    Image(systemName: "star.fill").font(.caption2).foregroundStyle(palette.warning)
+                                        .accessibilityLabel("Opens at launch")
+                                }
+                            }
+                            Text("\(routeName(c.route)) · \(c.relayHost)").font(.caption).foregroundStyle(palette.inkFaint)
                         }
-                        Text("\(routeName(c.route)) · \(c.relayHost)").font(.caption).foregroundStyle(palette.inkFaint)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(c.id == store.activeId ? .isSelected : [])
+                    .accessibilityHint(c.id == store.activeId ? "" : "Connects to this computer")
                     .swipeActions {
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
@@ -33,7 +45,6 @@ struct ComputersView: View {
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
                     }
-                    .onTapGesture { store.connect(c.id) }
                 }
             } footer: {
                 Text("Forgetting deletes this iPhone’s pairing keys. To stop the computer accepting this phone, remove it in Settings → Remote access there too.")

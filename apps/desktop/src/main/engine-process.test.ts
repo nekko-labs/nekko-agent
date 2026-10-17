@@ -2,7 +2,18 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { findDaemon, isMissingDllExit } from './engine-process.js';
+import { findDaemon, isMissingDllExit, nativeConfig } from './engine-process.js';
+
+describe("the daemon's native config", () => {
+  const facts = { isPackaged: true, appPath: '/a', userData: '/u', version: '0.8.1', resourcesPath: '/r', exePath: '/r/../NekkoAgent.exe', pid: 42 };
+  it('tells nekkod what it needs to update and own dialogs', () => {
+    expect(nativeConfig(facts, {})).toEqual({ isPackaged: true, exePath: '/r/../NekkoAgent.exe', resourcesPath: '/r', appPid: 42 });
+  });
+  it('takes a sandbox feed, cache, dialog mode and the AppImage from the environment', () => {
+    const env = { NEKKO_UPDATE_FEED_URL: 'http://127.0.0.1:1/feed/', NEKKO_UPDATE_CACHE_DIR: '/c', NEKKO_NATIVE_DIALOGS: 'bridge', APPIMAGE: '/x.AppImage' };
+    expect(nativeConfig(facts, env)).toMatchObject({ updateFeedUrl: 'http://127.0.0.1:1/feed/', updateCacheDir: '/c', dialogs: 'bridge', appImage: '/x.AppImage' });
+  });
+});
 
 describe('a daemon Windows cannot load', () => {
   it('is recognised by STATUS_DLL_NOT_FOUND, however Node signs it', () => {

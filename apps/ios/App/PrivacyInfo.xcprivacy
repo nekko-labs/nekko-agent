@@ -13,13 +13,16 @@
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
-		<!-- Prefs.swift: the app's own theme, app-lock and notification settings. -->
+		<!-- Prefs.swift: the app's own theme, app-lock and notification settings (CA92.1).
+		     The App Group's defaults, shared with the widget and the share extension:
+		     the widget's counts and text shared into a new chat (1C8F.1). -->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>CA92.1</string>
+				<string>1C8F.1</string>
 			</array>
 		</dict>
 	</array>

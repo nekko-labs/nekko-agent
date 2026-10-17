@@ -101,6 +101,32 @@ struct AnswerApprovalIntent: LiveActivityIntent {
     }
 }
 
+/// Allow from the Lock Screen: iOS asks for Face ID or the passcode first,
+/// since allowing a tool runs it on the computer. (Deny and Stop only stop
+/// something, so they stay one tap.) Before this, Allow on a locked phone
+/// quietly did nothing.
+struct AllowToolIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Allow a tool call"
+    static var description = IntentDescription("Allow the tool call your computer is waiting on.")
+    static var isDiscoverable = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
+    @Parameter(title: "Chat") var sessionId: String
+    @Parameter(title: "Tool call") var callId: String
+
+    init() {}
+
+    init(sessionId: String, callId: String) {
+        self.sessionId = sessionId
+        self.callId = callId
+    }
+
+    func perform() async throws -> some IntentResult {
+        await IntentRouter.approve?(sessionId, callId, true)
+        return .result()
+    }
+}
+
 struct StopRunIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Stop a running chat"
     static var isDiscoverable = false

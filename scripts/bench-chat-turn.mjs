@@ -48,6 +48,17 @@
 // the same search in the host through `bench:hostLoad`, so it still keeps the
 // host's event loop busy.
 //
+// `--fanout N` (#551) streams N chats at once (`--tokens` text events each,
+// default 200) and counts, per UI socket, the agent frames and bytes it
+// receives: N `/api/ws` sockets each subscribed to one chat
+// (`daemon:subscribe`; an older daemon answers it with an error and keeps
+// sending everything) and one that never subscribes. It also counts what the
+// TS backend receives meanwhile (request bytes by channel, `turn:event`
+// among them) and writes on its `/api/events` socket, through
+// scripts/bench-wire-meter.cjs loaded into it, so `--daemon`/`--backend` of
+// an older build measure the same way. Each subscribed socket must see its
+// own chat's whole reply, once.
+//
 // `--route ts` sets NEKKO_AGENT_LOOP=ts on the backend: every turn runs in
 // the TS host, the escape hatch. Nothing touches the user's data directory or
 // a running app; every spawned process is ended on exit.
@@ -113,7 +124,7 @@ if (args.fake) {
         const file = text.match(/create (\S+) /)?.[1] ?? 'note.txt';
         send({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${Date.now()}`, type: 'function', function: { name: 'write_file', arguments: JSON.stringify({ path: file, content: 'hello' }) } }] }, finish_reason: 'tool_calls' }] });
       } else {
-        const n = afterTool ? 3 : 40;
+        const n = afterTool ? 3 : text.includes('Give this task a short title') ? 4 : Number(args.tokens ?? 40);
         for (let i = 0; i < n; i++) {
           send({ choices: [{ delta: { content: `tok${i} ` }, finish_reason: null }] });
           await new Promise((r) => setTimeout(r, 15));
@@ -174,11 +185,14 @@ function cleanup() {
 process.on('exit', cleanup);
 process.on('SIGINT', () => process.exit(130));
 
+const meterFile = join(data, 'wire-meter.json');
 function startDaemon() {
   const env = { ELECTRON_RUN_AS_NODE: '1', NEKKO_BACKEND_DATA_DIR: data, NEKKO_BACKEND_APP: '{}', NEKKO_BACKEND_ORIGINS: '["null"]', NEKKO_BENCH_LOAD: '1' };
   if (route === 'ts') env.NEKKO_AGENT_LOOP = 'ts';
+  if (args.fanout) env.NEKKO_BENCH_METER = meterFile;
+  const backendArgs = args.fanout ? ['--require', join(root, 'scripts', 'bench-wire-meter.cjs'), backendJs] : [backendJs];
   // As the desktop app starts it (engine-process.ts): its host lets the agent drive a browser.
-  const config = { token, allowedOrigins: ['null'], dataDir: data, allowBrowserControl: true, backend: { exe: electron, args: [backendJs], env } };
+  const config = { token, allowedOrigins: ['null'], dataDir: data, allowBrowserControl: true, backend: { exe: electron, args: backendArgs, env } };
   const child = spawn(daemonExe, [], { env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   children.push(child);
   child.stderr.on('data', (d) => { if (args.verbose) process.stderr.write(d); });
@@ -338,7 +352,89 @@ function queuedFollowUp(sessionId) {
   });
 }
 
+/** One `/api/ws` socket, counting what it receives once `counting` is set. */
+async function meteredSocket(subscribeTo) {
+  const sock = new WebSocket(`ws://127.0.0.1:${port}/api/ws?token=${token}`);
+  await new Promise((ok, fail) => { sock.onopen = ok; sock.onerror = fail; });
+  const m = { subscribeTo, frames: 0, bytes: 0, agentFrames: 0, agentBytes: 0, ownFrames: 0, replays: 0, text: {}, done: new Set(), subscribed: null, counting: false };
+  sock.onmessage = (ev) => {
+    const raw = String(ev.data);
+    const frame = JSON.parse(raw);
+    if (frame.id === 1) { m.subscribed = frame.error ? `refused: ${frame.error}` : 'yes'; return; }
+    if (!m.counting) return;
+    m.frames++;
+    m.bytes += Buffer.byteLength(raw);
+    const p = frame.payload;
+    if (frame.channel === 'agent:replay') m.replays++;
+    if (frame.channel !== 'agent:event') return;
+    m.agentFrames++;
+    m.agentBytes += Buffer.byteLength(raw);
+    if (p.sessionId === subscribeTo) m.ownFrames++;
+    if (p.type === 'text') m.text[p.sessionId] = (m.text[p.sessionId] ?? '') + p.delta;
+    if (p.type === 'done') m.done.add(p.sessionId);
+  };
+  if (subscribeTo) sock.send(JSON.stringify({ id: 1, channel: 'daemon:subscribe', args: [[subscribeTo]] }));
+  return { m, sock };
+}
+
+async function fanout(n) {
+  const sessions = [];
+  for (let i = 0; i < n; i++) sessions.push(await newSession());
+  const sockets = [];
+  for (const sid of sessions) sockets.push(await meteredSocket(sid));
+  sockets.push(await meteredSocket(null));
+  await new Promise((r) => setTimeout(r, 500));
+  const meterAt = () => (existsSync(meterFile) ? JSON.parse(readFileSync(meterFile, 'utf8')) : { in: {}, inFrames: {}, out: {}, outWrites: {} });
+  await new Promise((r) => setTimeout(r, 400));
+  const before = meterAt();
+  for (const s of sockets) s.m.counting = true;
+  const t0 = performance.now();
+  await Promise.all(sessions.map((sid) => call('chat:send', { sessionId: sid, providerId: 'local', modelId: model, text: `Write about cats, chat ${sid}. Do not use any tools.` })));
+  // chat:send answers once the chain is done; give the last frames and the title a moment.
+  const allDone = () => sockets.every((s) => sessions.every((sid) => s.m.done.has(sid)));
+  for (let i = 0; i < 100 && !allDone(); i++) await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => setTimeout(r, 1500));
+  const elapsed = performance.now() - t0;
+  const after = meterAt();
+  const diff = (a, b) => Object.fromEntries(Object.keys({ ...a, ...b }).map((k) => [k, (b[k] ?? 0) - (a[k] ?? 0)]).filter(([, v]) => v));
+  const expected = Array.from({ length: Number(args.tokens ?? 40) }, (_, i) => `tok${i} `).join('');
+  const subscribed = sockets.slice(0, n).map((s) => s.m);
+  const everything = sockets[n].m;
+  const ok = subscribed.every((m) => m.text[m.subscribeTo] === expected) && sessions.every((sid) => everything.text[sid] === expected);
+  const avg = (f) => subscribed.reduce((s, m) => s + f(m), 0) / n;
+  const out = {
+    chats: n,
+    tokensPerChat: Number(args.tokens ?? 40),
+    subscribedAs: subscribed[0].subscribed,
+    perSubscribedSocket: { frames: avg((m) => m.frames), bytes: avg((m) => m.bytes), agentFrames: avg((m) => m.agentFrames), agentBytes: avg((m) => m.agentBytes), ownChatFrames: avg((m) => m.ownFrames), replays: avg((m) => m.replays) },
+    unsubscribedSocket: { frames: everything.frames, bytes: everything.bytes, agentFrames: everything.agentFrames, agentBytes: everything.agentBytes },
+    backend: { requestBytes: diff(before.in, after.in), requests: diff(before.inFrames, after.inFrames), socketBytesOut: diff(before.out, after.out), socketWrites: diff(before.outWrites, after.outWrites) },
+    everyReplyWholeAndOnce: ok,
+    elapsedMs: Math.round(elapsed),
+  };
+  out.backend.turnEventBytesPerTurn = (out.backend.requestBytes['turn:event'] ?? 0) / n;
+  out.backend.eventsSocketBytesPerTurn = (out.backend.socketBytesOut['/api/events'] ?? 0) / n;
+  console.log(JSON.stringify(out, null, 2));
+  for (const s of sockets) s.sock.close();
+  if (!ok) {
+    for (const m of [...subscribed, everything]) console.log(m.subscribeTo ?? 'all', Object.fromEntries(Object.entries(m.text).map(([k, v]) => [k, v.length])));
+    throw new Error('a socket did not get its chat\'s whole reply exactly once');
+  }
+  return out;
+}
+
 const results = { route, load, runs: [] };
+if (args.fanout) {
+  try {
+    results.fanout = await fanout(Number(args.fanout));
+    if (args.json) writeFileSync(args.json, JSON.stringify(results, null, 2));
+  } finally {
+    ws.close();
+    cleanup();
+    setTimeout(() => { try { rmSync(data, { recursive: true, force: true }); } catch { /* still held */ } process.exit(process.exitCode ?? 0); }, 1500);
+  }
+  await new Promise(() => {});
+}
 try {
   const warm = await newSession();
   await turn(warm, 'Reply with one word: ready.');

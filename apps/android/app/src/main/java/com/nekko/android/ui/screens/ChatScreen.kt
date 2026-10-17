@@ -33,6 +33,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Difference
+import com.nekko.android.ui.chat.ChangesSheet
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -68,6 +70,8 @@ import java.util.Locale
 fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boolean = false, onBack: () -> Unit) {
     val chat by vm.ui.collectAsStateWithLifecycle()
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
+    val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
+    var showChanges by remember { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -106,11 +110,23 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
         if (nearBottom || info.totalItemsCount == 0) list.scrollToItem(lastIndex)
     }
 
+    if (showChanges && changesAllowed) {
+        val changes by vm.changes.collectAsStateWithLifecycle()
+        ChangesSheet(changes.changes, changes.error, onRefresh = vm::loadChanges, onDismiss = { showChanges = false })
+    }
+
     Scaffold(
         containerColor = p.paper,
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                actions = {
+                    if (changesAllowed) {
+                        IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
+                            Icon(Icons.Filled.Difference, contentDescription = "Changes")
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

@@ -229,6 +229,32 @@ final class WireTests: XCTestCase {
         XCTAssertEqual(PcSettings.patch(mode: .ask), ["defaultChatMode": "ask"])
     }
 
+    func testDecodesPhoneChanges() throws {
+        let v = try JSONValue.parse(#"""
+        {"files":[
+          {"path":"…/src/main.ts","status":"modified","added":2,"removed":1,"hunks":[{"oldStart":2,"newStart":2,"lines":[" b","-e","+E","+j"," f"]}]},
+          {"path":"new.txt","status":"added","added":1,"removed":0,"hunks":[]},
+          {"path":".env","status":"modified","added":1,"removed":1,"hunks":[],"hidden":true},
+          {"path":"blob.bin","status":"modified","added":1,"removed":1,"hunks":[],"binary":true},
+          {"path":"big.txt","status":"modified","added":900,"removed":0,"hunks":[],"tooLarge":true,"lines":903},
+          {"status":"added"}
+        ],"omittedFiles":3}
+        """#)
+        let c = PhoneChanges.from(v)
+        XCTAssertEqual(c.files.map(\.path), ["…/src/main.ts", "new.txt", ".env", "blob.bin", "big.txt"])
+        XCTAssertEqual(c.omittedFiles, 3)
+        XCTAssertEqual(c.linesAdded, 905)
+        XCTAssertTrue(c.files[1].added)
+        XCTAssertEqual(c.files.map(\.shown), [.diff, .diff, .hidden, .binary, .tooLarge(lines: 903)])
+        let lines = c.files[0].hunks[0].lines
+        XCTAssertEqual(lines.map(\.kind), [.same, .removed, .added, .added, .same])
+        XCTAssertEqual(lines.map(\.number), [2, 3, 3, 4, 5])
+        XCTAssertEqual(lines[2].text, "E")
+        XCTAssertEqual(PhoneChanges.from(nil), PhoneChanges(files: [], omittedFiles: 0))
+        XCTAssertTrue(PcSettings.from(try JSONValue.parse(#"{"phoneChanges":true}"#)).phoneChanges)
+        XCTAssertFalse(PcSettings.from(try JSONValue.parse(#"{"phoneChanges":"yes"}"#)).phoneChanges)
+    }
+
     func testDecodesEventsAndPending() throws {
         let ev = try JSONValue.parse(#"{"type":"tool_approval_required","sessionId":"s","call":{"id":"t","name":"bash","input":{"command":"rm -rf /"}},"reason":"Deletes files","severity":"high"}"#)
         guard case .approvalRequired("s", let a)? = AgentEvent.from(ev) else { return XCTFail() }

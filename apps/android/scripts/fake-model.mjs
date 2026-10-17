@@ -8,6 +8,8 @@
 // Prompts containing "slow" stream one word a second for ~20 s, so a run can be
 // watched with the app in the background (keep-alive, local notifications).
 // Prompts containing "ask me" call `ask_user` with one two-option question.
+// Prompts containing "write a note" call `write_file` for `nekko-itest-note.txt`,
+// so the phone's read-only Changes view has a real edit to show.
 import { createServer } from 'node:http';
 
 const port = Number(process.argv[2] || 4700);
@@ -40,6 +42,11 @@ createServer((req, res) => {
     } else if (last?.role === 'user' && /ask me/i.test(userText)) {
       const args = { questions: [{ header: 'Target', question: 'Which platform should I build first?', options: ['iOS', 'Android'] }] };
       res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_ask', type: 'function', function: { name: 'ask_user', arguments: '' } }] }));
+      res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }));
+      res.write(chunk({}, 'tool_calls'));
+    } else if (last?.role === 'user' && /write a note/i.test(userText)) {
+      const args = { path: 'nekko-itest-note.txt', content: 'first line\nwritten by the agent\n' };
+      res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_write', type: 'function', function: { name: 'write_file', arguments: '' } }] }));
       res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }));
       res.write(chunk({}, 'tool_calls'));
     } else if (last?.role === 'user' && /slow/i.test(userText)) {

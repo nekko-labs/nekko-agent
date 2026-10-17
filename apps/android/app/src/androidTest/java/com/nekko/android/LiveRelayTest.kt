@@ -9,6 +9,8 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onRoot
@@ -97,6 +99,18 @@ class LiveRelayTest {
             tap(hasText("Submit"))
             waitGone(hasText("Which platform should I build first?"), 15_000)
             shot("7-answered")
+
+            // The agent writes a file; the phone reads the change, read only (the
+            // stack turns the computer's "Let phones see changes" on).
+            // The small emulator screen may not compose the new tool row, so wait
+            // for the turn to end (no Stop button) rather than for the row.
+            send("write a note")
+            Thread.sleep(3_000)
+            waitGone(hasContentDescription("Stop"), 30_000)
+            tap(hasContentDescription("Changes"))
+            waitFor(hasContentDescription("nekko-itest-note.txt, new file, 2 added", substring = true), 45_000)
+            waitFor(hasText("Read only", substring = true))
+            shot("8-changes")
         }
     }
 
@@ -128,7 +142,9 @@ class LiveRelayTest {
             compose.waitUntil(timeoutMs) { compose.onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         } catch (e: ComposeTimeoutException) {
             shot("failed-waiting")
-            throw AssertionError("never saw ${matcher.description}", e)
+            // What was on screen instead, for runs whose screenshots aren't at hand.
+            val screen = runCatching { compose.onAllNodes(isRoot(), useUnmergedTree = true).printToString(maxDepth = 40) }.getOrElse { it.toString() }
+            throw AssertionError("never saw ${matcher.description}; on screen:\n$screen", e)
         }
     }
 

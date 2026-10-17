@@ -1143,6 +1143,157 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     assert!(system.contains("1: export const secret = 'pineapple';"), "{system}");
 }
 
+/// A model reply of `n` text chunks (`word0 word1 ...`), then a stop.
+fn slow_text(word: &str, n: usize) -> String {
+    let mut chunks: Vec<Value> = (0..n)
+        .map(|i| json!({ "choices": [{ "delta": { "content": format!("{word}{i} ") }, "finish_reason": null }] }))
+        .collect();
+    chunks.push(json!({ "choices": [{ "delta": {}, "finish_reason": "stop" }], "usage": { "prompt_tokens": 10, "completion_tokens": n } }));
+    sse(&chunks)
+}
+
+/// Everything a socket receives until both chats' `done`, as (channel, payload).
+async fn collect_until_done(socket: &mut Socket, sessions: &[&str]) -> Vec<(String, Value)> {
+    let mut seen = Vec::new();
+    let mut done = std::collections::HashSet::new();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while done.len() < sessions.len() {
+        let Some(frame) = next_json(socket, deadline.saturating_duration_since(Instant::now())).await else {
+            panic!("socket went quiet; done for {done:?}, saw {}", seen.len())
+        };
+        let Some(channel) = frame["channel"].as_str() else { continue };
+        let payload = frame["payload"].clone();
+        if channel == "agent:event" && payload["type"] == "done" {
+            done.insert(payload["sessionId"].as_str().unwrap_or_default().to_string());
+        }
+        seen.push((channel.to_string(), payload));
+    }
+    seen
+}
+
+fn streamed_text(frames: &[(String, Value)], session: &str) -> String {
+    let mut out = String::new();
+    for (channel, p) in frames {
+        if channel == "agent:replay" && p["sessionId"] == session {
+            for e in p["events"].as_array().unwrap() {
+                if e["type"] == "text" {
+                    out.push_str(e["delta"].as_str().unwrap());
+                }
+            }
+        } else if channel == "agent:event" && p["sessionId"] == session && p["type"] == "text" {
+            out.push_str(p["delta"].as_str().unwrap());
+        }
+    }
+    out
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_turns_end() {
+    let chat = |id: &str| json!({ "id": id, "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("subscribe", chat("s_one"));
+    std::fs::write(rig.data.join("sessions").join("s_two.json"), chat("s_two").to_string()).unwrap();
+    // Each reply is 40 chunks, so 40 text events per chat, interleaved.
+    let model = scripted_model(vec![slow_text("one", 40), slow_text("two", 40)]).await;
+    let port = rig.d.port;
+
+    // Socket A takes s_one's stream (daemon:subscribe), B s_two's (?sessions=),
+    // C every chat (no subscription, as before).
+    let mut a = ws(port, &format!("/api/ws?token={TOKEN}"), None).await.unwrap();
+    a.send(Message::Text(json!({ "id": 1, "channel": "daemon:subscribe", "args": [["s_one"]] }).to_string().into()))
+        .await
+        .unwrap();
+    let ack = next_json(&mut a, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(ack, json!({ "id": 1, "result": true }), "no turn is running yet, so nothing comes before the answer");
+    let mut b = ws(port, &format!("/api/ws?sessions=s_two&token={TOKEN}"), None).await.unwrap();
+    let mut c = ws(port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
+
+    let mut one = turn_spec(&rig, &model, "turn_one", "s_one", json!({}));
+    let mut two = turn_spec(&rig, &model, "turn_two", "s_two", json!({}));
+    // As a host whose relay, messaging and accounting are the daemon's asks.
+    one["facts"]["hostEvents"] = json!(["done", "error"]);
+    two["facts"]["hostEvents"] = json!(["done", "error"]);
+    let (s1, _) = post(port, "chat:turn", json!([one]), Some(TOKEN)).await;
+    let (s2, _) = post(port, "chat:turn", json!([two]), Some(TOKEN)).await;
+    assert_eq!((s1, s2), (200, 200));
+
+    let (fa, fb, fc) = tokio::join!(
+        collect_until_done(&mut a, &["s_one", "s_two"]),
+        collect_until_done(&mut b, &["s_one", "s_two"]),
+        collect_until_done(&mut c, &["s_one", "s_two"]),
+    );
+    let words = |w: &str| (0..40).map(|i| format!("{w}{i} ")).collect::<String>();
+    // The model answers in the order the turns reach it, which the two posts
+    // above don't fix: each chat gets one of the two replies, whole.
+    let (c_one, c_two) = (streamed_text(&fc, "s_one"), streamed_text(&fc, "s_two"));
+    let mut got = [c_one.clone(), c_two.clone()];
+    got.sort();
+    assert_eq!(got, [words("one"), words("two")]);
+    // Every socket has its own chat's whole reply, once.
+    assert_eq!(streamed_text(&fa, "s_one"), c_one);
+    assert_eq!(streamed_text(&fb, "s_two"), c_two);
+    // Of the other chat a subscribed socket hears the turn start and end,
+    // and none of its stream after the first event.
+    let of = |frames: &[(String, Value)], s: &str| -> Vec<String> {
+        frames
+            .iter()
+            .filter(|(ch, p)| ch == "agent:event" && p["sessionId"] == s)
+            .map(|(_, p)| p["type"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let other_a = of(&fa, "s_two");
+    let other_b = of(&fb, "s_one");
+    assert!(other_a.first().is_some_and(|t| t != "done") && other_a.last().is_some_and(|t| t == "done"), "{other_a:?}");
+    assert!(other_a.len() <= 4, "a's view of s_two is a summary: {other_a:?}");
+    assert!(other_b.len() <= 4, "b's view of s_one is a summary: {other_b:?}");
+    let frames = |f: &[(String, Value)]| f.iter().filter(|(ch, _)| ch == "agent:event").count();
+    assert!(frames(&fa) * 3 < frames(&fc) * 2, "a {} frames vs c {}", frames(&fa), frames(&fc));
+    println!("agent frames per socket: subscribed a={} b={}, unsubscribed c={}", frames(&fa), frames(&fb), frames(&fc));
+
+    // The host asked only for how the turns end.
+    for turn in ["turn_one", "turn_two"] {
+        let (events, _) = turn_record(port, turn).await;
+        assert_eq!(event_types(&events), ["done"], "{turn}");
+    }
+
+    // A socket that starts showing a chat mid-turn is sent the turn so far.
+    let model2 = scripted_model(vec![
+        call_tool("c_wait", "ask_user", json!({ "questions": [{ "question": "Go?", "options": ["yes", "no"] }] })),
+        say_text("went"),
+    ])
+    .await;
+    let mut three = turn_spec(&rig, &model2, "turn_three", "s_one", json!({}));
+    three["facts"]["hostEvents"] = json!(["done", "error"]);
+    post(port, "chat:turn", json!([three]), Some(TOKEN)).await;
+    wait_pending(port, "s_one", "question", "c_wait").await;
+    let mut late = ws(port, &format!("/api/ws?sessions=s_two&token={TOKEN}"), None).await.unwrap();
+    // Connected narrowed: told that s_one is running (its first event).
+    let first = next_json(&mut late, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(
+        (first["channel"].as_str(), first["payload"]["sessionId"].as_str()),
+        (Some("agent:event"), Some("s_one")),
+        "{first}"
+    );
+    late.send(Message::Text(
+        json!({ "id": 7, "channel": "daemon:subscribe", "args": [["s_one", "s_two"]] }).to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let replay = next_json(&mut late, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(replay["channel"], "agent:replay", "{replay}");
+    let types: Vec<&str> =
+        replay["payload"]["events"].as_array().unwrap().iter().map(|e| e["type"].as_str().unwrap()).collect();
+    assert!(types.contains(&"tool_call") && types.contains(&"question"), "{types:?}");
+    assert_eq!(next_json(&mut late, Duration::from_secs(5)).await.unwrap(), json!({ "id": 7, "result": true }));
+    post(port, "chat:answer", json!(["s_one", "c_wait", [{ "questionId": "q1", "labels": ["yes"] }]]), Some(TOKEN))
+        .await;
+    let rest = collect_until_done(&mut late, &["s_one"]).await;
+    assert!(
+        rest.iter().all(|(ch, p)| ch != "agent:event" || p["type"] != "question"),
+        "the question is not sent twice"
+    );
+    assert_eq!(streamed_text(&rest, "s_one"), "went");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
     let session = json!({
@@ -4670,4 +4821,416 @@ async fn the_daemon_runs_the_telegram_bridge() {
     assert!(!calls.iter().any(|c| c[0] == "messaging:status"));
     drop(d);
     std::fs::remove_dir_all(&data).ok();
+}
+
+/// Electron main's side of the bridge for the native channels: the app
+/// window's handle (none here), dialogs it draws when asked (recorded, with
+/// scripted answers), and quitting for an update.
+async fn fake_shell_bridge(answers: Value) -> (String, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+    let s = seen.clone();
+    let app = axum::Router::new().route(
+        "/",
+        axum::routing::post(move |headers: axum::http::HeaderMap, body: axum::Json<Value>| {
+            let (s, answers) = (s.clone(), answers.clone());
+            async move {
+                assert_eq!(headers.get("authorization").and_then(|v| v.to_str().ok()), Some("Bearer bridge-token"));
+                s.lock().unwrap().push(body.0.clone());
+                let reply = match body.0["tool"].as_str() {
+                    Some("nativeWindow") => json!({ "handle": null }),
+                    Some("dialog") => json!({ "result": answers[body.0["kind"].as_str().unwrap_or("")].clone() }),
+                    Some("quitForUpdate") => json!({ "ok": true }),
+                    _ => json!({ "error": "unknown" }),
+                };
+                axum::Json(reply)
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://127.0.0.1:{}/", l.local_addr().unwrap().port());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    (url, seen)
+}
+
+fn native_daemon(data: &std::path::Path, bridge: &str, native: Value) -> Daemon {
+    start_with_config(
+        true,
+        Some(data),
+        json!({ "appVersion": "0.8.1", "edition": "desktop", "browserBridge": { "url": bridge, "token": "bridge-token" }, "native": native }),
+    )
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn answers_the_channels_electron_main_used_to() {
+    let data = std::env::temp_dir().join(format!("nekkod-native-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let picked = data.join("picked");
+    std::fs::create_dir_all(&picked).unwrap();
+    let answers = json!({
+        "pickFolder": picked,
+        "openFiles": [data.join("a.txt"), data.join("b.txt")],
+        "saveFile": null,
+        "message": { "response": 1 },
+    });
+    let (bridge, seen) = fake_shell_bridge(answers).await;
+    // `dialogs: "bridge"`: main draws them, so no real dialog opens in a test.
+    let d = native_daemon(&data, &bridge, json!({ "isPackaged": false, "exePath": "x", "dialogs": "bridge" }));
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in [
+        "dialog:openFiles",
+        "dialog:pickFolder",
+        "shell:openPath",
+        "voice:permission",
+        "update:check",
+        "update:install",
+    ] {
+        assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} is the daemon's: {info}");
+    }
+    let (status, files) = post(d.port, "dialog:openFiles", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{files}");
+    assert_eq!(files.as_array().unwrap().len(), 2);
+    let (_, folder) = post(d.port, "dialog:pickFolder", json!([{ "title": "Pick" }]), Some(TOKEN)).await;
+    assert_eq!(folder, json!(picked));
+    let (_, saved) = post(d.port, "dialog:saveFile", json!([{ "defaultPath": "x.md" }]), Some(TOKEN)).await;
+    assert_eq!(saved, Value::Null);
+    let (_, answer) =
+        post(d.port, "dialog:message", json!([{ "message": "Sure?", "buttons": ["No", "Yes"] }]), Some(TOKEN)).await;
+    assert_eq!(answer, json!({ "response": 1 }));
+    let (status, _) = post(d.port, "dialog:message", json!([{ "buttons": ["a", "b", "c", "d"] }]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "four buttons are refused before any dialog");
+
+    // workspace:add now goes through the daemon's own picker (small_services::pick_folder).
+    let (status, added) = post(d.port, "workspace:add", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{added}");
+    assert_eq!(added[0]["path"], json!(picked));
+    let kinds: Vec<String> =
+        seen.lock().unwrap().iter().filter_map(|v| v["kind"].as_str().map(str::to_string)).collect();
+    assert_eq!(kinds, ["openFiles", "pickFolder", "saveFile", "message", "pickFolder"]);
+    assert!(seen.lock().unwrap().iter().all(|v| v["tool"] != "pickFolder"), "the old bridge picker is not used");
+
+    // The microphone: Electron's answer shape, one of its statuses.
+    let (_, mic) = post(d.port, "voice:permission", json!(["status"]), Some(TOKEN)).await;
+    assert!(
+        ["granted", "denied", "restricted", "not-determined", "unknown"].contains(&mic["status"].as_str().unwrap()),
+        "{mic}"
+    );
+    let (status, _) = post(d.port, "voice:permission", json!(["grant"]), Some(TOKEN)).await;
+    assert_eq!(status, 400);
+    // Opening an empty path does nothing and does not fail, as shell.openPath did.
+    let (status, _) = post(d.port, "shell:openPath", json!([""]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    // An unpackaged app without a feed does not update, with main's message.
+    let (_, state) = post(d.port, "update:check", json!([]), Some(TOKEN)).await;
+    assert_eq!(state["state"], "none");
+    assert_eq!(state["message"], "Updates are available in the installed app.");
+    let (status, _) = post(d.port, "update:install", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "nothing downloaded");
+    // None of it reached the TS backend.
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!calls.to_string().contains("dialog:") && !calls.to_string().contains("update:"), "{calls}");
+    drop(d);
+
+    // Without `native` (the web edition), nothing here is the daemon's.
+    let web = start_with(true, Some(&data));
+    let (_, info) = post(web.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(!info["owned"].as_array().unwrap().iter().any(|o| o == "update:check"));
+    drop(web);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+fn fake_installer() -> std::path::PathBuf {
+    let exe = format!("fake_installer{}", std::env::consts::EXE_SUFFIX);
+    let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    let path = deps.parent().unwrap().join("examples").join(exe);
+    if !path.is_file() {
+        let target = deps.parent().unwrap().parent().unwrap();
+        let ok = Command::new(env!("CARGO"))
+            .args(["build", "-p", "nekkod", "--example", "fake_installer"])
+            .env("CARGO_TARGET_DIR", target)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "the stand-in installer builds");
+    }
+    path
+}
+
+/// A loopback release feed in electron-builder's layout: `latest*.yml` naming
+/// one file with its base64 SHA-512, the file itself, request log.
+async fn fake_feed(
+    version: &str,
+    file_name: &str,
+    bytes: Vec<u8>,
+    sha512: String,
+) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    let channel = if cfg!(windows) {
+        "latest.yml"
+    } else if cfg!(target_os = "macos") {
+        "latest-mac.yml"
+    } else {
+        "latest-linux.yml"
+    };
+    let yml = format!(
+        "version: {version}\nfiles:\n  - url: {file_name}\n    sha512: {sha512}\n    size: {}\npath: {file_name}\nsha512: {sha512}\nreleaseDate: '2026-10-17T00:00:00.000Z'\n",
+        bytes.len()
+    );
+    let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let (l2, name) = (log.clone(), file_name.to_string());
+    let bytes = std::sync::Arc::new(bytes);
+    let app = axum::Router::new().route(
+        "/feed/{file}",
+        axum::routing::get(move |axum::extract::Path(file): axum::extract::Path<String>| {
+            let (log, yml, name, bytes) = (l2.clone(), yml.clone(), name.clone(), bytes.clone());
+            async move {
+                log.lock().unwrap().push(file.clone());
+                if file == channel {
+                    (axum::http::StatusCode::OK, yml.into_bytes())
+                } else if file == name {
+                    (axum::http::StatusCode::OK, bytes.to_vec())
+                } else {
+                    (axum::http::StatusCode::NOT_FOUND, Vec::new())
+                }
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://127.0.0.1:{}/feed/", l.local_addr().unwrap().port());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    (url, log)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn updates_from_a_release_feed_with_checksums_and_events() {
+    let data = std::env::temp_dir().join(format!("nekkod-update-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    let installer = std::fs::read(fake_installer()).unwrap();
+    let sha = nekko_native::update::sha512_base64(&installer);
+    let ext = if cfg!(windows) {
+        "exe"
+    } else if cfg!(target_os = "macos") {
+        "zip"
+    } else {
+        "AppImage"
+    };
+    let name = format!("NekkoAgent-0.9.0-x64.{ext}");
+    let (feed, log) = fake_feed("0.9.0", &name, installer.clone(), sha.clone()).await;
+    let (bridge, seen) = fake_shell_bridge(json!({})).await;
+    let cache = data.join("cache");
+    let d = native_daemon(
+        &data,
+        &bridge,
+        json!({ "isPackaged": false, "exePath": "x", "updateFeedUrl": feed, "updateCacheDir": cache, "dialogs": "bridge" }),
+    );
+    // Only the updater's events (the fake backend sends one every 100 ms).
+    let mut events = ws(d.port, &format!("/api/events?token={TOKEN}&only=update:event"), Some("null")).await.unwrap();
+
+    let (_, state) = post(d.port, "update:check", json!([]), Some(TOKEN)).await;
+    assert_eq!(state["state"], "available", "{state}");
+    assert_eq!(state["version"], "0.9.0");
+    assert_eq!(state["currentVersion"], "0.8.1");
+    assert_eq!(state["edition"], "desktop");
+    let (_, state) = post(d.port, "update:download", json!([]), Some(TOKEN)).await;
+    assert_eq!(
+        state,
+        json!({ "state": "downloaded", "currentVersion": "0.8.1", "notesUrl": "https://github.com/nekko-labs/nekko-agent/releases/latest", "edition": "desktop", "version": "0.9.0", "percent": 100 })
+    );
+    let kept = cache.join("pending").join(&name);
+    assert_eq!(nekko_native::update::sha512_file(&kept).unwrap(), sha, "the download is kept, verified");
+
+    // The UI heard every step on `update:event`, the renderer's channel.
+    let mut states = Vec::new();
+    while let Some(ev) = next_json(&mut events, Duration::from_millis(500)).await {
+        if ev["channel"] == "update:event" {
+            states.push(ev["payload"]["state"].as_str().unwrap().to_string());
+        }
+    }
+    assert_eq!(states.first().map(String::as_str), Some("checking"));
+    assert!(states.iter().any(|s| s == "available") && states.iter().any(|s| s == "downloading"), "{states:?}");
+    assert_eq!(states.last().map(String::as_str), Some("downloaded"));
+
+    // A second download of the same file is not fetched again.
+    let fetched = log.lock().unwrap().iter().filter(|f| **f == name).count();
+    post(d.port, "update:check", json!([]), Some(TOKEN)).await;
+    post(d.port, "update:download", json!([]), Some(TOKEN)).await;
+    assert_eq!(log.lock().unwrap().iter().filter(|f| **f == name).count(), fetched);
+
+    // Windows: run the downloaded installer with electron-updater's silent
+    // update arguments, detached, then ask main to quit. Never a real installer.
+    if cfg!(windows) {
+        let (status, done) = post(d.port, "update:install", json!([]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{done}");
+        assert_eq!(done["plan"]["kind"], "run");
+        assert_eq!(done["plan"]["args"], json!(["--updated", "/S", "--force-run"]));
+        assert!(seen.lock().unwrap().iter().any(|v| v["tool"] == "quitForUpdate"), "main was asked to quit");
+        // The stand-in writes what it was started with beside itself.
+        let ran = kept.with_extension("ran.json");
+        wait_for("the stand-in installer to run", || ran.is_file()).await;
+        let got: Value = serde_json::from_str(&std::fs::read_to_string(&ran).unwrap()).unwrap();
+        assert_eq!(got["args"], json!(["--updated", "/S", "--force-run"]));
+    }
+    drop(d);
+
+    // A corrupted download is refused and not kept.
+    let _ = std::fs::remove_dir_all(&cache);
+    let (bad_feed, _) = fake_feed("0.9.0", &name, b"not the installer".to_vec(), sha.clone()).await;
+    let d = native_daemon(
+        &data,
+        &bridge,
+        json!({ "isPackaged": false, "exePath": "x", "updateFeedUrl": bad_feed, "updateCacheDir": cache, "dialogs": "bridge" }),
+    );
+    post(d.port, "update:check", json!([]), Some(TOKEN)).await;
+    let (_, state) = post(d.port, "update:download", json!([]), Some(TOKEN)).await;
+    assert_eq!(state["state"], "error");
+    assert!(state["message"].as_str().unwrap().starts_with("sha512 checksum mismatch, expected "), "{state}");
+    assert!(!cache.join("pending").join(&name).exists(), "a bad download is not kept");
+    let (status, _) = post(d.port, "update:install", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 400);
+    drop(d);
+
+    // Not newer: nothing offered.
+    let (same, _) = fake_feed("0.8.1", &name, installer, sha).await;
+    let d = native_daemon(
+        &data,
+        &bridge,
+        json!({ "isPackaged": false, "exePath": "x", "updateFeedUrl": same, "dialogs": "bridge" }),
+    );
+    let (_, state) = post(d.port, "update:check", json!([]), Some(TOKEN)).await;
+    assert_eq!(state["state"], "none", "{state}");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// A release of decision models on loopback: the English checkpoint's three small files as
+/// published (their real bytes, so their pinned SHA-256s hold), a stand-in for everything
+/// else, and counts of what was asked for. `tamper` serves a same-size `rl_agent_config.json`
+/// with other bytes.
+async fn fake_decision_release(tamper: bool) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    use axum::extract::Path;
+    use axum::routing::get;
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/laya-en");
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let log = seen.clone();
+    let app = axum::Router::new().route(
+        "/download/decision-models-v1/{asset}",
+        get(move |Path(asset): Path<String>| {
+            let (fixtures, log) = (fixtures.clone(), log.clone());
+            async move {
+                use axum::response::IntoResponse;
+                log.lock().unwrap().push(asset.clone());
+                let file = asset.strip_prefix("laya-en.").unwrap_or(&asset);
+                match std::fs::read(fixtures.join(file)) {
+                    Ok(mut bytes) => {
+                        if tamper && file == "rl_agent_config.json" {
+                            bytes[2] ^= 1;
+                        }
+                        bytes.into_response()
+                    }
+                    // The tokenizer and the weights: bytes that are not the published ones.
+                    Err(_) => b"not the published file".to_vec().into_response(),
+                }
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    (format!("http://127.0.0.1:{port}/download/decision-models-v1"), seen)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn downloads_a_decision_model_from_its_release_through_the_queue_and_checks_every_file() {
+    let root = std::env::temp_dir().join(format!("nekkod-decision-dl-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    let home = root.join("home");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), r#"{"engine":{"modelFolders":[]}}"#).unwrap();
+    let h = home.to_string_lossy().to_string();
+    let dir = data.join("models").join("decision").join("laya-en");
+
+    let (release, seen) = fake_decision_release(false).await;
+    let d = start_with_env(
+        true,
+        Some(&data),
+        json!({ "decisionModelsUrl": release }),
+        &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
+    );
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("decisions:download")));
+
+    let (status, started) = post(d.port, "decisions:download", json!(["laya-en", "fp16"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{started}");
+    assert_eq!(started, json!({ "ok": true, "message": "Downloading Laya (English) fp16 (0.85 GB)." }));
+    let settled = |j: &Value| ["done", "failed", "cancelled"].contains(&j["state"].as_str().unwrap_or_default());
+    // The three small files are the published ones: checked, and renamed into place.
+    for file in ["tokenizer_config.json", "rl_agent_config.json", "config.json"] {
+        let job = job_until(d.port, &format!("decision:laya-en:shared:{file}"), settled).await;
+        assert_eq!(job["state"], "done", "{job}");
+        assert_eq!(job["group"], "decision:laya-en:fp16");
+        assert_eq!(job["groupLabel"], "Laya (English) · fp16");
+        let want =
+            std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/laya-en").join(file));
+        assert_eq!(std::fs::read(dir.join(file)).ok(), want.ok(), "{file}");
+    }
+    // The others are not: refused before they are renamed, and nothing is left behind.
+    for (id, file) in [
+        ("decision:laya-en:shared:tokenizer.json", "tokenizer.json"),
+        ("decision:laya-en:fp16:model_fp16.onnx", "model_fp16.onnx"),
+    ] {
+        let job = job_until(d.port, id, settled).await;
+        assert_eq!(job["state"], "failed", "{job}");
+        assert_eq!(job["message"], format!("{file} is not the published size."), "{job}");
+        assert!(!dir.join(file).exists() && !dir.join(format!("{file}.part")).exists(), "{file} kept");
+    }
+    let mut asked = seen.lock().unwrap().clone();
+    asked.sort();
+    assert_eq!(
+        asked,
+        [
+            "laya-en.config.json",
+            "laya-en.model_fp16.onnx",
+            "laya-en.rl_agent_config.json",
+            "laya-en.tokenizer.json",
+            "laya-en.tokenizer_config.json"
+        ]
+    );
+    // An incomplete export is not a model yet.
+    let (_, models) = post(d.port, "decisions:models", json!([]), Some(TOKEN)).await;
+    assert_eq!(models, json!([]));
+    // Asked again, only what is missing is fetched.
+    seen.lock().unwrap().clear();
+    let (_, again) = post(d.port, "decisions:download", json!(["laya-en", "fp16"]), Some(TOKEN)).await;
+    assert_eq!(again["ok"], true, "{again}");
+    job_until(d.port, "decision:laya-en:fp16:model_fp16.onnx", settled).await;
+    job_until(d.port, "decision:laya-en:shared:tokenizer.json", settled).await;
+    let mut asked = seen.lock().unwrap().clone();
+    asked.sort();
+    assert_eq!(asked, ["laya-en.model_fp16.onnx", "laya-en.tokenizer.json"]);
+    // The decision files are not chat models: no autoStart, nothing in the library.
+    let settings: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert_ne!(settings["autoStart"], true, "{settings}");
+    drop(d);
+
+    // A file of the published size with other bytes is refused by its checksum.
+    let _ = std::fs::remove_dir_all(&dir);
+    let (tampered, _) = fake_decision_release(true).await;
+    let d = start_with_env(
+        true,
+        Some(&data),
+        json!({ "decisionModelsUrl": tampered }),
+        &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
+    );
+    post(d.port, "decisions:download", json!(["laya-en", "int8"]), Some(TOKEN)).await;
+    let job = job_until(d.port, "decision:laya-en:shared:rl_agent_config.json", settled).await;
+    assert_eq!(job["state"], "failed", "{job}");
+    assert_eq!(job["message"], "rl_agent_config.json is not the published file (checksum mismatch).");
+    assert!(!dir.join("rl_agent_config.json").exists());
+    let job = job_until(d.port, "decision:laya-en:shared:config.json", settled).await;
+    assert_eq!(job["state"], "done", "{job}");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&root);
 }
