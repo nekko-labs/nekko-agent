@@ -1,5 +1,6 @@
 import SwiftUI
 import WatchConnectivity
+import WidgetKit
 
 /// The Apple Watch glance: how many chats need you and how many are working on
 /// the iPhone's active computer, as the iPhone last saw it. Counts only, never
@@ -19,8 +20,7 @@ struct NekkoWatchApp: App {
 @MainActor
 @Observable
 final class WatchModel: NSObject, WCSessionDelegate {
-    private(set) var snapshot: StatusSnapshot = WatchModel.saved()
-    private static let key = "watch.status"
+    private(set) var snapshot: StatusSnapshot = WatchStatus.load()
 
     func start() {
         guard WCSession.isSupported() else { return }
@@ -28,16 +28,13 @@ final class WatchModel: NSObject, WCSessionDelegate {
         WCSession.default.activate()
     }
 
-    private static func saved() -> StatusSnapshot {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let s = try? JSONDecoder().decode(StatusSnapshot.self, from: data) else { return .empty }
-        return s
-    }
-
     private func take(_ context: [String: Any]) {
         guard let s = StatusSnapshot(watchContext: context) else { return }
+        guard s != snapshot else { return }
         snapshot = s
-        if let data = try? JSONEncoder().encode(s) { UserDefaults.standard.set(data, forKey: Self.key) }
+        // Kept in the App Group so the watch face complication shows the same counts.
+        WatchStatus.save(s)
+        WidgetCenter.shared.reloadTimelines(ofKind: WatchStatus.kind)
     }
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {

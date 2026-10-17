@@ -120,8 +120,8 @@ final class LiveRelayTests: XCTestCase {
                       "the slow reply never started streaming")
         XCUIDevice.shared.press(.home)
         sleep(3)
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let shot = XCTAttachment(screenshot: springboard.screenshot())
+        // The whole screen, without querying SpringBoard: on a loaded simulator finding it timed out.
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         shot.name = "\(theme)-6c-live-activity"
         shot.lifetime = .keepAlways
         add(shot)
