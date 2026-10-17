@@ -16,7 +16,8 @@ const done = { type: 'done', sessionId: 'a', messageId: 'm' };
 const cleanups: (() => void)[] = [];
 afterEach(() => { cleanups.splice(0).forEach(off => off()); vi.useRealTimers(); });
 
-function setup(context = () => ({ windowHidden: true, visibleSessionId: null as string | null, visibleView: null as string | null })) {
+type Context = () => { windowHidden: boolean; visibleSessionId: string | null; visibleView?: string | null };
+function setup(context: Context = () => ({ windowHidden: true, visibleSessionId: null })) {
   vi.useFakeTimers();
   let enabled: boolean | undefined;
   const endpoint = vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:123', token: 'a b', mode: 'backend' });
