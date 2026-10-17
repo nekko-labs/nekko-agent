@@ -29,6 +29,7 @@ const code = (fn: () => unknown) => {
 /** A full settings object with every kind of secret the computer holds. */
 const SETTINGS = {
   theme: 'dark',
+  phoneChanges: true,
   accent: '#6d5efc',
   accent2: '#22d3ee',
   themePreset: 'nebula',

@@ -204,6 +204,8 @@ it('decides phone requests the way the daemon must', async () => {
     providers: [{ id: 'p1', kind: 'openai', label: 'GPT', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
     guardrails: [{ id: 'g' }], hooks: [{ id: 'h', command: 'curl' }], hfToken: 'hf_secret', aboutUser: 'me',
     voice: { enabled: true, language: 'en', modelPath: '/m.bin', sensitivity: 50 },
+    // The computer lets phones see changes (the refusal when off is in phone-changes.test.ts).
+    phoneChanges: true,
   };
   const requests: Array<[string, unknown]> = [
     ['data:wipe', []],
@@ -286,6 +288,24 @@ it('decides phone requests the way the daemon must', async () => {
     },
   };
   for (const id of Object.keys(sessions)) requests.push(['session:get', [id]]);
+  // changes:list as a phone receives it (phoneChangesView): diffs, secrets hidden, limits.
+  const cv = phoneAccessPolicy().changesView;
+  const changes: Record<string, unknown> = {
+    edits: [
+      { path: '/Users/me/work/app/src/main.ts', original: 'a\nb\nc\nd\ne\nf\ng\nh\ni\n', current: 'a\nb\nc\nd\nE\nf\ng\nh\ni\nj\n' },
+      { path: 'C:\\code\\app\\new.txt', original: '', current: 'one\ntwo' },
+      { path: '/w/same.txt', original: 'z', current: 'z' },
+      { path: '/w/.env', original: 'KEY=1\n', current: 'KEY=2\n' },
+      { path: '/w/blob.bin', original: 'a\u0000', current: 'b\u0000' },
+      { path: '/w/emoji.md', original: 'héllo 😀\n', current: 'héllo 🐱\n' },
+      { path: '/w/scatter.txt', original: Array.from({ length: 20 }, (_, i) => `l${i}`).join('\n'), current: Array.from({ length: 20 }, (_, i) => (i === 1 ? 'X' : i === 18 ? 'Y' : `l${i}`)).join('\n') },
+    ],
+    big: [{ path: '/w/big.txt', original: '', current: Array.from({ length: cv.linesPerFile + 1 }, (_, i) => `n${i}`).join('\n') }],
+    many: Array.from({ length: cv.files + 2 }, (_, i) => ({ path: `/w/f${i}.txt`, original: '', current: 'x' })),
+    empty: [],
+  };
+  for (const id of Object.keys(changes)) requests.push(['changes:list', [id]]);
+  requests.push(['changes:list', []], ['changes:list', [7]], ['changes:accept', ['edits', '/w/a']], ['file:read', ['/etc/passwd']], ['dir:list', ['/']]);
   const cases = [];
   for (const [channel, args] of requests) {
     const calls: unknown[] = [];
@@ -293,6 +313,7 @@ it('decides phone requests the way the daemon must', async () => {
       calls.push([ch, a]);
       if (ch === 'skills:runnable') return skills;
       if (ch === 'session:get') return sessions[String(a[0])] ?? null;
+      if (ch === 'changes:list') return changes[String(a[0])] ?? [];
       return ch.startsWith('settings:') || ch === 'providers:list' ? (ch === 'providers:list' ? settings.providers : settings) : { ok: ch };
     };
     const outcome = await callFromPhone(dispatch, channel, Array.isArray(args) ? args : []).then(
@@ -301,7 +322,7 @@ it('decides phone requests the way the daemon must', async () => {
     );
     cases.push({ channel, args, calls, ...outcome });
   }
-  check(join(crate, 'tests', 'golden', 'phone.json'), { settings, skills, sessions, cases });
+  check(join(crate, 'tests', 'golden', 'phone.json'), { settings, skills, sessions, changes, cases });
 });
 
 /** A relay socket the agent dials, recording what it sends. */
