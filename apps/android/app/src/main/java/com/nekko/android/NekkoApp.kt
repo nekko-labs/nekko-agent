@@ -17,6 +17,9 @@ import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.haptics.EventHaptics
 import com.nekko.android.lock.AppLock
 import com.nekko.android.share.ShareInbox
+import com.nekko.android.widget.StatusSnapshot
+import com.nekko.android.widget.StatusStore
+import com.nekko.android.widget.StatusWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -68,6 +71,19 @@ class NekkoApp : Application() {
         haptics = AndroidHaptics(this, EventHaptics(phonePrefs), computers)
         // Vibrate for the active computer's agent events, per Settings → Vibration.
         appScope.launch { computers.events.collect(haptics::onEvent) }
+        // The Home Screen widget: counts only, saved and redrawn when they change.
+        val widgetStore = StatusStore(this)
+        appScope.launch {
+            computers.state.collect { s ->
+                // Not before the computers are loaded (after unlock): keep the last real numbers.
+                if (!s.ready) return@collect
+                val next = StatusSnapshot.of(s, System.currentTimeMillis())
+                if (!next.sameAs(widgetStore.load())) {
+                    widgetStore.save(next)
+                    StatusWidget.refresh(this@NekkoApp)
+                }
+            }
+        }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 appLock.onForeground()
