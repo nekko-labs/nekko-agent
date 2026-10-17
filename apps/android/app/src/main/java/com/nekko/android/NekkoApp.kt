@@ -20,6 +20,7 @@ import com.nekko.android.lock.AppLock
 import com.nekko.android.share.ShareInbox
 import com.nekko.android.widget.StatusSnapshot
 import com.nekko.android.widget.StatusStore
+import com.nekko.android.widget.StatusTile
 import com.nekko.android.widget.StatusWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -92,6 +93,7 @@ class NekkoApp : Application() {
                 if (!next.sameAs(widgetStore.load())) {
                     widgetStore.save(next)
                     StatusWidget.refresh(this@NekkoApp)
+                    StatusTile.refresh(this@NekkoApp)
                 }
             }
         }
