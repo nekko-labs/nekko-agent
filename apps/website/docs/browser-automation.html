@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser automation · Nekko Agent docs</title>
+    <meta name="description" content="Chat-owned browser actions, security boundaries and native driver migration status." />
+    <link rel="canonical" href="https://nekkoagent.com/docs/browser-automation" />
+    <link rel="alternate" type="text/markdown" href="/docs/browser-automation.md" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="theme-color" content="#101714" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Nekko Agent" />
+    <meta property="og:url" content="https://nekkoagent.com/docs/browser-automation" />
+    <meta property="og:title" content="Browser automation · Nekko Agent docs" />
+    <meta property="og:description" content="Chat-owned browser actions, security boundaries and native driver migration status." />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/docs.css?v=docs-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Browser automation","description":"Chat-owned browser actions, security boundaries and native driver migration status.","url":"https://nekkoagent.com/docs/browser-automation","inLanguage":"en","isPartOf":{"@id":"https://nekkoagent.com/#website"},"publisher":{"@id":"https://nekkolabs.com/#organization"},"about":{"@id":"https://nekkoagent.com/#app"}}</script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="topbar">
+      <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="docs-home" href="/docs">Docs</a>
+      <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
+        <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Site">
+        <a href="https://github.com/nekko-labs/nekko-agent" rel="noopener">GitHub</a>
+        <a class="download" href="/#download">Download</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/browser-automation" aria-current="page">Browser automation</a></li><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <main id="content">
+        <article class="prose" id="top">
+          <p class="kicker">Using Nekko Agent</p>
+          <h1>Browser automation</h1>
+          <p class="page-tools">
+            <a href="/docs/browser-automation.md">View as Markdown</a>
+            <a href="/llms.txt">llms.txt</a>
+          </p>
+<h2 id="current-dedicated-browser"><a class="anchor" href="#current-dedicated-browser" aria-hidden="true" tabindex="-1">#</a>Current dedicated browser</h2>
+<p>The desktop <code>browser</code> tool opens a hidden, sandboxed Chromium window owned by the current chat. It does not attach to your personal browser. Each chat has a separate in-memory session and up to eight tabs. Every browser action goes through Nekko&#39;s approval policy. Explicit visibility shows the owned window without activating it.</p>
+<p>You can navigate HTTP(S) pages, inspect text, click or fill the first matching element, type, press keys, wait for content, scroll, extract text or links, evaluate page JavaScript, take screenshots, manage tabs and read logs. Screenshots are sent to the selected model when approved. Evaluation runs in the page, not in the app; pages can see text you enter.</p>
+<p>Popups, downloads, JavaScript dialogs and device permissions are blocked. Local file navigation and uploads are blocked. Idle hidden sessions close after ten minutes. Browser control requires a local desktop chat; this dedicated browser is not supplied by web/server/CLI or sandboxed execution.</p>
+<h2 id="native-agent-browser-migration-status"><a class="anchor" href="#native-agent-browser-migration-status" aria-hidden="true" tabindex="-1">#</a>Native agent-browser migration status</h2>
+<p><strong>Not migrated (2026-10-17).</strong> Dedicated mode still requires pinned <code>playwright-core@1.63.0</code>, driving Electron&#39;s own Chromium through a per-chat in-process CDP transport without an app debugging port. This is an explicit security limitation, not a silent fallback.</p>
+<p>Vercel <code>agent-browser@0.39.1</code> was evaluated as the native Rust/Chrome replacement. Its Windows daemon accepts unauthenticated commands over a loopback TCP socket. That would create a second action entry point outside Nekko&#39;s approvals. Random session names and a token-protected CDP relay do not protect that command socket. MCP stdio uses the same daemon.</p>
+<p>Do not install a global browser driver, enable Electron remote debugging, attach a user browser or replace the default with raw CLI commands to work around this blocker. Native migration requires authenticated/private command IPC first, followed by security and behavior parity tests and matched before/after measurements. No performance comparison has been established.</p>
+<h2 id="testing-and-diagnostics"><a class="anchor" href="#testing-and-diagnostics" aria-hidden="true" tabindex="-1">#</a>Testing and diagnostics</h2>
+<p>Existing checks remain at their actual paths:</p>
+<ul>
+<li><code>apps/desktop/scripts/browser-automation-smoke.mjs</code>: dedicated Electron browser behavior/security smoke.</li>
+<li><code>apps/desktop/src/main/agentCdpTransport.test.ts</code>: CDP policy and owned-target tests.</li>
+<li><code>apps/desktop/src/main/agentBrowserActions.test.ts</code>: page-action behavior.</li>
+<li><code>apps/desktop/src/main/agentBrowser.test.ts</code>: private bridge behavior.</li>
+<li><code>scripts/perf/lib/browser.mjs</code>: owned Chromium helper for the existing performance harness.</li>
+<li><code>scripts/agent-browser-ipc-probe.mjs</code>: Windows-only native daemon authentication diagnostic; it does not launch a browser or switch defaults.</li>
+</ul>
+<p>See the <a href="https://github.com/nekko-labs/nekko-agent/blob/main/reports/agent-browser/feasibility.md" rel="noopener">feasibility report</a> for immutable upstream sources, exact executable provenance, raw probe output, safe reproduction commands and the implementation/measurement acceptance criteria. The separate E2E worktree has not been changed by this investigation.</p>
+
+          <footer class="page-foot">
+            <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/docs/browser-automation.md" rel="noopener">Edit this page on GitHub</a>
+            <div class="pager"><a class="prev" href="/docs/walkthrough"><span>Previous</span>Walkthrough</a><a class="next" href="/docs/local-models"><span>Next</span>Running models locally</a></div>
+          </footer>
+        </article>
+      </main>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Browser automation</a></li><li class="d2"><a href="#current-dedicated-browser">Current dedicated browser</a></li><li class="d2"><a href="#native-agent-browser-migration-status">Native agent-browser migration status</a></li><li class="d2"><a href="#testing-and-diagnostics">Testing and diagnostics</a></li></ul></nav></aside>
+    </div>
+    <dialog class="search-dialog" aria-label="Search the docs">
+      <form method="dialog" class="search-box">
+        <input type="search" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="esc" aria-label="Close search">Esc</button>
+      </form>
+      <ul class="results" role="listbox" aria-label="Results"></ul>
+    </dialog>
+    <script src="/docs.js?v=docs-1" defer></script>
+    <script src="/analytics.js?v=1" defer></script>
+  </body>
+</html>

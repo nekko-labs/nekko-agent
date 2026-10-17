@@ -6,6 +6,16 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Native agent-browser default (2026-10-17, blocked)
+
+See [SPEC](SPEC.md#in-app-browser-automation-2026-10-10) and [feasibility evidence](reports/agent-browser/feasibility.md). Architectural target: native Rust agent-browser, Chrome engine, app-owned chat scope; never a user browser or an app-wide debugging port. Existing Playwright default is explicitly retained pending the security prerequisite, not shipped as a migration.
+
+- [x] Inspect exact npm `0.39.1` / source `1165952d74ceed98fdc2dd97190ad41f44dd0e24` and main `dac13bb87468fe9d74a040d862720f6cc17a9565`; reproduce unauthenticated Windows command acceptance with no browser launch; save executable hash and raw JSON. The owned daemon tree and scratch data were cleaned up.
+- [ ] Release blocker: supply private inherited native IPC or authenticate every command with a privately delivered capability. Existing Windows TCP accepts arbitrary clients; CDP relay auth and random ports do not fix command auth. Audit dashboard/stream entry points too.
+- [ ] Capture unchanged baseline before runtime edits; implement chat-owned authenticated CDP relay and typed native action adapter with security/feature-parity tests. Preserve windows, partitions, approvals, screenshots/tabs/logs/waits and cleanup.
+- [ ] Matched same-browser/viewport/theme synthetic interleaved cold/warm benchmarks (at least 20 samples each where practical), raw data and exact perf-history numbers; full typecheck/build, relevant host/daemon suites and schema parity if changed.
+- [ ] Publish matching hidden visual/interaction evidence and obtain parent actual-pixel signoff; coordinate default testing workflow with the separate `e2e-playwright` task without modifying that worktree. No visual delta in this investigation-only change.
+
 ## Per-step plan working icons (2026-10-17)
 
 See [SPEC](SPEC.md#per-step-plan-working-icons-2026-10-17).
