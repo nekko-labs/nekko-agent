@@ -110,6 +110,9 @@
 .monitors-dock__hardware { gap: 18px; padding: 16px; }
 .monitors-dock__meter { display: grid; gap: 7px; }
 .monitors-dock__meter strong { font-size: 11px; font-weight: 500; color: var(--ink-soft); }
+.monitors-dock__meter-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.monitors-dock__meter-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.monitors-dock__temp { display: inline-flex; flex-shrink: 0; align-items: center; gap: 3px; font-size: 11px; font-variant-numeric: tabular-nums; }
 .monitors-dock__bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .monitors-dock__bar > span { display: block; height: 100%; border-radius: inherit; }
 .monitors-dock__reading { color: var(--ink-faint); font-size: 11px; font-variant-numeric: tabular-nums; }

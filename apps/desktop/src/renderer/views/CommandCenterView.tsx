@@ -20,6 +20,8 @@ import { type Vitals } from '../components/InsightsBox.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { MonitorsDock } from '../components/MonitorsDock.js';
 import { hasAppChrome } from '../chrome.js';
+import { claimAgent, displaysBridge, isScreenWindow, useDisplays, wallStorageKey, windowKey } from '../displays.js';
+import { ScreensControl } from '../components/ScreensControl.js';
 
 import { allPanes, isSplit, type PaneKind } from '../layout.js';
 import {
@@ -38,6 +40,19 @@ import {
 } from '../commandWall.js';
 
 const HOUR = 60 * 60_000;
+
+/**
+ * The wall's storage as this window should see it: the main window reads and
+ * writes the original keys; a second screen's window keeps its own copy, so
+ * two walls never overwrite each other.
+ */
+function screenStorage(storage: Storage | undefined): Pick<Storage, 'getItem' | 'setItem'> | undefined {
+  if (!storage || !isScreenWindow) return storage;
+  return {
+    getItem: (key) => storage.getItem(wallStorageKey(key)),
+    setItem: (key, value) => storage.setItem(wallStorageKey(key), value),
+  };
+}
 
 /** Physical digits also work when Shift produces !, @, or #. */
 export function wallLayoutShortcut(e: Pick<KeyboardEvent, 'code' | 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'repeat' | 'isComposing' | 'defaultPrevented'>) {
@@ -103,8 +118,15 @@ export function CommandCenterView() {
   // install show the same wall, with the browser's copy as the fast first
   // paint. Kept honest against the chats and terminals that exist, and grown
   // by every new chat while auto-add is on.
-  const storage = typeof localStorage === 'undefined' ? undefined : localStorage;
-  const [wall, setWallState] = useState<CommandWallState>(() => loadWallState(storage, useStore.getState().settings?.commandWall));
+  // A second screen's window (multi-monitor) keeps a wall of its own in this
+  // browser's storage and leaves the shared wall setting to the main window.
+  const storage = useMemo(() => screenStorage(typeof localStorage === 'undefined' ? undefined : localStorage), []);
+  const [wall, setWallState] = useState<CommandWallState>(() => {
+    const loaded = loadWallState(storage, isScreenWindow ? null : useStore.getState().settings?.commandWall);
+    // A new screen starts empty (it is where new agents go first), not
+    // seeded with the recent chats the main wall already shows.
+    return isScreenWindow && loaded.watermark === 0 ? { ...loaded, root: null, watermark: Date.now() } : loaded;
+  });
   const setWall = useCallback((update: (s: CommandWallState) => CommandWallState) => setWallState((s) => update(s)), []);
   const firstSave = useRef(true);
   // The wall waiting to reach the host. Leaving the page or closing the app
@@ -116,6 +138,7 @@ export function CommandCenterView() {
     const pending = unsaved.current;
     if (!pending) return;
     unsaved.current = null;
+    if (isScreenWindow) return;
     const setting = toWallSetting(pending);
     useStore.setState((s) => (s.settings ? { settings: { ...s.settings, commandWall: setting } } : {}));
     window.nekko.updateSettings({ commandWall: setting }).catch(() => {});
@@ -142,9 +165,40 @@ export function CommandCenterView() {
   // lists the view mounts with would seed an empty wall and watermark every
   // chat that already exists out of it.
   const [listsReady, setListsReady] = useState(false);
+  // Multi-monitor: which window owns each chat that appeared since the wall
+  // last looked, resolved before reconciling so a new chat lands on exactly
+  // one screen's wall. With one screen every chat is this window's at once.
+  const owners = useRef(new Map<string, string>());
+  const [ownersVersion, setOwnersVersion] = useState(0);
+  const [displays] = useDisplays();
+  const multiScreen = (displays?.displays.filter((d) => d.enabled).length ?? 1) > 1;
   useEffect(() => {
-    if (listsReady) setWallState((w) => reconcileWall(w, sessions, terminals, Date.now(), aspectRef.current));
-  }, [listsReady, sessions, terminals]);
+    if (!listsReady || !multiScreen || wall.watermark === 0) return;
+    const fresh = sessions.filter((s) => s.createdAt > wall.watermark && !s.parentSessionId && !owners.current.has(s.id));
+    if (!fresh.length) return;
+    let live = true;
+    void Promise.all(fresh.map(async (s) => { owners.current.set(s.id, await claimAgent(s.id, 'auto')); }))
+      .then(() => { if (live) setOwnersVersion((v) => v + 1); });
+    return () => { live = false; };
+  }, [listsReady, multiScreen, sessions, wall.watermark]);
+  useEffect(() => {
+    if (!listsReady) return;
+    if (!multiScreen) { setWallState((w) => reconcileWall(w, sessions, terminals, Date.now(), aspectRef.current)); return; }
+    // A chat whose owner is not known yet is left out (it would move the
+    // watermark past it); it is looked at again once its claim answers.
+    setWallState((w) => {
+      const known = sessions.filter((s) => w.watermark === 0 || s.createdAt <= w.watermark || s.parentSessionId || owners.current.has(s.id));
+      return reconcileWall(w, known, terminals, Date.now(), aspectRef.current, (id) => owners.current.get(id) === windowKey);
+    });
+  }, [listsReady, sessions, terminals, ownersVersion, multiScreen]);
+  // Main placed a chat made in another window here: open it on this wall.
+  useEffect(() => displaysBridge?.onPlaced((id) => {
+    owners.current.set(id, windowKey);
+    setWallState((w) => openWallPane(w, 'chat', id, aspectRef.current));
+  }), []);
+  // Tell main how full this wall is, for "prioritize empty windows".
+  const paneCount = useMemo(() => allPanes(wall.root).length, [wall.root]);
+  useEffect(() => { displaysBridge?.report(paneCount); }, [paneCount]);
 
   useEffect(() => {
     window.nekko.getUsageSummary().then(setUsage);
@@ -289,9 +343,23 @@ export function CommandCenterView() {
     useStore.setState((state) => ({ terminals: [t, ...state.terminals.filter((existing) => existing.id !== t.id)] }));
     return t.id;
   };
+  /**
+   * Multi-monitor: where a chat this window just made goes. A screen window
+   * keeps what it makes; the main window follows the placement preference
+   * (an empty screen first, or itself first). True when it stays here.
+   */
+  const keepNewChat = async (id: string): Promise<boolean> => {
+    if (!multiScreen) return true;
+    const owner = await claimAgent(id, isScreenWindow ? 'self' : 'place');
+    owners.current.set(id, owner);
+    return owner === windowKey;
+  };
   /** A window from the toolbar, with no side pointed at: beside the biggest window. */
-  const addFromToolbar = async (kind: PaneKind, refId?: string) => {
+  const addFromToolbar = async (kind: PaneKind, refId?: string, created = false) => {
+    const fresh = kind === 'chat' && (created || !refId);
     const ref = refId ?? (kind === 'chat' ? await newChat() : kind === 'terminal' ? await newTerminal() : kind);
+    // Placed on another screen: that window opens it; nothing to add here.
+    if (fresh && !(await keepNewChat(ref))) return;
     setWall((w) => openWallPane(w, kind, ref, aspectRef.current));
     if (kind === 'chat') setSelected(ref);
   };
@@ -435,13 +503,14 @@ export function CommandCenterView() {
       <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);
-          const add = kind === 'image' ? newChat({ kind: 'chat', chatType: 'image' }).then((id) => addFromToolbar('chat', id)) : addFromToolbar(kind);
+          const add = kind === 'image' ? newChat({ kind: 'chat', chatType: 'image' }).then((id) => addFromToolbar('chat', id, true)) : addFromToolbar(kind);
           void add.catch(reportAddFailure);
         }}
         onPick={async (selection) => {
           const ref = selection.refId ?? (selection.kind === 'chat' ? await newChat(selection) : await newTerminal());
-          await addFromToolbar(selection.kind, ref);
-          if (selection.kind === 'chat') selectAgent(ref);
+          await addFromToolbar(selection.kind, ref, !selection.refId);
+          // Unless placement sent the new agent to another screen.
+          if (selection.kind === 'chat' && (owners.current.get(ref) ?? windowKey) === windowKey) selectAgent(ref);
           setCompletedId(null);
           setAddOpen(false);
         }} />
@@ -455,7 +524,7 @@ export function CommandCenterView() {
       </div>}
       {panel.show && <AgentSidebar onCreate={async (kind, projectId, shell) => {
         const id = kind === 'terminal' ? await newTerminal(projectId, shell) : await newChat({ kind: 'chat', chatType: kind === 'image' ? 'image' : 'multimodal' }, projectId);
-        await addFromToolbar(kind === 'terminal' ? 'terminal' : 'chat', id);
+        await addFromToolbar(kind === 'terminal' ? 'terminal' : 'chat', id, true);
         setCompletedId(null);
       }} selectedId={completedId ?? selected} onOpenChat={(id) => {
         if (sessions.find((session) => session.id === id)?.archivedAt) setCompletedId(id);
@@ -596,6 +665,8 @@ export function WallToolbar({
             </button>
           ))}
         </div>
+        {/* Multi-monitor: Dynamic mode only, just left of the Monitors toggle. */}
+        {wall.layout.mode === 'grid' && <ScreensControl />}
         <button type="button" className="btn btn-outline gap-1.5 py-1 text-[12px]" aria-pressed={wall.dock.show} onClick={() => setWall((w) => ({ ...w, dock: { ...w.dock, show: !w.dock.show } }))}><PanelIcon className="h-4 w-4" />Monitors</button>
       </div>
     </div>

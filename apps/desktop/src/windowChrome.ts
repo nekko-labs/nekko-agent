@@ -42,4 +42,6 @@ export interface WindowChromeBridge {
   platform: string;
   titleBarHeight: number;
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => void;
+  /** Multi-monitor screen windows (see `displayWindows.ts`). */
+  displays: import('./displayWindows.js').DisplaysBridge;
 }

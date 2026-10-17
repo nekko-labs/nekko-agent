@@ -1,6 +1,6 @@
 import { chatArtifacts } from '../chatArtifacts.js';
 import { MonitorArtifacts } from './MonitorArtifacts.js';
-import { MonitorTasks } from './MonitorTasks.js';
+import { MonitorProject } from './MonitorProject.js';
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { QueuedPrompt, Session } from '@nekko-agent/shared';
 import { DEFAULT_ORCHESTRATION, getStrategy, planProgress, queueItemPayload } from '@nekko-agent/shared';
@@ -68,7 +68,7 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan, onMinimi
       </header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
         <MonitorArtifacts key={sessionId} sessionId={sessionId} artifacts={artifacts} hydrated={!!session && session.id === sessionId && Array.isArray(session.messages)} />
-        <MonitorTasks sessionId={sessionId} />
+        <MonitorProject sessionId={sessionId} projectPath={basePath} />
         <section>
           <div className="mb-1.5 flex items-center gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Sub-agents</span>

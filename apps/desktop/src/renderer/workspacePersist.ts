@@ -1,5 +1,6 @@
 import type { Workspace } from './store.js';
 import { allPanes, isSplit, type WbNode } from './layout.js';
+import { wallStorageKey } from './displays.js';
 
 /**
  * The open workspaces, kept across restarts.
@@ -15,7 +16,9 @@ import { allPanes, isSplit, type WbNode } from './layout.js';
  * pruned against what still exists once the session and terminal lists load.
  */
 
-const KEY = 'nekko.workspaces.v1';
+// A second screen's window keeps its own arrangement (multi-monitor), so the
+// two windows sharing this storage never overwrite each other's panes.
+const KEY = wallStorageKey('nekko.workspaces.v1');
 
 export interface SavedLayout {
   workspaces: Workspace[];

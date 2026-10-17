@@ -5,6 +5,7 @@ import type { AppSettings, Session, SessionSummary, ProviderConfig, ModelInfo, T
 import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
 import { syncTitleBarOverlay } from './chrome.js';
+import { isScreenWindow } from './displays.js';
 import { putCachedSession } from './sessionCache.js';
 import { loadLayout, maxIdSeq, pruneLayout, saveLayout } from './workspacePersist.js';
 import {
@@ -668,7 +669,8 @@ export const useStore = create<UiState>((set, get) => ({
     try {
       const settings = await window.nekko.getSettings();
       if (!settings) throw new Error('Nekko service returned no settings.');
-      const onboardingOpen = autoOpenOnboarding ? shouldAutoOpenOnboarding(settings) : get().onboardingOpen;
+      // A second screen's window never opens the setup wizard; the main window does.
+      const onboardingOpen = autoOpenOnboarding && !isScreenWindow ? shouldAutoOpenOnboarding(settings) : get().onboardingOpen;
       set({ settings, onboardingOpen, settingsLoaded: true, settingsError: null });
       get().applyTheme();
       if (!get().activeProviderId && settings.defaultProviderId) {

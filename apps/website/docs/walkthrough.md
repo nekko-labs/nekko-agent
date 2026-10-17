@@ -254,7 +254,9 @@ The plan icon in an agent window opens or closes only that chat's plan, sub-agen
 
 The context-window gauge has a subtle green background below 60% full, yellow from 60% to below 85%, and red at 85% or higher. Counts remain estimated; an unknown window limit stays neutral.
 
-In Agents, the Hardware panel names each detected GPU and shows its own utilization. Missing readings say Unavailable rather than zero; switching monitoring off says Monitor off. VRAM remains the aggregate memory reading across devices.
+In Agents, the Hardware panel names each detected GPU and shows its own utilization. Missing readings say Unavailable rather than zero; switching monitoring off says Monitor off. VRAM remains the aggregate memory reading across devices. Where your machine reports them, CPU, Memory and each GPU row also show a temperature at the right of the label, orange from 80°C and red from 90°C. NVIDIA cards report theirs through their driver; Linux reads its hardware sensors; on Windows the CPU reading comes from the ACPI thermal zone, which many desktops do not publish, so it can be missing there.
+
+**Using more than one screen.** In Dynamic view, the screens button just left of **Monitors** shows how many screens are in use. Hover it to see your screens in a row: click one to open a full Nekko window on it (it swipes in from the left edge), click again to close it (it shrinks into the right edge). The main window's screen is always on. Each screen's window has its own left navigation, toolbar and wall, so one screen can show agents while another shows Settings. Under **View options**, choose **Prioritize empty windows** to send new agents to an empty screen first, or **Prioritize the main window** to keep new agents on the main screen. A window always keeps the agents you start from it, and your screens are reopened the next time you launch.
 
 ## 4. The Context Inspector
 
@@ -389,7 +391,7 @@ Drag a project group header in the agent panel onto another group to place it be
 
 Changes is the leftmost header control. When the agent edits files it uses a muted background without an outer glow and shows added/deleted line totals plus the changed-file count. Click it to review the diff. Zen focuses that window; a small divider separates this action from the Files, Browser and Logs panel buttons. The activity icon is at the top left before the numbered agent icon.
 
-**Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label and shows only while the rail is minimized; the conversation starts below it so it never covers your first message. With the rail open, the minimize button at the far right of its header puts it away again. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
+**Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label and shows only while the rail is minimized; the conversation starts below it so it never covers your first message. With the rail open, the minimize button at the far right of its header puts it away again. Its **Project** group lists the work your project tracks: open items from a connected Linear, Jira, Asana, Trello, Todoist or ClickUp (one tab each), or, if none is connected, the unchecked items in the chat folder's `TASKS.md` (or `TODO.md`, `BACKLOG.md`, `ROADMAP.md`). Click an item to put it in the message box; nothing is sent until you send. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
 
 ## Reports and artifacts in chat
 

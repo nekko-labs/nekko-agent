@@ -103,6 +103,8 @@ export interface GpuDevice {
   memoryUsedMB: number;
   memoryFreeMB: number;
   utilizationPct?: number;
+  /** Core temperature in °C, when the probe reports one (nvidia-smi does). */
+  temperatureC?: number;
 }
 
 /**

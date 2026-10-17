@@ -1,4 +1,5 @@
 import type { ConnectorKind, ConnectorResource } from '@nekko-agent/shared';
+import { parseTasksMarkdown } from '@nekko-agent/shared';
 
 /** One event returned by a connector poll; listeners map these to WorkflowEvents. */
 export interface ConnectorPollEvent {
@@ -592,27 +593,8 @@ export const clickupConnector: Connector = {
   },
 };
 
-/**
- * Parse a Markdown checklist into tasks: each `- [ ]` / `* [ ]` line is an open
- * task, `[x]` lines are done and skipped. The nearest heading above becomes the
- * subtitle so a TASKS.md grouped by section reads the same in the panel.
- */
-export function parseTasksMarkdown(text: string, path = ''): ConnectorResource[] {
-  const out: ConnectorResource[] = [];
-  let section = '';
-  text.split(/\r?\n/).forEach((line, i) => {
-    // Linear prefix checks, not one backtracking regex (CodeQL polynomial
-    // ReDoS on whitespace-heavy lines); mirrors parse_tasks_markdown in Rust.
-    const hashes = /^#{1,6}/.exec(line)?.[0].length ?? 0;
-    if (hashes && /^\s/.test(line.slice(hashes)) && line[hashes] !== '#') { section = line.slice(hashes).trim(); return; }
-    const body = line.trimStart();
-    if (!'-*+'.includes(body[0] ?? 'z') || !/^\s/.test(body.slice(1))) return;
-    const box = body.slice(1).trimStart();
-    if (!box.startsWith('[ ]') || !/^\s/.test(box.slice(3))) return;
-    out.push({ id: `${path}:${i + 1}`, title: box.slice(3).trim(), subtitle: section || 'Tasks file', url: path ? `file://${path}` : undefined, body: '' });
-  });
-  return out;
-}
+/** The checklist parser now lives in shared (the Agent Monitor's Project group uses it too). */
+export { parseTasksMarkdown };
 
 /** A local Markdown task file (settings.path). Read on the host; no account. */
 export const tasksFileConnector: Connector = {
