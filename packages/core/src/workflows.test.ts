@@ -12,7 +12,14 @@ import {
   matchWorkflows,
   nextCronRun,
   nextScheduledRun,
+  dailyCron,
+  pausedBlocks,
+  runOutcome,
   slugify,
+  templateInputProblem,
+  templateInputValues,
+  templateReadiness,
+  weekdayCron,
   triggerAccepts,
   triggerLabel,
   unreachableSteps,
@@ -327,5 +334,87 @@ describe('templates', () => {
     expect(test.onFailure).toEqual({ goto: 'step', stepId: failStep.id });
     const okStep = steps.find((s) => s.name.toLowerCase().includes('success'))!;
     expect(okStep.onSuccess).toEqual({ goto: 'end' });
+  });
+});
+
+describe('gallery templates', () => {
+  const byId = (id: string) => WORKFLOW_TEMPLATES.find((t) => t.id === id)!;
+  const env = { connectors: [], defaultProviderId: 'p', defaultModelId: 'm' };
+
+  it('build from their inputs, with valid schedules', () => {
+    for (const t of WORKFLOW_TEMPLATES.filter((x) => x.featured)) {
+      const { steps, triggers } = t.build(templateInputValues(t, { repo: 'o/r' }));
+      expect(steps.length, t.id).toBeGreaterThan(0);
+      expect(t.summary, t.id).toBeTruthy();
+      for (const trig of triggers.filter((x) => x.kind === 'schedule')) expect(isValidCron(trig.cron!), t.id).toBe(true);
+    }
+  });
+
+  it('turns a time input into the schedule', () => {
+    expect(weekdayCron('08:30')).toBe('30 8 * * 1-5');
+    expect(dailyCron('3:05')).toBe('5 3 * * *');
+    expect(weekdayCron('25:00')).toBeUndefined();
+    expect(byId('github-notifications').build({ time: '07:15' }).triggers[0].cron).toBe('15 7 * * 1-5');
+  });
+
+  it('keeps the PR watcher disarmed until it has a repo', () => {
+    const t = byId('review-my-prs');
+    expect(t.build({}).triggers[0].enabled).toBe(false);
+    const armed = t.build({ repo: 'o/r', author: 'octo' });
+    expect(armed.triggers[0]).toMatchObject({ kind: 'connector', connector: 'github', repo: 'o/r', enabled: true });
+    expect(armed.steps[0].run).toContain('octo');
+  });
+
+  it('checks inputs', () => {
+    const [repo, author] = byId('review-my-prs').inputs!;
+    expect(templateInputProblem(repo, '')).toMatch(/required/);
+    expect(templateInputProblem(repo, 'nope')).toMatch(/owner\/name/);
+    expect(templateInputProblem(repo, 'o/r')).toBeUndefined();
+    expect(templateInputProblem(author, '')).toBeUndefined();
+    expect(templateInputProblem(byId('ticket-digest').inputs![0], '9am')).toMatch(/time/);
+  });
+
+  it('reports each requirement and whether it is met', () => {
+    expect(templateReadiness(byId('github-notifications'), env).map((n) => [n.id, n.ok])).toEqual([
+      ['connector:github', false],
+      ['model', true],
+    ]);
+    const digest = templateReadiness(byId('ticket-digest'), { ...env, connectors: [{ kind: 'jira', connected: true }] });
+    expect(digest[0]).toMatchObject({ label: 'Linear or Jira connected', ok: true, fix: 'connectors' });
+    const nightly = templateReadiness(byId('nightly-dependency-check'), { connectors: [] });
+    expect(nightly.map((n) => [n.id, n.ok])).toEqual([['workspace', false], ['model', false]]);
+  });
+});
+
+describe('pause all automations', () => {
+  it('holds back what nobody started by hand', () => {
+    for (const kind of ['schedule', 'git', 'slack', 'connector', 'webhook'] as const) expect(pausedBlocks(kind, true), kind).toBe(true);
+    expect(pausedBlocks('manual', true)).toBe(false);
+    expect(pausedBlocks('cli', true)).toBe(false);
+    expect(pausedBlocks('schedule', false)).toBe(false);
+    expect(pausedBlocks('schedule', undefined)).toBe(false);
+  });
+});
+
+describe('run outcomes', () => {
+  const steps = [step('a', { name: 'Check' }), step('b', { kind: 'shell', name: 'Lint' }), step('c', { name: 'Write up' })];
+  const run = (status: 'success' | 'failure' | 'cancelled', attempts: Array<Record<string, unknown>>) =>
+    ({ id: 'r', workflowId: 'w', status, triggerKind: 'manual', startedAt: 1, steps: attempts }) as never;
+
+  it('names the step that failed and why', () => {
+    const out = runOutcome(run('failure', [
+      { stepId: 'a', status: 'failure', attempt: 1, startedAt: 1, error: 'first' },
+      { stepId: 'b', status: 'failure', attempt: 1, startedAt: 2, error: 'exit 1', sessionId: 's' },
+    ]), steps);
+    expect(out).toEqual({ failed: { stepId: 'b', name: 'Lint', text: 'exit 1', sessionId: 's' } });
+  });
+
+  it('gives the last agent answer of a pass, without the outcome token', () => {
+    const out = runOutcome(run('success', [
+      { stepId: 'c', status: 'success', attempt: 1, startedAt: 1, output: 'Three PRs wait on you. ⟦PASS⟧', sessionId: 's1' },
+      { stepId: 'b', status: 'success', attempt: 1, startedAt: 2, output: 'lint ok' },
+    ]), steps);
+    expect(out.result).toEqual({ stepId: 'c', name: 'Write up', text: 'Three PRs wait on you.', sessionId: 's1' });
+    expect(runOutcome(run('cancelled', []), steps)).toEqual({});
   });
 });

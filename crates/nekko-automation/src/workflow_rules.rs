@@ -57,6 +57,15 @@ pub fn cli_command(wf: &Value, trigger: Option<&Value>) -> String {
     if cmd.is_empty() { slugify(&nekko_js::display(wf.get("name").unwrap_or(&Value::Null))) } else { cmd.to_string() }
 }
 
+/// `PAUSABLE_TRIGGER_KINDS`: the triggers "Pause all automations" holds back.
+/// Manual and CLI runs are a person asking and still go.
+pub const PAUSABLE_TRIGGER_KINDS: [&str; 5] = ["schedule", "git", "slack", "connector", "webhook"];
+
+/// `pausedBlocks(kind, paused)`: a run fired by `kind` waits while paused.
+pub fn paused_blocks(kind: &str, paused: Option<&Value>) -> bool {
+    nekko_js::truthy(paused) && PAUSABLE_TRIGGER_KINDS.contains(&kind)
+}
+
 /// `triggerEnabled(t)`: absent flag means armed.
 pub fn trigger_enabled(t: &Value) -> bool {
     t.get("enabled") != Some(&Value::Bool(false))

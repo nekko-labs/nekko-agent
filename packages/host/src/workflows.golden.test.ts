@@ -151,7 +151,8 @@ it('runs workflows and keeps their files as the TS engine does', async () => {
       workspaces: [{ id: 'ws1', path: '/work/one' }, { id: 'ws2', path: '/work/two' }],
       defaultProviderId: 'p-default', defaultModelId: 'm-default',
       connectors: [{ kind: 'slack', connected: true, token: 'xoxb' }, { kind: 'linear', connected: false, token: 'l' }],
-    };
+    } as Record<string, unknown>;
+    const initialSettings = JSON.parse(JSON.stringify(settings));
     const sessions = new Map<string, { id: string; messages: Array<{ role: string; content: string }> }>();
     const log: unknown[] = [];
     let sessionN = 0;
@@ -277,9 +278,17 @@ it('runs workflows and keeps their files as the TS engine does', async () => {
       { op: 'run', args: ['@Cancel Me'], at: NOW + 71_000, replies: [{ reply: 'ok', cancel: true }] },
       { op: 'cancel', args: ['missing'] },
       { op: 'runs', args: ['@Shell Chain'] },
+      // Paused automations: the due schedule, a connector event and a webhook start nothing; Run still works.
+      { op: 'settings', args: [{ automationsPaused: true }] },
+      { op: 'tick', at: NOW + 3_650_000 },
+      { op: 'event', args: [{ kind: 'connector', connector: 'linear', event: 'issue', text: 'Paused bug' }], at: NOW + 3_651_000 },
+      { op: 'webhook', args: ['shell-chain', 'sec', {}], at: NOW + 3_652_000 },
+      { op: 'run', args: ['@Cancel Me'], at: NOW + 3_653_000, replies: [{ reply: 'first done' }, { reply: 'second done' }] },
+      { op: 'settings', args: [{ automationsPaused: false }] },
       { op: 'tick', at: NOW + 3_700_000, replies: [{ reply: 'b' }, { reply: 'v' }], actions: [{ output: 'ok' }] },
       { op: 'delete', args: ['@Cancel Me'] },
       { op: 'delete', args: ['@Shell Chain'] },
+      { op: 'create', args: [{ name: 'From Gallery', notify: 'always', templateId: 'ticket-digest', steps: [prompt('a', 'x')], triggers: [] }], at: NOW + 3_800_000 },
       { op: 'file', file: ['workflow-runs.json', JSON.stringify([{ id: 'r1', workflowId: 'id-001', status: 'running', triggerKind: 'manual', startedAt: 5, steps: [{ stepId: 'build', status: 'running', attempt: 1, startedAt: 6 }, { stepId: 'x', status: 'success', attempt: 1, startedAt: 6, endedAt: 7 }] }, { id: 'r2', workflowId: 'id-001', status: 'success', triggerKind: 'manual', startedAt: 1, steps: [] }])] },
       { op: 'reconcile', at: NOW + 4_000_000 },
       { op: 'reconcile' },
@@ -331,6 +340,7 @@ it('runs workflows and keeps their files as the TS engine does', async () => {
             for (let i = 0; i < 6; i++) await settle();
             break;
           case 'reconcile': workflows.reconcileWorkflowRuns(); break;
+          case 'settings': Object.assign(settings, args[0]); break;
           case 'file': writeFileSync(join(dir, step.file![0]), step.file![1]); break;
         }
       } catch (e) {
@@ -357,7 +367,7 @@ it('runs workflows and keeps their files as the TS engine does', async () => {
       { kind: 'connector', connector: 'jira', repo: 'r', event: 'issue', text: 't' }, { kind: 'connector', connector: 'teams', channel: 'c' }, { kind: 'connector' },
       { kind: 'webhook', slug: 's' }, { kind: 'webhook' }, { kind: 'manual' },
     ].map((e) => ({ event: e, label: workflows.describeEvent(e as never) }));
-    check(join(crate, 'tests', 'golden', 'workflows.json'), { start: NOW, settings, ops: out, described });
+    check(join(crate, 'tests', 'golden', 'workflows.json'), { start: NOW, settings: initialSettings, ops: out, described });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

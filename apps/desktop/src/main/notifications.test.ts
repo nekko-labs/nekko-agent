@@ -9,13 +9,14 @@ class Socket {
   onmessage?: (e: { data: string }) => void;
   close = vi.fn();
   event(payload: unknown) { this.onmessage?.({ data: JSON.stringify({ channel: IpcEvents.agentEvent, payload }) }); }
+  workflows(payload: unknown) { this.onmessage?.({ data: JSON.stringify({ channel: IpcEvents.workflowsUpdated, payload }) }); }
 }
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const done = { type: 'done', sessionId: 'a', messageId: 'm' };
 const cleanups: (() => void)[] = [];
 afterEach(() => { cleanups.splice(0).forEach(off => off()); vi.useRealTimers(); });
 
-function setup(context = () => ({ windowHidden: true, visibleSessionId: null as string | null })) {
+function setup(context = () => ({ windowHidden: true, visibleSessionId: null as string | null, visibleView: null as string | null })) {
   vi.useFakeTimers();
   let enabled: boolean | undefined;
   const endpoint = vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:123', token: 'a b', mode: 'backend' });
@@ -108,5 +109,34 @@ describe('main desktop notifications', () => {
 
   it('encodes session IDs for click delivery', () => {
     expect(notificationLink('a/b ?')).toBe('nekko-agent://session/open?id=a%2Fb%20%3F');
+  });
+
+  it('tells each finished workflow run once, from the workflows snapshot', async () => {
+    const s = setup(); await flush(); s.sockets[0].onopen?.();
+    const started = Date.now();
+    const wf = { id: 'w', name: 'Digest', notify: 'failure', steps: [{ id: 'a', name: 'Lint', kind: 'shell', run: 'x' }] };
+    const old = { id: 'r0', workflowId: 'w', status: 'failure', triggerKind: 'schedule', startedAt: 1, endedAt: started - 1, steps: [] };
+    const live = { id: 'r1', workflowId: 'w', status: 'running', triggerKind: 'schedule', startedAt: started, steps: [] };
+    s.sockets[0].workflows({ workflows: [wf], runs: [live, old] }); await flush();
+    expect(s.post).not.toHaveBeenCalled();
+    const failed = { ...live, status: 'failure', endedAt: started + 5, steps: [{ stepId: 'a', status: 'failure', attempt: 1, startedAt: started, error: 'exit 1' }] };
+    s.sockets[0].workflows({ workflows: [wf], runs: [failed, old] });
+    s.sockets[0].workflows({ workflows: [wf], runs: [failed, old] }); await flush();
+    expect(s.post).toHaveBeenCalledTimes(1);
+    expect(s.post).toHaveBeenCalledWith(expect.objectContaining({ kind: 'run-failed', title: 'Digest failed', link: 'nekko-agent://workflow/run?workflow=w&run=r1' }));
+  });
+
+  it('keeps workflow run notices quiet on the Workflows view and when notifications are off', async () => {
+    let view: string | null = 'workflows';
+    const s = setup(() => ({ windowHidden: false, visibleSessionId: null, visibleView: view })); await flush(); s.sockets[0].onopen?.();
+    const wf = { id: 'w', name: 'Digest', steps: [] };
+    const run = (id: string) => ({ id, workflowId: 'w', status: 'failure', triggerKind: 'schedule', startedAt: Date.now(), endedAt: Date.now() + 1, steps: [], message: 'boom' });
+    s.sockets[0].workflows({ workflows: [wf], runs: [run('r1')] }); await flush();
+    view = 'chat'; s.enable(false);
+    s.sockets[0].workflows({ workflows: [wf], runs: [run('r2')] }); await flush();
+    expect(s.post).not.toHaveBeenCalled();
+    s.enable(true);
+    s.sockets[0].workflows({ workflows: [wf], runs: [run('r3')] }); await flush();
+    expect(s.post).toHaveBeenCalledWith(expect.objectContaining({ title: 'Digest failed', body: 'boom' }));
   });
 });

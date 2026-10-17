@@ -353,6 +353,10 @@ impl Tasks {
             return None;
         }
         let settings = self.host.settings().await;
+        // "Pause all automations": a due task waits; Run now still works.
+        if due_at.is_some() && nekko_js::truthy(settings.get("automationsPaused")) {
+            return None;
+        }
         let provider = nullish_or(task.get("providerId"), settings.get("defaultProviderId")).cloned();
         let model = nullish_or(task.get("modelId"), settings.get("defaultModelId")).cloned();
         let (Some(provider), Some(model)) =

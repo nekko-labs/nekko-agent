@@ -50,7 +50,7 @@ it('fires, finishes and keeps tasks.json as the TS service does', async () => {
       ...(await orig<typeof import('crypto')>()),
       randomUUID: () => `00000000-0000-4000-8000-${String(++uuid).padStart(12, '0')}`,
     }));
-    const settings: { defaultProviderId?: string; defaultModelId?: string } = { defaultProviderId: 'p-default', defaultModelId: 'm-default' };
+    const settings: { defaultProviderId?: string; defaultModelId?: string; automationsPaused?: boolean } = { defaultProviderId: 'p-default', defaultModelId: 'm-default' };
     const sessions = new Map<string, { id: string; messages: Array<{ role: string; content: string }>; [k: string]: unknown }>();
     const sessionLog: unknown[] = [];
     let sessionN = 0;
@@ -122,8 +122,10 @@ it('fires, finishes and keeps tasks.json as the TS service does', async () => {
       { op: 'create', args: [{ title: 'No model', kind: 'recurring', prompt: 'p', intervalMs: 10 }], at: NOW + 140_000, settings: {} },
       { op: 'run', args: ['00000000-0000-4000-8000-000000000005'], at: NOW + 141_000, settings: {} },
       { op: 'update', args: ['00000000-0000-4000-8000-000000000005', { status: 'active', nextRunAt: NOW + 1 }], at: NOW + 142_000, settings: { defaultProviderId: 'p-default', defaultModelId: 'm-default' } },
+      // Paused automations: a tick fires nothing, though task 5 is due.
+      { op: 'tick', at: NOW + 3_650_000, settings: { defaultProviderId: 'p-default', defaultModelId: 'm-default', automationsPaused: true } },
       // A scheduler tick fires what is due (the recurring one is not yet).
-      { op: 'tick', replies: [{ reply: 'Condition met, stopping.' }, { reply: 'ok' }], at: NOW + 3_700_000 },
+      { op: 'tick', replies: [{ reply: 'Condition met, stopping.' }, { reply: 'ok' }], at: NOW + 3_700_000, settings: { defaultProviderId: 'p-default', defaultModelId: 'm-default' } },
       { op: 'delete', args: ['00000000-0000-4000-8000-000000000005'] },
       { op: 'create', args: [{ title: 'Orphan', kind: 'scheduled', prompt: 'p', runAt: NOW }], at: NOW + 3_800_000 },
       { op: 'delete', args: ['00000000-0000-4000-8000-000000000006'] },
@@ -143,6 +145,7 @@ it('fires, finishes and keeps tasks.json as the TS service does', async () => {
       if (step.settings) {
         delete settings.defaultProviderId;
         delete settings.defaultModelId;
+        delete settings.automationsPaused;
         Object.assign(settings, step.settings);
       }
       if (step.deleteSession) sessions.delete(step.deleteSession);
