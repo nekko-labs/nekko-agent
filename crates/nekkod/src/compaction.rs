@@ -57,6 +57,9 @@ struct Job {
     progress: Mutex<serde_json::Map<String, Value>>,
     /// How it ended: the chat the summary landed in, or the error.
     done: watch::Receiver<Option<Result<Value, String>>>,
+    /// The last `turn:notify` sent: each waits for the one before, so the
+    /// host hears the progress in the order it happened.
+    notified: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 #[derive(Default)]
@@ -157,6 +160,7 @@ impl Compactions {
             cancelled: Arc::default(),
             progress: Mutex::new(progress),
             done: rx,
+            notified: Mutex::new(None),
         });
         {
             let mut jobs = lock(&self.jobs);
@@ -204,6 +208,8 @@ enum Started {
 
 /// `report(sessionId, job, patch)`: update the progress and tell the UI and the host.
 fn report(ctx: &Ctx, session_id: &str, job: &Job, patch: &[(&str, Value)]) {
+    // Held throughout, so two reports reach the UI and the host in one order.
+    let mut notified = lock(&job.notified);
     let progress = {
         let mut p = lock(&job.progress);
         for (k, val) in patch {
@@ -214,9 +220,13 @@ fn report(ctx: &Ctx, session_id: &str, job: &Job, patch: &[(&str, Value)]) {
     let event = json!({ "type": "compaction", "sessionId": session_id, "progress": progress });
     ctx.hub.publish("agent:event", event.clone(), false);
     let backend = ctx.backend.clone();
-    tokio::spawn(async move {
+    let before = notified.take();
+    *notified = Some(tokio::spawn(async move {
+        if let Some(before) = before {
+            let _ = before.await;
+        }
         let _ = backend.call("turn:notify", json!([event])).await;
-    });
+    }));
 }
 
 /// `run(session, job)`: summarize, then land the summary.
