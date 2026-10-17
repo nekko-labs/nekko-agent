@@ -17,7 +17,9 @@ extension XCTestCase {
     /// - Clipping on the system search field's placeholder.
     /// - Findings the audit can't attach to an element.
     /// `ignoring`: element labels excluded on this screen, each with its reason at the call site.
-    func auditAccessibility(_ app: XCUIApplication, _ screen: String, ignoring: Set<String> = [],
+    /// `covered`: a pinned, translucent bar; text under it is measured against the
+    /// bar, so its contrast and clipping findings are listed but don't block.
+    func auditAccessibility(_ app: XCUIApplication, _ screen: String, ignoring: Set<String> = [], covered: CGRect = .null,
                             file: StaticString = #filePath, line: UInt = #line) {
         let done = app.buttons["keyboard.done"]
         if app.keyboards.firstMatch.exists, done.exists { done.tap() }
@@ -39,7 +41,7 @@ extension XCTestCase {
                 try app.performAccessibilityAudit { issue in
                     let line = "\(Self.name(issue.auditType)): \(issue.compactDescription) — \(Self.describe(issue.element))"
                     let ignored = issue.element.map { ignoring.contains($0.label) } ?? false
-                    if !ignored, Self.blocks(issue, in: window, keyboard: keyboard) { blocking.append(line) } else { other.append(line) }
+                    if !ignored, Self.blocks(issue, in: window, keyboard: keyboard, covered: covered) { blocking.append(line) } else { other.append(line) }
                     return true // handled here; reported below
                 }
                 break
@@ -60,13 +62,14 @@ extension XCTestCase {
         }
     }
 
-    private static func blocks(_ issue: XCUIAccessibilityAuditIssue, in window: CGRect, keyboard: CGRect) -> Bool {
+    private static func blocks(_ issue: XCUIAccessibilityAuditIssue, in window: CGRect, keyboard: CGRect, covered: CGRect) -> Bool {
         if issue.auditType == .dynamicType { return false }
         // The audit names no element for some findings: nothing to act on, but listed.
         guard let e = issue.element, e.exists else { return false }
         if !e.isEnabled { return false }
         if !window.isEmpty, !window.contains(e.frame) { return false }
         if !keyboard.isNull, e.frame.intersects(keyboard) { return false }
+        if !covered.isNull, issue.auditType == .contrast || issue.auditType == .textClipped, e.frame.intersects(covered) { return false }
         // Covered by other UI (a pinned bar, a card over the transcript): the
         // audit samples whatever is on top, not the element's own colours.
         if issue.auditType == .contrast || issue.auditType == .textClipped, !e.isHittable { return false }
