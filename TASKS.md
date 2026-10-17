@@ -206,7 +206,7 @@ Layout: `apps/android` is a standalone Gradle build (wrapper 9.8.1, AGP 9.4.1 wi
 - [x] **AN-21, Needs-you widget (2026-10-17).** A Home Screen widget like the iPhone's (#654): the computer's name and whether it's online, "1 needs you" / "2 working" / "All quiet" / "Offline", and how old the numbers are; counts only, never chat titles. `RemoteViews` with no new dependency; the app saves a snapshot to plain preferences and redraws only when what it shows changes, and not before the computers are loaded (after unlock), so a locked app never shows "Not paired". Tap opens the app. Tests: `StatusSnapshotTest` (wording as on iOS, counts from the active computer). Not yet placed on a launcher in the emulator journey.
 - [ ] **AN-6, Push.** FCM token → relay `register-push` after pairing; needs a Firebase project (`google-services.json`) and the relay's FCM service account.
 - [ ] **AN-7, Phone models.** llama.cpp via JNI/NDK (or a maintained binding), memory-fit catalog, resumable downloads with integrity checks, no backup of model files, one loaded model, thermal handling. Parity with the Expo "On this phone" tab.
-- [ ] **AN-8, Markdown + attachments** in transcripts (no remote image fetches).
+- [ ] **AN-8, Markdown + attachments** in transcripts (no remote image fetches). **Photos done 2026-10-17:** the composer's Add photos (system photo picker, up to 4, 1,600 px JPEG data URLs in `images` on `chat:send` / `chat:queue`, as on iOS; `ImageAttachments`, tested in `MiscTest`, `ChatControllerTest` and `WireTest`). Still open: picking on a device.
 - [ ] **AN-9, Distribution.** Upload key / Play App Signing, privacy policy and Data safety form, internal testing track, then production.
 
 ### Wall creation placement

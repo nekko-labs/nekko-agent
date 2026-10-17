@@ -678,24 +678,30 @@ fun skillCall(name: String, input: String): JsonObject = buildJsonObject {
     put("input", input)
 }
 
-/** `chat:send` argument (SendOptions). Only the fields the phone uses. */
+/**
+ * `chat:send` argument (SendOptions). Only the fields the phone uses.
+ * [images] are `data:image/jpeg;base64,…` URLs, as the iPhone app sends them.
+ */
 fun sendOptions(
     sessionId: String,
     providerId: String,
     modelId: String,
     text: String,
     skill: SkillSummary? = null,
+    images: List<String> = emptyList(),
 ): JsonObject = buildJsonObject {
     put("sessionId", sessionId)
     put("providerId", providerId)
     put("modelId", modelId)
     put("text", text)
     if (skill != null) put("skill", skillCall(skill.name, text))
+    if (images.isNotEmpty()) put("images", JsonArray(images.map(::JsonPrimitive)))
 }
 
-/** `chat:queue` prompt: plain text, or `{ text, skill }` for a skill turn (the computer expands it). */
-fun queuePrompt(text: String, skill: SkillSummary? = null): JsonElement =
-    if (skill == null) JsonPrimitive(text) else buildJsonObject {
+/** `chat:queue` prompt: plain text, or `{ text, skill, images }` (the computer expands a skill). */
+fun queuePrompt(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()): JsonElement =
+    if (skill == null && images.isEmpty()) JsonPrimitive(text) else buildJsonObject {
         put("text", text)
-        put("skill", skillCall(skill.name, text))
+        if (skill != null) put("skill", skillCall(skill.name, text))
+        if (images.isNotEmpty()) put("images", JsonArray(images.map(::JsonPrimitive)))
     }
