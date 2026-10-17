@@ -109,8 +109,10 @@ model servers are first-class, not an afterthought.</p>
 <li><strong>Auto-discover local</strong> probes <code>localhost:11434</code> (Ollama), <code>:1234</code> (LM Studio),
 and <code>:8000</code> (vLLM). Anything running is added with one click.</li>
 <li>Connected local servers and cloud providers are grouped, and the groups sit side
-by side when the window has room. A group keeps its cards together; only its
-leftover cards share a line with another group, otherwise they wrap to the next line.</li>
+by side when the window has room. The provider groups use the full window width,
+and each sits in a container with a faint border and tint in its colour (green
+for local, blue for cloud). A group is never split: when it has more cards than
+fit on a line, they wrap inside its own container.</li>
 <li><strong>Add provider</strong> lets you configure a server manually, or add a cloud provider -
 Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint (just paste the
 base URL + key).</li>
