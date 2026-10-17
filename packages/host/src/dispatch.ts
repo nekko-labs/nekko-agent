@@ -130,6 +130,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.providersTestConfig]: ([cfg]) => host.testProviderConfig(cfg),
 
     [C.modelsList]: ([id]) => host.listModels(id),
+    [C.modelsListStatus]: ([id]) => host.listModelsStatus(id),
     [C.modelPull]: ([id, m]) => host.pullModel(id, m),
     [C.modelLoad]: ([id, m]) => host.loadModel(id, m),
     [C.modelUnload]: ([id, m]) => host.unloadModel(id, m),
