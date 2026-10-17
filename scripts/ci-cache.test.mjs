@@ -41,6 +41,8 @@ test('capture builds the verified native browser even on cache hits', () => {
   const build = read('./build-agent-browser.mjs');
   assert.ok(build.includes("['build', '--locked', '--release'"));
   assert.ok(build.includes('Build source differs from maintained patch'));
+  const smoke = read('../apps/desktop/scripts/capture-smoke.mjs');
+  assert.ok(smoke.includes("app.setAppPath(${JSON.stringify(join(root, 'apps/desktop'))})"));
 });
 
 test('required build restores a dedicated Rust cache before compiling', () => {
