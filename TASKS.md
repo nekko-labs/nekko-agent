@@ -6,6 +6,17 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Test suite trim and consolidated end-to-end (added 2026-10-17)
+
+See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17.md).
+
+- [x] ✅ 2026-10-17 `packages/shared` and `apps/cli` Vitest configs exclude `dist/` (tsc compiles tests there; 358 tests ran twice). `QuestionCard.test.ts` merged into `QuestionCard.test.tsx`. 108 one-off PR evidence harness files deleted (no npm script, workflow, doc, open PR or kept file referenced them); git history keeps them.
+- [ ] Playwright-Electron end-to-end suite: one fixture host, journeys instead of per-feature triads, run in the `capture` job (prototype: sidebar and finder).
+- [ ] Port the remaining wired and documented harnesses into journeys, then delete the triads.
+- [ ] Rewrite the 38 source-text tests (`readFileSync('ChatPane.tsx')` + `toContain`) as rendered assertions or journey steps.
+- [ ] Speed: fake timers in `core/loop-retry` and `host/hooks`, a shared git fixture in `chat-worktrees`, one root Vitest workspace, a shared CI build artifact.
+- [ ] Split `crates/nekkod/tests/daemon.rs` by domain with event waits instead of sleeps; promote 4 `itest-*.mjs` to a main-only job.
+
 ## Per-step plan working icons (2026-10-17)
 
 See [SPEC](SPEC.md#per-step-plan-working-icons-2026-10-17).
