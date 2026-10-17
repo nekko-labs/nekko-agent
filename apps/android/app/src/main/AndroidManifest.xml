@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Settings → Vibration: a short buzz when the agent needs you (install-time, no prompt). -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Android 14+: know a screenshot was taken, so the app lock's privacy cover does not
+         hide the app behind the screenshot toolbar (install-time, no prompt). -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
 
     <!-- Android 11+: see the phone's speech recognizer (the "This phone" dictation engine). -->
     <queries>

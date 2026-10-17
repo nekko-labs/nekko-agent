@@ -14,6 +14,7 @@ datastore = "1.2.1"
 codeScanner = "16.1.0"
 biometric = "1.1.0"
 fragment = "1.9.1"
+espresso = "3.7.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -38,6 +39,8 @@ compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
+# Newer than the one ui-test pulls in: 3.5 calls InputManager.getInstance, gone on API 37.
+androidx-test-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 gms-code-scanner = { module = "com.google.android.gms:play-services-code-scanner", version.ref = "codeScanner" }
