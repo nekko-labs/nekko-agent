@@ -78,6 +78,7 @@ final class AppModel {
             Task { await self.store.registerActivity(sessionId: sid, token: token) }
         }
         _ = store.subscribe { [weak self] e in self?.onEvent(e) }
+        WatchBridge.shared.start()
         watchWidget()
         network.onChange = { [weak self] in Task { @MainActor in self?.store.reconnect() } }
         network.start()
@@ -133,7 +134,10 @@ final class AppModel {
             computer: store.active?.name, online: store.conn == .online,
             needsYou: store.needsYouCount, running: store.runningCount, at: .now
         )
-        if snapshot.save() { WidgetCenter.shared.reloadTimelines(ofKind: StatusSnapshot.kind) }
+        if snapshot.save() {
+            WidgetCenter.shared.reloadTimelines(ofKind: StatusSnapshot.kind)
+            WatchBridge.shared.send(snapshot)
+        }
     }
 
     // MARK: Events → haptics, notifications, Live Activities

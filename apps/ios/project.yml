@@ -40,6 +40,24 @@ targets:
         embed: true
       - target: NekkoShare
         embed: true
+      - target: NekkoWatch
+        embed: true
+  NekkoWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: Watch
+      - path: App/Shared/StatusSnapshot.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nekko.native.ios.watchkitapp
+        PRODUCT_NAME: NekkoWatch
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Nekko Agent
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.nekko.native.ios
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "4"
   NekkoWidgets:
     type: app-extension
     platform: iOS
