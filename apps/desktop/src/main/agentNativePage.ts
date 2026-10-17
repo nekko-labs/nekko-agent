@@ -31,10 +31,11 @@ export class AgentNativePage {
   }
   async goto(url: string): Promise<void> { await this.client.command('navigate', { url, waitUntil: 'load' }); }
   async screenshot(): Promise<Buffer> {
-    // Same owned debugger and screenshot policy, without upstream filesystem writes.
-    const viewport = await this.evaluate(() => ({ x: window.scrollX, y: window.scrollY, width: window.innerWidth, height: window.innerHeight }));
-    const result = await this.win.webContents.debugger.sendCommand('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: true, clip: { ...viewport, scale: 1 } });
-    return Buffer.from(result.data, 'base64');
+    // Capture the owned compositor surface, including real native scrollbars.
+    // Never apply upstream headless styling or resize the page for a screenshot.
+    await this.win.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    const image = await this.win.capturePage(undefined, { stayHidden: true, stayAwake: false });
+    return image.toPNG();
   }
   on(event: string, listener: (...args: any[]) => void): this {
     const existing = this.listeners.get(event) ?? []; existing.push(listener); this.listeners.set(event, existing);

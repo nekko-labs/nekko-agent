@@ -201,9 +201,8 @@ export async function startAgentBrowser(options: {
       if (action === 'tabs') return { output: describeTabs(chat) };
       if (action === 'logs') { const text = describeLogs(tab.log); tab.log.length = 0; return { output: text }; }
       if (action === 'screenshot') {
-        // Playwright asks the renderer for a fresh frame. capturePage on a
-        // hidden window can return the last composited frame instead, which
-        // went stale after a scroll in the smoke run.
+        // The native page waits for rendering before capturing its owned hidden
+        // compositor, preserving real scrollbars without changing page layout.
         const png = await tab.page.screenshot({ type: 'png', timeout: 10_000 });
         if (png.length > MAX_SCREENSHOT_BYTES) throw new Error('The screenshot is larger than 5 MB; use the capture tool to save it to a file instead.');
         if (png.length < 24 || png.toString('ascii', 12, 16) !== 'IHDR') throw new Error('The page did not produce a frame; retry after it finishes rendering.');

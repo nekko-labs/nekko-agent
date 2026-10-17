@@ -79,6 +79,7 @@ app.whenReady().then(async () => {
       return body;
     };
     const step = async (name, input, check) => {
+      console.error('smoke step:', name);
       const t = Date.now();
       const body = await post(input, false);
       if (check && !check(body)) throw new Error(name + ' failed its check: ' + JSON.stringify(body).slice(0, 400));
@@ -109,8 +110,19 @@ app.whenReady().then(async () => {
     await step('extractText', { action: 'extract', selector: '#status' }, b => b.output === 'Submitted Nekko Agent');
     await step('extractLinks', { action: 'extract', what: 'links' }, b => b.output.includes('Second page (' + url + 'second)'));
     await step('scrollTop', { action: 'scroll', direction: 'up', amount: 20000 }, b => /y=0 /.test(b.output));
+    // Normalize only transient caret state for both drivers, not scrollbar styling.
+    // Keep focus semantics of the baseline fixture: Playwright's hidden-page
+    // screenshot can stall after blur, so do not alter focus for capture.
+    await new Promise(r => setTimeout(r, 300));
+    const pageState = () => owned.webContents.executeJavaScript('JSON.stringify({html:document.documentElement.outerHTML,x:scrollX,y:scrollY,width:innerWidth,height:innerHeight,clientWidth:document.documentElement.clientWidth,scrollHeight:document.documentElement.scrollHeight,overflow:getComputedStyle(document.documentElement).overflow,scrollbarWidth:getComputedStyle(document.documentElement).scrollbarWidth})');
+    const beforeScreenshot = await pageState();
     const shot = await step('screenshot', { action: 'screenshot' }, b => b.image?.mime === 'image/png' && b.image.data.length > 1000 && !b.output.includes(b.image.data.slice(0, 40)));
     writeFileSync(join(out, 'agent-page.png'), Buffer.from(shot.image.data, 'base64'));
+    const repeatedShot = await post({ action: 'screenshot' });
+    writeFileSync(join(out, 'agent-page-repeat.png'), Buffer.from(repeatedShot.image.data, 'base64'));
+    result.screenshotFidelity = { before: JSON.parse(beforeScreenshot), after: JSON.parse(await pageState()), repeatedPixelsEqual: shot.image.data === repeatedShot.image.data };
+    if (beforeScreenshot !== JSON.stringify(result.screenshotFidelity.after)) throw new Error('Screenshot mutated page DOM, scroll or layout');
+    if (!result.screenshotFidelity.repeatedPixelsEqual) throw new Error('Repeated screenshot was unstable');
     await step('logs', { action: 'logs' }, b => b.output.includes('fixture console error') && b.output.includes('404'));
     await step('logsDrained', { action: 'logs' }, b => b.output.startsWith('No console'));
     await step('tabNew', { action: 'tab_new', url: url + 'second' }, b => b.output.startsWith('Second page'));
@@ -202,7 +214,7 @@ const killTree = () => {
   else child.kill('SIGKILL');
 };
 const timer = setTimeout(killTree, 120_000);
-const code = await new Promise((r) => child.once('exit', r));
+const code = await new Promise((r, reject) => { child.once('error', reject); child.once('exit', (code, signal) => { console.log(JSON.stringify({ electronExit: code, signal, electron })); r(code); }); });
 clearTimeout(timer);
 killTree();
 let result = { passed: false, error: 'No result written' };

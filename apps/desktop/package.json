@@ -11,7 +11,7 @@
   "desktopName": "Nekko Agent",
   "main": "./out/main/index.js",
   "scripts": {
-    "predev": "node scripts/ensure-electron.mjs",
+    "predev": "node scripts/ensure-electron.mjs && npm run build:native-browser",
     "dev": "node scripts/dev-launch.mjs dev",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -21,7 +21,7 @@
     "test:grid-bugs": "node scripts/wall-controls-integration.cjs --grid-bugs",
     "test:repo-actions": "node scripts/agent-sidebar-integration.cjs --repo-actions",
     "test:command-center": "node scripts/command-center-integration.cjs",
-    "prestart": "node scripts/ensure-electron.mjs",
+    "prestart": "node scripts/ensure-electron.mjs && npm run build:native-browser",
     "start": "node scripts/dev-launch.mjs preview",
     "dist": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder",
     "release": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder --publish always",
