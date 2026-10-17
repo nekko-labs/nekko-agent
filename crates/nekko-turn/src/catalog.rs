@@ -30,6 +30,8 @@ pub struct Catalog {
     pub tool_categories: serde_json::Map<String, Value>,
     /// `OFFLINE_BLOCKED_AGENT_TOOLS`.
     pub offline_blocked: Vec<String>,
+    /// `workModePrompts()` (shared/work-modes.ts): work mode id to the text it adds.
+    pub work_mode_prompts: serde_json::Map<String, Value>,
 }
 
 fn text(v: &Value, key: &str) -> String {
@@ -64,6 +66,7 @@ pub fn catalog() -> &'static Catalog {
                 .as_array()
                 .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
                 .unwrap_or_default(),
+            work_mode_prompts: v["workModePrompts"].as_object().cloned().unwrap_or_default(),
         }
     })
 }

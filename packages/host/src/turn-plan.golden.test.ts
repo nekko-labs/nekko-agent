@@ -16,6 +16,7 @@ import {
   formatAskAnswers,
   parseAskRequest,
   planEcho,
+  workModePrompts,
 } from '@nekko-agent/shared';
 import {
   AGENT_WATCH_INSTRUCTIONS,
@@ -120,6 +121,11 @@ function promptCases() {
     { executionMode: 'unified', worktreeNotices: ['ignored'] },
     { worktreeNotices: ['Worktree A on branch x.', 'Worktree B.'] },
     { contextBlock: '<guideline path="AGENTS.md">\nhi\n</guideline>', platform: 'darwin' },
+    { workMode: 'better-review' },
+    { workMode: 'design', tools: [{ name: 'agent_watch' }], settings: { providers, systemInstructions: 'Be terse.' } },
+    { workMode: 'best-output', sandbox: true, executionMode: 'sandbox' },
+    { workMode: 'default' },
+    { workMode: 'no-such-mode' },
   ];
   return variants.map((v) => {
     const input = { ...base, ...v };
@@ -272,6 +278,7 @@ describe('turn plan golden set', () => {
       askUnattended: ASK_UNATTENDED,
       toolCategories: TOOL_CATEGORY_OF,
       offlineBlockedTools: OFFLINE_BLOCKED_AGENT_TOOLS,
+      workModePrompts: workModePrompts(),
     });
   });
 

@@ -985,6 +985,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
     worktreeNotices: Object.values(session.gitWorktrees ?? {}).map((w) => w.notice),
     contextBlock,
     platform: process.platform,
+    workMode: session.workMode,
   });
 
   if (abort.signal.aborted) {

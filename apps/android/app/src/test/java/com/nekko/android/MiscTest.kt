@@ -22,6 +22,7 @@ class MiscTest {
         val alt = "nekko-agent://pair?relay=wss://r.dev&room=abcdef12&key=0011223344556677"
         assertEquals(DeepLink.Pair(alt), DeepLink.from(alt, "nekko-agent", "pair", emptyList()))
         assertEquals(DeepLink.Chat("s1"), DeepLink.from("nekko-agent://chat/s1", "nekko-agent", "chat", listOf("s1")))
+        assertEquals(DeepLink.NewChat, DeepLink.from("nekko-agent://new", "nekko-agent", "new", emptyList()))
         assertNull(DeepLink.from("https://example.com", "https", "example.com", emptyList()))
     }
 
