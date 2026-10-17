@@ -4,9 +4,15 @@ name: Mobile
 # phone ↔ relay ↔ computer integration test run on every mobile/relay change;
 # the native builds prove the app compiles on both platforms (they can't be
 # built on the Windows dev box for iOS).
+#
+# The iOS build is macOS: on a PR it runs only with the `ci:macos` label, and
+# every 6 hours on main (the Team plan's 5 macOS runners are shared; ci.yml).
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '47 */6 * * *'
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'apps/mobile/**'
       - 'apps/relay/**'
@@ -79,6 +85,7 @@ jobs:
           if-no-files-found: error
 
   ios:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
     runs-on: macos-latest
     needs: test
     steps:
