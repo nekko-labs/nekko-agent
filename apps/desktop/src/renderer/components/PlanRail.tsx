@@ -60,11 +60,11 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan, onMinimi
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden border-l border-line" style={{ background: 'transparent' }} aria-label="Plan and sub-agents">
       <header className="flex shrink-0 items-center gap-1.5 border-b border-line px-3 py-2">
-        {/* Minimizing hides the panel and brings back the chat area's floating
-            Agent Monitor button, which reopens it. */}
-        {onMinimize && <button type="button" className="-ml-1 grid h-5 w-5 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink" data-plan-minimize onClick={onMinimize} title="Minimize Agent Monitor" aria-label="Minimize Agent Monitor"><MinimizeIcon className="h-3.5 w-3.5" /></button>}
         <ControlPanelIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
         <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Agent Monitor</span>
+        {/* Minimizing hides the panel and brings back the chat area's floating
+            Agent Monitor button, which reopens it. */}
+        {onMinimize && <button type="button" className="-mr-1 grid h-5 w-5 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink" data-plan-minimize onClick={onMinimize} title="Minimize Agent Monitor" aria-label="Minimize Agent Monitor"><MinimizeIcon className="h-3.5 w-3.5" /></button>}
       </header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
         <MonitorArtifacts key={sessionId} sessionId={sessionId} artifacts={artifacts} hydrated={!!session && session.id === sessionId && Array.isArray(session.messages)} />
