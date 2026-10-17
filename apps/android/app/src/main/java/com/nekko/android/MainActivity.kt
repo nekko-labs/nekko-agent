@@ -1,5 +1,6 @@
 package com.nekko.android
 
+import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -86,6 +87,26 @@ class MainActivity : FragmentActivity() {
      */
     private fun privateRecents(hide: Boolean) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(!hide)
+    }
+
+    /** API 34+: tells the lock a screenshot was taken, so the screenshot toolbar does not cover the app. */
+    private val screenCapture: Any? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            Activity.ScreenCaptureCallback { (application as NekkoApp).appLock.onScreenshot() }
+        } else null
+
+    override fun onStart() {
+        super.onStart()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            registerScreenCaptureCallback(mainExecutor, screenCapture as Activity.ScreenCaptureCallback)
+        }
+    }
+
+    override fun onStop() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            unregisterScreenCaptureCallback(screenCapture as Activity.ScreenCaptureCallback)
+        }
+        super.onStop()
     }
 
     override fun onPause() {
