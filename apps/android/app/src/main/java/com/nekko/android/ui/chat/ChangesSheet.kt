@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -47,7 +46,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.PhoneChanges
@@ -136,12 +134,12 @@ private fun FileChange(file: PhoneChanges.File) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = p.inkFaint)
+            // Wraps rather than truncates: the path is the only way to tell files apart.
             Text(
                 file.path, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, color = p.ink,
-                maxLines = 1, overflow = TextOverflow.StartEllipsis, modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f).padding(vertical = 8.dp),
             )
             if (file.added) Text("new", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = p.success)
-            Spacer(Modifier.weight(1f))
             Text("+${file.linesAdded}", style = MaterialTheme.typography.labelMedium, color = p.success)
             Text("−${file.linesRemoved}", style = MaterialTheme.typography.labelMedium, color = p.danger)
         }
@@ -180,10 +178,11 @@ private fun Note(text: String) {
 @Composable
 private fun DiffLine(line: PhoneChanges.Line) {
     val p = Nekko.palette
-    val (mark, tint, bg) = when (line.kind) {
-        PhoneChanges.Kind.ADDED -> Triple("+", p.success, p.successSoft)
-        PhoneChanges.Kind.REMOVED -> Triple("−", p.danger, p.dangerSoft)
-        PhoneChanges.Kind.SAME -> Triple(" ", p.inkFaint, Color.Transparent)
+    // The row's tint carries the colour; the mark is ink so it reads on it in both themes.
+    val (mark, bg) = when (line.kind) {
+        PhoneChanges.Kind.ADDED -> "+" to p.successSoft
+        PhoneChanges.Kind.REMOVED -> "−" to p.dangerSoft
+        PhoneChanges.Kind.SAME -> " " to Color.Transparent
     }
     val kind = when (line.kind) {
         PhoneChanges.Kind.ADDED -> "Added"
@@ -195,8 +194,8 @@ private fun DiffLine(line: PhoneChanges.Line) {
             .clearAndSetSemantics { contentDescription = "$kind line ${line.number}: ${line.text.ifEmpty { "blank" }}" },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("${line.number}", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = p.inkFaint, modifier = Modifier.widthIn(min = 28.dp))
-        Text(mark, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = tint)
+        Text("${line.number}", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = p.inkSoft, modifier = Modifier.widthIn(min = 28.dp))
+        Text(mark, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = p.ink)
         Text(line.text.ifEmpty { " " }, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = p.ink, softWrap = false)
     }
 }

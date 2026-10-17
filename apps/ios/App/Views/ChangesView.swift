@@ -87,12 +87,13 @@ private struct FileChangeView: View {
                     Image(systemName: open ? "chevron.down" : "chevron.right")
                         .font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint)
                         .accessibilityHidden(true)
+                    // Wraps rather than truncates: the path is the only way to tell files apart.
                     Text(file.path).font(.subheadline.monospaced()).foregroundStyle(palette.ink)
-                        .lineLimit(1).truncationMode(.head)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if file.added {
                         Text("new").font(.caption2.weight(.semibold)).foregroundStyle(palette.success)
                     }
-                    Spacer(minLength: 4)
                     Text("+\(file.linesAdded)").font(.caption.monospacedDigit()).foregroundStyle(palette.success)
                     Text("−\(file.linesRemoved)").font(.caption.monospacedDigit()).foregroundStyle(palette.danger)
                 }
@@ -153,9 +154,10 @@ private struct LineView: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("\(line.number)").font(.caption2.monospacedDigit()).foregroundStyle(palette.inkFaint)
+            Text("\(line.number)").font(.caption2.monospacedDigit()).foregroundStyle(palette.inkSoft)
                 .frame(minWidth: 28, alignment: .trailing)
-            Text(mark).font(.footnote.monospaced()).foregroundStyle(tint)
+            // The row's tint carries the colour; the mark is ink so it reads on it in both themes.
+            Text(mark).font(.footnote.monospaced().weight(.bold)).foregroundStyle(palette.ink)
             Text(line.text.isEmpty ? " " : line.text).font(.footnote.monospaced()).foregroundStyle(palette.ink)
                 .fixedSize(horizontal: true, vertical: false)
         }
@@ -163,14 +165,12 @@ private struct LineView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(background)
         .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isStaticText)
         .accessibilityLabel("\(kindName) line \(line.number): \(line.text.isEmpty ? "blank" : line.text)")
     }
 
     private var mark: String {
         switch line.kind { case .added: "+"; case .removed: "−"; case .same: " " }
-    }
-    private var tint: Color {
-        switch line.kind { case .added: palette.success; case .removed: palette.danger; case .same: palette.inkFaint }
     }
     private var background: Color {
         switch line.kind { case .added: palette.success.opacity(0.12); case .removed: palette.danger.opacity(0.12); case .same: .clear }
