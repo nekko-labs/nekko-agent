@@ -1,15 +1,16 @@
 // The one renderer entry the end-to-end suite builds. Each scenario installs a
 // synthetic window.nekko and mounts real renderer views; none reaches a host,
 // daemon or network.
-const scenarios = new Map<string, () => Promise<unknown>>([
-  ['command-center', () => import('../scripts/command-center-fixture')],
-  ['chat-finder', () => import('./scenarios/chat-finder')],
-]);
+function load(name: string): Promise<unknown> {
+  // An explicit switch: the name from the URL only ever picks a fixed import.
+  switch (name) {
+    case 'command-center': return import('../scripts/command-center-fixture');
+    case 'chat-finder': return import('./scenarios/chat-finder');
+    default: return Promise.reject(new Error(`Unknown e2e scenario "${name}"`));
+  }
+}
 
-// Only a registered name is ever called; anything else from the URL is an error.
-const name = new URLSearchParams(location.search).get('scenario') ?? '';
-const load = scenarios.get(name);
-(load ? load() : Promise.reject(new Error(`Unknown e2e scenario "${name}"`))).catch((error) => {
+load(new URLSearchParams(location.search).get('scenario') ?? '').catch((error) => {
   document.body.dataset.e2eError = String(error);
   throw error;
 });
