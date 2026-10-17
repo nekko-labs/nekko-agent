@@ -6,6 +6,14 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Desktop end-to-end journeys, Playwright-Electron (added 2026-10-17)
+
+See [apps/desktop/e2e/README.md](apps/desktop/e2e/README.md) and [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17.md).
+
+- [x] ✅ 2026-10-17 `apps/desktop/e2e/`: `@playwright/test` `_electron` over one fixture bundle (`fixture-app.tsx`, `?scenario=`) built once per run, a hidden non-focusable off-screen window with a scratch profile and non-local requests cancelled (`electron-main.cjs`), and `scenarioTest()` (one Electron per spec, `resize`, `shot`, a never-took-focus assertion, process-tree and profile cleanup). Journeys: `sidebar.e2e.ts` (4 theme × width runs, ported from `agent-sidebar-sandbox.cjs`) and `chat-finder.e2e.ts` (ported from the chat-finder triad, which is deleted). `npm run test:e2e -w @nekko-agent/desktop`; the CI `capture` job runs it in place of `agent-sidebar-integration.cjs`, which now only launches the repo-actions sandbox (`test:repo-actions`).
+- [ ] Port the remaining harnesses into journeys: wall (wall-controls, grid-bugs, pane-motion, panel-grips, focus-transitions, rail-swoop), composer, transcript (transcript-scroll, chat-search, chat-switch), plan and mode, pages (fresh-pages), agents and PRs (subagent, command-center, pr-divider, watch-rows), native (capture-smoke, notifications, tray).
+- [ ] Before/after against a base revision (the old `NEKKO_TEST_REVISION`) for PR evidence; `toHaveScreenshot` baselines per OS and theme.
+
 ## Per-step plan working icons (2026-10-17)
 
 See [SPEC](SPEC.md#per-step-plan-working-icons-2026-10-17).
