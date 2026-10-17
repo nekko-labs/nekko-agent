@@ -39,6 +39,20 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Native browser migration baseline (#752, 2026-10-17)
+
+Area: perf harness / browser driver. Result: regression in initial sequential driver comparison, not yet an alternated causal measurement.
+Conditions: Windows x64, unchanged revision `4fc3cc5c`, Playwright 1.63.0, Electron 44.7.0 / Chromium 152.0.7977.130, isolated hidden synthetic fixture, 1100x760 outer DIP, 20 fresh-chat navigation samples and 20 existing-page inspect samples. Nearest-rank percentiles.
+
+| Metric (ms) | Before | After |
+|---|---|---|
+| Fresh chat navigation p50 | 71.4239 | 93.61859999999979 |
+| Fresh chat navigation p95 | 89.70190000000002 | 103.96899999999994 |
+| Warm inspect p50 | 0.916899999999714 | 1.1934000000001106 |
+| Warm inspect p95 | 1.1640999999999622 | 1.3894000000000233 |
+
+Source: [raw samples and Electron process memory](../reports/agent-browser/playwright-baseline.json). Cold means new driver/renderer, not new Electron process or flushed caches. The [experimental native v2 candidate](../reports/agent-browser/native-candidate-v2.json) passed the smoke suite but measured higher latency in both workloads. These sequential batches are not a causal speedup/regression estimate; no performance win is claimed. Screenshot was 1359x873 device pixels at OS scaling, viewport height 698 DIP. Candidate must match these conditions; native-child memory is not included in Electron metrics and needs separate collection.
+
 ## Themes
 
 Threads worth an article, with the entries that tell each story:

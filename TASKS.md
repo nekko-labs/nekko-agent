@@ -6,7 +6,9 @@ owner:
 
 # Execution Plan, Nekko Agent
 
-## Native agent-browser default (2026-10-17, blocked)
+## Native agent-browser default (2026-10-17, maintained patch in progress)
+
+Continuation: user authorized a pinned maintained patch. Initial Windows release build and all four IPC security groups passed; native rebuilding after correcting the upstream `type` field to `text`. Unchanged baseline captured before transport edits: 20 cold chat sessions / 20 warm inspect requests, raw `reports/agent-browser/playwright-baseline.json`, screenshot `.shots/agent-browser-baseline/agent-page.png` awaiting parent inspection. Native client/relay/page/driver are now wired locally as default, without Playwright fallback. Desktop typecheck passes after local dependency installation. Native integration, relay auth negatives, request/HTTP logs, focused keyboard submission and matched 1359x873 screenshot dimensions now pass. Full workspace typecheck/build and all 1362 desktop tests pass. Host suite: 954 passed, 1 skipped, 2 failed (missing local debug nekkod binary and git-worktree timeout). Missing: extended edge-case parity, native-child memory, benchmark alternation, packaging validation, final docs, published evidence and parent pixel signoff.
 
 See [SPEC](SPEC.md#in-app-browser-automation-2026-10-10) and [feasibility evidence](reports/agent-browser/feasibility.md). Architectural target: native Rust agent-browser, Chrome engine, app-owned chat scope; never a user browser or an app-wide debugging port. Existing Playwright default is explicitly retained pending the security prerequisite, not shipped as a migration.
 

@@ -1,12 +1,11 @@
-import { app, BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import type { Page } from 'playwright-core';
+import type { AgentPage as Page } from './agentPage.js';
 import { validateBrowserInput } from '@nekko-agent/shared';
 import { captureWindow } from './windowCapture.js';
-import { AgentCdpTransport, isAllowedNavigation } from './agentCdpTransport.js';
+import { nativeDriver } from './agentNativeDriver.js';
+import { isAllowedNavigation } from './agentCdpTransport.js';
 import { describeLogs, runPageAction, watchPage, type PageLogEntry } from './agentBrowserActions.js';
 
 /** A hidden browser nobody has touched for this long is closed. Each one is a
@@ -17,12 +16,11 @@ const MAX_TABS = 8;
 /** Screenshot pixels above this size are not attached to the model. */
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
 
-/** Playwright's view of one chat's windows. The default drives real Playwright
- *  through the in-process CDP transport; tests substitute a fake. */
+/** One chat's owned native pages; tests may substitute a fake. */
 export interface BrowserDriver {
-  /** Hand a fresh about:blank window to Playwright and get its Page. */
+  /** Adopt a fresh about:blank owned window. */
   adopt(win: BrowserWindow): Promise<Page>;
-  /** Tell Playwright a window went away without it (reaper, crash). */
+  /** Release a window after reaper, crash or tab close. */
   forget(win: BrowserWindow): void;
   close(): Promise<void>;
 }
@@ -40,37 +38,6 @@ export interface ShellBridge {
   quitForUpdate(): void;
 }
 
-/** Connect playwright-core to this chat's windows only, with no debugging port. */
-export const playwrightDriver: BrowserDriverFactory = async () => {
-  // A plain require: the main bundle is CommonJS and playwright-core stays an
-  // external dependency (see bundleExternals.test.ts). Loaded on first use only.
-  const { chromium } = require('playwright-core') as typeof import('playwright-core');
-  const transport = new AgentCdpTransport({
-    product: `Chrome/${process.versions.chrome}`,
-    userAgent: app.userAgentFallback,
-    // Tabs are opened by the bridge (tab_new), never by Playwright itself.
-    createTarget: async () => { throw new Error('Open tabs with the tab_new action.'); },
-    closeTarget: (target) => (target as unknown as BrowserWindow).destroy(),
-  });
-  // A fixed artifacts folder instead of a fresh temp folder per chat that a
-  // hard exit would leave behind. Downloads are denied, so it stays empty.
-  const artifactsDir = join(app.getPath('userData'), 'agent-browser');
-  mkdirSync(artifactsDir, { recursive: true });
-  const browser = await chromium.connectOverCDP(transport, { timeout: 15_000, artifactsDir });
-  const context = browser.contexts()[0];
-  if (!context) throw new Error('Agent browser context did not start.');
-  return {
-    async adopt(win) {
-      const next = context.waitForEvent('page', { timeout: 15_000 });
-      await transport.add(win);
-      return next;
-    },
-    forget: (win) => transport.forget(win),
-    // Closing the transport first detaches every debugger; Playwright then
-    // sees the disconnect, so browser.close() cannot wait on a dead window.
-    close: async () => { transport.close(); await browser.close().catch(() => {}); },
-  };
-};
 
 interface Tab { win: BrowserWindow; page: Page; log: PageLogEntry[] }
 
@@ -98,7 +65,7 @@ export async function startAgentBrowser(options: {
    */
   shell?: ShellBridge;
 } = {}): Promise<{ url: string; token: string; close: () => void }> {
-  const createDriver = options.driver ?? playwrightDriver;
+  const createDriver = options.driver ?? nativeDriver;
   const token = randomBytes(32).toString('hex');
   const chats = new Map<string, ChatBrowser>();
   const starting = new Map<string, Promise<ChatBrowser>>();
