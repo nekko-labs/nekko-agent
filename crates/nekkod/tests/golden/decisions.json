@@ -5,46 +5,171 @@
    "name": "Laya (English)",
    "publisher": "Convai Innovations",
    "license": "Apache-2.0",
-   "unavailable": "No correct ONNX export of Laya is hosted yet, so it cannot be downloaded here. Export it with the recipe in docs/decision-models.md and add the folder below.",
+   "source": "nekko-agent decision-models-v1, from convaiinnovations/laya@55cf4c4",
    "description": "A 395M ModernBERT decision model. Routes, scores and answers yes/no questions about a text or JSON state, with calibrated probabilities, in one pass. 512-token context.",
    "variants": [
     {
      "precision": "fp16",
      "file": "model_fp16.onnx",
-     "bytes": 843685645,
+     "asset": "laya-en.model_fp16.onnx",
+     "bytes": 845901452,
+     "sha256": "f5adb828cd42bb265da6397c3693256f3c3fd34038a783becb8fb3831f21f03e",
      "recommended": true
     },
     {
      "precision": "int8",
      "file": "model_int8.onnx",
-     "bytes": 424348081
+     "asset": "laya-en.model_int8.onnx",
+     "bytes": 612313098,
+     "sha256": "57556a82d0384335b43831c48921fa8269d7788e06463779b11eda45d1675a58"
     },
     {
      "precision": "fp32",
      "file": "model.onnx",
-     "bytes": 1685917998
+     "asset": "laya-en.model.onnx",
+     "bytes": 1688502312,
+     "sha256": "7fd5d50d5354397ed7aa162cef85254270544812569faa37c19db249d268f360"
     }
    ],
    "shared": [
     {
      "file": "tokenizer.json",
-     "bytes": 3583228
+     "asset": "laya-en.tokenizer.json",
+     "bytes": 3583228,
+     "sha256": "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30"
     },
     {
      "file": "tokenizer_config.json",
-     "bytes": 308
+     "asset": "laya-en.tokenizer_config.json",
+     "bytes": 308,
+     "sha256": "50044de60daaa73df97d262e15a40d4faf0160e7d742df64b377877a1320dd12"
     },
     {
      "file": "rl_agent_config.json",
-     "bytes": 745
+     "asset": "laya-en.rl_agent_config.json",
+     "bytes": 745,
+     "sha256": "ae287b56bbcf5f8c4f4541ae9dfd00c914c4c48b940b8398c3058af37ba92bbd"
     },
     {
      "file": "config.json",
-     "bytes": 2083
+     "asset": "laya-en.config.json",
+     "bytes": 2083,
+     "sha256": "bf3ab80598fdccf414855a2ce80f22859e4492d06ca8a62ddd1cfb63972f8979"
+    }
+   ]
+  },
+  {
+   "id": "laya-multilingual",
+   "name": "Laya (multilingual)",
+   "publisher": "Convai Innovations",
+   "license": "Apache-2.0",
+   "source": "nekko-agent decision-models-v1, from convaiinnovations/laya-multilingual@e4e9ddf",
+   "description": "A 322M mmBERT decision model for text in 100+ languages, about twice as fast as the English one. Less accurate on English text. 1,024-token context.",
+   "variants": [
+    {
+     "precision": "fp16",
+     "file": "model_fp16.onnx",
+     "asset": "laya-multilingual.model_fp16.onnx",
+     "bytes": 646462359,
+     "sha256": "d5b9c4cff507b3370ab19c4dcd6302bd529bca8e9adaede6d48e95a2364e6d42",
+     "recommended": true
+    },
+    {
+     "precision": "fp32",
+     "file": "model.onnx",
+     "asset": "laya-multilingual.model.onnx",
+     "bytes": 1290294801,
+     "sha256": "6f5a928fe6ab7f9b34fa57b8a29683fbdd13e604cf75b7a0d483bf98760b665e"
+    }
+   ],
+   "shared": [
+    {
+     "file": "tokenizer.json",
+     "asset": "laya-multilingual.tokenizer.json",
+     "bytes": 34363188,
+     "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f"
+    },
+    {
+     "file": "tokenizer_config.json",
+     "asset": "laya-multilingual.tokenizer_config.json",
+     "bytes": 502,
+     "sha256": "424b69444bf7b5809dc2cd2e36d0bd71b8055124dd24274d6db3c655d38205e7"
+    },
+    {
+     "file": "rl_agent_config.json",
+     "asset": "laya-multilingual.rl_agent_config.json",
+     "bytes": 472,
+     "sha256": "25061739243b617ad88d1219ba6f8a9c86c5881ca28df024fa2d9b3b2fcc30c6"
+    },
+    {
+     "file": "config.json",
+     "asset": "laya-multilingual.config.json",
+     "bytes": 1938,
+     "sha256": "83f6916d13ef0f556ac461f28308dc2bffa7ebeadee8ec9e2db5812020ea5bb4"
+    }
+   ]
+  },
+  {
+   "id": "laya-typed-decisions",
+   "name": "Laya (typed decisions)",
+   "publisher": "Convai Innovations",
+   "license": "Apache-2.0",
+   "source": "nekko-agent decision-models-v1, from convaiinnovations/laya-typed-decisions@1a793eb",
+   "description": "The English model fine-tuned on four workflows: invoice processing, security incidents, customer service and agent traces. Much more accurate there, untested elsewhere. 1,024-token context.",
+   "variants": [
+    {
+     "precision": "fp16",
+     "file": "model_fp16.onnx",
+     "asset": "laya-typed-decisions.model_fp16.onnx",
+     "bytes": 845901452,
+     "sha256": "49dfd4f9b0988a921ab387ce136079a00975e682272433832d118070fc2fc729",
+     "recommended": true
+    },
+    {
+     "precision": "int8",
+     "file": "model_int8.onnx",
+     "asset": "laya-typed-decisions.model_int8.onnx",
+     "bytes": 612313098,
+     "sha256": "dda81996ba157117d7174cdc82295480c66066e605b3a5314b7faa3fad64279a"
+    },
+    {
+     "precision": "fp32",
+     "file": "model.onnx",
+     "asset": "laya-typed-decisions.model.onnx",
+     "bytes": 1688502312,
+     "sha256": "c2254b2fa7f90ca6534296ac96ac3d72eb7261e13f4242997db44d7a8d9cf1d3"
+    }
+   ],
+   "shared": [
+    {
+     "file": "tokenizer.json",
+     "asset": "laya-typed-decisions.tokenizer.json",
+     "bytes": 3583228,
+     "sha256": "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30"
+    },
+    {
+     "file": "tokenizer_config.json",
+     "asset": "laya-typed-decisions.tokenizer_config.json",
+     "bytes": 337,
+     "sha256": "08d4cf3ac4dca381759441b85b91a6d40e688471dcd33d15d6649eb0a9a854d1"
+    },
+    {
+     "file": "rl_agent_config.json",
+     "asset": "laya-typed-decisions.rl_agent_config.json",
+     "bytes": 847,
+     "sha256": "ebf0cd524d92342a6be5e48e9fca3d7c2babfb5a56ccd79d2171ef5d8c7f7be8"
+    },
+    {
+     "file": "config.json",
+     "asset": "laya-typed-decisions.config.json",
+     "bytes": 2084,
+     "sha256": "5268d24ad3b77c8151de5dcb0762ba4391619aad9ab0bda33e36fb083cfeae6d"
     }
    ]
   }
  ],
+ "releaseUrl": "https://github.com/nekko-labs/nekko-agent/releases/download/decision-models-v1",
+ "testReleaseUrl": "http://release.test/download/decision-models-v1",
  "tree": {
   "models/decision/laya-en/model_fp16.onnx": "fp16 graph",
   "models/decision/laya-en/model_int8.onnx": "int8",
@@ -58,6 +183,8 @@
   "models/decision/partial/model_fp16.onnx": "x",
   "models/decision/partial/rl_agent_config.json": "{}",
   "models/decision/stray.txt": "not a dir",
+  "models/decision/laya-typed-decisions/rl_agent_config.json": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "models/decision/laya-typed-decisions/config.json": "{}",
   "ext1/model.fp16.onnx": "graph16",
   "ext1/model_int8.onnx": "g8",
   "ext1/tokenizer/tokenizer.json": "{\"nested\":true}",
@@ -88,42 +215,165 @@
         "name": "Laya (English)",
         "publisher": "Convai Innovations",
         "license": "Apache-2.0",
-        "unavailable": "No correct ONNX export of Laya is hosted yet, so it cannot be downloaded here. Export it with the recipe in docs/decision-models.md and add the folder below.",
+        "source": "nekko-agent decision-models-v1, from convaiinnovations/laya@55cf4c4",
         "description": "A 395M ModernBERT decision model. Routes, scores and answers yes/no questions about a text or JSON state, with calibrated probabilities, in one pass. 512-token context.",
         "variants": [
          {
           "precision": "fp16",
           "file": "model_fp16.onnx",
-          "bytes": 843685645,
+          "asset": "laya-en.model_fp16.onnx",
+          "bytes": 845901452,
+          "sha256": "f5adb828cd42bb265da6397c3693256f3c3fd34038a783becb8fb3831f21f03e",
           "recommended": true
          },
          {
           "precision": "int8",
           "file": "model_int8.onnx",
-          "bytes": 424348081
+          "asset": "laya-en.model_int8.onnx",
+          "bytes": 612313098,
+          "sha256": "57556a82d0384335b43831c48921fa8269d7788e06463779b11eda45d1675a58"
          },
          {
           "precision": "fp32",
           "file": "model.onnx",
-          "bytes": 1685917998
+          "asset": "laya-en.model.onnx",
+          "bytes": 1688502312,
+          "sha256": "7fd5d50d5354397ed7aa162cef85254270544812569faa37c19db249d268f360"
          }
         ],
         "shared": [
          {
           "file": "tokenizer.json",
-          "bytes": 3583228
+          "asset": "laya-en.tokenizer.json",
+          "bytes": 3583228,
+          "sha256": "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30"
          },
          {
           "file": "tokenizer_config.json",
-          "bytes": 308
+          "asset": "laya-en.tokenizer_config.json",
+          "bytes": 308,
+          "sha256": "50044de60daaa73df97d262e15a40d4faf0160e7d742df64b377877a1320dd12"
          },
          {
           "file": "rl_agent_config.json",
-          "bytes": 745
+          "asset": "laya-en.rl_agent_config.json",
+          "bytes": 745,
+          "sha256": "ae287b56bbcf5f8c4f4541ae9dfd00c914c4c48b940b8398c3058af37ba92bbd"
          },
          {
           "file": "config.json",
-          "bytes": 2083
+          "asset": "laya-en.config.json",
+          "bytes": 2083,
+          "sha256": "bf3ab80598fdccf414855a2ce80f22859e4492d06ca8a62ddd1cfb63972f8979"
+         }
+        ]
+       },
+       {
+        "id": "laya-multilingual",
+        "name": "Laya (multilingual)",
+        "publisher": "Convai Innovations",
+        "license": "Apache-2.0",
+        "source": "nekko-agent decision-models-v1, from convaiinnovations/laya-multilingual@e4e9ddf",
+        "description": "A 322M mmBERT decision model for text in 100+ languages, about twice as fast as the English one. Less accurate on English text. 1,024-token context.",
+        "variants": [
+         {
+          "precision": "fp16",
+          "file": "model_fp16.onnx",
+          "asset": "laya-multilingual.model_fp16.onnx",
+          "bytes": 646462359,
+          "sha256": "d5b9c4cff507b3370ab19c4dcd6302bd529bca8e9adaede6d48e95a2364e6d42",
+          "recommended": true
+         },
+         {
+          "precision": "fp32",
+          "file": "model.onnx",
+          "asset": "laya-multilingual.model.onnx",
+          "bytes": 1290294801,
+          "sha256": "6f5a928fe6ab7f9b34fa57b8a29683fbdd13e604cf75b7a0d483bf98760b665e"
+         }
+        ],
+        "shared": [
+         {
+          "file": "tokenizer.json",
+          "asset": "laya-multilingual.tokenizer.json",
+          "bytes": 34363188,
+          "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f"
+         },
+         {
+          "file": "tokenizer_config.json",
+          "asset": "laya-multilingual.tokenizer_config.json",
+          "bytes": 502,
+          "sha256": "424b69444bf7b5809dc2cd2e36d0bd71b8055124dd24274d6db3c655d38205e7"
+         },
+         {
+          "file": "rl_agent_config.json",
+          "asset": "laya-multilingual.rl_agent_config.json",
+          "bytes": 472,
+          "sha256": "25061739243b617ad88d1219ba6f8a9c86c5881ca28df024fa2d9b3b2fcc30c6"
+         },
+         {
+          "file": "config.json",
+          "asset": "laya-multilingual.config.json",
+          "bytes": 1938,
+          "sha256": "83f6916d13ef0f556ac461f28308dc2bffa7ebeadee8ec9e2db5812020ea5bb4"
+         }
+        ]
+       },
+       {
+        "id": "laya-typed-decisions",
+        "name": "Laya (typed decisions)",
+        "publisher": "Convai Innovations",
+        "license": "Apache-2.0",
+        "source": "nekko-agent decision-models-v1, from convaiinnovations/laya-typed-decisions@1a793eb",
+        "description": "The English model fine-tuned on four workflows: invoice processing, security incidents, customer service and agent traces. Much more accurate there, untested elsewhere. 1,024-token context.",
+        "variants": [
+         {
+          "precision": "fp16",
+          "file": "model_fp16.onnx",
+          "asset": "laya-typed-decisions.model_fp16.onnx",
+          "bytes": 845901452,
+          "sha256": "49dfd4f9b0988a921ab387ce136079a00975e682272433832d118070fc2fc729",
+          "recommended": true
+         },
+         {
+          "precision": "int8",
+          "file": "model_int8.onnx",
+          "asset": "laya-typed-decisions.model_int8.onnx",
+          "bytes": 612313098,
+          "sha256": "dda81996ba157117d7174cdc82295480c66066e605b3a5314b7faa3fad64279a"
+         },
+         {
+          "precision": "fp32",
+          "file": "model.onnx",
+          "asset": "laya-typed-decisions.model.onnx",
+          "bytes": 1688502312,
+          "sha256": "c2254b2fa7f90ca6534296ac96ac3d72eb7261e13f4242997db44d7a8d9cf1d3"
+         }
+        ],
+        "shared": [
+         {
+          "file": "tokenizer.json",
+          "asset": "laya-typed-decisions.tokenizer.json",
+          "bytes": 3583228,
+          "sha256": "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30"
+         },
+         {
+          "file": "tokenizer_config.json",
+          "asset": "laya-typed-decisions.tokenizer_config.json",
+          "bytes": 337,
+          "sha256": "08d4cf3ac4dca381759441b85b91a6d40e688471dcd33d15d6649eb0a9a854d1"
+         },
+         {
+          "file": "rl_agent_config.json",
+          "asset": "laya-typed-decisions.rl_agent_config.json",
+          "bytes": 847,
+          "sha256": "ebf0cd524d92342a6be5e48e9fca3d7c2babfb5a56ccd79d2171ef5d8c7f7be8"
+         },
+         {
+          "file": "config.json",
+          "asset": "laya-typed-decisions.config.json",
+          "bytes": 2084,
+          "sha256": "5268d24ad3b77c8151de5dcb0762ba4391619aad9ab0bda33e36fb083cfeae6d"
          }
         ]
        }
@@ -170,11 +420,100 @@
      ],
      "out": {
       "ok": {
-       "ok": false,
-       "message": "No correct ONNX export of Laya is hosted yet, so it cannot be downloaded here. Export it with the recipe in docs/decision-models.md and add the folder below."
+       "ok": true,
+       "message": "Downloading Laya (English) fp16 (0.85 GB)."
       }
      },
-     "calls": [],
+     "calls": [
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-en:shared:tokenizer.json",
+        "kind": "model",
+        "label": "Laya (English) · tokenizer.json",
+        "target": "laya-en",
+        "url": "http://release.test/download/decision-models-v1/laya-en.tokenizer.json",
+        "dest": "<root>/models/decision/laya-en/tokenizer.json",
+        "group": "decision:laya-en:fp16",
+        "groupLabel": "Laya (English) · fp16",
+        "file": "tokenizer.json",
+        "verified": {
+         "wrongSize": "tokenizer.json is not the published size."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-en:shared:tokenizer_config.json",
+        "kind": "model",
+        "label": "Laya (English) · tokenizer_config.json",
+        "target": "laya-en",
+        "url": "http://release.test/download/decision-models-v1/laya-en.tokenizer_config.json",
+        "dest": "<root>/models/decision/laya-en/tokenizer_config.json",
+        "group": "decision:laya-en:fp16",
+        "groupLabel": "Laya (English) · fp16",
+        "file": "tokenizer_config.json",
+        "verified": {
+         "wrongSize": "tokenizer_config.json is not the published size.",
+         "wrongBytes": "tokenizer_config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-en:shared:rl_agent_config.json",
+        "kind": "model",
+        "label": "Laya (English) · rl_agent_config.json",
+        "target": "laya-en",
+        "url": "http://release.test/download/decision-models-v1/laya-en.rl_agent_config.json",
+        "dest": "<root>/models/decision/laya-en/rl_agent_config.json",
+        "group": "decision:laya-en:fp16",
+        "groupLabel": "Laya (English) · fp16",
+        "file": "rl_agent_config.json",
+        "verified": {
+         "wrongSize": "rl_agent_config.json is not the published size.",
+         "wrongBytes": "rl_agent_config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-en:shared:config.json",
+        "kind": "model",
+        "label": "Laya (English) · config.json",
+        "target": "laya-en",
+        "url": "http://release.test/download/decision-models-v1/laya-en.config.json",
+        "dest": "<root>/models/decision/laya-en/config.json",
+        "group": "decision:laya-en:fp16",
+        "groupLabel": "Laya (English) · fp16",
+        "file": "config.json",
+        "verified": {
+         "wrongSize": "config.json is not the published size.",
+         "wrongBytes": "config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-en:fp16:model_fp16.onnx",
+        "kind": "model",
+        "label": "Laya (English) · model_fp16.onnx",
+        "target": "laya-en",
+        "url": "http://release.test/download/decision-models-v1/laya-en.model_fp16.onnx",
+        "dest": "<root>/models/decision/laya-en/model_fp16.onnx",
+        "group": "decision:laya-en:fp16",
+        "groupLabel": "Laya (English) · fp16",
+        "file": "model_fp16.onnx",
+        "verified": {
+         "wrongSize": "model_fp16.onnx is not the published size."
+        }
+       }
+      ]
+     ],
      "requests": []
     },
     {
@@ -185,11 +524,100 @@
      ],
      "out": {
       "ok": {
-       "ok": false,
-       "message": "No correct ONNX export of Laya is hosted yet, so it cannot be downloaded here. Export it with the recipe in docs/decision-models.md and add the folder below."
+       "ok": true,
+       "message": "Downloading Laya (English) int8 (0.62 GB)."
       }
      },
-     "calls": [],
+     "calls": [
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-en:shared:tokenizer.json",
+        "kind": "model",
+        "label": "Laya (English) · tokenizer.json",
+        "target": "laya-en",
+        "url": "http://release.test/download/decision-models-v1/laya-en.tokenizer.json",
+        "dest": "<root>/models/decision/laya-en/tokenizer.json",
+        "group": "decision:laya-en:int8",
+        "groupLabel": "Laya (English) · int8",
+        "file": "tokenizer.json",
+        "verified": {
+         "wrongSize": "tokenizer.json is not the published size."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-en:shared:tokenizer_config.json",
+        "kind": "model",
+        "label": "Laya (English) · tokenizer_config.json",
+        "target": "laya-en",
+        "url": "http://release.test/download/decision-models-v1/laya-en.tokenizer_config.json",
+        "dest": "<root>/models/decision/laya-en/tokenizer_config.json",
+        "group": "decision:laya-en:int8",
+        "groupLabel": "Laya (English) · int8",
+        "file": "tokenizer_config.json",
+        "verified": {
+         "wrongSize": "tokenizer_config.json is not the published size.",
+         "wrongBytes": "tokenizer_config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-en:shared:rl_agent_config.json",
+        "kind": "model",
+        "label": "Laya (English) · rl_agent_config.json",
+        "target": "laya-en",
+        "url": "http://release.test/download/decision-models-v1/laya-en.rl_agent_config.json",
+        "dest": "<root>/models/decision/laya-en/rl_agent_config.json",
+        "group": "decision:laya-en:int8",
+        "groupLabel": "Laya (English) · int8",
+        "file": "rl_agent_config.json",
+        "verified": {
+         "wrongSize": "rl_agent_config.json is not the published size.",
+         "wrongBytes": "rl_agent_config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-en:shared:config.json",
+        "kind": "model",
+        "label": "Laya (English) · config.json",
+        "target": "laya-en",
+        "url": "http://release.test/download/decision-models-v1/laya-en.config.json",
+        "dest": "<root>/models/decision/laya-en/config.json",
+        "group": "decision:laya-en:int8",
+        "groupLabel": "Laya (English) · int8",
+        "file": "config.json",
+        "verified": {
+         "wrongSize": "config.json is not the published size.",
+         "wrongBytes": "config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-en:int8:model_int8.onnx",
+        "kind": "model",
+        "label": "Laya (English) · model_int8.onnx",
+        "target": "laya-en",
+        "url": "http://release.test/download/decision-models-v1/laya-en.model_int8.onnx",
+        "dest": "<root>/models/decision/laya-en/model_int8.onnx",
+        "group": "decision:laya-en:int8",
+        "groupLabel": "Laya (English) · int8",
+        "file": "model_int8.onnx",
+        "verified": {
+         "wrongSize": "model_int8.onnx is not the published size."
+        }
+       }
+      ]
+     ],
      "requests": []
     },
     {
@@ -219,6 +647,210 @@
       }
      },
      "calls": [],
+     "requests": []
+    },
+    {
+     "op": "download",
+     "args": [
+      "laya-multilingual"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Downloading Laya (multilingual) fp16 (0.68 GB)."
+      }
+     },
+     "calls": [
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-multilingual:shared:tokenizer.json",
+        "kind": "model",
+        "label": "Laya (multilingual) · tokenizer.json",
+        "target": "laya-multilingual",
+        "url": "http://release.test/download/decision-models-v1/laya-multilingual.tokenizer.json",
+        "dest": "<root>/models/decision/laya-multilingual/tokenizer.json",
+        "group": "decision:laya-multilingual:fp16",
+        "groupLabel": "Laya (multilingual) · fp16",
+        "file": "tokenizer.json",
+        "verified": {
+         "wrongSize": "tokenizer.json is not the published size."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-multilingual:shared:tokenizer_config.json",
+        "kind": "model",
+        "label": "Laya (multilingual) · tokenizer_config.json",
+        "target": "laya-multilingual",
+        "url": "http://release.test/download/decision-models-v1/laya-multilingual.tokenizer_config.json",
+        "dest": "<root>/models/decision/laya-multilingual/tokenizer_config.json",
+        "group": "decision:laya-multilingual:fp16",
+        "groupLabel": "Laya (multilingual) · fp16",
+        "file": "tokenizer_config.json",
+        "verified": {
+         "wrongSize": "tokenizer_config.json is not the published size.",
+         "wrongBytes": "tokenizer_config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-multilingual:shared:rl_agent_config.json",
+        "kind": "model",
+        "label": "Laya (multilingual) · rl_agent_config.json",
+        "target": "laya-multilingual",
+        "url": "http://release.test/download/decision-models-v1/laya-multilingual.rl_agent_config.json",
+        "dest": "<root>/models/decision/laya-multilingual/rl_agent_config.json",
+        "group": "decision:laya-multilingual:fp16",
+        "groupLabel": "Laya (multilingual) · fp16",
+        "file": "rl_agent_config.json",
+        "verified": {
+         "wrongSize": "rl_agent_config.json is not the published size.",
+         "wrongBytes": "rl_agent_config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-multilingual:shared:config.json",
+        "kind": "model",
+        "label": "Laya (multilingual) · config.json",
+        "target": "laya-multilingual",
+        "url": "http://release.test/download/decision-models-v1/laya-multilingual.config.json",
+        "dest": "<root>/models/decision/laya-multilingual/config.json",
+        "group": "decision:laya-multilingual:fp16",
+        "groupLabel": "Laya (multilingual) · fp16",
+        "file": "config.json",
+        "verified": {
+         "wrongSize": "config.json is not the published size.",
+         "wrongBytes": "config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-multilingual:fp16:model_fp16.onnx",
+        "kind": "model",
+        "label": "Laya (multilingual) · model_fp16.onnx",
+        "target": "laya-multilingual",
+        "url": "http://release.test/download/decision-models-v1/laya-multilingual.model_fp16.onnx",
+        "dest": "<root>/models/decision/laya-multilingual/model_fp16.onnx",
+        "group": "decision:laya-multilingual:fp16",
+        "groupLabel": "Laya (multilingual) · fp16",
+        "file": "model_fp16.onnx",
+        "verified": {
+         "wrongSize": "model_fp16.onnx is not the published size."
+        }
+       }
+      ]
+     ],
+     "requests": []
+    },
+    {
+     "op": "download",
+     "args": [
+      "laya-multilingual",
+      "int8"
+     ],
+     "out": {
+      "ok": {
+       "ok": false,
+       "message": "That decision model is not in the catalog."
+      }
+     },
+     "calls": [],
+     "requests": []
+    },
+    {
+     "op": "download",
+     "args": [
+      "laya-typed-decisions",
+      "fp32"
+     ],
+     "out": {
+      "ok": {
+       "ok": true,
+       "message": "Downloading Laya (typed decisions) fp32 (1.69 GB)."
+      }
+     },
+     "calls": [
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-typed-decisions:shared:tokenizer.json",
+        "kind": "model",
+        "label": "Laya (typed decisions) · tokenizer.json",
+        "target": "laya-typed-decisions",
+        "url": "http://release.test/download/decision-models-v1/laya-typed-decisions.tokenizer.json",
+        "dest": "<root>/models/decision/laya-typed-decisions/tokenizer.json",
+        "group": "decision:laya-typed-decisions:fp32",
+        "groupLabel": "Laya (typed decisions) · fp32",
+        "file": "tokenizer.json",
+        "verified": {
+         "wrongSize": "tokenizer.json is not the published size."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-typed-decisions:shared:tokenizer_config.json",
+        "kind": "model",
+        "label": "Laya (typed decisions) · tokenizer_config.json",
+        "target": "laya-typed-decisions",
+        "url": "http://release.test/download/decision-models-v1/laya-typed-decisions.tokenizer_config.json",
+        "dest": "<root>/models/decision/laya-typed-decisions/tokenizer_config.json",
+        "group": "decision:laya-typed-decisions:fp32",
+        "groupLabel": "Laya (typed decisions) · fp32",
+        "file": "tokenizer_config.json",
+        "verified": {
+         "wrongSize": "tokenizer_config.json is not the published size.",
+         "wrongBytes": "tokenizer_config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-typed-decisions:shared:config.json",
+        "kind": "model",
+        "label": "Laya (typed decisions) · config.json",
+        "target": "laya-typed-decisions",
+        "url": "http://release.test/download/decision-models-v1/laya-typed-decisions.config.json",
+        "dest": "<root>/models/decision/laya-typed-decisions/config.json",
+        "group": "decision:laya-typed-decisions:fp32",
+        "groupLabel": "Laya (typed decisions) · fp32",
+        "file": "config.json",
+        "verified": {
+         "wrongSize": "config.json is not the published size.",
+         "wrongBytes": "config.json is not the published file (checksum mismatch)."
+        }
+       }
+      ],
+      [
+       "downloads.start",
+       {
+        "id": "decision:laya-typed-decisions:fp32:model.onnx",
+        "kind": "model",
+        "label": "Laya (typed decisions) · model.onnx",
+        "target": "laya-typed-decisions",
+        "url": "http://release.test/download/decision-models-v1/laya-typed-decisions.model.onnx",
+        "dest": "<root>/models/decision/laya-typed-decisions/model.onnx",
+        "group": "decision:laya-typed-decisions:fp32",
+        "groupLabel": "Laya (typed decisions) · fp32",
+        "file": "model.onnx",
+        "verified": {
+         "wrongSize": "model.onnx is not the published size."
+        }
+       }
+      ]
+     ],
      "requests": []
     },
     {

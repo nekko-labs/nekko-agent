@@ -79,6 +79,8 @@ pub struct AppCtx {
     pub facts: crate::small_services::AppFacts,
     /// `(url, token)` of Electron main's bridge (`config.browserBridge`).
     pub bridge: Option<(String, String)>,
+    /// Where the decision models' release is (`config.decisionModelsUrl`); absent, the pinned one.
+    pub decision_models_url: Option<String>,
 }
 
 /// The small services (small_services.rs) are the daemon's with a data

@@ -281,6 +281,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         app: Arc::new(routes::AppCtx {
             facts: small_services::AppFacts { version: cfg.app_version.clone(), edition: cfg.edition.clone() },
             bridge: cfg.browser_bridge.clone().map(|b| (b.url, b.token)),
+            decision_models_url: cfg.decision_models_url.clone(),
         }),
         update_checks: small_services::UpdateChecks::new(),
         messaging: messaging.clone(),
