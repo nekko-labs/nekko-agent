@@ -47,7 +47,7 @@ object RelayHint {
         Problem.LOOPBACK ->
             "$computer’s relay is set to this device itself (localhost). On $computer: Settings → Remote access, use the managed relay or your Tailscale name, then pair again."
         Problem.TAILSCALE_IP ->
-            "Android only allows Tailscale relays by name. On $computer use ws://<name>.<tailnet>.ts.net:4400 (scripts/private-relay.sh prints it), then pair again."
+            "Android only allows Tailscale relays by name. On $computer use ws://<name>.<tailnet>.ts.net:4400 (Settings → Remote access → Relay on this computer shows it), then pair again."
         Problem.CLEARTEXT ->
             "Android blocks unencrypted ws:// relays except on Tailscale (*.ts.net). Use a wss:// relay or your computer’s Tailscale name, then pair again."
     }
