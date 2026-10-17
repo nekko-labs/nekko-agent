@@ -35,16 +35,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `language` is a base axis (not only `include`) so `exclude` can match it.
-        language: [actions, javascript-typescript, python, rust, swift]
+        # Swift (macOS) only on the schedule, by hand, or with `ci:macos` on a PR.
+        language: ${{ fromJSON(((github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) || github.event_name == 'merge_group') && '["actions","javascript-typescript","python","rust"]' || '["actions","javascript-typescript","python","rust","swift"]') }}
         include:
           - { language: actions, os: ubuntu-latest, build-mode: none }
           - { language: javascript-typescript, os: ubuntu-latest, build-mode: none }
           - { language: python, os: ubuntu-latest, build-mode: none }
           - { language: rust, os: ubuntu-latest, build-mode: none }
           - { language: swift, os: macos-latest, build-mode: manual }
-        exclude:
-          - language: ${{ ((github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) || github.event_name == 'merge_group') && 'swift' || 'none' }}
     steps:
       - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v4

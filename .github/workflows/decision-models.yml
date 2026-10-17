@@ -36,16 +36,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `ep` is a base axis (not only `include`) so `exclude` can match it.
-        ep: [coreml, cpu]
+        # CoreML (macOS) on a PR only with the `ci:macos` label; by hand otherwise.
+        ep: ${{ fromJSON((github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) && '["cpu"]' || '["coreml","cpu"]') }}
         include:
           - os: macos-14
             ep: coreml
           - os: ubuntu-latest
             ep: cpu
-        # CoreML (macOS) on a PR only with the `ci:macos` label; by hand otherwise.
-        exclude:
-          - ep: ${{ (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) && 'coreml' || 'none' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     steps:
