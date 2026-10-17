@@ -77,6 +77,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Composer → + → Take photo: the camera app writes one shot into the app's cache
+             (camera_photos.xml); it is read into memory and deleted at once. No CAMERA permission. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/camera_photos" />
+        </provider>
+
         <!-- remoteMessaging: carries the conversation between the user's computer and this
              phone; no runtime permission and, unlike dataSync, no daily time limit. -->
         <service
@@ -85,6 +97,9 @@
             android:foregroundServiceType="remoteMessaging" />
 
         <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
+        <receiver
+            android:name=".connection.DenyReceiver"
+            android:exported="false" />
         <receiver
             android:name=".widget.StatusWidget"
             android:exported="false">

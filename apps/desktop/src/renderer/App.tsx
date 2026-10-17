@@ -96,6 +96,7 @@ export function App() {
   const [dropNav, setDropNav] = useState<View | null>(null);
   const order = navOrder(NAV.map(n => n.view), settings?.navOrder);
   const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings));
+  const activeNavIndex = visibleNav.findIndex(n => n.view === view);
   const reorder = async (from: View, to: View) => {
     const previous = settings;
     const nextOrder = moveNav(order, from, to);
@@ -268,7 +269,14 @@ export function App() {
             <div className="rail-space-before" aria-hidden="true" />
             <div className="rail-group">
              <RailBackdrop />
-            <div className="rail-destinations flex min-h-0 flex-col gap-[7px] overflow-y-auto overflow-x-hidden">
+            <div className="rail-destinations">
+            {/* One tile slides to the active row. Where the brand row heads the
+                list (no title bar), it starts below that 36px row and its 12px margin. */}
+            <span
+              className="rail-indicator"
+              aria-hidden="true"
+              style={{ '--i': Math.max(0, activeNavIndex), '--rail-head': hasAppChrome ? undefined : 'calc(48px + var(--rail-gap))', opacity: activeNavIndex < 0 ? 0 : 1 } as React.CSSProperties}
+            />
             {/* The brand mark heads the rail. The wordmark joins it only where
                 there is no title bar to carry it (web and phone builds), so the
                 name is never shown twice. */}
@@ -276,14 +284,14 @@ export function App() {
               <span className="grid h-8 w-8 shrink-0 place-items-center text-ink"><BrandMark size={24} title={hasAppChrome ? undefined : 'Nekko Agent'} /></span>
               {!hasAppChrome && <span className="rail-label text-[15px] font-semibold tracking-tight">Nekko Agent</span>}
             </div>}
-            {visibleNav.map(({ view: v, labelKey, Icon }) => (
+            {visibleNav.map(({ view: v, labelKey, Icon }, navIndex) => (
               <button
                 key={v}
                 className={`nav-item ${view === v ? 'active' : ''}`}
                 aria-label={t(labelKey)}
                 draggable
                 title={`${t(labelKey)}. Drag to reorder, or use Alt+Up / Alt+Down.`}
-                style={dropNav === v ? { boxShadow: 'inset 0 2px var(--accent)' } : draggedNav === v ? { opacity: 0.5 } : undefined}
+                style={{ ...({ '--n': navIndex } as React.CSSProperties), ...(dropNav === v ? { boxShadow: 'inset 0 2px var(--accent)' } : draggedNav === v ? { opacity: 0.5 } : {}) }}
                 onDragStart={e => { e.dataTransfer.setData('text/plain', v); e.dataTransfer.effectAllowed = 'move'; setDraggedNav(v); }}
                 onDragOver={e => { if (draggedNav) { e.preventDefault(); setDropNav(v); } }}
                 onDrop={e => { e.preventDefault(); if (draggedNav) void reorder(draggedNav, v); setDraggedNav(null); setDropNav(null); }}

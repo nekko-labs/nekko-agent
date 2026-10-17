@@ -160,6 +160,15 @@ class WireTest {
         assertEquals("\"plain\"", queuePrompt("plain").toString())
     }
 
+    @Test fun `photos ride chat send and chat queue as data urls`() {
+        val img = "data:image/jpeg;base64,AAAA"
+        assertEquals(
+            """{"sessionId":"s","providerId":"p","modelId":"m","text":"what is this","images":["$img"]}""",
+            sendOptions("s", "p", "m", "what is this", images = listOf(img)).toString(),
+        )
+        assertEquals("""{"text":"","images":["$img","$img"]}""", queuePrompt("", images = listOf(img, img)).toString())
+    }
+
     /** Every channel the phone calls must be one the computer lets a phone call (#529's allowlist). */
     @Test fun `the computer allows every channel and setting the phone uses`() {
         val f = File(System.getenv("NEKKO_REPO_ROOT") ?: "../../..", "crates/nekko-remote/src/phone-access.json")
@@ -174,9 +183,9 @@ class WireTest {
         for (m in PcSettings.ChatMode.entries) assertTrue("the computer refuses chat mode ${m.wire} from a phone", m.wire in modes)
         val skill = SkillSummary("r", "", "", "")
         val sendKeys = policy["chatSendKeys"].arr()!!.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toSet()
-        for (k in sendOptions("s", "p", "m", "x", skill).keys) assertTrue("the computer refuses chat:send $k", k in sendKeys)
+        for (k in sendOptions("s", "p", "m", "x", skill, listOf("data:image/jpeg;base64,AA")).keys) assertTrue("the computer refuses chat:send $k", k in sendKeys)
         val queueKeys = policy["queueKeys"].arr()!!.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toSet()
-        for (k in queuePrompt("x", skill).obj()!!.keys) assertTrue("the computer refuses chat:queue $k", k in queueKeys)
+        for (k in queuePrompt("x", skill, listOf("data:image/jpeg;base64,AA")).obj()!!.keys) assertTrue("the computer refuses chat:queue $k", k in queueKeys)
     }
 
     @Test fun `pc settings read only the phone-visible keys, unset keys use the computer's defaults`() {

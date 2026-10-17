@@ -142,7 +142,7 @@ private fun Reply(b: Block.Assistant) {
             }
         }
         if (b.text.isNotEmpty()) {
-            Text(b.text, style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.copyOnLongPress(b.text))
+            MarkdownText(b.text, color = p.ink, modifier = Modifier.fillMaxWidth().copyOnLongPress(b.text))
         } else if (b.streaming && reasoning.isNullOrEmpty()) {
             CircularProgressIndicator(
                 color = p.accent,

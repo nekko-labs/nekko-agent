@@ -72,7 +72,13 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > on the phone the next time the list refreshes: when a reply finishes, when you pull down, or when
 > you come back to the app.
 >
-> **Dictation** (Android): tap the microphone in a chat's message box, speak, and tap again (or stop
+> **Photos and dictation** (Android): the **+** on the left of a chat's message box opens **Dictate**,
+> **Image from files** (the phone's photo picker; Nekko only sees the photos you pick) and **Take
+> photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails you
+> can remove; they are scaled to 1600 px and sent end-to-end encrypted to the computer, which hands
+> them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
+>
+> **Dictation** (Android): tap **+ → Dictate**, speak, and tap ■ (or stop
 > at 30 seconds). The words go into the message box for you to check and send; nothing is sent by
 > itself. By default the speech is turned into text by **Nekko Voice on your computer** (Whisper,
 > end-to-end encrypted, the audio never reaches anyone else); install and switch it on there under

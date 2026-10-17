@@ -125,6 +125,22 @@ final class StatusWidgetTests: XCTestCase {
         XCTAssertEqual(s(0, 0, online: false), "Offline")
     }
 
+    func testWhatNeedsMeAnswersInASentence() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        func say(_ needs: Int, _ running: Int, online: Bool = true, computer: String? = "Mac", ago: TimeInterval = 30) -> String {
+            StatusSnapshot(computer: computer, online: online, needsYou: needs, running: running, at: now.addingTimeInterval(-ago)).spoken(now: now)
+        }
+        XCTAssertEqual(say(0, 0, computer: nil), "No computer is paired with Nekko Agent yet.")
+        XCTAssertEqual(say(1, 0), "1 chat needs you on Mac.")
+        XCTAssertEqual(say(2, 1), "2 chats need you on Mac, and 1 is working.")
+        XCTAssertEqual(say(0, 3), "3 chats are working on Mac. Nothing needs you.")
+        XCTAssertEqual(say(0, 0), "All quiet on Mac.")
+        XCTAssertEqual(say(0, 0, online: false), "Mac was offline when Nekko Agent last checked.")
+        XCTAssertTrue(say(1, 0, ago: 3600).hasPrefix("1 chat needs you on Mac. As of "), "old numbers say how old")
+        XCTAssertEqual(StatusSnapshot(computer: "Mac", online: true, needsYou: 0, running: 0, at: .distantPast).spoken(now: now),
+                       "Open Nekko Agent once so it can check Mac.")
+    }
+
     func testSavesCountsOnlyAndReportsRealChanges() throws {
         let suite = "nekko.widget.tests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

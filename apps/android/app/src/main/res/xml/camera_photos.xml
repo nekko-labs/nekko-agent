@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The only folder the photo FileProvider shares: one camera shot at a time, deleted once read. -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+</paths>
