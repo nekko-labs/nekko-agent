@@ -6,6 +6,8 @@ import { useStore } from '../src/renderer/store';
 import { PlanRail } from '../src/renderer/components/PlanRail';
 import '../src/renderer/styles.css';
 
+const theme = new URLSearchParams(location.search).get('theme') === 'light' ? 'light' : 'dark';
+document.documentElement.dataset.theme = theme;
 const listeners = new Set<(e: any) => void>();
 (window as any).nekko = {
   onAgentEvent: (cb: (e: any) => void) => { listeners.add(cb); return () => listeners.delete(cb); },
@@ -26,7 +28,7 @@ const child = (id: string, title: string, lastReplyText?: string) => ({ id, titl
 
 useStore.setState({
   sessions: [child('child1', 'Inspect layout'), child('child2', 'Verify styles', 'Done.')],
-  settings: { providers: [], guardrails: [], workspaces: [] } as any,
+  settings: { theme, providers: [], guardrails: [], workspaces: [] } as any,
 } as any);
 
 function Fixture() {
