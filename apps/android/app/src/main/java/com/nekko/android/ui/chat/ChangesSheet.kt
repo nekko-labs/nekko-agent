@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.PhoneChanges
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 
 /**
  * What the agent changed in a chat, read only. The computer works out the diff
@@ -65,8 +67,10 @@ fun ChangesSheet(load: suspend () -> PhoneChanges, onDismiss: () -> Unit) {
     var attempt by remember { mutableIntStateOf(0) }
     LaunchedEffect(attempt) {
         try {
-            changes = load()
+            changes = withTimeout(30_000) { load() }
             error = null
+        } catch (_: TimeoutCancellationException) {
+            error = "Your computer didn’t answer. Try Refresh."
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -108,7 +108,7 @@ class LiveRelayTest {
             Thread.sleep(3_000)
             waitGone(hasContentDescription("Stop"), 30_000)
             tap(hasContentDescription("Changes"))
-            waitFor(hasContentDescription("nekko-itest-note.txt, new file, 2 added", substring = true), 20_000)
+            waitFor(hasContentDescription("nekko-itest-note.txt, new file, 2 added", substring = true), 45_000)
             waitFor(hasText("Read only", substring = true))
             shot("8-changes")
         }
