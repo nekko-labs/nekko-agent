@@ -90,6 +90,12 @@ class LiveRelayTest {
             waitFor(hasText("Hello from your computer."), 30_000)
             shot("4-reply")
 
+            // A Markdown reply: heading, lists, a code block with its Copy button, a link.
+            send("show me markdown")
+            waitFor(hasContentDescription("Copy code"), 30_000)
+            waitFor(hasText("Build steps"))
+            shot("4b-markdown")
+
             send("please approve a cleanup")
             waitFor(hasText("Deny"), 30_000)
             shot("5-approval")

@@ -207,7 +207,7 @@ Layout: `apps/android` is a standalone Gradle build (wrapper 9.8.1, AGP 9.4.1 wi
 - [x] **AN-22, Launcher shortcut (2026-10-17).** Long-press the app icon for *New chat*, the Android side of the iPhone's "Ask my computer" shortcut: a static shortcut opening `nekko-agent://new` (`DeepLink.NewChat`), through the app lock like any link. Tests: `MiscTest` parses the link. Not yet long-pressed in the emulator journey.
 - [ ] **AN-6, Push.** FCM token → relay `register-push` after pairing; needs a Firebase project (`google-services.json`) and the relay's FCM service account.
 - [ ] **AN-7, Phone models.** llama.cpp via JNI/NDK (or a maintained binding), memory-fit catalog, resumable downloads with integrity checks, no backup of model files, one loaded model, thermal handling. Parity with the Expo "On this phone" tab.
-- [ ] **AN-8, Markdown + attachments** in transcripts (no remote image fetches).
+- [ ] **AN-8, Markdown + attachments** in transcripts (no remote image fetches). **Markdown done 2026-10-17:** replies render the iPhone app's subset (`com.nekko.protocol.Markdown`, `ui/chat/MarkdownText.kt`; code blocks with Copy, headings, lists, quotes, inline styles, `https`/`http`/`mailto` links only, images as alt text), unit-tested in `MarkdownTest`. Still open: photos in the composer (`images` in `chat:send`, as on iOS) and a device look at long code blocks and TalkBack.
 - [ ] **AN-9, Distribution.** Upload key / Play App Signing, privacy policy and Data safety form, internal testing track, then production.
 
 ### Wall creation placement
