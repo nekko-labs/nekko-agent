@@ -10,6 +10,12 @@ test('CI cancels stale PR revisions without cancelling main runs', () => {
   assert.ok(ci.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"));
 });
 
+test('a bot merge dispatches full CI on main, since GITHUB_TOKEN merges start no push run', () => {
+  const merge = read('../.github/workflows/auto-merge.yml');
+  assert.ok(merge.includes('gh workflow run ci.yml --repo "$GH_REPO" --ref main'));
+  assert.match(read('../.github/workflows/ci.yml'), /\n  workflow_dispatch:\n/);
+});
+
 test('required build restores a dedicated Rust cache before compiling', () => {
   const build = read('../.github/workflows/ci.yml').split('\n  build:')[1].split('\n  daemon:')[0];
   assert.ok(build.indexOf('Swatinem/rust-cache@v2') < build.indexOf('cargo build -p nekkod --locked'));
