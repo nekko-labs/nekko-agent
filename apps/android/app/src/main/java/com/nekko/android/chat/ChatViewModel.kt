@@ -105,7 +105,8 @@ class ChatViewModel(
         }
     }
 
-    suspend fun send(text: String, skill: SkillSummary? = null) = controller.send(text, skill)
+    suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) =
+        controller.send(text, skill, images)
     fun stop() = controller.stop()
     suspend fun approve(ok: Boolean) = controller.approve(ok)
     suspend fun answer(answers: List<AskAnswer>) = controller.answer(answers)
