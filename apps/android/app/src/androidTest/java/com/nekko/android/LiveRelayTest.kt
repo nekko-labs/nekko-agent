@@ -8,11 +8,14 @@ import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -111,6 +114,13 @@ class LiveRelayTest {
             waitFor(hasContentDescription("nekko-itest-note.txt, new file, 2 added", substring = true), 45_000)
             waitFor(hasText("Read only", substring = true))
             shot("8-changes")
+
+            // Ask about a change: the quote lands in the message box, unsent, and the sheet closes.
+            val change = SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick) and hasAnyDescendant(hasContentDescription("Added line 2", substring = true))
+            waitFor(change)
+            compose.onAllNodes(change, useUnmergedTree = true).onFirst().performSemanticsAction(SemanticsActions.OnLongClick)
+            waitFor(hasText("+written by the agent", substring = true), 10_000)
+            shot("8b-asked")
         }
     }
 

@@ -95,6 +95,7 @@
  "model:pull",
  "model:unload",
  "models:list",
+ "models:listStatus",
  "oauth:begin",
  "oauth:cancel",
  "oauth:finish",

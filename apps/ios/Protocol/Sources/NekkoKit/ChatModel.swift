@@ -207,6 +207,14 @@ public final class ChatModel {
     /// Put a prompt back in the composer (it couldn't be sent from elsewhere).
     public func handBack(_ prompt: UnsentPrompt) { unsent = prompt }
 
+    /// Text to add to the message box (a quoted line from Changes), taken once by the composer.
+    public private(set) var insert: String?
+    public func quote(_ text: String) { insert = text }
+    public func takeInsert() -> String? {
+        defer { insert = nil }
+        return insert
+    }
+
     /// The prompt to put back in the composer after a failed send, once.
     public func takeUnsent() -> UnsentPrompt? {
         defer { unsent = nil }

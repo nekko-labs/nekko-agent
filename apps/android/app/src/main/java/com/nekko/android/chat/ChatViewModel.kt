@@ -79,6 +79,12 @@ class ChatViewModel(
     val changesAllowed: StateFlow<Boolean> = repo.state.map { it.pcSettings.phoneChanges }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.pcSettings.phoneChanges)
 
+    private val _insert = MutableStateFlow<String?>(null)
+    /** Text to add to the message box (a quoted line from Changes); the composer takes it once. */
+    val insert: StateFlow<String?> = _insert.asStateFlow()
+    fun quote(text: String) { _insert.value = text }
+    fun inserted() { _insert.value = null }
+
     /** The Changes sheet's state: loading (null fields), loaded, or the reason it couldn't. */
     data class ChangesLoad(val changes: PhoneChanges? = null, val error: String? = null)
 

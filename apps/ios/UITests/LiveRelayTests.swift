@@ -48,7 +48,7 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the reply streamed in")
         attach(app, "\(theme)-4-reply")
 
-        let message = app.input("Message")
+        let message = app.input("chat.message")
         XCTAssertTrue(message.waitForExistence(timeout: 10))
         message.tap()
         message.typeText("please approve a cleanup")
@@ -100,8 +100,16 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertFalse(app.buttons["Accept"].exists)
         attach(app, "\(theme)-6d-changes")
         auditAccessibility(app, "\(theme)-changes")
-        app.buttons["Done"].tap()
+        // Ask about a change: the quote lands in the message box, unsent, and the sheet closes.
+        let line = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Added line 2")).firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 5))
+        line.press(forDuration: 1.0)
+        app.buttons["Ask about this change"].firstMatch.tap()
         XCTAssertTrue(waitGone(note, 10))
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        XCTAssertTrue((message.value as? String ?? "").contains("+written by the agent"), "the quote is in the message box: \(message.value ?? "")")
+        attach(app, "\(theme)-6e-asked")
+        // Left in the box: the next prompt follows the quote, and the fake model still hears "slow".
 
         // A longer run, then Home: the Live Activity takes over in the Dynamic Island.
         message.tap()

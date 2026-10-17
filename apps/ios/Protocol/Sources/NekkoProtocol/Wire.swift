@@ -353,6 +353,25 @@ public struct PhoneChanges: Equatable, Sendable {
     /// Changed files past the computer's limit, not listed.
     public let omittedFiles: Int
 
+    /// Changed lines quoted at most, so a big hunk stays a short message.
+    public static let quoteLines = 12
+
+    /// What "Ask about this change" puts in the message box: the file, the line
+    /// range, and the hunk's changed lines quoted as a diff. Never sent on its own.
+    public static func quote(_ file: File, hunk: Hunk) -> String {
+        let changed = hunk.lines.filter { $0.kind != .same }
+        let numbers = changed.map(\.number)
+        let range = numbers.isEmpty ? "" : numbers.min() == numbers.max() ? " line \(numbers.min()!)" : " lines \(numbers.min()!)–\(numbers.max()!)"
+        var body = changed.prefix(quoteLines).map { ($0.kind == .added ? "+" : "-") + $0.text }
+        if changed.count > quoteLines { body.append("… \(changed.count - quoteLines) more") }
+        return "About `\(file.path)`\(range):\n```diff\n\(body.joined(separator: "\n"))\n```\n\n"
+    }
+
+    /// The same for a whole file.
+    public static func quote(_ file: File) -> String {
+        "About `\(file.path)` (\(file.added ? "new, " : "")+\(file.linesAdded) −\(file.linesRemoved)):\n\n"
+    }
+
     public var linesAdded: Int { files.reduce(0) { $0 + $1.linesAdded } }
     public var linesRemoved: Int { files.reduce(0) { $0 + $1.linesRemoved } }
 

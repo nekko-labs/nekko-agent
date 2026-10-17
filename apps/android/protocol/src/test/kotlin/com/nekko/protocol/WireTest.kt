@@ -42,6 +42,10 @@ class WireTest {
         assertEquals(listOf(2, 3, 3, 4, 5), lines.map { it.number })
         assertEquals("E", lines[2].text)
         assertEquals(PhoneChanges(emptyList()), PhoneChanges.from(null))
+        assertEquals("About `…/src/main.ts` lines 3–4:\n```diff\n-e\n+E\n+j\n```\n\n", PhoneChanges.quote(c.files[0], c.files[0].hunks[0]))
+        val big = PhoneChanges.Hunk.of(1, 1, (1..20).map { "+l$it" })
+        assertTrue(PhoneChanges.quote(c.files[0], big).contains("+l12\n… 8 more\n```"))
+        assertEquals("About `new.txt` (new, +1 −0):\n\n", PhoneChanges.quote(c.files[1]))
         assertTrue(PcSettings.from(json("""{"phoneChanges":true}""")).phoneChanges)
         assertFalse(PcSettings.from(json("""{"phoneChanges":"yes"}""")).phoneChanges)
     }
