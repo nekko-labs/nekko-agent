@@ -25,7 +25,7 @@ import {
   unreachableSteps,
   workflowEdges,
 } from '@nekko-agent/shared';
-import type { Workflow, WorkflowEvent, WorkflowStep, WorkflowTrigger } from '@nekko-agent/shared';
+import type { ConnectorKind, Workflow, WorkflowEvent, WorkflowStep, WorkflowTrigger } from '@nekko-agent/shared';
 
 function step(id: string, over: Partial<WorkflowStep> = {}): WorkflowStep {
   return { id, name: id, kind: 'prompt', run: `do ${id}`, ...over };
@@ -383,7 +383,7 @@ describe('gallery templates', () => {
     expect(templateInputProblem(repo, 'nope')).toMatch(/owner\/name/);
     expect(templateInputProblem(repo, 'o/r')).toBeUndefined();
     expect(templateInputProblem(author, '')).toMatch(/required/);
-    expect(templateInputProblem(byId('ticket-digest').inputs![0], '9am')).toMatch(/time/);
+    expect(templateInputProblem(byId('github-notifications').inputs![0], '9am')).toMatch(/time/);
   });
 
   it('reports each requirement and whether it is met', () => {
@@ -391,10 +391,26 @@ describe('gallery templates', () => {
       ['connector:github', false],
       ['model', true],
     ]);
-    const digest = templateReadiness(byId('ticket-digest'), { ...env, connectors: [{ kind: 'jira', connected: true }] });
+    const either = { ...byId('github-notifications'), requires: { anyConnector: ['linear', 'jira'] as ConnectorKind[] } };
+    const digest = templateReadiness(either, { ...env, connectors: [{ kind: 'jira', connected: true }] });
     expect(digest[0]).toMatchObject({ label: 'Linear or Jira connected', ok: true, fix: 'connectors' });
     const nightly = templateReadiness(byId('nightly-dependency-check'), { connectors: [] });
     expect(nightly.map((n) => [n.id, n.ok])).toEqual([['workspace', false], ['model', false]]);
+  });
+
+  it('never hands text someone else wrote to an agent with tools', () => {
+    expect(WORKFLOW_TEMPLATES.find((t) => t.id === 'ticket-digest')).toBeUndefined();
+    for (const id of ['github-notifications', 'nightly-dependency-check']) {
+      const { steps } = byId(id).build(templateInputValues(byId(id), {}));
+      const agents = steps.filter((s) => s.kind === 'prompt' || s.kind === 'skill');
+      // One agent step, last, tools off, quoting the earlier fetch steps' output.
+      expect(agents.map((s) => s.id), id).toEqual([steps[steps.length - 1].id]);
+      expect(agents[0].tools, id).toBe('none');
+      for (const fetch of steps.slice(0, -1)) {
+        expect(fetch.kind, id).toBe('shell');
+        expect(agents[0].run, id).toContain(`{{steps.${fetch.id}.output}}`);
+      }
+    }
   });
 });
 

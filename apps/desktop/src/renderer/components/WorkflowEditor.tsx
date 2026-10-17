@@ -526,6 +526,16 @@ function StepEditor({
         />
         <span className="text-[11.5px] text-ink-soft">Keep going even if this step fails</span>
       </label>
+      {(step.kind === 'prompt' || step.kind === 'skill') && (
+        <label className="mt-1 flex items-center gap-2" title="For a step that reads text someone else wrote. Later steps share the chat, so keep it last.">
+          <input
+            type="checkbox"
+            checked={step.tools === 'none'}
+            onChange={(e) => onPatch({ tools: e.target.checked ? 'none' : undefined })}
+          />
+          <span className="text-[11.5px] text-ink-soft">No tools: only reads what the step gives it</span>
+        </label>
+      )}
     </div>
   );
 }

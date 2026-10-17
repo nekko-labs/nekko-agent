@@ -21,8 +21,7 @@ describe('template gallery', () => {
     for (const t of WORKFLOW_TEMPLATES.filter((x) => x.featured)) expect(html).toContain(`data-template="${t.id}"`);
     expect(html).not.toContain('data-template="blank"');
     expect(html).toContain('✓ GitHub connected');
-    expect(html).toContain('Linear or Jira connected');
-    expect(html).not.toContain('✓ Linear or Jira connected');
+    expect(html).not.toContain('data-template="ticket-digest"');
   });
 
   it('seeds a workflow that remembers its template and notify setting', () => {

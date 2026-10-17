@@ -15,7 +15,6 @@ CI on your machine, see [Local CI runner](git-runner.md).
 | Summarize my GitHub notifications every morning | Weekdays at a time you pick | GitHub connected, the `gh` CLI signed in, a default model |
 | Review every PR I open | Each pull request you open in a repo you pick (checked every 2 minutes) | GitHub connected, the `gh` CLI signed in, a default model |
 | Nightly dependency check | Every night at a time you pick | A project folder, a default model |
-| Daily digest of my Linear or Jira tickets | Weekdays at a time you pick | Linear or Jira connected, a default model |
 
 Each card marks what you already have. Click one to open its setup sheet:
 
@@ -33,6 +32,12 @@ steps, triggers and model before saving.
 Every ready-made automation only reads: it summarizes or reviews, and never comments, posts,
 installs or changes anything. Results land in the run history (and a notification, if you asked
 for one).
+
+Digests read text other people wrote, such as notification titles or package advisories. So a
+fixed command fetches it first, and the agent that summarizes it has **no tools**: it can only
+write the summary, so nothing in that text can make it run a command. You can set **No tools** on
+any prompt or skill step in the editor. Keep such a step last, because later steps share its
+chat and see the same text.
 
 ## How a run went
 

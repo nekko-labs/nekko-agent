@@ -927,11 +927,12 @@ impl Workflows {
             .get_session(session_id)
             .and_then(|s| s.get("messages").and_then(Value::as_array).map(Vec::len))
             .unwrap_or(0);
-        let failed = match self
-            .host
-            .send_chat(json!({ "sessionId": session_id, "providerId": provider, "modelId": model, "text": prompt }))
-            .await
-        {
+        let mut opts = json!({ "sessionId": session_id, "providerId": provider, "modelId": model, "text": prompt });
+        // A tools-off step reads text someone else wrote: no tool that acts.
+        if str_field(step, "tools") == Some("none") {
+            opts["noTools"] = json!(true);
+        }
+        let failed = match self.host.send_chat(opts).await {
             Ok(f) => f,
             Err(e) => return fail(&e),
         };

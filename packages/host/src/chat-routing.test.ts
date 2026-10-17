@@ -774,3 +774,17 @@ describe('child checkpoint recovery', () => {
     expect(result?.type === 'tool_result' && result.result.output).toContain('Continue the delegated task directly');
   });
 });
+
+describe('tools-off turns', () => {
+  it('offers only update_plan and refuses a tool the turn did not offer', async () => {
+    const session = createSession();
+    session.mode = 'yolo';
+    saveSession(session);
+    rounds = [[{ type: 'tool_call', call: { id: 'x', name: 'bash', input: { command: 'echo injected' } } }, { type: 'done' }]];
+    const events: AgentEvent[] = [];
+    await sendChat({ sessionId: session.id, providerId: 'frontier', modelId: 'frontier-exact', text: 'summarize', noTools: true }, (event) => events.push(event));
+    expect(requests[0].request.tools?.map((t) => t.name)).toEqual(['update_plan']);
+    const result = events.find((event) => event.type === 'tool_result');
+    expect(result).toMatchObject({ result: { isError: true, output: expect.stringContaining('disabled or unavailable') } });
+  });
+});

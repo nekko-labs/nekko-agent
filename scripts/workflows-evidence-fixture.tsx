@@ -14,7 +14,7 @@ const workflows = [
   {
     id: 'w1', name: 'Nightly dependency check', category: 'Maintenance', enabled: true, notify: 'always', templateId: 'nightly-dependency-check',
     description: 'Every night the project runs npm outdated and npm audit, and the agent writes up which updates matter and why.',
-    steps: [step('a', 'Check for outdated packages', 'shell', 'npm outdated'), step('b', 'Check for known vulnerabilities', 'shell', 'npm audit --omit=dev'), step('c', 'Write it up', 'prompt', 'Summarize')],
+    steps: [step('a', 'Check for outdated packages', 'shell', 'npm outdated'), step('b', 'Check for known vulnerabilities', 'shell', 'npm audit --omit=dev'), { ...step('c', 'Write it up', 'prompt', 'Summarize:\n{{steps.a.output}}\n{{steps.b.output}}'), tools: 'none' }],
     triggers: [{ id: 't1', kind: 'schedule', cron: '0 3 * * *' }],
     createdAt: now - 3 * 86_400_000, updatedAt: now - 3 * 86_400_000, lastRunAt: now - 7 * 60 * min, lastStatus: 'success', runCount: 3, nextRunAt: now + 17 * 60 * min,
   },

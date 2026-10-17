@@ -598,7 +598,7 @@ async function runAgentStep(
   const before = getSession(sessionId)?.messages.length ?? 0;
   let failed: string | undefined;
   try {
-    await sendChat({ sessionId, providerId, modelId, text: prompt }, (e) => {
+    await sendChat({ sessionId, providerId, modelId, text: prompt, ...(step.tools === 'none' ? { noTools: true } : {}) }, (e) => {
       if (e.type === 'error') failed = e.message;
       workflowSender?.(e);
     });
