@@ -95,7 +95,7 @@ write('agent-watches.json', JSON.stringify([{ id: 'w1', sessionId: 's_src', kind
 
 // The configuration nekkod gets is written by the server; the GitHub API
 // address reaches it through the environment the server passes on.
-const server = spawn(process.execPath, ['apps/server/dist/index.js'], {
+const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
   env: {
     ...process.env,
     NEKKO_PORT: String(SERVER_PORT),

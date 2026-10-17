@@ -304,6 +304,7 @@ ${rendered.html}
       <ul class="results" role="listbox" aria-label="Results"></ul>
     </dialog>
     <script src="/docs.js?v=${ASSET_VERSION}" defer></script>
+    <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>
 `;

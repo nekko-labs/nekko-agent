@@ -95,10 +95,10 @@ npm run dev          # build the Rust daemon and the app, then launch the deskto
 </tbody></table></div>
 <p><strong>Rule of thumb:</strong> business logic goes in <code>packages/core</code> (so it&#39;s testable without Electron); the desktop app wires it to the filesystem, shell, and UI.</p>
 <h2 id="publishing-the-npx-nekko-agent-package"><a class="anchor" href="#publishing-the-npx-nekko-agent-package" aria-hidden="true" tabindex="-1">#</a>Publishing the <code>npx nekko-agent</code> package</h2>
-<p><code>npm run bundle:web</code> produces a self-contained package in <code>apps/server/cli-dist/</code>
+<p><code>npm run bundle:web</code> produces a self-contained package in <code>apps/web-app-server/cli-dist/</code>
 (server + engine bundled by esbuild, plus the built <code>web/</code> UI). To release it:</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run bundle:web
-cd apps/server/cli-dist &amp;&amp; npm publish</code></pre></div>
+cd apps/web-app-server/cli-dist &amp;&amp; npm publish</code></pre></div>
 <p>After that, anyone can run the web edition with <code>npx nekko-agent</code>.</p>
 <h2 id="before-you-open-a-pr"><a class="anchor" href="#before-you-open-a-pr" aria-hidden="true" tabindex="-1">#</a>Before you open a PR</h2>
 <p>Keep the build green and the suite passing:</p>
@@ -114,6 +114,7 @@ npm run typecheck   # every TypeScript workspace</code></pre></div>
 <h2 id="documentation"><a class="anchor" href="#documentation" aria-hidden="true" tabindex="-1">#</a>Documentation</h2>
 <p>The docs at <a href="https://nekkoagent.com/docs">nekkoagent.com/docs</a> are rendered from Markdown in this repo. <code>docs/hub/nav.json</code> lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change. When a pull request changes what users see or do, update the page that describes it in the same PR.</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run docs</code></pre></div>
+<p>To look at the result before it ships, <code>npm run website</code> serves the site on <a href="http://127.0.0.1:8080" rel="noopener">http://127.0.0.1:8080</a> (set <code>PORT</code> to change it), with the same clean URLs as production.</p>
 <p>If you forget, the <strong>Docs site</strong> workflow regenerates the pages on your pull request and pushes them to its branch. It only commits when something actually changed.</p>
 <h2 id="commit-messages"><a class="anchor" href="#commit-messages" aria-hidden="true" tabindex="-1">#</a>Commit messages</h2>
 <p>Conventional commits (<code>feat:</code>, <code>fix:</code>, <code>docs:</code>, <code>refactor:</code>, <code>test:</code>, <code>chore:</code>).</p>
@@ -139,5 +140,6 @@ kind (Ollama / LM Studio / vLLM / cloud), the base URL shape, and the model id.<
       <ul class="results" role="listbox" aria-label="Results"></ul>
     </dialog>
     <script src="/docs.js?v=docs-1" defer></script>
+    <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

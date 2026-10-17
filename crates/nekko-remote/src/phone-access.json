@@ -124,7 +124,10 @@
  ],
  "sessionView": {
   "messages": 300,
-  "textChars": 4000
+  "textChars": 4000,
+  "images": 40,
+  "thumbSide": 384,
+  "thumbChars": 98304
  },
  "changesView": {
   "files": 50,

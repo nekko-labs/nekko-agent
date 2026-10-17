@@ -47,6 +47,7 @@ export const SendIcon = (p: P) => (
 );
 export const PlusIcon = (p: P) => (<S {...p}><path d="M12 5v14M5 12h14" /></S>);
 export const SearchIcon = (p: P) => (<S {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.4-4.4" /></S>);
+export const CalendarIcon = (p: P) => (<S {...p}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></S>);
 export const ChevronUpIcon = (p: P) => (<S {...p}><path d="m6 15 6-6 6 6" /></S>);
 export const ChevronDownIcon = (p: P) => (<S {...p}><path d="m6 9 6 6 6-6" /></S>);
 export const TrashIcon = (p: P) => (<S {...p}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></S>);

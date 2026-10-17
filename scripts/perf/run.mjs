@@ -737,7 +737,7 @@ async function main() {
   cleanups.push(() => rmSync(dataDir, { recursive: true, force: true }));
   log(`scratch data dir ${dataDir}`);
 
-  const server = spawn(process.execPath, [join(APP_ROOT, 'apps/server/dist/index.js')], {
+  const server = spawn(process.execPath, [join(APP_ROOT, 'apps/web-app-server/dist/index.js')], {
     cwd: APP_ROOT,
     env: { ...process.env, NEKKO_DATA_DIR: dataDir, NEKKO_PORT: String(CFG.appPort), NEKKO_HOST: '127.0.0.1' },
     stdio: ['ignore', 'pipe', 'pipe'],

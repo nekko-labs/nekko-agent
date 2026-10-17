@@ -66,6 +66,8 @@ data class ComputersState(
     /** Chats mid-run or waiting on an approval/answer, by session id. */
     val activity: Map<String, Activity> = emptyMap(),
     val lastError: String? = null,
+    /** When the list on screen is the phone's saved copy, when it was saved; null once the computer answers. */
+    val savedListAt: Long? = null,
 ) {
     val active: Computer? get() = computers.firstOrNull { it.id == activeId }
 }

@@ -77,6 +77,9 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails you
 > can remove; they are scaled to 1600 px and sent end-to-end encrypted to the computer, which hands
 > them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
+> The photos stay in the message's bubble on the phone too, as small previews the computer makes
+> (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
+> a plain tile, and the full-size original stays on the computer.
 >
 > **Dictation** (Android): tap **+ → Dictate**, speak, and tap ■ (or stop
 > at 30 seconds). The words go into the message box for you to check and send; nothing is sent by
@@ -104,7 +107,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > anything. While it is locked nothing can be read or approved, and the recent-apps preview shows a
 > plain cover instead of your chats. After a restart it doesn't connect to your computer until you unlock. Turn it off in
 > **Settings → Security → App lock**; turning it off asks for the same check first. Screenshots and screen
-> recording of the app work as usual, lock on or off. A phone with no screen lock can't be locked;
+> recording of the app work as usual, lock on or off; on Android 14 and later the screenshot toolbar
+> some phones show afterwards (Samsung) no longer hides the app behind the cover. A phone with no screen lock can't be locked;
 > Settings says so and links to the phone's security settings.
 >
 > The Android app **reconnects by itself** as soon as the phone changes network (Wi-Fi to mobile data,

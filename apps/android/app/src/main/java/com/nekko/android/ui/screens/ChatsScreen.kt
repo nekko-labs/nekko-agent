@@ -215,6 +215,16 @@ fun ChatsScreen(
             ) {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                     item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers) }
+                    s.savedListAt?.let { at ->
+                        item(key = "saved-list") {
+                            Text(
+                                savedListNote(at, active.name),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = p.inkSoft,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
                     item(key = "header") { SectionHeader("On ${active.name}") }
                     actionError?.let { msg -> item(key = "action-error") { Notice(msg, Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) } }
                     if (s.summaries.isEmpty()) {
@@ -471,4 +481,14 @@ private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(80.dp))
     }
+}
+
+/** The line above a saved chat list: when it was saved, and that it isn't live. */
+internal fun savedListNote(savedAt: Long, computer: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
+    val at = java.time.Instant.ofEpochMilli(savedAt).atZone(zone)
+    val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val time = at.toLocalTime().format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
+    val whenText = if (at.toLocalDate() == today) time
+    else at.toLocalDate().format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)) + ", " + time
+    return "Saved list from $whenText. It updates when $computer answers."
 }

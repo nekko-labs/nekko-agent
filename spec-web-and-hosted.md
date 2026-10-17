@@ -47,7 +47,7 @@ packages/host/        // Node-only, no Electron, no HTTP, just services + a Host
 `createHost()` returns one object whose methods are exactly the `NekkoApi` surface (minus the `on*` subscriptions, which become an EventEmitter). Every edition wraps the same `Host`:
 
 - **Electron** (`apps/desktop/src/main`): `ipcMain.handle(channel, (e,...args) => host[method](...args))`; forwards `host.on('agentEvent', …)` to `webContents.send`. (This is a thin rewrite of today's `ipc.ts`.)
-- **Web server** (`apps/server`): one HTTP route per request method + a WebSocket for streamed events. (Details in §3.)
+- **Web server** (`apps/web-app-server`): one HTTP route per request method + a WebSocket for streamed events. (Details in §3.)
 
 ### 2.3 Renderer transport adapter
 The renderer must get `window.nekko` regardless of runtime. Introduce a tiny bootstrap that picks an adapter:
@@ -58,14 +58,14 @@ The renderer must get `window.nekko` regardless of runtime. Introduce a tiny boo
 Selection is by build target / presence of the preload bridge: `window.nekko ??= makeWebClient()`.
 
 ### 2.4 Net effect
-`@nekko-agent/core` + `apps/desktop/src/renderer` are shared verbatim. New code is: `packages/host` (mostly moved), `apps/server` (new, thin), and `renderer/web-client.ts` (new, thin). The desktop `main` shrinks to a host wiring file.
+`@nekko-agent/core` + `apps/desktop/src/renderer` are shared verbatim. New code is: `packages/host` (mostly moved), `apps/web-app-server` (new, thin), and `renderer/web-client.ts` (new, thin). The desktop `main` shrinks to a host wiring file.
 
 ---
 
 ## 3. Self-hosted web edition
 
 ### 3.1 One command
-`apps/server` is a small Fastify (or Express) app that:
+`apps/web-app-server` is a small Fastify (or Express) app that:
 1. Calls `createHost()` (local FS storage, same data dir as desktop so they can share state).
 2. Mounts `POST /api/:channel` → `host[method](...args)` (validated against the IPC contract).
 3. Exposes `GET /api/events` (WebSocket) streaming `AgentEvent` + `IndexProgress`.
@@ -74,7 +74,7 @@ Selection is by build target / presence of the preload bridge: `window.nekko ??=
 
 Run paths:
 - `npx nekko-agent` (published bin) → downloads + starts the server.
-- In-repo: `npm run web` → builds renderer + core + host, starts `apps/server`.
+- In-repo: `npm run web` → builds renderer + core + host, starts `apps/web-app-server`.
 - The server is **offline-first**: it makes no outbound calls except to the model servers and connectors the user configures.
 
 ### 3.2 Docker
@@ -208,7 +208,7 @@ Numbers are placeholders pending cost modeling (relay bandwidth, storage). ZDR i
 Phase ordering keeps the OSS app shippable throughout.
 
 - [ ] **P2.1, Host extraction**: move `apps/desktop/src/main` services into `packages/host`; rewrite desktop `main` as thin IPC wiring over `createHost()`. No user-visible change; keep build + tests green.
-- [ ] **P2.2, Web server**: `apps/server` (Fastify) mapping the IPC contract to HTTP + WS; `renderer/web-client.ts` adapter; `npm run web`; localhost bind + token for non-local.
+- [ ] **P2.2, Web server**: `apps/web-app-server` (Fastify) mapping the IPC contract to HTTP + WS; `renderer/web-client.ts` adapter; `npm run web`; localhost bind + token for non-local.
 - [ ] **P2.3, Docker**: `Dockerfile`, `docker-compose.yml`, `host.docker.internal` model access, volume-mounted workspaces, non-root, published image via CI.
 - [ ] **P2.4, Packaging/publish**: `npx nekko-agent` bin; website download/run section updated; docs.
 - [ ] **P3.1, Cloud foundation**: accounts/auth, Postgres, entitlements, app.nekkoagent.com shell reusing the same renderer with a cloud transport.

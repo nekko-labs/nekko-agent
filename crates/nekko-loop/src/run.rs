@@ -207,6 +207,10 @@ fn trim_runaway(s: &str) -> String {
 /// (`MAX_STREAM_ATTEMPTS` in providers/errors.ts).
 pub const MAX_STREAM_ATTEMPTS: u32 = 5;
 
+/// Attempts when the network itself failed: about half an hour of waits at
+/// the 30 s cap (`MAX_NETWORK_STREAM_ATTEMPTS` in providers/errors.ts).
+pub const MAX_NETWORK_STREAM_ATTEMPTS: u32 = 65;
+
 /// Statuses a second attempt usually gets past; 529 is Anthropic's "overloaded".
 const TRANSIENT_STATUSES: &[u16] = &[408, 409, 425, 429, 500, 502, 503, 504, 529];
 
@@ -218,6 +222,9 @@ pub fn is_transient_error(message: &str) -> bool {
     let lower = message.to_ascii_lowercase();
     if lower.contains("abort") {
         return false;
+    }
+    if is_network_error(message) {
+        return true;
     }
     let mut digits = String::new();
     for ch in message.chars().chain(std::iter::once(' ')) {
@@ -261,6 +268,45 @@ pub fn is_transient_error(message: &str) -> bool {
         "error sending request",
         "error decoding response body",
         "stopped sending",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+}
+
+/// Whether the connection itself failed (DNS, an unreachable network, a
+/// dropped socket) rather than a provider that answered
+/// (`isNetworkProviderError`). These get `MAX_NETWORK_STREAM_ATTEMPTS`.
+pub fn is_network_error(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("abort") || lower.contains("stopped sending") {
+        return false;
+    }
+    [
+        "econnreset",
+        "econnrefused",
+        "etimedout",
+        "epipe",
+        "eai_again",
+        "enotfound",
+        "enetunreach",
+        "ehostunreach",
+        "enetdown",
+        "und_err_socket",
+        "und_err_connect_timeout",
+        "socket hang up",
+        "fetch failed",
+        "terminated",
+        "network error",
+        "premature close",
+        // reqwest and the OS, as the daemon's client reports them.
+        "error sending request",
+        "connection reset",
+        "connection refused",
+        "connection closed",
+        "broken pipe",
+        "dns error",
+        "network is unreachable",
+        "no route to host",
     ]
     .iter()
     .any(|needle| lower.contains(needle))
@@ -464,7 +510,9 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                         attempt = 1;
                         continue;
                     }
-                    if self.opts.cancel.is_cancelled() || attempt >= MAX_STREAM_ATTEMPTS || !is_transient_error(&e) {
+                    let max_attempts =
+                        if is_network_error(&e) { MAX_NETWORK_STREAM_ATTEMPTS } else { MAX_STREAM_ATTEMPTS };
+                    if self.opts.cancel.is_cancelled() || attempt >= max_attempts || !is_transient_error(&e) {
                         return Err(e);
                     }
                     *turn = before;
@@ -473,7 +521,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                         "retry",
                         json!({
                             "attempt": attempt,
-                            "maxAttempts": MAX_STREAM_ATTEMPTS,
+                            "maxAttempts": max_attempts,
                             "delayMs": delay.as_millis() as u64,
                             "reason": e,
                         }),

@@ -290,6 +290,9 @@ export const IpcChannels = {
   localRelayStatus: 'localRelay:status',
   localRelayStart: 'localRelay:start',
   localRelayStop: 'localRelay:stop',
+  networkVisibilityStatus: 'networkVisibility:status',
+  networkVisibilityStart: 'networkVisibility:start',
+  networkVisibilityStop: 'networkVisibility:stop',
 
   appInfo: 'app:info',
   mcpStatus: 'mcp:status',
@@ -857,6 +860,14 @@ export interface NekkoApi {
   /** Switch it on (and keep it on across restarts); reports why if it can't start. */
   localRelayStart(): Promise<import('./relay-route.js').LocalRelayStatus>;
   localRelayStop(): Promise<import('./relay-route.js').LocalRelayStatus>;
+  /**
+   * "Visible on this network": answer mDNS for `_nekko-agent._tcp` so phones
+   * on the same Wi-Fi can list this computer. Off by default; says nothing
+   * that gets a phone into the room. Desktop only.
+   */
+  networkVisibilityStatus(): Promise<import('./relay-route.js').NetworkVisibilityStatus>;
+  networkVisibilityStart(): Promise<import('./relay-route.js').NetworkVisibilityStatus>;
+  networkVisibilityStop(): Promise<import('./relay-route.js').NetworkVisibilityStatus>;
 
   /** Running version + edition. */
   getAppInfo(): Promise<AppInfo>;

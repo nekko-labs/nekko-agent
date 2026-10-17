@@ -776,10 +776,24 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // fresh (focused, empty), and closing it clears the highlights.
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchEpoch, setSearchEpoch] = useState(0);
+  const [searchSeed, setSearchSeed] = useState('');
   const openSearch = useCallback(() => {
+    setSearchSeed('');
     setSearchOpen(true);
     setSearchEpoch((n) => n + 1);
   }, []);
+  // Search chats opened this chat from a message match: open Find in this chat
+  // on the words that matched, so the reader lands on them. Only a surface that
+  // shows the transcript takes it; the wall's composer pane leaves it for its
+  // transcript window.
+  const findSeed = useStore((s) => (s.findSeed?.sessionId === sessionId ? s.findSeed : null));
+  useEffect(() => {
+    if (!findSeed || surface === 'composer') return;
+    useStore.setState({ findSeed: null });
+    setSearchSeed(findSeed.query);
+    setSearchOpen(true);
+    setSearchEpoch((n) => n + 1);
+  }, [findSeed, surface]);
   const transcriptRef = useRef<VirtualTranscriptHandle>(null);
   const composerRef = useRef<MarkdownEditorElement>(null);
   // A dragged composer height, or null to size to the draft. See COMPOSER_H_KEY.
@@ -2547,9 +2561,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               </>
             }
           /></WatchSessionContext.Provider></SubagentInheritedModelContext.Provider></SubagentParentContext.Provider>
-          {/* The plan panel's toggle floats in the chat area's top-right corner,
-              in its own place whether the panel is open or not. */}
-          {wideEnoughForRail && (
+          {/* The Agent Monitor button floats in the chat area's top-right corner
+              while the panel is minimized; the open panel has its own minimize
+              button, so the two never stack. */}
+          {wideEnoughForRail && !planRailOpen && (
             <button
               type="button"
               className={`plan-rail-toggle ${planRailOpen ? 'is-open' : ''}`}
@@ -2566,6 +2581,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           {searchOpen && (
             <ChatSearchBar
               key={searchEpoch}
+              initialQuery={searchSeed}
               rows={rows}
               scrollRoot={transcriptScroller}
               transcript={transcriptRef}
@@ -3243,6 +3259,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             session={session}
             streaming={streaming}
             onChangePlan={readOnly ? undefined : () => setPlanChangeOpen(true)}
+            onMinimize={() => useStore.getState().togglePlanRail(sessionId)}
           />
         </div>
       )}

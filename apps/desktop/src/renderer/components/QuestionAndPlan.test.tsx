@@ -34,6 +34,12 @@ describe('plan panel toggle', () => {
   const rail = read('./PlanRail.tsx');
   it('is a floating plan icon in the chat area, not an X in the panel', () => {
     expect(pane).toContain('data-plan-toggle');
+    // Floating button only while minimized; the open panel minimizes itself.
+    expect(pane).toContain('{wideEnoughForRail && !planRailOpen && (');
+    expect(pane).toContain('onMinimize={() => useStore.getState().togglePlanRail(sessionId)}');
+    expect(rail).toContain('data-plan-minimize');
+    // The transcript starts below the floating button instead of under it.
+    expect(read('../styles.css')).toContain('div:has(> .plan-rail-toggle) > [data-transcript-scroll] { padding-top: 44px; }');
     expect(pane).toMatch(/className=\{`plan-rail-toggle \$\{planRailOpen \? 'is-open' : ''\}`\}/);
     expect(rail).not.toContain('Hide the plan panel');
     expect(rail).not.toContain('onClose');

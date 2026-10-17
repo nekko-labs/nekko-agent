@@ -46,7 +46,7 @@ describe('findNekkod', () => {
 
   it('prefers the platform npm package, then bin/ beside the script, then the newest cargo build', () => {
     const root = scratch();
-    const here = join(root, 'apps/server/dist');
+    const here = join(root, 'apps/web-app-server/dist');
     const exe = 'nekkod';
     touch(join(root, 'target/release', exe), 1_000);
     touch(join(root, 'target/debug', exe), 2_000);
@@ -65,7 +65,7 @@ describe('findNekkod', () => {
 
   it('looks for nekkod.exe on Windows and finds nothing in an empty tree', () => {
     const root = scratch();
-    const here = join(root, 'apps/server/dist');
+    const here = join(root, 'apps/web-app-server/dist');
     expect(findNekkod({ here, env: {}, platform: 'win32', resolvePackage: none })).toBeNull();
     touch(join(root, 'target/release/nekkod.exe'));
     expect(findNekkod({ here, env: {}, platform: 'win32', resolvePackage: none })?.path).toBe(join(root, 'target/release/nekkod.exe'));
