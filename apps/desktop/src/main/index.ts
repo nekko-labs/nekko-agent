@@ -22,6 +22,11 @@ import { registerArtifactPreview } from './artifactPreview.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
 import { startMainNotifications, createNativeNotificationPoster } from './notifications.js';
+import { createDisplayWindows, type DisplayWindows } from './displayWindows.js';
+import {
+  DISPLAY_ARG, DISPLAYS_CHANGED_EVENT, DISPLAYS_CLAIM_CHANNEL, DISPLAYS_LIST_CHANNEL, DISPLAYS_PLACED_EVENT,
+  DISPLAYS_PLACEMENT_CHANNEL, DISPLAYS_REPORT_CHANNEL, DISPLAYS_TOGGLE_CHANNEL, MAIN_KEY,
+} from '../displayWindows.js';
 const applicationWindows = new Set<number>();
 
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
@@ -155,15 +160,18 @@ function resolveWindowIcon(): string | undefined {
   return candidates.find((path) => existsSync(path));
 }
 
-function createWindow(): void {
-  if (mainWindow && !mainWindow.isDestroyed()) { showWindow(); return; }
-  // A first launch is sized to the screen before the window exists, so it
-  // appears at that size rather than visibly growing into it.
-  const bounds = loadWindowBounds() ?? initialWindowBounds(screen.getPrimaryDisplay().workArea);
-  const win = new BrowserWindow({
+/**
+ * An app window: the whole UI, with the app's own title strip. The main window
+ * and every multi-monitor screen window are made here, so they share the
+ * preload, the navigation guards and the webview hardening.
+ */
+function newAppWindow(bounds: { x?: number; y?: number; width: number; height: number }, displayId?: string): BrowserWindow {
+  return new BrowserWindow({
     ...bounds,
-    minWidth: MIN_WINDOW.width,
-    minHeight: MIN_WINDOW.height,
+    // A screen window starts as a thin strip and swipes open, so it cannot
+    // have the main window's floor.
+    minWidth: displayId ? undefined : MIN_WINDOW.width,
+    minHeight: displayId ? undefined : MIN_WINDOW.height,
     show: false,
     backgroundColor: DEFAULT_OVERLAY.color,
     icon: resolveWindowIcon(),
@@ -185,37 +193,14 @@ function createWindow(): void {
       nodeIntegration: false,
       // Enable <webview> for the in-app browser pane (BrowserPane).
       webviewTag: true,
+      // Tells the preload which screen this window fills (multi-monitor).
+      ...(displayId ? { additionalArguments: [`${DISPLAY_ARG}${displayId}`] } : {}),
     },
   });
+}
 
-  mainWindow = win;
-  win.once('closed', () => { if (mainWindow === win) mainWindow = null; });
-  win.on('ready-to-show', () => win.show());
-  const closeIntent = createCloseIntent();
-  if (process.platform === 'win32') {
-    win.hookWindowMessage(WM_SYSCOMMAND, (wParam) => closeIntent.sysCommand(readWParam(wParam)));
-    win.hookWindowMessage(WM_CLOSE, () => closeIntent.closeMessage());
-  }
-  win.on('close', event => {
-    const external = closeIntent.takeExternal();
-    if (quitting || !desktopTray) return;
-    event.preventDefault();
-    // Another program asked the app to exit (`taskkill` without /F, as
-    // `nekko-agent migrate` and installers do): quit for real, through the
-    // clean engine shutdown, rather than hide into the tray.
-    if (external) { app.quit(); return; }
-    void trayCompanion?.closeWindow(() => { saveWindowBounds(win.getBounds()); win.hide(); });
-  });
-
-  // A link that arrived before the page could listen (a cold launch from
-  // Hypergate's Connect button) is replayed the moment it can.
-  win.webContents.on('did-finish-load', () => {
-    if (!pendingLink) return;
-    const url = pendingLink;
-    pendingLink = null;
-    win.webContents.send(IpcEvents.deepLink, url);
-  });
-
+/** Everything an app window's page needs, main window or screen window alike. */
+function wireAppWindow(win: BrowserWindow): void {
   // Reload and devtools used to hang off the View menu. The menu is gone, the
   // shortcuts people reach for shouldn't be, so bind the two that were worth
   // keeping directly. Everything else in that menu duplicated a shortcut the
@@ -232,19 +217,6 @@ function createWindow(): void {
       win.webContents.reload();
     }
   });
-
-  // Persist size/position (debounced) so the window reopens where it was.
-  let saveTimer: NodeJS.Timeout | undefined;
-  const persist = () => {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      if (win.isDestroyed() || win.isMinimized()) return;
-      const b = win.getBounds();
-      saveWindowBounds(b);
-    }, 400);
-  };
-  win.on('resize', persist);
-  win.on('move', persist);
 
   applicationWindows.add(win.webContents.id);
   const windowId = win.webContents.id;
@@ -295,6 +267,112 @@ function createWindow(): void {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'));
   }
+}
+
+/** A multi-monitor screen window: the whole app on another screen, closed (not hidden) with its X. */
+function createScreenWindow(displayId: string, bounds: { x: number; y: number; width: number; height: number }): BrowserWindow {
+  const win = newAppWindow(bounds, displayId);
+  wireAppWindow(win);
+  return win;
+}
+
+function createWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) { showWindow(); return; }
+  // A first launch is sized to the screen before the window exists, so it
+  // appears at that size rather than visibly growing into it.
+  const bounds = loadWindowBounds() ?? initialWindowBounds(screen.getPrimaryDisplay().workArea);
+  const win = newAppWindow(bounds);
+
+  mainWindow = win;
+  win.once('closed', () => { if (mainWindow === win) mainWindow = null; });
+  win.on('ready-to-show', () => win.show());
+  const closeIntent = createCloseIntent();
+  if (process.platform === 'win32') {
+    win.hookWindowMessage(WM_SYSCOMMAND, (wParam) => closeIntent.sysCommand(readWParam(wParam)));
+    win.hookWindowMessage(WM_CLOSE, () => closeIntent.closeMessage());
+  }
+  win.on('close', event => {
+    const external = closeIntent.takeExternal();
+    if (quitting || !desktopTray) return;
+    event.preventDefault();
+    // Another program asked the app to exit (`taskkill` without /F, as
+    // `nekko-agent migrate` and installers do): quit for real, through the
+    // clean engine shutdown, rather than hide into the tray.
+    if (external) { app.quit(); return; }
+    void trayCompanion?.closeWindow(() => { saveWindowBounds(win.getBounds()); win.hide(); });
+  });
+
+  // A link that arrived before the page could listen (a cold launch from
+  // Hypergate's Connect button) is replayed the moment it can.
+  win.webContents.on('did-finish-load', () => {
+    if (!pendingLink) return;
+    const url = pendingLink;
+    pendingLink = null;
+    win.webContents.send(IpcEvents.deepLink, url);
+  });
+
+  // Persist size/position (debounced) so the window reopens where it was.
+  let saveTimer: NodeJS.Timeout | undefined;
+  const persist = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      if (win.isDestroyed() || win.isMinimized()) return;
+      const b = win.getBounds();
+      saveWindowBounds(b);
+      // Dragged onto another screen: that screen's own window (if any) goes,
+      // and the old screen becomes switchable.
+      displayWindows?.mainMoved();
+    }, 400);
+  };
+  win.on('resize', persist);
+  win.on('move', persist);
+  // Hidden to the tray: the other screens' windows go with it, and come back with it.
+  win.on('hide', () => displayWindows?.setVisible(false));
+  win.on('show', () => displayWindows?.setVisible(true));
+
+  wireAppWindow(win);
+}
+
+/**
+ * Multi-monitor: the screen windows and the channels the Screens dropdown and
+ * new-agent placement use. Only app windows may call them.
+ */
+let displayWindows: DisplayWindows | null = null;
+function registerDisplayWindows(dataDir: string): void {
+  const windows = createDisplayWindows({
+    screen,
+    dataDir,
+    mainWindow: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null),
+    createWindow: (id, bounds) => createScreenWindow(id, bounds),
+    broadcast: (state) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed() && applicationWindows.has(win.webContents.id)) win.webContents.send(DISPLAYS_CHANGED_EVENT, state(win.webContents.id));
+      }
+    },
+    placed: (key, sessionId) => {
+      const target = key === MAIN_KEY ? mainWindow : windows.windowFor(key);
+      if (target && !target.isDestroyed()) target.webContents.send(DISPLAYS_PLACED_EVENT, sessionId);
+    },
+  });
+  displayWindows = windows;
+  const trusted = (e: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) => applicationWindows.has(e.sender.id);
+  ipcMain.handle(DISPLAYS_LIST_CHANNEL, (e) => { if (!trusted(e)) throw new Error('untrusted'); return windows.state(e.sender.id); });
+  ipcMain.handle(DISPLAYS_TOGGLE_CHANNEL, (e, id: unknown, on: unknown, reducedMotion: unknown) => {
+    if (!trusted(e) || typeof id !== 'string') throw new Error('bad request');
+    windows.toggle(id, on === true, reducedMotion === true);
+    return windows.state(e.sender.id);
+  });
+  ipcMain.handle(DISPLAYS_PLACEMENT_CHANNEL, (e, placement: unknown) => {
+    if (!trusted(e)) throw new Error('untrusted');
+    windows.setPlacement(placement === 'main-first' ? 'main-first' : 'empty-first');
+    return windows.state(e.sender.id);
+  });
+  ipcMain.handle(DISPLAYS_CLAIM_CHANNEL, (e, sessionId: unknown, mode: unknown) => {
+    if (!trusted(e) || typeof sessionId !== 'string') throw new Error('bad request');
+    return windows.claim(e.sender.id, sessionId, mode === 'self' || mode === 'place' ? mode : 'auto');
+  });
+  ipcMain.on(DISPLAYS_REPORT_CHANNEL, (e, panes: unknown) => { if (trusted(e) && typeof panes === 'number') windows.report(e.sender.id, panes); });
+  windows.start();
 }
 
 /**
@@ -457,6 +535,7 @@ app.whenReady().then(async () => {
   // (Windows/Linux); park it so the first load replays it.
   pendingLink = linkFromArgv(process.argv);
   createWindow();
+  registerDisplayWindows(dataDir);
   const iconPath = resolveWindowIcon();
   if (iconPath) {
     desktopTray = createDesktopTray({
@@ -514,6 +593,7 @@ app.on('window-all-closed', () => {
 // not serving and stops model servers it started), then quits for real.
 app.on('before-quit', (event) => {
   quitting = true;
+  displayWindows?.dispose();
   trayCompanion?.dispose();
   stopNotifications?.();
   stopNotifications = undefined;

@@ -247,7 +247,10 @@ impl Machine {
         if smi.is_none() {
             smi = run_ok(
                 "nvidia-smi",
-                &["--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu", "--format=csv,noheader,nounits"],
+                &[
+                    "--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu",
+                    "--format=csv,noheader,nounits",
+                ],
                 Duration::from_secs(4),
             )
             .await;
