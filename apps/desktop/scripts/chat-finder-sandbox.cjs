@@ -8,6 +8,12 @@ const dir = path.join(out, version);
 fs.mkdirSync(dir, { recursive: true });
 app.setPath('userData', path.join(dir, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const escapeUnsafeChars = str => str.replace(/[<>\u2028\u2029]/g, c => (
+  c === '<' ? '\\u003C' :
+  c === '>' ? '\\u003E' :
+  c === '\u2028' ? '\\u2028' :
+  '\\u2029'
+));
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_wc, _p, done) => done(false));
@@ -17,7 +23,7 @@ app.whenReady().then(async () => {
   const checks = [];
   const check = async (name, s) => { if (!await run(s)) throw Error('FAILED: ' + name); checks.push(name); };
   const capture = async name => fs.writeFileSync(path.join(dir, name + '.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG());
-  const type = async text => run(`(()=>{const i=document.querySelector('[data-chat-finder] input');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,${JSON.stringify(text)});i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  const type = async text => run(`(()=>{const i=document.querySelector('[data-chat-finder] input');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,${escapeUnsafeChars(JSON.stringify(text))});i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   const key = async k => run(`document.querySelector('[data-chat-finder] input').dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(k)},bubbles:true}))`);
   const rows = "[...document.querySelectorAll('[data-finder-row]')]";
   try {
