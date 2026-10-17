@@ -127,7 +127,9 @@ passed. CI runs in three tiers (`scripts/ci-scope.mjs`):
 | Queue | `merge_group` | the PR tier, plus `daemon` on Windows and `perf` when the group changes what it measures |
 | Full | every 6 hours (skipped if `main` has not moved), or `gh workflow run ci.yml --ref <branch>` | every job on every OS, macOS included |
 
-Add `ci:macos` to a PR that changes macOS-specific code (`cfg(target_os =
+The same goes for every other macOS job (native iOS, the mobile iOS build,
+dev identity, nekkod darwin, decision-model CoreML, CodeQL Swift): scheduled, or
+`ci:macos` on the PR. Add `ci:macos` to a PR that changes macOS-specific code (`cfg(target_os =
 "macos")`, the dev bundle, signing, native capture), and `ci:perf` to one that
 changes a hot path the speed contract measures and wants the numbers before
 queueing. Labels are read when a run starts: add the label, then push. A skipped

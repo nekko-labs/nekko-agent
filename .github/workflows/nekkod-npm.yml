@@ -8,6 +8,7 @@ name: nekkod npm binaries
 on:
   workflow_call:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - .github/workflows/nekkod-npm.yml
       - apps/web-app-server/scripts/nekkod-packages.mjs
@@ -29,6 +30,10 @@ jobs:
           - { key: linux-x64, os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
           - { key: linux-arm64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
           - { key: darwin-arm64, os: macos-latest, target: aarch64-apple-darwin }
+        # A PR build check skips darwin unless labelled `ci:macos`; release.yml
+        # (which calls this workflow) always builds every target.
+        exclude:
+          - os: ${{ (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) && 'macos-latest' || 'none' }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
