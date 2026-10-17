@@ -32,6 +32,9 @@ test('auto-merge queues only ready PRs into main, never a stacked layer', () => 
   // A merge method arms classic auto-merge, which never enters a required queue.
   assert.ok(merge.includes('run: gh pr merge --auto "$PR_URL"'));
   assert.ok(!/gh pr merge --auto --(squash|merge|rebase)/.test(merge));
+  // ...and an armed request alone did not reliably enter the queue, so it enqueues once gate passes.
+  assert.ok(merge.includes('enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head})'));
+  assert.ok(merge.indexOf('Enqueue once gate passes') < merge.indexOf('Release the merge'));
 });
 
 test('required build restores a dedicated Rust cache before compiling', () => {

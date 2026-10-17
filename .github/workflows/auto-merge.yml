@@ -50,6 +50,39 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
 
+      # Armed on `opened`, before any check has run, `--auto` on a queue-required
+      # branch records an auto-merge request that GitHub does not always turn
+      # into a queue entry when `gate` goes green (#756 sat 25 minutes like
+      # that). So wait for `gate` here and enqueue explicitly once it passes;
+      # an enqueue of a PR already in the queue is a no-op.
+      - name: Enqueue once gate passes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_ID: ${{ github.event.pull_request.node_id }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          for _ in $(seq 1 60); do
+            pr=$(gh pr view "$PR_URL" --json state,isDraft,headRefOid,statusCheckRollup)
+            state=$(jq -r .state <<<"$pr")
+            [ "$state" = OPEN ] || { echo "PR is $state."; exit 0; }
+            if [ "$(jq -r .isDraft <<<"$pr")" = true ]; then echo 'Back in draft; not queueing.'; exit 0; fi
+            gate=$(jq -r '[.statusCheckRollup[] | select(.name == "gate")] | last | .conclusion // ""' <<<"$pr")
+            case "$gate" in
+              SUCCESS)
+                head=$(jq -r .headRefOid <<<"$pr")
+                gh api graphql -f query='mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{state position}}}' \
+                  -f id="$PR_ID" -f head="$head" || echo '::warning::Enqueue failed; auto-merge stays armed.'
+                exit 0
+                ;;
+              FAILURE|CANCELLED|TIMED_OUT)
+                echo "gate is $gate; the author re-queues after a fix (push re-runs gate, then gh pr merge --auto)."
+                exit 0
+                ;;
+            esac
+            sleep 20
+          done
+          echo '::warning::gate did not finish within 20 minutes; auto-merge stays armed.'
+
       # Dispatched for every merge, not just version bumps: version-release is
       # idempotent (it stops when the version is already tagged), so a merge
       # that does not bump the version costs one no-op run and a merge that
