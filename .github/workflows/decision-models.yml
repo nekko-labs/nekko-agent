@@ -37,8 +37,9 @@ jobs:
       fail-fast: false
       # CoreML (macOS) on a PR only with the `ci:macos` label; by hand otherwise.
       # The list is computed: an `include` row that matches nothing is added.
+      # (Both branches are non-empty: `cond && '' || x` is always x.)
       matrix:
-        include: ${{ fromJSON(format('[{0}{{"os":"ubuntu-latest","ep":"cpu"}}]', (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) && '' || '{"os":"macos-14","ep":"coreml"},')) }}
+        include: ${{ fromJSON((github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) && '[{"os":"ubuntu-latest","ep":"cpu"}]' || '[{"os":"macos-14","ep":"coreml"},{"os":"ubuntu-latest","ep":"cpu"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     steps:
