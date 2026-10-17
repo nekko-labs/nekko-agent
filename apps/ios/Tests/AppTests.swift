@@ -114,6 +114,12 @@ final class DeepLinkTests: XCTestCase {
         XCTAssertTrue(app.newChatRequested)
         XCTAssertNil(app.pendingLink)
         app.newChatRequested = false
+        // The Home Screen quick action opens the same link; an unknown type does nothing.
+        XCTAssertEqual(QuickAction.url(for: QuickAction.newChat)?.absoluteString, "nekko-agent://new")
+        XCTAssertNil(QuickAction.url(for: "com.nekko.native.ios.other"))
+        XCTAssertTrue(QuickAction.perform(QuickAction.newChat))
+        XCTAssertTrue(app.newChatRequested)
+        app.newChatRequested = false
     }
 }
 
