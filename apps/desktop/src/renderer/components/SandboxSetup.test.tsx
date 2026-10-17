@@ -22,13 +22,12 @@ describe('sandbox renderer safety regressions', () => {
     expect(setup).toContain('Sandbox diff (read-only)');
   });
   it('keeps execution and permissions separate and persists the default', () => {
-    const controls = source('./ChatControls.tsx');
-    // Execution, Permissions and Work mode each get their own column.
-    expect(controls).toContain('sm:grid-cols-3');
-    expect(controls).toContain('aria-label="Work mode"');
-    expect(controls).toContain('getExecutionMode(session)');
-    expect(controls).toContain('defaultExecutionMode: executionMode');
-    expect(controls).toContain('(recommended)');
+    const panel = source('./ModePanel.tsx');
+    // Where it runs, Approvals and Work mode are separate controls in the Mode panel.
+    expect(panel).toContain('aria-label="Work mode"');
+    expect(panel).toContain("tiles<ChatMode>('Approvals'");
+    expect(panel).toContain('getExecutionMode(session)');
+    expect(panel).toContain('defaultExecutionMode: executionMode');
     expect(source('./WorktreeChip.tsx')).toContain('{ gitIsolation, executionMode }');
   });
   it('wires the exact shared sandbox channels in both transports', () => {

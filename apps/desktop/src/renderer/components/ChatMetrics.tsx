@@ -146,7 +146,7 @@ export function ContextGauge({
   );
 }
 
-const EFFORT_LABEL: Record<EffortLevel, string> = {
+export const EFFORT_LABEL: Record<EffortLevel, string> = {
   low: 'Low',
   medium: 'Medium',
   normal: 'Normal',

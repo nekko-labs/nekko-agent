@@ -933,7 +933,7 @@
     "type": "retry",
     "sessionId": "s1",
     "attempt": 1,
-    "maxAttempts": 5,
+    "maxAttempts": 65,
     "delayMs": 0,
     "reason": "socket hang up"
    },
@@ -1023,7 +1023,7 @@
     "type": "retry",
     "sessionId": "s1",
     "attempt": 1,
-    "maxAttempts": 5,
+    "maxAttempts": 65,
     "delayMs": 0,
     "reason": "connect ECONNREFUSED 127.0.0.1:8080"
    },

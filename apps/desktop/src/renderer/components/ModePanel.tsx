@@ -1,0 +1,367 @@
+import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import type { ChatMode, EffortLevel, ExecutionMode, SavedMode, SavedModeIcon, Session, WorkModeId } from '@nekko-agent/shared';
+import {
+  WORK_MODES, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
+  savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
+} from '@nekko-agent/shared';
+import { useStore } from '../store.js';
+import { addFolderToChat, applyFolderSelection, withExcluded } from '../sessionFolders.js';
+import { EFFORT_LABEL, effortRungs } from './ChatMetrics.js';
+import { McpServerList, ToolsList, toolCounts, useChatTools } from './ChatControls.js';
+import {
+  BoltIcon, BrainIcon, CapIcon, CheckIcon, ChevronIcon, CloseIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
+  ExternalIcon, FolderIcon, GaugeIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
+  RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon, BoltIcon as YoloIcon,
+} from '../icons.js';
+
+const WORKTREE_DOCS = 'https://git-scm.com/docs/git-worktree';
+
+export const SAVED_MODE_GLYPH: Record<SavedModeIcon, (p: { className?: string }) => React.ReactElement> = {
+  bolt: BoltIcon, dial: DialIcon, incognito: IncognitoIcon, box: CubeIcon, cap: CapIcon, sparkle: SparkleIcon, shield: ShieldIcon, 'globe-off': GlobeOffIcon,
+};
+
+const APPROVAL_DESC: Record<ChatMode, string> = {
+  ask: 'Asks before every file write and command.',
+  guardrails: 'Runs freely; asks or blocks per your guardrail rules.',
+  yolo: 'Never asks (deny rules still block). Pair it with a sandbox or worktree.',
+};
+
+/** The saved mode each chat was last put in, so an edited chat can offer Update and Revert. */
+const lastApplied = new Map<string, string>();
+
+type Deps = {
+  session: Session;
+  isCloudModel: boolean;
+  onChange: (s: Session | null) => void;
+  /** Sandbox needs its setup dialog (image, consent) before a chat can move in. */
+  onSandboxSetup: () => void;
+};
+
+const toastError = (e: unknown) => useStore.getState().pushToast('error', String(e));
+
+/**
+ * Everything the panel writes, kept out of the component so each write can be
+ * tested on its own. Per-chat settings go through setSessionOptions; saved
+ * modes and effort are app settings.
+ */
+export function modePanelActions({ session, isCloudModel, onChange, onSandboxSetup }: Deps) {
+  const settings = () => useStore.getState().settings;
+  const saveSettings = async (patch: Parameters<typeof window.nekko.updateSettings>[0]) => {
+    await window.nekko.updateSettings(patch);
+    await useStore.getState().refreshSettings();
+  };
+  const patchChat = async (patch: Partial<Session>) => {
+    const next = await window.nekko.setSessionOptions(session.id, patch as never);
+    onChange(next);
+    return next;
+  };
+  return {
+    /** Local machine (with or without a worktree) or Sandbox. Also the default for new chats, as before. */
+    async setExecution(executionMode: ExecutionMode) {
+      if (executionMode === 'sandbox') { onSandboxSetup(); return; }
+      try {
+        await patchChat({ executionMode, gitIsolation: executionMode === 'worktree' });
+        await saveSettings({ defaultExecutionMode: executionMode, gitManagement: { ...settings()?.gitManagement, mode: executionMode === 'worktree' ? 'worktree' : 'shared' } });
+      } catch (e) { toastError(e); }
+    },
+    /** Approvals for this chat; saved as the default only once the chat took it. */
+    async setApprovals(mode: ChatMode) {
+      try {
+        const next = await patchChat({ mode });
+        if (next) await saveSettings({ defaultChatMode: mode });
+      } catch (e) { toastError(e); }
+    },
+    async toggle(key: 'incognito' | 'offline') {
+      if (key === 'offline' && isCloudModel && !session.offline) return;
+      try { await patchChat({ [key]: !session[key] }); } catch (e) { toastError(e); }
+    },
+    async setWorkMode(workMode: WorkModeId) {
+      try { await patchChat({ workMode }); } catch (e) { toastError(e); }
+    },
+    async setEffort(effort: EffortLevel) {
+      try { await saveSettings({ effort }); } catch (e) { toastError(e); }
+    },
+    /** Put this chat in a saved mode: one per-chat write, then effort, then the sandbox dialog if it needs one. */
+    async applyMode(mode: SavedMode) {
+      const patch = sessionPatchForMode(mode.options, { cloudModel: isCloudModel });
+      const intoSandbox = mode.options.executionMode === 'sandbox' && getExecutionMode(session) !== 'sandbox';
+      if (intoSandbox) { delete patch.executionMode; delete patch.gitIsolation; delete patch.mode; }
+      try {
+        await patchChat(patch);
+        lastApplied.set(session.id, mode.id);
+        if (mode.options.effort && mode.options.effort !== settings()?.effort) await saveSettings({ effort: mode.options.effort });
+        if (intoSandbox) onSandboxSetup();
+      } catch (e) { toastError(e); }
+    },
+    async saveMode(name: string, makeDefault: boolean) {
+      const modes = savedModes(settings());
+      const mode: SavedMode = { id: newSavedModeId(name, modes), name: name.trim() || 'New mode', icon: 'sparkle', options: sessionModeOptions(session, settings()) };
+      lastApplied.set(session.id, mode.id);
+      try { await saveSettings({ savedModes: [...modes, mode], ...(makeDefault ? { defaultSavedModeId: mode.id } : {}) }); } catch (e) { toastError(e); }
+      return mode;
+    },
+    async updateMode(id: string) {
+      const modes = savedModes(settings()).map((m) => (m.id === id ? { ...m, options: sessionModeOptions(session, settings()) } : m));
+      try { await saveSettings({ savedModes: modes }); } catch (e) { toastError(e); }
+    },
+    async deleteMode(id: string) {
+      const s = settings();
+      try { await saveSettings({ savedModes: savedModes(s).filter((m) => m.id !== id), ...(s?.defaultSavedModeId === id ? { defaultSavedModeId: undefined } : {}) }); } catch (e) { toastError(e); }
+    },
+    /** Star a mode as the start for new chats; starring the default again clears it. */
+    async toggleDefault(id: string) {
+      const s = settings();
+      try { await saveSettings({ savedModes: savedModes(s), defaultSavedModeId: s?.defaultSavedModeId === id ? undefined : id }); } catch (e) { toastError(e); }
+    },
+  };
+}
+
+/** The saved mode a chat is in, or the one it was last put in (for Update/Revert). */
+export function chatModeState(session: Session, settings: Parameters<typeof savedModes>[0] & Parameters<typeof sessionModeOptions>[1]) {
+  const modes = savedModes(settings);
+  const current = sessionModeOptions(session, settings);
+  const active = matchSavedMode(modes, current);
+  const last = modes.find((m) => m.id === lastApplied.get(session.id));
+  return { modes, current, active, edited: active ? undefined : last };
+}
+
+type Fly = 'tools' | 'mcp' | 'skills';
+
+/**
+ * The composer's Mode panel: saved modes down a rail on the left, then every
+ * per-chat setting in three columns (Environment and Model, Privacy,
+ * Approach). Tools, MCP servers and Skills open a list out the side.
+ */
+export function ModePanel({
+  session, isCloudModel, modelId, onChange, onSandboxSetup, style, panelRef,
+}: Deps & { modelId?: string; style?: React.CSSProperties; panelRef?: React.Ref<HTMLDivElement> }) {
+  const settings = useStore((s) => s.settings);
+  const tools = useChatTools();
+  const [fly, setFly] = useState<Fly | null>(null);
+  const [saving, setSaving] = useState<{ name: string; makeDefault: boolean } | null>(null);
+  const [flyStyle, setFlyStyle] = useState<React.CSSProperties>({});
+  const anchors = useRef<Partial<Record<Fly, HTMLButtonElement | null>>>({});
+  const panel = useRef<HTMLDivElement | null>(null);
+  const actions = modePanelActions({ session, isCloudModel, onChange, onSandboxSetup });
+  const { modes, current, active, edited } = chatModeState(session, settings);
+  const defaultId = defaultSavedMode(settings)?.id;
+  const execution = getExecutionMode(session);
+  const sandbox = execution === 'sandbox';
+  const workMode = getWorkMode(session.workMode);
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 720;
+
+  // A flyout sits out the panel's side when there is room, else beside its row.
+  useLayoutEffect(() => {
+    if (!fly || narrow) return;
+    const place = () => {
+      const a = anchors.current[fly]?.getBoundingClientRect(), p = panel.current?.getBoundingClientRect();
+      if (!a || !p) return;
+      const w = 320, vw = window.innerWidth, vh = window.innerHeight;
+      const left = p.right + 8 + w <= vw - 8 ? p.right + 8 : a.right + 6 + w <= vw - 8 ? a.right + 6 : Math.max(8, a.left - w - 6);
+      const maxHeight = Math.min(480, vh - 16);
+      setFlyStyle({ left, width: w, maxHeight, top: Math.max(8, Math.min(a.top - 10, vh - maxHeight - 8)) });
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [fly, narrow]);
+
+  const toggleFly = (f: Fly) => setFly((o) => (o === f ? null : f));
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    if (fly) { e.stopPropagation(); setFly(null); anchors.current[fly]?.focus({ preventScroll: true }); }
+    else if (saving) { e.stopPropagation(); setSaving(null); }
+  };
+
+  const { enabled: toolsOn, usable: toolsUsable } = toolCounts(session, tools);
+  const mcpServers = settings?.mcpServers ?? [];
+  const workspaces = settings?.workspaces ?? [];
+  const folders = getSessionWorkspaceIds(session).map((id) => ({ id, folder: workspaces.find((w) => w.id === id) }));
+  const rungs = effortRungs(settings?.effort ?? 'normal', modelId);
+
+  const flyBody = (f: Fly) => f === 'tools'
+    ? <ToolsList session={session} onChange={onChange} tools={tools} />
+    : f === 'mcp'
+      ? <>
+          <p className="mode-note">MCP servers are shared by every chat; switching one here changes it everywhere.</p>
+          {sandbox ? <p className="mode-note">MCP is unavailable in Sandbox.</p> : <McpServerList />}
+        </>
+      : <div role="radiogroup" aria-label="Work mode">
+          <p className="mode-group">Work mode</p>
+          {WORK_MODES.map((m) => (
+            <button key={m.id} role="radio" aria-checked={workMode.id === m.id} data-work-mode={m.id} className="mode-opt" onClick={() => void actions.setWorkMode(m.id)}>
+              <span className="mode-opt-ic">{m.id === 'default' ? <SparkleIcon /> : m.id === 'better-review' ? <ShieldCheckIcon /> : m.id === 'design' ? <CompassIcon /> : <DialIcon />}</span>
+              <span className="min-w-0 flex-1">
+                <span className="mode-t">{m.label}{workMode.id === m.id && <CheckIcon className="h-3.5 w-3.5 text-accent" />}</span>
+                <span className="mode-s">{m.description}{m.cost ? ` ${m.cost}.` : ''}</span>
+                {m.skills.length > 0 && <span className="mode-path">{m.skills.map((n) => `/${n}`).join('  ')}</span>}
+              </span>
+            </button>
+          ))}
+          <p className="mode-note">Picking skills one by one, per chat, is coming.</p>
+        </div>;
+
+  const FLY_TITLE: Record<Fly, [string, ReactNode]> = { tools: ['Tools', <WrenchIcon />], mcp: ['MCP servers', <ServerIcon />], skills: ['Skills', <SparkleIcon />] };
+  const flyRow = (f: Fly, icon: ReactNode, title: string, meta: string) => (<>
+    <button ref={(el) => { anchors.current[f] = el; }} className={`mode-row mode-row-btn ${fly === f ? 'is-open' : ''}`} aria-expanded={fly === f} aria-haspopup="dialog" data-mode-fly={f} onClick={() => toggleFly(f)}>
+      <span className="mode-ic">{icon}</span>
+      <span className="mode-t min-w-0 flex-1">{title}</span>
+      <span className="mode-meta">{meta}</span>
+      <ChevronIcon className={`mode-chev ${narrow && fly === f ? 'rotate-90' : ''}`} />
+    </button>
+    {narrow && fly === f && <div className="mode-inline-fly">{flyBody(f)}</div>}
+  </>);
+  const soon = (icon: ReactNode, title: string, sub: string) => (
+    <div className="mode-row is-disabled" aria-disabled="true">
+      <span className="mode-ic">{icon}</span>
+      <span className="min-w-0 flex-1"><span className="mode-t">{title} <span className="mode-badge">Coming soon</span></span><span className="mode-s">{sub}</span></span>
+    </div>
+  );
+  const sw = (on: boolean, onClick: () => void, label: string, disabled = false) => (
+    <button role="switch" aria-checked={on} aria-label={label} className="mode-switch" disabled={disabled} onClick={onClick} />
+  );
+  const tiles = <T extends string>(label: string, value: T, options: Array<[T, string, ReactNode, Record<string, string>?]>, pick: (v: T) => void) => (
+    <div className="mode-tiles" role="radiogroup" aria-label={label}>
+      {options.map(([v, l, icon, data]) => (
+        <button key={v} role="radio" aria-checked={value === v} onClick={() => pick(v)} {...data}>{icon}<span>{l}</span></button>
+      ))}
+    </div>
+  );
+  const approvals: ChatMode = current.mode;
+
+  return (<>
+    <div ref={(el) => { panel.current = el; if (typeof panelRef === 'function') panelRef(el); else if (panelRef) (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }}
+      style={style} className="mode-panel card fixed z-[100] shadow-lg" role="dialog" aria-label="Mode" data-mode-panel onKeyDown={onKeyDown}>
+      <div className="mode-rail" role="radiogroup" aria-label="Saved modes">
+        <p className="mode-sec">Saved modes</p>
+        {modes.map((m) => {
+          const Glyph = SAVED_MODE_GLYPH[m.icon] ?? SparkleIcon;
+          const isDefault = m.id === defaultId;
+          return (
+            <div key={m.id} className="mode-rail-item" aria-checked={active?.id === m.id} role="radio" tabIndex={0} data-saved-mode={m.id}
+              onClick={() => void actions.applyMode(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void actions.applyMode(m); } }}>
+              <span className="mode-glyph"><Glyph /></span>
+              <span className="min-w-0 flex-1"><span className="mode-rail-n">{m.name}</span><span className="mode-rail-d">{savedModeSummary(m.options) || 'local'}</span></span>
+              <button className={`mode-star ${isDefault ? 'is-on' : ''}`} aria-label={isDefault ? `${m.name} is the default for new chats` : `Use ${m.name} for new chats`} title={isDefault ? 'Default for new chats (click to clear)' : 'Use for new chats'}
+                onClick={(e) => { e.stopPropagation(); void actions.toggleDefault(m.id); }}><StarIcon filled={isDefault} /></button>
+            </div>
+          );
+        })}
+        <span className="flex-1" />
+        <button className="mode-rail-item" onClick={() => setSaving({ name: '', makeDefault: false })}><span className="mode-glyph"><PlusIcon /></span><span className="mode-rail-n">New mode</span></button>
+      </div>
+
+      <div className="mode-main">
+        <div className="mode-head">
+          <h2>{active?.name ?? 'Custom'}{active && active.id === defaultId && <span className="mode-badge is-accent">Default</span>}</h2>
+          {saving ? (
+            <form className="mode-save" onSubmit={(e) => { e.preventDefault(); void actions.saveMode(saving.name, saving.makeDefault); setSaving(null); }}>
+              <input className="input" autoFocus placeholder="Name this mode" maxLength={32} value={saving.name} aria-label="Mode name" onChange={(e) => setSaving({ ...saving, name: e.target.value })} />
+              <label><input type="checkbox" checked={saving.makeDefault} onChange={(e) => setSaving({ ...saving, makeDefault: e.target.checked })} /> Use for new chats</label>
+              <button type="submit" className="mode-btn is-primary">Save</button>
+              <button type="button" className="mode-btn" onClick={() => setSaving(null)}>Cancel</button>
+            </form>
+          ) : (
+            <div className="mode-save">
+              {!active && <span className="mode-dirty">{edited ? `Changed from ${edited.name}` : 'Not a saved mode'}</span>}
+              {!active && edited && <button className="mode-btn" onClick={() => void actions.applyMode(edited)}>Revert</button>}
+              {!active && edited && <button className="mode-btn" onClick={() => void actions.updateMode(edited.id)}>Update “{edited.name}”</button>}
+              {active && <button className="mode-btn" onClick={() => void actions.deleteMode(active.id)} aria-label={`Delete ${active.name}`}><CloseIcon className="h-3 w-3" /> Delete</button>}
+              <button className={`mode-btn ${active ? '' : 'is-primary'}`} onClick={() => setSaving({ name: '', makeDefault: false })}><PlusIcon className="h-3 w-3" /> {active ? 'Save as new' : 'Save mode'}</button>
+            </div>
+          )}
+        </div>
+
+        <div className="mode-scroll"><div className="mode-grid">
+          <section className="mode-col" aria-label="Environment and model">
+            <p className="mode-sec"><CubeIcon /> Environment</p>
+            <div className="mode-row is-stacked">
+              <span className="mode-ic">{sandbox ? <CubeIcon /> : <LaptopIcon />}</span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Run on</span><span className="mode-s">{sandbox ? 'A local container. Only scoped files and bash; host previews, hooks and MCP are off.' : 'Your machine, with your shell, apps and credentials.'}</span></span>
+              {tiles<'local' | 'sandbox'>('Run on', sandbox ? 'sandbox' : 'local', [['local', 'Local machine', <LaptopIcon />, { 'data-execution': 'local' }], ['sandbox', 'Sandbox', <CubeIcon />, { 'data-execution': 'sandbox' }]],
+                (v) => void (v === 'sandbox' ? (sandbox ? onSandboxSetup() : actions.setExecution('sandbox')) : sandbox && actions.setExecution(session.gitIsolation === false ? 'unified' : 'worktree')))}
+            </div>
+            <div className={`mode-row ${sandbox ? 'is-disabled' : ''}`}>
+              <span className="mode-ic"><WorktreeIcon /></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Use worktrees</span>
+                <span className="mode-s">{sandbox ? 'Not needed in Sandbox, which already works on a copy.' : <>Edits land in a separate Git checkout, so your branch stays clean. <a href={WORKTREE_DOCS} onClick={(e) => { e.preventDefault(); void window.nekko.openPath(WORKTREE_DOCS); }}>What's a worktree? <ExternalIcon className="inline h-2.5 w-2.5" /></a></>}</span>
+              </span>
+              {sw(execution === 'worktree', () => void actions.setExecution(execution === 'worktree' ? 'unified' : 'worktree'), 'Use worktrees', sandbox)}
+            </div>
+            {sandbox && <button className="mode-link" onClick={onSandboxSetup}>Sandbox setup</button>}
+
+            <p className="mode-sec mt-3"><DialIcon /> Model</p>
+            {soon(<RouteIcon />, 'Model router', 'Picks the model for each turn from what the task needs.')}
+            <div className="mode-row is-stacked">
+              <span className="mode-ic"><GaugeIcon /></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Effort</span><span className="mode-s">How long the model thinks before acting. Shared by every chat for now.</span></span>
+              {tiles<EffortLevel>('Effort', rungs.options[rungs.index], rungs.options.map((o, i) => [o, o === 'normal' ? 'Default' : o === 'xhigh' ? 'X-high' : EFFORT_LABEL[o], <EffortBarsIcon level={Math.max(1, Math.round(((i + 1) / rungs.options.length) * 4))} />, { 'data-effort': o }]),
+                (v) => void actions.setEffort(v))}
+            </div>
+          </section>
+
+          <section className="mode-col" aria-label="Privacy">
+            <p className="mode-sec"><LockIcon /> Privacy</p>
+            <div className="mode-row">
+              <span className="mode-ic"><IncognitoIcon /></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Incognito</span><span className="mode-s">This chat is not saved to your history.</span></span>
+              {sw(!!session.incognito, () => void actions.toggle('incognito'), 'Incognito')}
+            </div>
+            <div className="mode-row">
+              <span className="mode-ic">{session.offline ? <GlobeOffIcon /> : <GlobeIcon />}</span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Internet access</span>
+                <span className="mode-s">{session.offline ? 'Blocked: online tools, connectors and MCP are off. Shell commands are not network-sandboxed.' : isCloudModel ? 'On. A cloud model needs the internet; pick a local model to block it.' : 'Web tools, connectors and MCP can reach the internet.'}</span>
+              </span>
+              {sw(!session.offline, () => void actions.toggle('offline'), 'Internet access', isCloudModel && !session.offline)}
+            </div>
+            <div className="mode-row">
+              <span className="mode-ic"><FolderIcon /></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Folders</span><span className="mode-s">What the agent can read and write. The first is where it works.</span>
+                <span className="mode-folders">
+                  {folders.map(({ id, folder }) => (
+                    <span key={id} className="mode-chip" title={folder?.path}><span>{folder?.name ?? id}</span>
+                      <button aria-label={`Remove ${folder?.name ?? id}`} onClick={() => void applyFolderSelection(session.id, withExcluded(session, id)).then(onChange).catch(toastError)}><CloseIcon className="h-2.5 w-2.5" /></button>
+                    </span>
+                  ))}
+                  <button className="mode-chip is-add" onClick={() => void addFolderToChat(session.id, session, 'include').then((s) => s && onChange(s)).catch(toastError)}><PlusIcon className="h-3 w-3" /> Add folder</button>
+                </span>
+              </span>
+            </div>
+            <div className="mode-row is-stacked">
+              <span className="mode-ic"><ShieldIcon /></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Approvals</span><span className="mode-s">{sandbox ? 'Sandbox always asks first.' : APPROVAL_DESC[approvals]}</span></span>
+              {tiles<ChatMode>('Approvals', approvals, [['ask', 'Ask', <HandIcon />, { 'data-chat-mode': 'ask' }], ['guardrails', 'Guardrails', <ShieldCheckIcon />, { 'data-chat-mode': 'guardrails' }], ['yolo', 'YOLO', <YoloIcon />, { 'data-chat-mode': 'yolo' }]],
+                (v) => void (!sandbox && actions.setApprovals(v)))}
+            </div>
+            {flyRow('tools', <WrenchIcon />, 'Tools', `${toolsOn} of ${toolsUsable} on`)}
+            {flyRow('mcp', <ServerIcon />, 'MCP servers', sandbox ? 'Off in Sandbox' : `${mcpServers.filter((s) => s.enabled).length} of ${mcpServers.length} on`)}
+            {soon(<PlugIcon />, 'Connectors', 'Choosing connectors per chat is coming. Today every connected one is available.')}
+          </section>
+
+          <section className="mode-col" aria-label="Approach">
+            <p className="mode-sec"><CompassIcon /> Approach</p>
+            {flyRow('skills', <SparkleIcon />, 'Skills', workMode.label)}
+            <p className="mode-s mode-under">{workMode.id === 'default' ? 'No extra skills. Pick a work mode to bring its skills along.' : `${workMode.description} Applies ${WORK_MODES.find((m) => m.id === workMode.id)!.skills.map((n) => `/${n}`).join(', ')}.`}</p>
+            {soon(<DocTextIcon />, 'System prompt', 'Pick a saved prompt per chat and open it to edit.')}
+            {soon(<BrainIcon />, 'Memory', 'Choose what this chat remembers: nothing, this chat, the project, or everything.')}
+          </section>
+        </div></div>
+      </div>
+    </div>
+
+    {fly && !narrow && createPortal(
+      <div className="mode-fly card fixed z-[101] shadow-lg" style={flyStyle} role="dialog" aria-label={FLY_TITLE[fly][0]} data-mode-panel onKeyDown={onKeyDown}>
+        <p className="mode-fly-h">{FLY_TITLE[fly][1]} {FLY_TITLE[fly][0]}</p>
+        <div className="mode-fly-body">{flyBody(fly)}</div>
+      </div>,
+      document.body,
+    )}
+  </>);
+}
+
+/** The Mode button's label: the saved mode this chat is in, or Custom. */
+export function modeButtonLabel(session: Session, settings: Parameters<typeof chatModeState>[1]) {
+  const { active, current } = chatModeState(session, settings);
+  return { name: active?.name ?? 'Custom', icon: active ? SAVED_MODE_GLYPH[active.icon] : SparkleIcon, summary: savedModeSummary(current) };
+}

@@ -10,7 +10,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/nekkod-npm.yml
-      - apps/server/scripts/nekkod-packages.mjs
+      - apps/web-app-server/scripts/nekkod-packages.mjs
       - scripts/vc-runtime.mjs
       - crates/nekkod/build.rs
 

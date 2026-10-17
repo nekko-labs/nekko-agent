@@ -62,7 +62,7 @@
             |                                        |
             |  IPC                          HTTP + WebSocket
             v                                        v
-       apps/desktop main                      apps/server
+       apps/desktop main                  apps/web-app-server
             \                                        /
              \----------- nekkod (Rust) ------------/
                      engine daemon on loopback
@@ -105,7 +105,7 @@
 <td>The Electron app: <code>src/main</code> (Node), <code>src/preload</code> (the bridge) and <code>src/renderer</code> (React).</td>
 </tr>
 <tr>
-<td><code>apps/server</code></td>
+<td><code>apps/web-app-server</code></td>
 <td>The self-hosted web edition, also the <code>npx nekko-agent-web</code> package.</td>
 </tr>
 <tr>

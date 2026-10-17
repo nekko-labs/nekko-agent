@@ -29,12 +29,12 @@ To stop a dev run, press **Enter** or **q** (or Ctrl+C) in its terminal. The app
 
 ## Publishing the `npx nekko-agent` package
 
-`npm run bundle:web` produces a self-contained package in `apps/server/cli-dist/`
+`npm run bundle:web` produces a self-contained package in `apps/web-app-server/cli-dist/`
 (server + engine bundled by esbuild, plus the built `web/` UI). To release it:
 
 ```bash
 npm run bundle:web
-cd apps/server/cli-dist && npm publish
+cd apps/web-app-server/cli-dist && npm publish
 ```
 
 After that, anyone can run the web edition with `npx nekko-agent`.

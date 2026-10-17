@@ -56,7 +56,7 @@ procs.push(
   }),
 );
 let serverOut = '';
-const server = spawn(process.execPath, ['apps/server/dist/index.js'], {
+const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
   env: {
     ...process.env,
     NEKKO_PORT: String(SERVER_PORT),

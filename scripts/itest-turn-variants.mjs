@@ -79,7 +79,7 @@ writeFileSync(imageModel, tinyGguf('sd1', 'Tiny SD'));
 mkdirSync(join(dataDir, 'engine', 'diffusion'), { recursive: true });
 writeFileSync(join(dataDir, 'engine', 'diffusion', 'engine.json'), JSON.stringify({ buildId: 'fake', binPath: fakeSd, version: 'fake' }));
 
-const server = spawn(process.execPath, ['apps/server/dist/index.js'], {
+const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
   env: {
     ...process.env,
     NEKKO_PORT: String(SERVER_PORT),

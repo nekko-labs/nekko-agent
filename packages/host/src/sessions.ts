@@ -3,7 +3,7 @@ import { readFile, readdir, stat } from 'fs/promises';
 import { randomBytes } from 'crypto';
 import { join } from 'path';
 import type { QueuePayload, QueuedPrompt, Session, SessionSummary } from '@nekko-agent/shared';
-import { archiveExpired, queueItemsEqual, summarizeSession, getExecutionMode } from '@nekko-agent/shared';
+import { archiveExpired, queueItemsEqual, summarizeSession, getExecutionMode, defaultSavedMode, sessionPatchForMode } from '@nekko-agent/shared';
 import { dataDir, getSettings } from './store.js';
 import { deleteAgentLog } from './agent-log.js';
 
@@ -367,6 +367,12 @@ export function createSession(workspaceId?: string, parentSessionId?: string, su
     createdAt: now,
     updatedAt: now,
   };
+  // A top-level chat starts in the user's default saved mode, when they set one.
+  const start = parentSessionId ? undefined : defaultSavedMode(getSettings());
+  if (start) {
+    Object.assign(s, sessionPatchForMode(start.options));
+    if (s.executionMode === 'sandbox') s.mode = 'ask';
+  }
   saveSession(s);
   return s;
 }
