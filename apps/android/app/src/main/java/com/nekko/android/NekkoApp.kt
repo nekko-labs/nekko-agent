@@ -8,6 +8,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.nekko.android.connection.ConnectionKeeper
 import com.nekko.android.data.AndroidSecureStore
+import com.nekko.android.data.ChatListFiles
 import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
@@ -19,6 +20,7 @@ import com.nekko.android.lock.AppLock
 import com.nekko.android.share.ShareInbox
 import com.nekko.android.widget.StatusSnapshot
 import com.nekko.android.widget.StatusStore
+import com.nekko.android.widget.StatusTile
 import com.nekko.android.widget.StatusWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +47,14 @@ class NekkoApp : Application() {
         private set
     lateinit var haptics: AndroidHaptics
         private set
+    private lateinit var chatLists: ChatListFiles
+
+    /** Settings → Connection → Keep the chat list when offline. Off deletes every saved list. */
+    fun setKeepChatList(on: Boolean) {
+        phonePrefs.set(ChatListFiles.ENABLED, on)
+        computers.chatListCache = if (on) chatLists else null
+        if (!on) chatLists.removeAll()
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -58,6 +68,8 @@ class NekkoApp : Application() {
             deviceName = ::deviceName,
             onForget = newChatDefaults::forget,
         )
+        chatLists = ChatListFiles(this)
+        if (phonePrefs.get(ChatListFiles.ENABLED)) computers.chatListCache = chatLists
         appLock = AppLock(enabled = phonePrefs.get(AppLock.ENABLED), persist = { phonePrefs.set(AppLock.ENABLED, it) })
         connection = ConnectionKeeper(this, computers, phonePrefs, appLock, appScope)
         connection.start()
@@ -81,6 +93,7 @@ class NekkoApp : Application() {
                 if (!next.sameAs(widgetStore.load())) {
                     widgetStore.save(next)
                     StatusWidget.refresh(this@NekkoApp)
+                    StatusTile.refresh(this@NekkoApp)
                 }
             }
         }

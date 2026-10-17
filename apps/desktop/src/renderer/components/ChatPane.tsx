@@ -2547,9 +2547,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               </>
             }
           /></WatchSessionContext.Provider></SubagentInheritedModelContext.Provider></SubagentParentContext.Provider>
-          {/* The plan panel's toggle floats in the chat area's top-right corner,
-              in its own place whether the panel is open or not. */}
-          {wideEnoughForRail && (
+          {/* The Agent Monitor button floats in the chat area's top-right corner
+              while the panel is minimized; the open panel has its own minimize
+              button, so the two never stack. */}
+          {wideEnoughForRail && !planRailOpen && (
             <button
               type="button"
               className={`plan-rail-toggle ${planRailOpen ? 'is-open' : ''}`}
@@ -3243,6 +3244,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             session={session}
             streaming={streaming}
             onChangePlan={readOnly ? undefined : () => setPlanChangeOpen(true)}
+            onMinimize={() => useStore.getState().togglePlanRail(sessionId)}
           />
         </div>
       )}

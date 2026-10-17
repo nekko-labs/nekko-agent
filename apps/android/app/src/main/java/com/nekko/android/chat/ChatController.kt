@@ -167,7 +167,7 @@ class ChatController(
         val at = now()
         _state.update {
             val shown = if (skill == null) text else "/${skill.name} $text".trim()
-            it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-$at", shown, at, images.size))))
+            it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-$at", shown, at, images))))
         }
         // Resolves only when the whole turn ends; the events carry the progress.
         scope.launch {

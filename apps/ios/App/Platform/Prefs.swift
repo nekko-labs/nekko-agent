@@ -36,6 +36,9 @@ final class Prefs {
     var defaultComputer: String? { didSet { d.set(defaultComputer, forKey: "defaultComputer") } }
     /// Dictation: the computer's Whisper when installed, else this iPhone's recognizer.
     var dictationOnComputer: Bool { didSet { d.set(dictationOnComputer, forKey: "dictationOnComputer") } }
+    /// Keep each computer's chat list (titles, times, folders) on this iPhone to show
+    /// while the computer is unreachable. Off by default: nothing about chats is stored.
+    var keepChatList: Bool { didSet { d.set(keepChatList, forKey: "keepChatList") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
 
@@ -52,5 +55,6 @@ final class Prefs {
         defaultComputer = d.string(forKey: "defaultComputer")
         dictationOnComputer = flag("dictationOnComputer", true)
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
+        keepChatList = flag("keepChatList", false)
     }
 }

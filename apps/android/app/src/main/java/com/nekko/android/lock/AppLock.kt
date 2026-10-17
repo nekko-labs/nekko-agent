@@ -91,7 +91,33 @@ class AppLock(
      * from the app does not pause the activity, so this is what covers it.
      */
     fun onFocus(hasFocus: Boolean) {
-        unfocused = !hasFocus
+        if (hasFocus) {
+            unfocused = false
+            screenshotUi = false
+        } else if (!unfocused) {
+            unfocused = true
+            unfocusedAt = now()
+            screenshotUi = now() - screenshotAt <= SCREENSHOT_GRACE_MS
+        }
+        cover()
+    }
+
+    private var unfocusedAt = Long.MIN_VALUE / 2
+    private var screenshotAt = Long.MIN_VALUE / 2
+
+    /** Whether the current focus loss is the system's screenshot toolbar, not something to hide the app from. */
+    private var screenshotUi = false
+
+    /**
+     * The user took a screenshot of the app (Activity.ScreenCaptureCallback,
+     * API 34+). Some phones (Samsung) then show a floating screenshot toolbar
+     * that takes focus; that focus loss, if it starts around the screenshot,
+     * does not cover the app, so the user is not left looking at the lock
+     * mark. A pause (leaving, the overview after leaving) still covers.
+     */
+    fun onScreenshot() {
+        screenshotAt = now()
+        if (unfocused && screenshotAt - unfocusedAt <= SCREENSHOT_GRACE_MS) screenshotUi = true
         cover()
     }
 
@@ -125,7 +151,7 @@ class AppLock(
     }
 
     private fun cover() {
-        _covered.value = _enabled.value && (paused || unfocused)
+        _covered.value = _enabled.value && (paused || (unfocused && !screenshotUi))
     }
 
     private fun lock() {
@@ -138,5 +164,8 @@ class AppLock(
 
         /** Long enough to scan a QR code or set up a screen lock, short enough to matter. */
         const val EXCURSION_MS = 2 * 60_000L
+
+        /** How close a focus loss and a screenshot must be to count as the screenshot toolbar. */
+        const val SCREENSHOT_GRACE_MS = 2_000L
     }
 }

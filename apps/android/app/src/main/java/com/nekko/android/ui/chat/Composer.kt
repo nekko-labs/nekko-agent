@@ -241,11 +241,14 @@ fun Composer(
                                 when {
                                     skill != null -> "Add details for /${skill.name} (optional)"
                                     running -> "Queue a follow-up…"
-                                    skills.isNotEmpty() -> "Message your computer, / for skills"
+                                    skills.isNotEmpty() -> "Message, / for skills"
                                     else -> "Message your computer"
                                 },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = p.inkFaint,
+                                // One line, so the empty box is as tall as one with a line typed.
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         inner()
