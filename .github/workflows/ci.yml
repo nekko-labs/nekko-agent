@@ -4,11 +4,16 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Full run, every platform, on any branch: the way to get macOS and perf on a
+  # PR without a label (`gh workflow run ci.yml --ref <branch>`).
+  workflow_dispatch:
 
-# Read-only: neither job writes to the repo (the perf report goes up as an
-# artifact, which does not use this token).
+# Read-only: no job writes to the repo (the perf report goes up as an artifact,
+# which does not use this token). pull-requests: read lets `scope` list the PR's
+# changed files.
 permissions:
   contents: read
+  pull-requests: read
 
 # Cancel stale PR revisions, but preserve each main-branch verification run.
 concurrency:
@@ -16,6 +21,34 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Which of the slow jobs below this run needs (scripts/ci-scope.mjs). A PR
+  # waits only for the checks its changes can affect: macOS (5 concurrent jobs
+  # on the Team plan, shared by every workflow, and the cause of 50-100 minute
+  # queues) and the speed contract run on main, on dispatch, or with the
+  # `ci:macos` / `ci:perf` labels. `build`, the required check, always runs.
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      daemon_os: ${{ steps.scope.outputs.daemon_os }}
+      capture_os: ${{ steps.scope.outputs.capture_os }}
+      perf: ${{ steps.scope.outputs.perf }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts
+      - name: Changed files
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        # Failure leaves the list empty, which ci-scope treats as "run everything".
+        run: gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
+      - id: scope
+        env:
+          CI_CHANGED_FILES: ${{ github.event_name == 'pull_request' && format('{0}/changed.txt', runner.temp) || '' }}
+          CI_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: node scripts/ci-scope.mjs
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -46,10 +79,12 @@ jobs:
   # The engine daemon (crates/). Real ptys on every platform the app ships on,
   # since ConPTY and Unix ptys fail differently.
   daemon:
+    needs: scope
+    if: needs.scope.outputs.daemon_os != '[]'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(needs.scope.outputs.daemon_os) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -75,10 +110,12 @@ jobs:
         run: npm run test -w @nekko-agent/host -- src/session-clear.golden.test.ts src/session-clear.timezone.test.ts src/session-log-callback.test.ts src/session-clear.daemon.test.ts
 
   capture:
+    needs: scope
+    if: needs.scope.outputs.capture_os != '[]'
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: ${{ fromJSON(needs.scope.outputs.capture_os) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -115,8 +152,12 @@ jobs:
   # The speed contract (SPEC.md, "Speed & responsiveness"): headless Chrome over
   # the DevTools protocol against the web edition and a scripted model. Fails
   # when a p95 exceeds its budget; the report is uploaded either way so a
-  # regression shows its numbers, not only a red cross.
+  # regression shows its numbers, not only a red cross. On PRs it runs only for
+  # changes to scripts/perf/ or with the `ci:perf` label; every main push runs it,
+  # so a regression is caught at the merge that caused it.
   perf:
+    needs: scope
+    if: needs.scope.outputs.perf == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
