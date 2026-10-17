@@ -1,55 +1,87 @@
 name: CI
 
+# Three tiers (scripts/ci-scope.mjs decides which jobs each run needs):
+#
+#   pull_request   fast feedback: build, Linux daemon, Windows capture, gated by
+#                  the paths the PR touches. About 8 minutes.
+#   merge_group    the merge queue: adds the Windows daemon and the speed
+#                  contract for the queued group, before anything reaches main.
+#   schedule       every 6 hours, and before the nightly release: every job on
+#                  every OS, macOS included. Skipped when main has not moved.
+#
+# macOS runs on the schedule rather than per change: the Team plan runs 5 macOS
+# jobs at once across every workflow, and per-PR macOS jobs queued 50-100
+# minutes. `ci:macos` / `ci:perf` labels opt a single PR in.
 on:
-  push:
-    branches: [main]
   pull_request:
-  # Full run, every platform, on any branch: the way to get macOS and perf on a
-  # PR without a label (`gh workflow run ci.yml --ref <branch>`).
+  merge_group:
+  schedule:
+    - cron: '17 */6 * * *'
+  # Full run on any branch: `gh workflow run ci.yml --ref <branch>`.
   workflow_dispatch:
 
-# Read-only: no job writes to the repo (the perf report goes up as an artifact,
-# which does not use this token). pull-requests: read lets `scope` list the PR's
-# changed files.
+# Read-only, except `issues: write` for the scheduled run to file its failure.
 permissions:
   contents: read
   pull-requests: read
+  actions: read
+  issues: write
 
-# Cancel stale PR revisions, but preserve each main-branch verification run.
+# Cancel stale PR revisions; keep every queue, schedule and dispatch run.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Which of the slow jobs below this run needs (scripts/ci-scope.mjs). A PR
-  # waits only for the checks its changes can affect: macOS (5 concurrent jobs
-  # on the Team plan, shared by every workflow, and the cause of 50-100 minute
-  # queues) and the speed contract run on main, on dispatch, or with the
-  # `ci:macos` / `ci:perf` labels. `build`, the required check, always runs.
   scope:
     runs-on: ubuntu-latest
     outputs:
       daemon_os: ${{ steps.scope.outputs.daemon_os }}
       capture_os: ${{ steps.scope.outputs.capture_os }}
       perf: ${{ steps.scope.outputs.perf }}
+      run: ${{ steps.fresh.outputs.run }}
     steps:
       - uses: actions/checkout@v7
         with:
           sparse-checkout: scripts
+      - name: Skip a scheduled run when main has not moved
+        id: fresh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=true
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            last=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --event schedule --status success --limit 1 --json headSha -q '.[0].headSha' || true)
+            if [ "$last" = "$GITHUB_SHA" ]; then
+              echo "main is still at $GITHUB_SHA, which already passed a full run."
+              run=false
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Changed files
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.merge_group.head_sha }}
         # Failure leaves the list empty, which ci-scope treats as "run everything".
-        run: gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
+          else
+            gh api "repos/$GITHUB_REPOSITORY/compare/$BASE...$HEAD" --jq '.files[].filename' > "$RUNNER_TEMP/changed.txt" || true
+          fi
       - id: scope
+        if: steps.fresh.outputs.run == 'true'
         env:
-          CI_CHANGED_FILES: ${{ github.event_name == 'pull_request' && format('{0}/changed.txt', runner.temp) || '' }}
+          CI_CHANGED_FILES: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/changed.txt', runner.temp) || '' }}
           CI_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: node scripts/ci-scope.mjs
 
   build:
+    needs: scope
+    if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -80,7 +112,7 @@ jobs:
   # since ConPTY and Unix ptys fail differently.
   daemon:
     needs: scope
-    if: needs.scope.outputs.daemon_os != '[]'
+    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.daemon_os != '[]'
     strategy:
       fail-fast: false
       matrix:
@@ -111,7 +143,7 @@ jobs:
 
   capture:
     needs: scope
-    if: needs.scope.outputs.capture_os != '[]'
+    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.capture_os != '[]'
     strategy:
       fail-fast: false
       matrix:
@@ -152,12 +184,12 @@ jobs:
   # The speed contract (SPEC.md, "Speed & responsiveness"): headless Chrome over
   # the DevTools protocol against the web edition and a scripted model. Fails
   # when a p95 exceeds its budget; the report is uploaded either way so a
-  # regression shows its numbers, not only a red cross. On PRs it runs only for
-  # changes to scripts/perf/ or with the `ci:perf` label; every main push runs it,
-  # so a regression is caught at the merge that caused it.
+  # regression shows its numbers, not only a red cross. It runs in the merge
+  # queue for changes it can measure, so a regression is stopped before main,
+  # and on a PR only with the `ci:perf` label.
   perf:
     needs: scope
-    if: needs.scope.outputs.perf == 'true'
+    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.perf == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -184,11 +216,11 @@ jobs:
           NEKKO_DAEMON: nekkod
         run: node scripts/perf/run.mjs --out perf-results --attempts 3 --no-gpu
       - name: Profile streaming frame work against the unchanged base after a failed gate
-        if: failure() && github.event_name == 'pull_request'
+        if: failure() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
           NEKKO_DAEMON: nekkod
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: |
           # Diagnostic only: keep the failed speed-contract result and its budgets.
           node scripts/perf/run.mjs --out perf-results/profile-head --quick --only frames --profile --timeline --dump-trace --no-gpu || echo "Head diagnostic missed a budget; original gate remains failed."
@@ -209,3 +241,36 @@ jobs:
           retention-days: 14
           path: perf-results/
           if-no-files-found: ignore
+
+  # The one required check. It passes when every job this run needed passed and
+  # the skipped ones were skipped on purpose, so branch protection and the merge
+  # queue need not know which jobs a change runs. A scheduled run that fails
+  # opens (or comments on) one `ci-scheduled` issue, so nobody has to watch it.
+  gate:
+    needs: [scope, build, daemon, capture, perf]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every needed job passed
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -Eq '"(failure|cancelled)"'; then
+            echo 'A required job failed or was cancelled.' >&2
+            exit 1
+          fi
+      - name: File the scheduled failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="The 6-hourly full CI run (every OS, macOS and the speed contract) failed on $GITHUB_SHA: $RUN_URL"
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label ci-scheduled --state open --limit 1 --json number -q '.[0].number')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --label ci-scheduled --title 'Scheduled full CI is failing on main' \
+              --body "$body. Fix it before the nightly release; close this issue once a scheduled run is green."
+          fi
