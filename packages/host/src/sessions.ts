@@ -120,7 +120,7 @@ function writeAtomic(file: string, text: string): void {
  * The UI changes these while a turn is running, through the engine daemon or
  * this host; a turn's save must not put back the values it read at its start.
  */
-const USER_FIELDS = ['pinned', 'tags', 'order', 'mode', 'disabledTools', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'sandbox', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'thinking', 'chatType', 'imageParams', 'workspaceId', 'supportingWorkspaceIds', 'attachedPaths', 'specLinked', 'queue', 'archivedAt'] as const;
+const USER_FIELDS = ['pinned', 'tags', 'order', 'mode', 'disabledTools', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'sandbox', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'workMode', 'thinking', 'chatType', 'imageParams', 'workspaceId', 'supportingWorkspaceIds', 'attachedPaths', 'specLinked', 'queue', 'archivedAt'] as const;
 
 /**
  * Save a chat a running turn has held in memory, keeping whatever the user
@@ -293,12 +293,12 @@ export function clearSessions(scope: 'today' | 'month' | 'all'): number {
 }
 
 /** The fields `setSessionOptions` may change (crates/nekko-store/src/write.rs keeps the same list). */
-const OPTION_KEYS = ['title', 'pinned', 'tags', 'order', 'mode', 'disabledTools', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'thinking', 'providerId', 'modelId', 'plan', 'chatType', 'imageParams', 'archivedAt'] as const;
+const OPTION_KEYS = ['title', 'pinned', 'tags', 'order', 'mode', 'disabledTools', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'workMode', 'thinking', 'providerId', 'modelId', 'plan', 'chatType', 'imageParams', 'archivedAt'] as const;
 
 /** Patch per-chat options (title, pin, mode, disabled tools, offline, incognito, brain, archive). */
 export function setSessionOptions(
   id: string,
-  patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
+  patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
 ): Session | null {
   const s = getSession(id);
   if (!s) return null;

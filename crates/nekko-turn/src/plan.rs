@@ -188,7 +188,7 @@ fn orchestration_hint(o: &Value) -> String {
 
 /// `turnSystemPrompt(input)`. `input` is the TS `TurnPromptInput`:
 /// `workspaces`, `tools`, `settings`, `sandbox`, `executionMode`,
-/// `worktreeNotices`, `contextBlock`, `platform`.
+/// `worktreeNotices`, `contextBlock`, `platform`, `workMode`.
 pub fn turn_system_prompt(input: &Value) -> String {
     let c = catalog();
     let settings = input.get("settings").unwrap_or(&Value::Null);
@@ -211,7 +211,14 @@ pub fn turn_system_prompt(input: &Value) -> String {
     let str_of = |k: &str| settings.get(k).and_then(Value::as_str);
     let own = if sandbox { Some(c.sandbox_instructions.as_str()) } else { str_of("systemInstructions") };
     let watch = has("agent_watch").then_some(c.agent_watch_instructions.as_str());
-    let instructions = [own, watch].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n");
+    // `workModePrompt(input.workMode)`: an unknown or absent mode adds nothing.
+    let work_mode = input
+        .get("workMode")
+        .and_then(Value::as_str)
+        .and_then(|id| c.work_mode_prompts.get(id))
+        .and_then(Value::as_str);
+    let instructions =
+        [own, watch, work_mode].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n");
     let wrapper = if sandbox {
         c.default_turn_wrapper.as_str()
     } else {

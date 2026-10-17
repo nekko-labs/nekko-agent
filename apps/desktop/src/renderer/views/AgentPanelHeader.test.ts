@@ -32,6 +32,16 @@ describe('Agents panel header', () => {
     expect(source).toContain('className="card fixed z-[1000] w-64 p-1.5 shadow-lg"');
     expect(source).toContain('document.body,');
   });
+  it('opens the view menu from the sliders button and from a right-click on any group header', () => {
+    expect(source).toContain('<SlidersIcon className="h-4 w-4" />');
+    expect(source).toContain('aria-label="Agent panel view options"');
+    expect(source).toMatch(/onContextMenu=\{sidebarOnly \? \(e\) => \{ e\.preventDefault\(\); e\.stopPropagation\(\); setViewMenu\(\{ x: e\.clientX, y: e\.clientY \}\)/);
+    expect(source).toContain('<AgentPanelViewMenu x={viewMenu.x} y={viewMenu.y} view={view} onChange={setView} onClose={closeViewMenu} />');
+  });
+  it('only drags cards into order where that order is what the panel shows', () => {
+    expect(source).toContain('draggable={reorderable}');
+    expect(source).toContain("draggable={byProject && !!b.ws}");
+  });
   it('keeps the composer row to the composer alone in either docking position; adding lives in the toolbar', () => {
     expect(toolbar).toContain("wall.composer.side === 'bottom' && composerRow");
     expect(toolbar).toContain('>{composer}</div>');

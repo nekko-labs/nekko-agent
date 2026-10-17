@@ -48,6 +48,10 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
+            <!-- Long-press the launcher icon: New chat (res/xml/shortcuts.xml). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -79,5 +83,17 @@
             android:name=".connection.KeepAliveService"
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
+
+        <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
+        <receiver
+            android:name=".widget.StatusWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/status_widget_info" />
+        </receiver>
     </application>
 </manifest>

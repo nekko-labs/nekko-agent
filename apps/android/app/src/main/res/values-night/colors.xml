@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="paper">#FF0C0C11</color>
+    <color name="widget_surface">#FF16161C</color>
+    <color name="widget_ink">#FFECEAF3</color>
+    <color name="widget_ink_soft">#FFA3A1B0</color>
+    <color name="widget_online">#FF4CC38A</color>
 </resources>
