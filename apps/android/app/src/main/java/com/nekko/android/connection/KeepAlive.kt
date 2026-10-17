@@ -27,4 +27,18 @@ object KeepAlive {
     /** The ongoing notification's line, e.g. "1 chat running on Mac". */
     fun line(busyChats: Int, computer: String): String =
         if (busyChats == 1) "1 chat running on $computer" else "$busyChats chats running on $computer"
+
+    /**
+     * The status-bar chip of the Live Update (Android 16+): the system shows
+     * only a few characters there, so the count and nothing else.
+     */
+    fun chip(busyChats: Int): String = if (busyChats <= 1) "Running" else "$busyChats running"
+
+    /** What the ongoing notification says while the service should run. */
+    data class Status(val line: String, val chip: String)
+
+    fun status(busyChats: Int, computer: String): Status = Status(line(busyChats, computer), chip(busyChats))
+
+    /** Between the service starting and the first status (or the last one going away). */
+    val FINISHING = Status("Finishing up", "Running")
 }
