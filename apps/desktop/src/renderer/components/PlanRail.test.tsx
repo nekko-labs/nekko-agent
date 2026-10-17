@@ -20,6 +20,16 @@ describe('change plan action', () => {
   });
 });
 
+describe('minimize button', () => {
+  it('sits at the far left of the header, only when minimizing is wired', () => {
+    const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={null} streaming={false} onMinimize={() => {}} />);
+    const header = markup.slice(markup.indexOf('<header'), markup.indexOf('</header>'));
+    expect(header).toContain('aria-label="Minimize Agent Monitor"');
+    expect(header.indexOf('data-plan-minimize')).toBeLessThan(header.indexOf('Agent Monitor</span>'));
+    expect(renderToStaticMarkup(<PlanRail sessionId="s" session={null} streaming={false} />)).not.toContain('data-plan-minimize');
+  });
+});
+
 describe('plan change prompt', () => {
   it('asks what to change, with a text box, Send change and Cancel', () => {
     const markup = renderToStaticMarkup(<PlanChangePrompt running onSend={() => {}} onCancel={() => {}} />);
