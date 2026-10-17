@@ -1304,7 +1304,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     name: 'Nightly dependency check',
     summary: 'Every night, look for outdated and vulnerable packages in a project and write up what is worth updating.',
     description:
-      'Every night the project runs `npm outdated` and `npm audit`, and the agent writes up which updates matter and why. It reads only: nothing is installed or changed.',
+      'Every night the project runs npm outdated and npm audit, and the agent writes up which updates matter and why. It reads only: nothing is installed or changed.',
     category: 'Maintenance',
     featured: true,
     requires: { workspace: true, model: true },

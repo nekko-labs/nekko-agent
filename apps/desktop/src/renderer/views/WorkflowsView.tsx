@@ -723,12 +723,12 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{r.triggerLabel || r.triggerKind}</span>
                       <span className="block truncate text-[10.5px] text-ink-faint">
+                        {isRunnerRun(r) && <span title="Fired by an external event">runner · </span>}
                         {STATUS_TONE[r.status].label}
                         {r.status !== 'running' && ` · ${formatDuration(runDurationMs(r))}`}
                         {failedAt && ` · at ${failedAt}`}
                       </span>
                     </span>
-                    {isRunnerRun(r) && <Badge tone="info" title="Fired by an external event">runner</Badge>}
                     <span className="shrink-0 font-mono text-[10px] text-ink-faint">{relative(r.startedAt)}</span>
                   </button>
                 );

@@ -49,8 +49,9 @@ app.whenReady().then(async () => {
   try {
     win.showInactive();
     for (const theme of ['dark', 'light']) {
-      for (const scene of SCENES) {
-        await win.loadFile(path.join(dir, 'index.html'), { hash: scene.data });
+      for (const [i, scene] of SCENES.entries()) {
+        // A fresh page per scene: the query differs every time, so nothing carries over.
+        await win.loadFile(path.join(dir, 'index.html'), { query: { data: scene.data, n: `${theme}-${i}` } });
         await run(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
         await run('document.fonts.ready');
         await sleep(400);

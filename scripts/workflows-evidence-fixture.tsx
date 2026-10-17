@@ -4,8 +4,8 @@ import { WorkflowsView } from '../apps/desktop/src/renderer/views/WorkflowsView'
 import { useStore } from '../apps/desktop/src/renderer/store';
 import '../apps/desktop/src/renderer/styles.css';
 
-// The scene comes from the URL hash: `empty`, `list` or `paused`.
-const scene = location.hash.slice(1) || 'list';
+// The data set comes from the query string: `empty`, `list` or `paused`.
+const scene = new URLSearchParams(location.search).get('data') || 'list';
 const now = Date.now();
 const min = 60_000;
 
