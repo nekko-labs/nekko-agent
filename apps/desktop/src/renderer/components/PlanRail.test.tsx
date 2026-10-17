@@ -62,3 +62,34 @@ it('lists sub-agents above the agent plan', () => {
   expect(markup.indexOf('>Sub-agents<')).toBeGreaterThan(-1);
   expect(markup.indexOf('>Sub-agents<')).toBeLessThan(markup.indexOf('>Agent plan<'));
 });
+
+describe('per-step plan status icons', () => {
+  const parallel = { ...session, messages: [], agentPlan: [
+    { id: 'a', createdAt: 1, updatedAt: 1, title: 'Implement', status: 'active' },
+    { id: 'b', createdAt: 1, updatedAt: 1, title: 'Test independently', status: 'active' },
+    { id: 'c', createdAt: 1, updatedAt: 1, title: 'Inspect', status: 'done' },
+    { id: 'd', createdAt: 1, updatedAt: 1, title: 'Publish', status: 'pending' },
+    { id: 'e', createdAt: 1, updatedAt: 1, title: 'Animate', status: 'skipped' },
+  ] } as Session;
+  it.each([true, false])('shows every active step as Working, streaming=%s', (streaming) => {
+    const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={parallel} streaming={streaming} />);
+    expect(markup.match(/aria-label="Working"/g)).toHaveLength(2);
+    for (const status of ['Working', 'Done', 'Pending', 'Skipped']) expect(markup).toContain('title="' + status + '"');
+    expect(markup).toContain('line-through');
+    expect(markup).toContain('M6 18 18 6');
+    const rows = markup.slice(markup.indexOf('<ol'), markup.indexOf('</ol>'));
+    expect(rows).not.toContain('animate-');
+    expect(rows).not.toContain('background:var(--accent)');
+  });
+  it('pauses all active entries only for an explicitly interrupted, non-running chat', () => {
+    const interrupted = { ...parallel, messages: [{ role: 'assistant', content: 'Stopped', interrupted: true }] } as Session;
+    const paused = renderToStaticMarkup(<PlanRail sessionId="s" session={interrupted} streaming={false} />);
+    expect(paused.match(/aria-label="Paused"/g)).toHaveLength(2);
+    expect(paused).not.toContain('aria-label="Working"');
+    expect(paused).toContain('M8 5v14M16 5v14');
+    for (const running of [interrupted, { ...interrupted, activeRun: { startedAt: 1 } }]) {
+      const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={running} streaming={running === interrupted} />);
+      expect(markup.match(/aria-label="Working"/g)).toHaveLength(2);
+    }
+  });
+});

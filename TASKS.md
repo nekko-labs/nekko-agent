@@ -6,6 +6,16 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Per-step plan working icons (2026-10-17)
+
+See [SPEC](SPEC.md#per-step-plan-working-icons-2026-10-17).
+
+- [x] Static Working glyph per active entry, independent of streaming and other active steps; explicit interrupted idle chats show Paused; accessible status tooltips and distinct pending/done/skipped shapes.
+- [x] 11 PlanRail component tests pass, including simultaneous active statuses and interruption/resume behavior. Hidden fixture captures before/after working/paused at 240/360px in both themes, with no focus or horizontal overflow.
+- [x] Parent actual-pixel inspection and affected-surface signoff (2026-10-17): browser-owned corrected v2 matching working 240px dark/light before/after pairs show two legible, unclipped Working icons; paused 240px dark/light pairs show two correct pause icons; working 360px light also inspected and visible. Initial evidence had invalid theme matching; v2 asserts computed colors and captured background pixels with fresh profiles. Inspection covers these cases only. Synthetic hidden Windows Electron fixtures do not verify a packaged build or native platform behavior.
+- [x] Docs checklist and public evidence verified (2026-10-17): 5 docs tests pass, docs regeneration is unchanged, and all 16 published v2 PNG links return HTTP 200 with PNG bytes. Focused rerun passes 11 implementation tests and 8 archived-base tests.
+- [ ] Land PR #746 after final CI gates. Packaged/native verification remains a non-blocking limitation for this renderer-only change.
+
 ## CI scope: which jobs a PR waits for (added 2026-10-17)
 
 PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows jobs finished in about 8 minutes, but `daemon (macos-latest)` queued 50-98 minutes for one of the Team plan's 5 concurrent macOS runners, and `perf` failed on `main` itself (a stale Grid wait, fixed in #743, and the streaming-frame flap in #544), so unrelated PRs never went green.
