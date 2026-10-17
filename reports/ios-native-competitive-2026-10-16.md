@@ -68,7 +68,46 @@ Orca is a free, MIT-licensed "agent development environment" for macOS, Windows 
 - **Native SwiftUI.** Orca, Happy and Omnara are React Native or cross-platform. Built.
 - **Tailscale-first private transport**, with the phone able to tell you whether Tailscale is on. Built. Orca has only LAN or its own relay.
 - **App lock with redaction** of notifications and the Lock Screen (Anthropic's Trusted Devices is the nearest equivalent). Built.
-- Apple Watch approvals, Shortcuts / Siri intents, Home Screen widgets, iPad multi-pane. Not built; listed as follow-ups.
+- Apple Watch approvals, Shortcuts / Siri intents, Home Screen widgets, iPad multi-pane. Not built on 2026-10-16; most have shipped since. See the status table below.
+
+## Status on 2026-10-17
+
+Each Orca and Codex phone feature, mapped to what the native apps ship now. "Decision" means the owner has to choose before anything is built. "Device" means it's built and tested in CI, but not yet tried on a real phone or watch.
+
+| Feature (who has it) | iPhone | Android | Where |
+| --- | --- | --- | --- |
+| QR, paste and link pairing with E2EE (all) | Built | Built | #630, AN-1 |
+| Tailscale route, with "is Tailscale on?" (VibeTunnel only) | Built | Built | #667, TailnetStatus |
+| Private relay on the computer (none) | Built (desktop) | Built (desktop) | PH4 |
+| Several computers, connection log and troubleshooting (Orca) | Built | Built | #677, #678 |
+| Chats, streaming, reasoning, tool steps (all) | Built | Built | |
+| Markdown in replies (all) | Built | Built | #694 |
+| Approvals and questions inline (all) | Built | Built | |
+| Stop and queue (Orca, Codex) | Built | Built | |
+| New chat with model, folder and tools (Codex, Orca) | Built | Built | |
+| Photos and dictation (Orca) | Built | Built | #695 (Android photos) |
+| Read-only diffs (Orca, Codex) | Built, off by default | Built, off by default | #670, #673 |
+| Comment on a diff (Orca) | Built: "Ask about this change" | Built | #675 |
+| Accept or revert changes, file browser, terminal (Orca, Codex) | Decision | Decision | `PHONE_ALWAYS_DENIED`; reports/phone-readonly-changes-proposal.md |
+| Push for "finished" and "needs you" (all) | Built; needs the APNs key | Built locally; FCM (AN-6) needs the service account | Credentials |
+| Push on Tailscale-only setups (none) | Decision | Decision | PH6, reports/free-push-tailscale-proposal.md |
+| Nearby computers without a QR code (none) | Decision | Decision | PH2/PH3, reports/phone-discovery-pairing-proposal.md |
+| Chat list while the computer is unreachable (Happy) | Built, opt-in | Built, opt-in | #706, #702 |
+| Live Activities and the Dynamic Island with Allow / Deny (none) | Built | n/a | IO-6 |
+| Actions on notifications (none) | Allow (Face ID) and Deny | Deny only; Allow is a decision | #697 |
+| Home Screen and Lock Screen widget (none) | Built | Built | #654, #688 |
+| Siri, Spotlight and Shortcuts: "What needs me?", "Ask my computer" (none) | Built | n/a | #696 |
+| Quick Settings tile (none) | n/a | Built | #708 |
+| New chat from Control Center, the Action button, the icon or the launcher (none) | Built | Built | #721, #725, #692 |
+| Share into a new chat (none) | Built | Built | IO-8, AN-11 |
+| Apple Watch: counts glance and complication (none) | Built | n/a | #726, #729 |
+| Apple Watch: approve from the watch app (none) | Decision; mirrored notifications work today | n/a | |
+| iPad split view (Codex) | Built | n/a | |
+| App lock with redaction (Anthropic's Trusted Devices) | Built | Built | |
+| Git, PR and worktree actions, usage (Orca) | Not built | Not built | Phone access to these channels is a decision |
+| Browser screencast, live terminal (Orca, Codex) | Decision | Decision | Part of files and terminals |
+| Store builds (all) | Blocked: signing and TestFlight | Blocked: signing and Play | IO-7, AN-9 |
+| Tried on real devices | Device | Device | IO-5, AN-5 |
 
 ## Connection approach
 
