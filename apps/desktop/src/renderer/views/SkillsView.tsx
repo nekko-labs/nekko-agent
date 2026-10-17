@@ -20,6 +20,7 @@ import {
   type SkillSearchResult,
   type SkillPreview,
   type SkillDef,
+  type SkillCategory,
   type SkillNodeKind,
   type SkillWorkflow,
   type LaidOutNode,
@@ -32,7 +33,7 @@ import {
 } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
-import { StarIcon, SendIcon } from '../icons.js';
+import { StarIcon, SendIcon, CloseIcon, BinocularsIcon, WrenchIcon, BranchIcon, BoltIcon, DownloadIcon, GridIcon } from '../icons.js';
 import { hasAppChrome } from '../chrome.js';
 
 /** Per-node-kind visual identity for the workflow canvas. */
@@ -120,11 +121,20 @@ function OriginChip({ origin }: { origin?: SkillOrigin }) {
   );
 }
 
+const CATEGORY_ICON: Record<SkillCategory, (p: { className?: string }) => React.ReactElement> = {
+  'Research & planning': BinocularsIcon,
+  'Code quality': WrenchIcon,
+  Delivery: BranchIcon,
+  Automation: BoltIcon,
+  Imported: DownloadIcon,
+};
+
 /** Built-in skills, marketplace skills installed into Nekko Agent, and skills imported read-only from other tools. */
 function LibraryTab() {
   const { attachSkillToChat, installedSkillDefs } = useStore(useShallow((s) => ({ attachSkillToChat: s.attachSkillToChat, installedSkillDefs: s.installedSkillDefs })));
   const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState<string>(SKILLS[0]?.id ?? '');
+  const [category, setCategory] = useState<SkillCategory | 'all'>('all');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Marketplace installs only: imported skills belong to the other tool.
   const installedIds = useMemo(() => new Set(installedSkillDefs.filter((s) => !s.origin).map((s) => s.id)), [installedSkillDefs]);
@@ -133,69 +143,108 @@ function LibraryTab() {
     return [...SKILLS, ...installedSkillDefs.filter((s) => !names.has(s.name))];
   }, [installedSkillDefs]);
 
-  const filtered = useMemo(() => {
+  const matching = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return all;
     return all.filter((s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q));
   }, [query, all]);
+  const categories = SKILL_CATEGORIES.filter((c) => all.some((s) => s.category === c));
+  const shown = category === 'all' ? categories : categories.filter((c) => c === category);
+  const visible = matching.filter((s) => shown.includes(s.category));
 
-  const selected = all.find((s) => s.id === selectedId) ?? filtered[0] ?? all[0];
+  const selected = selectedId ? all.find((s) => s.id === selectedId) ?? null : null;
+  const close = () => setSelectedId(null);
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected]);
+
+  // Keep the chosen card visible above the drawer once it opens.
+  useEffect(() => {
+    if (!selectedId) return;
+    const el = document.querySelector(`[data-skill-card="${CSS.escape(selectedId)}"]`);
+    requestAnimationFrame(() => el?.scrollIntoView({ block: 'nearest' }));
+  }, [selectedId]);
 
   return (
-    <div className="flex min-h-0 flex-1">
-      {/* Skill list */}
-      <aside className="flex w-72 flex-col border-r border-line">
-        <div className="p-4">
-          {!hasAppChrome && <h1 className="view-title text-gradient">Skills</h1>}
-          <p className="mt-0.5 text-[12px] text-ink-faint">
-            Ready-made agent workflows. Pick one to see how it runs, then use it in a chat.
-          </p>
-          <input
-            className="input mt-3"
-            placeholder="Search skills…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <div className="flex-1 overflow-y-auto px-3 pb-4">
-          {SKILL_CATEGORIES.map((cat) => {
-            const items = filtered.filter((s) => s.category === cat);
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Card grid */}
+      <div className="@container min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-[1400px] px-6 pt-5 pb-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              {!hasAppChrome && <h1 className="view-title text-gradient">Skills</h1>}
+              <p className="mt-0.5 text-[12.5px] text-ink-faint">
+                Ready-made agent workflows. Open one to see how it runs, then use it in a chat.
+              </p>
+            </div>
+            <input
+              className="input w-full max-w-xs"
+              placeholder="Search skills…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Skill categories">
+            {(['all', ...categories] as const).map((c) => {
+              const n = c === 'all' ? matching.length : matching.filter((s) => s.category === c).length;
+              const on = category === c;
+              return (
+                <button
+                  key={c}
+                  role="tab"
+                  aria-selected={on}
+                  className={`rounded-lg border px-2.5 py-1 text-[12px] transition ${
+                    on ? 'border-accent bg-accent-soft text-ink' : 'border-line text-ink-soft hover:border-ink-faint hover:text-ink'
+                  }`}
+                  onClick={() => setCategory(c)}
+                >
+                  {c === 'all' ? 'All' : c}
+                  <span className="ml-1.5 text-[11px] text-ink-faint">{n}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {shown.map((cat) => {
+            const items = matching.filter((s) => s.category === cat);
             if (items.length === 0) return null;
             return (
-              <div key={cat} className="mb-3">
-                <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{cat}</p>
-                <div className="space-y-1">
+              <section key={cat} className="mt-6">
+                <p className="pb-2 text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint">{cat}</p>
+                <div data-skill-grid className="grid grid-cols-1 gap-3 @xl:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4">
                   {items.map((s) => (
-                    <button
+                    <SkillCard
                       key={s.id}
-                      className={`w-full rounded-lg px-2.5 py-2 text-left transition ${
-                        selected?.id === s.id ? 'border-accent' : 'border-transparent hover:bg-surface-2'
-                      } border`}
-                      onClick={() => setSelectedId(s.id)}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        {s.highlighted && <StarIcon className="h-3.5 w-3.5 text-accent" filled />}
-                        <span className="font-mono text-[13px] font-medium">/{s.name}</span>
-                        {installedIds.has(s.id) && <span className="chip px-1.5! py-0! text-[9px]">installed</span>}
-                        <OriginChip origin={s.origin} />
-                      </div>
-                      <p className="mt-0.5 line-clamp-2 text-[11.5px] text-ink-soft">{s.description}</p>
-                    </button>
+                      skill={s}
+                      installed={installedIds.has(s.id)}
+                      selected={selected?.id === s.id}
+                      onOpen={() => setSelectedId(selected?.id === s.id ? null : s.id)}
+                    />
                   ))}
                 </div>
-              </div>
+              </section>
             );
           })}
-          {filtered.length === 0 && <p className="px-2 text-[12px] text-ink-faint">No skills match “{query}”.</p>}
+          {visible.length === 0 && <p className="mt-6 text-[12.5px] text-ink-faint">No skills match “{query}”.</p>}
         </div>
-      </aside>
+      </div>
 
-      {/* Detail + workflow canvas */}
+      {/* Bottom drawer: the selected skill's details + workflow */}
       {selected && (
-        <section className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-start justify-between gap-4 border-b border-line p-4">
+        <section
+          data-skill-drawer
+          aria-label={`/${selected.name} workflow`}
+          className="slide-up flex h-[58%] min-h-[300px] shrink-0 flex-col border-t border-line bg-surface"
+          style={{ boxShadow: '0 -12px 32px -16px rgb(0 0 0 / 0.45)' }}
+        >
+          <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-3.5">
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {selected.highlighted && <StarIcon className="h-4 w-4 text-accent" filled />}
                 <h2 className="truncate font-mono text-[16px] font-semibold">/{selected.name}</h2>
                 <span className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: 'var(--surface-2)', color: 'var(--ink-soft)' }}>
@@ -225,19 +274,63 @@ function LibraryTab() {
                 </div>
               )}
             </div>
-            <button
-              className="btn btn-primary shrink-0 gap-1.5"
-              onClick={() => attachSkillToChat(selected)}
-              title="Attach this skill to the chat composer"
-            >
-              <SendIcon className="h-4 w-4" /> Use in chat
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                className="btn btn-primary gap-1.5"
+                onClick={() => attachSkillToChat(selected)}
+                title="Attach this skill to the chat composer"
+              >
+                <SendIcon className="h-4 w-4" /> Use in chat
+              </button>
+              <button className="btn btn-ghost h-9 w-9 p-0!" onClick={close} title="Close (Esc)" aria-label="Close workflow">
+                <CloseIcon className="h-4 w-4" />
+              </button>
+            </div>
           </header>
 
           <WorkflowExplainer workflow={selected.workflow} />
         </section>
       )}
     </div>
+  );
+}
+
+/** One skill in the Library grid: category icon, /name, description, and its badges. */
+function SkillCard({ skill, installed, selected, onOpen }: { skill: SkillDef; installed: boolean; selected: boolean; onOpen: () => void }) {
+  const Icon = CATEGORY_ICON[skill.category] ?? GridIcon;
+  return (
+    <button
+      data-skill-card={skill.id}
+      aria-expanded={selected}
+      className={`group flex min-h-[132px] flex-col rounded-xl border p-4 text-left transition ${
+        selected ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:border-ink-faint'
+      }`}
+      onClick={onOpen}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition ${selected ? 'text-accent' : 'text-ink-soft group-hover:text-accent'}`}
+          style={{ background: 'var(--surface-2)' }}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
+        <span className={`truncate font-mono text-[14.5px] font-semibold transition ${selected ? 'text-accent' : 'group-hover:text-accent'}`}>
+          /{skill.name}
+        </span>
+        {skill.highlighted && <StarIcon className="h-3.5 w-3.5 shrink-0 text-accent" filled />}
+      </div>
+      <p className="mt-3 line-clamp-2 text-[12.5px] leading-snug text-ink-soft">{skill.description}</p>
+      <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3">
+        <span className="text-[10.5px] text-ink-faint">{skill.workflow.nodes.length} steps</span>
+        {skill.kind === 'goal' && (
+          <span className="rounded-full px-1.5 py-0 text-[9px]" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+            background agent
+          </span>
+        )}
+        {installed && <span className="chip px-1.5! py-0! text-[9px]">installed</span>}
+        <OriginChip origin={skill.origin} />
+      </div>
+    </button>
   );
 }
 
