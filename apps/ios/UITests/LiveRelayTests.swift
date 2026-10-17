@@ -84,6 +84,25 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(waitGone(question, 15))
         XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: 30))
 
+        // The agent writes a file; the phone reads the change, read only (the
+        // stack turns the computer's "Let phones see changes" on).
+        message.tap()
+        message.typeText("write a note")
+        app.buttons["Send"].tap()
+        let step = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "nekko-itest-note.txt")).firstMatch
+        XCTAssertTrue(step.waitForExistence(timeout: 30), "the write step shows in the chat")
+        sleep(2)
+        app.buttons["More"].tap()
+        app.buttons["Changes"].tap()
+        let note = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "nekko-itest-note.txt", "new file, 2 added")).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 20), "the changed file reaches the phone")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Read only")).firstMatch.exists)
+        XCTAssertFalse(app.buttons["Accept"].exists)
+        attach(app, "\(theme)-6d-changes")
+        auditAccessibility(app, "\(theme)-changes")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(waitGone(note, 10))
+
         // A longer run, then Home: the Live Activity takes over in the Dynamic Island.
         message.tap()
         message.typeText("a slow one please")
