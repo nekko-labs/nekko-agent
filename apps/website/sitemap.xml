@@ -43,6 +43,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/automations</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/local-ci-runner</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

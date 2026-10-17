@@ -106,6 +106,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Usage limits and prices](https://nekkoagent.com/docs/usage-limits.md): Where the usage numbers and price estimates come from, and what they mean.
 - [Phone remote control](https://nekkoagent.com/docs/remote.md): Drive the agent on your computer from your phone, end-to-end encrypted.
 - [CLI and MCP](https://nekkoagent.com/docs/cli.md): Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor.
+- [Automations](https://nekkoagent.com/docs/automations.md): Ready-made automations, run results and notifications, and pausing them all.
 - [Local CI runner](https://nekkoagent.com/docs/local-ci-runner.md): Run a GitHub or GitLab repo's builds and tests on your own machine.
 - [Decision models](https://nekkoagent.com/docs/decision-models.md): Typed questions answered with calibrated probabilities, in one forward pass.
 - [Local inference benchmarks](https://nekkoagent.com/docs/benchmarks.md): How fast the engine runs a model compared with Ollama and LM Studio.
