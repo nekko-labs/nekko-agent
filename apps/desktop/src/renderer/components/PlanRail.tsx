@@ -7,7 +7,7 @@ import { DEFAULT_ORCHESTRATION, getStrategy, planProgress, queueItemPayload } fr
 import { useLiveRunsVersion, getLiveRun, runningSessionIds } from '../liveRuns.js';
 import { childActivity, activitySentence } from '../subagentActivity.js';
 import { useStore } from '../store.js';
-import { CheckIcon, ChatIcon, ControlPanelIcon, PencilIcon, RobotIcon } from '../icons.js';
+import { CheckIcon, ChatIcon, ControlPanelIcon, MinimizeIcon, PencilIcon, RobotIcon } from '../icons.js';
 
 /** The agent's published plan, active delegates and queued follow-ups. */
 function queueLabel(item: QueuedPrompt): string {
@@ -21,10 +21,12 @@ function queueLabel(item: QueuedPrompt): string {
 /** Leads the message a plan change sends (see PlanChangePrompt). */
 export const PLAN_CHANGE_REQUEST = 'Please revise the current agent plan. I would like to change the approach as follows:\n';
 
-export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
+export function PlanRail({ sessionId, session, streaming, onChangePlan, onMinimize }: {
   sessionId: string;
   session: Session | null;
   streaming: boolean;
+  /** Closes the panel; the floating Agent Monitor button then reopens it. */
+  onMinimize?: () => void;
   /** Pops up the plan-change prompt; nothing is sent until the user types and sends. */
   onChangePlan?: () => void;
 }) {
@@ -59,8 +61,10 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
     <aside className="flex h-full w-full flex-col overflow-hidden border-l border-line" style={{ background: 'transparent' }} aria-label="Plan and sub-agents">
       <header className="flex shrink-0 items-center gap-1.5 border-b border-line px-3 py-2">
         <ControlPanelIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
-        {/* The chat area's floating plan toggle opens and closes this panel. */}
-        <span className="min-w-0 flex-1 truncate pr-8 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Agent Monitor</span>
+        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Agent Monitor</span>
+        {/* Minimizing hides the panel and brings back the chat area's floating
+            Agent Monitor button, which reopens it. */}
+        {onMinimize && <button type="button" className="-mr-1 grid h-5 w-5 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink" data-plan-minimize onClick={onMinimize} title="Minimize Agent Monitor" aria-label="Minimize Agent Monitor"><MinimizeIcon className="h-3.5 w-3.5" /></button>}
       </header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
         <MonitorArtifacts key={sessionId} sessionId={sessionId} artifacts={artifacts} hydrated={!!session && session.id === sessionId && Array.isArray(session.messages)} />
