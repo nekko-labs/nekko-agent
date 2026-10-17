@@ -82,6 +82,9 @@
 
         <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
         <receiver
+            android:name=".connection.DenyReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".widget.StatusWidget"
             android:exported="false">
             <intent-filter>
