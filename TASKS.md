@@ -6,6 +6,17 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Native agent-browser default (2026-10-17, maintained patch in progress)
+
+Continuation: user authorized maintained inherited-stdio patch. Native is default without fallback. Initial unchanged baseline and alternating PW/native/PW/native fixture batches captured (40 cold + 40 warm per driver); exact latency regression / lower memory snapshots in docs/perf-history.md and reports/agent-browser/matched-benchmark.json. Native IPC security groups, relay negatives, full workspace typecheck/build, 1362 desktop tests, 956 host tests (1 skipped, explicit owned daemon), Rust browser/capture golden parity and expanded hidden Electron action/security smoke pass. Keyboard chord replacement and actual cancelled download verified. Unpacked Windows package native executable/license/pin hashes match source staging; unrelated daemon resource missing, no signed installer claim. Final v3 before/after 1359x872 media published with hash-verified downloads; parent actual-pixel signoff granted for the synthetic browser surface only, not the full packaged/native app. Remaining release gates: required CI/reviews and merge queue. Capture CI now builds/stages the pinned resource with a source-keyed Cargo cache and always retains locked source/patch verification. Residual limitations: other platforms/signing/live model, renderer performance helper remains independent Chrome/CDP (not a Playwright runtime driver).
+
+See [SPEC](SPEC.md#in-app-browser-automation-2026-10-10) and [feasibility evidence](reports/agent-browser/feasibility.md). Architectural target: native Rust agent-browser, Chrome engine, app-owned chat scope; never a user browser or an app-wide debugging port. Maintained patch is selected and implemented; unpatched upstream remains unsupported.
+
+- [x] Inspect exact npm `0.39.1` / source `1165952d74ceed98fdc2dd97190ad41f44dd0e24` and main `dac13bb87468fe9d74a040d862720f6cc17a9565`; reproduce unauthenticated Windows command acceptance with no browser launch; save executable hash and raw JSON. The owned daemon tree and scratch data were cleaned up.
+- [x] Supply private inherited native IPC or authenticate every command with a privately delivered capability. Existing Windows TCP accepts arbitrary clients; CDP relay auth and random ports do not fix command auth. Audit dashboard/stream entry points too.
+- [x] Capture unchanged baseline before runtime edits; implement chat-owned authenticated CDP relay and typed native action adapter with security/feature-parity tests. Preserve windows, partitions, approvals, screenshots/tabs/logs/waits and cleanup.
+- [x] Matched same-browser/viewport/theme synthetic alternating cold/warm benchmarks (at least 20 samples each where practical), raw data and exact perf-history numbers; full typecheck/build, relevant host/daemon suites and schema parity if changed.
+- [x] Publish matching hidden visual/interaction evidence and obtain parent actual-pixel signoff (2026-10-17): final v3 baseline/native actual pixels inspected via owned browser capture, 1359x872 rendered; heading, input/orange focus, submitted result, links, late text, right scrollbar and layout match. Acceptance covers the synthetic browser surface only, not the full packaged/native app. Preserve separate e2e-playwright work; other platforms, signed/full installer and live model remain residual verification limits.
 ## Test suite trim and consolidated end-to-end (added 2026-10-17)
 
 See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17.md).

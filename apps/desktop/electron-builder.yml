@@ -20,6 +20,8 @@ files:
 # and run by this app's own Electron binary, so installing the app installs the
 # CLI with no Node or npm. main/cli-install.ts links it onto PATH on first run.
 extraResources:
+  - from: resources/agent-browser
+    to: agent-browser
   - from: ../cli/app-dist/nekko-agent-cli.cjs
     to: cli/nekko-agent-cli.cjs
   # The engine daemon (crates/nekkod), built and staged by scripts/stage-daemon.mjs.

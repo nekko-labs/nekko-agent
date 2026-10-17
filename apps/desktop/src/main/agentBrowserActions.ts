@@ -1,4 +1,4 @@
-import type { Page } from 'playwright-core';
+import type { AgentPage as Page } from './agentPage.js';
 import { BROWSER_MAX_WAIT_MS } from '@nekko-agent/shared';
 
 /** Text returned to the model is capped so one page cannot flood the context. */
