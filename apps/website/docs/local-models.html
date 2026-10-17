@@ -100,6 +100,14 @@ type, then says what it chose and what it costs. <em>Advanced</em> is every llam
 context, GPU layers, KV cache type, parallel slots, flash attention, batch and physical
 batch, threads, mmap and mlock, RoPE base and scale, seed, idle TTL. They are the same
 state, so moving one moves the other, and either can be saved as that model&#39;s default.</p>
+<p><strong>Seeing what is loaded from anywhere.</strong> The Agents view&#39;s <strong>Panels</strong> dock has a <strong>Local
+models</strong> monitor, under Hardware: each model the engine holds in memory, whether it runs on
+the GPU, split across GPU and CPU (with the layer count, in amber), or on the CPU, plus its
+context and footprint. <strong>Settings</strong> on a row opens Nekko Server with that model&#39;s drawer
+unfolded on <em>Advanced</em>, where <strong>Runs on</strong> (GPU only, Hybrid, CPU only) lives. The chat&#39;s
+right panel has the same jump as <strong>All settings</strong> inside each model under Model settings.
+Switch the monitor off in the dock&#39;s <strong>Configure</strong> menu. Changing a setting reloads the
+model, which interrupts a reply it is generating.</p>
 <p><strong>The Server tab</strong> carries port, whether it is reachable from your network or only this
 computer, an API key, allowed browser origins, how many models may be resident, the idle
 timeout, load-on-demand, start-with-the-app, and the models folder. The defaults are

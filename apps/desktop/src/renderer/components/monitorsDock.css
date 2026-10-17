@@ -192,3 +192,9 @@
 /* A long account email truncates rather than widening the panel. */
 .monitors-dock__provider-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .monitors-dock__account { font-weight: 400; color: var(--ink-faint); }
+/* Local models: one compact row per resident model, its name left and the jump to its settings right. */
+.monitors-dock__local-models { padding: 10px 12px; gap: 8px; }
+.monitors-dock__local-model { display: grid; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.monitors-dock__local-model .monitors-dock__metric-row strong { text-align: left; flex: 1; }
+.monitors-dock__local-model .monitors-dock__note { margin-top: 0; }
+.monitors-dock__local-model button.monitors-dock__text-button { flex-shrink: 0; }

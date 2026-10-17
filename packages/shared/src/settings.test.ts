@@ -24,9 +24,10 @@ describe('command wall settings schema', () => {
     expect(DEFAULT_MONITORS_DOCK.side).toBe('right');
     expect(DEFAULT_MONITORS_DOCK.show).toBe(true);
     expect(DEFAULT_MONITORS_DOCK.minimized).toEqual({
-      automations: false, utilization: false, budget: false, insights: false, hardware: false,
+      automations: false, utilization: false, budget: false, insights: false, hardware: false, localModels: false,
     });
     expect(DEFAULT_MONITORS_DOCK.monitorOrder?.[0]).toBe('hardware');
+    expect(DEFAULT_MONITORS_DOCK.monitorOrder?.[1]).toBe('localModels');
     expect(Object.keys(DEFAULT_MONITORS_DOCK.minimized)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
     expect(Object.entries(DEFAULT_MONITORS_DOCK.monitors).filter(([, enabled]) => !enabled)).toEqual([['insights', false]]);
   });
