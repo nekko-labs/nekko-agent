@@ -1,6 +1,7 @@
 package com.nekko.android
 
 import com.nekko.android.chat.approvalDetail
+import com.nekko.android.ui.chat.safeLink
 import com.nekko.android.util.ago
 import com.nekko.android.util.plainText
 import com.nekko.protocol.Approval
@@ -22,6 +23,16 @@ class MiscTest {
         assertEquals(DeepLink.Pair(alt), DeepLink.from(alt, "nekko-agent", "pair", emptyList()))
         assertEquals(DeepLink.Chat("s1"), DeepLink.from("nekko-agent://chat/s1", "nekko-agent", "chat", listOf("s1")))
         assertNull(DeepLink.from("https://example.com", "https", "example.com", emptyList()))
+    }
+
+    @Test
+    fun `only web and mail links are tappable in replies`() {
+        assertTrue(safeLink("https://nekkoagent.com"))
+        assertTrue(safeLink("HTTP://192.168.1.2:3000"))
+        assertTrue(safeLink("mailto:hi@nekkolabs.com"))
+        for (url in listOf("intent://x#Intent;end", "file:///sdcard/a", "javascript:alert(1)", "content://x", "relative/path")) {
+            assertTrue(url, !safeLink(url))
+        }
     }
 
     @Test
