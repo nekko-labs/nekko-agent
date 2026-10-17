@@ -37,8 +37,7 @@ struct MarkdownText: View {
     }
 
     private func inline(_ s: String) -> Text {
-        let opts = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
-        if let a = try? AttributedString(markdown: s, options: opts) { return Text(a) }
+        if let a = InlineMarkdown.attributed(s) { return Text(a) }
         return Text(s)
     }
 
@@ -138,5 +137,32 @@ struct CodeBlock: View {
         }
         .background(palette.code, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(palette.line))
+    }
+}
+
+/// Inline Markdown, parsed once per distinct string. While a reply streams,
+/// every token re-renders the whole reply; without this each finished paragraph
+/// went through `AttributedString(markdown:)` again on every token.
+enum InlineMarkdown {
+    private final class Box {
+        let value: AttributedString?
+        init(_ value: AttributedString?) { self.value = value }
+    }
+
+    private static let cache: NSCache<NSString, Box> = {
+        let c = NSCache<NSString, Box>()
+        c.countLimit = 800
+        return c
+    }()
+
+    private static let options = AttributedString.MarkdownParsingOptions(
+        interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
+
+    static func attributed(_ s: String) -> AttributedString? {
+        let key = s as NSString
+        if let hit = cache.object(forKey: key) { return hit.value }
+        let value = try? AttributedString(markdown: s, options: options)
+        cache.setObject(Box(value), forKey: key)
+        return value
     }
 }

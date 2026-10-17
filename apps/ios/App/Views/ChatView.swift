@@ -12,6 +12,7 @@ struct ChatView: View {
     @Environment(\.palette) private var palette
     @State private var chat: ChatModel?
     @State private var showModels = false
+    @State private var showChanges = false
     @State private var renaming = false
     @State private var renameText = ""
     @State private var actionError: String?
@@ -145,6 +146,9 @@ struct ChatView: View {
                             }
                         }
                     } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
+                    if store.pcSettings.phoneChanges {
+                        Button { showChanges = true } label: { Label("Changes", systemImage: "plusminus") }
+                    }
                     Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                     Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     Button { Task { await chat.reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
@@ -156,6 +160,7 @@ struct ChatView: View {
                 act { try await chat.setOptions(providerId: p, modelId: m) }
             }
         }
+        .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
         .alert("Rename chat", isPresented: $renaming) {
             TextField("Title", text: $renameText)
             Button("Cancel", role: .cancel) {}
@@ -520,13 +525,15 @@ struct Composer: View {
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
-                if dictation.available && text.isEmpty && !dictation.recording {
+                if dictation.transcribing {
+                    ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
+                } else if dictation.available && text.isEmpty && !dictation.recording {
                     Button { Task { await dictation.start(store: store) } } label: {
                         Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
                             .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Dictate")
                 } else if dictation.recording {
-                    Button { Task { if let t = await dictation.stop(store: store) { text += (text.isEmpty ? "" : " ") + t } } } label: {
+                    Button { Task { await dictation.finish(store: store) } } label: {
                         Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
                             .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Stop dictation")
@@ -549,7 +556,7 @@ struct Composer: View {
                     .accessibilityLabel(chat.running ? "Queue" : "Send")
                 }
             }
-            if dictation.recording { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
+            if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
         }
         // Send waits for the photos (it used to send without them, and they came back later).
         .task(id: photos) {
@@ -560,6 +567,8 @@ struct Composer: View {
             loadingPhotos = false
         }
         .onChange(of: dictation.error) { _, e in if let e { error = e } }
+        // Tapped stop or hit the 30-second limit: the words go into the message, never sent.
+        .onChange(of: dictation.result) { _, r in if let r { text += (text.isEmpty ? "" : " ") + r.text } }
         // A prompt that never reached the computer comes back, with its skill and photos.
         .onChange(of: chat.unsent) { _, u in
             guard u != nil, let back = chat.takeUnsent() else { return }

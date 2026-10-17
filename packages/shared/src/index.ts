@@ -53,6 +53,7 @@ export * from './e2e.js';
 export * from './remote.js';
 export * from './relay-route.js';
 export * from './phone-access.js';
+export * from './phone-changes.js';
 export * from './update.js';
 export * from './mcp.js';
 export * from './spec.js';

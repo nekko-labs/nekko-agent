@@ -32,6 +32,8 @@ public final class ChatModel {
         didSet { savedBlocks = session.map { Transcript.fromMessages($0.messages) } ?? [] }
     }
     private var savedBlocks: [Block] = []
+    /// Saved block id → the live id the view already shows it under (see `Transcript.carriedIds`).
+    private var shownIds: [String: String] = [:]
     public private(set) var turn = LiveTurn() {
         didSet { if running != turn.running { running = turn.running } }
     }
@@ -87,6 +89,7 @@ public final class ChatModel {
                 return
             }
             let mine = PendingInput.map(p)[sessionId]
+            let shown = blocks
             self.session = session
             loadError = nil
             // Mid-turn the overlay keeps streaming; mergeLive hides what the
@@ -97,9 +100,17 @@ public final class ChatModel {
             t.question = mine?.question
             t.running = t.running || mine != nil
             turn = t
+            // Keep the ids of what was on screen when the saved transcript replaces the live one.
+            let carried = Transcript.carriedIds(shown: shown, next: Transcript.mergeLive(saved: savedBlocks, live: turn.blocks))
+            if !carried.isEmpty { shownIds.merge(carried) { a, _ in a } }
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    /// What the agent changed in this chat; the computer refuses unless it allows phones to see changes.
+    public func changes() async throws -> PhoneChanges {
+        PhoneChanges.from(try await store.remote().call(Channels.changesList, [.string(sessionId)]))
     }
 
     public func loadSkills() async {
@@ -230,7 +241,9 @@ public final class ChatModel {
     public var modelId: String? { Self.resolveModel(session, store.defaults).1 }
 
     public var blocks: [Block] {
-        Transcript.mergeLive(saved: savedBlocks, live: turn.blocks)
+        let merged = Transcript.mergeLive(saved: savedBlocks, live: turn.blocks)
+        guard !shownIds.isEmpty else { return merged }
+        return merged.map { b in shownIds[b.id].map { b.withId($0) } ?? b }
     }
 
     public var queued: [String] { session?.queue ?? [] }

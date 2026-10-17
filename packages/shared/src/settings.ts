@@ -253,6 +253,12 @@ export interface AppSettings {
   showTips?: boolean;
   completionTipSeen?: boolean;
   skipDeleteConfirmation?: boolean;
+  /**
+   * Let paired phones see a read-only diff of the files the agent changed in a
+   * chat (Settings → Remote access). Off unless set. Phones can never accept,
+   * revert or edit changes, read other files or open terminals.
+   */
+  phoneChanges?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';
   /**

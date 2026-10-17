@@ -190,7 +190,7 @@ changes how the computer itself is set up:</p>
 approvals and the agent&#39;s questions; pick a model from the computer&#39;s providers and a folder from
 its list; voice status and transcription; and a few settings (below).</li>
 <li><strong>Never allowed from a phone:</strong> wiping data or resetting settings, remote access itself (pairing,
-revoking, rotating the secret), terminals, writing files, adding or removing folders, installing
+revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes, adding or removing folders, installing
 or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
 servers and hooks. Everything not on the allowed list is refused too, with an error that starts
 <em>Not allowed from a paired phone</em>.</li>
@@ -200,6 +200,11 @@ setting is refused as a whole: nothing in it is applied.</li>
 <li><strong>Settings a phone can read:</strong> only the theme and accents, the default and starred models, and
 the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
 instructions never leave the computer this way; provider lists arrive as name and type only.</li>
+<li><strong>A chat&#39;s changes, read only, only if you allow it:</strong> with <em>Let phones see changes</em> on (off
+unless you turn it on, in Remote access on the computer), a phone can see a diff of the files the
+agent changed in a chat. Your computer works out the diff and sends only that: short paths, a
+capped number of lines, and files that may hold secrets (<code>.env</code>, keys, <code>.ssh</code>, <code>.aws</code>) counted but
+never shown. A phone still can&#39;t accept or revert changes or read any other file.</li>
 <li><strong>One chat&#39;s options:</strong> a phone can change a chat&#39;s model, title, pin and tags, complete it, and
 switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
 offline/incognito switches. Messages cannot attach files from the computer.</li>
@@ -245,6 +250,7 @@ offline/incognito switches. Messages cannot attach files from the computer.</li>
 enable push, device push tokens plus the content-free fact &quot;a run finished&quot;. That&#39;s the whole list,
 and it&#39;s why relayed local-model use is inherently zero-data-retention for content.</p>
 <h2 id="choosing-a-relay"><a class="anchor" href="#choosing-a-relay" aria-hidden="true" tabindex="-1">#</a>Choosing a relay</h2>
+<p>How the Android and iOS apps each handle the connection (URL rules, pairing, reconnects, push, background) is compared in <a href="https://github.com/nekko-labs/nekko-agent/blob/main/docs/phone-connection.md" rel="noopener">phone-connection.md</a>.</p>
 <h3 id="managed-relay-default-wssnekko-agent-relayflydev"><a class="anchor" href="#managed-relay-default-wssnekko-agent-relayflydev" aria-hidden="true" tabindex="-1">#</a>Managed relay (default): <code>wss://nekko-agent-relay.fly.dev</code></h3>
 <p>Zero setup; free during beta with per-connection rate limits. When Nekko Agent Cloud launches, the
 managed relay becomes part of the paid plans (it already supports gating via
