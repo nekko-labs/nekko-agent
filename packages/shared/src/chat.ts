@@ -221,6 +221,12 @@ export interface Session {
   autoProviderSwitch?: boolean;
   /** Tool-execution policy for this chat. */
   mode?: ChatMode;
+  /**
+   * How the agent works in this chat (see WORK_MODES): Better review, Design,
+   * Best output. Separate from `mode`, the permission policy, which it never
+   * changes. Absent means the default.
+   */
+  workMode?: import('./work-modes.js').WorkModeId;
   /** Chat or image generation; absent means `multimodal`. */
   chatType?: ChatType;
   /** Settings for an image-generation chat. */

@@ -66,7 +66,7 @@ fun NekkoNavHost(
             is DeepLink.Pair -> nav.navigate(Routes.pair(l.raw)) { launchSingleTop = true }
             is DeepLink.Chat -> nav.navigate(Routes.chat(l.id)) { launchSingleTop = true }
             // Over whatever is open; Back from New chat returns there.
-            DeepLink.Share -> nav.navigate(Routes.NEW) { launchSingleTop = true }
+            DeepLink.Share, DeepLink.NewChat -> nav.navigate(Routes.NEW) { launchSingleTop = true }
             null -> return@LaunchedEffect
         }
         onLinkHandled()

@@ -11,6 +11,9 @@ sealed interface DeepLink {
     /** Text shared from another app (the text itself waits in ShareInbox): open New chat. */
     data object Share : DeepLink
 
+    /** `nekko-agent://new`: open New chat (the launcher's "New chat" shortcut). */
+    data object NewChat : DeepLink
+
     companion object {
         /** Pure so it can be unit-tested; MainActivity feeds it the parts of an android.net.Uri. */
         fun from(raw: String, scheme: String?, host: String?, path: List<String>): DeepLink? {
@@ -19,6 +22,7 @@ sealed interface DeepLink {
                 s == "nekko-agent-pair" -> Pair(raw)
                 s == "nekko-agent" && raw.contains("relay=") -> Pair(raw)
                 s == "nekko-agent" && host == "chat" && path.isNotEmpty() -> Chat(path.first())
+                s == "nekko-agent" && host == "new" -> NewChat
                 else -> null
             }
         }

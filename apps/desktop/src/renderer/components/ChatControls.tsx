@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { ChatMode, McpServerStatus, Session } from '@nekko-agent/shared';
-import { getExecutionMode, groupToolsByCategory, toolAllowedOffline, type ExecutionMode } from '@nekko-agent/shared';
+import { WORK_MODES, getExecutionMode, getWorkMode, groupToolsByCategory, toolAllowedOffline, type ExecutionMode, type WorkModeId } from '@nekko-agent/shared';
 import { SandboxSetup, SandboxReview } from './SandboxSetup.js';
 import { useStore } from '../store.js';
 import { WrenchIcon, PlaneIcon, IncognitoIcon, PlugIcon, PlusIcon, GlobeIcon, GlobeOffIcon } from '../icons.js';
@@ -387,7 +387,7 @@ export function ChatControls({
       if (!anchor) return;
       const above = Math.max(0, anchor.top - 16);
       const below = Math.max(0, window.innerHeight - anchor.bottom - 16);
-      const width = Math.min(480, window.innerWidth - 16);
+      const width = Math.min(720, window.innerWidth - 16);
       setModePosition({
         width, left: Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8)),
         maxHeight: Math.max(above, below),
@@ -427,6 +427,13 @@ export function ChatControls({
     } catch (e) { setExecutionError(String((e as Error).message ?? e)); }
   };
   const mode: ChatMode = session.mode ?? defaultChatMode ?? 'guardrails';
+  const workMode = getWorkMode(session.workMode);
+  // Per chat only: a heavier way of working is a choice for this task, not a new default.
+  const selectWorkMode = (id: WorkModeId) => {
+    setModeOpen(false);
+    modeButton.current?.focus({ preventScroll: true });
+    void window.nekko.setSessionOptions(session.id, { workMode: id }).then(onChange).catch((e) => useStore.getState().pushToast('error', String(e)));
+  };
   const offline = !!session.offline;
   const incognito = !!session.incognito;
 
@@ -456,15 +463,15 @@ export function ChatControls({
           onClick={() => setModeOpen((o) => !o)}
           aria-haspopup="menu"
           aria-expanded={modeOpen}
-          title={MODE_DESC[mode]}
+          title={workMode.id === 'default' ? MODE_DESC[mode] : `${MODE_DESC[mode]} Work mode: ${workMode.label}.`}
         >
           <span className="ctl-menu-label">Mode</span>
-          <span className="min-w-0 truncate">{execution === 'worktree' ? 'Worktree' : sandbox ? 'Sandbox' : 'Unified'} - {MODE_LABEL[mode]}</span>
+          <span className="min-w-0 truncate">{execution === 'worktree' ? 'Worktree' : sandbox ? 'Sandbox' : 'Unified'} - {MODE_LABEL[mode]}{workMode.id === 'default' ? '' : ` - ${workMode.label}`}</span>
           <span className="ctl-caret">▾</span>
         </button>
         {modeOpen && createPortal(
           <div ref={modeMenu} style={modePosition} className="card fixed z-[100] overflow-y-auto p-1.5 shadow-lg" role="menu" aria-label="Chat mode">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div><p className="px-2.5 text-[11px] text-ink-faint">Execution</p>
               {([{ value: 'sandbox', label: 'Sandbox', description: 'Scoped files and bash in a local container.' }, { value: 'worktree', label: 'Worktree', description: 'Isolated Git checkout from committed HEAD.' }, { value: 'unified', label: 'Unified', description: 'Share current folders and local changes.' }] as const).map((item) => <button key={item.value} role="menuitemradio" aria-checked={execution === item.value} className="flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2" onClick={() => void selectExecution(item.value)}><span className="text-[13px] font-medium">{item.label}</span><span className="text-[11px] text-ink-faint">{item.description}</span></button>)}
             </div><div><p className="px-2.5 text-[11px] text-ink-faint">Permissions</p>
@@ -479,6 +486,21 @@ export function ChatControls({
               >
                 <span className="text-[13px] font-medium">{MODE_LABEL[m]}{m === 'guardrails' ? ' (recommended)' : ''}</span>
                 <span className="text-[11px] text-ink-faint">{MODE_DESC[m]}</span>
+              </button>
+            ))}
+            </div><div role="group" aria-label="Work mode"><p className="px-2.5 text-[11px] text-ink-faint">Work mode</p>
+            {WORK_MODES.map((m) => (
+              <button
+                key={m.id}
+                role="menuitemradio"
+                data-work-mode={m.id}
+                aria-checked={workMode.id === m.id}
+                className={`flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 ${workMode.id === m.id ? 'text-accent' : ''}`}
+                title={m.skills.length ? `Applies automatically: ${m.skills.map((n) => `/${n}`).join(', ')}` : undefined}
+                onClick={() => selectWorkMode(m.id)}
+              >
+                <span className="text-[13px] font-medium">{m.label}</span>
+                <span className="text-[11px] text-ink-faint">{m.description}{m.cost ? ` ${m.cost}.` : ''}</span>
               </button>
             ))}
             </div></div>
