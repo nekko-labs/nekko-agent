@@ -42,10 +42,10 @@ describe('Agents panel header', () => {
     expect(source).toContain('draggable={reorderable}');
     expect(source).toContain("draggable={byProject && !!b.ws}");
   });
-  it('puts a search button beside the +, in the same accent and size, opening the chat finder', () => {
-    expect(source).toContain('<SearchIcon className="h-[22px] w-[22px]" />');
+  it('puts a search button beside the +, styled and sized like the view-options sliders, opening the chat finder', () => {
+    expect(source).toContain('<SearchIcon className="h-4 w-4" />');
     expect(source).toMatch(/data-chat-finder-toggle[\s\S]{0,400}<ChatFinder[\s\S]{0,400}ref=\{newMenuButtonRef\}/);
-    expect(source).toMatch(/className=\{`agent-panel-plus btn btn-ghost px-1\.5 py-1 \$\{finderOpen/);
+    expect(source).toMatch(/className=\{`agent-panel-view btn btn-ghost px-1\.5 py-1 \$\{finderOpen \? \x27is-open text-ink\x27 : \x27text-ink-faint hover:text-ink\x27/);
   });
   it('keeps the composer row to the composer alone in either docking position; adding lives in the toolbar', () => {
     expect(toolbar).toContain("wall.composer.side === 'bottom' && composerRow");
