@@ -79,6 +79,7 @@
 body { background: var(--field); color: var(--ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
+[hidden] { display: none !important; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .page { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 22px; }
@@ -118,11 +119,12 @@ button { cursor: pointer; }
 .wtoast.on { opacity: 1; transform: translate(-50%, 0); }
 
 /* ---------- shared glass + composer pieces ---------- */
-.center { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px 22px 40px; overflow-y: auto; }
+.center { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 18px; padding: 24px 22px 40px; overflow-y: auto; }
 .glass { position: relative; background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%); border-radius: 22px; box-shadow: var(--glass-shadow); corner-shape: squircle; }
 .glass::before { /* hairline glass edge */ content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: linear-gradient(160deg, var(--glass-edge), transparent 45%, var(--glass-edge)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
-.prism-edge::after { /* refracted ring, brightens on focus */ content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px; background: conic-gradient(from var(--spin), var(--p1), var(--p2), var(--p3), var(--p4), var(--p5), var(--p1)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: .35; transition: opacity .3s; pointer-events: none; animation: spin 9s linear infinite; }
+.prism-edge::after { /* refracted ring, brightens on focus */ content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; background: conic-gradient(from var(--spin), var(--p1), var(--p2), var(--p3), var(--p4), var(--p5), var(--p1)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: .35; transition: opacity .3s; pointer-events: none; animation: spin 9s linear infinite; }
 .prism-edge:focus-within::after { opacity: 1; }
+.glass.prism-edge::before { display: none; } /* the prism ring is this surface's only edge */
 @keyframes spin { to { --spin: 360deg; } }
 
 .composer { width: min(680px, 100%); }
@@ -160,14 +162,49 @@ button { cursor: pointer; }
 .hello { text-align: center; display: grid; gap: 4px; }
 .hello .hi { font-size: 30px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; }
 .hello .sub { font-size: 30px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; color: var(--ink-faint); text-wrap: balance; }
-.starters { width: min(680px, 100%); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.starter { text-align: left; border: 0; padding: 12px 12px 14px; border-radius: 16px; display: grid; gap: 6px; align-content: start; background: var(--glass); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 0 0 1px var(--glass-edge) inset; transition: transform .2s, box-shadow .2s; min-height: 108px; }
-.starter:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent) inset, 0 14px 30px -18px color-mix(in srgb, var(--p1) 60%, transparent); }
-.starter .ic { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: #fff; }
-.starter .ic svg { width: 14px; height: 14px; }
-.starter strong { font-size: 13px; font-weight: 600; }
-.starter span { font-size: 12px; color: var(--ink-soft); line-height: 1.4; }
-.starter[aria-pressed="true"] { box-shadow: 0 0 0 1.5px var(--accent) inset; }
+.stack { width: min(680px, 100%); display: grid; gap: 10px; }
+.stack .composer { width: 100%; }
+.starters { width: min(680px, 100%); display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.starter { display: inline-flex; align-items: center; gap: 8px; border: 0; padding: 5px 12px 5px 5px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--ink); background: var(--glass); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent); transition: transform .2s, box-shadow .2s; }
+.starter:hover { transform: translateY(-1px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 10px 24px -16px color-mix(in srgb, var(--p1) 60%, transparent); }
+.starter .ic { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+.starter .ic svg { width: 12px; height: 12px; }
+
+/* The four parts of a prompt, each with its own hue, shared by the highlights and the coach. */
+.k-goal { --k: var(--p1); } .k-where { --k: var(--p2); } .k-done { --k: var(--p3); } .k-limits { --k: var(--p4); }
+.field mark[class^="k-"] { background: color-mix(in srgb, var(--k) 18%, transparent); box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--k) 85%, transparent); border-radius: 3px; }
+
+.pcoach { border-radius: 16px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 85%, transparent), 0 12px 30px -24px rgba(40, 30, 120, 0.5); }
+.pcoach::before { display: none; }
+.pc-bar { width: 100%; display: flex; align-items: center; gap: 10px; border: 0; background: transparent; padding: 8px 8px 8px 12px; border-radius: 16px; text-align: left; font-size: 12.5px; color: var(--ink-soft); }
+.pc-segs { display: flex; gap: 3px; flex: none; }
+.pc-segs i { width: 14px; height: 5px; border-radius: 999px; background: color-mix(in srgb, var(--ink-faint) 30%, transparent); transition: background .3s; }
+.pc-segs i.ok { background: var(--k); }
+.pc-sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-sum b { color: var(--ink); font-weight: 600; }
+.pc-sum .done { color: var(--success); }
+.pc-show { flex: none; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; color: var(--accent); padding: 4px 10px; border-radius: 999px; background: var(--accent-soft); }
+.pc-show svg { transition: transform .2s; }
+.pc-bar[aria-expanded="true"] .pc-show svg { transform: rotate(180deg); }
+.pc-bar.nudge .pc-show { animation: nudge 1.4s ease-in-out 3; }
+@keyframes nudge { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); } 60% { box-shadow: 0 0 0 7px transparent; } }
+.pc-body { display: grid; gap: 10px; padding: 10px 12px 12px; border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); }
+.pc-intro { margin: 0; font-size: 12.5px; color: var(--ink-soft); }
+.pc-intro b { color: var(--ink); font-weight: 600; }
+.pc-parts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.pc-part { display: flex; gap: 8px; align-items: flex-start; text-align: left; border: 0; border-radius: 10px; padding: 8px; background: color-mix(in srgb, var(--surface) 55%, transparent); box-shadow: inset 0 0 0 1px var(--line); min-width: 0; }
+.pc-part[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--k); }
+.pc-part .box { flex: none; width: 16px; height: 16px; margin-top: 1px; border-radius: 4px; border: 1.5px solid color-mix(in srgb, var(--k) 70%, var(--ink-faint)); display: grid; place-items: center; transition: background .2s; }
+.pc-part.ok .box { background: var(--k); border-color: var(--k); }
+.pc-part.ok .box::after { content: ""; width: 7px; height: 4px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px, -1px); }
+.pc-txt { display: grid; min-width: 0; }
+.pc-txt strong { font-size: 12.5px; font-weight: 600; }
+.pc-txt small { font-size: 11px; color: var(--ink-faint); line-height: 1.35; }
+.pc-tip { padding: 0 2px; }
+.tip.pc-tip .eg { margin-top: 6px; font-family: var(--font-sans); font-size: 12px; color: var(--ink); background: color-mix(in srgb, var(--k, var(--accent)) 12%, transparent); box-shadow: inset 2px 0 0 var(--k, var(--accent)); }
+.pc-keep { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-soft); width: fit-content; padding: 3px 8px 3px 4px; border-radius: 8px; cursor: pointer; }
+.pc-keep input { accent-color: var(--accent); margin: 0; }
+.pc-keep.pc-ask { color: var(--ink); animation: nudge 1.4s ease-in-out 2; }
 
 /* ---------- B · Cloud sentence builder ---------- */
 .pv-cloud { position: absolute; inset: 0; background: linear-gradient(180deg, var(--sky-top), var(--sky-bottom)); }
@@ -275,14 +312,14 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
   .coach-grid .coach { display: grid; grid-template-columns: 1fr; }
 }
 @container (max-width: 640px) {
-  .starters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .starter { min-height: 0; }
+  .pc-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hello .hi, .hello .sub { font-size: 24px; }
   .sentence { font-size: 18px; }
   .slot select, .slot input { font-size: 16px; }
 }
 @container (max-width: 480px) {
   .opts { grid-template-columns: 1fr; }
+  .chip-folder { display: none; }
 }
 @media (max-width: 860px) {
   .notes { grid-template-columns: 1fr; }
@@ -307,7 +344,7 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
 
   <div class="toolbar">
     <div class="tabs" role="tablist" aria-label="Prototype">
-      <button class="tab" role="tab" id="tab-prism" data-p="prism"><b>A</b>Prism starters</button>
+      <button class="tab" role="tab" id="tab-prism" data-p="prism"><b>A</b>Prism + coach</button>
       <button class="tab" role="tab" id="tab-cloud" data-p="cloud"><b>B</b>Sentence builder</button>
       <button class="tab" role="tab" id="tab-coach" data-p="coach"><b>C</b>Prompt coach</button>
       <button class="tab" role="tab" id="tab-guide" data-p="guide"><b>D</b>Guided steps</button>
@@ -332,15 +369,15 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
       <table>
         <thead><tr><th>Prototype</th><th>Teaches prompting</th><th>Time to first send</th><th>Friction for experts</th><th>Build effort</th><th>Render cost</th><th>Best used as</th></tr></thead>
         <tbody>
-          <tr><td>A · Prism starters</td><td><span class="lvl">●●<s>●●</s></span> by example</td><td>~5 s (pick a card, fill one blank)</td><td>None. It is a normal composer</td><td><span class="lvl">●<s>●●●</s></span> S</td><td>Medium (blur over moving orbs)</td><td>The default clean-start look for everyone</td></tr>
+          <tr><td>A · Prism + coach</td><td><span class="lvl">●●●<s>●</s></span> highlights your own words</td><td>~5 s (type, or pick a starter)</td><td>Low. The coach starts as one closed line</td><td><span class="lvl">●●<s>●●</s></span> S–M</td><td>Medium (blur over moving orbs)</td><td>The default clean-start look for everyone</td></tr>
           <tr><td>B · Sentence builder</td><td><span class="lvl">●●●<s>●</s></span> structure</td><td>~10 s</td><td>High. Experts will hit “Write it myself”</td><td><span class="lvl">●●●<s>●</s></span> M</td><td>Low</td><td>An opt-in “Help me write it” view</td></tr>
-          <tr><td>C · Prompt coach</td><td><span class="lvl">●●●●</span> live feedback</td><td>~20 s, but the prompt is better</td><td>Low if collapsible</td><td><span class="lvl">●●<s>●●</s></span> S–M</td><td>Low (heuristics run on the deferred draft)</td><td>A layer on top of A, on while Beginner mode is on</td></tr>
+          <tr><td>C · Prompt coach (now part of A)</td><td><span class="lvl">●●●●</span> live feedback</td><td>~20 s, but the prompt is better</td><td>Low if collapsible</td><td><span class="lvl">●●<s>●●</s></span> S–M</td><td>Low (heuristics run on the deferred draft)</td><td>A layer on top of A, on while Beginner mode is on</td></tr>
           <tr><td>D · Guided steps</td><td><span class="lvl">●●●<s>●</s></span> by interview</td><td>~25 s (3 questions)</td><td>Very high</td><td><span class="lvl">●●●<s>●</s></span> M</td><td>Low</td><td>The first chat after onboarding, once</td></tr>
         </tbody>
       </table>
     </div>
     <h3>Recommendation</h3>
-    <p>Ship <b>A</b> as the clean-start shell for everyone, since it is a restyle of what is already there. Put <b>C</b>’s facet chips and coach under a <code>beginnerMode</code> setting that onboarding turns on and that switches itself off after a few good prompts. Use <b>D</b> once, for the very first chat after the onboarding wizard’s Done step. Keep <b>B</b> as a stretch goal: it teaches structure best but costs the most and gets in an expert’s way.</p>
+    <p>Ship <b>A</b> as the clean-start shell for everyone. The coach is built in, closed by default, and opens by default while a <code>beginnerMode</code> setting that onboarding turns on is set, or once the user ticks “Keep tips open”. Use <b>D</b> once, for the very first chat after the onboarding wizard’s Done step. Keep <b>B</b> as a stretch goal: it teaches structure best but costs the most and gets in an expert’s way. <b>C</b> is kept for comparison; its parts and tips now live in A’s tray.</p>
   </section>
 </div>
 
@@ -378,7 +415,7 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
     <div class="cbar">
       <button class="ib" type="button" aria-label="Add files, images or a skill" title="Add files, images or a skill">${I.plus}</button>
       <span class="chip" data-mode title="What Nekko may do without asking">${I.shield}<span>${esc(mode)}</span></span>
-      <span class="chip">${I.folder} my-app</span>
+      <span class="chip chip-folder">${I.folder} my-app</span>
       <span class="grow"></span>
       <span class="chip">Auto ${I.caret}</span>
       <button class="send" type="button" data-send aria-label="Send">${I.arrow}</button>
@@ -429,50 +466,149 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
   }
   const wireSend = (win, get) => $$('[data-send]', win).forEach((b) => b.addEventListener('click', () => send(win, get())));
 
-  /* ================= A · Prism starters ================= */
+  /* ================= A · Prism + coach ================= */
+  // Starters open a sentence and leave the cursor at its end; the user finishes it in their own words.
   const STARTERS = [
-    { k: 'explain', t: 'Explain this project', s: 'Get a tour of the code before you change it', c: 'var(--p1)', i: I.book,
-      p: 'Explain how this project is organized. Start with [the part you care about] and keep it simple, I am new to this codebase.' },
-    { k: 'fix', t: 'Fix something broken', s: 'Describe what you see and what you expected', c: 'var(--p5)', i: I.bug,
-      p: 'Something is broken: [what you see happen]. It should [what you expected]. Find the cause, fix it, and tell me what you changed.' },
-    { k: 'add', t: 'Add a small feature', s: 'Nekko shows a plan before it writes code', c: 'var(--p2)', i: I.wand,
-      p: 'Add [a small feature] to [which page or file]. Show me a short plan before you change anything.' },
-    { k: 'test', t: 'Write tests', s: 'Nekko runs them and reports back', c: 'var(--p3)', i: I.check,
-      p: 'Write tests for [a file or function]. Run them and tell me what passed and what failed.' },
+    { k: 'explain', t: 'Explain this project', c: 'var(--p1)', i: I.book, p: 'Explain how ' },
+    { k: 'fix', t: 'Fix something broken', c: 'var(--p5)', i: I.bug, p: 'Fix the bug where ' },
+    { k: 'add', t: 'Add a feature', c: 'var(--p2)', i: I.wand, p: 'Add a ' },
+    { k: 'test', t: 'Write tests', c: 'var(--p3)', i: I.check, p: 'Write tests for ' },
   ];
+  // The four parts of a good prompt, and the words in the user's own draft that show each one.
+  const PARTS = [
+    { k: 'goal', t: 'Goal', s: 'What should change', next: 'say what you want done', min: 3,
+      re: /\b(?:add|fix|make|build|explain|write|create|change|update|remove|delete|refactor|test|find|show|rename|move|clean up|improve|debug|implement|set up|help)\b/gi,
+      tip: '<strong>Start with what you want done.</strong> Begin with an action word like fix, add or explain.', eg: 'Add a dark mode switch' },
+    { k: 'where', t: 'Where', s: 'The page, file or folder', next: 'say where it happens',
+      re: /@[\w./-]+|\b[\w-]+\.(?:tsx?|jsx?|py|css|md|json|html|rs|go|swift)\b|\b(?:page|screen|file|folder|component|function|button|form|menu|api|endpoint|settings|header|footer|sidebar|modal|dialog|database|navbar|login)s?\b/gi,
+      tip: '<strong>Say where it happens.</strong> Name the page or file, or type <span class="kbd">@</span> to pick one, so Nekko doesn’t have to hunt for it.', eg: '…on the settings page (@src/pages/Settings.tsx)' },
+    { k: 'done', t: 'Done when', s: 'How you’ll know it worked', next: 'say how you’ll know it worked',
+      re: /\b(?:done when|so that|should|until|make sure|expect(?:ed)?|passes|remembers?|it'?s done)\b/gi,
+      tip: '<strong>Describe “done”.</strong> Say how you’ll check that it worked. Nekko keeps going until that’s true.', eg: 'It should save my changes and show “Saved”.' },
+    { k: 'limits', t: 'Limits', s: 'Anything to avoid', next: 'add a limit',
+      re: /\b(?:don'?t|do not|without|only|keep|avoid|never|ask (?:me )?(?:first|before)|no new)\b/gi,
+      tip: '<strong>Add a limit.</strong> Anything Nekko should avoid or leave alone.', eg: 'Don’t add new libraries.' },
+  ];
+  /** Non-overlapping keyword matches, earliest first; at a tie the longer match wins. */
+  function partSpans(text) {
+    const all = [];
+    for (const p of PARTS) for (const m of text.matchAll(p.re)) all.push({ s: m.index, e: m.index + m[0].length, k: p.k });
+    all.sort((a, b) => a.s - b.s || b.e - a.e);
+    const out = []; let end = 0;
+    for (const x of all) if (x.s >= end) { out.push(x); end = x.e; }
+    return out;
+  }
+  function partsFound(text, spans) {
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+    return Object.fromEntries(PARTS.map((p) => [p.k, spans.some((x) => x.k === p.k) && words >= (p.min || 1)]));
+  }
+  /** A textarea whose matching keywords are tinted by part, via a mirror behind it. */
+  function keywordField(win, { placeholder, onInput }) {
+    const el = h(`<div class="field"><div class="mirror" aria-hidden="true"></div><textarea rows="2" aria-label="Message Nekko"></textarea></div>`);
+    const ta = $('textarea', el), mirror = $('.mirror', el);
+    ta.placeholder = placeholder;
+    const sync = () => {
+      const v = ta.value, spans = partSpans(v);
+      let html = '', i = 0;
+      for (const x of spans) { html += esc(v.slice(i, x.s)) + `<mark class="k-${x.k}">${esc(v.slice(x.s, x.e))}</mark>`; i = x.e; }
+      mirror.innerHTML = html + esc(v.slice(i)) + '​';
+      ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px';
+      onInput(v, partsFound(v, spans));
+    };
+    ta.addEventListener('input', sync);
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(win, ta.value); } });
+    return { el, ta, sync, set(v) { ta.value = v; sync(); ta.focus({ preventScroll: true }); ta.setSelectionRange(v.length, v.length); } };
+  }
+  /** The coach tray under the prompt: a one-line summary until opened, then the four parts and a tip. */
+  function promptCoach(win) {
+    const keepKey = 'bc.coachKeep';
+    const el = h(`<section class="glass pcoach" aria-label="Prompt coach">
+      <button type="button" class="pc-bar" aria-expanded="false" aria-controls="pc-${win.id}">
+        <span class="pc-segs" aria-hidden="true">${PARTS.map((p) => `<i class="k-${p.k}"></i>`).join('')}</span>
+        <span class="pc-sum"></span>
+        <span class="pc-show"><span>Show tips</span>${I.caret}</span>
+      </button>
+      <div class="pc-body" id="pc-${win.id}" hidden>
+        <p class="pc-intro"><b>A good prompt has four parts.</b> As you type, Nekko highlights the words that cover each one.</p>
+        <div class="pc-parts" role="group" aria-label="Parts of a good prompt">${PARTS.map((p) => `
+          <button type="button" class="pc-part k-${p.k}" data-k="${p.k}" aria-pressed="false" title="Show the tip for ${p.t}">
+            <span class="box" aria-hidden="true"></span><span class="pc-txt"><strong>${p.t}</strong><small>${p.s}</small></span>
+          </button>`).join('')}</div>
+        <div class="tip pc-tip" aria-live="polite"></div>
+        <label class="pc-keep"><input type="checkbox" id="keep-${win.id}"> Keep tips open while I’m learning</label>
+      </div></section>`);
+    const bar = $('.pc-bar', el), body = $('.pc-body', el), sum = $('.pc-sum', el), tipEl = $('.pc-tip', el);
+    const keep = $('input', el), keepLabel = $('.pc-keep', el);
+    let found = {}, text = '', picked = null, nudgeTimer = 0, opened = false;
+    const setOpen = (open) => {
+      body.hidden = !open; bar.setAttribute('aria-expanded', String(open));
+      $('.pc-show span', el).textContent = open ? 'Hide tips' : 'Show tips';
+      if (open) { opened = true; bar.classList.remove('nudge'); }
+    };
+    const paint = () => {
+      const n = PARTS.filter((p) => found[p.k]).length, next = PARTS.find((p) => !found[p.k]);
+      $$('.pc-segs i', el).forEach((s, i) => s.classList.toggle('ok', !!found[PARTS[i].k]));
+      sum.innerHTML = !text.trim() ? '<b>Prompt tips</b> · A good prompt has four parts'
+        : n === 4 ? '<b class="done">All four parts.</b> Ready to send.'
+        : `<b>${n} of 4 parts</b> · Next, ${next.next}`;
+      $$('.pc-part', el).forEach((b) => {
+        const k = b.dataset.k;
+        b.classList.toggle('ok', !!found[k]);
+        b.setAttribute('aria-label', `${PARTS.find((p) => p.k === k).t}: ${found[k] ? 'found in your prompt' : 'missing'}`);
+      });
+      const show = PARTS.find((p) => p.k === picked) || next;
+      $$('.pc-part', el).forEach((b) => b.setAttribute('aria-pressed', String(!!show && b.dataset.k === show.k)));
+      tipEl.className = `tip pc-tip ${show ? 'k-' + show.k : ''}`;
+      tipEl.innerHTML = show ? `${show.tip}<span class="eg">${show.eg}</span>` : '<strong>That’s a clear prompt.</strong> Press <span class="kbd">Enter</span> to send it. Nekko will check with you if anything is unclear.';
+    };
+    bar.addEventListener('click', () => setOpen(body.hidden));
+    $$('.pc-part', el).forEach((b) => b.addEventListener('click', () => { picked = picked === b.dataset.k ? null : b.dataset.k; paint(); }));
+    keep.addEventListener('change', () => { store.set(keepKey, keep.checked ? '1' : '0'); keepLabel.classList.remove('pc-ask'); });
+    keep.checked = store.get(keepKey) === '1';
+    setOpen(keep.checked); opened = false;
+    return {
+      el,
+      update(v, f) {
+        const gained = PARTS.some((p) => f[p.k] && !found[p.k]);
+        text = v; found = f;
+        if (picked && found[picked]) picked = null;
+        paint();
+        // Nudge: a pause with parts still missing pulses "Show tips" (until it has been opened once);
+        // a part gained while the tips are open invites the user to keep them open.
+        clearTimeout(nudgeTimer); bar.classList.remove('nudge');
+        if (!opened && body.hidden && v.trim() && PARTS.some((p) => !f[p.k])) nudgeTimer = setTimeout(() => bar.classList.add('nudge'), 1500);
+        if (gained && !body.hidden && !keep.checked) keepLabel.classList.add('pc-ask');
+      },
+    };
+  }
   function renderPrism(win, body) {
     body.innerHTML = `
       <div class="pv-prism">
         <div class="aura" aria-hidden="true"><i class="o1"></i><i class="o2"></i><i class="o3"></i><i class="o4"></i></div>
         <div class="center">
           <div class="hello"><div class="hi"><span class="grad">Hi Philip,</span></div><div class="sub">what should we build first?</div></div>
-          <div class="glass prism-edge composer" data-slot></div>
-          <div class="starters">${STARTERS.map((s) => `
-            <button type="button" class="starter" data-k="${s.k}" aria-pressed="false">
-              <span class="ic" style="background:${s.c}">${s.i}</span><strong>${s.t}</strong><span>${s.s}</span>
-            </button>`).join('')}</div>
-          <div class="foot">Nekko works in <b>~/projects/my-app</b> and asks before anything risky. Not sure? Pick a card, then fill in the highlighted blanks.</div>
+          <div class="stack"><div class="glass prism-edge composer" data-slot></div><div data-coach></div></div>
+          <div class="starters" role="group" aria-label="Start from">${STARTERS.map((s) => `
+            <button type="button" class="starter" data-k="${s.k}"><span class="ic" style="background:${s.c}">${s.i}</span>${s.t}</button>`).join('')}</div>
+          <div class="foot">Nekko works in <b>~/projects/my-app</b> and asks before anything risky.</div>
         </div>
       </div>`;
-    const slot = $('[data-slot]', body);
     const hint = h(`<div class="hintline"></div>`);
-    const f = blankField(win, {
+    const coach = promptCoach(win);
+    const f = keywordField(win, {
       placeholder: 'Tell Nekko what you want to do, in your own words…',
-      onInput: (v) => {
-        BLANK.lastIndex = 0;
-        const n = (v.match(BLANK) || []).length;
-        hint.innerHTML = n ? `${I.spark.replace('<svg', '<svg width="11" height="11" style="color:var(--accent)"')} ${n} blank${n > 1 ? 's' : ''} to fill · <span class="kbd">Tab</span> jumps to the next one` : v ? '<span class="kbd">Enter</span> to send · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> for a new line' : '';
+      onInput: (v, found) => {
+        hint.innerHTML = v.trim() ? '<span class="kbd">Enter</span> to send · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> for a new line' : 'Plain words are fine. Or start from one of the ideas below.';
+        coach.update(v, found);
       },
     });
-    slot.append(f.el, hint, h(cbar()));
-    $$('.starter', body).forEach((b) => b.addEventListener('click', () => {
-      $$('.starter', body).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-      f.set(STARTERS.find((s) => s.k === b.dataset.k).p);
-    }));
+    $('[data-slot]', body).append(f.el, hint, h(cbar()));
+    $('[data-coach]', body).replaceWith(coach.el);
+    $$('.starter', body).forEach((b) => b.addEventListener('click', () => f.set(STARTERS.find((s) => s.k === b.dataset.k).p)));
     wireSend(win, () => f.ta.value);
-    // Open in a realistic working state: the "Fix" card picked, nothing typed into its blanks yet.
-    $('.starter[data-k="fix"]', body).setAttribute('aria-pressed', 'true');
-    f.ta.value = STARTERS[1].p; requestAnimationFrame(() => f.ta.dispatchEvent(new Event('input')));
+    // Open in a realistic working state: a first draft that covers Goal and Where.
+    f.ta.value = 'Fix the Save button on the settings page. Nothing happens when I click it.';
+    requestAnimationFrame(f.sync);
   }
 
   /* ================= B · Sentence builder ================= */
@@ -692,20 +828,23 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
 
   /* ================= shell ================= */
   const PROTOS = {
-    prism: { render: renderPrism, name: 'A · Prism starters',
-      idea: 'The closest to Gemini: a greeting in prism gradient type, a frosted composer floating over slow colored light, and four starter cards. A card drops a template into the box with its blanks highlighted, and Tab moves between blanks.',
-      why: ['A beginner never faces an empty box: the blanks show what a good prompt contains.', 'It is still a normal composer, so nobody has to learn a second UI or leave it.', 'Fill-in-the-blank teaches the shape of a prompt (what, where, what done looks like) without a lecture.'],
-      pros: ['Smallest change: a restyle of the existing <code>.clean-start</code> branch plus a starter list', 'Works for experts as well, who just type', 'Starters can be per project (read from AGENTS.md or recent chats)'],
-      cons: ['Blur over moving color repaints every frame. Pause it when the window is hidden or not focused, and on low-power machines', 'Templates can feel canned after the third use; rotate or learn them', 'The mirror highlight needs the textarea and mirror to share exact metrics'],
-      impl: `// ChatPane.tsx, inside {cleanStart && …}
-<CleanStartAura paused={!windowVisible} />        // transform-only orbs
-<CleanStartGreeting name={profile.firstName} />
-<BlankAwareTextarea value={draft} onChange={setDraft}
-  onTab={selectNextBlank} />                      // [blank] mirror
-<StarterCards items={starters(project)} onPick={t => setDraft(t)} />
+    prism: { render: renderPrism, name: 'A · Prism + coach',
+      idea: 'The closest to Gemini: a greeting in prism gradient type and a frosted composer floating over slow colored light. A coach tray sits right under the prompt. Closed, it is one line: four colored segments and the next thing to add. Open, it explains that a good prompt has four parts, ticks off each part it finds, and shows a tip with an example. As the user types, the words that cover each part are tinted in that part’s color, so the coach and the user’s own words use the same colors.',
+      why: ['Feedback is about the words the user wrote, not a template they have to rewrite.', 'Color links each highlighted word to the part it covers, so the four parts are learned by seeing them.', 'Starters only open a sentence, so the user always finishes it in their own words.'],
+      pros: ['Still a normal composer, so experts just type and ignore the one-line tray', 'Closed by default, so it costs one line of height. It pulses “Show tips” once after a pause, and offers “Keep tips open” after it has helped', 'Cheap: pure regex on <code>deferredDraft</code>, which ChatPane already computes'],
+      cons: ['Keyword matching will misjudge some prompts (“should” counts as Done when even in “should I…?”)', 'Blur over moving color repaints every frame. Pause it when the window is hidden or not focused', 'The mirror highlight needs the textarea and mirror to share exact metrics, and keyword lists need translating for Japanese'],
+      impl: `// pure + unit-testable, next to composerSkills.ts
+export const PROMPT_PARTS: PromptPart[];          // goal · where · done · limits
+export function partSpans(text: string): Span[];  // non-overlapping matches
+export function partsFound(text: string, spans: Span[]): Record<PartKey, boolean>;
 
-// styles.css: one new token set, reused by B–D
---glass, --glass-edge, --glass-shadow, --p1…--p5` },
+// ChatPane.tsx, inside {cleanStart && …}
+const spans = useMemo(() => partSpans(deferredDraft), [deferredDraft]);
+<CleanStartAura paused={!windowVisible} />          // transform-only orbs
+<KeywordMirror text={draft} spans={spans} />        // behind the textarea
+<PromptCoach found={partsFound(deferredDraft, spans)}
+  keepOpen={settings.beginner?.keepCoachOpen} />     // persisted, not localStorage
+<StarterChips onPick={(s) => setDraft(s)} />` },
     cloud: { render: renderCloud, name: 'B · Sentence builder',
       idea: 'The prompt is one sentence with editable parts: an action, the thing, where it is, and what to do when finished. Add-ons attach common extras (an error message, plan first, ask before editing). The exact text Nekko will read stays visible below, so the user learns the sentence pattern by watching it.',
       why: ['It is impossible to write a vague prompt: every slot is something the agent needs.', 'The add-ons turn hidden settings (mode, plan first) into plain language.', 'The live preview teaches the pattern well enough that users graduate to free text.'],
