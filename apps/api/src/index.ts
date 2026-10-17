@@ -9,8 +9,7 @@ if (!url) {
 }
 
 const db = createPgDb(url);
-// Render's free plan has no pre-deploy step, so migrations run on start; they
-// are idempotent and take an advisory lock.
+// Migrations run on every start; they are idempotent and take an advisory lock.
 const applied = await migrate(db);
 if (applied.length) console.log(`migrations applied: ${applied.join(", ")}`);
 
