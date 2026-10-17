@@ -11,11 +11,19 @@ owner:
 See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17.md).
 
 - [x] ✅ 2026-10-17 `packages/shared` and `apps/cli` Vitest configs exclude `dist/` (tsc compiles tests there; 358 tests ran twice). `QuestionCard.test.ts` merged into `QuestionCard.test.tsx`. 108 one-off PR evidence harness files deleted (no npm script, workflow, doc, open PR or kept file referenced them); git history keeps them.
-- [ ] Playwright-Electron end-to-end suite: one fixture host, journeys instead of per-feature triads, run in the `capture` job (prototype: sidebar and finder).
+- [x] ✅ 2026-10-17 Playwright-Electron end-to-end suite with the sidebar and chat-finder journeys (see the section below).
 - [ ] Port the remaining wired and documented harnesses into journeys, then delete the triads.
 - [ ] Rewrite the 38 source-text tests (`readFileSync('ChatPane.tsx')` + `toContain`) as rendered assertions or journey steps.
 - [ ] Speed: fake timers in `core/loop-retry` and `host/hooks`, a shared git fixture in `chat-worktrees`, one root Vitest workspace, a shared CI build artifact.
 - [ ] Split `crates/nekkod/tests/daemon.rs` by domain with event waits instead of sleeps; promote 4 `itest-*.mjs` to a main-only job.
+
+## Desktop end-to-end journeys, Playwright-Electron (added 2026-10-17)
+
+See [apps/desktop/e2e/README.md](apps/desktop/e2e/README.md) and [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17.md).
+
+- [x] ✅ 2026-10-17 `apps/desktop/e2e/`: `@playwright/test` `_electron` over one fixture bundle (`fixture-app.tsx`, `?scenario=`) built once per run, a hidden non-focusable off-screen window with a scratch profile and non-local requests cancelled (`electron-main.cjs`), and `scenarioTest()` (one Electron per spec, `resize`, `shot`, a never-took-focus assertion, process-tree and profile cleanup). Journeys: `sidebar.e2e.ts` (4 theme × width runs, ported from `agent-sidebar-sandbox.cjs`) and `chat-finder.e2e.ts` (ported from the chat-finder triad, which is deleted). `npm run test:e2e -w @nekko-agent/desktop`; the CI `capture` job runs it in place of `agent-sidebar-integration.cjs`, which now only launches the repo-actions sandbox (`test:repo-actions`).
+- [ ] Port the remaining harnesses into journeys: wall (wall-controls, grid-bugs, pane-motion, panel-grips, focus-transitions, rail-swoop), composer, transcript (transcript-scroll, chat-search, chat-switch), plan and mode, pages (fresh-pages), agents and PRs (subagent, command-center, pr-divider, watch-rows), native (capture-smoke, notifications, tray).
+- [ ] Before/after against a base revision (the old `NEKKO_TEST_REVISION`) for PR evidence; `toHaveScreenshot` baselines per OS and theme.
 
 ## Per-step plan working icons (2026-10-17)
 
