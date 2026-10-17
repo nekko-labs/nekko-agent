@@ -115,7 +115,9 @@ final class LiveRelayTests: XCTestCase {
         message.tap()
         message.typeText("a slow one please")
         app.buttons["Send"].tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word2")).firstMatch.waitForExistence(timeout: 20))
+        // A slow simulator can take 15 s just to deliver the tap; the reply itself starts within seconds.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word2")).firstMatch.waitForExistence(timeout: 45),
+                      "the slow reply never started streaming")
         XCUIDevice.shared.press(.home)
         sleep(3)
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
