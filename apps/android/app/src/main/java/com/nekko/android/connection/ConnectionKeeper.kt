@@ -10,6 +10,7 @@ import com.nekko.android.chat.PhoneEvent
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.lock.AppLock
+import com.nekko.protocol.AgentEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,7 +51,7 @@ class ConnectionKeeper(
         scope.launch {
             repo.events.collect { e ->
                 lastEventAt.value = now()
-                onEvent(e.sessionId, PhoneEvent.of(e) ?: return@collect)
+                onEvent(e.sessionId, PhoneEvent.of(e) ?: return@collect, (e as? AgentEvent.ApprovalRequired)?.approval?.call?.id)
             }
         }
         // A minute tick so a run that went silent stops the service after IDLE_LIMIT_MS.
@@ -77,7 +78,7 @@ class ConnectionKeeper(
         if (!visible && _status.value != null) startService()
     }
 
-    private fun onEvent(sessionId: String, event: PhoneEvent) {
+    private fun onEvent(sessionId: String, event: PhoneEvent, callId: String?) {
         // In the app the chat itself shows it (and A6's haptics react).
         if (foreground.value || !prefs.get(Notices.ENABLED)) return
         val s = repo.state.value
@@ -90,6 +91,7 @@ class ConnectionKeeper(
                 chatTitle = chat.title,
                 computer = s.active?.name ?: "your computer",
                 hideContent = lock.enabled.value,
+                callId = callId,
             ),
         )
     }

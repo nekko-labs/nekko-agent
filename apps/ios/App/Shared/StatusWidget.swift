@@ -34,6 +34,30 @@ struct StatusSnapshot: Codable, Equatable {
         return same != self
     }
 
+    /// The answer to "What needs me?" (Siri, Spotlight, Shortcuts): the same
+    /// counts as the widget, in a sentence, with their age once it matters.
+    func spoken(now: Date = Date()) -> String {
+        guard let computer else { return "No computer is paired with Nekko Agent yet." }
+        if at == .distantPast { return "Open Nekko Agent once so it can check \(computer)." }
+        let chats = { (n: Int) in n == 1 ? "1 chat" : "\(n) chats" }
+        var text: String
+        if needsYou > 0 {
+            text = "\(chats(needsYou)) \(needsYou == 1 ? "needs" : "need") you on \(computer)"
+            if running > 0 { text += ", and \(running) \(running == 1 ? "is" : "are") working" }
+            text += "."
+        } else if running > 0 {
+            text = "\(chats(running)) \(running == 1 ? "is" : "are") working on \(computer). Nothing needs you."
+        } else {
+            text = online ? "All quiet on \(computer)." : "\(computer) was offline when Nekko Agent last checked."
+        }
+        if now.timeIntervalSince(at) > 5 * 60 {
+            let f = RelativeDateTimeFormatter()
+            f.unitsStyle = .full
+            text += " As of \(f.localizedString(for: at, relativeTo: now))."
+        }
+        return text
+    }
+
     var headline: String {
         if computer == nil { return "Not paired" }
         if needsYou > 0 { return needsYou == 1 ? "1 needs you" : "\(needsYou) need you" }

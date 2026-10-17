@@ -2,6 +2,7 @@ package com.nekko.android
 
 import com.nekko.android.chat.ImageAttachments
 import com.nekko.android.chat.approvalDetail
+import com.nekko.android.ui.chat.safeLink
 import com.nekko.android.util.ago
 import com.nekko.android.util.plainText
 import com.nekko.protocol.Approval
@@ -33,6 +34,16 @@ class MiscTest {
         assertEquals(800 to 600, ImageAttachments.fit(800, 600))
         assertEquals(1600 to 1, ImageAttachments.fit(10000, 2))
         assertEquals("data:image/jpeg;base64,/9j/", ImageAttachments.dataUrl(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())))
+    }
+
+    @Test
+    fun `only web and mail links are tappable in replies`() {
+        assertTrue(safeLink("https://nekkoagent.com"))
+        assertTrue(safeLink("HTTP://192.168.1.2:3000"))
+        assertTrue(safeLink("mailto:hi@nekkolabs.com"))
+        for (url in listOf("intent://x#Intent;end", "file:///sdcard/a", "javascript:alert(1)", "content://x", "relative/path")) {
+            assertTrue(url, !safeLink(url))
+        }
     }
 
     @Test
