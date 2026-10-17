@@ -48,11 +48,13 @@ object Channels {
     const val APP_INFO = "app:info"
     /** The skills a chat on the computer can run: names and descriptions only, never templates. */
     const val SKILLS_RUNNABLE = "skills:runnable"
+    /** What the agent changed in a chat, as a capped read-only diff ([PhoneChanges]); refused unless the computer allows it. */
+    const val CHANGES_LIST = "changes:list"
 
     val ALL = listOf(
         SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
-        WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE,
+        WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST,
     )
 }
 
@@ -324,6 +326,8 @@ data class PcSettings(
     val known: Boolean = false,
     /** Nekko Voice switched on in the computer's Settings (`voice.enabled`). Read only here. */
     val voiceEnabled: Boolean = false,
+    /** The computer lets phones read a chat's changes (`phoneChanges`). Set on the computer only. */
+    val phoneChanges: Boolean = false,
 ) {
     enum class ChatMode(val wire: String) {
         ASK("ask"), GUARDRAILS("guardrails"), YOLO("yolo");
@@ -355,6 +359,7 @@ data class PcSettings(
                 chatPaneAction = ChatAction.of(o.str("chatPaneAction")),
                 skipDeleteConfirmation = (o["skipDeleteConfirmation"] as? JsonPrimitive)?.booleanOrNull,
                 voiceEnabled = o["voice"].obj()?.bool("enabled") == true,
+                phoneChanges = o.bool("phoneChanges"),
             )
         }
 
@@ -363,6 +368,88 @@ data class PcSettings(
             mode?.let { put("defaultChatMode", it.wire) }
             action?.let { put("chatPaneAction", it.wire) }
             skipConfirm?.let { put("skipDeleteConfirmation", it) }
+        }
+    }
+}
+
+/**
+ * One chat's changes as the computer shows them to a phone (`phoneChangesView`,
+ * packages/shared/src/phone-changes.ts): paths cut to their last two parts,
+ * secret files counted but never shown, big files summarised.
+ */
+data class PhoneChanges(val files: List<File>, val omittedFiles: Int = 0) {
+    enum class Kind { SAME, REMOVED, ADDED }
+
+    /** [number] is the line in the new file, or in the old one for a removed line. */
+    data class Line(val kind: Kind, val text: String, val number: Int)
+
+    data class Hunk(val oldStart: Int, val newStart: Int, val lines: List<Line>) {
+        companion object {
+            /** Lines as the computer sent them (`' '`, `'-'` or `'+'` first), numbered from the starts. */
+            fun of(oldStart: Int, newStart: Int, raw: List<String>): Hunk {
+                var o = oldStart
+                var n = newStart
+                val lines = raw.map { r ->
+                    val text = r.drop(1)
+                    when (r.firstOrNull()) {
+                        '-' -> Line(Kind.REMOVED, text, o++)
+                        '+' -> Line(Kind.ADDED, text, n++)
+                        else -> Line(Kind.SAME, text, n).also { o++; n++ }
+                    }
+                }
+                return Hunk(oldStart, newStart, lines)
+            }
+        }
+    }
+
+    sealed interface Shown {
+        data object Diff : Shown
+        data object Hidden : Shown
+        data object Binary : Shown
+        data class TooLarge(val lines: Int) : Shown
+    }
+
+    data class File(
+        val path: String,
+        val added: Boolean,
+        val linesAdded: Int,
+        val linesRemoved: Int,
+        val hunks: List<Hunk>,
+        val shown: Shown,
+    )
+
+    val linesAdded: Int get() = files.sumOf { it.linesAdded }
+    val linesRemoved: Int get() = files.sumOf { it.linesRemoved }
+
+    companion object {
+        fun from(e: JsonElement?): PhoneChanges {
+            val o = e.obj() ?: return PhoneChanges(emptyList())
+            val files = o["files"].arr()?.mapNotNull { el ->
+                val f = el.obj() ?: return@mapNotNull null
+                val path = f.str("path") ?: return@mapNotNull null
+                val shown = when {
+                    f.bool("hidden") -> Shown.Hidden
+                    f.bool("binary") -> Shown.Binary
+                    f.bool("tooLarge") -> Shown.TooLarge((f.long("lines") ?: 0).toInt())
+                    else -> Shown.Diff
+                }
+                val hunks = if (shown != Shown.Diff) emptyList() else f["hunks"].arr()?.mapNotNull { h ->
+                    val ho = h.obj() ?: return@mapNotNull null
+                    val os = ho.long("oldStart") ?: return@mapNotNull null
+                    val ns = ho.long("newStart") ?: return@mapNotNull null
+                    val raw = ho["lines"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList()
+                    Hunk.of(os.toInt(), ns.toInt(), raw)
+                } ?: emptyList()
+                File(
+                    path = path,
+                    added = f.str("status") == "added",
+                    linesAdded = (f.long("added") ?: 0).toInt(),
+                    linesRemoved = (f.long("removed") ?: 0).toInt(),
+                    hunks = hunks,
+                    shown = shown,
+                )
+            } ?: emptyList()
+            return PhoneChanges(files, (o.long("omittedFiles") ?: 0).toInt())
         }
     }
 }

@@ -12,6 +12,7 @@ struct ChatView: View {
     @Environment(\.palette) private var palette
     @State private var chat: ChatModel?
     @State private var showModels = false
+    @State private var showChanges = false
     @State private var renaming = false
     @State private var renameText = ""
     @State private var actionError: String?
@@ -145,6 +146,9 @@ struct ChatView: View {
                             }
                         }
                     } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
+                    if store.pcSettings.phoneChanges {
+                        Button { showChanges = true } label: { Label("Changes", systemImage: "plusminus") }
+                    }
                     Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                     Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     Button { Task { await chat.reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
@@ -156,6 +160,7 @@ struct ChatView: View {
                 act { try await chat.setOptions(providerId: p, modelId: m) }
             }
         }
+        .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
         .alert("Rename chat", isPresented: $renaming) {
             TextField("Title", text: $renameText)
             Button("Cancel", role: .cancel) {}

@@ -108,6 +108,11 @@ public final class ChatModel {
         }
     }
 
+    /// What the agent changed in this chat; the computer refuses unless it allows phones to see changes.
+    public func changes() async throws -> PhoneChanges {
+        PhoneChanges.from(try await store.remote().call(Channels.changesList, [.string(sessionId)]))
+    }
+
     public func loadSkills() async {
         guard let r = try? store.remote(), let raw = try? await r.call(Channels.skillsRunnable) else { return }
         skills = SkillSummary.list(raw)

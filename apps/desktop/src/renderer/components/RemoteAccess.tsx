@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { relayUrlProblem, type LocalRelayStatus, type PairingGrant, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
 import { Badge } from './primitives/index.js';
+import { Toggle } from './primitives/Toggle.js';
+import { useStore } from '../store.js';
 
 /**
  * Settings card for phone remote control: expose this machine over a relay,
@@ -187,6 +189,7 @@ export function RemoteAccess() {
             <Field label="Room" value={status.room!} mono />
           </div>
           <LocalRelayCard inUse={status.relayUrl} />
+          <PhoneChangesSwitch />
 
           {/* Paired devices */}
           <div>
@@ -412,6 +415,33 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
     <div className="flex items-center gap-2">
       <span className="text-ink-faint">{label}:</span>
       <span className={`truncate ${mono ? 'font-mono' : ''}`}>{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Whether paired phones may see the files the agent changed in a chat
+ * (`phoneChanges`, off unless set). Read only: a phone can never accept or
+ * revert changes, read other files or open terminals, and files that may hold
+ * secrets are counted, not shown.
+ */
+export function PhoneChangesSwitch() {
+  const on = useStore((s) => s.settings?.phoneChanges === true);
+  const set = (v: boolean) => {
+    void window.nekko.updateSettings({ phoneChanges: v })
+      .then(() => useStore.getState().refreshSettings())
+      .catch((e) => useStore.getState().pushToast('error', String(e)));
+  };
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium">Let phones see changes</div>
+        <p className="mt-0.5 text-[12px] text-ink-faint">
+          Paired phones can read the diff of files the agent changed in a chat. Read only: phones can’t accept or
+          revert changes, open other files or terminals. Secret files like .env and keys are hidden.
+        </p>
+      </div>
+      <Toggle value={on} onChange={set} label="Let phones see changes" />
     </div>
   );
 }

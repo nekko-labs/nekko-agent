@@ -18,6 +18,34 @@ class WireTest {
         for (ch in Channels.ALL + Events.AGENT_EVENT) assertTrue("missing $ch in ipc.ts", text.contains("'$ch'"))
     }
 
+    @Test fun `phone changes decode hunks, hidden, binary and too-large files`() {
+        val c = PhoneChanges.from(json("""
+            {"files":[
+              {"path":"…/src/main.ts","status":"modified","added":2,"removed":1,"hunks":[{"oldStart":2,"newStart":2,"lines":[" b","-e","+E","+j"," f"]}]},
+              {"path":"new.txt","status":"added","added":1,"removed":0,"hunks":[]},
+              {"path":".env","status":"modified","added":1,"removed":1,"hunks":[],"hidden":true},
+              {"path":"blob.bin","status":"modified","added":1,"removed":1,"hunks":[],"binary":true},
+              {"path":"big.txt","status":"modified","added":900,"removed":0,"hunks":[],"tooLarge":true,"lines":903},
+              {"status":"added"}
+            ],"omittedFiles":3}
+        """))
+        assertEquals(listOf("…/src/main.ts", "new.txt", ".env", "blob.bin", "big.txt"), c.files.map { it.path })
+        assertEquals(3, c.omittedFiles)
+        assertEquals(905, c.linesAdded)
+        assertTrue(c.files[1].added)
+        assertEquals(
+            listOf(PhoneChanges.Shown.Diff, PhoneChanges.Shown.Diff, PhoneChanges.Shown.Hidden, PhoneChanges.Shown.Binary, PhoneChanges.Shown.TooLarge(903)),
+            c.files.map { it.shown },
+        )
+        val lines = c.files[0].hunks[0].lines
+        assertEquals(listOf(PhoneChanges.Kind.SAME, PhoneChanges.Kind.REMOVED, PhoneChanges.Kind.ADDED, PhoneChanges.Kind.ADDED, PhoneChanges.Kind.SAME), lines.map { it.kind })
+        assertEquals(listOf(2, 3, 3, 4, 5), lines.map { it.number })
+        assertEquals("E", lines[2].text)
+        assertEquals(PhoneChanges(emptyList()), PhoneChanges.from(null))
+        assertTrue(PcSettings.from(json("""{"phoneChanges":true}""")).phoneChanges)
+        assertFalse(PcSettings.from(json("""{"phoneChanges":"yes"}""")).phoneChanges)
+    }
+
     @Test fun `providers drop secrets and keep only public fields`() {
         val list = PublicProvider.list(json("""[{"id":"fake","kind":"openai-compat","label":"Fake","baseUrl":"http://x","apiKey":"sk-secret","enabled":true},{"nope":1}]"""))
         assertEquals(listOf(PublicProvider("fake", "openai-compat", "Fake", true)), list)

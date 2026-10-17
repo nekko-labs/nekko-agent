@@ -1,6 +1,14 @@
 # Proposal: read-only "Changes" on the phones
 
-Status: **awaiting the owner's decision** (2026-10-16). Nothing here is built. Today the computer refuses all of these channels to phones.
+Status: **built, off by default** (2026-10-17, TASKS IO-9). It was built while the owner was away, so it still needs the owner's sign-off before the switch is turned on anywhere. What shipped differs from the proposal below in these ways:
+
+- It reuses **`changes:list`** with a projection (`phoneChangesView` in `packages/shared/src/phone-changes.ts`, `phone_changes.rs` in the daemon), not a new `changes:phoneView` channel. The phone never receives whole file contents, only the capped hunks.
+- Paths are the **last two segments** (`…/src/app.ts`) rather than relative to the workspace, since a change records only the absolute path.
+- It's off unless **Settings → Remote access → Let phones see changes** is on (`phoneChanges`, which a phone can't set). With it off, the computer refuses the call.
+- The phone learns the switch from `settings:get` (`phoneChanges`), not `app:info`.
+- Any chat id is accepted, as `session:get` already accepts any. Restricting it to the chats `sessions:summaries` lists is not built.
+
+Both phone screens are built: a Changes sheet from the chat's More menu on iOS, and a Changes button in the chat's top bar on Android. Each appears only when the computer allows it. The decisions below are taken as proposed, except that only `changes:accept`, `changes:acceptAll`, `file:read` and `dir:list` were added to `PHONE_ALWAYS_DENIED`. File writes and terminals were already there.
 
 ## Why
 
