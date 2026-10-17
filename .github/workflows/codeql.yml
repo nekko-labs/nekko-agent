@@ -30,25 +30,19 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.language == 'swift' && 'macos-latest' || 'ubuntu-latest' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         # Swift (macOS) only on the schedule, by hand, or with `ci:macos` on a PR.
         language: ${{ fromJSON(((github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) || github.event_name == 'merge_group') && '["actions","javascript-typescript","python","rust"]' || '["actions","javascript-typescript","python","rust","swift"]') }}
-        include:
-          - { language: actions, os: ubuntu-latest, build-mode: none }
-          - { language: javascript-typescript, os: ubuntu-latest, build-mode: none }
-          - { language: python, os: ubuntu-latest, build-mode: none }
-          - { language: rust, os: ubuntu-latest, build-mode: none }
-          - { language: swift, os: macos-latest, build-mode: manual }
     steps:
       - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
+          build-mode: ${{ matrix.language == 'swift' && 'manual' || 'none' }}
       - name: Build the Swift protocol package
         if: matrix.language == 'swift'
         working-directory: apps/ios/Protocol
