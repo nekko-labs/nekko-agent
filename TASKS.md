@@ -1856,3 +1856,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] `models:listStatus` (`{ models, error? }`) in shared, TS host, `nekkod`, preload and web client; `models:list` unchanged. Tests: `models-list-status.test.ts`, `nekkod` providers test (401 case).
 - [x] Provider card shows the error or "<name> didn't answer at <url>" with Retry; filter past eight models (`modelListProblem.ts`); no repeat of an error the failed connection test already shows.
 - [x] Checked in the desktop app (macOS, isolated data folder): Ollama 0.40.4 stopped → "didn't answer" → Retry after start → empty → model listed; OpenAI refused key; OpenRouter at `https://openrouter.ai/v1` (HTML 200: Connected, list fails) and at `/api/v1` (filter on ~300 models).
+
+### Approval/subagent navigation regression
+- [x] Reproduce unrelated-result approval disappearance in isolated real ChatPane; scope clearing to matching call ID.
+- [x] Add accessible sibling Open controls for observed unambiguous child delegations.
+- [ ] Inspect matching 1200/390 light/dark before/after pixels and publish evidence before landing.
+- [ ] Follow-up: stable persisted spawn-call/child association for navigation after renderer restart (current live association intentionally does not guess).
