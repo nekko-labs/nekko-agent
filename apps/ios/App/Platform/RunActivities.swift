@@ -7,10 +7,11 @@ import NekkoProtocol
 /// computer's events. Updates are throttled (ActivityKit budgets them) except
 /// for state changes the user must see at once: an approval, a question, the end.
 ///
-/// Limitation: iOS suspends the app shortly after it leaves the screen, and the
-/// relay connection with it, so updates stop until the app runs again. Keeping
-/// them current while suspended needs ActivityKit push updates sent by the relay
-/// (APNs `liveactivity` pushes), which is not built yet (see TASKS.md).
+/// iOS suspends the app shortly after it leaves the screen, and the relay
+/// connection with it. While suspended, the relay keeps each activity current
+/// with ActivityKit push updates (APNs `liveactivity`): the push token is
+/// registered with the relay (`register-activity`), and the computer sends the relay
+/// content-free phase changes (IO-6). Delivery needs the APNs key on the relay.
 @MainActor
 final class RunActivities {
     private var activities: [String: ActivityKit.Activity<AgentRunAttributes>] = [:]
