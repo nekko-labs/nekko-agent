@@ -20,7 +20,7 @@
  * buttons land on the wordmark's line rather than floating above or below it.
  */
 // The native caption buttons keep this 38px band. The app's strip is taller
-// (58px in styles.css) for breathing room, and its trailing toolbar sits on
+// (46px in styles.css, mark centred at 29px) for breathing room, and its trailing toolbar sits on
 // this band's bottom edge so it lines up with the buttons.
 export const TITLEBAR_HEIGHT = 38;
 
