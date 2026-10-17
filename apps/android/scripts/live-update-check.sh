@@ -16,10 +16,14 @@ done
 # …and until the user's credential-encrypted storage is unlocked, or the app's
 # first SharedPreferences read crashes it.
 adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
-for _ in $(seq 1 90); do
-  [ "$(adb shell getprop sys.user.0.ce_available | tr -d '\r')" = "true" ] && break
+unlocked=no
+for _ in $(seq 1 120); do
+  if adb shell am get-started-user-state 0 2>/dev/null | grep -q RUNNING_UNLOCKED; then unlocked=yes; break; fi
+  adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
   sleep 2
 done
+echo "user 0 unlocked: $unlocked ($(adb shell am get-started-user-state 0 2>&1 | tr -d '\r'))"
+
 install() {
   for attempt in 1 2 3 4 5; do
     adb install -r -t "$1" && return 0
