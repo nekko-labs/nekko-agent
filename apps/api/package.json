@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Nekko Agent public API on Render: beta signups now, accounts later. Postgres on Neon.",
+  "description": "Nekko Agent public API on Fly.io: beta signups now, accounts later. Postgres on Neon.",
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
