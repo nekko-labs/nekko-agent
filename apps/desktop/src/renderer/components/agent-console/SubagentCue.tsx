@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import { BranchIcon, RobotIcon } from '../../icons.js';
+import { useStore } from '../../store.js';
 import type { SessionSummary, ToolCall, ToolResult } from '@nekko-agent/shared';
 import { getLiveRun, useLiveRunsVersion } from '../../liveRuns.js';
 import { activitySentence, compactSentence, delegationActivity, delegationChild } from '../../subagentActivity.js';
@@ -24,6 +25,17 @@ export function SubagentHeadline({ call, result }: { call: ToolCall; result?: To
   const summary = useSubagentSummary(call, result);
   return <span className="min-w-0 truncate" title={summary}>{summary}</span>;
 }
+/** A sibling of the details toggle, never an interactive element inside it. */
+export function SubagentOpenButton({ call }: { call: ToolCall }) {
+  const children = useContext(SubagentParentContext);
+  const child = delegationChild(call, children);
+  if (!child) return null;
+  return <button type="button" className="shrink-0 rounded px-1.5 text-[11px] text-accent hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-(--ring)" aria-label={`Open subagent: ${child.title}`} title={`Open ${child.title}`} onClick={() => {
+    const store = useStore.getState();
+    store.openChatPane(child.id);
+  }}>Open ↗</button>;
+}
+
 export function subagentTitle(call: ToolCall): string {
   return typeof call.input.title === 'string' && call.input.title.trim() ? compactSentence(call.input.title) : 'Subagent';
 }

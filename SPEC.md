@@ -1734,3 +1734,7 @@ User intent: the search should wait 1000 ms after typing (was 1.5 s); search not
 - **Responsive** `[implemented; sandbox verified at 360 px]`: the popup is at most 420 px wide, shrinks to the window, and caps its height to the space below the button.
 
 Not verified: the find-in-chat landing inside the full desktop app (sandbox checks the seed only), packaged app, very large histories (thousands of chats / very long transcripts) for first-search read time and memory.
+
+## Approval retention and delegation navigation
+
+Implemented: a tool result clears only its matching pending chat approval; unrelated results no longer hide a waiting request. The existing transcript/full approval surface and composer-only exclusion remain unchanged. Observed, unambiguously associated subagents have a separate keyboard-accessible Open control beside the details toggle in activity groups and tool cards; it uses the existing workspace pane opener without rearranging existing panes. Ambiguous or unobserved delegation associations deliberately have no link. Focused tests and hidden isolated full-ChatPane fixtures verify event retention, hydration and store navigation. Open remains within the narrow viewport beside a shrinkable details toggle. Parent review inspected the actual matching light/dark 1200px and 390px baseline/patched pixels, confirming retained approvals and unclipped Open controls. Packaged/native-window verification remains unverified; the fixture uses synthetic local bridge events.

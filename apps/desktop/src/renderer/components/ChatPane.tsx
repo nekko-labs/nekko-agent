@@ -17,6 +17,7 @@ import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBu
 import { archiveDaysLeft, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
+import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { useGitStatus } from '../useGitStatus.js';
 import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
@@ -1080,7 +1081,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           setQuestion((q) => (q?.callId === e.callId ? null : q));
           break;
         case 'tool_result':
-          setApproval(null);
+          // Parallel work can finish while another tool is still waiting on us.
+          setApproval((current) => approvalAfterResult(current, e.result.toolCallId));
           // The step just landed on disk, so the bundle can account for it (and
           // for the tool's output, which the renderer never sees in full).
           refreshCtxThrottled();

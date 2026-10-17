@@ -21,7 +21,7 @@ interface WindowChrome {
 }
 
 /** The bridge, or `undefined` when this isn't the desktop shell. */
-export const windowChrome: WindowChrome | undefined = (
+export const windowChrome: WindowChrome | undefined = typeof window === 'undefined' ? undefined : (
   window as unknown as { nekkoChrome?: WindowChrome }
 ).nekkoChrome;
 
