@@ -169,6 +169,8 @@ const newWorkspaceId = () => `ws_${(++wsSeq).toString(36)}`;
 
 interface UiState {
   completionTipSessionId: string | null;
+  /** A workflow run to show when the Workflows view opens (a notification click). */
+  workflowFocus: { workflowId: string; runId: string } | null;
   settings: AppSettings | null;
   view: View;
   /**
@@ -555,6 +557,7 @@ let completionTipPending = false;
 
 export const useStore = create<UiState>((set, get) => ({
   completionTipSessionId: null,
+  workflowFocus: null,
   settings: null,
   view: 'command',
   sessions: [],

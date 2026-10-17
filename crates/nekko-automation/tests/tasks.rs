@@ -139,8 +139,10 @@ async fn tasks_json_and_every_side_effect_match() {
                 Value::Null
             }
             "tick" => {
-                for id in svc.due(op["now"].as_f64().unwrap()) {
-                    svc.fire(&id).await;
+                // As the daemon's loop does: fire only what is still due.
+                let now = op["now"].as_f64().unwrap();
+                for id in svc.due(now) {
+                    svc.fire_if_due(&id, now).await;
                 }
                 Value::Null
             }
@@ -163,7 +165,9 @@ async fn tasks_json_and_every_side_effect_match() {
             // Fires run concurrently in the TS, so their middle snapshots
             // interleave differently; the count and the last one must agree.
             assert_eq!(notices.len(), want.len(), "op {i} tick notices");
-            same(notices.last().unwrap(), want.last().unwrap(), &format!("op {i} last notice"));
+            if let (Some(got), Some(last)) = (notices.last(), want.last()) {
+                same(got, last, &format!("op {i} last notice"));
+            }
         } else {
             same(&json!(notices), &json!(want), &format!("op {i} {name} notices"));
         }
