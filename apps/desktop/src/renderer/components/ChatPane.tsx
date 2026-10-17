@@ -2673,6 +2673,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               <ChatControls
                 session={session}
                 isCloudModel={isCloudModel}
+                modelId={modelId ?? undefined}
                 onChange={setSession}
                 toolsInWindow
               />
@@ -3142,7 +3143,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   </>)}
                   {header && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
-                      <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} toolsInWindow only="mode" />
+                      <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />
                       <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} toolsInWindow only="privacy" />
                     </div>
                   )}

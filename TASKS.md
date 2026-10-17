@@ -6,6 +6,16 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Mode panel and saved modes (added 2026-10-17)
+
+See [SPEC](SPEC.md#mode-panel-and-saved-modes-2026-10-17).
+
+- [x] ✅ 2026-10-17 Phase 1: the Mode button opens the rail panel (`ModePanel.tsx`): saved modes, Environment, Model, Privacy and Approach columns with icons and explanations, Tools / MCP / Skills flyouts. Saved modes in `AppSettings.savedModes` with starters, apply, save, update, revert, delete and a starred default that `createSession` applies to new chats (`packages/shared/src/saved-modes.ts`). Tools and MCP lists extracted from `ChatControls.tsx` and shared. Unit, component and host tests; hidden renderer captures before and after.
+- [ ] Phase 2: per-chat effort (`Session.effort` over `settings.effort`), per-chat MCP servers and connectors (`disabledMcpServers`, `disabledConnectors`), each in the TS host and the Rust daemon with golden parity; then add them to saved modes and drop their Coming soon rows.
+- [ ] Phase 3: Approach. Per-chat skill choice beside work modes; a system-prompt library (files the user can open and edit) with a per-chat pick; memory strategies (off, this chat, project, everything), with Incognito keeping memory out of the prompt.
+- [ ] Model router row: decide whether it is the existing Auto model (`autoModel`) or something new, then wire it.
+- [ ] Phones: saved modes and the panel's per-chat fields are not in the phone allowlist.
+
 ## Agent panel view options (added 2026-10-17)
 
 See [SPEC](SPEC.md#agent-panel-view-options-2026-10-17).
