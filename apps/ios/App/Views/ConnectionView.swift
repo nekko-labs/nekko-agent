@@ -26,16 +26,19 @@ struct ConnectionView: View {
                     }
                 } footer: {
                     Text("Messages are end-to-end encrypted on every route; the relay sees only sealed frames.")
+                        .foregroundStyle(palette.inkSoft)
                 }
 
                 let advice = ConnectionAdvice.advise(route: c.route, relayHost: c.relayHost, computer: c.name, state: store.conn,
                                                      denied: store.denied, detail: store.connDetail, tailscaleOn: tailnet)
                 if !advice.isEmpty {
-                    Section("What to try") {
+                    Section {
                         ForEach(advice, id: \.self) { Label($0, systemImage: "lightbulb").foregroundStyle(palette.ink) }
                         if store.conn != .denied {
                             Button { store.connect(c.id) } label: { Label("Try again now", systemImage: "arrow.clockwise") }
                         }
+                    } header: {
+                        header("What to try")
                     }
                 }
 
@@ -47,7 +50,7 @@ struct ConnectionView: View {
                         LogRow(entry: e)
                     }
                 } header: {
-                    Text("Since the app started")
+                    header("Since the app started")
                 } footer: {
                     Button(copied ? "Copied" : "Copy log") {
                         UIPasteboard.general.string = store.connectionLog.text(relayHost: c.relayHost, route: c.route)
@@ -64,6 +67,13 @@ struct ConnectionView: View {
         .onAppear { tailnet = Tailnet.isConnected }
         .onChange(of: phase) { _, p in if p == .active { tailnet = Tailnet.isConnected } }
         .onChange(of: store.conn) { _, _ in tailnet = Tailnet.isConnected }
+    }
+}
+
+extension ConnectionView {
+    /// Section headers in the palette's secondary ink: the system grey misses contrast on its paper.
+    func header(_ text: String) -> some View {
+        Text(text).foregroundStyle(palette.inkSoft)
     }
 }
 

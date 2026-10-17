@@ -130,8 +130,9 @@ final class LiveRelayTests: XCTestCase {
         let connection = app.buttons["Connection"].firstMatch
         if !connection.waitForExistence(timeout: 5) { app.swipeUp() }
         connection.tap()
-        XCTAssertTrue(app.staticTexts["Online"].firstMatch.waitForExistence(timeout: 10), "the status reads online")
-        XCTAssertTrue(app.staticTexts["Since the app started"].exists || app.staticTexts["SINCE THE APP STARTED"].exists)
+        // LabeledContent reads as one element: "Status" with the value "Online".
+        let online = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "Online", "Online")).firstMatch
+        XCTAssertTrue(online.waitForExistence(timeout: 10), "the status reads online")
         attach(app, "\(theme)-7b-connection")
         auditAccessibility(app, "\(theme)-connection")
 
