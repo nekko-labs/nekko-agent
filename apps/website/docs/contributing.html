@@ -114,6 +114,7 @@ npm run typecheck   # every TypeScript workspace</code></pre></div>
 <h2 id="documentation"><a class="anchor" href="#documentation" aria-hidden="true" tabindex="-1">#</a>Documentation</h2>
 <p>The docs at <a href="https://nekkoagent.com/docs">nekkoagent.com/docs</a> are rendered from Markdown in this repo. <code>docs/hub/nav.json</code> lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change. When a pull request changes what users see or do, update the page that describes it in the same PR.</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run docs</code></pre></div>
+<p>To look at the result before it ships, <code>npm run website</code> serves the site on <a href="http://127.0.0.1:8080" rel="noopener">http://127.0.0.1:8080</a> (set <code>PORT</code> to change it), with the same clean URLs as production.</p>
 <p>If you forget, the <strong>Docs site</strong> workflow regenerates the pages on your pull request and pushes them to its branch. It only commits when something actually changed.</p>
 <h2 id="commit-messages"><a class="anchor" href="#commit-messages" aria-hidden="true" tabindex="-1">#</a>Commit messages</h2>
 <p>Conventional commits (<code>feat:</code>, <code>fix:</code>, <code>docs:</code>, <code>refactor:</code>, <code>test:</code>, <code>chore:</code>).</p>

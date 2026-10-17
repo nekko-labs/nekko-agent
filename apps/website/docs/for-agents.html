@@ -94,6 +94,7 @@
 <h2 id="editing-these-docs"><a class="anchor" href="#editing-these-docs" aria-hidden="true" tabindex="-1">#</a>Editing these docs</h2>
 <p>Each page is rendered from one Markdown file in the repo, listed in <code>docs/hub/nav.json</code>. Edit the Markdown, then regenerate the site:</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run docs</code></pre></div>
+<p>To look at the result before it ships, <code>npm run website</code> serves the site on <a href="http://127.0.0.1:8080" rel="noopener">http://127.0.0.1:8080</a> (set <code>PORT</code> to change it), with the same clean URLs as production.</p>
 <p>If you skip that step, the <strong>Docs site</strong> workflow rebuilds the pages on the pull request and commits them to its branch, but only when the output actually changed. A pull request that changes user-facing behaviour should also update the page that describes it.</p>
 
           <footer class="page-foot">

@@ -8,13 +8,15 @@ owner:
 
 ## Beta signups and website analytics (added 2026-10-17)
 
-See [SPEC](SPEC.md#beta-signups-and-website-analytics-2026-10-17). Decided: Neon free for Postgres, Render free for the API, a separate PostHog project for the site (org moves to pay-as-you-go to allow a second project).
+See [SPEC](SPEC.md#beta-signups-and-website-analytics-2026-10-17). Decided: Neon free for Postgres, Fly.io for the API (2026-10-17, replacing Render; budget under $100/month), a separate PostHog project for the site (org moves to pay-as-you-go to allow a second project).
 
-- [x] ✅ 2026-10-17 `apps/api` (standalone npm package, not a workspace): `migrations/0001_users_and_signups.sql` (`users`, `signups`, case-insensitive unique email), migrations on start under an advisory lock, `POST /v1/signups` (validation, upsert, honeypot, origin allowlist, 5/IP/hour), `GET /healthz`. 10 tests on PGlite. `render.yaml` Blueprint and the `API` workflow.
+- [x] ✅ 2026-10-17 `apps/api` (standalone npm package, not a workspace): `migrations/0001_users_and_signups.sql` (`users`, `signups`, case-insensitive unique email), migrations on start under an advisory lock, `POST /v1/signups` (validation, upsert, honeypot, origin allowlist, 5/IP/hour), `GET /healthz`. 10 tests on PGlite. `Dockerfile` + `fly.toml` (one machine, auto-stop, no autoscale, shared IPv4) and the `API` workflow. Image smoke-tested against Postgres 17 in Docker.
 - [x] ✅ 2026-10-17 `apps/website/analytics.js`, cookieless PostHog on the home page and every docs page (via `build-docs.mjs`), inert until `POSTHOG_KEY` is set and only on `nekkoagent.com`.
 - [ ] Owner: switch the PostHog org to pay-as-you-go, create the **Nekko Agent** project, and paste its `phc_` key into `analytics.js` (one line). Add `https://nekkoagent.com` to the project's authorized URLs.
-- [ ] Owner: create the Neon project (free plan, a US region near Render's Oregon), then in Render: New, Blueprint, this repo, and paste Neon's **pooled** connection string as `DATABASE_URL`. Check `/healthz` and one signup with curl.
-- [ ] The signup form on the website: `POST {api}/v1/signups`, call `/healthz` on load, hidden `website` honeypot field, send `source` as the page path and any `utm_*`. Point it at a custom domain (e.g. `api.nekkoagent.com`) or the `onrender.com` URL.
+- [x] ✅ 2026-10-17 Live at `https://nekko-agent-api.fly.dev` (org `nekko-labs-975`, one machine in `iad`), backed by Neon project `restless-sun-01519386` (`nekko-agent`, `aws-us-east-1`, Postgres 18, pooled endpoint). `DATABASE_URL` set from `neon cs production --pooled`. Verified: `/healthz` 200, migration 0001 applied on first start, a `smoke-test` signup stored with the CORS header and then deleted, a foreign origin refused with 403.
+- [ ] Owner: Fly has no spending cap or billing alert. For a hard $100/month stop, pay Fly with a card that has a $100 monthly limit; check the month-to-date bill in the dashboard meanwhile.
+- [ ] Deploy on push: a `fly deploy` job in the `API` workflow, once a `FLY_API_TOKEN` (deploy token scoped to this app) is in the repo secrets.
+- [ ] The signup form on the website: `POST {api}/v1/signups`, call `/healthz` on load, hidden `website` honeypot field, send `source` as the page path and any `utm_*`. Point it at a custom domain (e.g. `api.nekkoagent.com`, `fly certs add`) or `nekko-agent-api.fly.dev`.
 - [ ] Before the form ships: a privacy line on the site saying what the form keeps, and how to unsubscribe.
 
 ## Swoop navigation rail (added 2026-10-17)

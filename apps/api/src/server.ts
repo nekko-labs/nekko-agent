@@ -14,7 +14,7 @@ export interface ServerOptions {
 export const DEFAULT_ORIGINS = ["https://nekkoagent.com", "https://www.nekkoagent.com"];
 
 export function buildServer(opts: ServerOptions): FastifyInstance {
-  // Render puts one proxy in front of the service; trust it for the client IP.
+  // Fly's proxy is the one hop in front of the service; trust it for the client IP.
   const app = Fastify({ logger: opts.logger ?? false, trustProxy: (_addr: string, hop: number) => hop === 0, bodyLimit: 8 * 1024 });
   const origins = new Set(opts.allowedOrigins);
   const { max, windowMs } = opts.rateLimit ?? { max: 5, windowMs: 60 * 60 * 1000 };
@@ -38,8 +38,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
       .send();
   });
 
-  // Render's health check, and what the page can call on load to wake a
-  // free-plan instance before anyone presses Join.
+  // Fly's health check, and what the page calls on load to wake a stopped
+  // machine before anyone presses Join.
   app.get("/healthz", async () => ({ ok: true }));
 
   app.post("/v1/signups", async (req, reply) => {
