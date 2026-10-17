@@ -129,6 +129,97 @@ pub fn to_fixed(x: f64, digits: usize) -> String {
     if negative && body.chars().any(|c| c != '0' && c != '.') { format!("-{body}") } else { body }
 }
 
+/// Where the catalog's files are fetched from, as the TS exports it
+/// (`DECISION_RELEASE_URL`, recorded in the golden set).
+pub fn release_url() -> String {
+    static U: OnceLock<String> = OnceLock::new();
+    U.get_or_init(|| {
+        let golden: Value = serde_json::from_str(include_str!("../tests/golden/decisions.json")).unwrap_or(Value::Null);
+        golden.get("releaseUrl").and_then(Value::as_str).unwrap_or_default().to_string()
+    })
+    .clone()
+}
+
+/// One file of a catalog model to fetch (the TS `DownloadRequest` it starts).
+#[derive(Clone, Debug)]
+pub struct Download {
+    pub id: String,
+    pub label: String,
+    pub target: String,
+    pub url: String,
+    pub dest: String,
+    pub group: String,
+    pub group_label: String,
+    pub file: String,
+    /// The published size and SHA-256 the bytes must have.
+    pub bytes: u64,
+    pub sha256: Option<String>,
+}
+
+impl Download {
+    /// The request as the TS service hands it to the queue (minus `verify`).
+    pub fn to_value(&self) -> Value {
+        json!({
+            "id": self.id,
+            "kind": "model",
+            "label": self.label,
+            "target": self.target,
+            "url": self.url,
+            "dest": self.dest,
+            "group": self.group,
+            "groupLabel": self.group_label,
+            "file": self.file,
+        })
+    }
+}
+
+/// The bytes at `path` are the published file's: its size, then its SHA-256,
+/// streamed. `None` when they are (`checkDecisionFile`).
+pub async fn check_file(path: &str, file: &str, bytes: u64, sha256: Option<&str>) -> Option<String> {
+    if file_size(path).await != bytes {
+        return Some(format!("{file} is not the published size."));
+    }
+    let want = sha256?.to_string();
+    let path = path.to_string();
+    let got = tokio::task::spawn_blocking(move || -> std::io::Result<String> {
+        use sha2::{Digest, Sha256};
+        use std::io::Read;
+        let mut f = std::fs::File::open(path)?;
+        let mut hash = Sha256::new();
+        let mut buf = vec![0u8; 1 << 20];
+        loop {
+            let n = f.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            hash.update(&buf[..n]);
+        }
+        Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
+    })
+    .await;
+    match got {
+        Ok(Ok(h)) if h == want => None,
+        _ => Some(format!("{file} is not the published file (checksum mismatch).")),
+    }
+}
+
+/// The download queue the catalog's files go through (the daemon's, scripted in tests).
+pub trait Queue: Send + Sync {
+    fn start(&self, download: Download);
+}
+
+impl Queue for nekko_engine::download::Downloads {
+    fn start(&self, d: Download) {
+        let mut req = nekko_engine::download::Request::from_value(&d.to_value());
+        let (file, bytes, sha) = (d.file.clone(), d.bytes, d.sha256.clone());
+        req.verify = Some(Arc::new(move |part: String| {
+            let (file, sha) = (file.clone(), sha.clone());
+            Box::pin(async move { check_file(&part, &file, bytes, sha.as_deref()).await })
+        }));
+        nekko_engine::download::Downloads::start(self, req);
+    }
+}
+
 pub struct Decisions {
     local: Arc<dyn LocalModel>,
     prefs: Arc<dyn Prefs>,
@@ -136,6 +227,10 @@ pub struct Decisions {
     default_models: String,
     typesafe_url: String,
     http: reqwest::Client,
+    /// The daemon's download queue, when it has one.
+    queue: Option<Arc<dyn Queue>>,
+    /// Where the catalog's files are fetched from (`release_url()`; tests use a loopback server).
+    release_url: String,
 }
 
 async fn file_size(p: &str) -> u64 {
@@ -155,7 +250,14 @@ impl Decisions {
     ) -> Self {
         static HTTP: OnceLock<reqwest::Client> = OnceLock::new();
         let http = HTTP.get_or_init(reqwest::Client::new).clone();
-        Self { local, prefs, default_models, typesafe_url, http }
+        Self { local, prefs, default_models, typesafe_url, http, queue: None, release_url: release_url() }
+    }
+
+    /// Downloads go through `queue`, from `release_url`.
+    pub fn with_downloads(mut self, queue: Arc<dyn Queue>, release_url: String) -> Self {
+        self.queue = Some(queue);
+        self.release_url = release_url;
+        self
     }
 
     async fn models_dir(&self) -> String {
@@ -275,22 +377,62 @@ impl Decisions {
         out
     }
 
-    /// Fetch one precision of a catalog model. No correct export is hosted
-    /// yet (the TS `LAYA_ONNX` is null), so this only explains why not.
-    fn download(&self, catalog_id: &Value, precision: Option<&Value>) -> Value {
+    /// Fetch one precision of a catalog model, plus its tokenizer and config,
+    /// through the daemon's download queue as one group. Each file is checked
+    /// against its published size and SHA-256 before it is renamed into
+    /// place; a file already on disk at the published size is kept.
+    async fn download(&self, catalog_id: &Value, precision: Option<&Value>) -> Result<Value, String> {
         let precision = match precision {
             None => json!("fp16"),
             Some(p) => p.clone(),
         };
         let entry = catalog().as_array().and_then(|c| c.iter().find(|e| &e["id"] == catalog_id));
         let variant = entry.and_then(|e| e["variants"].as_array()?.iter().find(|v| v["precision"] == precision));
-        match (entry, variant) {
-            (Some(e), Some(_)) => ok(
-                false,
-                e.get("unavailable").and_then(Value::as_str).unwrap_or("That decision model cannot be downloaded yet."),
-            ),
-            _ => ok(false, "That decision model is not in the catalog."),
+        let (Some(entry), Some(variant)) = (entry, variant) else {
+            return Ok(ok(false, "That decision model is not in the catalog."));
+        };
+        if let Some(why) = entry.get("unavailable").and_then(Value::as_str) {
+            return Ok(ok(false, why));
         }
+        let Some(queue) = &self.queue else {
+            return Ok(ok(false, "Downloads are not available in this engine."));
+        };
+        let id = nekko_js::display(&entry["id"]);
+        let name = nekko_js::display(&entry["name"]);
+        let p = nekko_js::display(&precision);
+        let dir = Self::dir_of(&Self::root(&self.models_dir().await), &id)?;
+        let mut files: Vec<&Value> = entry["shared"].as_array().map(|s| s.iter().collect()).unwrap_or_default();
+        files.push(variant);
+        let (mut queued, mut bytes) = (0u32, 0f64);
+        for f in files {
+            let file = nekko_js::display(&f["file"]);
+            let size = f["bytes"].as_u64().unwrap_or(0);
+            let dest = path::join(&[&dir, &file]);
+            if file_size(&dest).await == size {
+                continue;
+            }
+            let asset = f.get("asset").and_then(Value::as_str).map_or_else(|| file.clone(), str::to_string);
+            let role = if std::ptr::eq(f, variant) { p.clone() } else { "shared".into() };
+            queue.start(Download {
+                id: format!("decision:{id}:{role}:{file}"),
+                label: format!("{name} · {file}"),
+                target: id.clone(),
+                url: format!("{}/{asset}", self.release_url),
+                dest,
+                group: format!("decision:{id}:{p}"),
+                group_label: format!("{name} · {p}"),
+                file: file.clone(),
+                bytes: size,
+                sha256: f.get("sha256").and_then(Value::as_str).map(str::to_string),
+            });
+            queued += 1;
+            bytes += size as f64;
+        }
+        Ok(if queued > 0 {
+            ok(true, format!("Downloading {name} {p} ({} GB).", to_fixed(bytes / 1e9, 2)))
+        } else {
+            ok(true, format!("{name} {p} is already downloaded."))
+        })
     }
 
     /// Point at an export folder the user made or copied; it is read in place, never moved.
@@ -498,7 +640,7 @@ impl Decisions {
         match channel {
             "decisions:catalog" => Ok(catalog().clone()),
             "decisions:models" => Ok(Value::Array(self.models().await)),
-            "decisions:download" => Ok(self.download(arg(0), args.get(1).filter(|p| !p.is_null()))),
+            "decisions:download" => self.download(arg(0), args.get(1).filter(|p| !p.is_null())).await,
             "decisions:delete" => self.remove(&nekko_js::display(arg(0))).await,
             "decisions:addFolder" => self.add_folder(arg(0)).await,
             "decisions:status" => Ok(self.status().await),
@@ -522,12 +664,18 @@ pub async fn route(
     args: &[Value],
 ) -> Result<Value, String> {
     let default_models = path::join(&[&data_dir.to_string_lossy(), "models"]);
-    let d = Decisions::new(
+    let mut d = Decisions::new(
         Arc::new(ctx.engine.decide.clone()),
         Arc::new(CtxPrefs(ctx.clone())),
         default_models,
         TYPESAFE_URL.into(),
     );
+    if let Some(downloads) = &ctx.downloads {
+        // Where the release is: the config's `decisionModelsUrl` (tests serve one on loopback),
+        // else the pinned GitHub release.
+        let base = ctx.app.decision_models_url.clone().unwrap_or_else(release_url);
+        d = d.with_downloads(Arc::new(downloads.queue()), base);
+    }
     d.route(channel, args).await
 }
 

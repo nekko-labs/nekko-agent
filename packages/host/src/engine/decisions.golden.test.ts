@@ -2,8 +2,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os';
 import { dirname, join, sep } from 'path';
 import { expect, it } from 'vitest';
-import { createDecisions, DECISION_CATALOG } from './decisions.js';
+import { createDecisions, DECISION_CATALOG, DECISION_RELEASE_URL } from './decisions.js';
 import type { EngineDaemon } from './daemon.js';
+import type { DownloadRequest } from './download.js';
+
+/** Where the scripts download from (a release URL the daemon test also serves). */
+const RELEASE = 'http://release.test/download/decision-models-v1';
 
 /**
  * The decision-model service (`decisions:*`) as the TS host runs it, which the
@@ -32,6 +36,9 @@ const TREE: Record<string, string> = {
   'models/decision/partial/model_fp16.onnx': 'x',
   'models/decision/partial/rl_agent_config.json': '{}',
   'models/decision/stray.txt': 'not a dir',
+  // A typed-decisions download cut short: one file at its published size (kept), one not (fetched again).
+  'models/decision/laya-typed-decisions/rl_agent_config.json': 'x'.repeat(847),
+  'models/decision/laya-typed-decisions/config.json': '{}',
   'ext1/model.fp16.onnx': 'graph16',
   'ext1/model_int8.onnx': 'g8',
   'ext1/tokenizer/tokenizer.json': '{"nested":true}',
@@ -64,6 +71,9 @@ const SCRIPTS: { name: string; typesafeKey: string | null; typesafe: { status: n
       ['download', 'laya-en', 'int8'],
       ['download', 'laya-en', 'fp8'],
       ['download', 'nope'],
+      ['download', 'laya-multilingual'],
+      ['download', 'laya-multilingual', 'int8'],
+      ['download', 'laya-typed-decisions', 'fp32'],
       ['addFolder', ''],
       ['addFolder', '   '],
       ['addFolder', '<root>/ext2'],
@@ -150,13 +160,36 @@ it('the decision service matches the daemon golden set', async () => {
         writeFileSync(join(root, rel), text);
       }
       const calls: unknown[] = [];
+      const checks: Promise<void>[] = [];
       const requests: unknown[] = [];
       let folders: string[] = [];
       const replies = [...script.typesafe];
       const daemon = fakeDaemon(calls);
       const decisions = createDecisions({
         modelsDir: () => join(root, 'models'),
-        downloads: { start: async () => { throw new Error('no downloads in the golden set'); } } as never,
+        releaseUrl: () => RELEASE,
+        // The queue is the engine's (its own golden set holds the transfer); here what is
+        // asked of it, and what each file's check says about a wrong and a right file.
+        downloads: {
+          start: (req: DownloadRequest) => {
+            const { verify, ...rest } = req;
+            const verified: Record<string, unknown> = {};
+            calls.push(['downloads.start', { ...rest, verified }]);
+            checks.push((async () => {
+              const probe = join(root, `probe-${checks.length}.part`);
+              writeFileSync(probe, 'x');
+              verified.wrongSize = await verify?.(probe);
+              // A small file of the right size but other bytes: the checksum must catch it.
+              const file = DECISION_CATALOG.flatMap((c) => [...c.variants, ...c.shared]).find((f) => req.url.endsWith(`/${f.asset}`));
+              if (file && file.bytes < 4096) {
+                writeFileSync(probe, Buffer.alloc(file.bytes));
+                verified.wrongBytes = await verify?.(probe);
+              }
+              rmSync(probe, { force: true });
+            })());
+            return Promise.resolve(rest);
+          },
+        } as never,
         daemon: () => daemon,
         typesafeKey: () => script.typesafeKey ?? undefined,
         folders: () => folders,
@@ -177,6 +210,7 @@ it('the decision service matches the daemon golden set', async () => {
         } catch (e) {
           out = { error: (e as Error).message };
         }
+        await Promise.all(checks.splice(0));
         // Latency is the clock's; the shape is what matters.
         const value = (out as { ok?: { latencyMs?: number } }).ok;
         if (value && typeof value === 'object' && 'latencyMs' in value) value.latencyMs = 0;
@@ -187,7 +221,7 @@ it('the decision service matches the daemon golden set', async () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-  const out = { catalog: DECISION_CATALOG, tree: TREE, scripts: results };
+  const out = { catalog: DECISION_CATALOG, releaseUrl: DECISION_RELEASE_URL, testReleaseUrl: RELEASE, tree: TREE, scripts: results };
   if (process.env.UPDATE_GOLDEN) {
     mkdirSync(dirname(golden), { recursive: true });
     writeFileSync(golden, `${JSON.stringify(out, null, 1)}\n`);

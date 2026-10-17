@@ -50,6 +50,9 @@ pub struct Config {
     /// Where GitHub's API is (`https://api.github.com`), for the runtime
     /// installers; tests point it at a loopback server.
     pub github_api_url: Option<String>,
+    /// Where the decision models' release assets are (the `decision-models-v1`
+    /// release's download URL); tests point it at a loopback server.
+    pub decision_models_url: Option<String>,
     /// The app's version for `app:info` (the desktop app's); absent, the
     /// web edition's `NEKKO_VERSION`, else `0.0.0`.
     pub app_version: Option<String>,

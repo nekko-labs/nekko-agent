@@ -2,8 +2,11 @@
 //!
 //! `tests/golden/cases.json` holds 60 requests (all three question types, 1 to 30 options,
 //! states from empty to far past the 512-token window, JSON and conversation states, unicode)
-//! and `golden.json` what the official package answered, plus a fingerprint of the exact token
-//! sequence it built for every question.
+//! and `golden.json` what the official package answered with the English checkpoint, plus a
+//! fingerprint of the exact token sequence it built for every question.
+//! `golden-multilingual.json` and `golden-typed-decisions.json` are the same cases answered by
+//! the other two checkpoints (`LAYA_GOLDEN=multilingual|typed-decisions`). All three are written
+//! by `scripts/decision-models/reference.py`.
 //!
 //! Needs a model directory, so it only runs when `LAYA_MODEL_DIR` points at one (an ONNX
 //! export plus `tokenizer.json` and `rl_agent_config.json`); CI does not download 800 MB.
@@ -24,11 +27,17 @@ use nekko_decide::{DecisionModel, Encoder, Ep, LoadOptions, Precision, Question}
 use serde_json::Value;
 use std::path::PathBuf;
 
+/// The reference answers for the checkpoint under test: `golden.json` is the English one, and
+/// `LAYA_GOLDEN=multilingual` or `typed-decisions` picks `golden-<name>.json` (same cases).
 fn golden() -> (Vec<Value>, Vec<Value>) {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden");
     let read = |f: &str| -> Value { serde_json::from_str(&std::fs::read_to_string(dir.join(f)).unwrap()).unwrap() };
+    let file = match std::env::var("LAYA_GOLDEN").ok().filter(|g| !g.is_empty() && g != "en") {
+        Some(name) => format!("golden-{name}.json"),
+        None => "golden.json".into(),
+    };
     let cases = read("cases.json")["cases"].as_array().unwrap().clone();
-    let golden = read("golden.json")["golden"].as_array().unwrap().clone();
+    let golden = read(&file)["golden"].as_array().unwrap().clone();
     assert_eq!(cases.len(), golden.len());
     (cases, golden)
 }

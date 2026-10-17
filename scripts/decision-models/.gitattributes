@@ -1,0 +1,4 @@
+# Run inside Linux containers and on macOS; LICENSE and NOTICE are published with checksums.
+*.sh text eol=lf
+LICENSE -text
+NOTICE -text

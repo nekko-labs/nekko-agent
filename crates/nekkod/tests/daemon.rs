@@ -5085,3 +5085,136 @@ async fn updates_from_a_release_feed_with_checksums_and_events() {
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+/// A release of decision models on loopback: the English checkpoint's three small files as
+/// published (their real bytes, so their pinned SHA-256s hold), a stand-in for everything
+/// else, and counts of what was asked for. `tamper` serves a same-size `rl_agent_config.json`
+/// with other bytes.
+async fn fake_decision_release(tamper: bool) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    use axum::extract::Path;
+    use axum::routing::get;
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/laya-en");
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let log = seen.clone();
+    let app = axum::Router::new().route(
+        "/download/decision-models-v1/{asset}",
+        get(move |Path(asset): Path<String>| {
+            let (fixtures, log) = (fixtures.clone(), log.clone());
+            async move {
+                use axum::response::IntoResponse;
+                log.lock().unwrap().push(asset.clone());
+                let file = asset.strip_prefix("laya-en.").unwrap_or(&asset);
+                match std::fs::read(fixtures.join(file)) {
+                    Ok(mut bytes) => {
+                        if tamper && file == "rl_agent_config.json" {
+                            bytes[2] ^= 1;
+                        }
+                        bytes.into_response()
+                    }
+                    // The tokenizer and the weights: bytes that are not the published ones.
+                    Err(_) => b"not the published file".to_vec().into_response(),
+                }
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    (format!("http://127.0.0.1:{port}/download/decision-models-v1"), seen)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn downloads_a_decision_model_from_its_release_through_the_queue_and_checks_every_file() {
+    let root = std::env::temp_dir().join(format!("nekkod-decision-dl-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    let home = root.join("home");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), r#"{"engine":{"modelFolders":[]}}"#).unwrap();
+    let h = home.to_string_lossy().to_string();
+    let dir = data.join("models").join("decision").join("laya-en");
+
+    let (release, seen) = fake_decision_release(false).await;
+    let d = start_with_env(
+        true,
+        Some(&data),
+        json!({ "decisionModelsUrl": release }),
+        &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
+    );
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("decisions:download")));
+
+    let (status, started) = post(d.port, "decisions:download", json!(["laya-en", "fp16"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{started}");
+    assert_eq!(started, json!({ "ok": true, "message": "Downloading Laya (English) fp16 (0.85 GB)." }));
+    let settled = |j: &Value| ["done", "failed", "cancelled"].contains(&j["state"].as_str().unwrap_or_default());
+    // The three small files are the published ones: checked, and renamed into place.
+    for file in ["tokenizer_config.json", "rl_agent_config.json", "config.json"] {
+        let job = job_until(d.port, &format!("decision:laya-en:shared:{file}"), settled).await;
+        assert_eq!(job["state"], "done", "{job}");
+        assert_eq!(job["group"], "decision:laya-en:fp16");
+        assert_eq!(job["groupLabel"], "Laya (English) · fp16");
+        let want =
+            std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/laya-en").join(file));
+        assert_eq!(std::fs::read(dir.join(file)).ok(), want.ok(), "{file}");
+    }
+    // The others are not: refused before they are renamed, and nothing is left behind.
+    for (id, file) in [
+        ("decision:laya-en:shared:tokenizer.json", "tokenizer.json"),
+        ("decision:laya-en:fp16:model_fp16.onnx", "model_fp16.onnx"),
+    ] {
+        let job = job_until(d.port, id, settled).await;
+        assert_eq!(job["state"], "failed", "{job}");
+        assert_eq!(job["message"], format!("{file} is not the published size."), "{job}");
+        assert!(!dir.join(file).exists() && !dir.join(format!("{file}.part")).exists(), "{file} kept");
+    }
+    let mut asked = seen.lock().unwrap().clone();
+    asked.sort();
+    assert_eq!(
+        asked,
+        [
+            "laya-en.config.json",
+            "laya-en.model_fp16.onnx",
+            "laya-en.rl_agent_config.json",
+            "laya-en.tokenizer.json",
+            "laya-en.tokenizer_config.json"
+        ]
+    );
+    // An incomplete export is not a model yet.
+    let (_, models) = post(d.port, "decisions:models", json!([]), Some(TOKEN)).await;
+    assert_eq!(models, json!([]));
+    // Asked again, only what is missing is fetched.
+    seen.lock().unwrap().clear();
+    let (_, again) = post(d.port, "decisions:download", json!(["laya-en", "fp16"]), Some(TOKEN)).await;
+    assert_eq!(again["ok"], true, "{again}");
+    job_until(d.port, "decision:laya-en:fp16:model_fp16.onnx", settled).await;
+    job_until(d.port, "decision:laya-en:shared:tokenizer.json", settled).await;
+    let mut asked = seen.lock().unwrap().clone();
+    asked.sort();
+    assert_eq!(asked, ["laya-en.model_fp16.onnx", "laya-en.tokenizer.json"]);
+    // The decision files are not chat models: no autoStart, nothing in the library.
+    let settings: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert_ne!(settings["autoStart"], true, "{settings}");
+    drop(d);
+
+    // A file of the published size with other bytes is refused by its checksum.
+    let _ = std::fs::remove_dir_all(&dir);
+    let (tampered, _) = fake_decision_release(true).await;
+    let d = start_with_env(
+        true,
+        Some(&data),
+        json!({ "decisionModelsUrl": tampered }),
+        &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
+    );
+    post(d.port, "decisions:download", json!(["laya-en", "int8"]), Some(TOKEN)).await;
+    let job = job_until(d.port, "decision:laya-en:shared:rl_agent_config.json", settled).await;
+    assert_eq!(job["state"], "failed", "{job}");
+    assert_eq!(job["message"], "rl_agent_config.json is not the published file (checksum mismatch).");
+    assert!(!dir.join("rl_agent_config.json").exists());
+    let job = job_until(d.port, "decision:laya-en:shared:config.json", settled).await;
+    assert_eq!(job["state"], "done", "{job}");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&root);
+}

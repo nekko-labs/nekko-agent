@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { createDecisions, DECISION_CATALOG } from './decisions.js';
+import { createHash } from 'crypto';
+import { checkDecisionFile, createDecisions, DECISION_CATALOG, DECISION_RELEASE_URL } from './decisions.js';
 import type { EngineDaemon } from './daemon.js';
 
 const dirs: string[] = [];
@@ -17,16 +18,34 @@ const fakeDownloads = () => {
 const request = { state: 'I was charged twice.', questions: { dept: { type: 'choice' as const, instructions: 'Which team?', criteria: ['billing', 'technical'] } } };
 
 describe('decision models', () => {
-  it('refuses the download while no correct export is hosted, and says what to do instead', async () => {
+  it('downloads a catalog model from the pinned release, every file checked by size and SHA-256', async () => {
     const models = await scratch();
     const { started, downloads } = fakeDownloads();
     const d = createDecisions({ modelsDir: () => models, downloads, daemon: () => undefined, typesafeKey: () => undefined });
     const res = await d.download('laya-en', 'fp16');
-    expect(res.ok).toBe(false);
-    expect(res.message).toMatch(/No correct ONNX export/);
-    expect(started).toEqual([]);
-    expect(DECISION_CATALOG[0].unavailable).toBeTruthy();
+    expect(res).toEqual({ ok: true, message: 'Downloading Laya (English) fp16 (0.85 GB).' });
+    expect(started.map((r) => r.url)).toEqual([
+      'laya-en.tokenizer.json', 'laya-en.tokenizer_config.json', 'laya-en.rl_agent_config.json', 'laya-en.config.json', 'laya-en.model_fp16.onnx',
+    ].map((a) => `${DECISION_RELEASE_URL}/${a}`));
+    expect(started.map((r) => r.dest)).toEqual(['tokenizer.json', 'tokenizer_config.json', 'rl_agent_config.json', 'config.json', 'model_fp16.onnx'].map((f) => join(models, 'decision', 'laya-en', f)));
+    expect(DECISION_RELEASE_URL).toBe('https://github.com/nekko-labs/nekko-agent/releases/download/decision-models-v1');
+    for (const entry of DECISION_CATALOG) {
+      expect(entry.unavailable).toBeUndefined();
+      for (const f of [...entry.variants, ...entry.shared]) expect(f.sha256).toMatch(/^[0-9a-f]{64}$/);
+    }
     expect((await d.download('nope')).ok).toBe(false);
+  });
+
+  it('accepts a file only with the published bytes', async () => {
+    const dir = await scratch();
+    const body = Buffer.from('{"max_len":512}');
+    const sha256 = createHash('sha256').update(body).digest('hex');
+    const path = join(dir, 'f.part');
+    await writeFile(path, body);
+    expect(await checkDecisionFile(path, { file: 'f', bytes: body.length, sha256 })).toBeNull();
+    expect(await checkDecisionFile(path, { file: 'f', bytes: body.length + 1, sha256 })).toBe('f is not the published size.');
+    await writeFile(path, Buffer.from('{"max_len":999}'));
+    expect(await checkDecisionFile(path, { file: 'f', bytes: body.length, sha256 })).toBe('f is not the published file (checksum mismatch).');
   });
 
   it('adds an export folder, lists it with its precisions, and forgets it without touching its files', async () => {
