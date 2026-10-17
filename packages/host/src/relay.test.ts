@@ -150,6 +150,25 @@ describe('relay agent: what a phone may do', () => {
     handle.stop();
   });
 
+  it("sends a chat's photos as small thumbnails, the newest first, never the originals", async () => {
+    const { Jimp } = await import('jimp');
+    const png = `data:image/png;base64,${(await new Jimp({ width: 2400, height: 1600, color: 0x336699ff }).getBuffer('image/png')).toString('base64')}`;
+    // 45 photos: the phone gets the newest 40 as thumbnails, the rest as ''.
+    sessions.photos = { id: 'photos', messages: Array.from({ length: 45 }, (_, i) => ({ id: `u${i}`, role: 'user', content: `p${i}`, images: [png] })) };
+    const { call, handle } = await phone();
+    const res = await call('session:get', 'photos');
+    const imgs = res.result.messages.map((m: { images: string[] }) => m.images);
+    expect(imgs.every((a: string[]) => a.length === 1)).toBe(true);
+    expect(imgs.slice(0, 5).flat()).toEqual(['', '', '', '', '']);
+    for (const t of imgs.slice(5).flat()) {
+      expect(t.startsWith('data:image/jpeg;base64,')).toBe(true);
+      const back = await Jimp.read(Buffer.from(t.split(',')[1], 'base64'));
+      expect([back.width, back.height]).toEqual([384, 256]);
+    }
+    expect(sessions.photos.messages[0].images[0]).toBe(png); // the chat keeps the original
+    handle.stop();
+  });
+
   it('answers a reply too large for the relay with an error instead of silence', async () => {
     const { call, handle } = await phone();
     // Not a session object, so nothing trims it: ~9.6 MB as JSON, over the frame limit once sealed.

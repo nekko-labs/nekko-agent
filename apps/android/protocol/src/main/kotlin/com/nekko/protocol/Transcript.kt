@@ -13,7 +13,13 @@ enum class ToolStatus { RUNNING, WAITING, OK, ERROR }
 sealed interface Block {
     val id: String
 
-    data class User(override val id: String, val text: String, val at: Long? = null, val images: Int = 0) : Block
+    /**
+     * A prompt. [thumbs] holds one entry per photo: a small image data URL, or
+     * `""` when the phone has no picture for it (it is on the computer).
+     */
+    data class User(override val id: String, val text: String, val at: Long? = null, val thumbs: List<String> = emptyList()) : Block {
+        val images: Int get() = thumbs.size
+    }
     data class Assistant(
         override val id: String,
         val text: String,
@@ -52,7 +58,7 @@ object Transcript {
                     m.id,
                     m.skill?.let { (name, input) -> "/$name $input".trim() } ?: m.content,
                     m.createdAt,
-                    m.imageCount,
+                    m.images,
                 )
                 "assistant" -> {
                     if (m.content.isNotBlank() || !m.reasoning.isNullOrBlank()) {

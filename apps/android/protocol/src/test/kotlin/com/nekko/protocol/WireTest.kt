@@ -112,6 +112,7 @@ class WireTest {
           ]}"""))!!
         assertEquals(listOf("one", "two"), s.queue)
         assertEquals(2, s.messages[0].imageCount)
+        assertEquals(listOf("x", "y"), s.messages[0].images)
         assertEquals("bash", s.messages[1].toolCalls.single().name)
         assertEquals("file", s.messages[2].toolResult!!.output)
         assertNull(Session.from(json("null")))
