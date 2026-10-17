@@ -2084,6 +2084,9 @@
 .plan-rail-toggle.is-open { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .plan-rail-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .plan-rail-toggle-count { color: var(--ink-soft); }
+/* While the floating button shows, the transcript starts below it so the first
+   message never sits under it (8px offset + 28px button + breathing room). */
+div:has(> .plan-rail-toggle) > [data-transcript-scroll] { padding-top: 44px; }
 /* A question the agent asked, pinned at the top of its window: a warning-toned
    label you cannot miss, then the card. Capped so the transcript keeps a view;
    a long card scrolls inside the pin rather than pushing the history away. */
