@@ -99,12 +99,14 @@ class RelayClientTest {
         RelayConfig(
             relayUrl = "wss://relay.test/", room = "abcd1234", key = "k&ey", keyBytes = key,
             deviceId = id, deviceName = "Pixel", pairCode = pair,
-            handshakeTimeoutMs = 2_000, requestTimeoutMs = 2_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+            // Generous: the first test on a cold JVM also pays for crypto setup, and no test here
+            // waits for these to expire, so they only bound how long a real failure takes.
+            handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
         ),
         relay, scope,
     )
 
-    private suspend fun RelayClient.await(state: RelayState) = withTimeout(3_000) { status.first { it.state == state } }
+    private suspend fun RelayClient.await(state: RelayState) = withTimeout(10_000) { status.first { it.state == state } }
 
     @Test fun `enrolls with the one-time code, then never resends it`() = runBlocking {
         val relay = FakeRelay(code = "ABCD2345")
