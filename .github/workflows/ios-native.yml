@@ -1,21 +1,26 @@
 name: Native iOS
+# macOS-only. Runs every 6 hours on main and with the `ci:macos` label on a PR,
+# not on every iOS change: the Team plan's 5 macOS runners are shared by every
+# workflow (see ci.yml).
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'apps/ios/**'
       - 'apps/relay/src/**'
       - 'packages/shared/src/phone-access.ts'
       - '.github/workflows/ios-native.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'apps/ios/**'
-      - '.github/workflows/ios-native.yml'
+  schedule:
+    - cron: '37 */6 * * *'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ios-native-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 jobs:
   protocol-and-build:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
     runs-on: macos-14
     timeout-minutes: 50
     steps:

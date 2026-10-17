@@ -1,10 +1,16 @@
 name: Auto-merge
 
-# Turns on GitHub's native auto-merge for every non-draft PR, so it merges
-# itself once required checks pass, then makes sure the merge actually releases.
+# Turns on GitHub's native auto-merge for every ready PR into main. With the
+# merge queue required on main, that adds the PR to the queue once its PR-tier
+# checks pass; the queue runs the queue tier and merges. Then it makes sure the
+# merge actually releases.
 #
-# Requires "Allow auto-merge" enabled in repo settings and required status
-# checks on the target branch (otherwise a mergeable PR merges immediately).
+# Only PRs based on main: a stacked layer targets the branch below it, and
+# auto-merging it would fold it into that branch rather than queue it. Stacks
+# are queued with `gh stack merge`.
+#
+# The merge method comes from the queue's settings; `--squash` here is ignored
+# by GitHub when a queue is required, and kept for a main without one.
 #
 # Why this also dispatches version-release: a merge performed with
 # GITHUB_TOKEN never starts a workflow run, so the `push` trigger on
@@ -30,11 +36,11 @@ permissions:
 
 jobs:
   auto-merge:
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.base.ref == 'main' }}
     runs-on: ubuntu-latest
-    # Long enough to outlast CI on a slow day, short enough that a PR left open
-    # for review does not hold a runner all afternoon.
-    timeout-minutes: 35
+    # Long enough to outlast the PR tier plus a queue run on a slow day, short
+    # enough that a PR left open for review does not hold a runner all afternoon.
+    timeout-minutes: 45
     steps:
       - name: Enable auto-merge (squash)
         run: gh pr merge --auto --squash "$PR_URL"
@@ -48,7 +54,7 @@ jobs:
       # does releases within seconds instead of waiting for the next tick.
       - name: Release the merge
         run: |
-          for _ in $(seq 1 90); do
+          for _ in $(seq 1 120); do
             state=$(gh pr view "$PR_URL" --json state -q .state 2>/dev/null || echo UNKNOWN)
             case "$state" in
               MERGED)
@@ -66,6 +72,9 @@ jobs:
                 done
 
                 gh workflow run version-release.yml --repo "$GH_REPO" --ref main
+                # No CI dispatch here: the merge queue tested this exact group on
+                # top of main before merging it, and the 6-hourly full run covers
+                # macOS (ci.yml).
                 echo "Merged. Dispatched version-release for $PR_URL"
                 exit 0
                 ;;
@@ -76,7 +85,7 @@ jobs:
             esac
             sleep 20
           done
-          echo "::warning::$PR_URL had not merged after 30 minutes, so no release was dispatched. The */15 schedule on version-release.yml remains the backstop."
+          echo "::warning::$PR_URL had not merged after 40 minutes, so no release was dispatched. The */15 schedule on version-release.yml remains the backstop."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
