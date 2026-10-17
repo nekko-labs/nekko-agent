@@ -91,7 +91,7 @@ Each Orca and Codex phone feature, mapped to what the native apps ship now. "Dec
 | Accept or revert changes, file browser, terminal (Orca, Codex) | Decision | Decision | `PHONE_ALWAYS_DENIED`; reports/phone-readonly-changes-proposal.md |
 | Push for "finished" and "needs you" (all) | Built; needs the APNs key | Built locally; FCM (AN-6) needs the service account | Credentials |
 | Push on Tailscale-only setups (none) | Decision | Decision | PH6, reports/free-push-tailscale-proposal.md |
-| Nearby computers without a QR code (none) | Decision | Decision | PH2/PH3, reports/phone-discovery-pairing-proposal.md |
+| Nearby computers without a QR code (none) | Listed under *On this network*; pairing still by code (decision) | Listed under *On this network*; pairing still by code (decision) | #732 (desktop, off by default), #735; tap-to-pair: reports/phone-discovery-pairing-proposal.md |
 | Chat list while the computer is unreachable (Happy) | Built, opt-in | Built, opt-in | #706, #702 |
 | Live Activities and the Dynamic Island with Allow / Deny (none) | Built | n/a | IO-6 |
 | Actions on notifications (none) | Allow (Face ID) and Deny | Deny only; Allow is a decision | #697 |
