@@ -27,7 +27,10 @@ jobs:
     env:
       MACOS_SIGNING_CERTS_P12: ${{ secrets.MACOS_SIGNING_CERTS_P12 }}
       APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-      WINDOWS_SIGNING_CERTS_P12: ${{ secrets.WINDOWS_SIGNING_CERTS_P12 }}
+      # Windows signs through Azure Artifact Signing (formerly Trusted
+      # Signing). The service principal's client id is the gate, like the
+      # macOS certificate above.
+      AZURE_SIGNING_CLIENT_ID: ${{ secrets.AZURE_SIGNING_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v7
 
@@ -41,7 +44,6 @@ jobs:
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -104,22 +106,38 @@ jobs:
           rm -f "$key"
           echo 'Notary credentials accepted by App Store Connect.'
 
+      # Same rule as macOS: no service principal means an unsigned build (a
+      # supported outcome); a partial set fails here rather than producing an
+      # installer that SmartScreen flags while the release looks fine.
       - name: Validate Windows signing configuration
         if: runner.os == 'Windows'
         shell: bash
         env:
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          AZURE_SIGNING_TENANT_ID: ${{ secrets.AZURE_SIGNING_TENANT_ID }}
+          AZURE_SIGNING_CLIENT_SECRET: ${{ secrets.AZURE_SIGNING_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          AZURE_SIGNING_PUBLISHER: ${{ vars.AZURE_SIGNING_PUBLISHER }}
         run: |
           set -euo pipefail
-          if [ -z "${WINDOWS_SIGNING_CERTS_P12:-}" ]; then
-            echo 'No Authenticode certificate configured, building unsigned.'
-            if [ -n "${WINDOWS_CERT_PASSWORD:-}" ]; then
-              echo 'Note: WINDOWS_CERT_PASSWORD is set but unused without WINDOWS_SIGNING_CERTS_P12.' >&2
-            fi
+          names=(AZURE_SIGNING_TENANT_ID AZURE_SIGNING_CLIENT_SECRET AZURE_SIGNING_ENDPOINT AZURE_SIGNING_ACCOUNT AZURE_SIGNING_PROFILE AZURE_SIGNING_PUBLISHER)
+          if [ -z "${AZURE_SIGNING_CLIENT_ID:-}" ]; then
+            echo 'No Azure Artifact Signing configured, building unsigned.'
+            for name in "${names[@]}"; do
+              if [ -n "${!name:-}" ]; then
+                echo "Note: $name is set but unused without AZURE_SIGNING_CLIENT_ID." >&2
+              fi
+            done
             exit 0
           fi
-          if [ -z "${WINDOWS_CERT_PASSWORD:-}" ]; then
-            echo 'Windows signing configuration is incomplete. Missing: WINDOWS_CERT_PASSWORD' >&2
+          missing=()
+          for name in "${names[@]}"; do
+            [ -n "${!name:-}" ] || missing+=("$name")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Windows signing configuration is incomplete. Missing: %s\n' "${missing[*]}" >&2
+            echo 'Secrets and variables are listed in docs/signing.md, "Windows".' >&2
             exit 1
           fi
           echo 'Windows signing fully configured.'
@@ -138,8 +156,11 @@ jobs:
       # Build installers (Windows: NSIS, macOS: dmg/zip, Linux:
       # AppImage/deb) and upload them to a draft GitHub Release for this tag.
       #
-      # electron-builder reads WIN_CSC_LINK/WIN_CSC_KEY_PASSWORD for Windows
-      # Authenticode and CSC_LINK/CSC_KEY_PASSWORD for macOS, and
+      # Windows signs with Azure Artifact Signing: electron-builder runs
+      # Invoke-TrustedSigning with win.azureSignOptions (passed as -c flags so
+      # a local `npm run dist` never tries to reach Azure) and authenticates
+      # from AZURE_TENANT_ID/AZURE_CLIENT_ID/AZURE_CLIENT_SECRET. macOS reads
+      # CSC_LINK/CSC_KEY_PASSWORD, and
       # APPLE_API_KEY (a *path* to the .p8, hence the temp file) with
       # APPLE_API_KEY_ID/APPLE_API_ISSUER to notarize.
       - name: Build and publish installers
@@ -148,29 +169,42 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MACOS_SIGNING_CERTS_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-          WINDOWS_SIGNING_CERTS_P12: ${{ secrets.WINDOWS_SIGNING_CERTS_P12 }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          AZURE_SIGNING_TENANT_ID: ${{ secrets.AZURE_SIGNING_TENANT_ID }}
+          AZURE_SIGNING_CLIENT_SECRET: ${{ secrets.AZURE_SIGNING_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          AZURE_SIGNING_PUBLISHER: ${{ vars.AZURE_SIGNING_PUBLISHER }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           set -euo pipefail
-          EXTRA=""
-          if [ "$RUNNER_OS" = "Windows" ] && [ -n "${WINDOWS_SIGNING_CERTS_P12:-}" ]; then
-            export WIN_CSC_LINK="$WINDOWS_SIGNING_CERTS_P12"
-            export WIN_CSC_KEY_PASSWORD="$WINDOWS_CERT_PASSWORD"
+          EXTRA=()
+          if [ "$RUNNER_OS" = "Windows" ] && [ -n "${AZURE_SIGNING_CLIENT_ID:-}" ]; then
             unset CSC_LINK CSC_KEY_PASSWORD
-            echo 'Windows: signing with Authenticode certificate.'
+            export AZURE_TENANT_ID="$AZURE_SIGNING_TENANT_ID"
+            export AZURE_CLIENT_ID="$AZURE_SIGNING_CLIENT_ID"
+            export AZURE_CLIENT_SECRET="$AZURE_SIGNING_CLIENT_SECRET"
+            # publisherName also lands in app-update.yml, where electron-updater
+            # checks that every later update is signed by the same publisher.
+            EXTRA=(
+              "-c.win.azureSignOptions.endpoint=$AZURE_SIGNING_ENDPOINT"
+              "-c.win.azureSignOptions.codeSigningAccountName=$AZURE_SIGNING_ACCOUNT"
+              "-c.win.azureSignOptions.certificateProfileName=$AZURE_SIGNING_PROFILE"
+              "-c.win.azureSignOptions.publisherName=$AZURE_SIGNING_PUBLISHER"
+            )
+            echo 'Windows: signing with Azure Artifact Signing.'
           elif [ "$RUNNER_OS" = "Windows" ]; then
-            unset CSC_LINK CSC_KEY_PASSWORD WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
+            unset CSC_LINK CSC_KEY_PASSWORD
             export CSC_IDENTITY_AUTO_DISCOVERY=false
-            echo 'Windows: building UNSIGNED (no Authenticode certificate configured).'
+            echo 'Windows: building UNSIGNED (no Azure Artifact Signing configured).'
           elif [ "$RUNNER_OS" = "macOS" ] && [ -n "${CSC_LINK:-}" ]; then
             key="$RUNNER_TEMP/notary-api-key.p8"
             # Subshell so the restrictive umask applies to the key file only,
             # not to every artifact the build writes afterwards.
             (umask 077; printf '%s' "$APPLE_API_KEY_P8" > "$key")
             export APPLE_API_KEY="$key"
-            EXTRA="-c.mac.notarize=true"
+            EXTRA=(-c.mac.notarize=true)
             echo 'macOS: signing with Developer ID and notarizing.'
           else
             # No certificate. Clear the signing env so electron-builder does not
@@ -182,7 +216,7 @@ jobs:
               echo 'macOS: building UNSIGNED (no Developer ID cert configured).'
             fi
           fi
-          npm run release -w @nekko-agent/desktop -- $EXTRA
+          npm run release -w @nekko-agent/desktop -- ${EXTRA[@]+"${EXTRA[@]}"}
 
       # Proof the artifact is actually distributable, rather than trusting that
       # the build steps above did what they claim.
@@ -203,6 +237,26 @@ jobs:
           # that wraps it, so this is the artifact to validate.
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose=4 "$app"
+
+      - name: Verify the signed installer
+        if: runner.os == 'Windows' && env.AZURE_SIGNING_CLIENT_ID != ''
+        shell: pwsh
+        env:
+          AZURE_SIGNING_PUBLISHER: ${{ vars.AZURE_SIGNING_PUBLISHER }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(Get-ChildItem apps/desktop/release -Filter '*.exe' -File) +
+                   @(Get-ChildItem apps/desktop/release/win-unpacked -Filter '*.exe' -File)
+          if ($files.Count -lt 2) { throw 'Expected the installer and the app .exe to verify.' }
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature $f.FullName
+            "$($f.Name): $($sig.Status) $($sig.SignerCertificate.Subject)"
+            if ($sig.Status -ne 'Valid') { throw "$($f.Name) is not validly signed: $($sig.StatusMessage)" }
+            if ($sig.SignerCertificate.Subject -notlike "*CN=$env:AZURE_SIGNING_PUBLISHER*") {
+              throw "$($f.Name) is signed by '$($sig.SignerCertificate.Subject)', expected publisher '$env:AZURE_SIGNING_PUBLISHER'."
+            }
+            if (-not $sig.TimeStamperCertificate) { throw "$($f.Name) has no timestamp; it would stop verifying when the certificate expires." }
+          }
 
   publish-release:
     name: Publish GitHub release

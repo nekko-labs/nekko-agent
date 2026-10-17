@@ -1970,8 +1970,8 @@ Status: implemented, unit and isolated fixture interaction tested; image/motion 
 
 # Release signing
 
-How Nekko Agent's macOS builds get signed and notarized, what is wired, and what
-needs a human with an Apple account.
+How Nekko Agent's macOS and Windows builds get signed (and, on macOS,
+notarized), what is wired, and what needs a human with an Apple or Azure account.
 
 Everything here is **secret-gated**. With no signing secrets configured the
 release still builds and publishes, just unsigned, so nothing below can block a
@@ -1984,7 +1984,7 @@ worked.
 | Platform | Mechanism | Wired | Blocked on |
 | --- | --- | --- | --- |
 | macOS | Developer ID codesign + notarization | ✅ live since v0.6.0 | nothing |
-| Windows | Authenticode | ✅ secret-gated | the org secrets being set |
+| Windows | Authenticode via Azure Artifact Signing | ✅ secret-gated | Azure identity validation + the secrets below |
 | Linux | none (AppImage/deb are unsigned) | n/a | n/a |
 
 ## macOS
@@ -2035,8 +2035,13 @@ These are **`nekko-labs` organization secrets**, shared with `hypergate` and
 | `APPLE_API_KEY_P8` | App Store Connect API key contents |
 | `APPLE_API_KEY_ID` | ASC key id |
 | `APPLE_API_ISSUER` | ASC issuer id (a UUID) |
-| `WINDOWS_SIGNING_CERTS_P12` | base64 of the Authenticode `.p12` certificate |
-| `WINDOWS_CERT_PASSWORD` | password for that `.p12` |
+| `AZURE_SIGNING_TENANT_ID` | Entra tenant of the signing service principal |
+| `AZURE_SIGNING_CLIENT_ID` | its application (client) id; the Windows gate |
+| `AZURE_SIGNING_CLIENT_SECRET` | its client secret |
+
+Plus four non-secret **organization variables** (`gh variable set --org`), also
+read by the Windows leg: `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`,
+`AZURE_SIGNING_PROFILE`, `AZURE_SIGNING_PUBLISHER`. See [Windows](#windows).
 
 Certificate: `Developer ID Application: Nekko Labs LLC (3HM5598S99)`.
 
@@ -2137,28 +2142,114 @@ lightwrite.
 
 ## Windows
 
-The release workflow passes `WINDOWS_SIGNING_CERTS_P12` and
-`WINDOWS_CERT_PASSWORD` to electron-builder as `WIN_CSC_LINK` and
-`WIN_CSC_KEY_PASSWORD`. electron-builder 26.16.1 still supports the legacy
-PKCS#12/signtool path through these Windows-specific environment variables;
-Azure Trusted Signing is an alternative, not a requirement for this setup.
-With both secrets present, the NSIS installer is Authenticode-signed. If no
-certificate is configured, the workflow deliberately builds an unsigned
-installer so releases remain available; SmartScreen will show an
-unknown-publisher warning. A certificate without its password is a
-configuration error and fails the Windows job before packaging.
+Windows installers are signed with **Azure Artifact Signing** (Microsoft's
+managed code signing, formerly Trusted Signing). A `.p12` is no longer an
+option: since June 2023 the CA/B Forum requires every new code-signing key to
+live in a hardware module, so no new Authenticode certificate can be exported
+to a file for CI. Artifact Signing holds the key, issues short-lived
+certificates in the validated organization's name, and costs about $10 a month
+on the Basic tier.
 
-The certificate should contain the private key and be exported as a base64
-PKCS#12 file:
+electron-builder 26 signs through it natively (`win.azureSignOptions`, which
+runs the `TrustedSigning` PowerShell module on the runner). The release
+workflow passes the options as `-c` flags only when `AZURE_SIGNING_CLIENT_ID`
+is set, so a local `npm run dist` never tries to reach Azure. It signs the app
+`.exe`, the uninstaller and the NSIS installer, and then "Verify the signed
+installer" fails the job unless each one has a `Valid` signature from
+`CN=<AZURE_SIGNING_PUBLISHER>` with a timestamp. With no client id the build is
+unsigned (SmartScreen shows "unknown publisher") and the release still ships;
+a client id without the rest fails before packaging.
+
+`AZURE_SIGNING_PUBLISHER` is also written into `app-update.yml`, and
+electron-updater refuses an update not signed by that publisher. Set it to the
+certificate's common name exactly (the validated legal name, e.g.
+`Nekko Labs LLC`) and never change it casually: installs on the old name would
+stop accepting updates.
+
+### One-time setup (needs Philip: Azure owner + company documents)
+
+1. In the Azure portal, register the `Microsoft.CodeSigning` resource provider
+   on the subscription, then create an **Artifact Signing account** (Basic)
+   in a supported region, e.g. East US (`https://eus.codesigning.azure.net`).
+2. **Identity validation → Public Trust → Organization** for Nekko Labs LLC.
+   This is the slow, human step: Microsoft verifies the business (registration
+   documents, a domain email) and usually answers in a few business days. Only
+   a validated identity can back a public certificate.
+3. Create a **certificate profile** (type *Public Trust*) on that identity.
+4. Create the CI identity and give it signing rights on the account only:
 
 ```bash
-base64 -w0 /path/to/windows-signing.p12 | \
-  gh secret set WINDOWS_SIGNING_CERTS_P12 --org nekko-labs --visibility all
-gh secret set WINDOWS_CERT_PASSWORD --org nekko-labs --visibility all
+az ad sp create-for-rbac --name nekko-agent-release-signing
+# note appId (client id), password (client secret), tenant
+az role assignment create --assignee <appId> \
+  --role "Trusted Signing Certificate Profile Signer" \
+  --scope <the signing account's resource id>
 ```
+
+   (Newer tenants may list it as "Artifact Signing Certificate Profile
+   Signer" after the rename; it is the same role.)
+
+5. Store them on the org. Set the client secret interactively, one command at
+   a time (see the stdin warning under macOS):
+
+```bash
+gh secret set AZURE_SIGNING_TENANT_ID --org nekko-labs --visibility all --body <tenant>
+gh secret set AZURE_SIGNING_CLIENT_ID --org nekko-labs --visibility all --body <appId>
+read -rs "P?client secret: " && gh secret set AZURE_SIGNING_CLIENT_SECRET --org nekko-labs --visibility all --body "$P" && unset P
+gh variable set AZURE_SIGNING_ENDPOINT --org nekko-labs --visibility all --body https://eus.codesigning.azure.net
+gh variable set AZURE_SIGNING_ACCOUNT --org nekko-labs --visibility all --body <account name>
+gh variable set AZURE_SIGNING_PROFILE --org nekko-labs --visibility all --body <certificate profile name>
+gh variable set AZURE_SIGNING_PUBLISHER --org nekko-labs --visibility all --body "Nekko Labs LLC"
+```
+
+6. Re-run the release at the latest tag
+   (`gh workflow run release.yml --repo nekko-labs/nekko-agent --ref vX.Y.Z`)
+   and check the "Verify the signed installer" step.
+
+The client secret expires (two years by default with `create-for-rbac`); when
+it does, the Windows leg fails in the signing step with an Entra `AADSTS7000222`
+error. Rotate with `az ad sp credential reset --id <appId>` and re-set
+`AZURE_SIGNING_CLIENT_SECRET`.
+
+SmartScreen reputation: Artifact Signing certificates carry the validated
+organization name, and reputation accrues to that identity rather than to one
+certificate, so warnings fade as installs accumulate instead of resetting with
+every short-lived certificate.
+
+### The installer itself
+
+The NSIS installer is **one click**: double-clicking it shows a short branded
+progress window, installs per user into `%LOCALAPPDATA%\Programs`, adds Start
+Menu and desktop shortcuts and the Add/Remove Programs entry, and opens the
+app. There is no UAC prompt and no wizard page. Uninstalling still asks whether
+to remove chats and settings (`build/installer.nsh`); a silent uninstall,
+including the one electron-updater runs, keeps them.
 
 Certificates expire (Developer ID is 5 years). When it rolls, re-export and
 re-run the two `MACOS_*` commands; nothing in this repo changes.
+
+## The macOS drag-to-install window
+
+The `.dmg` opens to a Finder window with the app on the left, the Applications
+folder on the right, and a pixel Nekko leaping between them under "Drag the cat
+into Applications". The art is generated, not drawn by hand:
+
+```bash
+node apps/desktop/scripts/gen-dmg-art.mjs
+```
+
+writes `build/background.png` (640x400) and `build/background@2x.png`, which
+dmg-builder merges into a HiDPI `.background.tiff`. The icon positions in the
+`dmg` section of `electron-builder.yml` must match `APP_X` / `APPS_X` / `ICON_Y`
+in the script. Two Finder facts shaped the layout: icon labels are drawn
+**black** even in dark mode, so they sit on light sage ledges, and a user who
+shows Finder's path and status bars loses the bottom ~50px of the window, so
+the copy is at the top.
+
+The `Installers` workflow (`.github/workflows/installers.yml`) builds both
+installers unsigned on any PR that touches their config, installs and
+uninstalls the Windows one silently, and checks the disk image has its
+background, layout and Applications link.
 
 ## npm publishing
 
