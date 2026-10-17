@@ -1202,8 +1202,23 @@ async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_tur
     a.send(Message::Text(json!({ "id": 1, "channel": "daemon:subscribe", "args": [["s_one"]] }).to_string().into()))
         .await
         .unwrap();
-    let ack = next_json(&mut a, Duration::from_secs(5)).await.unwrap();
-    assert_eq!(ack, json!({ "id": 1, "result": true }), "no turn is running yet, so nothing comes before the answer");
+    // The fake backend greets every socket every 100 ms with a session-less
+    // `hello-from-backend`; one may land first. No chat's event may.
+    let ack = loop {
+        let f = next_json(&mut a, Duration::from_secs(5)).await.unwrap();
+        if f["channel"] == "agent:event"
+            && f["payload"]["type"] == "hello-from-backend"
+            && f["payload"]["sessionId"].is_null()
+        {
+            continue;
+        }
+        break f;
+    };
+    assert_eq!(
+        ack,
+        json!({ "id": 1, "result": true }),
+        "no turn is running yet, so no chat event comes before the answer"
+    );
     let mut b = ws(port, &format!("/api/ws?sessions=s_two&token={TOKEN}"), None).await.unwrap();
     let mut c = ws(port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
 
