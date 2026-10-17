@@ -1,0 +1,24 @@
+# Render Blueprint for the Nekko Agent public API (apps/api).
+# Connect the repo in Render (New > Blueprint) and set DATABASE_URL when asked:
+# the Neon *pooled* connection string, with sslmode=require.
+services:
+  - type: web
+    name: nekko-agent-api
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: apps/api
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - apps/api/**
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://nekkoagent.com,https://www.nekkoagent.com

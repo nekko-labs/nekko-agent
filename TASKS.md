@@ -6,6 +6,17 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Beta signups and website analytics (added 2026-10-17)
+
+See [SPEC](SPEC.md#beta-signups-and-website-analytics-2026-10-17). Decided: Neon free for Postgres, Render free for the API, a separate PostHog project for the site (org moves to pay-as-you-go to allow a second project).
+
+- [x] ✅ 2026-10-17 `apps/api` (standalone npm package, not a workspace): `migrations/0001_users_and_signups.sql` (`users`, `signups`, case-insensitive unique email), migrations on start under an advisory lock, `POST /v1/signups` (validation, upsert, honeypot, origin allowlist, 5/IP/hour), `GET /healthz`. 10 tests on PGlite. `render.yaml` Blueprint and the `API` workflow.
+- [x] ✅ 2026-10-17 `apps/website/analytics.js`, cookieless PostHog on the home page and every docs page (via `build-docs.mjs`), inert until `POSTHOG_KEY` is set and only on `nekkoagent.com`.
+- [ ] Owner: switch the PostHog org to pay-as-you-go, create the **Nekko Agent** project, and paste its `phc_` key into `analytics.js` (one line). Add `https://nekkoagent.com` to the project's authorized URLs.
+- [ ] Owner: create the Neon project (free plan, a US region near Render's Oregon), then in Render: New, Blueprint, this repo, and paste Neon's **pooled** connection string as `DATABASE_URL`. Check `/healthz` and one signup with curl.
+- [ ] The signup form on the website: `POST {api}/v1/signups`, call `/healthz` on load, hidden `website` honeypot field, send `source` as the page path and any `utm_*`. Point it at a custom domain (e.g. `api.nekkoagent.com`) or the `onrender.com` URL.
+- [ ] Before the form ships: a privacy line on the site saying what the form keeps, and how to unsubscribe.
+
 ## Swoop navigation rail (added 2026-10-17)
 
 See [SPEC](SPEC.md#swoop-navigation-rail-2026-10-17).
