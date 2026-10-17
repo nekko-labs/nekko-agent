@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher shortcuts. The link goes through the app lock like any other (DeepLink.NewChat). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="new_chat"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new_chat"
+        android:shortcutShortLabel="@string/shortcut_new_chat"
+        android:shortcutLongLabel="@string/shortcut_new_chat_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="nekko-agent://new"
+            android:targetClass="com.nekko.android.MainActivity"
+            android:targetPackage="com.nekko.native.android" />
+    </shortcut>
+</shortcuts>
