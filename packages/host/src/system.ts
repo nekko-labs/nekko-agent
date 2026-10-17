@@ -2,6 +2,7 @@ import os from 'os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { SystemStats } from '@nekko-agent/shared';
+import { readTemps } from './temps.js';
 
 /**
  * CPU load + RAM use for monitor surfaces. macOS uses VM page accounting
@@ -86,12 +87,14 @@ export async function getSystemStats(): Promise<SystemStats | null> {
         return null;
       }
     }
+    const temps = readTemps();
     return {
       cpuPct: Math.round(busyPct(from, now)),
       cpuCores: cpus.length,
       cpuModel: cpus[0]?.model?.trim() || undefined,
       memUsedMB: usedMB,
       memTotalMB: totalMB,
+      ...(temps ? { temps } : {}),
     };
   } catch {
     return null;

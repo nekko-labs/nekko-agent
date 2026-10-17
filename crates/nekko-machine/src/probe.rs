@@ -233,12 +233,25 @@ impl Machine {
             );
             return parse::ioreg_stats(&out, total);
         }
-        let smi = run_ok(
+        // Temperature rides on the same query; a driver too old to know the
+        // field fails the whole query, so it is asked again without it.
+        let mut smi = run_ok(
             "nvidia-smi",
-            &["--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu", "--format=csv,noheader,nounits"],
+            &[
+                "--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu",
+                "--format=csv,noheader,nounits",
+            ],
             Duration::from_secs(4),
         )
         .await;
+        if smi.is_none() {
+            smi = run_ok(
+                "nvidia-smi",
+                &["--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu", "--format=csv,noheader,nounits"],
+                Duration::from_secs(4),
+            )
+            .await;
+        }
         if let Some(stats) = smi.as_deref().and_then(parse::parse_nvidia_smi) {
             return Some(stats);
         }
@@ -296,6 +309,10 @@ impl Machine {
         }
         o.insert("memUsedMB".into(), num(used_mb));
         o.insert("memTotalMB".into(), num(total_mb));
+        // Sensors are best-effort: absent rather than a failed reading.
+        if let Ok(Some(temps)) = tokio::task::spawn_blocking(crate::temps::read).await {
+            o.insert("temps".into(), temps);
+        }
         Some(Value::Object(o))
     }
 

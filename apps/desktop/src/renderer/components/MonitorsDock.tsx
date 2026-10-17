@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { AutomationTask, ProviderConfig, RuntimeStatus, SessionSummary, UsageSummary } from '@nekko-agent/shared';
-import { RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor } from '@nekko-agent/shared';
+import type { AutomationTask, GpuStats, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SystemStats, UsageSummary } from '@nekko-agent/shared';
+import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor } from '@nekko-agent/shared';
 import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type InsightsPrefs, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
@@ -453,25 +453,44 @@ function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'us
     {error && <p role="alert">{error}</p>}
   </div>;
 }
+/**
+ * The Hardware monitor's rows. A temperature, where the machine reports one,
+ * sits at the right of its own row's label: the CPU sensor on CPU, DIMM
+ * sensors on Memory, each GPU's own reading on its GPU row (the system-wide
+ * GPU sensor when the GPU probe has none, e.g. AMD on Linux or Apple Silicon).
+ */
+export function hardwareRows(monitors: Record<MonitorKind, boolean>, system: SystemStats | null, gpu: GpuStats | null) {
+  const memory = (used: number, total: number) => total > 0 ? `${(used / 1024).toFixed(1)} / ${(total / 1024).toFixed(1)} GiB (${Math.round(used / total * 100)}%)` : 'Unavailable';
+  const devices: Array<{ name: string; utilizationPct?: number; temperatureC?: number }> = gpu?.devices.length ? gpu.devices : [{ name: '' }];
+  return [
+    { label: 'CPU', value: !monitors.cpu ? null : system?.cpuPct ?? null, text: !monitors.cpu ? 'Monitor off' : system ? `${system.cpuPct}%` : 'Unavailable', color: 'var(--accent)', temp: monitors.cpu ? system?.temps?.cpuC : undefined },
+    { label: 'Memory', value: monitors.memory && system && system.memTotalMB > 0 ? system.memUsedMB / system.memTotalMB * 100 : null, text: !monitors.memory ? 'Monitor off' : system ? memory(system.memUsedMB, system.memTotalMB) : 'Unavailable', color: 'var(--accent-2)', temp: monitors.memory ? system?.temps?.memoryC : undefined },
+    ...devices.map((device, index) => {
+      const value = monitors.gpu && Number.isFinite(device.utilizationPct) ? device.utilizationPct! : null;
+      // A per-device reading wins; the board-level sensor fills in for the only GPU.
+      const temp = monitors.gpu ? device.temperatureC ?? (devices.length === 1 ? system?.temps?.gpuC : undefined) : undefined;
+      return { label: device.name ? `GPU ${index + 1}: ${device.name}` : 'GPU', value, text: !monitors.gpu ? 'Monitor off' : value == null ? 'Unavailable' : `${value}%`, color: 'var(--success)', temp };
+    }),
+    { label: gpu ? gpuMemoryLabel(gpu) : 'VRAM', value: monitors.vram && gpu && gpu.totalMB > 0 ? gpu.usedMB / gpu.totalMB * 100 : null, text: !monitors.vram ? 'Monitor off' : gpu ? memory(gpu.usedMB, gpu.totalMB) : 'Unavailable', color: 'var(--warning)', temp: undefined as number | undefined },
+  ];
+}
+
+const TEMP_COLOR = { ok: 'var(--ink-faint)', warn: 'var(--warning)', hot: 'var(--danger)' } as const;
+
 function Hardware({ providers }: { providers: ProviderConfig[] }) {
   const monitors = useMonitors();
   const { system, gpu } = useResourceSample();
-  const memory = (used: number, total: number) => total > 0 ? `${(used / 1024).toFixed(1)} / ${(total / 1024).toFixed(1)} GiB (${Math.round(used / total * 100)}%)` : 'Unavailable';
-  const rows = [
-    { label: 'CPU', value: !monitors.cpu ? null : system?.cpuPct ?? null, text: !monitors.cpu ? 'Monitor off' : system ? `${system.cpuPct}%` : 'Unavailable', color: 'var(--accent)' },
-    { label: 'Memory', value: monitors.memory && system && system.memTotalMB > 0 ? system.memUsedMB / system.memTotalMB * 100 : null, text: !monitors.memory ? 'Monitor off' : system ? memory(system.memUsedMB, system.memTotalMB) : 'Unavailable', color: 'var(--accent-2)' },
-    ...(gpu?.devices.length ? gpu.devices : [{ name: '', utilizationPct: undefined }]).map((device, index) => {
-      const value = monitors.gpu && Number.isFinite(device.utilizationPct) ? device.utilizationPct! : null;
-      return { label: device.name ? `GPU ${index + 1}: ${device.name}` : 'GPU', value, text: !monitors.gpu ? 'Monitor off' : value == null ? 'Unavailable' : `${value}%`, color: 'var(--success)' };
-    }),
-    { label: gpu ? gpuMemoryLabel(gpu) : 'VRAM', value: monitors.vram && gpu && gpu.totalMB > 0 ? gpu.usedMB / gpu.totalMB * 100 : null, text: !monitors.vram ? 'Monitor off' : gpu ? memory(gpu.usedMB, gpu.totalMB) : 'Unavailable', color: 'var(--warning)' },
-  ];
+  const rows = hardwareRows(monitors, system, gpu);
   return <div className="monitors-dock__metrics monitors-dock__hardware">
     {rows.map((row) => <div className="monitors-dock__meter" key={row.label}>
-      <strong>{row.label}</strong>
+      <div className="monitors-dock__meter-head"><strong>{row.label}</strong>{formatTemperature(row.temp) && <span className="monitors-dock__temp" data-temp-tone={temperatureTone(row.temp!)} style={{ color: TEMP_COLOR[temperatureTone(row.temp!)] }} aria-label={`${row.label} temperature ${formatTemperature(row.temp)}`} title="Sensor temperature"><ThermometerGlyph />{formatTemperature(row.temp)}</span>}</div>
       <div className="monitors-dock__bar" role={row.value == null ? undefined : 'meter'} aria-label={row.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={row.value == null ? undefined : Math.max(0, Math.min(100, row.value))}>
         {row.value != null && <span style={{ width: `${Math.max(0, Math.min(100, row.value))}%`, background: row.color }} />}
       </div><span className="monitors-dock__reading">{row.text}</span>
     </div>)}
   </div>;
+}
+
+function ThermometerGlyph() {
+  return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" /></svg>;
 }
