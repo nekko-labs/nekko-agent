@@ -1028,7 +1028,7 @@ changes how the computer itself is set up:
   approvals and the agent's questions; pick a model from the computer's providers and a folder from
   its list; voice status and transcription; and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
-  revoking, rotating the secret), terminals, writing files, adding or removing folders, installing
+  revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes, adding or removing folders, installing
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
   servers and hooks. Everything not on the allowed list is refused too, with an error that starts
   *Not allowed from a paired phone*.
@@ -1038,6 +1038,11 @@ changes how the computer itself is set up:
 - **Settings a phone can read:** only the theme and accents, the default and starred models, and
   the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
   instructions never leave the computer this way; provider lists arrive as name and type only.
+- **A chat's changes, read only, only if you allow it:** with *Let phones see changes* on (off
+  unless you turn it on, in Remote access on the computer), a phone can see a diff of the files the
+  agent changed in a chat. Your computer works out the diff and sends only that: short paths, a
+  capped number of lines, and files that may hold secrets (`.env`, keys, `.ssh`, `.aws`) counted but
+  never shown. A phone still can't accept or revert changes or read any other file.
 - **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer.
