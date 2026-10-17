@@ -10,10 +10,25 @@ test('CI cancels stale PR revisions without cancelling main runs', () => {
   assert.ok(ci.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"));
 });
 
-test('a bot merge dispatches full CI on main, since GITHUB_TOKEN merges start no push run', () => {
+test('CI runs in three tiers: PR, merge queue, and a 6-hourly full run', () => {
+  const on = read('../.github/workflows/ci.yml').split('\njobs:')[0];
+  for (const trigger of ['pull_request:', 'merge_group:', 'schedule:', 'workflow_dispatch:']) assert.ok(on.includes(`\n  ${trigger}`), trigger);
+  assert.ok(on.includes("cron: '17 */6 * * *'"));
+  // The queue replaces per-merge runs on main.
+  assert.ok(!/\n  push:/.test(on));
+  assert.ok(!read('../.github/workflows/auto-merge.yml').includes('gh workflow run ci.yml'));
+});
+
+test('gate is the single required check and sees every job', () => {
+  const gate = read('../.github/workflows/ci.yml').split('\n  gate:')[1];
+  assert.ok(gate.includes('needs: [scope, build, daemon, capture, perf]'));
+  assert.ok(gate.includes('if: always()'));
+  assert.ok(gate.includes('(failure|cancelled)'));
+});
+
+test('auto-merge queues only ready PRs into main, never a stacked layer', () => {
   const merge = read('../.github/workflows/auto-merge.yml');
-  assert.ok(merge.includes('gh workflow run ci.yml --repo "$GH_REPO" --ref main'));
-  assert.match(read('../.github/workflows/ci.yml'), /\n  workflow_dispatch:\n/);
+  assert.ok(merge.includes("!github.event.pull_request.draft && github.event.pull_request.base.ref == 'main'"));
 });
 
 test('required build restores a dedicated Rust cache before compiling', () => {
