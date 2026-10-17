@@ -114,10 +114,37 @@ final class DeepLinkTests: XCTestCase {
         XCTAssertTrue(app.newChatRequested)
         XCTAssertNil(app.pendingLink)
         app.newChatRequested = false
+        // The Home Screen quick action opens the same link; an unknown type does nothing.
+        XCTAssertEqual(QuickAction.url(for: QuickAction.newChat)?.absoluteString, "nekko-agent://new")
+        XCTAssertNil(QuickAction.url(for: "com.nekko.native.ios.other"))
+        XCTAssertTrue(QuickAction.perform(QuickAction.newChat))
+        XCTAssertTrue(app.newChatRequested)
+        app.newChatRequested = false
     }
 }
 
 final class StatusWidgetTests: XCTestCase {
+    func testTheWatchKeepsTheLastCountsForItsComplication() throws {
+        let suite = "nekko.tests.watch.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(WatchStatus.load(defaults), .empty)
+        let s = StatusSnapshot(computer: "Mac", online: false, needsYou: 0, running: 3, at: Date(timeIntervalSince1970: 1_800_000_000))
+        WatchStatus.save(s, defaults)
+        XCTAssertEqual(WatchStatus.load(defaults), s)
+    }
+
+    func testTheWatchGetsTheSameCountsAndNothingElse() throws {
+        let s = StatusSnapshot(computer: "Mac", online: true, needsYou: 2, running: 1, at: Date(timeIntervalSince1970: 1_800_000_000))
+        let context = s.watchContext
+        XCTAssertEqual(Array(context.keys), [StatusSnapshot.watchKey])
+        XCTAssertEqual(StatusSnapshot(watchContext: context), s)
+        let json = String(decoding: try XCTUnwrap(context[StatusSnapshot.watchKey] as? Data), as: UTF8.self)
+        for key in ["computer", "online", "needsYou", "running", "at"] { XCTAssertTrue(json.contains(key), key) }
+        XCTAssertNil(StatusSnapshot(watchContext: ["status": Data("nope".utf8)]))
+        XCTAssertNil(StatusSnapshot(watchContext: [:]))
+    }
+
     func testHeadlineSaysWhatNeedsYouFirst() {
         func s(_ needs: Int, _ running: Int, online: Bool = true, computer: String? = "Mac") -> String {
             StatusSnapshot(computer: computer, online: online, needsYou: needs, running: running, at: .now).headline

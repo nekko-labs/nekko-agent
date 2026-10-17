@@ -358,6 +358,11 @@ interface UiState {
   composerSeed: { sessionId: string; text: string; images: string[] } | null;
   seedComposer: (sessionId: string, text: string, images: string[]) => void;
   /**
+   * Text a chat's Find-in-chat bar opens with the next time that chat shows
+   * its transcript (Search chats opening a message match). Consumed once.
+   */
+  findSeed: { sessionId: string; query: string } | null;
+  /**
    * Start a new chat holding this chat's conversation up to (not including)
    * `beforeMessageId`, with that message's text and images waiting in its
    * composer. "Split here" from a message.
@@ -595,6 +600,7 @@ export const useStore = create<UiState>((set, get) => ({
   archivedViewId: null,
   focusRequest: null,
   composerSeed: null,
+  findSeed: null,
 
   focusChatOnWall: (sessionId) => set({ focusRequest: sessionId, view: 'command' }),
 

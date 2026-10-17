@@ -17,6 +17,7 @@ import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBu
 import { archiveDaysLeft, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
+import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { useGitStatus } from '../useGitStatus.js';
 import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
@@ -776,10 +777,24 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // fresh (focused, empty), and closing it clears the highlights.
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchEpoch, setSearchEpoch] = useState(0);
+  const [searchSeed, setSearchSeed] = useState('');
   const openSearch = useCallback(() => {
+    setSearchSeed('');
     setSearchOpen(true);
     setSearchEpoch((n) => n + 1);
   }, []);
+  // Search chats opened this chat from a message match: open Find in this chat
+  // on the words that matched, so the reader lands on them. Only a surface that
+  // shows the transcript takes it; the wall's composer pane leaves it for its
+  // transcript window.
+  const findSeed = useStore((s) => (s.findSeed?.sessionId === sessionId ? s.findSeed : null));
+  useEffect(() => {
+    if (!findSeed || surface === 'composer') return;
+    useStore.setState({ findSeed: null });
+    setSearchSeed(findSeed.query);
+    setSearchOpen(true);
+    setSearchEpoch((n) => n + 1);
+  }, [findSeed, surface]);
   const transcriptRef = useRef<VirtualTranscriptHandle>(null);
   const composerRef = useRef<MarkdownEditorElement>(null);
   // A dragged composer height, or null to size to the draft. See COMPOSER_H_KEY.
@@ -1066,7 +1081,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           setQuestion((q) => (q?.callId === e.callId ? null : q));
           break;
         case 'tool_result':
-          setApproval(null);
+          // Parallel work can finish while another tool is still waiting on us.
+          setApproval((current) => approvalAfterResult(current, e.result.toolCallId));
           // The step just landed on disk, so the bundle can account for it (and
           // for the tool's output, which the renderer never sees in full).
           refreshCtxThrottled();
@@ -2300,6 +2316,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
+  // Leaving the clean start because the user sent (the welcome is gone, it is
+  // still the same focused chat) plays the composer-into-chat expansion once.
+  const wasCleanStart = useRef(false);
+  const [expanding, setExpanding] = useState(false);
+  useLayoutEffect(() => {
+    if (wasCleanStart.current && !cleanStart && cleanStartWanted && !welcomeState.welcome) setExpanding(true);
+    wasCleanStart.current = cleanStart;
+  }, [cleanStart, cleanStartWanted, welcomeState.welcome]);
   const onCompacted = useCallback(() => {
     refreshCtxRef.current();
     loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
@@ -2353,7 +2377,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   return (
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
-    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); setChatMenu({ x: e.clientX, y: e.clientY }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
+    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); setChatMenu({ x: e.clientX, y: e.clientY }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
       {contextChangeNotice && <Modal title="Context on your next reply" zIndex={100} overlayClassName="p-4" className="w-full max-w-md rounded-xl border border-line bg-surface p-5 text-ink shadow-xl" onClose={closeContextNotice}>
             <h2 className="font-semibold">Context on your next reply</h2>
             <p className="mt-3 text-sm text-ink-soft">Your selection is saved. Changing the model or effort does not send a request now or change an already-running reply. The next reply sends the assembled chat context again, as ordinary follow-up replies do.</p>
@@ -2567,6 +2591,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           {searchOpen && (
             <ChatSearchBar
               key={searchEpoch}
+              initialQuery={searchSeed}
               rows={rows}
               scrollRoot={transcriptScroller}
               transcript={transcriptRef}
@@ -3189,8 +3214,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             folder and usage controls live in the agent window), so it draws no
             chrome of its own: empty, it used to show as a bare band under the
             composer. */}
+        {/* The PR deck sits above the strip and rises from its top divider. */}
+        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} />}
         {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 border-t border-line bg-surface px-3 py-1.5'} aria-label="Chat actions and information">
-          <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} />
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
           {!imageMode && surface !== 'composer' && <div className="flex flex-wrap items-center gap-2">

@@ -814,10 +814,12 @@
      read as part of the page instead of as a frame around it. Its height is
      `TITLEBAR_HEIGHT` in src/windowChrome.ts — the main process gives the
      Window Controls Overlay the same number, and the two have to agree or the
-     buttons stop lining up with the wordmark. The strip itself is 58px, 20px
-     taller than that band, so the mark and heading get more space above
-     them; the trailing controls stay in the top 38px (see below). */
-  height: 58px;
+     buttons stop lining up with the wordmark. The strip itself is 46px, 8px
+     taller than that band; with the 12px top padding below, the mark and
+     heading keep the line they had in the old 58px strip (centred at 29px)
+     while the empty band under the toolbar shrinks. The trailing controls
+     stay in the top 38px (see below). */
+  height: 46px;
   flex: none;
   display: flex;
   align-items: center;
@@ -841,8 +843,9 @@
      (`trafficLightPosition` in the main process centres them on this line), so
      the wordmark starts after them rather than underneath. */
   padding-left: 92px;
-  /* Lift the mark and heading 8px onto the traffic lights' line. */
-  padding-bottom: 16px;
+  /* Lift the mark and heading onto the traffic lights' line (centre 21px,
+     as in the old 58px strip with 16px). */
+  padding-bottom: 4px;
 }
 
 @utility titlebar-heading {
@@ -875,10 +878,12 @@
    Windows/Linux caption buttons unless the developer controls already do. */
 .titlebar:not(.titlebar-mac):not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 138px; }
 .titlebar-mac:not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 10px; }
-/* The strip is 58px but the native caption buttons keep their 38px band
-   (`TITLEBAR_HEIGHT`). Hold the trailing controls in that band. */
+/* The strip is 46px with 12px top padding (mark and heading centred at 29px),
+   but the native caption buttons keep their 38px band (`TITLEBAR_HEIGHT`).
+   Hold the trailing controls in that band, pulling them back over the padding. */
+.titlebar:not(.titlebar-mac) { padding-top: 12px; }
 .titlebar:not(.titlebar-mac) #command-titlebar-slot,
-.titlebar:not(.titlebar-mac) .developer-server-controls { align-self: flex-start; height: 38px; align-items: flex-end; }
+.titlebar:not(.titlebar-mac) .developer-server-controls { align-self: flex-start; height: 38px; margin-top: -12px; align-items: flex-end; }
 /* Inside that band every control centres on one line, so the labels (All,
    Focus, Panels...) share a text line even though the pills differ in height. */
 .titlebar:not(.titlebar-mac) #command-titlebar-slot > .wall-toolbar-titlebar,
@@ -1630,6 +1635,17 @@
 .chat-search-input, .chat-search-input:focus, .chat-search-input:focus-visible { outline: none; box-shadow: none; }
 ::highlight(nekko-chat-search) { background-color: color-mix(in srgb, var(--highlight) 32%, transparent); color: inherit; }
 ::highlight(nekko-chat-search-current) { background-color: var(--highlight); color: #1b1304; }
+/* Search within Settings (icon in the Appearance header + floating bar). */
+.settings-search-btn { display: inline-flex; align-items: center; justify-content: center; height: 28px; width: 28px; border-radius: 6px; color: var(--ink-faint); }
+.settings-search-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.settings-search-btn:disabled { opacity: .4; cursor: default; }
+.settings-search-pop .settings-search-btn { height: 24px; width: 24px; }
+.settings-search-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.settings-search-pop { position: fixed; z-index: 60; transform: translateY(-4px); display: flex; align-items: center; gap: 8px; width: 320px; padding: 6px 6px 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: 13px; color: var(--ink); }
+.settings-search-input, .settings-search-input:focus, .settings-search-input:focus-visible { outline: none; box-shadow: none; }
+::highlight(nekko-settings-search) { background-color: color-mix(in srgb, var(--highlight) 32%, transparent); color: inherit; }
+::highlight(nekko-settings-search-current) { background-color: var(--highlight); color: #1b1304; }
 /* Beside the open Agent Monitor toggle, the bar moves left of it. */
 .plan-rail-toggle ~ .chat-search { right: 150px; }
 
@@ -1948,16 +1964,20 @@
 .composer-summary-meta { color: var(--ink-faint); font-weight: 400; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .pane-flash { animation: none; } }
 
-/* The PR deck rises from the footer divider, reserving space above controls. */
-.pr-action-deck { position: relative; width: 90%; margin: -7px auto 6px; padding: 0 8px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 10px 10px; background: var(--surface); box-shadow: 0 3px 14px rgb(0 0 0 / 6%); }
+/* The PR deck rises from the footer divider: a tab whose open bottom edge sits
+   on the strip's top border (the -1px margin covers that line), its toggle on
+   the divider and its cards growing upward. With no strip below (the wall
+   composer) it closes into a full rounded card. */
+.pr-action-deck { position: relative; z-index: 1; flex-shrink: 0; display: flex; flex-direction: column; width: 90%; margin: 6px auto -1px; padding: 0 8px; border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--surface); box-shadow: 0 -3px 14px rgb(0 0 0 / 6%); }
+.pr-action-deck[data-floating=true] { margin-bottom: 6px; border-bottom: 1px solid var(--line); border-radius: 10px; }
 .pr-deck-toggle { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 5px 3px; font-size: 11px; color: var(--ink-soft); border-radius: 8px; }
 .pr-deck-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .pr-deck-chevron { transition: transform 220ms ease; }
-.pr-action-deck[data-expanded=false] .pr-deck-chevron { transform: rotate(180deg); }
+.pr-action-deck[data-expanded=true] .pr-deck-chevron { transform: rotate(180deg); }
 .pr-deck-reveal { display: grid; grid-template-rows: 1fr; opacity: 1; transform: translateY(0); transition: grid-template-rows 240ms ease, opacity 180ms ease, transform 240ms ease; }
 .pr-action-deck[data-expanded=false] .pr-deck-reveal { grid-template-rows: 0fr; opacity: 0; transform: translateY(10px) scale(.98); }
 .pr-deck-clip { min-height: 0; overflow: hidden; }
-.pr-deck-list { max-height: 180px; overflow-y: auto; padding: 1px 0 2px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.pr-deck-list { max-height: 180px; overflow-y: auto; padding: 6px 0 1px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .pr-deck-card { background: var(--paper); }
 
 /* Response artifact cards (ChatArtifacts). A quieter cousin of the merged-PR
@@ -2146,7 +2166,19 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-auto-arrange [role='tooltip'] { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; width: 230px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--win); color: var(--ink); font-size: 12px; pointer-events: none; opacity: 0; visibility: hidden; }
 .wall-auto-arrange[data-visible='true']:hover [role='tooltip'], .wall-auto-arrange[data-visible='true']:focus-within [role='tooltip'] { opacity: 1; visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .wall-auto-arrange { transition: none; transform: none; } }
-.command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-selected] > .panel { --panel-ring-color: var(--accent) !important; box-shadow: none; }
+/* Focused only: one window fills the board, so its selection ring is a quiet
+   hint (accent mixed well into the line colour), not a full-strength outline. */
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-selected] > .panel { --panel-ring-color: color-mix(in srgb, var(--accent) 28%, var(--line)) !important; box-shadow: none; }
+/* Focused: a new agent fades in as its prompt view. */
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-hero][data-wall-entering] > .panel { animation: focus-new-agent-in 320ms cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes focus-new-agent-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+/* Focused: after the first send, the centred composer expands into the full
+   chat. The window's chat body grows out of the composer's place. */
+[data-chat-expanding] > section { animation: composer-expand-in 420ms cubic-bezier(.22, 1, .36, 1) both; transform-origin: 50% 70%; }
+@keyframes composer-expand-in { from { opacity: .35; transform: scale(.92, .55); border-radius: 18px; } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-entering] > .panel, [data-chat-expanding] > section { animation: none; }
+}
 .command-wall-layout[data-wall-layout='focus'] .composer, .command-wall-layout[data-wall-layout='focus'] .composer:focus-within { box-shadow: none; }
 /* The All/Agents/Terminals filter shares this frame exactly. It used to be
    `rounded-lg`, which also picks up `corner-shape: squircle`, so its corners
@@ -2278,10 +2310,27 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .chat-finder-row.is-cursor { background: var(--surface-2); }
 /* The wait before a search, drawn as a line that fills while typing pauses. */
 .chat-finder-progress { height: 2px; margin: 0 6px; border-radius: 1px; background: var(--accent); transform: scaleX(0); transform-origin: left; opacity: 0; }
-.chat-finder-progress[data-active] { opacity: 0.7; animation: chat-finder-wait 1.5s linear forwards; }
+.chat-finder-progress[data-active] { opacity: 0.7; animation: chat-finder-wait 1s linear forwards; }
 @keyframes chat-finder-wait { to { transform: scaleX(1); } }
+.chat-finder-tabs { scrollbar-width: none; }
+.chat-finder-chip { padding: 2px 9px; border-radius: 999px; font-size: 11.5px; color: var(--ink-faint); border: 1px solid var(--line); background: transparent; }
+.chat-finder-chip:hover { color: var(--ink); background: var(--surface-2); }
+.chat-finder-chip.is-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.chat-finder-tool { color: var(--ink-faint); }
+.chat-finder-tool:hover { color: var(--ink); background: var(--surface-2); }
+.chat-finder-tool.is-on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.chat-finder-badge { padding: 0 6px; border-radius: 999px; font-size: 10px; line-height: 16px; color: var(--ink-faint); background: var(--surface-2); }
+.chat-finder-calendar-wrap { border: 1px solid var(--line); background: var(--surface); }
+.chat-finder-day { border-radius: 6px; color: var(--ink); }
+.chat-finder-day:hover { background: var(--surface-2); }
+.chat-finder-day.is-future { color: var(--ink-faint); }
+.chat-finder-day[data-today] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent); }
+.chat-finder-day[data-in-range] { border-radius: 0; background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.chat-finder-day[data-edge] { border-radius: 6px; color: var(--paper); background: var(--accent); }
+.chat-finder-spinner { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line); border-top-color: var(--accent); animation: chat-finder-spin 0.8s linear infinite; }
+@keyframes chat-finder-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .chat-finder, .chat-finder-progress[data-active] { animation: none; }
+  .chat-finder, .chat-finder-progress[data-active], .chat-finder-spinner { animation: none; }
   .chat-finder-progress[data-active] { transform: scaleX(1); opacity: 0.4; }
 }
 

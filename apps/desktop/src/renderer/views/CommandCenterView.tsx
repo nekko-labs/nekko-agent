@@ -9,7 +9,7 @@ import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD } from '@nekko
 import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { GridIcon, PhotoIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
+import { PhotoIcon, TerminalIcon, FocusLayoutIcon, BoltIcon, PanelIcon, WandIcon } from '../icons.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -526,17 +526,6 @@ export function WallToolbar({
   onPick?: (selection: AgentWindowSelection) => Promise<void>;
 }) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
-  const [fixedOpen, setFixedOpen] = useState(false);
-  const [hoverSize, setHoverSize] = useState({ rows: wall.layout.rows, cols: wall.layout.cols });
-  const fixedRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!fixedOpen) return;
-    const down = (e: MouseEvent) => { if (!fixedRef.current?.contains(e.target as Node)) setFixedOpen(false); };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setFixedOpen(false); };
-    window.addEventListener('mousedown', down);
-    window.addEventListener('keydown', key);
-    return () => { window.removeEventListener('mousedown', down); window.removeEventListener('keydown', key); };
-  }, [fixedOpen]);
   const canArrange = wall.layout.mode === 'grid' && !!wall.root && isSplit(wall.root);
   const panel = readAgentPanel(wall.agentPanel);
   // In the desktop shell the controls share the title bar's row with the
@@ -579,13 +568,10 @@ export function WallToolbar({
           <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" ref={addButtonRef} onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
-        <div className="wall-layout-control" ref={fixedRef}>
+        <div className="wall-layout-control">
           <div className="wall-layout-segments" role="group" aria-label="Wall layout">
-            {(['focus', 'grid', 'fixed'] as const).map((mode) => (
-              <button key={mode} type="button" title={`${LAYOUT_LABEL[mode]} (${layoutShortcutLabel(mode)})`} aria-pressed={wall.layout.mode === mode} aria-expanded={mode === 'fixed' ? fixedOpen : undefined} onClick={() => {
-                if (mode === 'fixed') { setHoverSize({ rows: wall.layout.rows, cols: wall.layout.cols }); setFixedOpen((open) => !open); }
-                else { setFixedOpen(false); setWall((w) => ({ ...w, layout: { ...w.layout, mode } })); }
-              }}>{React.createElement(mode === 'focus' ? FocusLayoutIcon : mode === 'grid' ? GridIcon : FixedLayoutIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[mode]}</button>
+            {(['focus', 'grid'] as const).map((mode) => (
+              <button key={mode} type="button" title={`${LAYOUT_LABEL[mode]} (${layoutShortcutLabel(mode)})`} aria-pressed={wall.layout.mode === mode} onClick={() => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))}>{React.createElement(mode === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[mode]}</button>
             ))}
           </div>
           <div className="wall-auto-arrange" data-visible={wall.layout.mode === 'grid'}>
@@ -594,17 +580,6 @@ export function WallToolbar({
             </button>
             <span id="wall-auto-arrange-tip" role="tooltip">Fit windows above the composer in even rows and columns.</span>
           </div>
-          {fixedOpen && <div className="wall-fixed-picker" role="dialog" aria-label="Grid size">
-            <p className="wall-fixed-shortcut">{layoutShortcutLabel('fixed')} · Grid view</p>
-            <p>{hoverSize.cols} columns × {hoverSize.rows} rows</p>
-            <div className="wall-fixed-cells" onMouseLeave={() => setHoverSize({ rows: wall.layout.rows, cols: wall.layout.cols })}>
-              {Array.from({ length: 36 }, (_, i) => {
-                const rows = Math.floor(i / 6) + 1;
-                const cols = i % 6 + 1;
-                return <button key={i} type="button" aria-label={`${cols} columns by ${rows} rows`} className={rows <= hoverSize.rows && cols <= hoverSize.cols ? 'is-preview' : ''} onMouseEnter={() => setHoverSize({ rows, cols })} onFocus={() => setHoverSize({ rows, cols })} onClick={() => { setWall((w) => ({ ...w, layout: { mode: 'fixed', rows, cols } })); setFixedOpen(false); }} />;
-              })}
-            </div>
-          </div>}
         </div>
         {/* Same frame as the layout segments beside it (plain 8px corners, not
             the squircle `rounded-lg` gets), so the two groups match. */}

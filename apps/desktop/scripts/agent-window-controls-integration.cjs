@@ -30,7 +30,9 @@ async function main() {
     const html=path.join(out,'index.html'); fs.writeFileSync(html,fs.readFileSync(html,'utf8').replace('<script src="fixture.js">','<script src="chrome-bootstrap.js"></script><script src="fixture.js">'));
   }
   const env = { ...process.env, NEKKO_INTEGRATION_OUT: out }; delete env.ELECTRON_RUN_AS_NODE;
-  const result = cp.spawnSync(require(path.join(modules, 'electron')), [path.join(__dirname, 'agent-window-controls-sandbox.cjs')], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 240000 });
+  // NEKKO_CONTROLS_SANDBOX picks another capture script for the same fixture.
+  const sandbox = path.join(__dirname, path.basename(process.env.NEKKO_CONTROLS_SANDBOX || 'agent-window-controls-sandbox.cjs'));
+  const result = cp.spawnSync(require(path.join(modules, 'electron')), [sandbox], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 240000 });
   if (result.error) throw result.error;
   process.exitCode = result.status ?? 1;
 }

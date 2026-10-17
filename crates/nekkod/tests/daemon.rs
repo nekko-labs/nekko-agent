@@ -1171,6 +1171,23 @@ async fn collect_until_done(socket: &mut Socket, sessions: &[&str]) -> Vec<(Stri
     seen
 }
 
+/// The next frame about a chat or a request, past the backend's own chatter:
+/// the fake backend greets every socket every 100 ms with a session-less
+/// `hello-from-backend`, and a socket may hear `daemon:backend` when the
+/// backend comes up. Either can land between any two frames a test expects.
+async fn next_chat_frame(socket: &mut Socket) -> Value {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let f = next_json(socket, deadline.saturating_duration_since(Instant::now())).await.expect("a frame");
+        let hello = f["channel"] == "agent:event"
+            && f["payload"]["type"] == "hello-from-backend"
+            && f["payload"]["sessionId"].is_null();
+        if !hello && f["channel"] != "daemon:backend" {
+            return f;
+        }
+    }
+}
+
 fn streamed_text(frames: &[(String, Value)], session: &str) -> String {
     let mut out = String::new();
     for (channel, p) in frames {
@@ -1202,18 +1219,8 @@ async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_tur
     a.send(Message::Text(json!({ "id": 1, "channel": "daemon:subscribe", "args": [["s_one"]] }).to_string().into()))
         .await
         .unwrap();
-    // The fake backend greets every socket every 100 ms with a session-less
-    // `hello-from-backend`; one may land first. No chat's event may.
-    let ack = loop {
-        let f = next_json(&mut a, Duration::from_secs(5)).await.unwrap();
-        if f["channel"] == "agent:event"
-            && f["payload"]["type"] == "hello-from-backend"
-            && f["payload"]["sessionId"].is_null()
-        {
-            continue;
-        }
-        break f;
-    };
+    // The backend's own chatter may land first (`next_chat_frame`). No chat's event may.
+    let ack = next_chat_frame(&mut a).await;
     assert_eq!(
         ack,
         json!({ "id": 1, "result": true }),
@@ -1280,9 +1287,24 @@ async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_tur
     three["facts"]["hostEvents"] = json!(["done", "error"]);
     post(port, "chat:turn", json!([three]), Some(TOKEN)).await;
     wait_pending(port, "s_one", "question", "c_wait").await;
+    // The question is pending before its event is published: wait until a
+    // socket that hears every chat has it, so the replay below holds it too.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let f = next_json(&mut c, Duration::from_secs(10)).await.expect("c is still open");
+            if f["channel"] == "agent:event"
+                && f["payload"]["sessionId"] == "s_one"
+                && f["payload"]["type"] == "question"
+            {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("the question event reached every chat's socket");
     let mut late = ws(port, &format!("/api/ws?sessions=s_two&token={TOKEN}"), None).await.unwrap();
     // Connected narrowed: told that s_one is running (its first event).
-    let first = next_json(&mut late, Duration::from_secs(5)).await.unwrap();
+    let first = next_chat_frame(&mut late).await;
     assert_eq!(
         (first["channel"].as_str(), first["payload"]["sessionId"].as_str()),
         (Some("agent:event"), Some("s_one")),
@@ -1293,12 +1315,12 @@ async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_tur
     ))
     .await
     .unwrap();
-    let replay = next_json(&mut late, Duration::from_secs(5)).await.unwrap();
+    let replay = next_chat_frame(&mut late).await;
     assert_eq!(replay["channel"], "agent:replay", "{replay}");
     let types: Vec<&str> =
         replay["payload"]["events"].as_array().unwrap().iter().map(|e| e["type"].as_str().unwrap()).collect();
     assert!(types.contains(&"tool_call") && types.contains(&"question"), "{types:?}");
-    assert_eq!(next_json(&mut late, Duration::from_secs(5)).await.unwrap(), json!({ "id": 7, "result": true }));
+    assert_eq!(next_chat_frame(&mut late).await, json!({ "id": 7, "result": true }));
     post(port, "chat:answer", json!(["s_one", "c_wait", [{ "questionId": "q1", "labels": ["yes"] }]]), Some(TOKEN))
         .await;
     let rest = collect_until_done(&mut late, &["s_one"]).await;
@@ -3670,8 +3692,19 @@ fn fake_llama() -> std::path::PathBuf {
     path
 }
 
+/// A port for a server the daemon binds later (the engine binds its port at
+/// the first load, seconds on). A port 0 picked would be free only until then:
+/// any `bind(0)` in the run (a daemon, a fake server, a model process) may be
+/// handed it meanwhile. So pick below every OS's ephemeral range (Linux starts
+/// at 32768, macOS and Windows at 49152), apart per test process, never twice.
 fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+    use std::sync::atomic::{AtomicU16, Ordering};
+    static NEXT: AtomicU16 = AtomicU16::new(0);
+    let base = 20_000 + (std::process::id() % 400) as u16 * 25;
+    (0..100)
+        .map(|_| base + NEXT.fetch_add(1, Ordering::Relaxed) % 25)
+        .find(|&port| std::net::TcpListener::bind(("127.0.0.1", port)).is_ok())
+        .expect("a free port below the ephemeral range")
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -3870,17 +3903,15 @@ async fn compaction_progress(port: u16, session_id: &str) -> Vec<Value> {
 }
 
 async fn wait_progress(port: u16, session_id: &str, state: &str) -> Vec<Value> {
-    tokio::time::timeout(Duration::from_secs(20), async {
-        loop {
-            let all = compaction_progress(port, session_id).await;
-            if all.last().is_some_and(|p| p["state"] == state) {
-                return all;
-            }
-            tokio::time::sleep(Duration::from_millis(25)).await;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let all = compaction_progress(port, session_id).await;
+        if all.last().is_some_and(|p| p["state"] == state) {
+            return all;
         }
-    })
-    .await
-    .unwrap_or_else(|_| panic!("compaction never reached {state}"))
+        assert!(Instant::now() < deadline, "compaction never reached {state}: {all:?}");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -4146,7 +4177,7 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     assert_eq!(messages.len(), 2);
     assert_eq!(messages[0]["content"], "a calico cat");
     let reply = &messages[1];
-    let image = reply["images"][0].as_str().unwrap();
+    let image = reply["images"][0].as_str().unwrap_or_else(|| panic!("no image in the reply: {reply}"));
     // The stand-in drew the request it was sent: the trimmed prompt with the
     // steps, guidance and seed, and the size (`imageGenerationBody`).
     let drawn = image.strip_prefix("data:image/png;base64,").unwrap();

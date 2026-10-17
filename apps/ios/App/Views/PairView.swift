@@ -46,8 +46,8 @@ struct TailscaleGuide: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Connect over Tailscale (recommended)").font(.headline).foregroundStyle(palette.ink)
             step(1, "Install Tailscale on your computer and this iPhone, and sign in to the same tailnet.")
-            step(2, "On the computer, run the private relay: `npm run relay:tailscale` (or `scripts/private-relay.sh`). It prints a ws://<name>.<tailnet>.ts.net:4400 address.")
-            step(3, "In Nekko Agent on the computer: Settings → Remote access, paste that address as the relay, turn Remote access on and show the pairing code.")
+            step(2, "In Nekko Agent on the computer: Settings → Remote access → Relay on this computer → Start relay, then Use this relay.")
+            step(3, "Turn Remote access on and choose Pair a phone to show the pairing code.")
             step(4, "Scan the code here. Traffic stays inside your tailnet (WireGuard) and is end-to-end encrypted on top.")
             HStack(spacing: 8) {
                 Circle().fill(tailnet ? palette.success : palette.inkFaint).frame(width: 8, height: 8)
@@ -134,6 +134,7 @@ struct PairView: View {
             if let error {
                 Section { Text(error).foregroundStyle(palette.danger).font(.footnote) }
             }
+            NearbySection()
             Section { TailscaleGuide().listRowInsets(EdgeInsets()) }
         }
         .navigationTitle("Pair")
@@ -161,6 +162,54 @@ struct PairView: View {
             busy = false
             if error == nil { done() }
         }
+    }
+}
+
+/// Computers on this Wi-Fi that say they run Nekko Agent (the desktop's
+/// *Visible on this network*). A pointer only: their record holds no secrets,
+/// so pairing still takes the computer's code. Looks only when asked.
+struct NearbySection: View {
+    @Environment(\.palette) private var palette
+    @State private var browser = NearbyBrowser()
+
+    var body: some View {
+        Section {
+            ForEach(browser.found) { c in
+                VStack(alignment: .leading, spacing: 2) {
+                    Label(c.name, systemImage: "desktopcomputer").foregroundStyle(palette.ink)
+                    Text(c.relayUrl.map { "Runs its own relay: \(Pairing.relayHost($0))" } ?? "On this network")
+                        .font(.footnote).foregroundStyle(palette.inkSoft)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            if browser.state == .looking {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Looking…").foregroundStyle(palette.inkSoft)
+                }
+                .frame(minHeight: 44)
+            } else {
+                Button(browser.looked || !browser.found.isEmpty ? "Look again" : "Look on this network") { browser.start() }
+                    .frame(minHeight: 44)
+            }
+            if browser.state == .denied {
+                Text("Local network access is off for Nekko Agent. Turn it on in Settings → Privacy & Security → Local Network.")
+                    .font(.footnote).foregroundStyle(palette.danger)
+                Link("Open Settings", destination: URL(string: UIApplication.openSettingsURLString)!).font(.footnote.weight(.semibold))
+                    .frame(minHeight: 44, alignment: .leading)
+            } else if case .failed(let message) = browser.state {
+                Text("Couldn’t look on this network: \(message)").font(.footnote).foregroundStyle(palette.danger)
+            } else if browser.looked && browser.found.isEmpty && browser.state == .idle {
+                Text("No computers found. On the computer, turn on Settings → Remote access → Visible on this network. Some Wi-Fi networks (offices, hotels) block this; the code always works.")
+                    .font(.footnote).foregroundStyle(palette.inkSoft)
+            }
+        } header: {
+            SectionHeader("On this network")
+        } footer: {
+            Text("Finding a computer doesn’t pair with it. On the computer you want: Settings → Remote access → Pair a phone, then scan its code above.")
+                .foregroundStyle(palette.inkSoft)
+        }
+        .onDisappear { browser.stop() }
     }
 }
 
