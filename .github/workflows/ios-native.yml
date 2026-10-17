@@ -100,7 +100,7 @@ jobs:
           failed=0
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test -skip-testing:NekkoNativeUITests/LiveRelayTests || failed=1
           # The live journey, once per theme, each against a fresh stack (pairing codes are single-use).
-          for THEME in light dark; do
+          for THEME in dark light; do
             xcrun simctl ui "$DEVICE" appearance "$THEME"
             ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env"
             . "/tmp/stack-$THEME.env"
