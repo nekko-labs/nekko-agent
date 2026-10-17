@@ -36,7 +36,7 @@ const reply = { id: 'a_new', role: 'assistant', content: 'Done.', createdAt: 5 }
 
 const CASES: Case[] = [
   { name: 'plain', fixture: 's_tools', disk: [], turn: { messagesAppend: [reply], activeRun: { startedAt: 1 } } },
-  { name: 'user renamed and changed options', fixture: 's_tools', disk: [['setOptions', { title: 'Mine', pinned: true, mode: 'ask', thinking: false }], ['setSpecLinked', true]], turn: { title: 'Auto title', titleAuto: true, messagesAppend: [reply] } },
+  { name: 'user renamed and changed options', fixture: 's_tools', disk: [['setOptions', { title: 'Mine', pinned: true, mode: 'ask', thinking: false, effort: 'low', disabledMcpServers: ['web'], disabledConnectors: ['slack'] }], ['setSpecLinked', true]], turn: { title: 'Auto title', titleAuto: true, messagesAppend: [reply] } },
   { name: 'turn set fields the disk lacks', fixture: 's_plain', disk: [], turn: { pinned: true, tags: ['x'], queue: ['stale'], agentPlan: [{ id: 'step_1', title: 'a', status: 'pending', createdAt: 1, updatedAt: 1 }] } },
   { name: 'queued claim', fixture: 's_extra', disk: [['queue', 'first'], ['queue', { text: 'second', images: ['i'] }], ['queue', 'third']], turn: { messagesAppend: [{ id: 'u_q', role: 'user', content: 'second', createdAt: 6 }] }, queued: { index: 2, item: { text: 'second', images: ['i'] } } },
   { name: 'queued string claim', fixture: 's_extra', disk: [['queue', 'only']], turn: {}, queued: { index: 1, item: { text: 'only' } } },

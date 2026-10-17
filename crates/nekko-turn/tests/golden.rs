@@ -7,9 +7,9 @@
 //! match as text, key order included.
 
 use nekko_turn::{
-    PlanOutcome, TurnStats, apply_plan_update, apply_turn_input, attach_turn_stats, catalog, clean_title,
-    format_ask_answers, host_tool_approval, parse_ask_request, plan_echo, send_options_for_queued_item, title_prompt,
-    turn_system_prompt, turn_tools,
+    PlanOutcome, TurnStats, apply_plan_update, apply_turn_input, attach_turn_stats, catalog, chat_connectors,
+    chat_effort, clean_title, format_ask_answers, host_tool_approval, parse_ask_request, plan_echo,
+    send_options_for_queued_item, title_prompt, turn_system_prompt, turn_tools,
 };
 use serde_json::{Map, Value, json};
 use std::path::Path;
@@ -38,6 +38,18 @@ fn tool_lists_match() {
     for (i, c) in cases(&all, "tools").iter().enumerate() {
         let got: Vec<Value> = turn_tools(&c["input"]).iter().map(|t| t["name"].clone()).collect();
         assert_eq!(Value::Array(got), c["output"], "tools case {i}: {}", c["input"]);
+    }
+}
+
+#[test]
+fn chat_scopes_match() {
+    let all = expected();
+    for (i, c) in cases(&all, "scopes").iter().enumerate() {
+        let session = &c["input"]["session"];
+        let connectors = c["input"]["connectors"].as_array().cloned().unwrap_or_default();
+        let kinds: Vec<Value> = chat_connectors(connectors, session).iter().map(|k| k["kind"].clone()).collect();
+        let got = json!({ "effort": chat_effort(session, c["input"].get("appEffort")).unwrap_or(Value::Null), "connectors": kinds });
+        assert_eq!(got, c["output"], "scopes case {i}: {}", c["input"]);
     }
 }
 

@@ -3969,6 +3969,577 @@
     "set_chat_title",
     "ask_user"
    ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledMcpServers": [
+      "web"
+     ]
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "mcp__files__read",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledMcpServers": [
+      "web"
+     ]
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledMcpServers": [
+      "files",
+      "web"
+     ]
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledMcpServers": [
+      "files",
+      "web"
+     ]
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledMcpServers": [
+      "fil",
+      "nope"
+     ]
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "mcp__files__read",
+    "mcp__web__get",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledMcpServers": [
+      "fil",
+      "nope"
+     ]
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledMcpServers": []
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "mcp__files__read",
+    "mcp__web__get",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledMcpServers": []
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledMcpServers": [
+      "web"
+     ],
+     "disabledTools": [
+      "mcp__files__read"
+     ]
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "disabledMcpServers": [
+      "web"
+     ],
+     "disabledTools": [
+      "mcp__files__read"
+     ]
+    },
+    "offline": true,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user"
+   ]
   }
  ],
  "prompts": [
@@ -7090,6 +7661,578 @@
     "sandboxMode": null
    },
    "output": null
+  }
+ ],
+ "scopes": [
+  {
+   "input": {
+    "session": {},
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": null,
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {},
+    "appEffort": null,
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": null,
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {},
+    "appEffort": "high",
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": "high",
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "effort": "max"
+    },
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": "max",
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "effort": "max"
+    },
+    "appEffort": null,
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": "max",
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "effort": "max"
+    },
+    "appEffort": "high",
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": "max",
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "effort": null
+    },
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": null,
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "effort": null
+    },
+    "appEffort": null,
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": null,
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "effort": null
+    },
+    "appEffort": "high",
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": "high",
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "disabledConnectors": [
+      "slack"
+     ]
+    },
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": null,
+    "connectors": [
+     "github",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "disabledConnectors": [
+      "slack"
+     ]
+    },
+    "appEffort": null,
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": null,
+    "connectors": [
+     "github",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "disabledConnectors": [
+      "slack"
+     ]
+    },
+    "appEffort": "high",
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": "high",
+    "connectors": [
+     "github",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "disabledConnectors": [
+      "github",
+      "slack",
+      "linear"
+     ]
+    },
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": null,
+    "connectors": []
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "disabledConnectors": [
+      "github",
+      "slack",
+      "linear"
+     ]
+    },
+    "appEffort": null,
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": null,
+    "connectors": []
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "disabledConnectors": [
+      "github",
+      "slack",
+      "linear"
+     ]
+    },
+    "appEffort": "high",
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": "high",
+    "connectors": []
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "disabledConnectors": [],
+     "effort": "low"
+    },
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": "low",
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "disabledConnectors": [],
+     "effort": "low"
+    },
+    "appEffort": null,
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": "low",
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
+  },
+  {
+   "input": {
+    "session": {
+     "disabledConnectors": [],
+     "effort": "low"
+    },
+    "appEffort": "high",
+    "connectors": [
+     {
+      "kind": "github",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "slack",
+      "connected": true,
+      "token": "t"
+     },
+     {
+      "kind": "linear",
+      "connected": false
+     }
+    ]
+   },
+   "output": {
+    "effort": "low",
+    "connectors": [
+     "github",
+     "slack",
+     "linear"
+    ]
+   }
   }
  ]
 }

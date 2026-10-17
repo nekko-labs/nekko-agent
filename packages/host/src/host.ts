@@ -433,7 +433,7 @@ export interface Host {
   specPath(sessionId: string): string | null;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
   ): Session | null;
   truncateSession(id: string, messageId: string): Session | null;
   clearSessions(scope: 'today' | 'month' | 'all'): number;
@@ -1014,7 +1014,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
     changesNotify: notifyChanges,
     adoptTurn: (payload) => adoptAdmittedTurn(payload, (e) => events.emit('agentEvent', e)),
     admissionSnippets: async (kind, args) =>
-      kind === 'connector' ? connectorSnippetsFor(args[0] as string | undefined) : indexSnippetsForAdmission(args[0] as string[], String(args[1] ?? '')),
+      kind === 'connector' ? connectorSnippetsFor(args[0] as string | undefined, args[1] as string | undefined) : indexSnippetsForAdmission(args[0] as string[], String(args[1] ?? '')),
     settingsChanged: (next, patch) => {
       settingsChanged(next, patch);
       // Not announceAppearance: the daemon that saved it told the phone already (nekkod settings.rs).

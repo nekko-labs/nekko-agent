@@ -1,5 +1,5 @@
 import type { ChatMessage, ExecutionMode, OrchestrationSettings, ProviderConfig, QueuedPrompt, SendOptions, Session, WorkspaceFolder } from '@nekko-agent/shared';
-import { DEFAULT_ORCHESTRATION, DEFAULT_TURN_WRAPPER, getStrategy, orchestrationPromptHint, queueItemPayload, toolAllowedOffline, workModePrompt, workModePrompts } from '@nekko-agent/shared';
+import { DEFAULT_ORCHESTRATION, DEFAULT_TURN_WRAPPER, chatMcpTools, getStrategy, orchestrationPromptHint, queueItemPayload, toolAllowedOffline, workModePrompt, workModePrompts } from '@nekko-agent/shared';
 import {
   ASK_USER_TOOL,
   BUILTIN_TOOLS,
@@ -50,11 +50,11 @@ export function turnToolCatalog(): { builtin: ToolSpec[]; agentWatch: ToolSpec; 
 }
 
 export interface TurnToolInput {
-  session: Pick<Session, 'disabledTools' | 'incognito' | 'trainingRunId' | 'parentSessionId' | 'taskId' | 'titleAuto'>;
+  session: Pick<Session, 'disabledTools' | 'disabledMcpServers' | 'incognito' | 'trainingRunId' | 'parentSessionId' | 'taskId' | 'titleAuto'>;
   offline: boolean;
   orchestration?: OrchestrationSettings;
   allowBrowserControl: boolean;
-  /** Connected MCP servers' tools (empty in a sandbox). */
+  /** Connected MCP servers' tools (empty in a sandbox); the chat's `disabledMcpServers` are dropped here. */
   mcpTools: ToolSpec[];
   /** Whether a decision provider is available for `decide` (already false in a sandbox or when disabled). */
   decide: boolean;
@@ -74,7 +74,7 @@ export function turnTools(input: TurnToolInput): ToolSpec[] {
   if (!allowSpawn || disabled.has('spawn_agent') || session.incognito) disabled.add('delegation_targets');
   if (!allowSpawn) disabled.add('spawn_agent');
   if (!input.allowBrowserControl || !canAsk) { disabled.add('browser'); disabled.add('capture'); }
-  const all = [...BUILTIN_TOOLS, ...input.mcpTools, ...(!session.incognito && !session.trainingRunId ? [AGENT_WATCH_TOOL] : [])].filter((t) => !disabled.has(t.name));
+  const all = [...BUILTIN_TOOLS, ...chatMcpTools(input.mcpTools, session), ...(!session.incognito && !session.trainingRunId ? [AGENT_WATCH_TOOL] : [])].filter((t) => !disabled.has(t.name));
   // Blocking the internet keeps the local tools (files, shell, desktop) and
   // drops those that reach a network: fetch, the browser, MCP servers, and the
   // agent tools that can route to a cloud provider.

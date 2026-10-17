@@ -2,6 +2,8 @@
   { "fixture": "s_tools", "ops": [
     ["setOptions", { "title": "Renamed", "pinned": true, "modelId": "m1", "plan": { "items": [{ "text": "a", "done": false }], "send": true }, "notAnOption": 1 }],
     ["setOptions", { "imageParams": { "width": 1024, "height": 768, "steps": 4, "cfgScale": 4.5, "seed": -1 }, "chatType": "image", "thinking": null }],
+    ["setOptions", { "effort": "high", "disabledMcpServers": ["web", "files"], "disabledConnectors": ["slack"] }],
+    ["setOptions", { "effort": null }],
     ["queue", "  next thing  "],
     ["queue", "   "],
     ["queue", "second"],

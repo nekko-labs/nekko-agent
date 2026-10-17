@@ -11,6 +11,7 @@ let settings: any = {
   defaultChatMode: 'yolo', gitManagement: { mode: 'worktree' }, theme: 'dark', effort: 'high',
   workspaces: [{ id: 'w1', name: 'agent-nekko', path: '/code/agent-nekko', addedAt: 1 }, { id: 'w2', name: 'obsurdian', path: '/code/obsurdian', addedAt: 1 }],
   mcpServers: [{ id: 'context7', name: 'context7', enabled: true, command: 'npx' }, { id: 'higgsfield', name: 'higgsfield', enabled: true, url: 'https://example.invalid' }, { id: 'hypergate', name: 'hypergate', enabled: false, url: 'http://127.0.0.1:7881' }],
+  connectors: [{ kind: 'github', connected: true, token: 'synthetic' }, { kind: 'linear', connected: true, token: 'synthetic' }, { kind: 'slack', connected: false }],
 };
 const tools = ['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash', 'web_fetch', 'web_search', 'browser'].map((name) => ({ name, description: `Synthetic ${name} tool.` }));
 const bridge: any = {

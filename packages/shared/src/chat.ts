@@ -1,5 +1,7 @@
 /** Chat / agent conversation types. */
 
+import type { EffortLevel } from './settings.js';
+
 export type Role = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface ToolCall {
@@ -239,6 +241,18 @@ export interface Session {
   thinking?: boolean;
   /** Tool names the user disabled for this chat (subset of the builtins). */
   disabledTools?: string[];
+  /**
+   * How hard the model works in this chat. Unset follows the app-wide
+   * `AppSettings.effort`; set, it wins over it for this chat only.
+   */
+  effort?: EffortLevel;
+  /**
+   * MCP server ids switched off for this chat. Their tools are not offered to
+   * this chat's turns; the servers keep running for other chats.
+   */
+  disabledMcpServers?: string[];
+  /** Connector kinds whose context this chat's turns do not fetch. */
+  disabledConnectors?: string[];
   /** Offline: no tool calls, no connectors/internet (local models only). */
   offline?: boolean;
   /** Incognito: don't persist the transcript or touch memory. */

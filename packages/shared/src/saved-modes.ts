@@ -1,17 +1,20 @@
 /**
  * Saved modes: named bundles of a chat's settings (where it runs, worktrees,
- * approvals, internet, incognito, tools, work mode, effort) that the composer's
- * Mode panel applies in one click. One may be the default for new chats.
+ * approvals, internet, incognito, tools, work mode, effort, MCP servers,
+ * connectors) that the composer's Mode panel applies in one click. One may be
+ * the default for new chats.
  *
- * A saved mode is only a shortcut for settings that already exist per chat
- * (and effort, which is still app-wide). It adds no permission of its own:
- * applying one is the same as flipping each setting by hand.
+ * A saved mode is only a shortcut for settings that already exist per chat.
+ * It adds no permission of its own: applying one is the same as flipping each
+ * setting by hand. Switching an MCP server or connector off for a chat never
+ * turns one on that is off or disconnected app-wide.
  *
  * Folders are not part of a mode. They belong to the task, not the way of
  * working, so switching modes never re-wires a chat's folders.
  */
 import type { ChatMode, ExecutionMode, Session } from './chat.js';
 import { getExecutionMode } from './chat.js';
+import { chatEffort } from './chat-scope.js';
 import type { EffortLevel } from './settings.js';
 import type { WorkModeId } from './work-modes.js';
 
@@ -28,8 +31,15 @@ export interface SavedModeOptions {
   /** Tools switched off, sorted so two modes compare by value. */
   disabledTools: string[];
   workMode: WorkModeId;
-  /** App-wide today; applying a mode sets it for every chat. */
+  /**
+   * The chat's effort. Modes saved before effort was per chat may leave it
+   * unset, and an unset value matches any effort and leaves it as it is.
+   */
   effort?: EffortLevel;
+  /** MCP server ids switched off for the chat, sorted. Unset (older modes) matches any and changes nothing. */
+  disabledMcpServers?: string[];
+  /** Connector kinds switched off for the chat, sorted. Unset (older modes) matches any and changes nothing. */
+  disabledConnectors?: string[];
 }
 
 export interface SavedMode {
@@ -60,7 +70,7 @@ export function defaultSavedMode(settings: ModeSettings | null | undefined): Sav
   return id ? savedModes(settings).find((m) => m.id === id) : undefined;
 }
 
-type ChatSettings = Pick<Session, 'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'incognito' | 'disabledTools' | 'workMode'>;
+type ChatSettings = Pick<Session, 'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'incognito' | 'disabledTools' | 'workMode' | 'effort' | 'disabledMcpServers' | 'disabledConnectors'>;
 
 /** A chat's current settings in saved-mode form. */
 export function sessionModeOptions(session: ChatSettings, settings?: ModeSettings | null): SavedModeOptions {
@@ -73,31 +83,46 @@ export function sessionModeOptions(session: ChatSettings, settings?: ModeSetting
     incognito: !!session.incognito,
     disabledTools: [...(session.disabledTools ?? [])].sort(),
     workMode: session.workMode ?? 'default',
-    ...(settings?.effort ? { effort: settings.effort } : {}),
+    ...(chatEffort(session, settings?.effort) ? { effort: chatEffort(session, settings?.effort) } : {}),
+    disabledMcpServers: [...(session.disabledMcpServers ?? [])].sort(),
+    disabledConnectors: [...(session.disabledConnectors ?? [])].sort(),
   };
 }
 
+const sameList = (a: string[], b: string[]) => {
+  const as = [...a].sort(), bs = [...b].sort();
+  return as.length === bs.length && as.every((t, i) => t === bs[i]);
+};
+
 /**
- * Whether two option sets would run a chat the same way. A mode that leaves
- * effort unset matches any effort.
+ * Whether two option sets would run a chat the same way. A field either side
+ * leaves unset (effort, MCP servers, connectors, from a mode saved before they
+ * were per chat) matches any value.
  */
 export function sameModeOptions(a: SavedModeOptions, b: SavedModeOptions): boolean {
   const sandboxed = a.executionMode === 'sandbox';
   if (a.executionMode !== b.executionMode || a.offline !== b.offline || a.incognito !== b.incognito || a.workMode !== b.workMode) return false;
   if (!sandboxed && a.mode !== b.mode) return false;
   if (a.effort && b.effort && a.effort !== b.effort) return false;
-  const at = [...a.disabledTools].sort(), bt = [...b.disabledTools].sort();
-  return at.length === bt.length && at.every((t, i) => t === bt[i]);
+  if (a.disabledMcpServers && b.disabledMcpServers && !sameList(a.disabledMcpServers, b.disabledMcpServers)) return false;
+  if (a.disabledConnectors && b.disabledConnectors && !sameList(a.disabledConnectors, b.disabledConnectors)) return false;
+  return sameList(a.disabledTools, b.disabledTools);
 }
 
 /** The saved mode a chat is in right now, if its settings match one exactly. */
 export function matchSavedMode(modes: SavedMode[], current: SavedModeOptions): SavedMode | undefined {
-  return modes.find((m) => sameModeOptions({ ...m.options, effort: m.options.effort ?? current.effort }, current));
+  return modes.find((m) => sameModeOptions({
+    ...m.options,
+    effort: m.options.effort ?? current.effort,
+    disabledMcpServers: m.options.disabledMcpServers ?? current.disabledMcpServers,
+    disabledConnectors: m.options.disabledConnectors ?? current.disabledConnectors,
+  }, current));
 }
 
 /**
  * The per-chat patch that puts a chat in a mode. A cloud model cannot go
- * offline, so `offline` is left as it is for one rather than refused.
+ * offline, so `offline` is left as it is for one rather than refused. Fields
+ * the mode leaves unset (effort, MCP servers, connectors) stay as they are.
  */
 export function sessionPatchForMode(options: SavedModeOptions, opts: { cloudModel?: boolean } = {}): Partial<Session> {
   return {
@@ -108,6 +133,9 @@ export function sessionPatchForMode(options: SavedModeOptions, opts: { cloudMode
     incognito: options.incognito,
     disabledTools: [...options.disabledTools],
     workMode: options.workMode,
+    ...(options.effort ? { effort: options.effort } : {}),
+    ...(options.disabledMcpServers ? { disabledMcpServers: [...options.disabledMcpServers] } : {}),
+    ...(options.disabledConnectors ? { disabledConnectors: [...options.disabledConnectors] } : {}),
   };
 }
 

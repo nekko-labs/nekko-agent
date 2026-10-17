@@ -1,9 +1,9 @@
 // Before/after evidence for the Mode panel: an isolated, hidden, off-screen
 // Electron renderer with a synthetic bridge (no host, network or user data).
-// `before` renders origin/main's sources at BASE; `after` the working tree.
+// `before` renders the sources at BASE (phase 1 of the panel); `after` the working tree.
 const fs = require('node:fs'), path = require('node:path'), cp = require('node:child_process');
 const repo = path.resolve(__dirname, '..'), out = path.join(repo, '.shots/mode-panel');
-const BASE = process.env.BASE || '2c345cd0';
+const BASE = process.env.BASE || 'b52897a3';
 const resolve = (x) => require.resolve(x, { paths: [path.join(repo, 'apps/desktop'), repo] });
 (async () => {
   for (const kind of ['before', 'after']) {

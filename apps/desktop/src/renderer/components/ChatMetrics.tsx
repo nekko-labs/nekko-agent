@@ -1,6 +1,6 @@
 import React from 'react';
-import type { ContextBundle, ContextItem, EffortLevel } from '@nekko-agent/shared';
-import { effectiveEffort, modelDefaultEffort, modelEffortLevels, usesNativeEffort } from '@nekko-agent/shared';
+import type { ContextBundle, ContextItem, EffortLevel, Session } from '@nekko-agent/shared';
+import { chatEffort, effectiveEffort, modelDefaultEffort, modelEffortLevels, usesNativeEffort } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { sourceMeta } from '../contextSources.js';
 import { fillTone } from './contextTone.js';
@@ -176,13 +176,29 @@ export function effortRungs(saved: EffortLevel, modelId: string | undefined): { 
   return { options, index, shown: atDefault ? `Default · ${EFFORT_LABEL[fallback]}` : EFFORT_LABEL[effective] };
 }
 
-/** Model-specific effort rungs on a compact slider beside the model picker. */
-export function EffortSlider({ modelId, onChanged }: { modelId?: string; onChanged?: () => void }) {
-  const saved = useStore((s) => s.settings?.effort) ?? 'normal';
+/**
+ * Model-specific effort rungs on a compact slider beside the model picker.
+ * Given a chat, it shows and sets that chat's effort (`Session.effort`, which
+ * falls back to the app-wide setting); without one it sets the app-wide one.
+ */
+export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
+  modelId?: string;
+  onChanged?: () => void;
+  session?: Pick<Session, 'id' | 'effort'> | null;
+  onSessionChange?: (s: Session) => void;
+}) {
+  const appEffort = useStore((s) => s.settings?.effort);
+  const saved = (session ? chatEffort(session, appEffort) : appEffort) ?? 'normal';
   const pick = (level: EffortLevel) => {
     if (level === saved) return;
     onChanged?.();
-    void window.nekko.updateSettings({ effort: level }).then(() => useStore.getState().refreshSettings());
+    if (session) {
+      void window.nekko.setSessionOptions(session.id, { effort: level })
+        .then((s) => { if (s) onSessionChange?.(s); })
+        .catch((e) => useStore.getState().pushToast('error', String(e)));
+    } else {
+      void window.nekko.updateSettings({ effort: level }).then(() => useStore.getState().refreshSettings());
+    }
   };
 
   const { options, index, shown } = effortRungs(saved, modelId);
@@ -191,7 +207,7 @@ export function EffortSlider({ modelId, onChanged }: { modelId?: string; onChang
   const level = options.length > 1 ? index / (options.length - 1) : 0;
   const atMax = options.length > 1 && index === options.length - 1;
   return (
-    <div className="effort-slider flex shrink-0 items-center gap-1 rounded-r-lg border border-l-0 border-line px-2 py-1 text-[11px]" title="Reasoning effort (applies to all chats)">
+    <div className="effort-slider flex shrink-0 items-center gap-1 rounded-r-lg border border-l-0 border-line px-2 py-1 text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort (the app default; a chat can set its own)'}>
       <label htmlFor="composer-effort" className="text-ink-faint">Effort</label>
       <span
         className="effort-track"
