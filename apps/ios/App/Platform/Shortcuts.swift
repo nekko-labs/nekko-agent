@@ -28,12 +28,31 @@ struct AskComputerIntent: AppIntent {
     }
 }
 
+/// "What needs me?": how many chats wait on you and how many are working,
+/// answered from the widget's counts-only snapshot without opening the app,
+/// so it says nothing the Home Screen widget wouldn't.
+struct NeedsYouIntent: AppIntent {
+    static var title: LocalizedStringResource = "What needs me?"
+    static var description = IntentDescription("Hear how many chats on your computer need you or are working. Counts only.")
+    static var openAppWhenRun = false
+
+    init() {}
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        .result(dialog: "\(StatusSnapshot.load().spoken())")
+    }
+}
+
 struct NekkoShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: AskComputerIntent(),
                     phrases: ["Ask my computer with \(.applicationName)", "Start a \(.applicationName) chat"],
                     shortTitle: "Ask my computer",
                     systemImageName: "desktopcomputer")
+        AppShortcut(intent: NeedsYouIntent(),
+                    phrases: ["What needs me in \(.applicationName)", "Check \(.applicationName)"],
+                    shortTitle: "What needs me?",
+                    systemImageName: "hand.raised")
     }
 }
 
