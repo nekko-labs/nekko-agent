@@ -742,7 +742,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
           </button>}
           <button
             ref={finderButtonRef}
-            className={`agent-panel-plus btn btn-ghost px-1.5 py-1 ${finderOpen ? 'is-open' : ''}`}
+            className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${finderOpen ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
             title="Search chats"
             aria-label="Search chats"
             aria-haspopup="dialog"
@@ -750,7 +750,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
             data-chat-finder-toggle
             onClick={() => { closeNewMenu(); setFinderOpen((o) => !o); }}
           >
-            <SearchIcon className="h-[22px] w-[22px]" />
+            <SearchIcon className="h-4 w-4" />
           </button>
           {finderOpen && (
             <ChatFinder
