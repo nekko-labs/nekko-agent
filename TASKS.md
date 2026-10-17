@@ -6,6 +6,14 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Swoop navigation rail (added 2026-10-17)
+
+See [SPEC](SPEC.md#swoop-navigation-rail-2026-10-17).
+
+- [x] ✅ 2026-10-17 `railGeometry.ts` builds a hairline-to-column swoop outline (rest) and an even column (open) with matching commands; the old `@utility rail*` blocks and `rail-item-in` are replaced by plain CSS in `styles.css` (Soft fill, sliding active tile, label stagger, hover intent, reduced motion); `App.tsx` adds the tile and per-row stagger index. `boardRailSpacing.test.ts` rewritten for the new shape. Evidence: `apps/desktop/scripts/rail-swoop-sandbox.cjs`, run through `layout-evidence-integration.cjs` with `NEKKO_LAYOUT_SANDBOX`.
+- [ ] Check the rail in a packaged desktop build (native title bar alignment, real hover).
+- [ ] Optional: a Vivid fill (saturated brand gradient, white glyphs, white active tile) was designed alongside Soft and not built; `RailBackdrop` would need an SVG gradient.
+
 ## Agent panel view options (added 2026-10-17)
 
 See [SPEC](SPEC.md#agent-panel-view-options-2026-10-17).
