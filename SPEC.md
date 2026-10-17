@@ -1,5 +1,16 @@
 ---
 
+## Focused mode transitions, calmer focus ring and layout controls (2026-10-17)
+
+`[implemented; focused tests, desktop typecheck and production build pass; hidden network-blocked Electron fixture checks at 1400px in light and dark, with matched main/branch screenshots and sampled motion frames inspected; packaged app, narrow widths and macOS not checked]`
+
+- **New agent fades in (Focused only).** Clicking **New agent** while the wall is Focused keeps Focused and makes the new chat the hero. That window fades and settles in (320 ms, opacity plus a slight scale) straight into its clean-start prompt ("What should we work on?"). Only windows added after the wall first renders animate; a restored wall never does. Other layouts are unchanged.
+- **Composer expands into the chat.** Typing into the centred clean-start composer keeps the prompt view. The first send swaps it for the full chat, and the chat body grows out of the composer's place (420 ms). It plays once per chat, only when leaving clean start because a message was sent.
+- **Calmer focus ring (Focused only).** The hero window's selection ring is accent mixed 28% into the line colour, with no glow, instead of a full-strength accent outline. Dynamic and Grid selection styling is unchanged.
+- **Monitors dock header** reads **Monitors** (it read "Panels"). The Configure popover's checklist legend still reads Panels.
+- **Grid moves to Settings.** The Agents toolbar shows only **Focused** and **Dynamic**; Dynamic's icon is a lightning bolt. **Settings > Command Center > Wall layout** chooses Focused, Dynamic or Grid and sets Grid rows and columns (1–6). Saved `fixed` layouts and Ctrl/Cmd+Shift+3 still open Grid, and Grid placeholders behave as before. This supersedes the toolbar Grid size picker described under 2026-10-08.
+- Reduced motion turns both animations off. Renderer-only: no new settings keys, permissions or network use.
+
 ## Local marketing website preview (2026-10-17)
 
 `[implemented; unit-tested; verified by serving the site locally and loading pages and docs]` `npm run website` serves the static marketing site and docs in `apps/website` on `http://127.0.0.1:8080` (set `PORT` to change it), so a contributor can look at a website or docs change before it ships. It needs no build, package installation, agent backend or app data, and every response is `no-store`, so a refresh shows the latest edit.
