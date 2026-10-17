@@ -6,6 +6,13 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Agent panel view options (added 2026-10-17)
+
+See [SPEC](SPEC.md#agent-panel-view-options-2026-10-17).
+
+- [x] ✅ 2026-10-17 Sliders button and group-header right-click open a Group by / Sort by / Show menu (`AgentPanelViewMenu.tsx`), pure view model and tests in `views/agentPanelView.ts`. Defaults reproduce the previous panel exactly; card drag-to-order is limited to project grouping in manual order. Isolated web-edition captures, before and after.
+- [ ] Optional follow-ups from the reference menu not built: **New section** (user-defined groups) and **View all**. Needs a decision on what a custom section means next to projects.
+
 ## Automations: local-model GitHub automations, CI diagnosis and skill-based PR review (added 2026-10-17)
 
 Tracked in [#680](https://github.com/nekko-labs/nekko-agent/issues/680), part of [#612](https://github.com/nekko-labs/nekko-agent/issues/612). Execution plans live in each sub-issue. See [SPEC](SPEC.md#workflows-procedural-automation).
