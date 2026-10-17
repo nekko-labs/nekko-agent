@@ -101,6 +101,17 @@ final class LiveRelayTests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         attach(app, "\(theme)-7-chats-after")
 
+        // Settings → Connection: the route, Tailscale on this phone, and what happened.
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch.tap()
+        app.buttons["Settings"].firstMatch.tap()
+        let connection = app.buttons["Connection"].firstMatch
+        if !connection.waitForExistence(timeout: 5) { app.swipeUp() }
+        connection.tap()
+        XCTAssertTrue(app.staticTexts["Online"].firstMatch.waitForExistence(timeout: 10), "the status reads online")
+        XCTAssertTrue(app.staticTexts["Since the app started"].exists || app.staticTexts["SINCE THE APP STARTED"].exists)
+        attach(app, "\(theme)-7b-connection")
+        auditAccessibility(app, "\(theme)-connection")
+
         // Shared from another app: relaunch with what the share extension leaves
         // in the App Group. New chat opens with the text; nothing is sent.
         app.terminate()

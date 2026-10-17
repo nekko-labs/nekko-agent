@@ -123,6 +123,7 @@ struct SettingsView: View {
             }
             Section("Computers") {
                 NavigationLink(value: Route.computers) { Label("Paired computers", systemImage: "desktopcomputer") }
+                NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right") }
                 Picker("Open at launch", selection: $prefs.defaultComputer) {
                     Text("The one used last").tag(String?.none)
                     ForEach(store.computers) { Text($0.name).tag(Optional($0.id)) }
