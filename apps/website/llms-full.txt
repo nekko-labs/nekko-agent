@@ -1060,6 +1060,8 @@ and it's why relayed local-model use is inherently zero-data-retention for conte
 
 ## Choosing a relay
 
+How the Android and iOS apps each handle the connection (URL rules, pairing, reconnects, push, background) is compared in [phone-connection.md](https://github.com/nekko-labs/nekko-agent/blob/main/docs/phone-connection.md).
+
 ### Managed relay (default): `wss://nekko-agent-relay.fly.dev`
 
 Zero setup; free during beta with per-connection rate limits. When Nekko Agent Cloud launches, the

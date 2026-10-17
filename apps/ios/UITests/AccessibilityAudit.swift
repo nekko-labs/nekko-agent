@@ -11,7 +11,7 @@ extension XCTestCase {
     ///   `FirstRunTests.testLargestTextSizesStillFit` drives the real accessibility-XL
     ///   layout instead; the audit's heuristic flags SwiftUI text that does scale.
     /// - Anything on a disabled control (WCAG 1.4.3 exempts inactive components).
-    /// - Elements not fully on screen (under the keyboard or scrolled away),
+    /// - Elements not fully on screen (scrolled away, or under a keyboard that stayed up),
     ///   or covered by other UI (not hittable), for contrast and clipping:
     ///   the audit samples whatever covers them.
     /// - Clipping on the system search field's placeholder.
@@ -27,6 +27,8 @@ extension XCTestCase {
         // auditing mid-animation reported rows as clipped or covered.
         RunLoop.current.run(until: Date().addingTimeInterval(1.5))
         let window = app.windows.firstMatch.frame
+        // If the keyboard is still up, what's under it (and its Done bar) isn't what the user sees.
+        let keyboard = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.insetBy(dx: 0, dy: -44) : .null
 
         var blocking: [String] = [], other: [String] = []
         // XCTest's audit sometimes times out on a busy simulator (code -56): one retry.
@@ -37,7 +39,7 @@ extension XCTestCase {
                 try app.performAccessibilityAudit { issue in
                     let line = "\(Self.name(issue.auditType)): \(issue.compactDescription) — \(Self.describe(issue.element))"
                     let ignored = issue.element.map { ignoring.contains($0.label) } ?? false
-                    if !ignored, Self.blocks(issue, in: window) { blocking.append(line) } else { other.append(line) }
+                    if !ignored, Self.blocks(issue, in: window, keyboard: keyboard) { blocking.append(line) } else { other.append(line) }
                     return true // handled here; reported below
                 }
                 break
@@ -58,12 +60,13 @@ extension XCTestCase {
         }
     }
 
-    private static func blocks(_ issue: XCUIAccessibilityAuditIssue, in window: CGRect) -> Bool {
+    private static func blocks(_ issue: XCUIAccessibilityAuditIssue, in window: CGRect, keyboard: CGRect) -> Bool {
         if issue.auditType == .dynamicType { return false }
         // The audit names no element for some findings: nothing to act on, but listed.
         guard let e = issue.element, e.exists else { return false }
         if !e.isEnabled { return false }
         if !window.isEmpty, !window.contains(e.frame) { return false }
+        if !keyboard.isNull, e.frame.intersects(keyboard) { return false }
         // Covered by other UI (a pinned bar, a card over the transcript): the
         // audit samples whatever is on top, not the element's own colours.
         if issue.auditType == .contrast || issue.auditType == .textClipped, !e.isHittable { return false }
