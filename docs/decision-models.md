@@ -63,7 +63,7 @@ CUDA batches a call's questions into one run, so ten questions cost little more 
 
 ### CoreML on macOS
 
-`.github/workflows/decision-models.yml` (run by hand, and on changes to `crates/nekko-decide`) downloads the exports, checks their SHA-256 sums, and runs the golden test with CoreML requested on a `macos-14` (Apple silicon) runner, writing which provider actually ran each checkpoint to the job summary. GitHub's macOS runners are virtual machines without the Neural Engine, and Apple's paravirtualized GPU may or may not take the model, so a CPU fallback there does not prove one on a real Mac, while a CoreML pass proves the graph compiles and answers correctly under CoreML.
+`.github/workflows/decision-models.yml` (run by hand, and on changes to `crates/nekko-decide`) downloads the exports, checks their SHA-256 sums, and runs the golden test with CoreML requested on a `macos-14` (Apple silicon) runner, writing which provider actually ran each checkpoint to the job summary. GitHub's macOS runners are virtual machines without the Neural Engine, and Apple's paravirtualized GPU may or may not take the model, so a CPU fallback there does not prove one on a real Mac, while a CoreML pass proves the graph compiles and answers correctly under CoreML. The first run (2026-10-17) did not get that far: the golden set under CoreML on the VM was still running when the job hit its 60-minute limit, so it showed neither a CoreML run nor a fallback. The workflow now asks the latency example first, which reports the provider in use and any fallback reason within minutes.
 
 **Checking CoreML on a Mac** (Apple silicon, about 3 GB of disk and 10 minutes): with Rust and the GitHub CLI installed, from a checkout of this repository run
 
