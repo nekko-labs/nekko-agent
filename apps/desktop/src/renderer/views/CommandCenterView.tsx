@@ -304,6 +304,11 @@ export function CommandCenterView() {
   // Ctrl+1…9 (or Alt+1…9) pick one by its number.
   const [addOpen, setAddOpen] = useState(false);
   const [completedId, setCompletedId] = useState<string | null>(null);
+  // The reader shows a completed chat only while it stays completed: restoring
+  // or deleting it (from its bar or the agent list's menu) closes the reader.
+  useEffect(() => {
+    if (completedId && listsReady && !sessions.some((s) => s.id === completedId && s.archivedAt)) setCompletedId(null);
+  }, [completedId, listsReady, sessions]);
   const [selected, setSelected] = useState<string | null>(() => wall.hero);
   const selectAgent = useCallback((id: string | null) => {
     setCompletedId(null);

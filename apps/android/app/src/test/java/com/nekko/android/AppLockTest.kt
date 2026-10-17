@@ -155,4 +155,42 @@ class AppLockTest {
         l.onResume()
         assertFalse(l.covered.value)
     }
+
+    @Test
+    fun `the screenshot toolbar taking focus does not cover the app, either order`() {
+        val l = lock()
+        l.unlock()
+        l.onScreenshot()
+        clock += 300
+        l.onFocus(false)
+        assertFalse(l.covered.value)
+        l.onFocus(true)
+
+        clock += 10_000
+        l.onFocus(false) // focus first, the callback a moment later: covered, then lifted
+        assertTrue(l.covered.value)
+        clock += 300
+        l.onScreenshot()
+        assertFalse(l.covered.value)
+    }
+
+    @Test
+    fun `an old screenshot does not excuse a later focus loss, and pausing still covers`() {
+        val l = lock()
+        l.unlock()
+        l.onScreenshot()
+        clock += 10_000
+        l.onFocus(false)
+        assertTrue(l.covered.value)
+        l.onFocus(true)
+
+        l.onScreenshot(); l.onFocus(false)
+        assertFalse(l.covered.value)
+        l.onPause() // left the app from the toolbar: the overview shows the cover
+        assertTrue(l.covered.value)
+        l.onResume(); l.onFocus(true)
+        clock += 10_000
+        l.onFocus(false) // the next focus loss is judged on its own
+        assertTrue(l.covered.value)
+    }
 }

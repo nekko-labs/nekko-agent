@@ -24,6 +24,14 @@ class StatusSnapshotTest {
         assertEquals("Offline", h("Studio", false, 0, 0))
     }
 
+    @Test fun `the quick settings tile lights only when something waits, and reads counts only`() {
+        assertTrue(StatusSnapshot("Studio", true, 1, 0, 0).tileActive)
+        assertFalse(StatusSnapshot("Studio", true, 0, 3, 0).tileActive)
+        assertFalse(StatusSnapshot(null, false, 2, 0, 0).tileActive)
+        assertEquals("Nekko Agent on Studio, 2 need you", StatusSnapshot("Studio", true, 2, 0, 0).tileDescription)
+        assertEquals("Nekko Agent, not paired", StatusSnapshot.EMPTY.tileDescription)
+    }
+
     @Test fun `counts come from the active computer's activity, and the time alone is not a change`() {
         val state = ComputersState(
             ready = true, computers = listOf(pc), activeId = "a", conn = RelayState.ONLINE,

@@ -50,8 +50,10 @@ model servers are first-class, not an afterthought.
 - **Auto-discover local** probes `localhost:11434` (Ollama), `:1234` (LM Studio),
   and `:8000` (vLLM). Anything running is added with one click.
 - Connected local servers and cloud providers are grouped, and the groups sit side
-  by side when the window has room. A group keeps its cards together; only its
-  leftover cards share a line with another group, otherwise they wrap to the next line.
+  by side when the window has room. The provider groups use the full window width,
+  and each sits in a container with a faint border and tint in its colour (green
+  for local, blue for cloud). A group is never split: when it has more cards than
+  fit on a line, they wrap inside its own container.
 - **Add provider** lets you configure a server manually, or add a cloud provider -
   Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint (just paste the
   base URL + key).
@@ -148,9 +150,13 @@ Utilization shows a Claude subscription account once when provider entries share
 
 These 2026-10-13 changes are implemented and unit/fixture interaction tested. Matching captures exist, but image/motion inspection remains pending; earlier walkthrough pictures are not visual proof of this batch.
 
+### Find a chat
+
+The magnifier beside **+** at the top of the Agents panel opens a chat finder. It starts with your latest chats, newest first, each with how long ago it was used (days up to 30, then months). Type to filter by title, first prompt or latest reply; the search runs once you pause typing, or straight away with Enter or the Nekko button. Click a chat (or press Enter) to open it. **X** or Esc closes the finder. Incognito chats are never listed.
+
 ### Complete, minimize, and delete
 
-Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts target the window you are using, not every chat. The **X** in a chat window's top-right corner (and on its card) is **Complete**: it closes the window and keeps the chat under its group's **Show completed** control in the left Agent panel for 60 days, where you can read or restore it. It never deletes; **Delete** is a separate trash action. Agents you have not touched for a month are completed for you the same way; change or turn this off under Settings → **Complete idle agents after** (1 week, 2 weeks, 1 month, 3 months or Never). Pinned, running, waiting and sub-agent chats are never completed automatically. **Minimize** removes only the board window: the item remains in the Agent panel, and a terminal keeps running. Terminals do not have completed history; **Close** ends their process.
+Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts target the window you are using, not every chat. The **X** in a chat window's top-right corner (and on its card) is **Complete**: it closes the window and keeps the chat under its group's **Show completed** control in the left Agent panel for 60 days, where you can read or restore it. Right-click a completed chat there for **Restore chat** or **Delete forever** without opening it. Completing never deletes; **Delete** is a separate trash action. Agents you have not touched for a month are completed for you the same way; change or turn this off under Settings → **Complete idle agents after** (1 week, 2 weeks, 1 month, 3 months or Never). Pinned, running, waiting and sub-agent chats are never completed automatically. **Minimize** removes only the board window: the item remains in the Agent panel, and a terminal keeps running. Terminals do not have completed history; **Close** ends their process.
 
 Settings has **Show tips**, enabled by default. Your first successful completion highlights Show completed with a dismissible explanation. On a narrow screen, the existing agent list drawer opens automatically to reveal Show completed without taking focus. If you close it, the highlighted Agents button lets you return to the destination. Opening or closing the drawer does not dismiss the tip. Turning tips off does not disable deletion warnings. The in-app delete dialog offers **Skip future deletion confirmations**; only choose it if you want permanent deletions without another prompt. Re-enable **Confirm deletions** in Settings at any time. General chats no longer display a redundant missing-project label.
 
@@ -377,7 +383,7 @@ Drag a project group header in the agent panel onto another group to place it be
 
 Changes is the leftmost header control. When the agent edits files it uses a muted background without an outer glow and shows added/deleted line totals plus the changed-file count. Click it to review the diff. Zen focuses that window; a small divider separates this action from the Files, Browser and Logs panel buttons. The activity icon is at the top left before the numbered agent icon.
 
-**Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
+**Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label and shows only while the rail is minimized; the conversation starts below it so it never covers your first message. With the rail open, the minimize button at the far right of its header puts it away again. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
 
 ## Reports and artifacts in chat
 

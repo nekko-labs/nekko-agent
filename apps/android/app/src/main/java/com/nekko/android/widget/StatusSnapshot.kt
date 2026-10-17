@@ -26,6 +26,13 @@ data class StatusSnapshot(
             else -> "Offline"
         }
 
+    /** The Quick Settings tile lights up only when something waits on the user. */
+    val tileActive: Boolean get() = computer != null && needsYou > 0
+
+    /** What TalkBack reads for the tile: the computer and the headline, still counts only. */
+    val tileDescription: String
+        get() = if (computer == null) "Nekko Agent, not paired" else "Nekko Agent on $computer, ${headline.lowercase()}"
+
     /** Equal apart from when it was taken: nothing the widget shows changed. */
     fun sameAs(other: StatusSnapshot) = copy(at = 0) == other.copy(at = 0)
 

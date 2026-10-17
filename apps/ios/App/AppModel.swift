@@ -18,6 +18,7 @@ final class AppModel {
     let store: ComputersStore
     let lock: AppLock
     let notifier = Notifier()
+    let chatLists = ChatListFiles()
     private let activities = RunActivities()
     private let network = NetworkWatcher()
     private var started = false
@@ -80,6 +81,7 @@ final class AppModel {
         watchWidget()
         network.onChange = { [weak self] in Task { @MainActor in self?.store.reconnect() } }
         network.start()
+        if prefs.keepChatList { store.chatListCache = chatLists }
         store.load(preferredId: prefs.defaultComputer)
         if !store.computers.isEmpty { registerForPush() }
     }
@@ -229,9 +231,17 @@ final class AppModel {
         if store.computers.isEmpty { activities.endAll() }
     }
 
+    /// Settings → Keep the chat list when offline. Off deletes every saved list.
+    func setKeepChatList(_ on: Bool) {
+        prefs.keepChatList = on
+        store.chatListCache = on ? chatLists : nil
+        if !on { chatLists.removeAll() }
+    }
+
     /// Settings → Forget everything on this iPhone.
     func forgetEverything() {
         for c in store.computers { store.forget(c.id) }
+        chatLists.removeAll()
         keychain.wipe()
         activities.endAll()
         prefs.defaultComputer = nil

@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Settings → Vibration: a short buzz when the agent needs you (install-time, no prompt). -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Android 14+: know a screenshot was taken, so the app lock's privacy cover does not
+         hide the app behind the screenshot toolbar (install-time, no prompt). -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
 
     <!-- Android 11+: see the phone's speech recognizer (the "This phone" dictation engine). -->
     <queries>
@@ -96,10 +99,26 @@
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
 
-        <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
+        <!-- Quick Settings tile: the widget's counts, redrawn on request only (ACTIVE_TILE). -->
+        <service
+            android:name=".widget.StatusTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_status"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
+        <!-- The approval notification's Deny (connection/DenyReceiver.kt). -->
         <receiver
             android:name=".connection.DenyReceiver"
             android:exported="false" />
+        <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
         <receiver
             android:name=".widget.StatusWidget"
             android:exported="false">
