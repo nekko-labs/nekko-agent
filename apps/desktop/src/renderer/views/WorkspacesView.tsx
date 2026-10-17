@@ -22,7 +22,7 @@ import { PaneFrame } from '../components/PaneFrame.js';
 import { Divider } from '../components/Divider.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { StatusIcon, WorkspaceCard, type AgentStatus } from '../components/WorkspaceCard.js';
-import { CheckIcon, ChatIcon, PhotoIcon, TerminalIcon, PlusIcon, FileIcon, FolderIcon, ExternalIcon, PanelIcon, ShieldIcon, PanelLeftIcon, PanelSwapIcon } from '../icons.js';
+import { CheckIcon, ChatIcon, PhotoIcon, TerminalIcon, PlusIcon, FileIcon, FolderIcon, ExternalIcon, PanelIcon, ShieldIcon, PanelLeftIcon, PanelSwapIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../completionExit.js';
@@ -32,6 +32,11 @@ import { selectWorkspaceRows } from './workspaceSelection.js';
 import { unopenedChats } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
+import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
+import {
+  DATE_GROUPS, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
+  type AgentPanelView, type SortableCard,
+} from './agentPanelView.js';
 
 /** Short label for a window's title strip. */
 function paneTitle(pane: WbPane, sessions: SessionSummary[], terminals: TerminalInfo[]): string {
@@ -115,6 +120,27 @@ type DragItem = { kind: 'project' | 'workspace'; id: string; ws: string | undefi
  */
 type Entry = { key: string; w: Workspace | null; s: SessionSummary | null; t: TerminalInfo | null };
 const CHAT_KEY = 'chat:';
+/** Where completed chats gather when the panel is not grouped by project. */
+const COMPLETED_GROUP = '__completed';
+
+/** What a card sorts by: its chat, or its shell when it is a terminal. */
+function sortable(e: Entry): SortableCard {
+  const at = e.s?.updatedAt ?? e.t?.createdAt ?? 0;
+  return { title: e.s?.title ?? e.t?.title ?? '', updatedAt: at, createdAt: e.s?.createdAt ?? e.t?.createdAt ?? at, order: e.s?.order ?? e.t?.order };
+}
+
+/** One group the panel shows: a project, a status, a date range, or all of it. */
+type PanelGroup = {
+  key: string;
+  name: string;
+  /** The project folder, when grouped by project. */
+  ws?: WorkspaceFolder;
+  items: Entry[];
+  /** Completed chats folded under the group. */
+  done: SessionSummary[];
+  /** No header: the "None" grouping is one plain list. */
+  bare?: boolean;
+};
 
 /**
  * The workspace list's width, drag-resizable between a card's minimum and the
@@ -302,8 +328,8 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   const selectRow = (e: React.MouseEvent, id: string) => {
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) { setSelected([]); anchor.current = id; return false; }
     e.preventDefault(); e.stopPropagation();
-    const order = buckets.filter(b => !collapsed.has(b.key)).flatMap(b => bucketEntries(b.key).flatMap(e => e.s ? [e.s.id] : []));
-    setSelected(prev => selectWorkspaceRows(prev, order, id, anchor.current, e.shiftKey));
+    const rows = groups.filter(g => !collapsed.has(g.key)).flatMap(g => g.items.flatMap(e => e.s ? [e.s.id] : []));
+    setSelected(prev => selectWorkspaceRows(prev, rows, id, anchor.current, e.shiftKey));
     if (!e.shiftKey) anchor.current = id;
     return true;
   };
@@ -362,6 +388,17 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
     setSidebarW(w);
     try { localStorage.setItem(SIDEBAR_W_KEY, String(w)); } catch { /* private mode */ }
   };
+  // What the panel groups by, its order, and what it shows (the sliders menu).
+  const [view, setViewState] = useState<AgentPanelView>(readAgentPanelView);
+  const setView = (next: AgentPanelView) => { setViewState(next); saveAgentPanelView(next); };
+  const [viewMenu, setViewMenu] = useState<{ x: number; y: number } | null>(null);
+  const closeViewMenu = React.useCallback(() => setViewMenu(null), []);
+  const viewButtonRef = useRef<HTMLButtonElement>(null);
+  const openViewMenuFromButton = () => {
+    const r = viewButtonRef.current?.getBoundingClientRect();
+    if (r) setViewMenu((open) => (open ? null : { x: r.left, y: r.bottom + 6 }));
+  };
+  const reorderable = canReorder(view);
   const [mobileNav, setMobileNav] = useState(false);
   const completionDestinationRef = useRef<HTMLButtonElement>(null);
   // Reveal the existing destination without expanding completed chats or taking focus.
@@ -369,13 +406,13 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
     if (!sidebarOnly || !showTips || !completionTipSessionId) return;
     const completed = sessions.find((s) => s.id === completionTipSessionId && s.archivedAt);
     if (!completed) return;
-    const group = chatGroupOf(completed);
+    const group = view.groupBy === 'project' ? chatGroupOf(completed) : COMPLETED_GROUP;
     setCollapsed((previous) => {
       if (!previous.has(group)) return previous;
       const next = new Set(previous); next.delete(group); return next;
     });
     if (!horizontal && window.innerWidth < 768) setMobileNav(true);
-  }, [completionTipSessionId, sidebarOnly, showTips, horizontal, sessions]);
+  }, [completionTipSessionId, sidebarOnly, showTips, horizontal, sessions, view.groupBy]);
   useLayoutEffect(() => {
     if (!sidebarOnly || !showTips || !completionTipSessionId) return;
     const frame = requestAnimationFrame(() => {
@@ -544,6 +581,41 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   const findEntry = (key: string): Entry | null =>
     buckets.flatMap((b) => bucketEntries(b.key)).find((e) => e.key === key) ?? null;
 
+  /**
+   * The groups on screen, as the view menu arranges them. Grouped by project
+   * in manual order this is exactly the bucket list drag-and-drop writes to;
+   * every other arrangement is a read-only view of the same cards.
+   */
+  const shown = (e: Entry) => view.showAutomations || !e.s?.taskId;
+  const shownDone = (s: SessionSummary) => view.showAutomations || !s.taskId;
+  const order = (items: Entry[]) => (view.sortBy === 'manual' ? items : [...items].sort((a, b) => compareCards(view)(sortable(a), sortable(b))));
+  const groups: PanelGroup[] = (() => {
+    if (view.groupBy === 'project') {
+      return buckets.flatMap((b): PanelGroup[] => {
+        const items = order(bucketEntries(b.key).filter(shown));
+        const done = completedInGroup(sessions, b.key, chatGroupOf).filter(shownDone);
+        const empty = items.length === 0 && done.length === 0;
+        if (empty && (b.key === '__none' || !view.showEmptyGroups)) return [];
+        return [{ key: b.key, name: b.name, ws: b.ws, items, done }];
+      });
+    }
+    const all = order(buckets.flatMap((b) => bucketEntries(b.key)).filter(shown));
+    const done = completedInGroup(sessions, '*', () => '*').filter(shownDone);
+    const completed: PanelGroup[] = done.length > 0 ? [{ key: COMPLETED_GROUP, name: 'Completed', items: [], done }] : [];
+    if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, done: [], bare: true }, ...completed];
+    const groupOf = view.groupBy === 'status'
+      ? (e: Entry) => statusGroupOf(e.s ? statuses.get(e.s.id) : undefined)
+      : (e: Entry) => { const c = sortable(e); return dateGroupOf(view.sortBy === 'created' ? c.createdAt : c.updatedAt, now); };
+    const defs = view.groupBy === 'status' ? STATUS_GROUPS : DATE_GROUPS;
+    return [
+      ...defs.flatMap((d): PanelGroup[] => {
+        const items = all.filter((e) => groupOf(e) === d.key);
+        return items.length > 0 || view.showEmptyGroups ? [{ key: d.key, name: d.name, items, done: [] }] : [];
+      }),
+      ...completed,
+    ];
+  })();
+
   // --- Sidebar drag-and-drop (reorder projects; reorder / re-file workspaces) ---
   const startDrag = (e: React.DragEvent, item: DragItem) => {
     e.stopPropagation();
@@ -650,6 +722,19 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
           >
             <PanelIcon className="h-3.5 w-3.5" />
           </button>)}
+          {sidebarOnly && <button
+            ref={viewButtonRef}
+            className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${viewMenu ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
+            title="View options: group, sort and show"
+            aria-label="Agent panel view options"
+            aria-haspopup="menu"
+            aria-expanded={!!viewMenu}
+            data-agent-view-button
+            onPointerDown={(e) => { if (viewMenu) e.stopPropagation(); }}
+            onClick={openViewMenuFromButton}
+          >
+            <SlidersIcon className="h-4 w-4" />
+          </button>}
           <button
             ref={newMenuButtonRef}
             className={`agent-panel-plus btn btn-ghost px-1.5 py-1 ${newMenuOpen ? 'is-open' : ''}`}
@@ -708,12 +793,14 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
         </div>
       </div>
       <div className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1.5' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
-        {buckets.map((b) => {
-          const items = bucketEntries(b.key);
-          const done = completedInGroup(sessions, b.key, chatGroupOf);
-          if (b.key === '__none' && items.length === 0 && done.length === 0) return null;
-          const isCollapsed = collapsed.has(b.key);
-          const completedOpen = showCompleted.has(b.key);
+        {groups.map((b) => {
+          const { items, done } = b;
+          const byProject = view.groupBy === 'project';
+          // The Completed group is its own fold: open means its rows show.
+          const completedGroup = b.key === COMPLETED_GROUP;
+          const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
+          const completedOpen = completedGroup || showCompleted.has(b.key);
+          const tipHere = sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId);
           const bucketActive = dropTarget === 'bucket:' + b.key;
           const groupGap = bucketActive && drag?.kind === 'project' && drag.id !== b.key;
           return (
@@ -722,36 +809,48 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
               className={`agent-panel-group mb-1 rounded-lg ${bucketActive && drag?.kind === 'workspace' ? 'bg-accent-soft ring-1 ring-accent/40' : ''}`}
               data-agent-group={b.key}
               data-group-gap={groupGap || undefined}
-              onDragOver={(e) => overTarget(e, 'bucket:' + b.key, () => true)}
-              onDragLeave={(e) => { if (leftGroup(e.currentTarget, e.relatedTarget) && dropTarget === 'bucket:' + b.key) setDropTarget(null); }}
-              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); dropOnBucket(b); }}
+              onDragOver={byProject ? (e) => overTarget(e, 'bucket:' + b.key, (d) => d.kind === 'project' || reorderable) : undefined}
+              onDragLeave={byProject ? (e) => { if (leftGroup(e.currentTarget, e.relatedTarget) && dropTarget === 'bucket:' + b.key) setDropTarget(null); } : undefined}
+              onDrop={byProject ? (e) => { e.preventDefault(); e.stopPropagation(); dropOnBucket(b); } : undefined}
             >
-              <div
+              {!b.bare && <div
                 className="group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
-                draggable={!!b.ws}
-                onDragStart={b.ws ? (e) => {
+                draggable={byProject && !!b.ws}
+                onContextMenu={sidebarOnly ? (e) => { e.preventDefault(); e.stopPropagation(); setViewMenu({ x: e.clientX, y: e.clientY }); } : undefined}
+                onDragStart={byProject && b.ws ? (e) => {
                   if (pressingGroupAction.current) { e.preventDefault(); return; }
                   startDrag(e, { kind: 'project', id: b.ws!.id, ws: b.ws!.id });
                 } : undefined}
                 onDragEnd={endDrag}
-                title={b.ws ? 'Drag to reorder project' : undefined}
+                title={byProject && b.ws ? 'Drag to reorder project · right-click for view options' : sidebarOnly ? 'Right-click for view options' : undefined}
               >
-                <button className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left" aria-expanded={!isCollapsed} data-sidebar-group onClick={() => toggleCollapse(b.key)}>
+                <button
+                  className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
+                  aria-expanded={!isCollapsed}
+                  data-sidebar-group
+                  ref={completedGroup && tipHere ? completionDestinationRef : undefined}
+                  style={completedGroup && tipHere ? { outline: '2px solid var(--accent)', borderRadius: 6 } : undefined}
+                  onClick={() => {
+                    if (!completedGroup) return toggleCollapse(b.key);
+                    useStore.setState({ completionTipSessionId: null });
+                    setShowCompleted((c) => { const n = new Set(c); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n; });
+                  }}
+                >
                   <svg
                     className={`h-3 w-3 shrink-0 text-ink-faint transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
                   ><path d="M9 6l6 6-6 6" /></svg>
                   <span className="truncate text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{b.name}</span>
-                  {isCollapsed && items.length > 0 && (
+                  {isCollapsed && (items.length > 0 || completedGroup) && (
                     <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] tabular-nums text-ink-faint">
-                      {items.length}
+                      {completedGroup ? done.length : items.length}
                     </span>
                   )}
                 </button>
                 {/* Not part of the row's project drag: a press that wanders a few
                     pixels would otherwise start dragging the project, and the
                     click on + never lands. */}
-                <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100" data-group-actions
+                {byProject && <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100" data-group-actions
                   onPointerDown={() => { pressingGroupAction.current = true; }}>
                   <button className="rounded-md p-1 text-ink-faint hover:bg-paper hover:text-ink" title="New agent in this project"
                     disabled={pendingProjects.includes(b.key)} aria-label={`New agent in ${b.name}`}
@@ -759,13 +858,13 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                   <button className="rounded-md p-1 text-ink-faint hover:bg-paper hover:text-ink" title="New terminal in project"
                     disabled={pendingProjects.includes(b.key)} aria-label={`New terminal in ${b.name}`}
                     onClick={() => { void createInProject('terminal', b.ws?.id, b.name); }}><TerminalIcon className="h-3.5 w-3.5" /></button>
-                </span>
-              </div>
+                </span>}
+              </div>}
               {/* Collapsed means gone: hidden, out of the tab order, and taking
                   no room in the row layout either, not just squashed to 0fr. */}
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
                 <div className="min-h-0 space-y-0.5 overflow-hidden pb-1">
-                  {items.length === 0 && (
+                  {items.length === 0 && !completedGroup && (
                     <p className="px-3.5 py-1 text-[11px] text-ink-faint">No active agents</p>
                   )}
                   {items.map((entry) => {
@@ -778,11 +877,11 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                         onContextMenu={s ? (e) => contextRow(e, s.id) : undefined}
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
                         style={s && selected.includes(s.id) ? {background:'var(--accent-soft)', borderRadius:8, boxShadow:'inset 0 0 0 1px var(--accent)'} : undefined}
-                        draggable
-                        onDragStart={(e) => startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id })}
+                        draggable={reorderable}
+                        onDragStart={reorderable ? (e) => startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id }) : undefined}
                         onDragEnd={endDrag}
-                        onDragOver={(e) => overTarget(e, 'card:' + entry.key, (d) => d.kind === 'workspace')}
-                        onDrop={(e) => {
+                        onDragOver={reorderable ? (e) => overTarget(e, 'card:' + entry.key, (d) => d.kind === 'workspace') : undefined}
+                        onDrop={!reorderable ? undefined : (e) => {
                            // Project drops belong to the containing group, even over a card.
                            if (drag?.kind !== 'workspace') return;
                            e.preventDefault(); e.stopPropagation(); dropBeforeCard(b, entry.key);
@@ -798,6 +897,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                           now={now}
                           projects={settings?.workspaces ?? []}
                           subAgentCount={kids.length}
+                          showMetadata={view.showMetadata}
                           onOpen={() => {
                             if (sidebarOnly) {
                               if (s) onOpenChat?.(s.id);
@@ -824,8 +924,8 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                   {/* Completed chats stay with their group, folded away under
                       the active ones until asked for. */}
                   {done.length > 0 && (
-                    <div className="pt-1">
-                      <button
+                    <div className={completedGroup ? '' : 'pt-1'}>
+                      {!completedGroup && <button
                         className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-[11px] text-ink-faint hover:bg-surface-2 hover:text-ink"
                         style={sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
                         aria-expanded={completedOpen}
@@ -838,9 +938,9 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
                         ><path d="M9 6l6 6-6 6" /></svg>
                         {completedOpen ? 'Hide completed' : `Show completed (${done.length})`}
-                      </button>
-                      {sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId) && <div role="status" className="mt-1 rounded-md border border-line p-2 text-[11px] text-ink-soft">
-                        Your completed chat is here. Open Show completed to find or restore it.
+                      </button>}
+                      {tipHere && <div role="status" className="mt-1 rounded-md border border-line p-2 text-[11px] text-ink-soft">
+                        {completedGroup ? 'Your completed chat is here. Open Completed to find or restore it.' : 'Your completed chat is here. Open Show completed to find or restore it.'}
                         <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
                       </div>}
                       {completedOpen && done.map((s) => (
@@ -876,6 +976,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
       className={`flex min-w-0 ${sidebarOnly ? `shrink-0 ${horizontal ? 'w-full' : 'agent-panel-host min-h-0 self-stretch'}` : 'h-full overflow-hidden'}`}
       style={sidebarOnly ? { gap: 'var(--pane-gap)', minHeight: 0 } : { background: 'var(--surface-2)', padding: 'var(--pane-gap)', gap: 'var(--pane-gap)' }}
     >
+      {viewMenu && <AgentPanelViewMenu x={viewMenu.x} y={viewMenu.y} view={view} onChange={setView} onClose={closeViewMenu} />}
       {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
         <div className="select-text break-all px-2.5 py-2 font-mono text-[10px] text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>

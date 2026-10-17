@@ -173,6 +173,7 @@ function WorkspaceCardImpl({
   now,
   projects,
   subAgentCount = 0,
+  showMetadata = true,
   onOpen,
   onClose,
 }: {
@@ -188,6 +189,8 @@ function WorkspaceCardImpl({
   projects: WorkspaceFolder[];
   /** How many sub-agents this chat has spawned. */
   subAgentCount?: number;
+  /** The lines under the title; off, the card is its title row alone. */
+  showMetadata?: boolean;
   onOpen: () => void;
   onClose: () => void | Promise<void>;
 }) {
@@ -294,6 +297,7 @@ function WorkspaceCardImpl({
       {/* Line 2: what is running it: "source / model", then how full the
           context window is. Source first because it answers "whose quota is
           this spending" before "which model", and the two read as one fact. */}
+      {showMetadata && <>
       <div className="mt-0.5 flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
         <Fact
           grow
@@ -385,6 +389,7 @@ function WorkspaceCardImpl({
           {windows > 1 && <span className="shrink-0">{windows} windows</span>}
         </div>
       )}
+      </>}
     </div>
   );
 }
