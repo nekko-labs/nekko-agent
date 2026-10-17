@@ -485,6 +485,7 @@ export function ChatControls({
       <div className={only ? 'relative min-w-0' : 'relative shrink-0'}>
         <button
           ref={modeButton}
+          data-chat-mode-button
           className="ctl-menu max-w-full whitespace-nowrap"
           onClick={() => setModeOpen((o) => !o)}
           aria-haspopup="dialog"
