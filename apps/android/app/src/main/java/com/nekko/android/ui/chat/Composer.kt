@@ -1,5 +1,13 @@
 package com.nekko.android.ui.chat
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.nekko.android.chat.ImageAttachments
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -68,7 +76,8 @@ fun Composer(
     running: Boolean,
     blocked: String?,
     queued: List<String>,
-    onSend: suspend (String, SkillSummary?) -> Unit,
+    /** Text, the armed skill and photos (JPEG data URLs); throws when it didn't go. */
+    onSend: suspend (String, SkillSummary?, List<String>) -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
     /** Pre-filled once (text shared from another app); the user still presses Send. */
@@ -90,7 +99,25 @@ fun Composer(
     var skillName by rememberSaveable { mutableStateOf<String?>(null) }
     val skill = skillName?.let { n -> skills.firstOrNull { it.name == n } }
     val menu = if (skill == null) SkillMenu.query(text)?.let { SkillMenu.match(skills, it) }.orEmpty() else emptyList()
-    val canSend = (text.isNotBlank() || skill != null) && blocked == null && !sending
+    // Photos are held in memory only (data URLs are too big for saved state); rotation drops them.
+    var images by remember { mutableStateOf<List<String>>(emptyList()) }
+    var loadingPhotos by remember { mutableStateOf(false) }
+    val resolver = LocalContext.current.contentResolver
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(ImageAttachments.MAX)) { uris ->
+        if (uris.isNotEmpty()) {
+            loadingPhotos = true
+            scope.launch {
+                try {
+                    val loaded = ImageAttachments.load(resolver, uris)
+                    images = loaded
+                    error = if (loaded.size < uris.size) "Some photos couldn’t be read." else null
+                } finally {
+                    loadingPhotos = false
+                }
+            }
+        }
+    }
+    val canSend = (text.isNotBlank() || skill != null || images.isNotEmpty()) && blocked == null && !sending && !loadingPhotos
     val showStop = running && text.isBlank()
     LaunchedEffect(insert) {
         if (insert != null) {
@@ -108,18 +135,21 @@ fun Composer(
         if (canSend) {
             // `/name rest` typed out in full runs that skill too, as on the desktop.
             val (armed, value) = skill?.let { it to text.trim() } ?: SkillMenu.typed(text, skills) ?: (null to text.trim())
+            val photos = images
             sending = true
             text = ""
             skillName = null
+            images = emptyList()
             error = null
             scope.launch {
                 try {
-                    onSend(value, armed)
+                    onSend(value, armed, photos)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     text = value // keep what they typed if it didn't go
                     skillName = armed?.name
+                    images = photos
                     error = e.message ?: "Couldn’t send that."
                 } finally {
                     sending = false
@@ -162,6 +192,7 @@ fun Composer(
                 error = null
             }
             skill?.let { SkillChip(it) { skillName = null } }
+            if (images.isNotEmpty() || loadingPhotos) PhotosChip(images.size, loadingPhotos) { images = emptyList() }
             val note = blocked ?: error ?: mic?.error
             if (note != null) {
                 Text(
@@ -211,6 +242,13 @@ fun Composer(
                         inner()
                     },
                 )
+                IconButton(
+                    onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    enabled = !sending && !loadingPhotos,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(Icons.Filled.AddPhotoAlternate, contentDescription = "Add photos", tint = p.inkSoft)
+                }
                 if (mic != null) MicButton(mic, onText = dictated)
                 FilledIconButton(
                     onClick = { if (showStop) onStop() else send() },
@@ -296,6 +334,31 @@ class MicUi(
     /** Tap: start, or stop and transcribe. The screen asks for the microphone permission first. */
     val onTap: (onText: (String) -> Unit) -> Unit,
 )
+
+/** The photos going with the next prompt: how many, and a way to drop them. */
+@Composable
+private fun PhotosChip(count: Int, loading: Boolean, onClear: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.surface2)
+            .padding(start = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (loading) {
+            CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(14.dp))
+            Text("Preparing photos…", style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(vertical = 14.dp, horizontal = 4.dp))
+        } else {
+            Icon(Icons.Filled.Image, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+            Text(if (count == 1) "1 photo" else "$count photos", style = MaterialTheme.typography.bodySmall, color = p.ink)
+            IconButton(onClick = onClear, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = "Remove photos", tint = p.inkSoft, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
 
 @Composable
 private fun MicButton(mic: MicUi, onText: (String) -> Unit) {
