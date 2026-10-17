@@ -1,5 +1,5 @@
 import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
-import type { AgentReplay, LocalRelayStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
+import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
 
@@ -16,6 +16,7 @@ import { openTerminalSocket } from './terminal-socket.js';
  */
 /** No "relay on this computer" in a browser tab; the Remote access card hides it on `available === false`. */
 const webLocalRelay: LocalRelayStatus = { running: false, enabled: false, port: LOCAL_RELAY_PORT, available: false };
+const webVisibility: NetworkVisibilityStatus = { enabled: false, advertising: false, available: false };
 
 function webApiServerStatus() {
   return {
@@ -583,6 +584,9 @@ function makeWebClient(): NekkoApi {
     localRelayStatus: async () => webLocalRelay,
     localRelayStart: async () => webLocalRelay,
     localRelayStop: async () => webLocalRelay,
+    networkVisibilityStatus: async () => webVisibility,
+    networkVisibilityStart: async () => webVisibility,
+    networkVisibilityStop: async () => webVisibility,
 
     // Web edition: "update" = the server got a newer build since this tab
     // loaded; we just suggest a refresh (no installer to run in the browser).
