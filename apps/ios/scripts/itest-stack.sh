@@ -30,10 +30,11 @@ relay_pid=$!
 sleep 1
 cat >"$data/settings.json" <<JSON
 {"providers":[{"id":"fake","kind":"openai-compat","label":"Fake","baseUrl":"http://127.0.0.1:$model_port/v1","apiKey":"sk-should-never-reach-the-phone","enabled":true}],
- "defaultProviderId":"fake","defaultModelId":"fake-model"}
+ "defaultProviderId":"fake","defaultModelId":"fake-model","phoneChanges":true}
 JSON
-NEKKO_RELAY_URL="ws://127.0.0.1:$relay_port" NEKKO_ROOM="$room" NEKKO_PAIR_KEY="$key" NEKKO_DATA_DIR="$data" NEKKO_AGENT_LOOP=ts \
-  nohup node apps/server/dist/index.js >"$logs/agent.log" 2>&1 &
+# The agent runs in its data dir, so files the fake model writes land there, not in the repo.
+(cd "$data" && NEKKO_RELAY_URL="ws://127.0.0.1:$relay_port" NEKKO_ROOM="$room" NEKKO_PAIR_KEY="$key" NEKKO_DATA_DIR="$data" NEKKO_AGENT_LOOP=ts \
+  exec nohup node "$root/apps/server/dist/index.js" >"$logs/agent.log" 2>&1) &
 agent_pid=$!
 pair=""
 for _ in $(seq 150); do
