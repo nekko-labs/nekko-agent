@@ -325,6 +325,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   const [selected, setSelected] = useState<string[]>([]);
   const anchor = useRef<string | null>(null);
   const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
+  const [doneMenu, setDoneMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const selectRow = (e: React.MouseEvent, id: string) => {
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) { setSelected([]); anchor.current = id; return false; }
     e.preventDefault(); e.stopPropagation();
@@ -950,6 +951,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                           now={now}
                           isActive={sidebarOnly ? selectedId === s.id : archiveOpen && archivedViewId === s.id}
                           onOpen={() => { if (sidebarOnly) onOpenChat?.(s.id); else openChatPane(s.id); setMobileNav(false); }}
+                          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setDoneMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
                         />
                       ))}
                     </div>
@@ -987,6 +989,16 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
           <ContextAction disabled={menu.ids.every(id => statuses.has(id))} onClick={() => void runAction('continue',menu.ids)}>Continue{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction onClick={() => void runAction('delete',menu.ids)}>Delete permanently</ContextAction>
         </>}
+      </ContextMenu>}
+      {/* A completed chat's menu: the reader's two ways out, without opening it.
+          Delete still asks first, as it does from the reader. */}
+      {doneMenu && <ContextMenu x={doneMenu.x} y={doneMenu.y} onClose={() => setDoneMenu(null)}>
+        <ContextAction onClick={() => { const id = doneMenu.id; setDoneMenu(null); void useStore.getState().restoreChat(id); }}>
+          Restore chat
+        </ContextAction>
+        <ContextAction onClick={() => { const id = doneMenu.id; setDoneMenu(null); void useStore.getState().deleteChatForever(id); }}>
+          <span className="text-(--danger)">Delete forever</span>
+        </ContextAction>
       </ContextMenu>}
       {sidebarOnly && mobileNav && <div className="absolute inset-0 z-20 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} />}
       {/* A row of cards needs no drawer on a narrow screen: it is already out of the way. */}
@@ -1105,15 +1117,16 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
  * by when it was completed. Opening it reads it in the middle, read-only.
  */
 function CompletedRow({
-  session: s, now, isActive, onOpen,
+  session: s, now, isActive, onOpen, onContextMenu,
 }: {
-  session: SessionSummary; now: number; isActive: boolean; onOpen: () => void;
+  session: SessionSummary; now: number; isActive: boolean; onOpen: () => void; onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const at = s.archivedAt as number;
   const days = archiveDaysLeft(at, now);
   return (
     <button
       onClick={onOpen}
+      onContextMenu={onContextMenu}
       data-completed-row={s.id}
       className={`flex w-full items-center gap-1.5 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
       title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nDeleted on ${new Date(archiveDeletesAt(at)).toLocaleDateString()} unless restored (${days} day${days === 1 ? '' : 's'} left)`}

@@ -120,6 +120,13 @@ public final class ComputersStore {
     public private(set) var lastError: String?
     /// The active computer's connection history (memory only, content-free), for the Connection screen.
     public private(set) var connectionLog = ConnectionLog()
+    /// When the list on screen is the phone's saved copy (not yet re-read from
+    /// the computer), when it was saved; nil once the computer has answered.
+    public private(set) var savedListAt: Int64?
+    /// Set while *Keep the chat list when offline* is on; nil keeps nothing.
+    public var chatListCache: ChatListCache? {
+        didSet { if chatListCache == nil { savedListAt = nil } else { saveList() } }
+    }
     private var loggedComputer: String?
 
     public var active: Computer? { computers.first { $0.id == activeId } }
@@ -229,6 +236,7 @@ public final class ComputersStore {
         let wasActive = activeId == id
         if wasActive { disconnect() }
         store.set(Self.secretKey(id), nil)
+        chatListCache?.remove(id)
         computers.removeAll { $0.id == id }
         saveIndex()
         if wasActive {
@@ -259,6 +267,12 @@ public final class ComputersStore {
         }
         connectionLog.record(.connecting)
         clearComputerState()
+        // Opening the app away from the computer: show the list as it was, marked as saved.
+        if let saved = chatListCache?.load(id) {
+            summaries = saved.summaries
+            workspaces = saved.folders
+            savedListAt = saved.savedAt
+        }
         var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
                                  deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
         config.requestTimeout = 120
@@ -382,6 +396,8 @@ public final class ComputersStore {
             learnPlatform(appInfo.platform)
             summariesLoading = false
             summariesLoaded = true
+            savedListAt = nil
+            saveList()
         } catch {
             if client === c {
                 summariesLoading = false
@@ -482,6 +498,7 @@ public final class ComputersStore {
     }
 
     private func clearComputerState() {
+        savedListAt = nil
         summariesLoaded = false
         summaries = []
         providers = []
@@ -505,8 +522,15 @@ public final class ComputersStore {
             guard self.client === c, !Task.isCancelled else { return }
             if let list = try? await c.call(Channels.sessionsSummaries), self.client === c {
                 self.summaries = SessionSummary.visible(list)
+                self.saveList()
             }
         }
+    }
+
+    /// The live list, as the phone's saved copy (only when the user keeps one).
+    private func saveList() {
+        guard let cache = chatListCache, let id = activeId, summariesLoaded, savedListAt == nil else { return }
+        cache.save(id, SavedChatList(savedAt: now(), summaries: summaries, folders: workspaces))
     }
 
     private func learnPlatform(_ platform: String?) {

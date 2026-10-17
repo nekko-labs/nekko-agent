@@ -58,6 +58,12 @@ struct ChatsView: View {
 
     @ViewBuilder private var rows: some View {
             ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
+            if let at = store.savedListAt {
+                Label(SavedListNote.text(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
+                    .font(.footnote).foregroundStyle(palette.inkSoft)
+                    .listRowSeparator(.hidden).listRowBackground(Color.clear)
+                    .accessibilityIdentifier("chats.savedList")
+            }
             if store.summariesLoaded && store.summaries.isEmpty && !store.summariesLoading, let e = store.lastError {
                 // A list that failed to load is not an empty one.
                 VStack(spacing: 10) {
@@ -287,5 +293,16 @@ struct ChatDialogs: ViewModifier {
             } message: {
                 Text(actionError ?? "")
             }
+    }
+}
+
+/// The line above a saved chat list: when it was saved, and that it isn't live.
+enum SavedListNote {
+    static func text(savedAt ms: Int64, computer: String, now: Date = .now, calendar: Calendar = .current) -> String {
+        let date = Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
+        let when = calendar.isDate(date, inSameDayAs: now)
+            ? date.formatted(date: .omitted, time: .shortened)
+            : date.formatted(date: .abbreviated, time: .shortened)
+        return "Saved list from \(when). It updates when \(computer) answers."
     }
 }

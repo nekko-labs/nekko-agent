@@ -89,6 +89,12 @@ struct SettingsView: View {
                 Text("Asks on every open and every return, covers the app switcher preview, and keeps notifications and the Lock Screen free of chat details.")
             }
             Section {
+                Toggle("Keep the chat list when offline", isOn: Binding(get: { prefs.keepChatList }, set: { app.setKeepChatList($0) }))
+                    .accessibilityIdentifier("settings.keepChatList")
+            } header: { Text("Offline") } footer: {
+                Text("Shows each computer’s chat titles and folders, as last seen, while it can’t be reached. Only the list is kept on this iPhone, never what the chats say, and it isn’t backed up. Turning this off deletes it.")
+            }
+            Section {
                 Toggle("Notify when away", isOn: $prefs.notify)
                 Toggle("Live Activities", isOn: $prefs.liveActivities)
                 Toggle("Vibrate for approvals and questions", isOn: $prefs.hapticNeedsYou)
