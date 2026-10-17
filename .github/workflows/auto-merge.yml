@@ -22,7 +22,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  # Needed to dispatch version-release.yml once the PR lands.
+  # Needed to dispatch version-release.yml and ci.yml once the PR lands.
   actions: write
   # Needed to close the PR's linked issues: GitHub skips closing keywords on
   # merges made with GITHUB_TOKEN.
@@ -66,7 +66,12 @@ jobs:
                 done
 
                 gh workflow run version-release.yml --repo "$GH_REPO" --ref main
-                echo "Merged. Dispatched version-release for $PR_URL"
+                # The same token rule means this merge starts no `push` CI on main.
+                # PRs skip macOS and perf (scripts/ci-scope.mjs) on the promise that
+                # main runs them after every merge, so dispatch the full run here.
+                gh workflow run ci.yml --repo "$GH_REPO" --ref main \
+                  || echo "::warning::Could not dispatch CI on main for $PR_URL."
+                echo "Merged. Dispatched version-release and CI for $PR_URL"
                 exit 0
                 ;;
               CLOSED)

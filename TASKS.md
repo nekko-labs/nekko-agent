@@ -17,6 +17,23 @@ See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17
 - [ ] Speed: fake timers in `core/loop-retry` and `host/hooks`, a shared git fixture in `chat-worktrees`, one root Vitest workspace, a shared CI build artifact.
 - [ ] Split `crates/nekkod/tests/daemon.rs` by domain with event waits instead of sleeps; promote 4 `itest-*.mjs` to a main-only job.
 
+## Per-step plan working icons (2026-10-17)
+
+See [SPEC](SPEC.md#per-step-plan-working-icons-2026-10-17).
+
+- [x] Static Working glyph per active entry, independent of streaming and other active steps; explicit interrupted idle chats show Paused; accessible status tooltips and distinct pending/done/skipped shapes.
+- [x] 11 PlanRail component tests pass, including simultaneous active statuses and interruption/resume behavior. Hidden fixture captures before/after working/paused at 240/360px in both themes, with no focus or horizontal overflow.
+- [x] Parent actual-pixel inspection and affected-surface signoff (2026-10-17): browser-owned corrected v2 matching working 240px dark/light before/after pairs show two legible, unclipped Working icons; paused 240px dark/light pairs show two correct pause icons; working 360px light also inspected and visible. Initial evidence had invalid theme matching; v2 asserts computed colors and captured background pixels with fresh profiles. Inspection covers these cases only. Synthetic hidden Windows Electron fixtures do not verify a packaged build or native platform behavior.
+- [x] Docs checklist and public evidence verified (2026-10-17): 5 docs tests pass, docs regeneration is unchanged, and all 16 published v2 PNG links return HTTP 200 with PNG bytes. Focused rerun passes 11 implementation tests and 8 archived-base tests.
+- [ ] Land PR #746 after final CI gates. Packaged/native verification remains a non-blocking limitation for this renderer-only change.
+
+## CI scope: which jobs a PR waits for (added 2026-10-17)
+
+PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows jobs finished in about 8 minutes, but `daemon (macos-latest)` queued 50-98 minutes for one of the Team plan's 5 concurrent macOS runners, and `perf` failed on `main` itself (a stale Grid wait, fixed in #743, and the streaming-frame flap in #544), so unrelated PRs never went green.
+
+- [x] ✅ 2026-10-17 `scripts/ci-scope.mjs` + `scripts/ci-scope.test.mjs`: `push` to `main` and `workflow_dispatch` run everything on every OS. On a PR: `daemon` (Ubuntu, Windows) for `crates/`, Cargo files and `packages/{host,core,shared}`; `capture` (Windows) for `apps/desktop/` and `packages/`; `perf` for `scripts/perf/` or the `ci:perf` label; macOS daemon and capture only with `ci:macos`. `ci.yml`, `package.json`/lockfile and the scope script itself run all Linux and Windows jobs, and so does an empty or capped (3,000-file) changed-file list. Simulated on the last 30 PRs: 60 macOS jobs and 30 perf runs would have been 0 and 2, and 13 PRs would have waited for `build` alone.
+- [ ] Watch the first week of `main` runs. A macOS-only or perf regression now shows on `main` after the merge, not on the PR; if that happens often, move those jobs to a merge queue (`merge_group`) instead of labels.
+
 ## Focused mode transitions and layout controls (added 2026-10-17)
 
 See [SPEC](SPEC.md#focused-mode-transitions-calmer-focus-ring-and-layout-controls-2026-10-17).
@@ -393,6 +410,7 @@ A workspace is a **split tree**, not a tab stack. `renderer/layout.ts` owns the 
 - **Docker**: multi-stage `Dockerfile` (`ELECTRON_SKIP_BINARY_DOWNLOAD=1`, dev deps pruned, a cargo stage for `nekkod`, non-root node:22-trixie-slim with tini, health check on `/health`) + `docker-compose.yml` (volume workspace + data, `host.docker.internal:host-gateway`, publishes to 127.0.0.1:1440); GHCR publish workflow on `v*` tags.
 - **Mobile**: `.github/workflows/mobile.yml` runs on mobile/relay changes (and manually): typecheck, unit tests, and the phone ↔ relay ↔ computer integration test (needs the root shared/core/host/cli/server/relay builds), then `expo prebuild` + an Android debug APK and an unsigned iOS simulator build. Locally on Windows: `subst` a short drive letter over the worktree before `gradlew assembleDebug` (CMake path limits), JDK 21 from Android Studio's `jbr`, `-PreactNativeArchitectures=x86_64` for the emulator. llama.rn's postinstall downloads its prebuilt libraries with `tar`; under Git Bash that is GNU tar, which reads `C:` as a remote host, so run installs from PowerShell or run `npm run llama:native` after.
 - **Cloud**: `npm run cloud` (:4318) locally; hosted deploy target TBD (open question).
+- **CI scope** (`ci.yml`, added 2026-10-17; see "CI scope: which jobs a PR waits for" in Part 2): a `scope` job runs `scripts/ci-scope.mjs` over the PR's changed files and labels and hands each slow job its OS matrix. `build` (required) always runs.
 - **Local test loop**: `npm run local` builds + launches the built desktop app (electron-vite preview, no installer/Defender); `npm run web` for the browser edition.
 - **Ports**: web 1440, cloud 4318. Kill a stale dev server by port (`Get-NetTCPConnection -LocalPort … | Stop-Process`), npm-wrapped node survives `pkill`.
 
