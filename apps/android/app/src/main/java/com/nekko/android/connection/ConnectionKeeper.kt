@@ -42,9 +42,9 @@ class ConnectionKeeper(
     private val foreground = MutableStateFlow(false)
     private val lastEventAt = MutableStateFlow(0L)
 
-    private val _status = MutableStateFlow<String?>(null)
-    /** The keep-alive notification's line while the service should run, else null. */
-    val status: StateFlow<String?> = _status.asStateFlow()
+    private val _status = MutableStateFlow<KeepAlive.Status?>(null)
+    /** What the keep-alive notification says while the service should run, else null. */
+    val status: StateFlow<KeepAlive.Status?> = _status.asStateFlow()
 
     fun start() {
         watchNetwork()
@@ -60,7 +60,7 @@ class ConnectionKeeper(
             combine(prefs.flow(KeepAlive.ENABLED), repo.state, lastEventAt, tick) { on, s, last, _ ->
                 val busy = s.activity.size
                 val wanted = KeepAlive.wanted(on, s.conn, busy, now() - last)
-                if (wanted) KeepAlive.line(busy, s.active?.name ?: "your computer") else null
+                if (wanted) KeepAlive.status(busy, s.active?.name ?: "your computer") else null
             }.distinctUntilChanged().collect { line ->
                 _status.value = line
                 // In the app nothing needs keeping alive; on leaving, onForeground starts it.
