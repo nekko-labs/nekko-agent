@@ -15,15 +15,22 @@ app.whenReady().then(async () => {
   win.webContents.on('console-message', (_e, level, message) => { if (level >= 3) report.errors.push(message); });
   const run = (s) => win.webContents.executeJavaScript(s, true);
   try {
-    await win.loadFile(path.join(out, 'index.html')); win.showInactive(); await sleep(800);
-    for (const theme of ['dark', 'light']) {
-      await run(`document.documentElement.dataset.theme='${theme}'`); await sleep(300);
-      const order = await run("(()=>{const t=[...document.querySelectorAll('aside section > div:first-child > span:first-child')].map(s=>s.textContent);return t})()");
-      report.checks.push({ name: `${theme} section order`, value: order });
-      const img = await win.capturePage({ x: 0, y: 0, width: 280, height: 560 }, { stayHidden: true });
-      fs.writeFileSync(path.join(shots, `plan-rail-${tag}-${theme}.png`), img.toPNG());
+    for (const state of ['working', 'paused']) {
+      await win.loadFile(path.join(out, 'index.html'), { search: state === 'paused' ? '?paused' : '' }); await sleep(400);
+      for (const width of [240, 360]) {
+        win.setContentSize(width, 600);
+        for (const theme of ['dark', 'light']) {
+          await run(`document.documentElement.dataset.theme='${theme}'`); await sleep(200);
+          const value = await run(`(()=>{const rows=[...document.querySelectorAll('ol li')];return {rows:rows.map(r=>({text:r.textContent,label:r.querySelector('[role="img"]')?.getAttribute('aria-label')})),overflow:document.documentElement.scrollWidth>innerWidth,focused:document.hasFocus()}})()`);
+          report.checks.push({ name: `${state} ${width} ${theme}`, value });
+          if (value.overflow || value.rows.length !== 5) report.errors.push(`Invalid layout: ${state} ${width} ${theme}`);
+          if (!base && value.rows.filter(r => r.label === (state === 'paused' ? 'Paused' : 'Working')).length !== 2) report.errors.push(`Missing parallel statuses: ${state}`);
+          const img = await win.capturePage({ x: 0, y: 0, width, height: 560 }, { stayHidden: true });
+          fs.writeFileSync(path.join(shots, `plan-rail-${tag}-${state}-${width}-${theme}.png`), img.toPNG());
+        }
+      }
     }
-    report.background = { focused: win.isFocused(), bounds: win.getBounds() };
+    report.background = { focused: win.isFocused(), visible: win.isVisible(), bounds: win.getBounds() };
   } catch (e) { report.errors.push(String(e)); }
   finally {
     fs.writeFileSync(path.join(out, 'status.json'), JSON.stringify(report, null, 2));

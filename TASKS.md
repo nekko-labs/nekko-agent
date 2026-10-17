@@ -6,6 +6,14 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Per-step plan working icons (2026-10-17)
+
+See [SPEC](SPEC.md#per-step-plan-working-icons-2026-10-17).
+
+- [x] Static Working glyph per active entry, independent of streaming and other active steps; explicit interrupted idle chats show Paused; accessible status tooltips and distinct pending/done/skipped shapes.
+- [x] 11 PlanRail component tests pass, including simultaneous active statuses and interruption/resume behavior. Hidden fixture captures before/after working/paused at 240/360px in both themes, with no focus or horizontal overflow.
+- [ ] Parent pixel inspection of the matching screenshots, then landing after required checks. Captured evidence alone is not visual verification.
+
 ## Focused mode transitions and layout controls (added 2026-10-17)
 
 See [SPEC](SPEC.md#focused-mode-transitions-calmer-focus-ring-and-layout-controls-2026-10-17).
