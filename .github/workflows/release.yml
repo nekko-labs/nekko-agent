@@ -363,16 +363,16 @@ jobs:
             }
           }
           # The platform packages first: the bundle pins them at this version.
-          node apps/server/scripts/nekkod-packages.mjs --bins nekkod-bins --out npm-nekkod --version "$version" --require-all
+          node apps/web-app-server/scripts/nekkod-packages.mjs --bins nekkod-bins --out npm-nekkod --version "$version" --require-all
           for dir in npm-nekkod/*/; do
             publish "$dir" "$(node -p "require('./${dir}package.json').name")"
           done
-          npm pkg set "version=$version" --workspace=apps/server
+          npm pkg set "version=$version" --workspace=apps/web-app-server
           npm install --package-lock-only --ignore-scripts
           npm ci
           npm run build:web
           npm run bundle -w @nekko-agent/server
-          publish apps/server/cli-dist nekko-agent-web
+          publish apps/web-app-server/cli-dist nekko-agent-web
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'

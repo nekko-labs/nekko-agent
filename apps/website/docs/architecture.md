@@ -9,7 +9,7 @@ Nekko Agent is one engine and one React UI that run in several places: the deskt
             |                                        |
             |  IPC                          HTTP + WebSocket
             v                                        v
-       apps/desktop main                      apps/server
+       apps/desktop main                  apps/web-app-server
             \                                        /
              \----------- nekkod (Rust) ------------/
                      engine daemon on loopback
@@ -41,7 +41,7 @@ Status: implemented, unit and isolated fixture interaction tested; image/motion 
 | `packages/core` | The TypeScript engine: providers, agent loop, guardrails, context, indexer, memory, connectors. No Electron imports, unit tested with Vitest. |
 | `packages/host` | Wires the engine to the file system, shell and settings. Shared by every edition. |
 | `apps/desktop` | The Electron app: `src/main` (Node), `src/preload` (the bridge) and `src/renderer` (React). |
-| `apps/server` | The self-hosted web edition, also the `npx nekko-agent-web` package. |
+| `apps/web-app-server` | The self-hosted web edition, also the `npx nekko-agent-web` package. |
 | `apps/cli` | The `nekko-agent` CLI and MCP server. |
 | `apps/mobile` | The iOS and Android app (Expo). |
 | `apps/relay` | The relay that pairs a phone with a computer. It only ever sees encrypted frames. |
