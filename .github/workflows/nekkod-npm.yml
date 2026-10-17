@@ -24,6 +24,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `key` is a base axis (not only `include`) so `exclude` can match it.
+        key: [win32-x64, linux-x64, linux-arm64, darwin-arm64]
         include:
           - { key: win32-x64, os: windows-latest, target: x86_64-pc-windows-msvc }
           # The prebuilt ONNX Runtime nekkod links needs a GCC 13 libstdc++ (Ubuntu 24.04, Debian 13).
@@ -33,7 +35,7 @@ jobs:
         # A PR build check skips darwin unless labelled `ci:macos`; release.yml
         # (which calls this workflow) always builds every target.
         exclude:
-          - os: ${{ (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) && 'macos-latest' || 'none' }}
+          - key: ${{ (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) && 'darwin-arm64' || 'none' }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

@@ -36,6 +36,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `ep` is a base axis (not only `include`) so `exclude` can match it.
+        ep: [coreml, cpu]
         include:
           - os: macos-14
             ep: coreml

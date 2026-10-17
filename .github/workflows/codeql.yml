@@ -35,6 +35,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `language` is a base axis (not only `include`) so `exclude` can match it.
+        language: [actions, javascript-typescript, python, rust, swift]
         include:
           - { language: actions, os: ubuntu-latest, build-mode: none }
           - { language: javascript-typescript, os: ubuntu-latest, build-mode: none }
