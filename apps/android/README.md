@@ -130,7 +130,7 @@ cd apps/android && NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegra
    link and a one-time code):
    ```sh
    NEKKO_RELAY_PORT=4400 NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 node apps/relay/dist/index.js
-   NEKKO_RELAY_URL=ws://127.0.0.1:4400 NEKKO_ROOM=<16 hex> NEKKO_PAIR_KEY=<32 hex> node apps/server/dist/index.js
+   NEKKO_RELAY_URL=ws://127.0.0.1:4400 NEKKO_ROOM=<16 hex> NEKKO_PAIR_KEY=<32 hex> node apps/web-app-server/dist/index.js
    ```
    Or use the desktop app's **Settings → Remote access** with the managed relay.
 2. Install the debug APK: `adb install -r app/build/outputs/apk/debug/app-debug.apk`.

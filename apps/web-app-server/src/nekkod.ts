@@ -79,7 +79,7 @@ export function findNekkod(opts: FindOptions): FoundDaemon | null {
   const bundled = join(opts.here, 'bin', exe);
   if (existsSync(bundled)) return { path: bundled, source: 'bundled' };
 
-  // apps/server/dist -> the repository root.
+  // apps/web-app-server/dist -> the repository root.
   const root = resolve(opts.here, '../../..');
   const builds = [join(root, 'target/release', exe), join(root, 'target/debug', exe)].flatMap((p) => {
     try {

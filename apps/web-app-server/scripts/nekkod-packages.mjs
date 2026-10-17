@@ -3,7 +3,7 @@
 // optionalDependencies (see bundle.mjs), so npm installs only the one whose
 // `os`/`cpu` match, and the server finds it at runtime (src/nekkod.ts).
 //
-//   node apps/server/scripts/nekkod-packages.mjs --bins <dir> --out <dir> [--version x.y.z]
+//   node apps/web-app-server/scripts/nekkod-packages.mjs --bins <dir> --out <dir> [--version x.y.z]
 //
 // <bins> holds one folder per platform, named as in PLATFORMS below
 // (e.g. `linux-x64/nekkod`, `win32-x64/nekkod.exe` plus `msvcp140.dll`), which is

@@ -10,7 +10,7 @@ set -euo pipefail
 out="${1:?usage: itest-stack.sh <env-file>}"
 root="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$root"
-for f in apps/relay/dist/index.js apps/server/dist/index.js; do
+for f in apps/relay/dist/index.js apps/web-app-server/dist/index.js; do
   [ -f "$f" ] || { echo "missing $f: build the workspaces first" >&2; exit 1; }
 done
 free_port() { node -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})'; }
@@ -34,7 +34,7 @@ cat >"$data/settings.json" <<JSON
 JSON
 # The agent runs in its data dir, so files the fake model writes land there, not in the repo.
 (cd "$data" && NEKKO_RELAY_URL="ws://127.0.0.1:$relay_port" NEKKO_ROOM="$room" NEKKO_PAIR_KEY="$key" NEKKO_DATA_DIR="$data" NEKKO_AGENT_LOOP=ts \
-  exec nohup node "$root/apps/server/dist/index.js" >"$logs/agent.log" 2>&1) &
+  exec nohup node "$root/apps/web-app-server/dist/index.js" >"$logs/agent.log" 2>&1) &
 agent_pid=$!
 pair=""
 for _ in $(seq 150); do

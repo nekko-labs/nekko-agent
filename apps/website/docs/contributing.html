@@ -95,10 +95,10 @@ npm run dev          # build the Rust daemon and the app, then launch the deskto
 </tbody></table></div>
 <p><strong>Rule of thumb:</strong> business logic goes in <code>packages/core</code> (so it&#39;s testable without Electron); the desktop app wires it to the filesystem, shell, and UI.</p>
 <h2 id="publishing-the-npx-nekko-agent-package"><a class="anchor" href="#publishing-the-npx-nekko-agent-package" aria-hidden="true" tabindex="-1">#</a>Publishing the <code>npx nekko-agent</code> package</h2>
-<p><code>npm run bundle:web</code> produces a self-contained package in <code>apps/server/cli-dist/</code>
+<p><code>npm run bundle:web</code> produces a self-contained package in <code>apps/web-app-server/cli-dist/</code>
 (server + engine bundled by esbuild, plus the built <code>web/</code> UI). To release it:</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run bundle:web
-cd apps/server/cli-dist &amp;&amp; npm publish</code></pre></div>
+cd apps/web-app-server/cli-dist &amp;&amp; npm publish</code></pre></div>
 <p>After that, anyone can run the web edition with <code>npx nekko-agent</code>.</p>
 <h2 id="before-you-open-a-pr"><a class="anchor" href="#before-you-open-a-pr" aria-hidden="true" tabindex="-1">#</a>Before you open a PR</h2>
 <p>Keep the build green and the suite passing:</p>

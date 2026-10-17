@@ -10,7 +10,7 @@
     "packages/core",
     "packages/host",
     "apps/desktop",
-    "apps/server",
+    "apps/web-app-server",
     "apps/relay",
     "apps/cli",
     "apps/cloud"
