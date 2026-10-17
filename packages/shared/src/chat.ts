@@ -539,7 +539,7 @@ export interface SendOptions {
   maxHistoryTurns?: number;
   /**
    * Offer no tool that acts (only `update_plan`): a workflow step that reads
-   * untrusted text. A prompt queued behind this turn inherits it.
+   * untrusted text.
    */
   noTools?: boolean;
 }
