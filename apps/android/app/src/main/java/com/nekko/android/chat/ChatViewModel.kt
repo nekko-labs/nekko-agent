@@ -9,6 +9,8 @@ import com.nekko.android.voice.Dictation
 import com.nekko.android.voice.DictationController
 import com.nekko.android.voice.MicHardware
 import com.nekko.protocol.AskAnswer
+import com.nekko.protocol.Channels
+import com.nekko.protocol.PhoneChanges
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SkillSummary
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
 
 /** Android wrapper around [ChatController]: wires it to the repository's state and events. */
 class ChatViewModel(
@@ -67,6 +70,13 @@ class ChatViewModel(
 
     /** Bring this completed chat back to the active list. */
     suspend fun restore() = repo.restoreChat(sessionId)
+
+    /** Whether the computer lets phones see a chat's changes (`phoneChanges`, set on the computer). */
+    val changesAllowed: StateFlow<Boolean> = repo.state.map { it.pcSettings.phoneChanges }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.pcSettings.phoneChanges)
+
+    /** What the agent changed in this chat; the computer refuses unless it allows phones to see changes. */
+    suspend fun changes(): PhoneChanges = PhoneChanges.from(repo.caller.call(Channels.CHANGES_LIST, JsonPrimitive(sessionId)))
 
     suspend fun send(text: String, skill: SkillSummary? = null) = controller.send(text, skill)
     fun stop() = controller.stop()

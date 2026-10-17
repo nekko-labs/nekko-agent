@@ -8,7 +8,7 @@ Status: **built, off by default** (2026-10-17, TASKS IO-9). It was built while t
 - The phone learns the switch from `settings:get` (`phoneChanges`), not `app:info`.
 - Any chat id is accepted, as `session:get` already accepts any. Restricting it to the chats `sessions:summaries` lists is not built.
 
-The iOS sheet is built. The Android screen is not built yet; the computer side already serves it. The decisions below are taken as proposed, except that only `changes:accept`, `changes:acceptAll`, `file:read` and `dir:list` were added to `PHONE_ALWAYS_DENIED`. File writes and terminals were already there.
+Both phone screens are built: a Changes sheet from the chat's More menu on iOS, and a Changes button in the chat's top bar on Android. Each appears only when the computer allows it. The decisions below are taken as proposed, except that only `changes:accept`, `changes:acceptAll`, `file:read` and `dir:list` were added to `PHONE_ALWAYS_DENIED`. File writes and terminals were already there.
 
 ## Why
 
