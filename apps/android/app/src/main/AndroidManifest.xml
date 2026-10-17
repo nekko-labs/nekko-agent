@@ -96,10 +96,26 @@
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
 
-        <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
+        <!-- Quick Settings tile: the widget's counts, redrawn on request only (ACTIVE_TILE). -->
+        <service
+            android:name=".widget.StatusTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_status"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
+        <!-- The approval notification's Deny (connection/DenyReceiver.kt). -->
         <receiver
             android:name=".connection.DenyReceiver"
             android:exported="false" />
+        <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
         <receiver
             android:name=".widget.StatusWidget"
             android:exported="false">
