@@ -41,7 +41,11 @@ reference until this app reaches parity.
   mode (YOLO allowed after a confirmation), the long-press action (Complete or
   Delete) and delete confirmation; a long-press on a chat runs that action.
 
-- **Dictation:** a microphone in the message box; the text goes in the box and
+- **The + menu:** left of the message box, Send on the right. **Dictate**,
+  **Image from files** (system photo picker, no storage permission) and **Take
+  photo** (the camera app, no camera permission). Up to 4 photos, scaled to
+  1600 px JPEG in memory, go with the next message as `images`.
+- **Dictation:** **+ → Dictate**; the text goes in the box and
   you press Send. Whisper on the computer (encrypted, up to 30 s) when its Nekko
   Voice is on, else the phone's recognizer; *Settings → Dictation*.
 
@@ -51,7 +55,7 @@ reference until this app reaches parity.
   itself; the phone only ever sees names and descriptions. No `/goal`.
 
 **Not yet:** models on the phone, push notifications, Markdown rendering,
-attachments, Play Store release. See `TASKS.md` → *Native Android app*.
+files other than photos, thumbnails of sent photos, Play Store release. See `TASKS.md` → *Native Android app*.
 
 ## Layout
 

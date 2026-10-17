@@ -649,73 +649,38 @@
   color: var(--ink-faint);
 }
 
-@utility rail {
-  /* Only the button column receives input. The mirrored tails are decoration. */
-  width: 52px;
+/* Left rail: one SVG outline (components/RailBackdrop + railGeometry.ts). At
+   rest it is a hairline near the top of the window that swoops out to the icon
+   column and tapers back to a hairline below it. Opening moves every point to
+   the same x, so the whole rail becomes one even column. Both outlines share a
+   command list, so `d` interpolates between them. Plain (unlayered) rules, so
+   they win over the nav-item / active utilities inside the rail. */
+.rail {
+  --rail-w-rest: 52px;
+  --rail-w-open: 198px;
+  --rail-row: 40px;          /* one destination row (nav-item h-10) */
+  --rail-gap: 7px;           /* gap between rows */
+  --rail-ease: cubic-bezier(0.32, 0.72, 0, 1);   /* quick start, long soft settle */
+  --rail-slide: cubic-bezier(0.3, 1.25, 0.5, 1); /* the active tile: a hint of spring */
+  --rail-open-ms: 440ms;
+  --rail-close-ms: 320ms;
+  --rail-slide-ms: 420ms;
+  --rail-open-delay: 50ms;   /* hover intent: sweeping past never opens it */
+  --rail-close-delay: 120ms; /* and a brief slip out never snaps it shut */
+
+  width: var(--rail-w-rest);
   padding-inline: 6px;
   justify-content: flex-start;
   isolation: isolate;
+  /* Only the button column and the painted outline receive input. */
   pointer-events: none;
-  transition: width var(--dur-slow) var(--ease-spring, var(--ease-out));
-  will-change: width;
-  & .rail-backdrop {
-    position: absolute;
-    left: -6px;
-    width: 198px;
-    z-index: -1;
-    pointer-events: none;
-    overflow: visible;
-    fill: color-mix(in srgb, var(--accent) 4%, var(--paper));
-    /* Rest and open outlines share one command list, so `d` interpolates:
-       the tails start at the collapsed width and widen with the body. */
-    & path {
-      d: var(--rail-rest);
-      pointer-events: visiblePainted;
-      transition: d var(--dur-slow) var(--ease-spring, var(--ease-out)), fill var(--dur-slow) ease;
-    }
-  }
-  &:hover,
-  &:has(:focus-visible) {
-    width: 198px;
-    padding-right: 16px;
-  }
-  &:hover .rail-backdrop,
-  &:has(:focus-visible) .rail-backdrop {
-    fill: color-mix(in srgb, var(--accent) 7%, var(--paper));
-  }
-  &:hover .rail-backdrop path,
-  &:has(:focus-visible) .rail-backdrop path {
-    d: var(--rail-open);
-  }
-  &:hover .rail-label,
-  &:has(:focus-visible) .rail-label {
-    opacity: 1;
-    transform: none;
-    transition-delay: 0.06s;
-  }
-  &:hover .nav-item,
-  &:has(:focus-visible) .nav-item {
-    animation: rail-item-in var(--dur-slow) var(--ease-out) both;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-    &:hover .nav-item, &:has(:focus-visible) .nav-item { animation: none; }
-    & .rail-backdrop path { transition: none; }
-  }
+  transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
 }
-
-/* Split unused space 1:4 above/below the destinations (was 1:3, so the
-   panel sits ~20% higher) without a fragile viewport offset.
-   On short windows the spacers collapse and destinations scroll instead. */
-@utility rail-space-before {
-  flex: 1 1 0;
-}
-
-@utility rail-space-after {
-  flex: 4 1 0;
-}
-
-@utility rail-group {
+.rail-space-before { flex: 1 1 0; }
+/* Spare space splits 1:4 above/below the destinations, so they sit high. On
+   short windows the spacers collapse and the destinations scroll instead. */
+.rail-space-after { flex: 4 1 0; }
+.rail-group {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -723,37 +688,124 @@
   min-height: 0;
 }
 
-@utility rail-destinations {
-  pointer-events: auto;
+.rail-backdrop {
+  position: absolute;
+  left: -6px;                 /* x = 0 is the window wall */
+  width: var(--rail-w-open);
+  z-index: -1;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 0 transparent);
+  transition: filter var(--rail-close-ms) ease var(--rail-close-delay);
+  & path {
+    d: var(--rail-rest);
+    fill: color-mix(in srgb, var(--accent) 8%, var(--paper));
+    pointer-events: visiblePainted;  /* pointing at the shape keeps it open */
+    transition:
+      d var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay),
+      fill var(--rail-close-ms) ease var(--rail-close-delay);
+  }
+}
+
+.rail-destinations {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 0 1 auto;
+  gap: var(--rail-gap);
+  min-height: 0;
+  /* Reach the wall so the active notch is not clipped by the scroller. */
+  margin-left: -6px;
+  padding-left: 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  pointer-events: auto;
   scrollbar-width: thin;
   & > .nav-item { flex-shrink: 0; }
 }
 
-@keyframes rail-item-in {
-  from { transform: translateX(-4px); }
-  to { transform: none; }
+/* One tile slides to the active row instead of each row painting its own. */
+.rail-indicator {
+  position: absolute;
+  top: var(--rail-head, 0px);
+  left: 6px;
+  right: 0;
+  height: var(--rail-row);
+  border-radius: 12px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  transform: translateY(calc(var(--i, 0) * (var(--rail-row) + var(--rail-gap))));
+  transition:
+    transform var(--rail-slide-ms) var(--rail-slide),
+    opacity 160ms ease;
+  /* The brand-gradient notch on the wall travels with it. */
+  &::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 50%;
+    width: 3px;
+    height: 18px;
+    border-radius: 0 3px 3px 0;
+    background: var(--brand-grad);
+    transform: translateY(-50%);
+  }
 }
 
-@utility rail-label {
-  opacity: 0;
-  transform: translateX(-8px);
+.rail .nav-item {
+  z-index: 1;
+  transition: color 140ms ease, background-color 140ms ease;
+  &:hover { color: var(--ink); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  &.active { color: var(--accent); background: transparent; }
+  &.active::before { content: none; }
+}
+
+.rail-label {
   white-space: nowrap;
   pointer-events: none;
+  opacity: 0;
+  transform: translateX(-6px);
+  filter: blur(2px);
   transition:
-    opacity 0.16s ease,
-    transform var(--dur-slow) var(--ease-out);
-  .rail:hover & {
-    opacity: 1;
-    transform: none;
-    transition-delay: 0.05s;
-  }
+    opacity 120ms ease var(--rail-close-delay),
+    transform 200ms var(--rail-ease) var(--rail-close-delay),
+    filter 120ms ease var(--rail-close-delay);
+}
 
-  .rail:has(:focus-visible) & {
+/* Open: hover, keyboard focus inside, or pinned with data-open. */
+.rail:is(:hover, :has(:focus-visible), [data-open]) {
+  width: var(--rail-w-open);
+  padding-right: 16px;
+  transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
+  & .rail-backdrop {
+    filter: drop-shadow(12px 0 24px color-mix(in srgb, var(--accent) 16%, transparent));
+    transition: filter var(--rail-open-ms) ease var(--rail-open-delay);
+  }
+  & .rail-backdrop path {
+    d: var(--rail-open);
+    fill: color-mix(in srgb, var(--accent) 6%, var(--surface));
+    transition:
+      d var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay),
+      fill var(--rail-open-ms) ease var(--rail-open-delay);
+  }
+  & .rail-label {
     opacity: 1;
     transform: none;
-    transition-delay: 0.05s;
+    filter: none;
+    /* Labels arrive as the edge passes them, top row first, 18ms apart. */
+    transition-duration: 220ms, 340ms, 220ms;
+    transition-delay: calc(var(--rail-open-delay) + 110ms + var(--n, 0) * 18ms);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail, .rail-backdrop, .rail-backdrop path, .rail-indicator, .rail-label,
+  .rail:is(:hover, :has(:focus-visible), [data-open]),
+  .rail:is(:hover, :has(:focus-visible), [data-open]) :is(.rail-backdrop, .rail-backdrop path, .rail-label) {
+    transition-duration: 0s;
+    transition-delay: 0s;
+  }
+  .rail-label { filter: none; transform: none; }
 }
 
 @utility titlebar {
