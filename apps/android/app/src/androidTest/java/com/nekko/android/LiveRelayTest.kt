@@ -8,6 +8,7 @@ import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.printToString
@@ -114,11 +115,11 @@ class LiveRelayTest {
             waitFor(hasText("Read only", substring = true))
             shot("8-changes")
 
-            // Ask about a line: the quote lands in the message box, unsent, and the sheet closes.
-            val added = hasContentDescription("Added line 2", substring = true)
-            waitFor(added)
-            compose.onAllNodes(added, useUnmergedTree = true).onFirst().performSemanticsAction(SemanticsActions.OnLongClick)
-            waitFor(hasText("line 2 (added)", substring = true), 10_000)
+            // Ask about a change: the quote lands in the message box, unsent, and the sheet closes.
+            val change = SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick) and hasAnyDescendant(hasContentDescription("Added line 2", substring = true))
+            waitFor(change)
+            compose.onAllNodes(change, useUnmergedTree = true).onFirst().performSemanticsAction(SemanticsActions.OnLongClick)
+            waitFor(hasText("+written by the agent", substring = true), 10_000)
             shot("8b-asked")
         }
     }

@@ -521,6 +521,7 @@ struct Composer: View {
                 .accessibilityLabel("Add")
                 TextField(chat.running ? "Queue a follow-up" : "Message", text: $text, axis: .vertical)
                     .lineLimit(1...6)
+                    .accessibilityIdentifier("chat.message")
                     .focused($focused)
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))

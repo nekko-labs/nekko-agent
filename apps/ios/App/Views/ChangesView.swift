@@ -53,7 +53,7 @@ struct ChangesView: View {
                     Text("\(changes.omittedFiles) more \(changes.omittedFiles == 1 ? "file" : "files") changed. See them on your computer.")
                         .font(.footnote).foregroundStyle(palette.inkFaint)
                 }
-                Text("Read only. Accept or revert changes on your computer. Touch and hold a line to ask the agent about it.")
+                Text("Read only. Accept or revert changes on your computer. Touch and hold a change to ask the agent about it.")
                     .font(.caption).foregroundStyle(palette.inkFaint)
             }
             .padding(16)
@@ -138,14 +138,16 @@ private struct FileChangeView: View {
                                     .padding(.horizontal, 12).padding(.vertical, 2)
                                     .accessibilityLabel("Unchanged lines skipped")
                             }
-                            ForEach(Array(hunk.lines.enumerated()), id: \.offset) { _, line in
-                                LineView(line: line)
-                                    .contextMenu {
-                                        Button { ask(PhoneChanges.quote(file, line: line)) } label: {
-                                            Label("Ask about this line", systemImage: "text.bubble")
-                                        }
-                                    }
-                                    .accessibilityAction(named: "Ask about this line") { ask(PhoneChanges.quote(file, line: line)) }
+                            // Touch and hold a change (a hunk, context included, so a target
+                            // tall enough to hit) to ask about it; its lines stay plain text.
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(Array(hunk.lines.enumerated()), id: \.offset) { _, line in LineView(line: line) }
+                            }
+                            .contentShape(Rectangle())
+                            .contextMenu {
+                                Button { ask(PhoneChanges.quote(file, hunk: hunk)) } label: {
+                                    Label("Ask about this change", systemImage: "text.bubble")
+                                }
                             }
                         }
                     }

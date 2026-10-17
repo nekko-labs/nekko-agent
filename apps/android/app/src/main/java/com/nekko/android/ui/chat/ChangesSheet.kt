@@ -86,7 +86,7 @@ fun ChangesSheet(changes: PhoneChanges?, error: String?, onRefresh: () -> Unit, 
                         )
                     }
                 }
-                item { Text("Read only. Accept or revert changes on your computer. Touch and hold a line to ask the agent about it.", style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
+                item { Text("Read only. Accept or revert changes on your computer. Touch and hold a change to ask the agent about it.", style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
             }
         }
     }
@@ -151,7 +151,12 @@ private fun FileChange(file: PhoneChanges.File, onAsk: (String) -> Unit) {
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp).semantics { contentDescription = "Unchanged lines skipped" },
                                     )
                                 }
-                                h.lines.forEach { line -> DiffLine(line) { onAsk(PhoneChanges.quote(file, line)) } }
+                                // Touch and hold a change (the hunk, context included, so a target big
+                                // enough to hit) to ask about it; its lines stay plain text.
+                                Column(
+                                    Modifier.pointerInput(h) { detectTapGestures(onLongPress = { onAsk(PhoneChanges.quote(file, h)) }) }
+                                        .semantics { onLongClick(label = "Ask about this change") { onAsk(PhoneChanges.quote(file, h)); true } },
+                                ) { h.lines.forEach { DiffLine(it) } }
                             }
                         }
                     }
@@ -169,7 +174,7 @@ private fun Note(text: String) {
 }
 
 @Composable
-private fun DiffLine(line: PhoneChanges.Line, onAsk: () -> Unit) {
+private fun DiffLine(line: PhoneChanges.Line) {
     val p = Nekko.palette
     // The row's tint carries the colour; the mark is ink so it reads on it in both themes.
     val (mark, bg) = when (line.kind) {
@@ -183,13 +188,8 @@ private fun DiffLine(line: PhoneChanges.Line, onAsk: () -> Unit) {
         PhoneChanges.Kind.SAME -> "Unchanged"
     }
     Row(
-        Modifier.background(bg)
-            .pointerInput(Unit) { detectTapGestures(onLongPress = { onAsk() }) }
-            .padding(horizontal = 12.dp, vertical = 1.dp)
-            .clearAndSetSemantics {
-                contentDescription = "$kind line ${line.number}: ${line.text.ifEmpty { "blank" }}"
-                onLongClick(label = "Ask about this line") { onAsk(); true }
-            },
+        Modifier.background(bg).padding(horizontal = 12.dp, vertical = 1.dp)
+            .clearAndSetSemantics { contentDescription = "$kind line ${line.number}: ${line.text.ifEmpty { "blank" }}" },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("${line.number}", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = p.inkSoft, modifier = Modifier.widthIn(min = 28.dp))

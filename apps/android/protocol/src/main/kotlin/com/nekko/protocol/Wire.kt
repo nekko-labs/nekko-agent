@@ -422,10 +422,18 @@ data class PhoneChanges(val files: List<File>, val omittedFiles: Int = 0) {
     val linesRemoved: Int get() = files.sumOf { it.linesRemoved }
 
     companion object {
-        /** What "Ask about this" puts in the message box for a line. Never sent on its own. */
-        fun quote(file: File, line: Line): String {
-            val kind = when (line.kind) { Kind.ADDED -> "added"; Kind.REMOVED -> "removed"; Kind.SAME -> "unchanged" }
-            return "About `${file.path}` line ${line.number} ($kind):\n> ${line.text}\n\n"
+        /** Changed lines quoted at most, so a big hunk stays a short message. */
+        const val QUOTE_LINES = 12
+
+        /** What "Ask about this change" puts in the message box: the hunk's changed lines as a diff. Never sent on its own. */
+        fun quote(file: File, hunk: Hunk): String {
+            val changed = hunk.lines.filter { it.kind != Kind.SAME }
+            val lo = changed.minOfOrNull { it.number }
+            val hi = changed.maxOfOrNull { it.number }
+            val range = when { lo == null -> ""; lo == hi -> " line $lo"; else -> " lines $lo–$hi" }
+            val body = changed.take(QUOTE_LINES).map { (if (it.kind == Kind.ADDED) "+" else "-") + it.text } +
+                (if (changed.size > QUOTE_LINES) listOf("… ${changed.size - QUOTE_LINES} more") else emptyList())
+            return "About `${file.path}`$range:\n```diff\n${body.joinToString("\n")}\n```\n\n"
         }
 
         /** The same for a whole file. */
