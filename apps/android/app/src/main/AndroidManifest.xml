@@ -79,5 +79,17 @@
             android:name=".connection.KeepAliveService"
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
+
+        <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
+        <receiver
+            android:name=".widget.StatusWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/status_widget_info" />
+        </receiver>
     </application>
 </manifest>
