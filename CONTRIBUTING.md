@@ -62,6 +62,8 @@ The docs at [nekkoagent.com/docs](https://nekkoagent.com/docs) are rendered from
 npm run docs
 ```
 
+To look at the result before it ships, `npm run website` serves the site on [http://127.0.0.1:8080](http://127.0.0.1:8080) (set `PORT` to change it), with the same clean URLs as production.
+
 If you forget, the **Docs site** workflow regenerates the pages on your pull request and pushes them to its branch. It only commits when something actually changed.
 
 ## Commit messages

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_STREAM_ATTEMPTS, ProviderHttpError, StreamStalledError, httpError, isTransientProviderError, retryAfterMs, retryDelayMs } from './errors.js';
+import { MAX_NETWORK_STREAM_ATTEMPTS, MAX_STREAM_ATTEMPTS, ProviderHttpError, StreamStalledError, httpError, isNetworkProviderError, isTransientProviderError, retryAfterMs, retryDelayMs } from './errors.js';
 import { readWithIdle, type ReadResult } from './sse.js';
 
 describe('isTransientProviderError', () => {
@@ -73,5 +73,31 @@ describe('readWithIdle', () => {
     const reader = { read: async () => chunk, cancel: async () => {} };
     expect(await readWithIdle(reader, 1000)).toBe(chunk);
     expect(await readWithIdle(reader, 0)).toBe(chunk);
+  });
+});
+
+describe('network recovery classification', () => {
+  it('recognizes DNS and routing failures, including fetch causes', () => {
+    for (const code of ['ENOTFOUND', 'ENETUNREACH', 'EHOSTUNREACH', 'EAI_AGAIN', 'UND_ERR_SOCKET']) {
+      const error = new Error('connection unavailable', { cause: { code } });
+      expect(isNetworkProviderError(error)).toBe(true);
+      expect(isTransientProviderError(error)).toBe(true);
+    }
+  });
+  it('does not extend HTTP, idle-stream or intentional abort retries', () => {
+    expect(isNetworkProviderError(new ProviderHttpError('network error', 401))).toBe(false);
+    expect(isNetworkProviderError(new ProviderHttpError('unavailable', 503))).toBe(false);
+    expect(isNetworkProviderError(new StreamStalledError(1000))).toBe(false);
+    expect(isNetworkProviderError(new DOMException('network error', 'AbortError'))).toBe(false);
+  });
+});
+
+describe('network recovery window', () => {
+  it('waits about half an hour in all before the reply ends', () => {
+    expect(MAX_NETWORK_STREAM_ATTEMPTS).toBe(65);
+    let waited = 0;
+    for (let attempt = 1; attempt < MAX_NETWORK_STREAM_ATTEMPTS; attempt++) waited += retryDelayMs(attempt, undefined, () => 0);
+    expect(waited / 60_000).toBeGreaterThan(29);
+    expect(waited / 60_000).toBeLessThan(32);
   });
 });
