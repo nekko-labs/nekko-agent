@@ -121,7 +121,11 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "\(theme)-7-chats-after")
 
         // Settings → Connection: the route, Tailscale on this phone, and what happened.
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch.tap()
+        // A coordinate tap: right after going back, XCTest can't "scroll to" the nav bar button.
+        let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        _ = waitUntilHittable(menu, 5)
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         app.buttons["Settings"].firstMatch.tap()
         let connection = app.buttons["Connection"].firstMatch
         if !connection.waitForExistence(timeout: 5) { app.swipeUp() }
@@ -193,6 +197,11 @@ final class LiveRelayTests: XCTestCase {
     private func waitEnabled(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
         let p = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: e)
         return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
+    }
+
+    private func waitUntilHittable(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
+        let p = NSPredicate(format: "isHittable == true")
+        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: p, object: e)], timeout: seconds) == .completed
     }
 
     private func waitGone(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
