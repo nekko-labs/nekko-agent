@@ -84,6 +84,16 @@ request the remaining work again. For UI changes:
 
 The repo's required check is `build`. The other jobs (`perf`, `capture`, `daemon`,
 CodeQL) are gates on the quality of this PR, not on whether `main` is healthy.
+
+Not every job runs on every PR (`scripts/ci-scope.mjs`). `daemon` and `capture`
+run when the PR touches what they test, and only on Linux and Windows. macOS jobs
+and `perf` run on every `main` push, but on a PR only with the `ci:macos` or
+`ci:perf` label (add it, then push), or a full `gh workflow run ci.yml --ref
+<branch>`. Add the label when a PR changes macOS-specific code (`cfg(target_os =
+"macos")`, the dev bundle, signing, native capture) or anything on the hot paths
+the speed contract measures. A skipped job is not a missing check: do not hold a
+PR draft waiting for it.
+
 When one of them is red:
 
 1. Diagnose the failing step. If the failure is in something this PR touches, fix it.
