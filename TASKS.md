@@ -1873,6 +1873,14 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] Provider card shows the error or "<name> didn't answer at <url>" with Retry; filter past eight models (`modelListProblem.ts`); no repeat of an error the failed connection test already shows.
 - [x] Checked in the desktop app (macOS, isolated data folder): Ollama 0.40.4 stopped → "didn't answer" → Retry after start → empty → model listed; OpenAI refused key; OpenRouter at `https://openrouter.ai/v1` (HTML 200: Connected, list fails) and at `/api/v1` (filter on ~300 models).
 
+### T192: One-gesture installers, signed on both platforms (2026-10-17) · [spec](SPEC.md#editions-same-engine--ui-different-runtime)
+- [x] **T192a** macOS drag-to-install window: `scripts/gen-dmg-art.mjs` draws a 640x400 + @2x pixel-art background (the brand Nekko: the app head from `Mascot.tsx` on a black leaping body with the same cream outline, dotted arc, copy at the top, light sage ledges under the icon labels because Finder draws labels black even in dark mode); `dmg` section in `electron-builder.yml` (volume `Nekko Agent`, 100px icons at 160/480, 200). Built from the v0.8.1 app with `--prepackaged` and checked in Finder on macOS 27. Done: 2026-10-17
+- [x] **T192b** Windows NSIS one click (`oneClick: true`, per user, `runAfterFinish`, Start Menu + desktop shortcuts); `installer.nsh` uninstall prompt unchanged. Done: 2026-10-17
+- [x] **T192c** Windows signing moved from the dead `.p12` path (no new Authenticode key can be exported since the 2023 HSM rule) to Azure Artifact Signing: `win.azureSignOptions` passed as `-c` flags only when `AZURE_SIGNING_CLIENT_ID` is set, a partial configuration fails before packaging, and a post-build step requires a valid timestamped signature from `AZURE_SIGNING_PUBLISHER` on the installer and app exe. Runbook in `docs/signing.md`. Done: 2026-10-17
+- [x] **T192d** `installers.yml`: builds both installers unsigned on PRs touching packaging, silently installs/uninstalls the Windows one and checks the dmg layout. Done: 2026-10-17
+- [ ] Azure Artifact Signing account, identity validation for Nekko Labs LLC, certificate profile, service principal and the org secrets/variables (Philip; steps in `docs/signing.md`, "One-time setup"). Then re-run the release and confirm the Windows verify step.
+- [ ] macOS bundle is `NekkoAgent.app` (no space), which is what the drag window labels it; renaming it needs an updater migration check first.
+
 ### Approval/subagent navigation regression
 - [x] Reproduce unrelated-result approval disappearance in isolated real ChatPane; scope clearing to matching call ID.
 - [x] Add accessible sibling Open controls for observed unambiguous child delegations.
