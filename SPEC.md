@@ -1255,6 +1255,12 @@ Acceptance: matched main/current captures and sampled mascot/reorder motion fram
 
 Agents now hosts the existing Chat grouped sidebar, retaining WorkspaceCard presentation, project grouping, ordering, context actions, and each group's Show completed section (including groups with only completed chats). Active cards add/select their session on the Agents wall (Focus shows it as the hero; other layouts keep their arrangement, see the 2026-10-08 polish); sidebar chat, image and terminal creation stays in Agents. Completed cards open a read-only transcript in Agents with a Back to active agents action. Chat no longer renders the sidebar. Narrow viewports expose an Open agent list overlay. This reuses existing local summaries and archive retention; opening a card neither sends prompts nor restores completed chats. Acceptance requires isolated active/completed selection, project-only-completed coverage, resize/overlay interactions, and matching light/dark wide/narrow before/after evidence. Those release checks remain pending.
 
+### Completed chat right-click menu
+
+`[Implemented; agent-sidebar sandbox checks (menu items, restore, delete confirmation, reader closes) pass in light/dark at 1200 and 400 px; matched dark 1200 px before/after captures inspected. Packaged app and macOS unverified.]`
+
+Right-clicking a row under a group's **Show completed** opens a menu with exactly two actions, the same as the read-only reader's bar: **Restore chat** (clears the completion and opens the chat as an active agent) and **Delete forever** (permanent; asks through the standard deletion confirmation unless the user turned confirmations off). Neither action requires opening the chat first. If the restored or deleted chat is the one open in the Agents read-only reader, the reader closes. Left-click still opens the read-only reader.
+
 ### Agents wall integration polish (2026-10-08)
 
 `[Implemented; isolated renderer checks and matched dark/light desktop before/after evidence inspected. Narrow-width visual evidence, the real desktop title bar (native caption buttons), and macOS are unverified.]`
