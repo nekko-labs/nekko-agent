@@ -129,9 +129,13 @@ jobs:
           if-no-files-found: warn
 
 
-  # AN-27: on an Android 16 system, the running-chat notification qualifies as
-  # a Live Update (the main emulator job runs API 34, which has no such thing).
+  # AN-27: on an Android 16 QPR1 system, the running-chat notification
+  # qualifies as a Live Update (the main emulator job runs API 34, which has no
+  # such thing). Manual only for now: on the API 36 image no notification is
+  # promotable, and on hosted runners the API 36.1 image boots but leaves user 0
+  # locked, so the app can't start (TASKS AN-27). Run it by hand from Actions.
   live-update:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:

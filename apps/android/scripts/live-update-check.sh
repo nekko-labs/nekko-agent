@@ -33,6 +33,6 @@ install() {
 }
 install "$apks/debug/app-debug.apk"
 install "$apks/androidTest/debug/app-debug-androidTest.apk"
-result="$(adb shell "am instrument -w -e class com.nekko.android.LiveUpdateTest,com.nekko.android.LiveUpdateProbeTest $pkg.test/androidx.test.runner.AndroidJUnitRunner" || true)"
+result="$(adb shell "am instrument -w -e class com.nekko.android.LiveUpdateTest $pkg.test/androidx.test.runner.AndroidJUnitRunner" || true)"
 echo "$result"
 grep -q "OK (1 test)" <<<"$result"
