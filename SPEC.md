@@ -1,12 +1,20 @@
 ---
 
+## Local marketing website preview (2026-10-17)
+
+`[implemented; unit-tested; verified by serving the site locally and loading pages and docs]` `npm run website` serves the static marketing site and docs in `apps/website` on `http://127.0.0.1:8080` (set `PORT` to change it), so a contributor can look at a website or docs change before it ships. It needs no build, package installation, agent backend or app data, and every response is `no-store`, so a refresh shows the latest edit.
+
+- **Same URLs as production:** it resolves clean URLs the way `vercel.json`'s `cleanUrls` does, so `/docs` serves `docs/index.html` and `/docs/cli` serves `docs/cli.html`. Redirects and production cache headers are not reproduced.
+- **Read-only and local:** it binds loopback only, answers `GET` and `HEAD` (anything else is 405), refuses paths that resolve outside `apps/website` (403) and malformed URLs (400).
+- A preview server, not production hosting; nothing on the website itself changes.
+
 ## Beta signups and website analytics (2026-10-17)
 
 **Beta signups.** People will join the beta from a form on nekkoagent.com with their email and, optionally, their name. The form is not on the site yet; the backend and database behind it are. Joining twice is harmless and looks the same as joining once, so the form never reveals whether an address is already on the list. We keep only what the form asks for, plus the page path and `utm_*` tags that brought someone there, never a full URL or IP. Each signup moves `pending → invited → joined`, or to `unsubscribed`; signing up again after unsubscribing puts the address back to pending. The same table serves later waitlists under another list name.
 
 **Users.** A signup is a request, not an account. Someone let into the beta becomes a **user**, the long-term account record that Cloud accounts will grow from; the signup row links to it. Nothing creates users yet.
 
-**Where it runs.** A small API (`apps/api`) on Render's free plan, Postgres on Neon's free plan: both cost nothing at beta volume. Supabase was ruled out on cost, because its two free projects are already in use. A free Render instance sleeps after 15 idle minutes, so the signup page wakes it when it loads.
+**Where it runs.** A small API (`apps/api`) on one small Fly.io machine, paid from Fly credits, with Postgres on Neon's free plan. Supabase was ruled out on cost, because its two free projects are already in use. Spending stays far under $100 a month. Fly can't cap a bill, so the limit is built into the app's config: one small machine that stops when idle and never scales out, at about $2 a month if it ran nonstop. The signup page wakes the machine when it loads.
 
 **Website analytics.** nekkoagent.com and its docs report to PostHog, in a Nekko Agent project of their own. They track pageviews, clicks and referrers without cookies or any browser storage, so there is no consent banner; there are no session recordings or person profiles. `[Implemented, not live: the PostHog project key and the Neon and Render accounts are owner-side; see TASKS.]`
 

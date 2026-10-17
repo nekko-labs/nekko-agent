@@ -1,8 +1,8 @@
 # Nekko Agent API
 
 The small public backend behind nekkoagent.com: beta signups now, accounts later.
-Fastify on Render's free plan, Postgres on Neon's free plan. It is its own npm
-package (not a root workspace) so Render installs only this folder.
+Fastify on one small Fly.io machine, Postgres on Neon's free plan. It is its own
+npm package (not a root workspace) so the image holds only this folder.
 
 ## Endpoints
 
@@ -12,14 +12,13 @@ package (not a root workspace) so Render installs only this folder.
   hides; a filled one gets a fake success. Always answers `202 {ok:true}` on
   valid input, new or repeat, so the form can't reveal who is on the list.
   Browser calls are accepted only from `ALLOWED_ORIGINS`; 5 per IP per hour.
-- `GET /healthz`: Render's health check. The signup page should call it when it
-  loads, because a free Render instance sleeps after 15 idle minutes and takes
-  up to a minute to wake.
+- `GET /healthz`: Fly's health check. The machine stops when idle and wakes on
+  the next request in about a second; the signup page should call this on load
+  so that happens before anyone presses Join.
 
 ## Database
 
-`migrations/NNNN_*.sql` run in order on every start (Render's free plan has no
-pre-deploy step), inside one transaction under an advisory lock, recorded in
+`migrations/NNNN_*.sql` run in order on every start, inside one transaction under an advisory lock, recorded in
 `schema_migrations`.
 
 - `signups`: one row per email per list (`unique (list, lower(email))`), status
@@ -35,8 +34,24 @@ npm test            # PGlite in memory, no database needed
 DATABASE_URL=postgres://... npm run build && npm start
 ```
 
-## Deploy
+## Deploy (Fly.io)
 
-`render.yaml` at the repo root is the Blueprint. In Render: New, Blueprint, pick
-this repo, and paste the Neon **pooled** connection string as `DATABASE_URL`.
-Deploys follow pushes to `main` that touch `apps/api/`.
+From `apps/api`, logged in with `fly auth login`:
+
+```bash
+fly apps create nekko-agent-api --org <org>
+fly secrets set DATABASE_URL='<Neon pooled connection string, sslmode=require>'
+fly deploy --ha=false
+```
+
+`--ha=false` keeps it to one machine (Fly makes two by default). Neon's project
+should be in `aws-us-east-1`, next to the `iad` region in `fly.toml`.
+
+## Cost
+
+Fly has no spending cap or billing alert; usage past the credits is billed to
+the card. So `fly.toml` holds the ceiling instead: one `shared-cpu-1x` 256 MB
+machine, auto-stopped when idle, no autoscaler, no volume, and the shared IPv4
+(do not `fly ips allocate-v4`, a dedicated one is $2/month). Always on, that is
+about $2/month plus bandwidth. For a hard $100 stop, put Fly on a card with a
+$100 monthly limit.
