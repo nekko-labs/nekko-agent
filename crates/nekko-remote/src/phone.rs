@@ -29,6 +29,10 @@ pub struct Policy {
     /// `PHONE_SESSION_VIEW`: newest messages kept, tool text cut to this many UTF-16 units.
     pub session_messages: usize,
     pub session_text_chars: usize,
+    /// `PHONE_SESSION_VIEW`: newest user photos sent as thumbnails, their long side, their largest data URL.
+    pub session_images: usize,
+    pub thumb_side: u32,
+    pub thumb_chars: usize,
     /// `PHONE_MAX_FRAME_BYTES`: the largest sealed reply frame sent to a phone.
     pub max_frame_bytes: usize,
     /// `PHONE_CHANGES_VIEW`: the limits of a phone's Changes view.
@@ -61,6 +65,9 @@ pub fn policy() -> &'static Policy {
             // Missing numbers keep nothing rather than send a frame too large to arrive.
             session_messages: v["sessionView"]["messages"].as_u64().unwrap_or(0) as usize,
             session_text_chars: v["sessionView"]["textChars"].as_u64().unwrap_or(0) as usize,
+            session_images: v["sessionView"]["images"].as_u64().unwrap_or(0) as usize,
+            thumb_side: v["sessionView"]["thumbSide"].as_u64().unwrap_or(0) as u32,
+            thumb_chars: v["sessionView"]["thumbChars"].as_u64().unwrap_or(0) as usize,
             max_frame_bytes: v["maxFrameBytes"].as_u64().unwrap_or(9 * 1024 * 1024) as usize,
             changes_view: crate::phone_changes::Limits::from_policy(&v["changesView"]),
         }
@@ -417,7 +424,24 @@ pub fn session_view(session: Value) -> Value {
     let (keep_n, n) = (policy().session_messages, policy().session_text_chars);
     let start = all.len().saturating_sub(keep_n);
     let omitted = start;
-    let kept: Vec<Value> = all[start..].iter().map(|m| phone_message(m, n)).collect();
+    let mut kept: Vec<Value> = all[start..].iter().map(|m| phone_message(m, n)).collect();
+    // Newest first: the last `images` photos small enough to be thumbnails stay.
+    let mut room = policy().session_images;
+    for m in kept.iter_mut().rev() {
+        let Some(Value::Array(imgs)) = m.get("images") else { continue };
+        let mut imgs: Vec<Value> = imgs.iter().map(|v| json!(v.as_str().unwrap_or(""))).collect();
+        for v in imgs.iter_mut().rev() {
+            let fits = matches!(v.as_str(), Some(t) if !t.is_empty() && len16(t) <= policy().thumb_chars) && room > 0;
+            if fits {
+                room -= 1;
+            } else {
+                *v = json!("");
+            }
+        }
+        if let Value::Object(o) = m {
+            o.insert("images".into(), Value::Array(imgs));
+        }
+    }
     s.insert("messages".into(), Value::Array(kept));
     if omitted > 0 {
         s.insert("omittedMessages".into(), json!(omitted));
@@ -457,7 +481,10 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         let at = if channel == "chat:send" { 0 } else { 1 };
         args[at] = expand_skill(&skill, &runnable, &args[at]).map_err(|d| d.to_string())?;
     }
-    let result = run(channel.clone(), Value::Array(args)).await?;
+    let mut result = run(channel.clone(), Value::Array(args)).await?;
+    if channel == "session:get" {
+        result = crate::phone_thumbs::thumbnail_images(result).await;
+    }
     Ok(redact(&channel, result))
 }
 

@@ -50,8 +50,10 @@ model servers are first-class, not an afterthought.
 - **Auto-discover local** probes `localhost:11434` (Ollama), `:1234` (LM Studio),
   and `:8000` (vLLM). Anything running is added with one click.
 - Connected local servers and cloud providers are grouped, and the groups sit side
-  by side when the window has room. A group keeps its cards together; only its
-  leftover cards share a line with another group, otherwise they wrap to the next line.
+  by side when the window has room. The provider groups use the full window width,
+  and each sits in a container with a faint border and tint in its colour (green
+  for local, blue for cloud). A group is never split: when it has more cards than
+  fit on a line, they wrap inside its own container.
 - **Add provider** lets you configure a server manually, or add a cloud provider -
   Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint (just paste the
   base URL + key).
@@ -147,6 +149,10 @@ Each repository heading in the Agent panel also has a **plus** button for a new 
 Utilization shows a Claude subscription account once when provider entries share the same token key, preferring the Anthropic entry. Independent accounts and API entries remain separate. In Budget, choose today, 1wk, 1m, 6m, 1y or all-time; the active range is tinted. Spend, tokens, top agent, local tokens, savings and compared model membership all follow that UTC range, not lifetime totals. See [usage limits and prices](/docs/usage-limits).
 
 These 2026-10-13 changes are implemented and unit/fixture interaction tested. Matching captures exist, but image/motion inspection remains pending; earlier walkthrough pictures are not visual proof of this batch.
+
+### Find a chat
+
+The magnifier beside **+** at the top of the Agents panel opens a chat finder. It starts with your latest chats, newest first, each with how long ago it was used (days up to 30, then months). Type to filter by title, first prompt or latest reply; the search runs once you pause typing, or straight away with Enter or the Nekko button. Click a chat (or press Enter) to open it. **X** or Esc closes the finder. Incognito chats are never listed.
 
 ### Complete, minimize, and delete
 

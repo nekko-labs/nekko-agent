@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, expect, it, vi } from 'vitest';
+import { phoneThumbnail } from '@nekko-agent/core';
 import {
   IpcChannels,
   IpcEvents,
@@ -287,6 +288,15 @@ it('decides phone requests the way the daemon must', async () => {
       ],
     },
   };
+  // A user's photos: none of these is a readable image, so both editions'
+  // thumbnailers send '' for each and keep the count.
+  sessions.photos = {
+    id: 'photos',
+    messages: [
+      { id: 'u1', role: 'user', content: 'look', images: ['data:image/jpeg;base64,' + big('A', view.thumbChars), 'data:image/jpeg;base64,QQ==', 5] },
+      { id: 'u2', role: 'user', content: 'and', images: [] },
+    ],
+  };
   for (const id of Object.keys(sessions)) requests.push(['session:get', [id]]);
   // changes:list as a phone receives it (phoneChangesView): diffs, secrets hidden, limits.
   const cv = phoneAccessPolicy().changesView;
@@ -316,7 +326,8 @@ it('decides phone requests the way the daemon must', async () => {
       if (ch === 'changes:list') return changes[String(a[0])] ?? [];
       return ch.startsWith('settings:') || ch === 'providers:list' ? (ch === 'providers:list' ? settings.providers : settings) : { ok: ch };
     };
-    const outcome = await callFromPhone(dispatch, channel, Array.isArray(args) ? args : []).then(
+    // The thumbnailer relay.ts uses, so both editions read the same photos.
+    const outcome = await callFromPhone(dispatch, channel, Array.isArray(args) ? args : [], phoneThumbnail).then(
       (result) => ({ result }),
       (e: Error) => ({ error: e.message }),
     );

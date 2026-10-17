@@ -14,6 +14,7 @@ export * from './agent/resume.js';
 export * from './agent/fit.js';
 export * from './agent/tools.js';
 export * from './agent/prompt.js';
+export * from './phone-thumbnails.js';
 export * from './guardrails/classifier.js';
 export * from './guardrails/rules.js';
 export * from './context/assembler.js';

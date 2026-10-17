@@ -20,18 +20,28 @@ app.whenReady().then(async () => {
   win.on('show', () => report.errors.push('Window became visible'));
   win.on('focus', () => report.errors.push('Window took focus'));
   // Card tops grouped into rows: [[label, ...], ...] ordered top to bottom.
-  const rows = `(() => { const cards = [...document.querySelectorAll('.card')].filter(c => /LM Studio|Anthropic|OpenAI|OpenRouter/.test(c.textContent) && !c.parentElement.closest('.card'));
-    const m = new Map(); for (const c of cards) { const r = c.getBoundingClientRect(); const k = Math.round(r.top / 8); const name = (c.textContent.match(/LM Studio|Anthropic|OpenAI|OpenRouter/) || ['?'])[0]; (m.get(k) || m.set(k, []).get(k)).push([r.left, name]); }
+  const names = 'LM Studio|lmstudio \\(local\\)|Ollama|vLLM|Anthropic|OpenAI|OpenRouter|Google Gemini|Groq';
+  const rows = `(() => { const re = /${names}/; const cards = [...document.querySelectorAll('.card')].filter(c => re.test(c.textContent) && !c.parentElement.closest('.card'));
+    const m = new Map(); for (const c of cards) { const r = c.getBoundingClientRect(); const k = Math.round(r.top / 8); const name = (c.textContent.match(re) || ['?'])[0]; (m.get(k) || m.set(k, []).get(k)).push([r.left, name]); }
     return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v.sort((a, b) => a[0] - b[0]).map(x => x[1])); })()`;
   try {
     await win.loadFile(path.join(work, 'index.html')); await sleep(500);
-    for (const theme of ['dark', 'light']) for (const [width, size] of [[1280, 'wide'], [900, 'medium'], [520, 'narrow']]) for (const clouds of [1, 2, 3]) {
-      win.setContentSize(width, 1400);
+    // 5 clouds is the nine-provider case (4 local + 5 cloud); 1600 is a large desktop window.
+    for (const theme of ['dark', 'light']) for (const [width, size] of [[1600, 'xwide'], [1280, 'wide'], [900, 'medium'], [520, 'narrow']]) for (const clouds of [1, 2, 3, 5]) {
+      win.setContentSize(width, clouds >= 5 ? 2000 : 1400);
       await run(`window.__fixture.show(${clouds}, '${theme}')`); await sleep(450);
       const layout = await run(rows);
       report.layout[`${theme}-${size}-${clouds}cloud`] = layout;
-      if (layout.flat().length !== clouds + 1) report.errors.push(`${theme}/${size}/${clouds}: expected ${clouds + 1} cards, saw ${JSON.stringify(layout)}`);
-      else report.checks.push(`${theme}/${size}/${clouds}cloud renders ${clouds + 1} cards`);
+      const expected = clouds >= 5 ? 9 : clouds + 1;
+      if (layout.flat().length !== expected) report.errors.push(`${theme}/${size}/${clouds}: expected ${expected} cards, saw ${JSON.stringify(layout)}`);
+      else report.checks.push(`${theme}/${size}/${clouds}cloud renders ${expected} cards`);
+      if (!base) {
+        // Each group is one container that holds all of its cards.
+        const groups = await run(`[...document.querySelectorAll('[data-provider-group]')].map(g => [g.dataset.providerGroup, g.querySelectorAll('.card').length - g.querySelectorAll('.card .card').length])`);
+        const want = clouds >= 5 ? [['local', 4], ['cloud', 5]] : [['local', 1], ['cloud', clouds]];
+        if (JSON.stringify(groups) !== JSON.stringify(want)) report.errors.push(`${theme}/${size}/${clouds}: groups ${JSON.stringify(groups)} != ${JSON.stringify(want)}`);
+        else report.checks.push(`${theme}/${size}/${clouds}cloud keeps each group in one container`);
+      }
       const file = path.join(dir, `providers-${theme}-${size}-${clouds}cloud.png`);
       fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG());
       report.captures.push(file);

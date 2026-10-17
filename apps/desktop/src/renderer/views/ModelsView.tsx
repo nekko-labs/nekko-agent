@@ -1,6 +1,6 @@
 import { FirstProviderSetup } from '../components/providers/FirstProviderSetup.js';
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { columnsFor, packGroups } from './providerLayout.js';
 import type { LimitWindow, ModelInfo, OAuthProvider, OAuthStatus, ProviderConfig, ProviderKind, SubscriptionLimits } from '@nekko-agent/shared';
 import { formatUSD, isLocalProvider, isRuntimeKind, formatModelPriceLabel, modelPricing } from '@nekko-agent/shared';
@@ -88,7 +88,7 @@ export function ModelsView() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-6xl px-8 py-8">
+      <div className="mx-auto w-full max-w-[2200px] px-8 py-8">
         <div className="flex items-center justify-between">
           <div>
             {!hasAppChrome && <h1 className="view-title">Model Providers</h1>}
@@ -129,7 +129,7 @@ export function ModelsView() {
           onChanged={refreshProviders}
         />
 
-        <section className="mt-7">
+        <section className="mx-auto mt-7 max-w-6xl">
           <div className="card flex flex-wrap items-center gap-3 p-5">
             <div className="min-w-0 flex-1">
               <h2 className="text-[15px] font-semibold">Nekko Agent's own engine</h2>
@@ -205,11 +205,13 @@ interface ProviderGroup {
 
 const CARD_MIN_WIDTH = 340;
 const CARD_GAP = 16;
+/** Inner padding of a group's tinted container; column sizing budgets for it. */
+const GROUP_PAD = 14;
 
 /**
- * Provider groups laid out side by side when there is room. A group's cards stay
- * together; only the cards left over after a group's full rows share a line with
- * another group (see packGroups).
+ * Provider groups laid out side by side when there is room. Each group is one
+ * bordered container that is never split: cards beyond a line wrap inside it
+ * (see packGroups).
  */
 function ProviderSections({ groups, onChanged }: { groups: ProviderGroup[]; onChanged: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -217,7 +219,8 @@ function ProviderSections({ groups, onChanged }: { groups: ProviderGroup[]; onCh
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const measure = () => setColumns(columnsFor(el.clientWidth, CARD_MIN_WIDTH, CARD_GAP));
+    // Each card slot also carries its share of a group container's padding.
+    const measure = () => setColumns(columnsFor(el.clientWidth, CARD_MIN_WIDTH + 2 * GROUP_PAD, CARD_GAP));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -226,7 +229,6 @@ function ProviderSections({ groups, onChanged }: { groups: ProviderGroup[]; onCh
 
   const byKey = new Map(groups.map((g) => [g.key, g]));
   const rows = packGroups(groups.map((g) => ({ key: g.key, items: g.providers })), columns);
-  const headed = new Set<string>();
 
   return (
     <div ref={ref}>
@@ -240,30 +242,41 @@ function ProviderSections({ groups, onChanged }: { groups: ProviderGroup[]; onCh
             let start = 1;
             return row.map((seg) => {
               const g = byKey.get(seg.group)!;
-              const showHeader = !headed.has(g.key);
-              headed.add(g.key);
-              const gridColumn = `${start} / span ${seg.items.length}`;
-              start += seg.items.length;
-              // Headings sit on grid row 1 and cards on row 2, so cards sharing a
-              // line stay top-aligned even when only one of them carries a heading.
+              const gridColumn = `${start} / span ${seg.span}`;
+              start += seg.span;
+              // Each group sits in a faint container tinted with its accent. It
+              // spans both rows as a subgrid: headings sit on row 1 and cards on
+              // row 2, so groups sharing a line keep their cards top-aligned even
+              // when their subtitles wrap differently.
               return (
-                <React.Fragment key={g.key}>
-                  {showHeader && (
-                    <div className="mb-3 min-w-0" style={{ gridColumn, gridRow: 1 }}>
+                <div
+                  key={g.key}
+                  data-provider-group={g.key}
+                  className="grid min-w-0 rounded-2xl border"
+                  style={{
+                    gridColumn,
+                    gridRow: '1 / span 2',
+                    alignSelf: 'stretch',
+                    gridTemplateRows: 'subgrid',
+                    rowGap: 0,
+                    padding: GROUP_PAD,
+                    borderColor: `color-mix(in srgb, ${g.accent} 22%, var(--line))`,
+                    background: `color-mix(in srgb, ${g.accent} 3%, transparent)`,
+                  }}
+                >
+                  <div className="mb-3 min-w-0" style={{ gridRow: 1 }}>
                       <div className="flex items-center gap-2">
                         <span className="h-2.5 w-2.5 rounded-full" style={{ background: g.accent }} />
                         <h2 className="text-[15px] font-semibold">{g.title} models</h2>
                         <span className="chip">{g.providers.length}</span>
                       </div>
                       <p className="mt-0.5 text-[12px] text-ink-faint">{g.subtitle}</p>
-                    </div>
-                  )}
+                  </div>
                   <div
                     className="grid min-w-0 items-start"
                     style={{
-                      gridColumn,
                       gridRow: 2,
-                      gridTemplateColumns: `repeat(${seg.items.length}, minmax(0, 1fr))`,
+                      gridTemplateColumns: `repeat(${seg.span}, minmax(0, 1fr))`,
                       gap: CARD_GAP,
                     }}
                   >
@@ -271,7 +284,7 @@ function ProviderSections({ groups, onChanged }: { groups: ProviderGroup[]; onCh
                       <ProviderCard key={p.id} provider={p} onChanged={onChanged} />
                     ))}
                   </div>
-                </React.Fragment>
+                </div>
               );
             });
           })()}
