@@ -1,0 +1,22 @@
+const fs = require('node:fs'), path = require('node:path'), cp = require('node:child_process');
+const repo = path.resolve(__dirname, '..'), primary = path.resolve(repo, '../..');
+const kind = process.argv[2] || 'before', dir = path.join(repo, '.shots/approval-navigation', kind);
+const resolve = name => require.resolve(name, { paths: [repo, primary, path.join(primary, 'apps/desktop')] });
+(async () => {
+  fs.mkdirSync(dir, { recursive: true });
+  const fixture = fs.readFileSync(path.join(__dirname, 'approval-navigation-evidence-fixture.tsx'), 'utf8').replaceAll('../apps/desktop/src/renderer', path.join(repo, 'apps/desktop/src/renderer').replaceAll('\\', '/'));
+  fs.writeFileSync(path.join(dir, 'fixture.tsx'), fixture);
+  await require(resolve('esbuild')).build({ entryPoints: [path.join(dir, 'fixture.tsx')], bundle: true, jsx: 'automatic', conditions: ['style', 'browser', 'import', 'default'], format: 'iife', outfile: path.join(dir, 'fixture.js'), nodePaths: [path.join(primary, 'node_modules'), path.join(primary, 'apps/desktop/node_modules')], alias: { '@nekko-agent/shared': path.join(repo, 'packages/shared/src/index.ts'), '@nekko-agent/core': path.join(repo, 'packages/core/src/index.ts') }, loader: { '.woff2': 'dataurl', '.svg': 'dataurl', '.png': 'dataurl', '.wasm': 'file' } });
+  const compiler = require(resolve('@tailwindcss/node'));
+  const { Scanner } = require(resolve('@tailwindcss/oxide'));
+  const scanner = new Scanner({ sources: [{ base: repo.replaceAll('\\', '/'), pattern: 'apps/desktop/src/renderer/**/*.{ts,tsx}', negated: false }] });
+  const css = fs.readFileSync(path.join(dir, 'fixture.css'), 'utf8').replaceAll(/(["'])tailwindcss\1/g, JSON.stringify(path.join(primary, 'node_modules/tailwindcss/index.css').replaceAll('\\', '/')));
+  fs.writeFileSync(path.join(dir, 'styled.css'), (await compiler.compile(css, { base: dir, onDependency() {} })).build(scanner.scan()));
+  fs.writeFileSync(path.join(dir, 'index.html'), `<!doctype html><html data-theme="light"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'"><link rel="stylesheet" href="styled.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>`);
+  fs.writeFileSync(path.join(dir, 'revision.json'), JSON.stringify({ revision: cp.execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8', windowsHide: true }).trim(), diff: cp.execFileSync('git', ['diff', '--stat'], { cwd: repo, encoding: 'utf8', windowsHide: true }), kind }));
+  const env = { ...process.env, NEKKO_EVIDENCE_DIR: dir, NEKKO_EVIDENCE_KIND: kind }; delete env.ELECTRON_RUN_AS_NODE;
+  const result = cp.spawnSync(path.join(primary, 'apps/desktop/.dev-runtime/44.7.0-win/Nekko Agent.exe'), [path.join(__dirname, 'approval-navigation-evidence-electron.cjs')], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
+  if (result.error && result.pid) cp.spawnSync('taskkill', ['/PID', String(result.pid), '/T', '/F'], { windowsHide: true });
+  for (const name of fs.readdirSync(dir).filter(n => n.startsWith('profile-'))) fs.rmSync(path.join(dir, name), { recursive: true, force: true, maxRetries: 8, retryDelay: 300 });
+  if (result.error || result.status !== 0) throw result.error || Error('Fixture failed: ' + result.status);
+})().catch(e => { console.error(e); process.exitCode = 1; });

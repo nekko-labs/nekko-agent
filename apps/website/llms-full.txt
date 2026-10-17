@@ -131,6 +131,12 @@ Hover anywhere on the left navigation panel to open it and see each destination'
 
 Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Videos** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Create or Edit Photos and Videos opens an image session; video generation is not available.
 
+### Approvals and delegated work
+
+When a tool needs permission, its approval card appears in the chat window, not the separate wall composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
+
+For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the Agent Monitor subagent list instead; the row does not guess which chat to open.
+
 ---
 
 <!-- https://nekkoagent.com/docs/walkthrough -->
@@ -237,7 +243,7 @@ A successfully completed reply should not retain a stale **Reply interrupted** w
 
 The left navigation panel curves into its tails about 10px beyond the icon rows, with matching curves at both ends. Opening a wall window reveals the incoming window and slides existing windows aside, without a separate corner-resize animation. Reduced motion disables the wall transitions.
 
-On the Agents wall, the agent, image, and terminal icons with small bottom-right **+** indicators create new windows. A subtle divider separates them from the Focused, Dynamic, and Grid view modes. Inside a window header, the larger accent-colored **Focus** icon sits immediately beside Minimize and opens that window in Focused view. Minimize removes only the wall window, keeping the chat in the Agent panel. The left navigation keeps its position and tint, with broad curved wings above and below the destinations.
+On the Agents wall, the agent, image, and terminal icons with small bottom-right **+** indicators create new windows. A subtle divider separates them from the **Focused** and **Dynamic** view modes. Dynamic uses a lightning bolt icon. For an even **Grid**, open **Settings > Command Center**, choose Grid under Wall layout, and set Grid rows and Grid columns (1 to 6 each). These dimensions are remembered when switching layouts. The existing **Ctrl/Cmd+Shift+1**, **2**, and **3** shortcuts still select Focused, Dynamic, and Grid respectively; saved Grid layouts reopen unchanged. In Focused view, **New agent** fades straight into the new chat's prompt; once you send your first message, the composer expands into the full chat. The Focused window's border is a quiet tint rather than a bright outline. The right-hand dock is headed **Monitors**. Inside a window header, the larger accent-colored **Focus** icon sits immediately beside Minimize and opens that window in Focused view. Minimize removes only the wall window, keeping the chat in the Agent panel. The left navigation keeps its position and tint, with broad curved wings above and below the destinations.
 
 The **Chat** tab is the heart of the app. There are no separate "chat", "cowork",
 and "code" modes, it's one thread. Ask a question, or hand off a task and let

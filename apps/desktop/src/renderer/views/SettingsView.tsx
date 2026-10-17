@@ -17,6 +17,7 @@ import { hasAppChrome } from '../chrome.js';
 import { ServiceLoadState } from '../components/ServiceLoadState.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { SettingsSearch } from '../components/SettingsSearch.js';
+import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
@@ -155,6 +156,7 @@ export function SettingsView() {
         <FunSection settings={settings} update={update} />
         <section className="card mt-5 p-5">
           <h2 className="font-semibold">Command Center</h2>
+          <WallLayoutSettings settings={settings} update={update} />
           <label className="mt-3 flex items-center justify-between gap-3 text-[13px]">Auto-add new agents
             <input type="checkbox" checked={loadWallState(localStorage, settings.commandWall).autoAdd} onChange={async (e) => {
               const wall = { ...loadWallState(localStorage, settings.commandWall), autoAdd: e.target.checked };

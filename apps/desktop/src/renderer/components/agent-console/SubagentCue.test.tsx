@@ -1,5 +1,6 @@
 import React from 'react';
 import { expect, it, vi } from 'vitest';
+vi.mock('../../store.js', () => ({ useStore: { getState: () => ({ openChatPane: () => {}, setView: () => {} }) } }));
 vi.mock('../Markdown.js', () => ({ Markdown: ({ text }: { text: string }) => <p>{text}</p> }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ActivityGroup } from './ActivityGroup.js';
@@ -40,4 +41,19 @@ it('renders watch wake-ups as watch rows without treating assistant quotations a
   expect(html).toContain('Watch triggered');
   expect(html).not.toContain('msg-user');
   expect(renderToStaticMarkup(<MessageBubble message={{...message,role:'assistant'}} />)).not.toContain('Watch triggered');
+});
+
+import { SubagentParentContext } from './SubagentCue.js';
+import { foldSubagentActivity, resetSubagentActivity } from '../../subagentActivity.js';
+it('offers sibling navigation only for an unambiguous observed child', () => {
+  resetSubagentActivity();
+  foldSubagentActivity({ type: 'tool_call', sessionId: 'parent', call }, 10);
+  const child: any = { id: 'child-session', parentSessionId: 'parent', title: 'Integration checks', createdAt: 20 };
+  for (const content of [<ToolCard call={call} />, <ActivityGroup items={[{ kind: 'tool', call }]} />]) {
+    const html = renderToStaticMarkup(<SubagentParentContext.Provider value={[child]}>{content}</SubagentParentContext.Provider>);
+    expect(html).toContain('aria-label="Open subagent: Integration checks"');
+    expect(html).not.toMatch(/<button[^>]*>(?:(?!<\/button>)[\s\S])*<button/);
+  }
+  resetSubagentActivity();
+  expect(renderToStaticMarkup(<ToolCard call={call} />)).not.toContain('Open subagent:');
 });

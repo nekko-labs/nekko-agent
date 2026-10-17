@@ -6,6 +6,13 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Focused mode transitions and layout controls (added 2026-10-17)
+
+See [SPEC](SPEC.md#focused-mode-transitions-calmer-focus-ring-and-layout-controls-2026-10-17).
+
+- [x] ✅ 2026-10-17 `CommandWall.tsx` marks panes added after mount as entering (Focus only) and `styles.css` fades the hero in; `ChatPane.tsx` plays `composer-expand-in` once when clean start ends on send; calmer Focus ring mix; Monitors dock header; Grid removed from the toolbar into `WallLayoutSettings.tsx`, Dynamic uses `BoltIcon`. Tests: `focusTransitions.test.ts`, `WallLayoutSettings.test.tsx`. Evidence: `apps/desktop/scripts/focus-transitions-sandbox.cjs` via `agent-window-controls-integration.cjs` (`NEKKO_CONTROLS_SANDBOX`, `NEKKO_TEST_REVISION=main` for before).
+- [ ] Check both animations in a packaged desktop build and at narrow widths.
+
 ## Flaky daemon integration tests (added 2026-10-17)
 
 - [x] ✅ 2026-10-17 Issue #705: three `crates/nekkod/tests/daemon.rs` tests failed CI on branches with no Rust changes. (1) The subscribe test read the late socket's replay before the `question` event was published (it is pending first, published a moment later), and could read the backend's session-less `hello-from-backend` or `daemon:backend` where it expected a chat frame or an ack. It now waits for the question on the all-chats socket and skips only that backend chatter (`next_chat_frame`). (2) Compaction sent each `turn:notify` on its own task, so the host could hear `done` before an earlier `running` and keep showing the chat as compacting. A real bug, not only a test one: each notify now waits for the one before (`compaction.rs`, `Job::notified`). (3) The image-turn test's engine port came from `bind(0)` and was bound only at the first load, so anything else in the run could take it first. Test ports now come from below every OS's ephemeral range. A missing image now prints the saved reply.
@@ -1857,3 +1864,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] `models:listStatus` (`{ models, error? }`) in shared, TS host, `nekkod`, preload and web client; `models:list` unchanged. Tests: `models-list-status.test.ts`, `nekkod` providers test (401 case).
 - [x] Provider card shows the error or "<name> didn't answer at <url>" with Retry; filter past eight models (`modelListProblem.ts`); no repeat of an error the failed connection test already shows.
 - [x] Checked in the desktop app (macOS, isolated data folder): Ollama 0.40.4 stopped → "didn't answer" → Retry after start → empty → model listed; OpenAI refused key; OpenRouter at `https://openrouter.ai/v1` (HTML 200: Connected, list fails) and at `/api/v1` (filter on ~300 models).
+
+### Approval/subagent navigation regression
+- [x] Reproduce unrelated-result approval disappearance in isolated real ChatPane; scope clearing to matching call ID.
+- [x] Add accessible sibling Open controls for observed unambiguous child delegations.
+- [ ] Inspect matching 1200/390 light/dark before/after pixels and publish evidence before landing.
+- [ ] Follow-up: stable persisted spawn-call/child association for navigation after renderer restart (current live association intentionally does not guess).
