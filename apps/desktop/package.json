@@ -25,7 +25,8 @@
     "start": "node scripts/dev-launch.mjs preview",
     "dist": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder",
     "release": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder --publish always",
-    "build:native-browser": "node ../../scripts/build-agent-browser.mjs"
+    "build:native-browser": "node ../../scripts/build-agent-browser.mjs",
+    "test:browser": "node ../../scripts/build-agent-browser.mjs && node --test ../../scripts/agent-browser-native.test.mjs && node scripts/browser-automation-smoke.mjs"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.2.0-beta.15",
