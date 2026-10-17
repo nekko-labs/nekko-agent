@@ -38,7 +38,9 @@ gh pr merge --auto                          # queue it; it merges itself when `g
 `main` requires the merge queue and one check, `gate`. Do not merge with `--admin`:
 it skips the queue, and the queue is what tests your PR against everything landing
 beside it. The auto-merge workflow also queues every ready PR, so `gh pr merge
---auto` is a belt to its braces.
+--auto` is a belt to its braces. Never add `--squash` (or another method) to it:
+with a method, gh arms classic auto-merge, which waits outside the queue forever.
+The queue's own setting squashes.
 
 ### Ready, not draft
 

@@ -9,8 +9,10 @@ name: Auto-merge
 # auto-merging it would fold it into that branch rather than queue it. Stacks
 # are queued with `gh stack merge`.
 #
-# The merge method comes from the queue's settings; `--squash` here is ignored
-# by GitHub when a queue is required, and kept for a main without one.
+# No merge method on purpose. With a method (`--squash`), `gh pr merge --auto`
+# arms GitHub's classic auto-merge, which waits outside the queue forever on a
+# branch that requires one (#751 and #755 sat green and never queued). Without
+# one, gh enqueues the PR, and the queue's own setting (squash) merges it.
 #
 # Why this also dispatches version-release: a merge performed with
 # GITHUB_TOKEN never starts a workflow run, so the `push` trigger on
@@ -42,8 +44,8 @@ jobs:
     # enough that a PR left open for review does not hold a runner all afternoon.
     timeout-minutes: 45
     steps:
-      - name: Enable auto-merge (squash)
-        run: gh pr merge --auto --squash "$PR_URL"
+      - name: Queue the PR
+        run: gh pr merge --auto "$PR_URL"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
