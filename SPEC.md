@@ -1,5 +1,13 @@
 ---
 
+## Local marketing website preview (2026-10-17)
+
+`[implemented; unit-tested; verified by serving the site locally and loading pages and docs]` `npm run website` serves the static marketing site and docs in `apps/website` on `http://127.0.0.1:8080` (set `PORT` to change it), so a contributor can look at a website or docs change before it ships. It needs no build, package installation, agent backend or app data, and every response is `no-store`, so a refresh shows the latest edit.
+
+- **Same URLs as production:** it resolves clean URLs the way `vercel.json`'s `cleanUrls` does, so `/docs` serves `docs/index.html` and `/docs/cli` serves `docs/cli.html`. Redirects and production cache headers are not reproduced.
+- **Read-only and local:** it binds loopback only, answers `GET` and `HEAD` (anything else is 405), refuses paths that resolve outside `apps/website` (403) and malformed URLs (400).
+- A preview server, not production hosting; nothing on the website itself changes.
+
 ## Beta signups and website analytics (2026-10-17)
 
 **Beta signups.** People will join the beta from a form on nekkoagent.com with their email and, optionally, their name. The form is not on the site yet; the backend and database behind it are. Joining twice is harmless and looks the same as joining once, so the form never reveals whether an address is already on the list. We keep only what the form asks for, plus the page path and `utm_*` tags that brought someone there, never a full URL or IP. Each signup moves `pending → invited → joined`, or to `unsubscribed`; signing up again after unsubscribing puts the address back to pending. The same table serves later waitlists under another list name.
