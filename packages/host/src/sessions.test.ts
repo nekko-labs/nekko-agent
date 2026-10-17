@@ -154,3 +154,17 @@ describe('new session defaults', () => {
     expect(getSettings().effort).toBe('high');
   });
 });
+
+describe('default saved mode', () => {
+  it('starts a new top-level chat in it, and leaves sub-agents and unset defaults alone', async () => {
+    const { saveSettings } = await import('./store.js');
+    expect(createSession()).not.toHaveProperty('incognito');
+    saveSettings({ defaultSavedModeId: 'private' });
+    const chat = createSession();
+    expect(chat).toMatchObject({ incognito: true, mode: 'ask', executionMode: 'worktree', gitIsolation: true, workMode: 'default', disabledTools: [] });
+    expect(getSession(chat.id)).toMatchObject({ incognito: true });
+    expect(createSession(undefined, chat.id)).not.toHaveProperty('incognito');
+    saveSettings({ defaultSavedModeId: 'untrusted-repo' });
+    expect(createSession()).toMatchObject({ executionMode: 'sandbox', mode: 'ask' });
+  });
+});

@@ -8,6 +8,25 @@ struct NekkoWidgets: WidgetBundle {
     var body: some Widget {
         AgentRunLiveActivity()
         StatusWidget()
+        if #available(iOS 18.0, *) { NewChatControl() }
+    }
+}
+
+/// Control Center, the Lock Screen and the Action button (iOS 18): one tap opens
+/// New chat on the active computer. It only opens the app, which still asks for
+/// Face ID when the app lock is on; nothing is sent.
+@available(iOS 18.0, *)
+struct NewChatControl: ControlWidget {
+    static let url = URL(string: "nekko-agent://new")!
+
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.nekko.native.ios.new-chat") {
+            ControlWidgetButton(action: OpenURLIntent(Self.url)) {
+                Label("New chat", systemImage: "square.and.pencil")
+            }
+        }
+        .displayName("New chat")
+        .description("Start a chat on your computer.")
     }
 }
 

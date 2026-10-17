@@ -108,6 +108,12 @@ final class DeepLinkTests: XCTestCase {
         app.openChat = nil
         app.handle(url: URL(string: "nekko-agent-pair:?nothing=here")!)
         XCTAssertNil(app.pendingLink)
+        // The Control Center control's link asks for New chat, and is not a pairing.
+        app.newChatRequested = false
+        app.handle(url: URL(string: "nekko-agent://new")!)
+        XCTAssertTrue(app.newChatRequested)
+        XCTAssertNil(app.pendingLink)
+        app.newChatRequested = false
     }
 }
 

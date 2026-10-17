@@ -33,7 +33,7 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/core/package.json packages/core/
 COPY packages/host/package.json packages/host/
 COPY apps/desktop/package.json apps/desktop/
-COPY apps/server/package.json apps/server/
+COPY apps/web-app-server/package.json apps/web-app-server/
 COPY apps/cli/package.json apps/cli/
 RUN npm ci
 
@@ -59,16 +59,16 @@ ENV NODE_ENV=production \
     NEKKO_DAEMON=nekkod
 
 # Copy the pruned install + build outputs, preserving the workspace layout the
-# server expects (apps/server/dist resolves ../../desktop/out/renderer).
+# server expects (apps/web-app-server/dist resolves ../../desktop/out/renderer).
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/apps/server/dist ./apps/server/dist
-COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
+COPY --from=builder /app/apps/web-app-server/dist ./apps/web-app-server/dist
+COPY --from=builder /app/apps/web-app-server/package.json ./apps/web-app-server/package.json
 COPY --from=builder /app/apps/cli ./apps/cli
 COPY --from=builder /app/apps/desktop/out/renderer ./apps/desktop/out/renderer
 # The server finds the daemon in bin/ beside its script.
-COPY --from=nekkod /out/ ./apps/server/dist/bin/
+COPY --from=nekkod /out/ ./apps/web-app-server/dist/bin/
 
 RUN mkdir -p /data /workspace && chown -R node:node /data /workspace /app
 USER node
@@ -81,4 +81,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD node -e "fetch('http://127.0.0.1:'+(process.env.NEKKO_PORT||1440)+'/health').then(r=>r.json()).then(h=>process.exit(h.ok&&h.daemon&&h.daemon.ready?0:1),()=>process.exit(1))"
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["sh", "-c", "if [ -z \"$NEKKO_TOKEN\" ]; then NEKKO_TOKEN=$(node -e \"console.log(require('node:crypto').randomBytes(24).toString('base64url'))\"); export NEKKO_TOKEN; echo \"Nekko Agent token: $NEKKO_TOKEN\"; fi; exec node apps/server/dist/index.js"]
+CMD ["sh", "-c", "if [ -z \"$NEKKO_TOKEN\" ]; then NEKKO_TOKEN=$(node -e \"console.log(require('node:crypto').randomBytes(24).toString('base64url'))\"); export NEKKO_TOKEN; echo \"Nekko Agent token: $NEKKO_TOKEN\"; fi; exec node apps/web-app-server/dist/index.js"]

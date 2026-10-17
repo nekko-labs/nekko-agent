@@ -6,7 +6,7 @@ import { BUILTIN_TOOLS } from './tools.js';
 import { RUNAWAY_NOTE, createRunawayGuard } from './runaway.js';
 import { INTERRUPTED_NOTE, RESUME_PROMPT, repairInterruptedHistory } from './resume.js';
 import { LOOP_WRAP_UP_PROMPT, createLoopDetector, loopNote, loopNudge } from './progress.js';
-import { MAX_STREAM_ATTEMPTS, ProviderHttpError, isTransientProviderError, retryDelayMs } from '../providers/errors.js';
+import { MAX_NETWORK_STREAM_ATTEMPTS, MAX_STREAM_ATTEMPTS, ProviderHttpError, isNetworkProviderError, isTransientProviderError, retryDelayMs } from '../providers/errors.js';
 import { withoutImages } from '../providers/media.js';
 
 export { withoutImages };
@@ -325,7 +325,8 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
           continue;
         }
         if (opts.signal?.aborted || !isTransientProviderError(e)) throw e;
-        if (attempt >= MAX_STREAM_ATTEMPTS) {
+        const maxAttempts = isNetworkProviderError(e) ? MAX_NETWORK_STREAM_ATTEMPTS : MAX_STREAM_ATTEMPTS;
+        if (attempt >= maxAttempts) {
           if (switched || !opts.failover) throw e;
           const replacement = await opts.failover(e);
           if (!replacement || opts.signal?.aborted || replacement.provider.config.id === route.provider.config.id) throw e;
@@ -345,7 +346,7 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
           type: 'retry',
           sessionId: opts.sessionId,
           attempt,
-          maxAttempts: MAX_STREAM_ATTEMPTS,
+          maxAttempts,
           delayMs,
           reason: (e as Error).message,
         };

@@ -40,7 +40,7 @@ const check = (name, ok, detail = '') => {
 mkdirSync(OUT, { recursive: true });
 const mock = await startMockProvider({ port: PORTS.mock, tokensPerSecond: 300, replyTokens: 3000 });
 const { dir } = seedDataDir({ mockPort: PORTS.mock, chats: [1000, 400, 400] });
-const server = spawn(process.execPath, [join(APP_ROOT, 'apps/server/dist/index.js')], {
+const server = spawn(process.execPath, [join(APP_ROOT, 'apps/web-app-server/dist/index.js')], {
   cwd: APP_ROOT,
   env: { ...process.env, NEKKO_DATA_DIR: dir, NEKKO_PORT: String(PORTS.app), NEKKO_HOST: '127.0.0.1' },
   stdio: 'ignore',

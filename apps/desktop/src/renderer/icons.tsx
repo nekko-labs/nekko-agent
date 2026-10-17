@@ -129,3 +129,23 @@ export const ZenIcon = (p: P) => <S {...p}><circle cx="12" cy="5" r="2" /><path 
 /** Configure: three vertical sliders, each knob at a different height. */
 export const SlidersIcon = (p: P) => <S {...p}><path d="M6 4v4m0 4v8M12 4v10m0 4v2M18 4v1m0 4v11" /><circle cx="6" cy="10" r="2" /><circle cx="12" cy="16" r="2" /><circle cx="18" cy="7" r="2" /></S>;
 export const ControlPanelIcon = (p: P) => <S {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 6v3m0 4v5m8-12v7m0 4v1M6 9h4m4 4h4" /><circle cx="8" cy="11" r="2" /><circle cx="16" cy="15" r="2" /></S>;
+
+/* Mode panel glyphs: one per setting and per option, so the panel scans by shape. */
+export const LaptopIcon = (p: P) => (<S {...p}><rect x="4" y="4.5" width="16" height="11" rx="1.5" /><path d="M2 19.5h20" /></S>);
+export const CubeIcon = (p: P) => (<S {...p}><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7zM3.5 7 12 11.5 20.5 7M12 11.5v10" /></S>);
+export const HandIcon = (p: P) => (<S {...p}><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5M14 10.5V5.5a1.5 1.5 0 0 1 3 0V13c0 4.2-2.7 7.5-6.7 7.5-2.4 0-3.9-1.2-5-3L3.4 14.4a1.5 1.5 0 0 1 2.4-1.8L8 15" /></S>);
+export const ShieldCheckIcon = (p: P) => (<S {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m8.8 12 2.2 2.2 4.2-4.4" /></S>);
+export const RouteIcon = (p: P) => (<S {...p}><circle cx="5.5" cy="18.5" r="2" /><circle cx="18.5" cy="5.5" r="2" /><path d="M7.5 18.5h7a3 3 0 0 0 0-6h-5a3 3 0 0 1 0-6h7" /></S>);
+export const GaugeIcon = (p: P) => (<S {...p}><path d="M3.5 17a8.5 8.5 0 1 1 17 0" /><path d="m12 17 4-5.5" /></S>);
+export const CompassIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></S>);
+export const CapIcon = (p: P) => (<S {...p}><path d="M2 9 12 4.5 22 9l-10 4.5zM6 10.8v4.7c1.8 1.5 3.8 2.2 6 2.2s4.2-.7 6-2.2v-4.7M22 9v6" /></S>);
+export const LockIcon = (p: P) => (<S {...p}><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></S>);
+export const DialIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="m12 12 4.5-4.5" /></S>);
+export const SparkleIcon = (p: P) => (<S {...p}><path d="M11 3c.6 4.6 2.2 6.8 6.5 7.5-4.3.7-5.9 2.9-6.5 7.5-.6-4.6-2.2-6.8-6.5-7.5C8.8 9.8 10.4 7.6 11 3z" /><path d="M19 15.5v5M16.5 18h5" /></S>);
+export const DocTextIcon = (p: P) => (<S {...p}><path d="M14 2.5H6.5a1.5 1.5 0 0 0-1.5 1.5v16a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V7.5z" /><path d="M14 2.5v5h5M8.5 12h7M8.5 15.5h7M8.5 8.5h3" /></S>);
+/** Four rising bars with the first `level` filled: reasoning effort at a glance. */
+export const EffortBarsIcon = ({ level, className }: P & { level: number }) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={1.4}>
+    {[0, 1, 2, 3].map((i) => <rect key={i} x={3.5 + i * 4.6} y={16 - i * 3.6} width={3} height={4.5 + i * 3.6} rx={0.8} fill={i < level ? 'currentColor' : 'none'} />)}
+  </svg>
+);

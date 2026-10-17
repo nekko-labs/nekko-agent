@@ -27,7 +27,7 @@ const mockPort = Number(opt('mock-port', 4391));
 
 const mock = await startMockProvider({ port: mockPort, tokensPerSecond: 300, replyTokens: 7000 });
 const { dir } = seedDataDir({ mockPort, chats: [1000, ...Array(12).fill(400)] });
-const server = spawn(process.execPath, [join(ROOT, 'apps/server/dist/index.js')], {
+const server = spawn(process.execPath, [join(ROOT, 'apps/web-app-server/dist/index.js')], {
   cwd: ROOT,
   env: { ...process.env, NEKKO_DATA_DIR: dir, NEKKO_PORT: String(port), NEKKO_HOST: '127.0.0.1' },
   stdio: 'inherit',
