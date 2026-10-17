@@ -42,6 +42,8 @@ class WireTest {
         assertEquals(listOf(2, 3, 3, 4, 5), lines.map { it.number })
         assertEquals("E", lines[2].text)
         assertEquals(PhoneChanges(emptyList()), PhoneChanges.from(null))
+        assertEquals("About `…/src/main.ts` line 3 (added):\n> E\n\n", PhoneChanges.quote(c.files[0], lines[2]))
+        assertEquals("About `new.txt` (new, +1 −0):\n\n", PhoneChanges.quote(c.files[1]))
         assertTrue(PcSettings.from(json("""{"phoneChanges":true}""")).phoneChanges)
         assertFalse(PcSettings.from(json("""{"phoneChanges":"yes"}""")).phoneChanges)
     }

@@ -71,6 +71,7 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
     val chat by vm.ui.collectAsStateWithLifecycle()
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
+    val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
@@ -112,7 +113,10 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
 
     if (showChanges && changesAllowed) {
         val changes by vm.changes.collectAsStateWithLifecycle()
-        ChangesSheet(changes.changes, changes.error, onRefresh = vm::loadChanges, onDismiss = { showChanges = false })
+        ChangesSheet(
+            changes.changes, changes.error, onRefresh = vm::loadChanges, onDismiss = { showChanges = false },
+            onAsk = { quote -> vm.quote(quote); showChanges = false },
+        )
     }
 
     Scaffold(
@@ -230,6 +234,8 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                 modifier = Modifier.navigationBarsPadding(),
                 mic = mic,
                 skills = chat.skills,
+                insert = insert,
+                onInserted = vm::inserted,
             )
         }
     }

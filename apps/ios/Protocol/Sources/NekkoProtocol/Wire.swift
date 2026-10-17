@@ -353,6 +353,18 @@ public struct PhoneChanges: Equatable, Sendable {
     /// Changed files past the computer's limit, not listed.
     public let omittedFiles: Int
 
+    /// What "Ask about this" puts in the message box for a line: the file, the
+    /// line number and kind, and the line quoted. Never sent on its own.
+    public static func quote(_ file: File, line: Hunk.Line) -> String {
+        let kind = switch line.kind { case .added: "added"; case .removed: "removed"; case .same: "unchanged" }
+        return "About `\(file.path)` line \(line.number) (\(kind)):\n> \(line.text)\n\n"
+    }
+
+    /// The same for a whole file.
+    public static func quote(_ file: File) -> String {
+        "About `\(file.path)` (\(file.added ? "new, " : "")+\(file.linesAdded) −\(file.linesRemoved)):\n\n"
+    }
+
     public var linesAdded: Int { files.reduce(0) { $0 + $1.linesAdded } }
     public var linesRemoved: Int { files.reduce(0) { $0 + $1.linesRemoved } }
 

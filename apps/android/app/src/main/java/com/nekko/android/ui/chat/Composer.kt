@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -76,6 +77,9 @@ fun Composer(
     mic: MicUi? = null,
     /** The computer's runnable skills for the `/` menu; empty hides it. */
     skills: List<SkillSummary> = emptyList(),
+    /** Text to add after what's typed ("Ask about this" in Changes); [onInserted] once it's in. */
+    insert: String? = null,
+    onInserted: () -> Unit = {},
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -88,6 +92,12 @@ fun Composer(
     val menu = if (skill == null) SkillMenu.query(text)?.let { SkillMenu.match(skills, it) }.orEmpty() else emptyList()
     val canSend = (text.isNotBlank() || skill != null) && blocked == null && !sending
     val showStop = running && text.isBlank()
+    LaunchedEffect(insert) {
+        if (insert != null) {
+            text += (if (text.isEmpty() || text.endsWith("\n")) "" else "\n\n") + insert
+            onInserted()
+        }
+    }
     // Dictated text goes after what is typed, never replacing it, and is never sent by itself.
     val dictated: (String) -> Unit = { spoken ->
         text = Dictation.insert(text, text.length, spoken).first

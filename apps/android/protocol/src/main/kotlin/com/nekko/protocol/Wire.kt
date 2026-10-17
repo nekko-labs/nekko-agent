@@ -422,6 +422,16 @@ data class PhoneChanges(val files: List<File>, val omittedFiles: Int = 0) {
     val linesRemoved: Int get() = files.sumOf { it.linesRemoved }
 
     companion object {
+        /** What "Ask about this" puts in the message box for a line. Never sent on its own. */
+        fun quote(file: File, line: Line): String {
+            val kind = when (line.kind) { Kind.ADDED -> "added"; Kind.REMOVED -> "removed"; Kind.SAME -> "unchanged" }
+            return "About `${file.path}` line ${line.number} ($kind):\n> ${line.text}\n\n"
+        }
+
+        /** The same for a whole file. */
+        fun quote(file: File): String =
+            "About `${file.path}` (${if (file.added) "new, " else ""}+${file.linesAdded} −${file.linesRemoved}):\n\n"
+
         fun from(e: JsonElement?): PhoneChanges {
             val o = e.obj() ?: return PhoneChanges(emptyList())
             val files = o["files"].arr()?.mapNotNull { el ->

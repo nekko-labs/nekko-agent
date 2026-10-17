@@ -13,6 +13,8 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -111,6 +113,13 @@ class LiveRelayTest {
             waitFor(hasContentDescription("nekko-itest-note.txt, new file, 2 added", substring = true), 45_000)
             waitFor(hasText("Read only", substring = true))
             shot("8-changes")
+
+            // Ask about a line: the quote lands in the message box, unsent, and the sheet closes.
+            val added = hasContentDescription("Added line 2", substring = true)
+            waitFor(added)
+            compose.onAllNodes(added, useUnmergedTree = true).onFirst().performSemanticsAction(SemanticsActions.OnLongClick)
+            waitFor(hasText("line 2 (added)", substring = true), 10_000)
+            shot("8b-asked")
         }
     }
 

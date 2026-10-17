@@ -2,7 +2,9 @@ package com.nekko.android.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +41,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
@@ -54,7 +59,7 @@ import com.nekko.protocol.PhoneChanges
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChangesSheet(changes: PhoneChanges?, error: String?, onRefresh: () -> Unit, onDismiss: () -> Unit) {
+fun ChangesSheet(changes: PhoneChanges?, error: String?, onRefresh: () -> Unit, onDismiss: () -> Unit, onAsk: (String) -> Unit) {
     val p = Nekko.palette
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -72,7 +77,7 @@ fun ChangesSheet(changes: PhoneChanges?, error: String?, onRefresh: () -> Unit, 
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item { Text(summary(c), style = MaterialTheme.typography.bodySmall, color = p.inkSoft) }
-                items(c.files, key = { it.path }) { FileChange(it) }
+                items(c.files, key = { it.path }) { FileChange(it, onAsk) }
                 if (c.omittedFiles > 0) {
                     item {
                         Text(
@@ -81,7 +86,7 @@ fun ChangesSheet(changes: PhoneChanges?, error: String?, onRefresh: () -> Unit, 
                         )
                     }
                 }
-                item { Text("Read only. Accept or revert changes on your computer.", style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
+                item { Text("Read only. Accept or revert changes on your computer. Touch and hold a line to ask the agent about it.", style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
             }
         }
     }
@@ -101,17 +106,22 @@ private fun Notice(title: String, body: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FileChange(file: PhoneChanges.File) {
+private fun FileChange(file: PhoneChanges.File, onAsk: (String) -> Unit) {
     val p = Nekko.palette
     var open by rememberSaveable(file.path) { mutableStateOf(true) }
     val shape = RoundedCornerShape(10.dp)
     Column(Modifier.fillMaxWidth().background(p.surface, shape).border(1.dp, p.line, shape)) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { open = !open }.padding(horizontal = 12.dp)
+            Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .combinedClickable(onClick = { open = !open }, onLongClick = { onAsk(PhoneChanges.quote(file)) })
+                .padding(horizontal = 12.dp)
                 .clearAndSetSemantics {
                     contentDescription = "${file.path}, ${if (file.added) "new file, " else ""}${file.linesAdded} added, ${file.linesRemoved} removed"
                     stateDescription = if (open) "Expanded" else "Collapsed"
+                    onClick(label = if (open) "Collapse" else "Expand") { open = !open; true }
+                    onLongClick(label = "Ask about this file") { onAsk(PhoneChanges.quote(file)); true }
                 },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -141,7 +151,7 @@ private fun FileChange(file: PhoneChanges.File) {
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp).semantics { contentDescription = "Unchanged lines skipped" },
                                     )
                                 }
-                                h.lines.forEach { DiffLine(it) }
+                                h.lines.forEach { line -> DiffLine(line) { onAsk(PhoneChanges.quote(file, line)) } }
                             }
                         }
                     }
@@ -159,7 +169,7 @@ private fun Note(text: String) {
 }
 
 @Composable
-private fun DiffLine(line: PhoneChanges.Line) {
+private fun DiffLine(line: PhoneChanges.Line, onAsk: () -> Unit) {
     val p = Nekko.palette
     // The row's tint carries the colour; the mark is ink so it reads on it in both themes.
     val (mark, bg) = when (line.kind) {
@@ -173,8 +183,13 @@ private fun DiffLine(line: PhoneChanges.Line) {
         PhoneChanges.Kind.SAME -> "Unchanged"
     }
     Row(
-        Modifier.background(bg).padding(horizontal = 12.dp, vertical = 1.dp)
-            .clearAndSetSemantics { contentDescription = "$kind line ${line.number}: ${line.text.ifEmpty { "blank" }}" },
+        Modifier.background(bg)
+            .pointerInput(Unit) { detectTapGestures(onLongPress = { onAsk() }) }
+            .padding(horizontal = 12.dp, vertical = 1.dp)
+            .clearAndSetSemantics {
+                contentDescription = "$kind line ${line.number}: ${line.text.ifEmpty { "blank" }}"
+                onLongClick(label = "Ask about this line") { onAsk(); true }
+            },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("${line.number}", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = p.inkSoft, modifier = Modifier.widthIn(min = 28.dp))

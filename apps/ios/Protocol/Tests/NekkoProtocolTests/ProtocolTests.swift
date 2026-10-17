@@ -251,6 +251,8 @@ final class WireTests: XCTestCase {
         XCTAssertEqual(lines.map(\.number), [2, 3, 3, 4, 5])
         XCTAssertEqual(lines[2].text, "E")
         XCTAssertEqual(PhoneChanges.from(nil), PhoneChanges(files: [], omittedFiles: 0))
+        XCTAssertEqual(PhoneChanges.quote(c.files[0], line: lines[2]), "About `…/src/main.ts` line 3 (added):\n> E\n\n")
+        XCTAssertEqual(PhoneChanges.quote(c.files[1]), "About `new.txt` (new, +1 −0):\n\n")
         XCTAssertTrue(PcSettings.from(try JSONValue.parse(#"{"phoneChanges":true}"#)).phoneChanges)
         XCTAssertFalse(PcSettings.from(try JSONValue.parse(#"{"phoneChanges":"yes"}"#)).phoneChanges)
     }
