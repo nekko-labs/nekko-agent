@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nekko Agent</string>
-<<<<<<< HEAD
+    <string name="widget_description">How many chats need you and how many are working. Counts only, never what they say.</string>
     <string name="shortcut_new_chat">New chat</string>
     <string name="shortcut_new_chat_long">New chat on your computer</string>
-=======
-    <string name="widget_description">How many chats need you and how many are working. Counts only, never what they say.</string>
->>>>>>> origin/main
 </resources>
