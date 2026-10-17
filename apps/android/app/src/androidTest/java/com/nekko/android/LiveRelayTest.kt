@@ -9,6 +9,8 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onRoot
@@ -140,7 +142,9 @@ class LiveRelayTest {
             compose.waitUntil(timeoutMs) { compose.onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         } catch (e: ComposeTimeoutException) {
             shot("failed-waiting")
-            throw AssertionError("never saw ${matcher.description}", e)
+            // What was on screen instead, for runs whose screenshots aren't at hand.
+            val screen = runCatching { compose.onAllNodes(isRoot(), useUnmergedTree = true).printToString(maxDepth = 40) }.getOrElse { it.toString() }
+            throw AssertionError("never saw ${matcher.description}; on screen:\n$screen", e)
         }
     }
 
