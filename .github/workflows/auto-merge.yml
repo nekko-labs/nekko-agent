@@ -1,7 +1,10 @@
 name: Auto-merge
 
-# Turns on GitHub's native auto-merge for every non-draft PR, so it merges
-# itself once required checks pass, then makes sure the merge actually releases.
+# Turns on GitHub's native auto-merge for a non-draft PR only when the user
+# opts in by adding the `automerge` label, so it merges itself once required
+# checks pass, then makes sure the merge actually releases. Without the label
+# nothing merges on its own: merging stays a manual action by the user.
+# Agents must never add this label (see AGENTS.md).
 #
 # Requires "Allow auto-merge" enabled in repo settings and required status
 # checks on the target branch (otherwise a mergeable PR merges immediately).
@@ -17,7 +20,7 @@ name: Auto-merge
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, labeled]
 
 permissions:
   contents: write
@@ -30,7 +33,7 @@ permissions:
 
 jobs:
   auto-merge:
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && contains(github.event.pull_request.labels.*.name, 'automerge') }}
     runs-on: ubuntu-latest
     # Long enough to outlast CI on a slow day, short enough that a PR left open
     # for review does not hold a runner all afternoon.

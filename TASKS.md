@@ -413,7 +413,7 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 - **TypeScript everywhere**; `packages/core` is pure (no Electron) and unit-tested with Vitest.
 - **Keep the build green**: `npm run build` at repo root (order: shared → core → host → desktop) before each commit; typecheck across all workspaces; core tests passing.
-- **Land code via auto-merged PRs** on `nekko-labs/nekko-agent`: branch → push → `gh pr create` → `gh pr merge --squash --admin --delete-branch`. PR descriptions stay **short and plain**, a few human-readable bullets.
+- **Deliver code as draft PRs** on `nekko-labs/nekko-agent`: branch → push → `gh pr create --draft`. **Only Philip merges**, by hand; agents never run `gh pr ready`, `gh pr merge` or add the `automerge` label (see AGENTS.md). PR descriptions stay **short and plain**, a few human-readable bullets.
 - **Human-readable tasks first**: checklist items read like plain product statements; technical detail goes as indented sub-bullets, never the top line.
 - **Cross-platform** code (Windows-first dev). MCP/stdio spawns use `shell:true` on win32.
 - **No new deps when avoidable**: diff (LCS), prompt analysis, file icons, MCP, push JWTs are all in-repo.

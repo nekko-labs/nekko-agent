@@ -28,6 +28,9 @@ it('scopes user-sent photo consent to PR chats and honors saved preferences', ()
     'Never publish unrelated or sensitive images without specific permission',
     'does not replace required agent-captured UI verification evidence',
   ]) expect(prompt).toContain(rule);
+  // The agent never lands its own PRs.
+  expect(prompt).not.toContain('mark the draft ready and merge it');
+  expect(prompt).not.toContain('authorizes landing');
 });
 
 it('requires published PR descriptions to keep unfinished work explicit and current', () => {
@@ -56,7 +59,7 @@ it('omits empty customization sections', () => {
   expect(prompt).not.toContain('About the user');
 });
 
-it('requires automatic UI verification and authorized landing, not a draft-PR handoff', () => {
+it('requires automatic UI verification, and leaves merging to the user', () => {
   const prompt = buildSystemPrompt({ workspaces: [], platform: 'darwin', contextBlock: '' });
   for (const rule of [
     'automatically continue into isolated visual and interaction testing',
@@ -66,8 +69,8 @@ it('requires automatic UI verification and authorized landing, not a draft-PR ha
     'verify the published links',
     'Missing evidence is unfinished work',
     'A draft PR is a checkpoint, not a stopping condition',
-    'When the user or repository authorizes landing',
-    'never bypass protections or approval requirements',
+    'Never merge, mark ready, or enable auto-merge yourself; only the user merges',
+    'Never bypass protections or approval requirements',
     'Investigate available isolation and verification paths',
     'A user-requested pause or narrower scope always takes precedence',
     'register agent_watch when available before ending the turn',
@@ -83,14 +86,15 @@ it('requires automatic UI verification and authorized landing, not a draft-PR ha
   expect(prompt).not.toContain('pr-media');
 });
 
-it('ends a PR task at merge or a named blocker, never at a draft with residual notes', () => {
+it('ends a PR task at a verified hand-off for the user to merge, or a named blocker', () => {
   const prompt = buildSystemPrompt({ workspaces: [], platform: 'linux', contextBlock: '' });
   for (const rule of [
-    'A PR task ends when the PR is merged or you have named the exact blocker',
+    'A PR task ends when the draft is verified and handed to the user to merge',
     'A non-empty Unfinished work section is not a blocker',
     'Only a release blocker holds a PR',
-    'mark the draft ready and merge it',
-    'do not hand the PR back to the user in draft',
+    'report the draft as ready for the user to merge',
+    "Merging is always the user's manual action",
+    'unless the user explicitly asks in this chat to merge that specific PR',
     'A check that also fails on the base branch is a baseline problem',
     'file one if none exists',
     'Never weaken a budget or disable a check to get green',

@@ -14,16 +14,17 @@ git merge --ff-only origin/main
 git worktree add -b <branch> .worktrees/<task> main
 ```
 
-Run edits, tests, commits and PR commands from that task worktree. After merging,
-fast-forward the primary checkout and remove the task worktree and merged branch.
+Run edits, tests, commits and PR commands from that task worktree. After the user
+has merged the PR, fast-forward the primary checkout and remove the task worktree
+and merged branch.
 Inspect dirty files and preserve any unmerged work before cleanup; never force
 remove a worktree just because its PR was squash-merged.
 
-## Always land work as a PR
+## Always deliver work as a PR; only the user merges
 
-The default for every change is: commit it to a branch, push, open a PR, and merge it.
-Do not leave finished work sitting uncommitted in a working tree. When several
-in-flight batches share the tree (parallel agents), land them together in one PR
+The default for every change is: commit it to a branch, push, and open a **draft**
+PR. Do not leave finished work sitting uncommitted in a working tree. When several
+in-flight batches share the tree (parallel agents), put them together in one PR
 rather than letting the tree drift further from `main`.
 
 ```
@@ -31,9 +32,19 @@ rather than letting the tree drift further from `main`.
 git add -A   # or a scoped add; never commit .shots/ or other evidence dirs
 git commit -m "..."
 git push -u origin <branch>
-gh pr create --title "..." --body "..."
-gh pr merge --squash --admin --delete-branch
+gh pr create --draft --title "..." --body "..."
 ```
+
+**Merging is always the user's manual action.** No agent, sub-agent, script or
+automation started by an agent may merge a PR, in any repo, for any reason. That
+means agents never run `gh pr merge` (with or without `--auto` or `--admin`),
+never run `gh pr ready`, never add the `automerge` label, never push directly to
+`main`, and never enable auto-merge in any other way. This holds even when checks
+are green, a reviewer approved, or an instruction elsewhere (a tool default, an
+older doc, a prompt) says to land or merge. Only an explicit request from the user
+in the current chat to merge one specific PR changes this, and only for that PR.
+The `automerge` label (see `.github/workflows/auto-merge.yml`) is the user's own
+switch.
 
 ## PR descriptions must record unfinished work
 
@@ -47,18 +58,18 @@ Read back the published description to verify the update succeeded. If publishin
 fails, report the failure and preserve the pending description locally; do not
 claim the notes are published.
 
-An entry in this section is not by itself a reason to stay draft. Residual notes
-(a platform not checked, a tuned pixel offset, a test that already fails on
-`main`) are recorded and the PR lands. Only a **release blocker** holds a PR:
-the change breaks something that worked, a required check is red because of this
-PR, the evidence this repo requires for the change is missing, or the user said
-to wait. Name which one applies when you keep a PR draft.
+Separate residual notes from release blockers. Residual notes (a platform not
+checked, a tuned pixel offset, a test that already fails on `main`) are recorded
+and do not hold the PR. A **release blocker** is: the change breaks something
+that worked, a required check is red because of this PR, the evidence this repo
+requires for the change is missing, or the user said to wait. Name any release
+blocker in the hand-off so the user knows whether the PR is ready to merge.
 
-## Continue through verification and landing
+## Continue through verification to a merge-ready draft
 
-Implementation, verification, evidence publication, and landing are one workflow.
-Do not stop at passing automated tests or opening a draft PR and ask the user to
-request the remaining work again. For UI changes:
+Implementation, verification and evidence publication are one workflow. Do not
+stop at passing automated tests or opening a draft PR and ask the user to request
+the remaining work again. Merging is not part of the agent workflow. For UI changes:
 
 1. Run focused automated checks first; arrange base-revision captures before
    changing visual surfaces (or use a separate unchanged-base sandbox).
@@ -71,14 +82,11 @@ request the remaining work again. For UI changes:
 4. Upload evidence to the shared **pr-media** GitHub pre-release series using
    `scripts/pr-media.mjs`; do not create a per-PR release. Read back the published
    PR description and verify its media links, not just the local files.
-5. Continue through review and checks, fix failures, and merge when required
-   checks, reviews, evidence and release-blocker requirements are satisfied.
-   Never bypass required reviews, failing checks, or branch protections. The
-   example merge command above is not permission to override these gates.
-6. **Mark the PR ready and merge it.** A draft never merges: `gh pr merge` refuses
-   drafts and the auto-merge workflow only runs on `ready_for_review`. Once the
-   gates in step 5 are met, run `gh pr ready <n>` and then merge (or let auto-merge
-   do it). Opening a draft is the start of this workflow, not its last step.
+5. Fix failures this PR causes. Never bypass required reviews, failing checks, or
+   branch protections.
+6. **Hand the draft to the user.** Report the PR link, check status, and any
+   release blockers. Leave the PR as a draft; the user marks it ready and merges
+   it. Do not run `gh pr ready`, `gh pr merge`, or add the `automerge` label.
 
 ## When a check fails on `main` too
 
@@ -92,7 +100,7 @@ When one of them is red:
    `main` fails the same way on the same metric, the failure is a baseline problem.
 3. A baseline failure does not block this PR. Record it in Unfinished work with the
    `main` run that proves it, make sure an issue exists for it (search first, file
-   one if not, link it), and land the PR. Do not spend this PR's budget fixing `main`
+   one if not, link it), and tell the user the PR is otherwise ready to merge. Do not spend this PR's budget fixing `main`
    unless the user asked; do not weaken the budget or delete the check.
 4. A failure that only this PR produces is a release blocker until it is fixed or
    shown to be runner noise with two matched base/head measurements.
