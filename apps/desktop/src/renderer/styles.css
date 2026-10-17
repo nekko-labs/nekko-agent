@@ -1630,6 +1630,17 @@
 .chat-search-input, .chat-search-input:focus, .chat-search-input:focus-visible { outline: none; box-shadow: none; }
 ::highlight(nekko-chat-search) { background-color: color-mix(in srgb, var(--highlight) 32%, transparent); color: inherit; }
 ::highlight(nekko-chat-search-current) { background-color: var(--highlight); color: #1b1304; }
+/* Search within Settings (icon in the Appearance header + floating bar). */
+.settings-search-btn { display: inline-flex; align-items: center; justify-content: center; height: 28px; width: 28px; border-radius: 6px; color: var(--ink-faint); }
+.settings-search-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.settings-search-btn:disabled { opacity: .4; cursor: default; }
+.settings-search-pop .settings-search-btn { height: 24px; width: 24px; }
+.settings-search-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.settings-search-pop { position: fixed; z-index: 60; transform: translateY(-4px); display: flex; align-items: center; gap: 8px; width: 320px; padding: 6px 6px 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: 13px; color: var(--ink); }
+.settings-search-input, .settings-search-input:focus, .settings-search-input:focus-visible { outline: none; box-shadow: none; }
+::highlight(nekko-settings-search) { background-color: color-mix(in srgb, var(--highlight) 32%, transparent); color: inherit; }
+::highlight(nekko-settings-search-current) { background-color: var(--highlight); color: #1b1304; }
 /* Beside the open Agent Monitor toggle, the bar moves left of it. */
 .plan-rail-toggle ~ .chat-search { right: 150px; }
 
