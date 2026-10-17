@@ -1210,11 +1210,15 @@ async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_tur
         collect_until_done(&mut c, &["s_one", "s_two"]),
     );
     let words = |w: &str| (0..40).map(|i| format!("{w}{i} ")).collect::<String>();
+    // The model answers in the order the turns reach it, which the two posts
+    // above don't fix: each chat gets one of the two replies, whole.
+    let (c_one, c_two) = (streamed_text(&fc, "s_one"), streamed_text(&fc, "s_two"));
+    let mut got = [c_one.clone(), c_two.clone()];
+    got.sort();
+    assert_eq!(got, [words("one"), words("two")]);
     // Every socket has its own chat's whole reply, once.
-    assert_eq!(streamed_text(&fa, "s_one"), words("one"));
-    assert_eq!(streamed_text(&fb, "s_two"), words("two"));
-    assert_eq!(streamed_text(&fc, "s_one"), words("one"));
-    assert_eq!(streamed_text(&fc, "s_two"), words("two"));
+    assert_eq!(streamed_text(&fa, "s_one"), c_one);
+    assert_eq!(streamed_text(&fb, "s_two"), c_two);
     // Of the other chat a subscribed socket hears the turn start and end,
     // and none of its stream after the first event.
     let of = |frames: &[(String, Value)], s: &str| -> Vec<String> {
