@@ -527,7 +527,8 @@ app.whenReady().then(async () => {
             await capture(`wall-solid-${theme}-${label}`);
             await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
           }
-          await click('Grid'); await capture(`wall-fixed-hint-${theme}-${label}`);
+          // Grid has no toolbar button since #741; Ctrl+Shift+3 selects it.
+          await run("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Digit3',key:'#',ctrlKey:true,shiftKey:true,bubbles:true}))"); await capture(`wall-fixed-hint-${theme}-${label}`);
           await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
         }
       }
@@ -658,7 +659,7 @@ app.whenReady().then(async () => {
     if (current) {
       win.setContentSize(900,480); await reset();
       await check('short grid remains scrollable', "(()=>{const stage=document.querySelector('.command-wall-stage');return stage && stage.scrollHeight>0 && document.querySelector('[data-wall-composer] [contenteditable]').clientHeight>=36})()");
-      await click('Grid');
+      await run("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Digit3',key:'#',ctrlKey:true,shiftKey:true,bubbles:true}))"); await sleep(180);
       await check('short fixed layout retains accessible editor', "document.querySelector('[data-wall-composer] [contenteditable]').clientHeight>=36 && document.documentElement.scrollWidth<=innerWidth");
     }
     if (win.isFocused() || screen.getAllDisplays().some(d => { const b=win.getBounds(); return b.x < d.bounds.x+d.bounds.width && b.x+b.width > d.bounds.x && b.y < d.bounds.y+d.bounds.height && b.y+b.height > d.bounds.y; }) || report.errors.some(e => /Verification window/.test(e))) throw Error('Background verification visibility/focus invariant failed');
