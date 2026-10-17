@@ -17,6 +17,16 @@ See [SPEC](SPEC.md#in-app-browser-automation-2026-10-10) and [feasibility eviden
 - [ ] Capture unchanged baseline before runtime edits; implement chat-owned authenticated CDP relay and typed native action adapter with security/feature-parity tests. Preserve windows, partitions, approvals, screenshots/tabs/logs/waits and cleanup.
 - [ ] Matched same-browser/viewport/theme synthetic interleaved cold/warm benchmarks (at least 20 samples each where practical), raw data and exact perf-history numbers; full typecheck/build, relevant host/daemon suites and schema parity if changed.
 - [ ] Publish matching hidden visual/interaction evidence and obtain parent actual-pixel signoff; coordinate default testing workflow with the separate `e2e-playwright` task without modifying that worktree. No visual delta in this investigation-only change.
+## Test suite trim and consolidated end-to-end (added 2026-10-17)
+
+See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17.md).
+
+- [x] ✅ 2026-10-17 `packages/shared` and `apps/cli` Vitest configs exclude `dist/` (tsc compiles tests there; 358 tests ran twice). `QuestionCard.test.ts` merged into `QuestionCard.test.tsx`. 108 one-off PR evidence harness files deleted (no npm script, workflow, doc, open PR or kept file referenced them); git history keeps them.
+- [ ] Playwright-Electron end-to-end suite: one fixture host, journeys instead of per-feature triads, run in the `capture` job (prototype: sidebar and finder).
+- [ ] Port the remaining wired and documented harnesses into journeys, then delete the triads.
+- [ ] Rewrite the 38 source-text tests (`readFileSync('ChatPane.tsx')` + `toContain`) as rendered assertions or journey steps.
+- [ ] Speed: fake timers in `core/loop-retry` and `host/hooks`, a shared git fixture in `chat-worktrees`, one root Vitest workspace, a shared CI build artifact.
+- [ ] Split `crates/nekkod/tests/daemon.rs` by domain with event waits instead of sleeps; promote 4 `itest-*.mjs` to a main-only job.
 
 ## Per-step plan working icons (2026-10-17)
 
@@ -28,12 +38,18 @@ See [SPEC](SPEC.md#per-step-plan-working-icons-2026-10-17).
 - [x] Docs checklist and public evidence verified (2026-10-17): 5 docs tests pass, docs regeneration is unchanged, and all 16 published v2 PNG links return HTTP 200 with PNG bytes. Focused rerun passes 11 implementation tests and 8 archived-base tests.
 - [ ] Land PR #746 after final CI gates. Packaged/native verification remains a non-blocking limitation for this renderer-only change.
 
-## CI scope: which jobs a PR waits for (added 2026-10-17)
+## CI scope, merge queue and stacks (added 2026-10-17)
 
 PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows jobs finished in about 8 minutes, but `daemon (macos-latest)` queued 50-98 minutes for one of the Team plan's 5 concurrent macOS runners, and `perf` failed on `main` itself (a stale Grid wait, fixed in #743, and the streaming-frame flap in #544), so unrelated PRs never went green.
 
 - [x] ✅ 2026-10-17 `scripts/ci-scope.mjs` + `scripts/ci-scope.test.mjs`: `push` to `main` and `workflow_dispatch` run everything on every OS. On a PR: `daemon` (Ubuntu, Windows) for `crates/`, Cargo files and `packages/{host,core,shared}`; `capture` (Windows) for `apps/desktop/` and `packages/`; `perf` for `scripts/perf/` or the `ci:perf` label; macOS daemon and capture only with `ci:macos`. `ci.yml`, `package.json`/lockfile and the scope script itself run all Linux and Windows jobs, and so does an empty or capped (3,000-file) changed-file list. Simulated on the last 30 PRs: 60 macOS jobs and 30 perf runs would have been 0 and 2, and 13 PRs would have waited for `build` alone.
-- [ ] Watch the first week of `main` runs. A macOS-only or perf regression now shows on `main` after the merge, not on the PR; if that happens often, move those jobs to a merge queue (`merge_group`) instead of labels.
+- [x] ✅ 2026-10-17 #749: `auto-merge.yml` dispatched full CI on `main` after each bot merge (a `GITHUB_TOKEN` merge starts no `push` run, so `main` had none). Superseded by the queue below.
+- [x] ✅ 2026-10-17 Two-tier queue ([SPEC](SPEC.md#contributing-how-changes-land-2026-10-17)). `ci.yml` triggers are `pull_request`, `merge_group`, a `17 */6 * * *` schedule and `workflow_dispatch`; `push` is gone (the queue tests every group before it merges). `ci-scope.mjs`: PR tier is `build`, Linux daemon, Windows capture; queue tier adds the Windows daemon and `perf` for renderer/server/packages/Rust/harness changes (a group's files come from the compare API between its base and head); the full tier runs everything and is skipped when the last green scheduled run was at the same `main` commit. A new `gate` job (`needs` every job, `if: always()`) fails on any failed or cancelled need and is the one required check; a failed scheduled run opens or comments on a `ci-scheduled` issue. `auto-merge.yml` queues only ready PRs based on `main` (stack layers are queued by `gh stack merge`) and no longer dispatches CI. The `main` ruleset gains the merge queue (squash, `gate` required) after this lands.
+- [x] ✅ 2026-10-17 Perf gates recalibrated from 115 CI reports (Philip: "update it to a reasonable number"), closing #544: composer 25 to 27 ms, streaming frame 10.4 to 14, warm switch 20.8 to 30, cold-switch frame 26 to 33. Replayed: 45 failing reports become 0. Details and the per-metric distribution in `docs/perf-history.md`.
+- [x] ✅ 2026-10-17 Draft policy and stacks in `AGENTS.md`: PRs open ready once the author's own checks pass and are queued with `gh pr merge --auto` (not `--admin`); draft only while working or for a named release blocker. Big features use `gh stack` (2-4 layers).
+- [x] ✅ 2026-10-17 The other macOS jobs off the PR path. `ios-native`, the `mobile` iOS build and `dev-identity` run on their own 6-hourly schedule (staggered at :37, :47, :57 from ci.yml's :17) and on a PR only with `ci:macos` (their `pull_request` triggers listen for `labeled` so adding the label starts them; Linux jobs in `mobile` still run per PR). `nekkod-npm` and `decision-models` drop their macOS matrix row on unlabelled PRs through a computed `exclude` (a job `if` cannot read `matrix`); `release.yml` still builds darwin. CodeQL moves from default setup to `.github/workflows/codeql.yml`: actions, JS/TS, Python and Rust on every PR and in the queue; Swift (`swift build` of `apps/ios/Protocol`, a macOS runner) weekly and with `ci:macos`. Default setup is switched off after this lands (both cannot run).
+- [ ] CodeQL Swift covers the SwiftPM protocol package only; the Xcode app targets need a signed-free `xcodebuild` in the analysis job.
+- [ ] Nightly desktop release from the last commit that passed a scheduled full run (Philip's plan; releases follow version bumps today).
 
 ## Focused mode transitions and layout controls (added 2026-10-17)
 
@@ -411,7 +427,7 @@ A workspace is a **split tree**, not a tab stack. `renderer/layout.ts` owns the 
 - **Docker**: multi-stage `Dockerfile` (`ELECTRON_SKIP_BINARY_DOWNLOAD=1`, dev deps pruned, a cargo stage for `nekkod`, non-root node:22-trixie-slim with tini, health check on `/health`) + `docker-compose.yml` (volume workspace + data, `host.docker.internal:host-gateway`, publishes to 127.0.0.1:1440); GHCR publish workflow on `v*` tags.
 - **Mobile**: `.github/workflows/mobile.yml` runs on mobile/relay changes (and manually): typecheck, unit tests, and the phone ↔ relay ↔ computer integration test (needs the root shared/core/host/cli/server/relay builds), then `expo prebuild` + an Android debug APK and an unsigned iOS simulator build. Locally on Windows: `subst` a short drive letter over the worktree before `gradlew assembleDebug` (CMake path limits), JDK 21 from Android Studio's `jbr`, `-PreactNativeArchitectures=x86_64` for the emulator. llama.rn's postinstall downloads its prebuilt libraries with `tar`; under Git Bash that is GNU tar, which reads `C:` as a remote host, so run installs from PowerShell or run `npm run llama:native` after.
 - **Cloud**: `npm run cloud` (:4318) locally; hosted deploy target TBD (open question).
-- **CI scope** (`ci.yml`, added 2026-10-17; see "CI scope: which jobs a PR waits for" in Part 2): a `scope` job runs `scripts/ci-scope.mjs` over the PR's changed files and labels and hands each slow job its OS matrix. `build` (required) always runs.
+- **CI scope** (`ci.yml`, added 2026-10-17; see "CI scope, merge queue and stacks" in Part 2): a `scope` job runs `scripts/ci-scope.mjs` over the run's event, changed files and labels and hands each slow job its OS matrix (PR tier, merge-queue tier, 6-hourly full tier). `gate`, the one required check, aggregates them. `main` requires the merge queue.
 - **Local test loop**: `npm run local` builds + launches the built desktop app (electron-vite preview, no installer/Defender); `npm run web` for the browser edition.
 - **Ports**: web 1440, cloud 4318. Kill a stale dev server by port (`Get-NetTCPConnection -LocalPort … | Stop-Process`), npm-wrapped node survives `pkill`.
 

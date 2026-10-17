@@ -80,6 +80,24 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### CI gates recalibrated from 115 runner reports; #544 closed (2026-10-17)
+Area: perf harness
+Result: measurement fix
+Conditions: GitHub `ubuntu-latest` (AMD EPYC 7763, 4 threads), Chrome 155, `--attempts 3 --no-gpu`; the 115 `perf-report` artifacts still retained from 2026-10-15 to 17, almost all from PRs that did not touch the renderer
+
+45 of the 115 reports failed after three attempts: warm switch 44 times, streaming frame work 23, cold-switch frame 18. Composer keypress never failed but came within 1 ms of its gate. A gate that fails 40% of healthy runs blocks unrelated PRs and tells their authors nothing, so each gate moved to the worst best-of-three p95 seen on these builds plus about 10% (Philip's call).
+
+| Metric (best-of-3 p95, ms) | Median | p90 | Max | Gate before | Gate after |
+|---|---|---|---|---|---|
+| Composer keypress | 18.8 | 21.2 | 24.0 | 25 | 27 |
+| Terminal keypress | 6.1 | 6.8 | 7.9 | 20.8 | 20.8 |
+| Streaming frame work | 9.4 | 10.9 | 12.7 | 10.4 | 14 |
+| Warm switch | 19.3 | 24.1 | 27.1 | 20.8 | 30 |
+| Cold-switch frame | 24.4 | 26.4 | 30.7 | 26 | 33 |
+| Cold-switch history | 24.4 | 26.4 | 30.7 | 250 | 250 |
+
+Replayed against the same reports: 45 failures become 0, and runs needing a second attempt drop from 81 to 6. Product targets (8.3 ms, 4 ms, 100 ms) are unchanged; this moves the regression tripwire, not the goal. The streaming-frame hotspot work in #594/#595 stays open as a product problem, not a CI one. The job now runs in the merge queue for changes it can measure, so a regression stops before `main` rather than on every PR. Source: this PR; numbers from `scripts/perf/budgets.mjs`'s comment.
+
 ### Chat scroll bounce under reduced motion (2026-10-16)
 Area: renderer
 Result: improvement (scroll correctness; frame times unchanged within noise)

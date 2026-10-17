@@ -27,13 +27,50 @@ in-flight batches share the tree (parallel agents), land them together in one PR
 rather than letting the tree drift further from `main`.
 
 ```
-# In the task worktree created above:
+# In the task worktree created above, once your own checks pass:
 git add -A   # or a scoped add; never commit .shots/ or other evidence dirs
 git commit -m "..."
 git push -u origin <branch>
-gh pr create --title "..." --body "..."
-gh pr merge --squash --admin --delete-branch
+gh pr create --title "..." --body "..."    # ready, not --draft
+gh pr merge --auto                          # queue it; it merges itself when `gate` is green
 ```
+
+`main` requires the merge queue and one check, `gate`. Do not merge with `--admin`:
+it skips the queue, and the queue is what tests your PR against everything landing
+beside it. The auto-merge workflow also queues every ready PR, so `gh pr merge
+--auto` is a belt to its braces.
+
+### Ready, not draft
+
+Open the PR **ready** once your own verification passes (focused tests, and for UI
+changes the evidence below). Do not park it in draft to watch CI: the queue waits
+for CI, merges on green and ejects on red, with nobody watching. Use draft only
+while you are still working, or when a named release blocker holds the PR (see
+below). "CI is still running" is never a reason to stay draft.
+
+If the queue ejects your PR, it comes back with the failing run linked. Diagnose
+it like any red check below, push the fix, and it re-queues.
+
+### Big features: stack them
+
+When a feature is more than one reviewable change (roughly: several hundred lines,
+or a part that can land before the rest), split it into a stack with GitHub's
+stacked-PR CLI instead of one large PR or a chain of drafts:
+
+```
+gh extension install github/gh-stack     # once per machine
+gh stack init                            # first layer, based on main
+# commit layer 1, then:
+gh stack add <next-branch>               # each layer builds on the one below
+gh stack submit                          # one PR per layer, linked as a stack
+gh stack sync                            # after main or a lower layer moves
+gh stack merge --yes                     # queue the stack (or up to a layer)
+```
+
+Each layer is a normal PR: fast-tier CI, ready not draft, its own Unfinished work
+section. Rebasing a lower layer re-runs CI on every layer above it, so keep stacks
+short (2-4 layers) and finish lower layers first. The app's **Continue as stacked
+PR** action creates the same native stacks from an agent chat.
 
 ## PR descriptions must record unfinished work
 
@@ -75,35 +112,43 @@ request the remaining work again. For UI changes:
    checks, reviews, evidence and release-blocker requirements are satisfied.
    Never bypass required reviews, failing checks, or branch protections. The
    example merge command above is not permission to override these gates.
-6. **Mark the PR ready and merge it.** A draft never merges: `gh pr merge` refuses
-   drafts and the auto-merge workflow only runs on `ready_for_review`. Once the
-   gates in step 5 are met, run `gh pr ready <n>` and then merge (or let auto-merge
-   do it). Opening a draft is the start of this workflow, not its last step.
+6. **Queue it.** Open the PR ready (or `gh pr ready <n>` once verification is
+   done) and let the queue merge it. A draft never merges: the auto-merge
+   workflow only queues ready PRs.
 
 ## When a check fails on `main` too
 
-The repo's required check is `build`. The other jobs (`perf`, `capture`, `daemon`,
-CodeQL) are gates on the quality of this PR, not on whether `main` is healthy.
+The repo's required check is `gate`, which passes when every job its run needed
+passed. CI runs in three tiers (`scripts/ci-scope.mjs`):
 
-Not every job runs on every PR (`scripts/ci-scope.mjs`). `daemon` and `capture`
-run when the PR touches what they test, and only on Linux and Windows. macOS jobs
-and `perf` run on every `main` push, but on a PR only with the `ci:macos` or
-`ci:perf` label (add it, then push), or a full `gh workflow run ci.yml --ref
-<branch>`. Add the label when a PR changes macOS-specific code (`cfg(target_os =
-"macos")`, the dev bundle, signing, native capture) or anything on the hot paths
-the speed contract measures. A skipped job is not a missing check: do not hold a
-PR draft waiting for it.
+| Tier | When | Runs |
+| --- | --- | --- |
+| PR | every push to a PR | `build`; `daemon` on Linux if Rust or `packages/{host,core,shared}` changed; `capture` on Windows if desktop code or `packages/` changed |
+| Queue | `merge_group` | the PR tier, plus `daemon` on Windows and `perf` when the group changes what it measures |
+| Full | every 6 hours (skipped if `main` has not moved), or `gh workflow run ci.yml --ref <branch>` | every job on every OS, macOS included |
+
+The same goes for every other macOS job (native iOS, the mobile iOS build,
+dev identity, nekkod darwin, decision-model CoreML, CodeQL Swift): scheduled, or
+`ci:macos` on the PR. Add `ci:macos` to a PR that changes macOS-specific code (`cfg(target_os =
+"macos")`, the dev bundle, signing, native capture), and `ci:perf` to one that
+changes a hot path the speed contract measures and wants the numbers before
+queueing. Labels are read when a run starts: add the label, then push. A skipped
+job is not a missing check. A failed 6-hourly run opens or updates the
+`ci-scheduled` issue; whoever lands the next fix to that area clears it.
 
 When one of them is red:
 
 1. Diagnose the failing step. If the failure is in something this PR touches, fix it.
 2. Otherwise compare against `main`: the same job on the merge-base commit, or the
-   most recent `main` runs (`gh run list --workflow ci.yml --branch main`). If
+   most recent full runs (`gh run list --workflow ci.yml --event schedule`). If
    `main` fails the same way on the same metric, the failure is a baseline problem.
-3. A baseline failure does not block this PR. Record it in Unfinished work with the
-   `main` run that proves it, make sure an issue exists for it (search first, file
-   one if not, link it), and land the PR. Do not spend this PR's budget fixing `main`
-   unless the user asked; do not weaken the budget or delete the check.
+3. A baseline failure is not this PR's fault, but in the queue it blocks every
+   group that runs that job, so it is the most urgent thing in the repo. Make sure
+   an issue exists (search first, file one if not), then fix it forward or revert
+   the commit that caused it, in its own small PR, before re-queueing yours.
+   Record it in this PR's Unfinished work with the run that proves it. Do not
+   weaken a budget or delete a check to get past it; recalibrating a noisy gate
+   from measured data is a separate, explicit decision (see `docs/perf-history.md`).
 4. A failure that only this PR produces is a release blocker until it is fixed or
    shown to be runner noise with two matched base/head measurements.
 
