@@ -46,6 +46,11 @@ class Notices(private val context: Context) {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .setContentIntent(openChat(n.sessionId))
+            .apply {
+                // Deny is safe to answer unseen (nothing runs), so it skips the app lock;
+                // Allow needs the command in view, so it is only in the chat.
+                if (n.canDeny) addAction(0, "Deny", deny(n.sessionId, n.callId!!))
+            }
             .build()
         try {
             manager.notify(EventNotice.tag(n.sessionId), ID_EVENT, notification)
@@ -74,6 +79,14 @@ class Notices(private val context: Context) {
         // The same deep link as nekko-agent://chat/<id>; it goes through the app lock like any other.
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nekko-agent://chat/${Uri.encode(sessionId)}"), context, MainActivity::class.java)
         return PendingIntent.getActivity(context, sessionId.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    private fun deny(sessionId: String, callId: String): PendingIntent {
+        val intent = Intent(context, DenyReceiver::class.java)
+            .setAction(DenyReceiver.ACTION)
+            .putExtra(DenyReceiver.SESSION, sessionId)
+            .putExtra(DenyReceiver.CALL, callId)
+        return PendingIntent.getBroadcast(context, sessionId.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
     private fun openApp(): PendingIntent {
