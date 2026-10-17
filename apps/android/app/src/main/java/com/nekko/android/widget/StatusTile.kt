@@ -1,5 +1,6 @@
 package com.nekko.android.widget
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
@@ -34,10 +35,14 @@ class StatusTile : TileService() {
         if (Build.VERSION.SDK_INT >= 34) {
             startActivityAndCollapse(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE))
         } else {
-            @Suppress("DEPRECATION")
-            startActivityAndCollapse(open)
+            openBefore34(open)
         }
     }
+
+    /** Android 13 and older have only the Intent form (it throws from 14 on, which never reaches here). */
+    @SuppressLint("StartActivityAndCollapseDeprecated")
+    @Suppress("DEPRECATION")
+    private fun openBefore34(open: Intent) = startActivityAndCollapse(open)
 
     companion object {
         /** The counts changed: ask the system to redraw the tile if it is in the panel. */
