@@ -63,6 +63,32 @@ class ComputersRepositoryTest {
         Json.parseToJsonElement(store.map.getValue(ComputersRepository.secretKey(id))).jsonObject
 
     @Test
+    fun `the connection log follows the active computer and holds no secrets`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        val a = repo.pair(link)
+        runCurrent()
+        remotes.last.status.value = com.nekko.protocol.RelayStatus(RelayState.CONNECTING, "handshake timed out")
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        val states = repo.connectionLog.value.map { it.state }
+        assertEquals(RelayState.CONNECTING, states.first())
+        assertEquals(RelayState.ONLINE, states.last())
+        assertTrue(repo.connectionLog.value.any { it.detail == "handshake timed out" })
+        val text = repo.connectionLogText()
+        assertTrue(text, text.startsWith("Relay: relay.example.dev (internet)"))
+        assertFalse(text.contains(room) || text.contains(key) || text.contains("ABC123"))
+
+        repo.connect(a)
+        runCurrent()
+        assertTrue("reconnecting the same computer keeps its history", repo.connectionLog.value.size > states.size)
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key))
+        runCurrent()
+        assertEquals("another computer starts its own", listOf(RelayState.CONNECTING), repo.connectionLog.value.map { it.state }.distinct())
+    }
+
+    @Test
     fun `pairing stores the secret, connects, and drops the pair code once welcomed`() = runTest {
         val store = FakeStore()
         val remotes = FakeRemotes()
