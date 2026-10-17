@@ -8,6 +8,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.nekko.android.connection.ConnectionKeeper
 import com.nekko.android.data.AndroidSecureStore
+import com.nekko.android.data.ChatListFiles
 import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
@@ -45,6 +46,14 @@ class NekkoApp : Application() {
         private set
     lateinit var haptics: AndroidHaptics
         private set
+    private lateinit var chatLists: ChatListFiles
+
+    /** Settings → Connection → Keep the chat list when offline. Off deletes every saved list. */
+    fun setKeepChatList(on: Boolean) {
+        phonePrefs.set(ChatListFiles.ENABLED, on)
+        computers.chatListCache = if (on) chatLists else null
+        if (!on) chatLists.removeAll()
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -58,6 +67,8 @@ class NekkoApp : Application() {
             deviceName = ::deviceName,
             onForget = newChatDefaults::forget,
         )
+        chatLists = ChatListFiles(this)
+        if (phonePrefs.get(ChatListFiles.ENABLED)) computers.chatListCache = chatLists
         appLock = AppLock(enabled = phonePrefs.get(AppLock.ENABLED), persist = { phonePrefs.set(AppLock.ENABLED, it) })
         connection = ConnectionKeeper(this, computers, phonePrefs, appLock, appScope)
         connection.start()
