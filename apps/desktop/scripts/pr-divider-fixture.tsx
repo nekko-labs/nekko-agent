@@ -80,7 +80,7 @@ function Fixture() {
     setRoute('command'); setEpoch(e => e + 1);
   };
   Object.assign(window, { integration: { reset, pointerTarget: (kind: string, scroll: boolean) => {
-    const selectors: Record<string, string> = { grid: '[data-wall-composer] button[title="Run freely; ask/deny per guardrail rules."]', mode: 'button[title="Run freely; ask/deny per guardrail rules."]', ask: 'button[title="Confirm every file write and command."]', item: '[role=menuitemradio]' };
+    const selectors: Record<string, string> = { grid: '[data-wall-composer] [data-chat-mode-button]', mode: '[data-chat-mode-button]', ask: '[data-chat-mode-button]', item: '[data-mode-panel] [data-chat-mode=ask]' };
     const selector=selectors[kind]; if(!selector)throw Error('Unknown pointer target');
     const el=document.querySelector(selector);if(!el)throw Error('Missing '+selector);
     if(scroll)el.scrollIntoView({block:'nearest',inline:'nearest'});
