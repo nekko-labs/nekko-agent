@@ -201,6 +201,8 @@ model servers are first-class, not an afterthought.
 
 > Tip: set a default provider + model in Settings so new chats start ready to go.
 
+> Can't find a setting? Click the search icon at the right of the **Appearance** heading in Settings and type a word such as "prompt". A second after you stop typing (or straight away when you press Enter) the page scrolls to the first match and highlights it. Use the up/down arrows (or the arrow keys) to step through the rest, and the X or Esc to close the search.
+
 ### Example: connect an LM Studio server
 
 1. In LM Studio, load a model and start its server (Developer → Start Server).
