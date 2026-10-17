@@ -118,6 +118,9 @@ public final class ComputersStore {
     public private(set) var modelErrors: [String: String] = [:]
     public private(set) var hostVersion: String?
     public private(set) var lastError: String?
+    /// The active computer's connection history (memory only, content-free), for the Connection screen.
+    public private(set) var connectionLog = ConnectionLog()
+    private var loggedComputer: String?
 
     public var active: Computer? { computers.first { $0.id == activeId } }
     public var groups: [ChatGroup] { ChatGroup.of(summaries, folders: workspaces) }
@@ -250,6 +253,11 @@ public final class ComputersStore {
         conn = .connecting
         denied = nil
         connDetail = nil
+        if loggedComputer != id {
+            connectionLog.clear()
+            loggedComputer = id
+        }
+        connectionLog.record(.connecting)
         clearComputerState()
         var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
                                  deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
@@ -285,6 +293,7 @@ public final class ComputersStore {
         case .status(let s):
             conn = s.state
             connDetail = s.detail
+            connectionLog.record(s.state, detail: s.detail, denied: s.denied)
             if let d = s.denied { denied = d }
             if s.state == .online {
                 Task { await refresh() }

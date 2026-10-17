@@ -128,6 +128,22 @@ final class LiveRelayTests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         attach(app, "\(theme)-7-chats-after")
 
+        // Settings → Connection: the route, Tailscale on this phone, and what happened.
+        // A coordinate tap: right after going back, XCTest can't "scroll to" the nav bar button.
+        let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        _ = waitUntilHittable(menu, 5)
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.buttons["Settings"].firstMatch.tap()
+        let connection = app.buttons["Connection"].firstMatch
+        if !connection.waitForExistence(timeout: 5) { app.swipeUp() }
+        connection.tap()
+        // LabeledContent reads as one element: "Status" with the value "Online".
+        let online = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "Online", "Online")).firstMatch
+        XCTAssertTrue(online.waitForExistence(timeout: 10), "the status reads online")
+        attach(app, "\(theme)-7b-connection")
+        auditAccessibility(app, "\(theme)-connection")
+
         // Shared from another app: relaunch with what the share extension leaves
         // in the App Group. New chat opens with the text; nothing is sent.
         app.terminate()
@@ -190,6 +206,11 @@ final class LiveRelayTests: XCTestCase {
     private func waitEnabled(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
         let p = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: e)
         return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
+    }
+
+    private func waitUntilHittable(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
+        let p = NSPredicate(format: "isHittable == true")
+        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: p, object: e)], timeout: seconds) == .completed
     }
 
     private func waitGone(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {

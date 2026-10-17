@@ -8,6 +8,7 @@ enum Route: Hashable {
     case computers
     case settings
     case pair
+    case connection
 }
 
 struct RootView: View {
@@ -92,6 +93,7 @@ struct RootView: View {
         case .computers: ComputersView()
         case .settings: SettingsView()
         case .pair: PairView { path.removeAll() }
+        case .connection: ConnectionView()
         }
     }
 

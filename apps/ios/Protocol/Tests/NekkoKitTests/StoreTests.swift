@@ -200,6 +200,23 @@ final class StoreTests: XCTestCase {
         XCTAssertTrue(s.computers.isEmpty)
     }
 
+    func testTheConnectionLogFollowsTheActiveComputer() async throws {
+        let s = makeStore()
+        s.load()
+        let a = await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key))
+        connections.last!.status(RelayStatus(.connecting, detail: "handshake timed out"))
+        connections.last!.status(RelayStatus(.connecting, detail: "handshake timed out"))
+        connections.last!.status(RelayStatus(.online))
+        await settle()
+        XCTAssertEqual(s.connectionLog.entries.map(\.state), [.connecting, .connecting, .online])
+        XCTAssertEqual(s.connectionLog.entries[1].repeats, 2)
+        s.connect(a)
+        XCTAssertEqual(s.connectionLog.entries.count, 4, "reconnecting the same computer keeps its history")
+        _ = await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key))
+        XCTAssertEqual(s.connectionLog.entries.map(\.state), [.connecting], "another computer starts its own")
+        XCTAssertFalse(s.connectionLog.text(relayHost: "b", route: .internet).contains(room))
+    }
+
     func testChatOperationsCallTheComputerWithPhoneKeysOnly() async throws {
         let s = makeStore()
         s.load()
