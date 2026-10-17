@@ -29,11 +29,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,9 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.PhoneChanges
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.withTimeout
 
 /**
  * What the agent changed in a chat, read only. The computer works out the diff
@@ -60,31 +54,16 @@ import kotlinx.coroutines.withTimeout
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChangesSheet(load: suspend () -> PhoneChanges, onDismiss: () -> Unit) {
+fun ChangesSheet(changes: PhoneChanges?, error: String?, onRefresh: () -> Unit, onDismiss: () -> Unit) {
     val p = Nekko.palette
-    var changes by remember { mutableStateOf<PhoneChanges?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var attempt by remember { mutableIntStateOf(0) }
-    LaunchedEffect(attempt) {
-        try {
-            changes = withTimeout(30_000) { load() }
-            error = null
-        } catch (_: TimeoutCancellationException) {
-            error = "Your computer didn’t answer. Try Refresh."
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = e.message ?: "Couldn’t load changes."
-        }
-    }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Changes", style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.weight(1f).semantics { heading() })
-            TextButton(onClick = { attempt++ }) { Text("Refresh") }
+            TextButton(onClick = onRefresh) { Text("Refresh") }
         }
         val c = changes
         when {
-            c == null && error != null -> Notice("Couldn’t load changes", error!!)
+            c == null && error != null -> Notice("Couldn’t load changes", error)
             c == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             c.files.isEmpty() -> Notice("No changes", "The agent hasn’t changed any files in this chat.")
             else -> LazyColumn(
