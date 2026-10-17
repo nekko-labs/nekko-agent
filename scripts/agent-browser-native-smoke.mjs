@@ -59,7 +59,8 @@ app.whenReady().then(async () => {
   try {
     const before = foreground();
     server = createServer((req, res) => {
-      if (req.url === '/missing') { res.writeHead(404); res.end('missing'); return; }
+      if (req.url === '/download') { res.writeHead(200, {'Content-Disposition':'attachment; filename=blocked.txt','Content-Type':'application/octet-stream'}); res.end('must not save'); return; }
+    if (req.url === '/missing') { res.writeHead(404); res.end('missing'); return; }
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(req.url === '/second' ? page('Second page', '<p>Second tab content</p>') : fixture);
     });
@@ -110,6 +111,9 @@ app.whenReady().then(async () => {
     await step('tabSwitch', { action: 'tab_switch', tab: 0 }, b => b.output.includes('* [0]'));
     await step('inspectAfterSwitch', { action: 'inspect' }, b => b.output.startsWith('Smoke fixture'));
     await step('tabClose', { action: 'tab_close', tab: 1 }, b => b.output.includes('Closed tab 1') && !b.output.includes('[1]'));
+    await step('selectAllChord', {action:'press', selector:'#name', key:'Control+A'});
+    await step('replaceSelected', {action:'type', text:'Chord'});
+    await step('chordResult', {action:'evaluate', expression:'document.querySelector("#name").value'}, b => b.output === 'Chord');
     await step('waitAttached', { action: 'wait', selector: '#name', state: 'attached', timeout_ms: 1000 });
     await step('waitHidden', { action: 'wait', selector: '#absent', state: 'hidden', timeout_ms: 1000 });
     await step('waitDetached', { action: 'wait', selector: '#absent', state: 'detached', timeout_ms: 1000 });
@@ -121,6 +125,13 @@ app.whenReady().then(async () => {
     await step('pageError', {action:'logs'}, b => b.output.includes('parity-page-error'));
     await step('popupDenied', {action:'evaluate', expression:'window.open("about:blank") === null'}, b => b.output === 'true');
     await step('permissionsDenied', {action:'evaluate', expression:'navigator.permissions.query({name:"notifications"}).then(p=>p.state)'}, b => b.output === 'denied');
+    const downloadWindow = BrowserWindow.getAllWindows().find(w => w !== ui && w.webContents.getURL().startsWith(url));
+    const downloadAttempt = new Promise(resolve => downloadWindow.webContents.session.once('will-download', (event, item) => {
+      result.download = { prevented: event.defaultPrevented, filename: item.getFilename() }; resolve();
+    }));
+    await post({action:'evaluate', expression:'(()=>{const a=document.createElement("a");a.href="/download";a.download="blocked.txt";document.body.append(a);a.click();return true})()'});
+    await Promise.race([downloadAttempt, new Promise((_,reject)=>setTimeout(()=>reject(new Error('No download event')),3000))]);
+    if (!result.download.prevented) throw new Error('Download was not blocked');
     const countBeforeDialog = BrowserWindow.getAllWindows().length;
     await step('dialogDisabled', {action:'evaluate', expression:'alert("must not show"); "returned"'}, b => b.output === 'returned');
     if (BrowserWindow.getAllWindows().length !== countBeforeDialog) throw new Error('Popup or dialog window appeared');
