@@ -17,6 +17,7 @@ import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBu
 import { archiveDaysLeft, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
+import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { useGitStatus } from '../useGitStatus.js';
 import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
@@ -1080,7 +1081,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           setQuestion((q) => (q?.callId === e.callId ? null : q));
           break;
         case 'tool_result':
-          setApproval(null);
+          // Parallel work can finish while another tool is still waiting on us.
+          setApproval((current) => approvalAfterResult(current, e.result.toolCallId));
           // The step just landed on disk, so the bundle can account for it (and
           // for the tool's output, which the renderer never sees in full).
           refreshCtxThrottled();
@@ -2314,6 +2316,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
+  // Leaving the clean start because the user sent (the welcome is gone, it is
+  // still the same focused chat) plays the composer-into-chat expansion once.
+  const wasCleanStart = useRef(false);
+  const [expanding, setExpanding] = useState(false);
+  useLayoutEffect(() => {
+    if (wasCleanStart.current && !cleanStart && cleanStartWanted && !welcomeState.welcome) setExpanding(true);
+    wasCleanStart.current = cleanStart;
+  }, [cleanStart, cleanStartWanted, welcomeState.welcome]);
   const onCompacted = useCallback(() => {
     refreshCtxRef.current();
     loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
@@ -2367,7 +2377,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   return (
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
-    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); setChatMenu({ x: e.clientX, y: e.clientY }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
+    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); setChatMenu({ x: e.clientX, y: e.clientY }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
       {contextChangeNotice && <Modal title="Context on your next reply" zIndex={100} overlayClassName="p-4" className="w-full max-w-md rounded-xl border border-line bg-surface p-5 text-ink shadow-xl" onClose={closeContextNotice}>
             <h2 className="font-semibold">Context on your next reply</h2>
             <p className="mt-3 text-sm text-ink-soft">Your selection is saved. Changing the model or effort does not send a request now or change an already-running reply. The next reply sends the assembled chat context again, as ordinary follow-up replies do.</p>

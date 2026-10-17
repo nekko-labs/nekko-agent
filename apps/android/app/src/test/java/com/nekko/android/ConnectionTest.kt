@@ -74,6 +74,10 @@ class ConnectionTest {
     fun `keep-alive line counts chats`() {
         assertEquals("1 chat running on Mac", KeepAlive.line(1, "Mac"))
         assertEquals("3 chats running on Mac", KeepAlive.line(3, "Mac"))
+        // The Live Update chip has room for a few characters only.
+        assertEquals("Running", KeepAlive.chip(1))
+        assertEquals("3 running", KeepAlive.chip(3))
+        assertEquals(KeepAlive.Status("1 chat running on Mac", "Running"), KeepAlive.status(1, "Mac"))
     }
 
     @Test
