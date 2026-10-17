@@ -16,6 +16,7 @@ import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
 import { hasAppChrome } from '../chrome.js';
 import { ServiceLoadState } from '../components/ServiceLoadState.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
+import { SettingsSearch } from '../components/SettingsSearch.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
@@ -37,6 +38,7 @@ export function SettingsView() {
   const { applyTheme, onboardingOpen, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
   const prevOnboardingOpen = useRef(onboardingOpen);
+  const pageRef = useRef<HTMLDivElement>(null);
   const reload = useCallback(() => refreshSettings(false), [refreshSettings]);
 
   useEffect(() => { void reload(); }, [reload]);
@@ -74,13 +76,13 @@ export function SettingsView() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div ref={pageRef} className="mx-auto max-w-3xl px-8 py-8">
         {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
 
         {/* Appearance */}
         <section className="card mt-6 p-5">
-          <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2></div>
+          <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2><SettingsSearch root={pageRef} /></div>
           <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
 
           <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">

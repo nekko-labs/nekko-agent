@@ -153,6 +153,17 @@ The initial loading/login UI resolves light or dark from the system preference b
 
 Implemented and checked with fresh Rust defaults, rejected/empty settings responses, rejected server status, retry recovery, a synthetic rendering failure, and matched hidden desktop/narrow captures in both themes. The friend's exact installed version, OS and original exception are unavailable; these checks verify the reproduced blank-page failure paths, not the cause of their service failure or a packaged-install upgrade. General async event-handler failures still need local handling; render boundaries do not intercept those.
 
+## Search within Settings (desktop)
+
+User intent: find a setting by keyword without scrolling through the whole Settings page.
+
+- A search icon sits at the far right of the **Appearance** heading. Clicking it replaces the icon with a floating search bar in the same spot that stays on screen while the page scrolls under it.
+- The search runs one second after typing stops, or immediately on Enter. It matches visible Settings text, ignoring case and including partial words. The page scrolls the first match into view and highlights it, with every other match highlighted more faintly. A counter shows "n of N", or "No results".
+- Up/down arrow buttons, the ArrowUp/ArrowDown keys and Enter / Shift+Enter step through matches, wrapping at the ends. The arrows are disabled when there is nothing to step to. The X or Escape closes the bar, clears the highlights and brings the icon back.
+- Privacy and safety: the search runs entirely in the page and sends nothing anywhere. Highlights use the CSS Custom Highlight API, so the settings controls are never rewritten and no setting changes.
+
+Status: implemented. Checked in a hidden renderer of the real Settings view (dark theme, 1280×900): debounce timing, Enter bypass, scroll-into-view, arrow stepping and wrap-around, disabled arrows on a single match, and close/clear. Not yet checked: light theme, narrow windows, and the installed app. Text hidden from the page (collapsed panels, dropdown options) is not searched. The bar is fixed in place, so it can cover a line of content and does not follow the header if the window is resized while it is open.
+
 ## Vision
 
 **Nekko Agent** is your local agent, backed by frontier intelligence. It is an open-source assistant for coding, cowork, and repeatable work that blends models running on your hardware with frontier providers. Use its own desktop UI or bring its capabilities into Claude Code, Cursor, Codex, OpenClaw, and other compatible tools through the CLI and MCP. Local-only work can run offline once its models and dependencies are installed; frontier calls and network integrations still require connectivity and may send their selected context to the configured provider.
