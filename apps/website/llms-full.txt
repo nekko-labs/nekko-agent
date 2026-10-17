@@ -988,7 +988,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > anything. While it is locked nothing can be read or approved, and the recent-apps preview shows a
 > plain cover instead of your chats. After a restart it doesn't connect to your computer until you unlock. Turn it off in
 > **Settings → Security → App lock**; turning it off asks for the same check first. Screenshots and screen
-> recording of the app work as usual, lock on or off. A phone with no screen lock can't be locked;
+> recording of the app work as usual, lock on or off; on Android 14 and later the screenshot toolbar
+> some phones show afterwards (Samsung) no longer hides the app behind the cover. A phone with no screen lock can't be locked;
 > Settings says so and links to the phone's security settings.
 >
 > The Android app **reconnects by itself** as soon as the phone changes network (Wi-Fi to mobile data,
