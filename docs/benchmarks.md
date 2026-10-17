@@ -83,3 +83,4 @@ How each server was started for the results above:
 - **LM Studio:** `lms server start` and `lms load google/gemma-4-12b --context-length 32768 --gpu max --identifier bench-gemma`.
 
 The harness counts tokens from each server's usage report when it sends one, and times the first streamed piece of text or reasoning as the first token.
+ 
