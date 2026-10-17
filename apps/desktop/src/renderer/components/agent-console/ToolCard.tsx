@@ -20,7 +20,7 @@ export function ToolCard({ call }: { call: ToolCall }) {
     <div className="mt-1 font-mono text-[12px]">
       <div className="flex min-w-0 items-center gap-1">
         <button
-          className="flex w-full items-center gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
         >

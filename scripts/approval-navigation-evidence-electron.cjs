@@ -26,6 +26,7 @@ app.whenReady().then(async () => {
       await run("evidence.route('navigation')"); await stable(); await capture(`${width}-${theme}-navigation`); await observe('navigation');
       if (kind === 'after') {
         if (!await run(`document.querySelectorAll('[aria-label^="Open subagent:"]').length===2&&!document.querySelector('button button')`)) throw Error('Missing accessible sibling navigation');
+        if (!await run(`Array.from(document.querySelectorAll('[aria-label^="Open subagent:"]')).every(b=>{const r=b.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})`)) throw Error('Subagent navigation clipped');
         await run(`document.querySelector('[aria-label^="Open subagent:"]').click()`); await stable();
         if (!await run(`evidence.state().workspaces.some(w=>JSON.stringify(w).includes('child'))&&evidence.state().view==='chat'`)) throw Error('Child did not open through store');
         await run("evidence.route('chat')"); await stable(); await run('evidence.approval()'); await stable();
