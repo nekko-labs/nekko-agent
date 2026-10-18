@@ -49,6 +49,16 @@
 .monitors-dock button:focus-visible,
 .monitors-dock input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .monitors-dock__configure { position: relative; }
+/* The dock's show/hide icon, top right of the header: the agent panel's pill,
+   not the dock's bordered buttons. */
+.monitors-dock .monitors-dock__toggle { width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--ink-faint); }
+.monitors-dock .monitors-dock__toggle:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
+/* Hidden: only the show button stays, in the dock's corner. */
+.monitors-dock-collapsed { display: flex; flex-shrink: 0; align-items: flex-start; justify-content: flex-end; padding: 4px 2px; }
+.monitors-dock-collapsed[data-dock-side='left'] { order: -1; }
+.monitors-dock-collapsed[data-dock-side='right'] { order: 1; }
+.monitors-dock-collapsed[data-dock-side='top'] { order: -1; }
+.monitors-dock-collapsed[data-dock-side='bottom'] { order: 1; }
 .monitors-dock__popover {
   position: absolute;
   top: calc(100% + 6px);
@@ -195,3 +205,9 @@
 /* A long account email truncates rather than widening the panel. */
 .monitors-dock__provider-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .monitors-dock__account { font-weight: 400; color: var(--ink-faint); }
+/* Local models: one compact row per resident model, its name left and the jump to its settings right. */
+.monitors-dock__local-models { padding: 10px 12px; gap: 8px; }
+.monitors-dock__local-model { display: grid; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.monitors-dock__local-model .monitors-dock__metric-row strong { text-align: left; flex: 1; }
+.monitors-dock__local-model .monitors-dock__note { margin-top: 0; }
+.monitors-dock__local-model button.monitors-dock__text-button { flex-shrink: 0; }

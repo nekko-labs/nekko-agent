@@ -38,11 +38,12 @@ describe('Screens dropdown', () => {
     expect(html).not.toContain('role="dialog"');
   });
 
-  it('sits just left of the Monitors toggle, in Dynamic mode only', () => {
+  it('ends the wall toolbar, after the layout and snap controls, in Dynamic mode only', () => {
     const view = readFileSync(new URL('../views/CommandCenterView.tsx', import.meta.url), 'utf8');
     const screens = view.indexOf("wall.layout.mode === 'grid' && <ScreensControl />");
     expect(screens).toBeGreaterThan(-1);
-    expect(screens).toBeLessThan(view.indexOf('<PanelIcon className="h-4 w-4" />Monitors'));
-    expect(view.indexOf('wall-filter-segments')).toBeLessThan(screens);
+    expect(view.indexOf('className="wall-snap-toggle"')).toBeGreaterThan(-1);
+    expect(view.indexOf('className="wall-snap-toggle"')).toBeLessThan(screens);
+    expect(view.indexOf('export function WallToolbar(')).toBeLessThan(screens);
   });
 });

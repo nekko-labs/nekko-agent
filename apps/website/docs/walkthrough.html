@@ -9,8 +9,9 @@
     <link rel="alternate" type="text/markdown" href="/docs/walkthrough.md" />
     <link rel="alternate" type="text/plain" href="/llms.txt" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
-    <meta name="theme-color" content="#101714" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta name="theme-color" content="#f3effe" />
+    <script>try{if(localStorage.getItem('nekko-theme')==='colour')document.documentElement.dataset.theme='colour';}catch(e){}</script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-6" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="Nekko Agent" />
     <meta property="og:url" content="https://nekkoagent.com/docs/walkthrough" />
@@ -35,7 +36,7 @@
       <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
       </button>
-      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="brand" href="/"><img src="/logo.svg?v=nekko-agent-6" alt="" width="26" height="20" /> NEKKO AGENT</a>
       <a class="docs-home" href="/docs">Docs</a>
       <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
         <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -47,7 +48,7 @@
       </nav>
     </header>
     <div class="shell">
-      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough" aria-current="page">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/browser-automation">Browser automation</a></li><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough" aria-current="page">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/browser-automation">Browser automation</a></li><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/automations">Automations</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
       <main id="content">
         <article class="prose" id="top">
           <p class="kicker">Introduction</p>
@@ -308,7 +309,7 @@ anything you might copy.</p>
 <p>The plan icon in an agent window opens or closes only that chat&#39;s plan, sub-agents and queue panel. Each chat remembers its own choice locally. Narrow windows fold the panel automatically without changing that choice.</p>
 <p>The context-window gauge has a subtle green background below 60% full, yellow from 60% to below 85%, and red at 85% or higher. Counts remain estimated; an unknown window limit stays neutral.</p>
 <p>In Agents, the Hardware panel names each detected GPU and shows its own utilization. Missing readings say Unavailable rather than zero; switching monitoring off says Monitor off. VRAM remains the aggregate memory reading across devices. Where your machine reports them, CPU, Memory and each GPU row also show a temperature at the right of the label, orange from 80°C and red from 90°C. NVIDIA cards report theirs through their driver; Linux reads its hardware sensors; on Windows the CPU reading comes from the ACPI thermal zone, which many desktops do not publish, so it can be missing there.</p>
-<p><strong>Using more than one screen.</strong> In Dynamic view, the screens button just left of <strong>Monitors</strong> shows how many screens are in use. Hover it to see your screens in a row: click one to open a full Nekko window on it (it swipes in from the left edge), click again to close it (it shrinks into the right edge). The main window&#39;s screen is always on. Each screen&#39;s window has its own left navigation, toolbar and wall, so one screen can show agents while another shows Settings. Under <strong>View options</strong>, choose <strong>Prioritize empty windows</strong> to send new agents to an empty screen first, or <strong>Prioritize the main window</strong> to keep new agents on the main screen. A window always keeps the agents you start from it, and your screens are reopened the next time you launch.</p>
+<p><strong>Using more than one screen.</strong> In Dynamic view, the screens button at the right end of the wall toolbar shows how many screens are in use. Hover it to see your screens in a row: click one to open a full Nekko window on it (it swipes in from the left edge), click again to close it (it shrinks into the right edge). The main window&#39;s screen is always on. Each screen&#39;s window has its own left navigation, toolbar and wall, so one screen can show agents while another shows Settings. Under <strong>View options</strong>, choose <strong>Prioritize empty windows</strong> to send new agents to an empty screen first, or <strong>Prioritize the main window</strong> to keep new agents on the main screen. A window always keeps the agents you start from it, and your screens are reopened the next time you launch.</p>
 <h2 id="4-the-context-inspector"><a class="anchor" href="#4-the-context-inspector" aria-hidden="true" tabindex="-1">#</a>4. The Context Inspector</h2>
 <p>The right-hand panel (toggle it with the panel icon) is Nekko Agent&#39;s signature
 feature. It shows <strong>exactly what is entering the prompt this turn</strong>, grouped by

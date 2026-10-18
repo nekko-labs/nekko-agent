@@ -329,7 +329,9 @@ export class OpenAICompatProvider implements Provider {
           role: m.role,
           content: hasUserMedia(m)
             ? [
-                { type: 'text', text: m.content },
+                // A picture sent without words has no text part: strict
+                // servers (and Anthropic behind a router) reject empty text.
+                ...(m.content.trim() ? [{ type: 'text', text: m.content }] : []),
                 ...(m.images ?? []).map((url) => ({ type: 'image_url', image_url: { url } })),
                 ...videoParts(m),
               ]

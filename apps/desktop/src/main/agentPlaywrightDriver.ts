@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BrowserDriverFactory } from './agentBrowser.js';
 import { AgentCdpTransport } from './agentCdpTransport.js';
+import { untimed } from './agentBrowserTiming.js';
 /** Connect playwright-core to this chat's windows only, with no debugging port. */
 export const playwrightDriver: BrowserDriverFactory = async () => {
   // A plain require: the main bundle is CommonJS and playwright-core stays an
@@ -23,10 +24,12 @@ export const playwrightDriver: BrowserDriverFactory = async () => {
   const context = browser.contexts()[0];
   if (!context) throw new Error('Agent browser context did not start.');
   return {
-    async adopt(win) {
-      const next = context.waitForEvent('page', { timeout: 15_000 });
-      await transport.add(win);
-      return next;
+    async adopt(win, mark = untimed) {
+      return mark('attach', async () => {
+        const next = context.waitForEvent('page', { timeout: 15_000 });
+        await transport.add(win);
+        return next;
+      });
     },
     forget: (win) => transport.forget(win),
     // Closing the transport first detaches every debugger; Playwright then

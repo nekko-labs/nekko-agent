@@ -1,0 +1,5556 @@
+{
+ "ops": [
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": "Claude Code wasn't found on this machine. Install it first, or use the manual config.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.claude.json → \"mcpServers\"",
+    "snippet": "\"mcpServers\": {\n  \"nekko-agent\": {\n    \"command\": \"/opt/nekko/bin/nekko-agent\",\n    \"args\": [\n      \"mcp\"\n    ],\n    \"env\": {\n      \"NEKKO_URL\": \"http://127.0.0.1:1439\",\n      \"NEKKO_TOKEN\": \"tok-1\"\n    }\n  }\n}"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.claude.json → \"mcpServers\"",
+    "snippet": "\"mcpServers\": {\n  \"nekko-agent\": {\n    \"command\": \"npx\",\n    \"args\": [\n      \"-y\",\n      \"nekko-agent\",\n      \"mcp\"\n    ]\n  }\n}"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.codex/config.toml",
+    "snippet": "[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.codex/config.toml",
+    "snippet": "[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.cursor/mcp.json → \"mcpServers\"",
+    "snippet": "\"mcpServers\": {\n  \"nekko-agent\": {\n    \"command\": \"/opt/nekko/bin/nekko-agent\",\n    \"args\": [\n      \"mcp\"\n    ],\n    \"env\": {\n      \"NEKKO_URL\": \"http://127.0.0.1:1439\",\n      \"NEKKO_TOKEN\": \"tok-1\"\n    }\n  }\n}"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.cursor/mcp.json → \"mcpServers\"",
+    "snippet": "\"mcpServers\": {\n  \"nekko-agent\": {\n    \"command\": \"npx\",\n    \"args\": [\n      \"-y\",\n      \"nekko-agent\",\n      \"mcp\"\n    ]\n  }\n}"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.codeium/windsurf/mcp_config.json → \"mcpServers\"",
+    "snippet": "\"mcpServers\": {\n  \"nekko-agent\": {\n    \"command\": \"/opt/nekko/bin/nekko-agent\",\n    \"args\": [\n      \"mcp\"\n    ],\n    \"env\": {\n      \"NEKKO_URL\": \"http://127.0.0.1:1439\",\n      \"NEKKO_TOKEN\": \"tok-1\"\n    }\n  }\n}"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.codeium/windsurf/mcp_config.json → \"mcpServers\"",
+    "snippet": "\"mcpServers\": {\n  \"nekko-agent\": {\n    \"command\": \"npx\",\n    \"args\": [\n      \"-y\",\n      \"nekko-agent\",\n      \"mcp\"\n    ]\n  }\n}"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "",
+    "snippet": ""
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "",
+    "snippet": ""
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.codex/config.toml",
+    "snippet": "[mcp_servers.nekko-agent]\ncommand = \"C:\\\\Users\\\\me\\\\AppData\\\\Local\\\\Programs\\\\nekko-agent.cmd\"\nargs = [\"mcp\"]"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.claude.json → \"mcpServers\"",
+    "snippet": "\"mcpServers\": {\n  \"nekko-agent\": {\n    \"command\": \"npx\",\n    \"args\": [\n      \"-y\",\n      \"nekko-agent\",\n      \"mcp\"\n    ],\n    \"env\": {\n      \"NEKKO_URL\": \"http://x\\\"y\",\n      \"NEKKO_TOKEN\": \"a\\b\"\n    }\n  }\n}"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.codex/config.toml",
+    "snippet": "[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\nenv = { NEKKO_URL = \"http://x\\\"y\", NEKKO_TOKEN = \"a\b\" }"
+   }
+  },
+  {
+   "op": "snippet",
+   "result": {
+    "target": "~/.cursor/mcp.json → \"mcpServers\"",
+    "snippet": "\"mcpServers\": {\n  \"nekko-agent\": {\n    \"command\": \"npx\",\n    \"args\": [\n      \"-y\",\n      \"nekko-agent\",\n      \"mcp\"\n    ],\n    \"env\": {\n      \"NEKKO_URL\": \"http://127.0.0.1:1440\",\n      \"NEKKO_TOKEN\": \"tok-2\"\n    }\n  }\n}"
+   }
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": "Unknown tool.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": "Unknown tool.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "mkdir",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"/opt/nekko/bin/nekko-agent\",\n      \"args\": [\n        \"mcp\"\n      ],\n      \"env\": {\n        \"NEKKO_URL\": \"http://127.0.0.1:1439\",\n        \"NEKKO_TOKEN\": \"tok-1\"\n      }\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "message": "Already installed in Claude Code.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ],\n      \"env\": {\n        \"NEKKO_URL\": \"http://127.0.0.1:1440\",\n        \"NEKKO_TOKEN\": \"tok-2\"\n      }\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"/opt/nekko/bin/nekko-agent\",\n      \"args\": [\n        \"mcp\"\n      ],\n      \"env\": {\n        \"NEKKO_URL\": \"http://127.0.0.1:1439\",\n        \"NEKKO_TOKEN\": \"tok-1\"\n      }\n    }\n  }\n}"
+  },
+  {
+   "op": "ls",
+   "result": [
+    ".claude",
+    ".claude.json",
+    ".claude.json.bak",
+    ".keep"
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"2\": 3,\n  \"10\": 2,\n  \"z\": 1,\n  \"mcpServers\": {\n    \"5\": {},\n    \"other\": {\n      \"command\": \"x\"\n    },\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  },\n  \"big\": 12345678901234567000,\n  \"f\": 1.5,\n  \"e\": 1e+21,\n  \"neg\": 0,\n  \"u\": \"é🐱\",\n  \"esc\": \"a\\u0001b \"\n}"
+  },
+  {
+   "op": "read",
+   "result": "{\"z\":1,\"10\":2,\"2\":3,\"mcpServers\":{\"other\":{\"command\":\"x\"},\"5\":{}},\"big\":12345678901234567890,\"f\":1.50,\"e\":1e21,\"neg\":-0,\"u\":\"\\u00e9\\ud83d\\udc31\",\"esc\":\"a\\u0001b\\u2028\"}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "[1,2]"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "null"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "\"text\""
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "5"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"0\": \"a\",\n    \"1\": \"b\",\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\":\"ab\"}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\":null}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"0\": {\n      \"a\": 1\n    },\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\":[{\"a\":1}]}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": ""
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "  \n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": ".claude.json isn't valid JSON. Fix it by hand or add the entry manually.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "﻿{}"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "﻿"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": ".claude.json isn't valid JSON. Fix it by hand or add the entry manually.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{bad json"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"a\": 2,\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "{\"a\":1,\"a\":2,\"mcpServers\":{}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "message": "Already installed in Claude Code.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\":{\"nekko-agent\":{\"command\":\"npx\",\"args\":[\"-y\",\"nekko-agent\",\"mcp\"]}}}"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\":{\"nekko-agent\":{\"args\":[\"-y\",\"nekko-agent\",\"mcp\"],\"command\":\"npx\"}}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\":{\"nekko-agent\":false}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ]\n    }\n  },\n  \"tail\": true\n}"
+  },
+  {
+   "op": "read",
+   "result": "{\n    \"mcpServers\": {\n        \"nekko-agent\": {\"command\": \"node\", \"args\": [\"x\"]}\n    },\n    \"tail\": true\n}\n"
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": false,
+     "installed": true
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": false,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": "Claude Code wasn't found on this machine. Install it first, or use the manual config.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": false,
+      "installed": true
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "mkdir",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": true
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"/opt/nekko/bin/nekko-agent\",\n      \"args\": [\n        \"mcp\"\n      ],\n      \"env\": {\n        \"NEKKO_URL\": \"http://127.0.0.1:1439\",\n        \"NEKKO_TOKEN\": \"tok-1\"\n      }\n    }\n  }\n}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"npx\", \"args\": [\"-y\", \"other\"]}}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"node\", \"args\": [\"dist/index.js\", \"mcp\"]}}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": true
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ],\n      \"env\": {\n        \"NEKKO_URL\": \"http://127.0.0.1:1440\",\n        \"NEKKO_TOKEN\": \"tok-2\"\n      }\n    }\n  }\n}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": true
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"C:\\\\Users\\\\me\\\\AppData\\\\Local\\\\Programs\\\\nekko-agent.cmd\",\n      \"args\": [\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"/usr/local/bin/nekko-agent-dev\", \"args\": [\"mcp\"]}}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "error": "command.split is not a function"
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\": {\"nekko-agent\": {\"command\": 5}}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"\"}}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\": {\"nekko-agent\": {\"args\": \"nope\"}}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"npx\", \"args\": \"nekko-agent\"}}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\": {\"nekko-agent\": true}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\": {\"nekko-agent\": \"npx\"}}"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"/opt/nekko/bin/nekko-agent\", \"args\": [\"mcp\"], \"env\": {\"NEKKO_URL\": \"http://127.0.0.1:1439\", \"NEKKO_TOKEN\": \"tok-1\"}}}}"
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "mkdir",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": false,
+      "installed": false
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"/opt/nekko/bin/nekko-agent\",\n      \"args\": [\n        \"mcp\"\n      ],\n      \"env\": {\n        \"NEKKO_URL\": \"http://127.0.0.1:1439\",\n        \"NEKKO_TOKEN\": \"tok-1\"\n      }\n    }\n  }\n}"
+  },
+  {
+   "op": "mkdir",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"nekko-agent\",\n        \"mcp\"\n      ],\n      \"env\": {\n        \"NEKKO_URL\": \"http://127.0.0.1:1440\",\n        \"NEKKO_TOKEN\": \"tok-2\"\n      }\n    }\n  }\n}"
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "mkdir",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": false,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": false
+    }
+   ]
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": false,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "{\n  \"mcpServers\": {\n    \"nekko-agent\": {\n      \"command\": \"C:\\\\Users\\\\me\\\\AppData\\\\Local\\\\Programs\\\\nekko-agent.cmd\",\n      \"args\": [\n        \"mcp\"\n      ]\n    }\n  }\n}"
+  },
+  {
+   "op": "ls",
+   "result": [
+    "mcp_config.json"
+   ]
+  },
+  {
+   "op": "mkdir",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "message": "Already installed in Codex.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1440\", NEKKO_TOKEN = \"tok-2\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"C:\\\\Users\\\\me\\\\AppData\\\\Local\\\\Programs\\\\nekko-agent.cmd\"\nargs = [\"mcp\"]\n"
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\nenv = { NEKKO_URL = \"http://x\\\"y\", NEKKO_TOKEN = \"a\b\" }\n"
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "ls",
+   "result": [
+    "config.toml",
+    "config.toml.bak"
+   ]
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": true
+  },
+  {
+   "op": "read",
+   "result": "model = \"o3\"\n\n[mcp_servers.other]\ncommand = \"x\"\n\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1440\", NEKKO_TOKEN = \"tok-2\" }\n\n[profiles.fast]\nmodel = \"o4\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "model = \"o3\"\n\n[mcp_servers.other]\ncommand = \"x\"\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n\n[profiles.fast]\nmodel = \"o4\"\n"
+  },
+  {
+   "op": "read",
+   "result": "model = \"o3\"\n\n[mcp_servers.other]\ncommand = \"x\"\n\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n\n[profiles.fast]\nmodel = \"o4\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": true
+  },
+  {
+   "op": "read",
+   "result": "model = \"o3\"\n\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1440\", NEKKO_TOKEN = \"tok-2\" }\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "model = \"o3\"\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "model = \"o3\"\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n\n\n   \n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": true
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1440\", NEKKO_TOKEN = \"tok-2\" }\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "\n\n[mcp_servers.nekko-agent]\n\n\n[next]\na = 1\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n\n[next]\na = 1\n"
+  },
+  {
+   "op": "read",
+   "result": "\n\n[mcp_servers.nekko-agent]\n\n\n[next]\na = 1\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "  [ mcp_servers . \"nekko-agent\" ]  \ncommand = \"npx\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "  [ mcp_servers . \"nekko-agent\" ]  \ncommand = \"npx\"\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "  [ mcp_servers . \"nekko-agent\" ]  \ncommand = \"npx\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.\"nekko-agent\"]\ncommand = \"npx\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.\"nekko-agent\"]\ncommand = \"npx\"\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.\"nekko-agent\"]\ncommand = \"npx\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "title = \"[mcp_servers.nekko-agent]\"\n# [mcp_servers.nekko-agent]\nx = 1\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "title = \"[mcp_servers.nekko-agent]\"\n# [mcp_servers.nekko-agent]\nx = 1\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "title = \"[mcp_servers.nekko-agent]\"\n# [mcp_servers.nekko-agent]\nx = 1\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "doc = \"\"\"\n[mcp_servers.nekko-agent]\nstill a string\n\"\"\"\nlit = '''\n[x]\n'''\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "doc = \"\"\"\n[mcp_servers.nekko-agent]\nstill a string\n\"\"\"\nlit = '''\n[x]\n'''\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "doc = \"\"\"\n[mcp_servers.nekko-agent]\nstill a string\n\"\"\"\nlit = '''\n[x]\n'''\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "path = 'C:\\no\\escape'\nq = \"he said \\\"[x]\\\"\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "path = 'C:\\no\\escape'\nq = \"he said \\\"[x]\\\"\"\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "path = 'C:\\no\\escape'\nq = \"he said \\\"[x]\\\"\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "a = \"unterminated\nb = 1\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": ".codex/config.toml doesn't look like valid TOML. Fix it by hand or add the entry manually.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "a = \"unterminated\nb = 1\n"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "a = \"\"\"never closed\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": ".codex/config.toml doesn't look like valid TOML. Fix it by hand or add the entry manually.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "a = \"\"\"never closed\n"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "this is not toml\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": ".codex/config.toml doesn't look like valid TOML. Fix it by hand or add the entry manually.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "this is not toml\n"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "args = [\n  \"a\",\n  \"b\",\n]\nt = { x = 1, y = [1, 2] }\n[[servers]]\nname = \"a\"\n[[servers]]\nname = \"b\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "args = [\n  \"a\",\n  \"b\",\n]\nt = { x = 1, y = [1, 2] }\n[[servers]]\nname = \"a\"\n[[servers]]\nname = \"b\"\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "args = [\n  \"a\",\n  \"b\",\n]\nt = { x = 1, y = [1, 2] }\n[[servers]]\nname = \"a\"\n[[servers]]\nname = \"b\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": true
+  },
+  {
+   "op": "read",
+   "result": "name = \"猫 🐱\"\n\"é\" = 1\n\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1440\", NEKKO_TOKEN = \"tok-2\" }\n\n[après]\nv = \"ü\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "name = \"猫 🐱\"\n\"é\" = 1\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n\n[après]\nv = \"ü\"\n"
+  },
+  {
+   "op": "read",
+   "result": "name = \"猫 🐱\"\n\"é\" = 1\n# コメント 🐱\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n[après]\nv = \"ü\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": true
+  },
+  {
+   "op": "read",
+   "result": "a = 1\n\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1440\", NEKKO_TOKEN = \"tok-2\" }\n\n[b]\r\nc = 2\r\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "a = 1\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n\n[b]\r\nc = 2\r\n"
+  },
+  {
+   "op": "read",
+   "result": "a = 1\r\n[mcp_servers.nekko-agent]\r\ncommand = \"npx\"\r\nargs = [\"nekko-agent\"]\r\n\r\n[b]\r\nc = 2\r\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "\n\n  \n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "\n\n  \n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": ""
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": ""
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "a = ]\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": ".codex/config.toml doesn't look like valid TOML. Fix it by hand or add the entry manually.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "a = ]\n"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "a = [1\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": ".codex/config.toml doesn't look like valid TOML. Fix it by hand or add the entry manually.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "a = [1\n"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "[bad header\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": ".codex/config.toml doesn't look like valid TOML. Fix it by hand or add the entry manually.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[bad header\n"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "a.b . c = 1\nbad key = 2\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": false,
+    "message": ".codex/config.toml doesn't look like valid TOML. Fix it by hand or add the entry manually.",
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "a.b . c = 1\nbad key = 2\n"
+  },
+  {
+   "op": "read",
+   "result": null
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "\"quoted key\" = 1\n'lit key' = 2\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "\"quoted key\" = 1\n'lit key' = 2\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "\"quoted key\" = 1\n'lit key' = 2\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "s = \"a\\\nb\"\nm = \"\"\"x\\\n  y\"\"\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "s = \"a\\\nb\"\nm = \"\"\"x\\\n  y\"\"\"\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "s = \"a\\\nb\"\nm = \"\"\"x\\\n  y\"\"\"\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "x = 1 # comment with \"quote\n[t] # tail\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "x = 1 # comment with \"quote\n[t] # tail\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "x = 1 # comment with \"quote\n[t] # tail\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "﻿a = 1\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "﻿a = 1\n\n[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "﻿a = 1\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": true
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1440\", NEKKO_TOKEN = \"tok-2\" }\n\n[other]\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n\n[other]\n"
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"C:\\\\nekko\\\\nekko-agent.cmd\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"old\" }\n[other]\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": false
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"node\"\nargs = [\"dist/index.js\", \"mcp\"]\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"node\"\nargs = [\"dist/index.js\", \"mcp\"]\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "detect",
+   "result": [
+    {
+     "id": "claude",
+     "label": "Claude Code",
+     "configPath": "<home>/.claude.json",
+     "detected": true,
+     "installed": false
+    },
+    {
+     "id": "codex",
+     "label": "Codex",
+     "configPath": "<home>/.codex/config.toml",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "cursor",
+     "label": "Cursor",
+     "configPath": "<home>/.cursor/mcp.json",
+     "detected": true,
+     "installed": true
+    },
+    {
+     "id": "windsurf",
+     "label": "Windsurf",
+     "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+     "detected": true,
+     "installed": true
+    }
+   ]
+  },
+  {
+   "op": "refresh",
+   "result": true
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1440\", NEKKO_TOKEN = \"tok-2\" }\n"
+  },
+  {
+   "op": "write",
+   "result": null
+  },
+  {
+   "op": "rm",
+   "result": null
+  },
+  {
+   "op": "install",
+   "result": {
+    "ok": true,
+    "tools": [
+     {
+      "id": "claude",
+      "label": "Claude Code",
+      "configPath": "<home>/.claude.json",
+      "detected": true,
+      "installed": false
+     },
+     {
+      "id": "codex",
+      "label": "Codex",
+      "configPath": "<home>/.codex/config.toml",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "cursor",
+      "label": "Cursor",
+      "configPath": "<home>/.cursor/mcp.json",
+      "detected": true,
+      "installed": true
+     },
+     {
+      "id": "windsurf",
+      "label": "Windsurf",
+      "configPath": "<home>/.codeium/windsurf/mcp_config.json",
+      "detected": true,
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\ncommand = \"/opt/nekko/bin/nekko-agent\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"http://127.0.0.1:1439\", NEKKO_TOKEN = \"tok-1\" }\n"
+  },
+  {
+   "op": "read",
+   "result": "[mcp_servers.nekko-agent]\nargs = [ \"-y\" , \"nekko-agent\" ]\ncommand = \"npx\"\n"
+  }
+ ]
+}

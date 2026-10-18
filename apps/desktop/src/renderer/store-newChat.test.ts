@@ -19,11 +19,25 @@ describe('new-chat first frame', () => {
     const open = vi.spyOn(useStore.getState(), 'openChatPane').mockImplementation((id) => {
       expect(getCachedSession(id)).toBe(created);
     });
+    useStore.setState({ settings: { workspaces: [], developer: { chat: true } } as any });
     try {
       await useStore.getState().newChat();
       expect(open).toHaveBeenCalledWith(created.id);
       expect(useStore.getState().activeSessionId).toBe(created.id);
-    } finally { open.mockRestore(); }
+      expect(useStore.getState().view).toBe('chat');
+    } finally { open.mockRestore(); useStore.setState({ settings: null }); }
+  });
+  it('with the Chat tab off, selects the new chat on the wall in the current layout', async () => {
+    window.nekko = { createSession: vi.fn().mockResolvedValue(created), listProviders: vi.fn().mockResolvedValue([{ id: 'p', kind: 'chatgpt', enabled: true }]), listModels: vi.fn().mockResolvedValue([]) } as unknown as typeof window.nekko;
+    useStore.setState({ view: 'settings', focusRequest: null, settings: { workspaces: [], developer: { chat: false } } as any });
+    const open = vi.spyOn(useStore.getState(), 'openChatPane');
+    try {
+      await useStore.getState().newChat();
+      expect(open).not.toHaveBeenCalled();
+      expect(useStore.getState().view).toBe('command');
+      expect(useStore.getState().focusRequest).toEqual({ sessionId: created.id, keepLayout: true });
+      expect(useStore.getState().sessions[0]?.id).toBe(created.id);
+    } finally { open.mockRestore(); useStore.setState({ settings: null }); }
   });
   it('caches image options rather than the unconfigured creation record', async () => {
     const image = { ...created, chatType: 'image' as const, imageParams: { modelId: 'image-model' } };

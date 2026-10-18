@@ -14,8 +14,13 @@ import {
   LEGACY_GRID_KEY,
   WALL_STATE_KEY,
   addPane,
+  applySnap,
   autoShape,
+  evenTree,
   filterTree,
+  snapFraction,
+  splitBoundary,
+  treeShape,
   leafRects,
   loadWallState,
   migrateGridState,
@@ -34,6 +39,68 @@ const term = (id: string, running = true): TerminalInfo =>
   ({ id, title: id, cwd: '/', shell: 'sh', createdAt: 1_000, running }) as TerminalInfo;
 const panes = (n: number): WbPane[] => Array.from({ length: n }, (_, i) => wallPane('chat', `c${i}`));
 const refs = (root: ReturnType<typeof tileTree>) => allPanes(root).map((p) => p.refId);
+
+describe('snap to grid', () => {
+  // Two windows side by side over one full-width window, sized unevenly.
+  const [a, b, c] = panes(3);
+  const lopsided = { id: 'split_col', dir: 'col' as const, sizes: [0.8, 0.2], children: [
+    { id: 'split_row', dir: 'row' as const, sizes: [0.7, 0.3], children: [a, b] },
+    c,
+  ] };
+  it('evens every split by how many windows each side holds, keeping the structure', () => {
+    const even = evenTree(lopsided)!;
+    expect(treeShape(even)).toBe(treeShape(lopsided));
+    const rects = leafRects(even);
+    expect(rects.get(a.id)).toEqual({ x: 0, y: 0, width: 0.5, height: 0.5 });
+    expect(rects.get(b.id)).toEqual({ x: 0.5, y: 0, width: 0.5, height: 0.5 });
+    expect(rects.get(c.id)).toEqual({ x: 0, y: 0.5, width: 1, height: 0.5 });
+  });
+  it('weights a column holding two windows across against a single window beside it', () => {
+    // A row of [a over b] and [c d e side by side]: shares follow window counts across.
+    const [p, q, r, s, t] = panes(5);
+    const tree = { id: 'r', dir: 'row' as const, sizes: [0.5, 0.5], children: [
+      { id: 'c1', dir: 'col' as const, sizes: [0.5, 0.5], children: [p, q] },
+      { id: 'r2', dir: 'row' as const, sizes: [0.2, 0.3, 0.5], children: [r, s, t] },
+    ] };
+    const widths = [p, r, s, t].map((x) => leafRects(evenTree(tree)).get(x.id)!.width);
+    widths.forEach((w) => expect(w).toBeCloseTo(0.25));
+  });
+  it('finds a divider boundary and snaps a drag onto it only when close', () => {
+    const even = evenTree(lopsided);
+    expect(splitBoundary(even, 'split_row', 0)).toBeCloseTo(0.5);
+    expect(splitBoundary(even, 'split_row', 1)).toBeNull();
+    expect(splitBoundary(even, 'missing', 0)).toBeNull();
+    expect(snapFraction(0.53, 0.5)).toBe(0.5);
+    expect(snapFraction(0.47, 0.5)).toBe(0.5);
+    expect(snapFraction(0.6, 0.5)).toBe(0.6);
+    expect(snapFraction(0.53, null)).toBe(0.53);
+  });
+  it('evens the wall when switched on and after a window is added, moved or removed, but leaves divider drags alone', () => {
+    const off = { ...DEFAULT_WALL_STATE, root: lopsided };
+    expect(applySnap(off, off)).toBe(off);
+    const on = applySnap(off, { ...off, snap: true });
+    expect(on.root && isSplit(on.root) && on.root.sizes).toEqual([0.5, 0.5]);
+    // A divider drag changes sizes only: kept as dragged.
+    const dragged = { ...on, root: { ...lopsided, sizes: [0.6, 0.4] }, snap: true };
+    expect(applySnap(on, dragged)).toBe(dragged);
+    // Adding a window changes the shape: evened again.
+    const grown = { ...on, root: addPane(on.root, wallPane('terminal', 't'), 1.7) };
+    const next = applySnap(on, grown);
+    const counts = (n: ReturnType<typeof evenTree>) => (n && isSplit(n) ? n.sizes : []);
+    expect(counts(next.root)).toEqual(counts(evenTree(grown.root)));
+    // Switching off never touches the layout.
+    const offAgain = { ...dragged, snap: false };
+    expect(applySnap(dragged, offAgain)).toBe(offAgain);
+  });
+  it('saves and loads the switch, defaulting off for older walls', () => {
+    expect(toWallSetting({ ...DEFAULT_WALL_STATE, snap: true }).snap).toBe(true);
+    expect(loadWallState(undefined, { ...toWallSetting(DEFAULT_WALL_STATE), snap: true }).snap).toBe(true);
+    expect(loadWallState(undefined, { root: null, autoAdd: true, filter: 'all', insights: { panels: {} }, watermark: 0 }).snap).toBe(false);
+  });
+  it('drops a filter saved before the filter left the toolbar, so no window stays hidden', () => {
+    expect(loadWallState(undefined, { ...toWallSetting(DEFAULT_WALL_STATE), filter: 'terminal' }).filter).toBe('all');
+  });
+});
 
 describe('autoShape', () => {
   it('fills a wide area with squarish windows and the fewest empty places', () => {
@@ -172,7 +239,8 @@ describe('persistence', () => {
     expect(loaded.dock.monitors.automations).toBe(true);
     expect(loaded.dock.monitors.insights).toBe(true);
     expect(loaded.autoAdd).toBe(false);
-    expect(loaded.filter).toBe('chat');
+    // The filter control is gone, so a saved filter would hide windows for good.
+    expect(loaded.filter).toBe('all');
     expect(loaded.insights.panels.models).toBe(true);
     expect(loaded.watermark).toBe(77);
   });
@@ -206,7 +274,7 @@ describe('the setting', () => {
     expect(allPanes(loadWallState(storage, null).root).map((p) => p.refId)).toContain('local');
   });
   it('round-trips through the setting shape', () => {
-    const state = seedWall({ ...DEFAULT_WALL_STATE, autoAdd: false, filter: 'terminal' }, [chat('a', { updatedAt: 1 })], [term('t')], 5);
+    const state = seedWall({ ...DEFAULT_WALL_STATE, autoAdd: false, snap: true }, [chat('a', { updatedAt: 1 })], [term('t')], 5);
     const back = loadWallState(undefined, toWallSetting(state));
     expect(back).toEqual(state);
   });
@@ -240,8 +308,8 @@ describe('wall preferences and panel migration', () => {
     expect(MONITORS.map(p => p.key)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
     expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true,
       monitorOrder: MONITORS.map(p => p.key),
-      minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false },
-      monitors: { automations: true, utilization: true, budget: true, insights: false, hardware: true } });
+      minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false, localModels: false },
+      monitors: { automations: true, utilization: true, budget: true, insights: false, hardware: true, localModels: true } });
     expect(seedWall(DEFAULT_WALL_STATE, [], [], 9).root).toBeNull();
     expect(DEFAULT_WALL_STATE.hero).toBeNull();
     expect(DEFAULT_WALL_STATE.folded).toEqual({});
