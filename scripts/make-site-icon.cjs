@@ -4,17 +4,18 @@
  *
  *   node scripts/make-site-icon.cjs
  *
- * Writes apps/website/favicon.svg, which the site uses both as its favicon and
- * as the nav/footer brand mark. The small-size variant of the art is the one
- * that survives 16px: no stars, a heavier trail, a bigger comet head.
+ * Writes apps/website/favicon.svg (the browser-tab icon: the app icon's tile,
+ * drawn for small sizes) and apps/website/logo.svg (the nav/footer brand mark:
+ * the gradient cat with no tile, so the page itself is its background).
  */
 const { writeFileSync } = require('fs');
 const { join } = require('path');
-const { iconSvg } = require('../apps/desktop/scripts/icon-art.cjs');
+const { iconSvg, logoSvg } = require('../apps/desktop/scripts/icon-art.cjs');
 
-const OUT = join(__dirname, '..', 'apps', 'website', 'favicon.svg');
+const SITE = join(__dirname, '..', 'apps', 'website');
 
 // Drawn for 32px, but with no width/height so CSS decides the rendered size:
 // one file serves the 16px tab icon and the 22px nav mark.
-writeFileSync(OUT, iconSvg(32).replace(/ width="\d+" height="\d+"/, ''));
-console.log('wrote apps/website/favicon.svg');
+writeFileSync(join(SITE, 'favicon.svg'), iconSvg(32).replace(/ width="\d+" height="\d+"/, ''));
+writeFileSync(join(SITE, 'logo.svg'), logoSvg());
+console.log('wrote apps/website/favicon.svg and apps/website/logo.svg');

@@ -18,7 +18,7 @@ import { readFileSync } from 'node:fs';
 it.each(['focus', 'grid', 'fixed'] as const)('direct creation replaces More without changing the %s layout', (mode) => {
   vi.mocked(useState).mockReturnValueOnce([null, vi.fn()]);
   const setWall = vi.fn(); const setAddOpen = vi.fn();
-  const tree = WallToolbar({ wall: { ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode } }, setWall, setAddOpen, addOpen: false, onAutoArrange: vi.fn(), onAdd: vi.fn() });
+  const tree = WallToolbar({ wall: { ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode } }, setWall, setAddOpen, addOpen: false, onAdd: vi.fn() });
   const elements: React.ReactElement<Record<string, any>>[] = [];
   const walk = (node: React.ReactNode) => React.Children.forEach(node, (child) => {
     if (!React.isValidElement<Record<string, any>>(child)) return;
