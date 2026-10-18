@@ -32,6 +32,7 @@
     ["install", "vaizer-n", "nekko-agent", {"id": "vaizer-n", "name": "vn", "description": "A Vaizer skill installed into Nekko Agent", "author": "A", "source": "vaizer", "category": "Automation", "template": "Run vn.", "instructions": "i", "markdown": "---\nname: vn\n---\n\nStep one.\nStep two.\n"}],
     ["defs"],
     ["external"],
+    ["runnable"],
     ["skillFile", ".claude/skills/review-council"],
     ["skillFile", ".codex/skills/vx"],
     ["uninstall", "nekko-agent-review-council", "claude"],
@@ -42,7 +43,8 @@
     ["uninstall", "missing", "codex"],
     ["list"],
     ["external"],
-    ["defs"]
+    ["defs"],
+    ["runnable"]
   ],
   "parse": [
     "",

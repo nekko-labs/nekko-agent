@@ -17,6 +17,7 @@ import {
   VAIZER_SNAPSHOT,
   marketToSkillDef,
   parseSkillMarkdown,
+  runnableSkills,
   skillToMarkdown,
 } from '@nekko-agent/shared';
 import { setDataDir } from './paths.js';
@@ -26,7 +27,7 @@ import { discoverExternalSkills } from './external-skills.js';
 /**
  * Skills, which the engine daemon's port (crates/nekko-workspace skills.rs)
  * must reproduce exactly. Writes two files: `src/skills-data.json`, the
- * catalog, built-in names and Vaizer snapshot the Rust side embeds, and
+ * catalog, built-in skills and their names, and Vaizer snapshot the Rust side embeds, and
  * `tests/golden/skills.json`, what installs, uninstalls, listings, external
  * discovery, SKILL.md rendering and parsing return over a scratch home.
  * Temp paths and install times are normalized. Rewrite with UPDATE_GOLDEN=1.
@@ -67,6 +68,7 @@ describe('skills golden set', () => {
   it('writes the data the Rust side embeds', () => {
     const data = {
       market: MARKET_SKILLS,
+      builtin: SKILLS,
       builtinNames: SKILLS.map((s) => s.name),
       vaizerSnapshot: VAIZER_SNAPSHOT,
       vaizerCatalogUrl: VAIZER_CATALOG_URL,
@@ -89,6 +91,13 @@ describe('skills golden set', () => {
     env.home = home;
     setDataDir(data);
     const roots: Array<[string, string]> = [[home, '<home>'], [project, '<project>'], [data, '<data>']];
+    const external = () =>
+      discoverExternalSkills({
+        home,
+        projectRoots: [project],
+        exclude: listInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
+        reserved: [...SKILLS, ...listInstalledSkillDefs()].map((s) => s.name),
+      });
     const run = ([op, ...a]: [string, ...any[]]): unknown => {
       switch (op) {
         case 'targets': return skillTargets();
@@ -96,12 +105,8 @@ describe('skills golden set', () => {
         case 'list': return listInstalledSkills();
         case 'install': return installSkill(a[0], a[1], a[2]);
         case 'uninstall': return uninstallSkill(a[0], a[1]);
-        case 'external': return discoverExternalSkills({
-          home,
-          projectRoots: [project],
-          exclude: listInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
-          reserved: [...SKILLS, ...listInstalledSkillDefs()].map((s) => s.name),
-        });
+        case 'external': return external();
+        case 'runnable': return runnableSkills(SKILLS, listInstalledSkillDefs(), external());
         case 'skillFile': return readFileSync(join(home, a[0], 'SKILL.md'), 'utf8');
         case 'exists': return existsSync(join(home, a[0]));
         case 'removeHome': rmSync(join(home, a[0]), { recursive: true, force: true }); return null;

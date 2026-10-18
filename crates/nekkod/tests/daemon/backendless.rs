@@ -35,6 +35,25 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
     for c in ["chat:send", "chat:compact", "chat:suggest", "chat:generateImage"] {
         assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is owned: {info}");
     }
+    // A channel nothing here serves is unknown, not a missing backend.
+    let (status, body) = post(d.port, "no:suchChannel", json!([]), Some(TOKEN)).await;
+    assert!(status >= 400, "{status}");
+    assert_eq!(body["error"], "unknown channel no:suchChannel");
+    // A pasted file lands under the data directory, a second one beside it.
+    let paste = json!(["s_solo", "note.txt", "data:text/plain;base64,aGk="]);
+    let (_, first) = post(d.port, "attachment:import", paste.clone(), Some(TOKEN)).await;
+    let (_, second) = post(d.port, "attachment:import", paste, Some(TOKEN)).await;
+    assert_eq!(std::fs::read_to_string(first.as_str().unwrap()).unwrap(), "hi");
+    assert!(second.as_str().unwrap().ends_with("note-2.txt"), "{second}");
+    assert!(std::path::Path::new(first.as_str().unwrap()).starts_with(data.join("attachments").join("s_solo")));
+    // A remote image is fetched here, and never from this machine's own network.
+    let (status, body) = post(d.port, "image:fetch", json!(["http://127.0.0.1/x.png"]), Some(TOKEN)).await;
+    assert!(status >= 400 && body["error"].is_string(), "{status} {body}");
+    // The skill shelves, from the cache only (nothing fetched without a refresh).
+    let (status, shelves) = post(d.port, "skillSources:list", json!([false]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{shelves}");
+    assert!(shelves.as_array().is_some_and(|s| !s.is_empty()), "{shelves}");
+    assert!(info["owned"].as_array().unwrap().contains(&json!("skillSources:list")), "{info}");
 
     // A whole turn, its tool included, admitted and run here.
     let opts = json!({ "sessionId": "s_solo", "providerId": "p1", "modelId": "synthetic", "text": "write a note" });

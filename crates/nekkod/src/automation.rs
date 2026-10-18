@@ -9,13 +9,11 @@
 //! A run's turn goes through the router's `chat:send`, so the daemon admits it
 //! when it admits the UI's turns.
 //!
-//! A task's or a workflow step's turn is a normal chat turn: the daemon asks
-//! the TS host to admit it (`chat:send`, the same door the UI uses, so the
-//! turn's events reach the UI and the phone as any chat's do). Their chats are
-//! made by the host (`session:create`, which owns the chat defaults) and
-//! named here. A skill step asks the host for the installed skills
-//! (`workflow:skillDefs`; the marketplace catalog lives there until skills
-//! move). Actions and polls are `nekko-connectors`'; shell steps run on
+//! A task's or a workflow step's turn is a normal chat turn, sent through the
+//! router (`chat:send`, the same door the UI uses, so the turn's events reach
+//! the UI and the phone as any chat's do). Their chats are made the same way
+//! (`session:create`) and named here. A skill step reads the installed skills
+//! from nekko-workspace (`installed_skill_defs`). Actions and polls are `nekko-connectors`'; shell steps run on
 //! `nekko-tools`' shell, which kills the whole tree on a timeout.
 //!
 //! Owned only when the daemon knows the data directory; otherwise every one

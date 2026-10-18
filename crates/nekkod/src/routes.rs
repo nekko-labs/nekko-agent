@@ -474,6 +474,16 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             if let Some(r) = crate::engine::route(&ctx.engine, channel, &args).await {
                 return r;
             }
+            if let Some(r) = crate::remote_image::route(ctx, channel, &args).await {
+                return r;
+            }
+            if let Some(r) = crate::skill_sources::route(ctx, channel, &args).await {
+                return r;
+            }
+            // With no host, a channel nothing here serves does not exist.
+            if ctx.backend.is_none() {
+                return Err(format!("unknown channel {channel}"));
+            }
             ctx.backend.call(channel, Value::Array(args)).await
         }
     }
@@ -612,6 +622,14 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
         all.extend_from_slice(crate::messaging::CHANNELS);
     }
     all.extend_from_slice(crate::machine::CHANNELS);
+    // An attachment is written under the data directory; a remote image needs nothing.
+    all.push("image:fetch");
+    if ctx.sessions.is_some() {
+        all.push("attachment:import");
+    }
+    if ctx.settings.is_some() {
+        all.extend_from_slice(crate::skill_sources::CHANNELS);
+    }
     if ctx.resource_queue.is_some() {
         all.extend_from_slice(crate::resource_queue::CHANNELS);
     }

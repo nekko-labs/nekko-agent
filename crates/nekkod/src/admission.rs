@@ -9,15 +9,12 @@
 //! prompts after it; `chat:send` answers once the chain is done, as the host's
 //! `sendChat` did.
 //!
-//! What still involves the host, and how: the turn is handed to it
-//! (`turn:adopt`, not waited on) so its callbacks find it (the tools that
-//! still run there, hooks, `spawn_agent`, the next queued prompt's admission)
-//! and so it runs what follows a turn (the agent terminal, TurnEnd hooks, the
-//! linked spec); a setup command's output goes to its agent terminal
-//! (`loop:log`); and connector and workspace-index snippets are asked of it
-//! (`chat:connectorSnippets`, `chat:indexSnippets`) only when a connector is
-//! connected or the prompt has words to search for, until those services
-//! move. A sandbox chat is admitted here too (its setup checked, ask mode,
+//! Connector and workspace-index snippets, a setup command's output (the
+//! chat's agent terminal, agent_logs.rs) and tool hooks are all this
+//! daemon's. When a host runs beside it, the turn is handed to it as well
+//! (`turn:adopt`, not waited on) so it runs what follows a turn (TurnEnd
+//! hooks, the linked spec) and the turn's few host-side tools; with no host,
+//! turns.rs runs that after-work itself. A sandbox chat is admitted here too (its setup checked, ask mode,
 //! only its copied folders, no host context, MCP, decision runner, hooks or
 //! sub-agents) and its turn runs every tool in the daemon's container for it
 //! (sandbox.rs). Only a sandbox chat on a daemon with no containers (no data

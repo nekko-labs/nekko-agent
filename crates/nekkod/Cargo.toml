@@ -15,6 +15,7 @@ cuda = ["nekko-decide/cuda"]
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 anyhow.workspace = true
 axum.workspace = true
+base64 = "0.22"
 bytes.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
@@ -44,7 +45,8 @@ nekko-usage = { path = "../nekko-usage" }
 nekko-web = { path = "../nekko-web" }
 regress.workspace = true
 nekko-workspace = { path = "../nekko-workspace" }
-reqwest.workspace = true
+# native-tls: `image:fetch` loads https photos. It is the TLS stack reqwest already uses here.
+reqwest = { workspace = true, features = ["native-tls"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"

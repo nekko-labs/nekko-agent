@@ -649,3 +649,60 @@ pub fn installed_skill_defs(data_dir: &Path) -> Vec<Value> {
         .map(|m| skill_def(&m))
         .collect()
 }
+
+/// The host's `externalSkills()`: other tools' SKILL.md folders under the
+/// home and the given folders, minus Nekko's own exports and taken names.
+pub fn external_skills(data_dir: &Path, home: &str, project_roots: &[String]) -> Vec<Value> {
+    let exclude: Vec<String> = list_installed(data_dir)
+        .iter()
+        .filter_map(|r| r.get("path").filter(|p| js::truthy(Some(p))).map(js::display))
+        .collect();
+    discover_external(home, project_roots, &exclude, &reserved_names(data_dir))
+}
+
+/// `runnableSkills(SKILLS, listInstalledSkillDefs(), externalSkills())`: every
+/// skill a chat can run, built-ins first, then installs, then other tools'
+/// (the first of a name wins); goals are not runnable this way.
+pub fn runnable_skills(data_dir: &Path, home: &str, project_roots: &[String]) -> Vec<Value> {
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let builtin = data()["builtin"].as_array().cloned().unwrap_or_default();
+    // Each list with its source; an external skill's is the tool it came from.
+    let lists = [
+        (builtin, Some("builtin")),
+        (installed_skill_defs(data_dir), Some("marketplace")),
+        (external_skills(data_dir, home, project_roots), None),
+    ];
+    for (list, source) in lists {
+        for s in list {
+            let name = show(s.get("name"));
+            if s.get("kind").and_then(Value::as_str) == Some("goal") || !seen.insert(name) {
+                continue;
+            }
+            let source = match source {
+                Some(src) => json!(src),
+                None => s
+                    .get("origin")
+                    .and_then(|o| o.get("tool"))
+                    .filter(|t| !js::nullish(Some(t)))
+                    .cloned()
+                    .unwrap_or(json!("agents")),
+            };
+            // Keys in the TS literal's order; an undefined field is left out.
+            let mut o = Map::new();
+            for (k, v) in [
+                ("name", s.get("name").cloned()),
+                ("description", s.get("description").cloned()),
+                ("category", s.get("category").cloned()),
+                ("source", Some(source)),
+                ("template", s.get("template").cloned()),
+            ] {
+                if let Some(v) = v {
+                    o.insert(k.into(), v);
+                }
+            }
+            out.push(Value::Object(o));
+        }
+    }
+    out
+}

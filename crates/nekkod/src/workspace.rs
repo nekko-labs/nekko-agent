@@ -55,6 +55,8 @@ pub const DATA_CHANNELS: &[&str] = &[
     "design:generate",
     "skills:installed",
     "skills:external",
+    "skills:runnable",
+    "workflow:skillDefs",
     "skills:targets",
     "skill:install",
     "skill:uninstall",
@@ -300,9 +302,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "workspace:list" => Ok(settings(ctx).await.get("workspaces").cloned().unwrap_or(json!([]))),
         "workspace:addByPath" => add_folder(ctx, arg(&args, 0)).await,
         "workspace:remove" => remove_folder(ctx, &text(&args, 0)).await,
-        "skills:installed" | "skills:targets" | "skill:install" | "skill:uninstall" | "skills:external" => {
+        "skills:installed" | "skills:targets" | "skill:install" | "skill:uninstall" | "skills:external"
+        | "skills:runnable" | "workflow:skillDefs" => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
-            let roots: Vec<String> = if channel == "skills:external" {
+            let roots: Vec<String> = if matches!(channel, "skills:external" | "skills:runnable") {
                 folders(ctx).await.iter().filter_map(|w| w.get("path").map(nekko_js::display)).collect()
             } else {
                 Vec::new()
@@ -517,13 +520,9 @@ fn skills_route(dir: &std::path::Path, channel: &str, args: &[Value], roots: &[S
         "skill:uninstall" => {
             skills::uninstall(dir, arg(args, 0).unwrap_or(&Value::Null), arg(args, 1)).map(Value::Array)
         }
-        "skills:external" => {
-            let exclude: Vec<String> = skills::list_installed(dir)
-                .iter()
-                .filter_map(|r| r.get("path").filter(|p| nekko_js::truthy(Some(p))).map(nekko_js::display))
-                .collect();
-            Ok(Value::Array(skills::discover_external(&home, roots, &exclude, &skills::reserved_names(dir))))
-        }
+        "skills:external" => Ok(Value::Array(skills::external_skills(dir, &home, roots))),
+        "skills:runnable" => Ok(Value::Array(skills::runnable_skills(dir, &home, roots))),
+        "workflow:skillDefs" => Ok(Value::Array(skills::installed_skill_defs(dir))),
         other => Err(format!("{other} is not a skills channel")),
     }
 }

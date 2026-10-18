@@ -76,6 +76,7 @@ fn installs_listings_and_discovery_match_the_ts_host() {
                     &skills::reserved_names(d),
                 )))
             }
+            "runnable" => Ok(Value::Array(skills::runnable_skills(d, &home, std::slice::from_ref(&project)))),
             "skillFile" => {
                 Ok(json!(std::fs::read_to_string(home_dir.join(o[1].as_str().unwrap()).join("SKILL.md")).unwrap()))
             }

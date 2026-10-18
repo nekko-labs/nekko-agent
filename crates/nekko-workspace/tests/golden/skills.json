@@ -717,6 +717,144 @@
       ]
     },
     {
+      "op": "runnable",
+      "result": [
+        {
+          "name": "research",
+          "description": "Deep, multi-source research with a cited report",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Research the following thoroughly and produce a well-cited report. Work from sources you can actually open: pages and links I give you, read with fetch_url, and the browser when it is available. If finding sources would need a web search engine you do not have, say so instead of guessing:\n\n"
+        },
+        {
+          "name": "plan",
+          "description": "Produce a step-by-step implementation plan before coding",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Create a detailed, step-by-step implementation plan for:\n\n"
+        },
+        {
+          "name": "review",
+          "description": "Review the current code/diff for bugs and improvements",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Review the current changes for correctness bugs, edge cases, and possible improvements."
+        },
+        {
+          "name": "security-review",
+          "description": "Audit the changes for security vulnerabilities",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Do a focused security review of the current changes: look for injection, auth, secret-handling, and unsafe-input issues."
+        },
+        {
+          "name": "simplify",
+          "description": "Simplify and de-duplicate the changed code",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Review the changed code for reuse, simplification, and clarity, then apply the cleanups (no behavior change)."
+        },
+        {
+          "name": "test",
+          "description": "Write tests covering the important edge cases",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Write tests for this code, covering the important edge cases."
+        },
+        {
+          "name": "explain",
+          "description": "Explain how this code works, step by step",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Explain how this code works, step by step."
+        },
+        {
+          "name": "fix",
+          "description": "Find and fix the bug, explaining the root cause",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Find and fix the bug. Explain the root cause and the fix."
+        },
+        {
+          "name": "commit",
+          "description": "Stage and commit the current changes with a good message",
+          "category": "Delivery",
+          "source": "builtin",
+          "template": "Stage and commit the current changes with a clear, conventional commit message."
+        },
+        {
+          "name": "pr",
+          "description": "Open a pull request for the current branch",
+          "category": "Delivery",
+          "source": "builtin",
+          "template": "Push the current branch and open a pull request. Follow the repository's PR conventions (if any) and include an explicit **Unfinished work / release blockers** section listing incomplete scope, known bugs, unsupported platforms, missing tests or visual evidence, and verification limitations. Then see it through: wait for checks, fix what this change broke, and when nothing blocks it mark the PR ready and merge it the way the repository lands work. Residual notes in Unfinished work are not a reason to leave it in draft; only a real release blocker is, and name it if you stop."
+        },
+        {
+          "name": "review-council",
+          "description": "Summon a council of specialised reviewers over your diff: correctness, security, and simplicity, each reporting separately",
+          "category": "Code quality",
+          "source": "marketplace",
+          "template": "Use the \"review-council\" skill. Its instructions:\n\nReview the working diff with a council of three parallel reviewer agents, each with one lens: (1) correctness bugs and edge cases, (2) security (injection, auth, secrets, unsafe input), (3) simplification and reuse. Spawn them with spawn_agent, give each the diff, then merge their findings into a single report ranked by severity, dropping duplicates. Verify each finding against the code before reporting it.\n\nTask:\nRun a review council over the current changes: spawn three parallel reviewers (correctness bugs, security, simplification), then merge their findings into one ranked report."
+        },
+        {
+          "name": "vn",
+          "description": "A Vaizer skill installed into Nekko Agent",
+          "category": "Automation",
+          "source": "marketplace",
+          "template": "Use the \"vn\" skill. Its instructions:\n\nStep one.\nStep two.\n\nTask:\nRun vn."
+        },
+        {
+          "name": "alpha",
+          "description": "project alpha wins",
+          "category": "Imported",
+          "source": "claude",
+          "template": "Use the \"alpha\" skill below.\n\nProject alpha."
+        },
+        {
+          "name": "proj",
+          "description": "single quoted",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"proj\" skill below.\n\nProject skill."
+        },
+        {
+          "name": "beta",
+          "description": "First real line of beta.",
+          "category": "Imported",
+          "source": "claude",
+          "template": "Use the \"beta\" skill below. Its own files (scripts, references) are in <home>/.claude/skills/beta. That folder belongs to the skill, not to the user's project: do the work in the project as usual, and only read from that folder when the instructions point at one of its files.\n\n# Beta\n\nFirst real line of beta.\nMore."
+        },
+        {
+          "name": "gamma-two",
+          "description": "folded over two lines",
+          "category": "Imported",
+          "source": "codex",
+          "template": "Use the \"gamma-two\" skill below.\n\nGamma body"
+        },
+        {
+          "name": "nometa",
+          "description": "Just a body, no frontmatter.",
+          "category": "Imported",
+          "source": "gemini",
+          "template": "Use the \"nometa\" skill below.\n\nJust a body, no frontmatter."
+        },
+        {
+          "name": "hidden",
+          "description": "still read",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"hidden\" skill below.\n\nstill read"
+        },
+        {
+          "name": "literal",
+          "description": "line one\nline two",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"literal\" skill below.\n\nLiteral body"
+        }
+      ]
+    },
+    {
       "op": "skillFile",
       "result": "---\nname: review-council\ndescription: shadowed by the built-in\n---\nbody\n"
     },
@@ -1263,6 +1401,144 @@
               }
             ]
           }
+        }
+      ]
+    },
+    {
+      "op": "runnable",
+      "result": [
+        {
+          "name": "research",
+          "description": "Deep, multi-source research with a cited report",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Research the following thoroughly and produce a well-cited report. Work from sources you can actually open: pages and links I give you, read with fetch_url, and the browser when it is available. If finding sources would need a web search engine you do not have, say so instead of guessing:\n\n"
+        },
+        {
+          "name": "plan",
+          "description": "Produce a step-by-step implementation plan before coding",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Create a detailed, step-by-step implementation plan for:\n\n"
+        },
+        {
+          "name": "review",
+          "description": "Review the current code/diff for bugs and improvements",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Review the current changes for correctness bugs, edge cases, and possible improvements."
+        },
+        {
+          "name": "security-review",
+          "description": "Audit the changes for security vulnerabilities",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Do a focused security review of the current changes: look for injection, auth, secret-handling, and unsafe-input issues."
+        },
+        {
+          "name": "simplify",
+          "description": "Simplify and de-duplicate the changed code",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Review the changed code for reuse, simplification, and clarity, then apply the cleanups (no behavior change)."
+        },
+        {
+          "name": "test",
+          "description": "Write tests covering the important edge cases",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Write tests for this code, covering the important edge cases."
+        },
+        {
+          "name": "explain",
+          "description": "Explain how this code works, step by step",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Explain how this code works, step by step."
+        },
+        {
+          "name": "fix",
+          "description": "Find and fix the bug, explaining the root cause",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Find and fix the bug. Explain the root cause and the fix."
+        },
+        {
+          "name": "commit",
+          "description": "Stage and commit the current changes with a good message",
+          "category": "Delivery",
+          "source": "builtin",
+          "template": "Stage and commit the current changes with a clear, conventional commit message."
+        },
+        {
+          "name": "pr",
+          "description": "Open a pull request for the current branch",
+          "category": "Delivery",
+          "source": "builtin",
+          "template": "Push the current branch and open a pull request. Follow the repository's PR conventions (if any) and include an explicit **Unfinished work / release blockers** section listing incomplete scope, known bugs, unsupported platforms, missing tests or visual evidence, and verification limitations. Then see it through: wait for checks, fix what this change broke, and when nothing blocks it mark the PR ready and merge it the way the repository lands work. Residual notes in Unfinished work are not a reason to leave it in draft; only a real release blocker is, and name it if you stop."
+        },
+        {
+          "name": "vn",
+          "description": "A Vaizer skill installed into Nekko Agent",
+          "category": "Automation",
+          "source": "marketplace",
+          "template": "Use the \"vn\" skill. Its instructions:\n\nStep one.\nStep two.\n\nTask:\nRun vn."
+        },
+        {
+          "name": "alpha",
+          "description": "project alpha wins",
+          "category": "Imported",
+          "source": "claude",
+          "template": "Use the \"alpha\" skill below.\n\nProject alpha."
+        },
+        {
+          "name": "proj",
+          "description": "single quoted",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"proj\" skill below.\n\nProject skill."
+        },
+        {
+          "name": "beta",
+          "description": "First real line of beta.",
+          "category": "Imported",
+          "source": "claude",
+          "template": "Use the \"beta\" skill below. Its own files (scripts, references) are in <home>/.claude/skills/beta. That folder belongs to the skill, not to the user's project: do the work in the project as usual, and only read from that folder when the instructions point at one of its files.\n\n# Beta\n\nFirst real line of beta.\nMore."
+        },
+        {
+          "name": "review-council",
+          "description": "shadowed by the built-in",
+          "category": "Imported",
+          "source": "claude",
+          "template": "Use the \"review-council\" skill below.\n\nbody"
+        },
+        {
+          "name": "gamma-two",
+          "description": "folded over two lines",
+          "category": "Imported",
+          "source": "codex",
+          "template": "Use the \"gamma-two\" skill below.\n\nGamma body"
+        },
+        {
+          "name": "nometa",
+          "description": "Just a body, no frontmatter.",
+          "category": "Imported",
+          "source": "gemini",
+          "template": "Use the \"nometa\" skill below.\n\nJust a body, no frontmatter."
+        },
+        {
+          "name": "hidden",
+          "description": "still read",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"hidden\" skill below.\n\nstill read"
+        },
+        {
+          "name": "literal",
+          "description": "line one\nline two",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"literal\" skill below.\n\nLiteral body"
         }
       ]
     }

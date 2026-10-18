@@ -89,9 +89,9 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let res = ask(3, "app:info", json!([])).await;
     assert_eq!(res["result"]["edition"], "web", "{res}");
     assert!(res["result"]["platform"].is_string(), "{res}");
-    // A channel the host serves.
+    // A channel a phone may call, the daemon's own now (built-ins first).
     let res = ask(31, "skills:runnable", json!([])).await;
-    assert_eq!(res["result"], json!([]), "{res}");
+    assert_eq!(res["result"][0]["source"], "builtin", "{res}");
     let res = ask(4, "training:list", json!([])).await;
     assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): training:list");
     let res = ask(5, "turn:pending", json!([])).await;
