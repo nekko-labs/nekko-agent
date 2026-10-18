@@ -25,7 +25,9 @@ try {
   if (kind === 'baseline') script = script.replace('agentPlaywrightDriver.ts', 'agentBrowser.ts');
   if (kind === 'native') {
     script = script.replace("import { playwrightDriver }", "import { createNativeDriver } from ${JSON.stringify(join(root, 'apps/desktop/src/main/agentNativeDriver.ts'))};\nimport { playwrightDriver }");
-    script = script.replace('driver: playwrightDriver', () => `driver: () => createNativeDriver(${JSON.stringify(join(root, 'apps/desktop/resources/agent-browser', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'agent-browser.exe' : 'agent-browser'))})`);
+    // This expression executes inside the generated runner; no path is serialized
+    // through two levels of JavaScript template literals.
+    script = script.replace('driver: playwrightDriver', "driver: () => createNativeDriver(join(process.cwd(), 'apps/desktop/resources/agent-browser', process.platform + '-' + process.arch, process.platform === 'win32' ? 'agent-browser.exe' : 'agent-browser'))");
   }
   script = script.replace("driver: process.env.NEKKO_BENCH_DRIVER || 'playwright-baseline', revision: '4fc3cc5c'", () => `driver: '${kind}', revision: '${kind === 'baseline' ? '4fc3cc5c' : execFileSync('git', ['rev-parse', 'HEAD'], {cwd:root,encoding:'utf8'}).trim()}'`);
   // This is not a benchmark rerun. Existing benchmark samples remain authoritative.
