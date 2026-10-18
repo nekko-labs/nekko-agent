@@ -94,7 +94,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
 // ---- integrations:* ----
 
 /// `os.homedir()`.
-fn home_dir() -> String {
+pub(crate) fn home_dir() -> String {
     std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default()
 }
 
@@ -103,13 +103,16 @@ async fn blocking(f: impl FnOnce() -> Result<Value, String> + Send + 'static) ->
 }
 
 /// How a written MCP entry should reach this app. The caller's target when it
-/// gives one; otherwise the desktop backend's (`integrations:target`: the
-/// local server's address and token and the CLI launcher, which the renderer
-/// never holds), and the portable `npx` form where there is none (the web
-/// edition, a backend that is down).
+/// gives one; otherwise the desktop app's (desktop.rs, or a desktop backend's
+/// `integrations:target`: the local server's address and token and the CLI
+/// launcher, which the renderer never holds), and the portable `npx` form
+/// where there is none (the web edition, a backend that is down).
 async fn subagent_target(ctx: &Ctx, given: &Value) -> Value {
     if given.is_object() {
         return given.clone();
+    }
+    if let Some(desktop) = &ctx.desktop {
+        return desktop.target(ctx).await;
     }
     match tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("integrations:target", json!([]))).await {
         Ok(Ok(t)) if t.is_object() => t,
@@ -120,7 +123,7 @@ async fn subagent_target(ctx: &Ctx, given: &Value) -> Value {
 /// `refreshLocalAccess`'s loop: every tool that already carries an entry,
 /// re-pointed when this app wrote it. A config someone else broke is skipped,
 /// as the TS loop's `catch` skipped it. The ids rewritten.
-fn refresh_all(home: &str, target: &Value) -> Result<Value, String> {
+pub(crate) fn refresh_all(home: &str, target: &Value) -> Result<Value, String> {
     let tools = integrations::detect(home);
     let mut done = Vec::new();
     for tool in tools.as_array().into_iter().flatten() {

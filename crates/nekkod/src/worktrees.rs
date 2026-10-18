@@ -14,6 +14,7 @@ use serde_json::{Map, Value, json};
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub const CHANNELS: &[&str] = &["chatWorktrees:list", "chatWorktrees:remove"];
@@ -851,6 +852,65 @@ fn owner_in(sessions: &[Value], running: &[String], root: &str) -> Option<Owner>
     })?;
     let id = self::s(session, "id").to_string();
     Some(Owner { running: running.contains(&id), title: self::s(session, "title").to_string(), id })
+}
+
+/// `removeMergedChatWorktrees`: remove the chat worktrees whose branch's PR
+/// has merged. Squash merges leave the branch "unmerged" to Git, so the PR
+/// (from GitHub) says the work landed, and the branch is force-deleted. The
+/// PR only counts when its head commit is the local branch tip; anything
+/// dirty, a running chat, an unmerged PR or a failed lookup is left alone.
+/// Never fails: one stuck worktree does not stop the others. `(root, branch)`
+/// of each one removed.
+pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
+    let settings = crate::settings::current(ctx).await;
+    if settings.pointer("/gitManagement/removeMerged") == Some(&Value::Bool(false)) {
+        return Vec::new();
+    }
+    let Some(store) = ctx.sessions.clone() else { return Vec::new() };
+    let owners = |store: Arc<nekko_store::SessionStore>, running: Vec<String>| {
+        let sessions = store.list();
+        move |r: &str| owner_in(&sessions, &running, r)
+    };
+    let running = crate::routes::running_chats(ctx).await;
+    let (s, st) = (settings.clone(), store.clone());
+    let entries = tokio::task::spawn_blocking(move || list(&s, &owners(st, running))).await.unwrap_or_default();
+    let mut removed = Vec::new();
+    for w in entries {
+        let (root, branch) = (self::s(&w, "root").to_string(), self::s(&w, "branch").to_string());
+        if branch.is_empty() || w["running"] == true || w["dirtyCount"].as_u64().unwrap_or(0) > 0 {
+            continue;
+        }
+        let Some((state, head)) = ctx.workspace.prs().branch_pr_head(&root, &branch).await else { continue };
+        if state != "merged" {
+            continue;
+        }
+        // Re-check right before removing: the chat may have started a turn,
+        // edited a file or committed while GitHub was being asked.
+        let running = crate::routes::running_chats(ctx).await;
+        let (s, st, source) = (settings.clone(), store.clone(), self::s(&w, "sourceRoot").to_string());
+        let (r, b) = (root.clone(), branch.clone());
+        let done = tokio::task::spawn_blocking(move || {
+            let lookup = owners(st, running);
+            if lookup(&r).is_some_and(|o| o.running) {
+                return false;
+            }
+            match (git(&r, &["status", "--porcelain"]), git(&r, &["rev-parse", "HEAD"])) {
+                (Ok(dirty), Ok(tip)) if dirty.trim().is_empty() && tip.trim().eq_ignore_ascii_case(&head) => {}
+                _ => return false,
+            }
+            if remove(&s, &r, &lookup).is_err() {
+                return false;
+            }
+            let _ = git(&source, &["branch", "-D", &b]);
+            true
+        })
+        .await
+        .unwrap_or(false);
+        if done {
+            removed.push((root, branch));
+        }
+    }
+    removed
 }
 
 pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {

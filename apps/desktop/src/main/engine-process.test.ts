@@ -7,7 +7,10 @@ import { findDaemon, isMissingDllExit, nativeConfig } from './engine-process.js'
 describe("the daemon's native config", () => {
   const facts = { isPackaged: true, appPath: '/a', userData: '/u', version: '0.8.1', resourcesPath: '/r', exePath: '/r/../NekkoAgent.exe', pid: 42 };
   it('tells nekkod what it needs to update and own dialogs', () => {
-    expect(nativeConfig(facts, {})).toEqual({ isPackaged: true, exePath: '/r/../NekkoAgent.exe', resourcesPath: '/r', appPid: 42 });
+    expect(nativeConfig(facts, {})).toEqual({ isPackaged: true, userData: '/u', appPath: '/a', exePath: '/r/../NekkoAgent.exe', resourcesPath: '/r', appPid: 42 });
+  });
+  it('names the bundled relay beside the main bundle, for the desktop features nekkod serves', () => {
+    expect(nativeConfig(facts, {}, join('/out', 'main'))).toMatchObject({ relayEntry: join('/out', 'main', 'relay.js') });
   });
   it('takes a sandbox feed, cache, dialog mode and the AppImage from the environment', () => {
     const env = { NEKKO_UPDATE_FEED_URL: 'http://127.0.0.1:1/feed/', NEKKO_UPDATE_CACHE_DIR: '/c', NEKKO_NATIVE_DIALOGS: 'bridge', APPIMAGE: '/x.AppImage' };

@@ -191,7 +191,7 @@ impl Env for Surroundings {
 }
 
 /// Keep one provider entry pointing at the engine (`ensureEngineProvider`).
-async fn ensure_engine_provider(settings: &Arc<crate::settings::Settings>, base_url: &str) {
+pub async fn ensure_engine_provider(settings: &Arc<crate::settings::Settings>, base_url: &str) {
     let current = settings.store.get();
     let providers: Vec<Value> = current.get("providers").and_then(Value::as_array).cloned().unwrap_or_default();
     let existing = providers.iter().find(|p| p.get("kind").and_then(Value::as_str) == Some("llamacpp"));

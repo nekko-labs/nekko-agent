@@ -25,11 +25,12 @@ export default defineConfig({
         // and the relay (out/main/relay.js) crashed on the first masked frame;
         // left external, the require throws and ws uses its JS fallback.
         external: ['@lydell/node-pty', 'bufferutil', 'utf-8-validate'],
-        // `backend` is the engine's TS half, run by nekkod under
-        // ELECTRON_RUN_AS_NODE (see src/backend/index.ts). It must never
-        // import `electron`.
-        // `relay` is apps/relay-server, bundled for "Relay on this computer"; the
-        // backend starts it the same way nekkod starts the backend.
+        // `backend` is the engine's old TS half (src/backend/index.ts). The app
+        // no longer starts it (nekkod serves everything, PF14 step 5 prep); it
+        // is built for scripts/bench-chat-turn.mjs until the TS engine goes.
+        // It must never import `electron`.
+        // `relay` is apps/relay-server, bundled for "Relay on this computer";
+        // nekkod runs it with the app's Electron as Node (local_relay.rs).
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           backend: resolve(__dirname, 'src/backend/index.ts'),

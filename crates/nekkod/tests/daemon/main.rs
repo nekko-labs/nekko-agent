@@ -11,6 +11,7 @@ mod common;
 mod assist;
 mod automation;
 mod backendless;
+mod desktop;
 mod engine;
 mod native;
 mod remote;

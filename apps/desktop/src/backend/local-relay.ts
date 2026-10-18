@@ -237,7 +237,7 @@ export class LocalRelay {
 
 const NO_TAILSCALE = "Tailscale isn't connected on this computer. Install Tailscale and sign in, and the relay starts.";
 
-function relayFailure(stderr: string, port: number): string {
+export function relayFailure(stderr: string, port: number): string {
   const m = stderr.match(/NEKKO_RELAY_ERROR (\{.*\})/);
   let code: string | undefined;
   try {

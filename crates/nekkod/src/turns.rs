@@ -1127,7 +1127,7 @@ async fn generate_title(
     }
 }
 
-fn base36(mut n: u64) -> String {
+pub(crate) fn base36(mut n: u64) -> String {
     const D: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let mut out = Vec::new();
     loop {
