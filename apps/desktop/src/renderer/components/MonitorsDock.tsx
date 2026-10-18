@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { AutomationTask, ProviderConfig, RuntimeStatus, SessionSummary, UsageSummary } from '@nekko-agent/shared';
+import type { AutomationTask, EngineStatus, LocalModel, ProviderConfig, RuntimeStatus, SessionSummary, UsageSummary } from '@nekko-agent/shared';
 import { RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor } from '@nekko-agent/shared';
 import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type InsightsPrefs, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
@@ -11,14 +11,15 @@ import { InsightsBox, type Vitals } from './InsightsBox.js';
 import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { useMonitors, useResourceSample } from './ResourceMonitor.js';
-import { BrainIcon, ServerIcon, MoneyIcon, ListIcon, GearIcon, SlidersIcon, CloseIcon, MinimizeIcon } from '../icons.js';
+import { BrainIcon, ServerIcon, MoneyIcon, ListIcon, GearIcon, SlidersIcon, CloseIcon, MinimizeIcon, CubeIcon } from '../icons.js';
+import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
 import './monitorsDock.css';
 import type { OAuthStatus } from '@nekko-agent/shared';
 import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
 import { dockMinimizeTransition } from './dockMinimize.js';
 
-const MONITOR_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon };
+const MONITOR_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon, localModels: CubeIcon };
 
 export interface MonitorsDockProps {
   state: CommandWallState;
@@ -240,6 +241,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
             {p.key === 'budget' && <Budget usage={props.usage} sessions={props.sessions} providers={props.providers} now={props.now} />}
             {p.key === 'insights' && <InsightsBox budgetMonitorPresent {...insightProps} prefs={state.insights} onPrefs={insights} />}
             {p.key === 'hardware' && <Hardware providers={props.providers} />}
+            {p.key === 'localModels' && <LocalModels />}
           </ResizableMonitorBody>
         </section>
           </React.Fragment>;
@@ -453,6 +455,63 @@ function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'us
     {error && <p role="alert">{error}</p>}
   </div>;
 }
+/** How often the Local models monitor re-reads the engine, matching the chat's model dock. */
+const LOCAL_MODELS_POLL_MS = 6000;
+
+/**
+ * What the local engine holds in memory and where each model runs, with a jump
+ * to that model's own settings on Nekko Server. Read-only by design: GPU offload,
+ * context and KV cache are load-time settings with a reload behind them, and they
+ * belong on the page that explains what changing them costs.
+ */
+export function LocalModels({ initial }: { initial?: { status: EngineStatus | null; models: LocalModel[] } } = {}) {
+  const [status, setStatus] = useState<EngineStatus | null>(initial?.status ?? null);
+  const [models, setModels] = useState<LocalModel[]>(initial?.models ?? []);
+  const [read, setRead] = useState(Boolean(initial));
+  useEffect(() => {
+    let live = true;
+    const refresh = async () => {
+      const [s, m] = await Promise.all([
+        window.nekko.engineStatus().catch(() => null),
+        window.nekko.engineModels().catch(() => []),
+      ]);
+      if (!live) return;
+      setStatus(s); setModels(Array.isArray(m) ? m : []); setRead(true);
+    };
+    void refresh();
+    const t = setInterval(refresh, LOCAL_MODELS_POLL_MS);
+    return () => { live = false; clearInterval(t); };
+  }, []);
+  const store = useStore.getState;
+  const names = new Map(models.map((m) => [m.id, m.name]));
+  const resident = status?.resident ?? [];
+  const openServer = () => store().setView('modelserver');
+  if (!read) return <div className="monitors-dock__metrics monitors-dock__local-models"><p className="monitors-dock__note">Reading the local engine…</p></div>;
+  return <div className="monitors-dock__metrics monitors-dock__local-models">
+    {!status?.install.binPath ? <p>No local engine installed.</p>
+      : !status.running ? <p>The model server is stopped.</p>
+      : resident.length === 0 ? <p>No local model is loaded.</p>
+      : resident.map((r) => {
+        const split = r.loadedOn === 'gpu+cpu' || r.loadedOn === 'cpu';
+        const name = names.get(r.id) ?? r.id;
+        const bytes = r.vramBytes ?? r.sizeBytes;
+        const rest = [r.contextLength ? `${formatTokens(r.contextLength)} context` : null, bytes ? formatBytes(bytes) : null].filter((x): x is string => Boolean(x));
+        return <div className="monitors-dock__local-model" key={r.id} data-local-model={r.id}>
+          <div className="monitors-dock__metric-row">
+            <strong className="monitors-dock__provider-name" title={name}>{name}</strong>
+            <button type="button" className="monitors-dock__text-button" data-local-model-settings={r.id} title={`Open ${name}'s GPU offload, context and memory settings`} aria-label={`Open ${name} settings`} onClick={() => store().openLocalModelSettings(r.id)}>Settings</button>
+          </div>
+          <p className="monitors-dock__note">
+            {r.loadedOn && <span title={placementTitle(r)} style={split ? { color: 'var(--warning)' } : undefined}>{placementLabel(r)}</span>}
+            {r.loadedOn && rest.length > 0 && ' · '}
+            {rest.join(' · ')}
+          </p>
+        </div>;
+      })}
+    <button type="button" className="monitors-dock__text-button" onClick={openServer}>{status?.install.binPath ? 'Open Nekko Server' : 'Set up a local model'}</button>
+  </div>;
+}
+
 function Hardware({ providers }: { providers: ProviderConfig[] }) {
   const monitors = useMonitors();
   const { system, gpu } = useResourceSample();

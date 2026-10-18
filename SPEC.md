@@ -1731,6 +1731,16 @@ User intent (Philip): the right-side dock's cards are **monitors** (the Budget m
 
 Not verified: packaged app and native window chrome.
 
+### Local models monitor in Panels (2026-10-17)
+
+User intent: from the Agents view's Panels dock, see which local models are running and jump straight to the place where their GPU/CPU placement is changed.
+
+- **Local models monitor** `[implemented; unit-tested; renderer-verified in an isolated fixture]`. A sixth dock monitor, `localModels`, on by default and placed under Hardware for new docks (saved docks keep their order and gain it at the end, switched on). It polls the engine every 6 s and lists each resident model: name, placement (`on GPU · 36/36 layers`, `GPU + CPU · 38/62 layers` in amber, `on CPU`), context and footprint. It says plainly when nothing is loaded, the server is stopped, or no engine is installed, and links to Nekko Server. It is read-only: load-time settings stay on Nekko Server, where their reload cost is explained.
+- **Jump to a model's settings** `[implemented; unit-tested; renderer-verified in an isolated fixture]`. **Settings** on a row (and **All settings** in the chat's Model settings group, whose inline quick edit is unchanged) calls `openLocalModelSettings(id)`: the app switches to Nekko Server, the In memory list unfolds that model's drawer on **Advanced** (where Runs on GPU only / Hybrid / CPU only sits), scrolls it into view and clears the request. A request for a model that is not resident is held until it is, and replaced by any later request.
+- **Not changed / known limit.** Settings are per model, not per chat. Reloading a model with new settings still unloads it immediately, so a reply it is generating is cut off; waiting for in-flight requests before a reload is planned, not built.
+
+Not verified: packaged app, native window chrome, and a real engine (the fixture uses synthetic engine status).
+
 ### Task systems, Agent Monitor Tasks and focus-mode clean start (2026-10-16)
 
 - **Implemented — source priority.** The system prompt (TS `packages/core/src/agent/prompt.ts` and Rust `crates/nekko-context/src/prompt.rs`, held equal by a test) tells the agent to use workspace folders first, then connected connectors, and only then CLI tools, unless the task is to run something.
