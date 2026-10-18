@@ -1,8 +1,13 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
+import postcss from 'postcss';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-vi.mock('../store.js', () => ({ useStore: vi.fn() }));
+import '../tests/browserGlobals.js';
+import { cssRule, cssValue, stylesheet } from '../tests/css.js';
+import { liveStore } from '../tests/liveStore.js';
+import { renderApp } from '../tests/renderApp.js';
+vi.mock('../store.js', (original) => liveStore(original as never));
 import { Mascot, MiniNekko, NekkoAvatar } from './Mascot.js';
 import { LANGUAGES, translate } from '../i18n.js';
 
@@ -43,13 +48,16 @@ describe('Pixel Nekko', () => {
     expect(renderToStaticMarkup(<NekkoAvatar wizardHat />)).toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<NekkoAvatar />)).not.toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<MiniNekko />)).not.toContain('orange-wizard-hat');
-    expect(source('./ChatPane.tsx')).not.toContain('wizardHat');
-    expect(source('./BrandMark.tsx')).not.toContain('autumn');
   });
-  it('puts the Spooky wizard hat on the corner mascot only', () => {
+  it('puts the Spooky wizard hat on the corner mascot only', async () => {
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled wizardHat />)).toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled />)).not.toContain('orange-wizard-hat');
-    expect(source('../App.tsx')).toContain("wizardHat={settings?.themePreset === 'autumn'}");
+    // In the app: the Spooky (autumn) preset dresses the corner mascot, and nothing else.
+    const spooky = await renderApp({ themePreset: 'autumn' } as never);
+    expect(spooky.match(/orange-wizard-hat/g)).toHaveLength(1);
+    const mascot = spooky.slice(spooky.indexOf('class="pixel-mascot'));
+    expect(mascot.slice(0, mascot.indexOf('</button>'))).toContain('orange-wizard-hat');
+    expect(await renderApp({})).not.toContain('orange-wizard-hat');
   });
   it('wears the wizard hat smaller and higher, on the crown', () => {
     expect(renderToStaticMarkup(<NekkoAvatar wizardHat />)).toContain('transform="translate(16.5 9) scale(0.8) translate(-16.5 -12)"');
@@ -58,7 +66,7 @@ describe('Pixel Nekko', () => {
     const eyeless = renderToStaticMarkup(<NekkoAvatar eyes={false} />);
     expect(eyeless).toContain('data-part="pixel-head"');
     expect(eyeless).not.toContain('pixel-eyes');
-    expect(source('../App.tsx')).toContain('<NekkoAvatar size={22} stationary eyes={false} />');
+    // Its use on the Agents rail button is rendered in viewEnabled.test.ts.
   });
   it('keeps working feedback, greeting, and the visibility setting', () => {
     expect(renderToStaticMarkup(<MiniNekko size={16} />)).toContain('pixel-working');
@@ -82,30 +90,37 @@ describe('Pixel Nekko', () => {
     }
   });
 
-  it('provides stepped motion and reduced-motion guards', () => {
-    for (const css of [source('../styles.css'), source('../../../../../apps/website/styles.css')]) {
-      expect(css).toContain('steps(1, end)');
-      expect(css).toContain('@media (prefers-reduced-motion: reduce)');
-      expect(css).toContain('.pixel-nekko, .pixel-nekko * { animation: none !important; }');
+  it('provides stepped motion and reduced-motion guards on desktop and the website', () => {
+    const website = postcss.parse(source('../../../../../apps/website/styles.css'));
+    for (const css of [stylesheet('styles.css'), website]) {
+      expect(cssRule(css, '.pixel-nekko').animation).toMatch(/steps\(1,end\)/);
+      for (const selector of ['.pixel-nekko', '.pixel-nekko *']) {
+        expect(cssRule(css, selector, { media: 'prefers-reduced-motion: reduce' }).animation, selector).toBe('none !important');
+      }
     }
-    expect(source('./Mascot.tsx')).toContain("document.addEventListener('visibilitychange'");
+  });
+
+  // Source pins: the mobile app's screens are not unit-rendered (its vitest
+  // config covers src/lib only and react-native is not installed here), and the
+  // desktop pause needs a client render to fire visibilitychange.
+  it('pauses with the page and honours reduced motion on mobile (source pin)', () => {
+    expect(source('./Mascot.tsx')).toMatch(/document\.addEventListener\('visibilitychange'/);
     const mobile = source('../../../../../apps/mobile/src/ui/Mascot.tsx');
-    expect(mobile).toContain('isReduceMotionEnabled');
-    expect(mobile).toContain('clearInterval(timer)');
-    expect(mobile).toContain("AppState.addEventListener('change'");
+    expect(mobile).toMatch(/AccessibilityInfo\.isReduceMotionEnabled\(\)/);
+    expect(mobile).toMatch(/clearInterval\(timer\)/);
+    expect(mobile).toMatch(/AppState\.addEventListener\('change'/);
   });
 
   it('keeps navigation still and limits the quiet face to the corner mascot', () => {
     expect(renderToStaticMarkup(<NekkoAvatar stationary />)).toContain('pixel-stationary');
     expect(renderToStaticMarkup(<NekkoAvatar />)).not.toContain('pixel-quiet');
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled />)).toContain('pixel-quiet');
-    const css = source('../styles.css');
-    expect(css).toContain('.pixel-stationary, .pixel-stationary * { animation: none !important; }');
-    expect(css).toContain('.pixel-quiet .pixel-mouth { display: none; }');
-    expect(css).toContain('pixel-quiet-hop 30s steps(1, end) infinite');
-    expect(css).toContain('pixel-quiet-open 24s steps(1, end) infinite');
-    expect(css).toContain('.pixel-mascot .pixel-quiet .pixel-eyes-open { opacity: 0;');
-    expect(css).toContain('.pixel-mascot .pixel-quiet .pixel-eyes-closed { opacity: 0;');
+    const css = stylesheet('styles.css');
+    for (const selector of ['.pixel-stationary', '.pixel-stationary *']) expect(cssRule(css, selector).animation).toBe('none !important');
+    expect(cssRule(css, '.pixel-quiet .pixel-mouth').display).toBe('none');
+    expect(cssRule(css, '.pixel-mascot .pixel-quiet').animation).toBe(cssValue('pixel-quiet-hop 30s steps(1, end) infinite'));
+    expect(cssRule(css, '.pixel-mascot .pixel-quiet .pixel-eyes-open')).toMatchObject({ opacity: '0', animation: cssValue('pixel-quiet-open 24s steps(1, end) infinite') });
+    expect(cssRule(css, '.pixel-mascot .pixel-quiet .pixel-eyes-closed').opacity).toBe('0');
   });
 
   it('preserves translated mascot settings', () => {

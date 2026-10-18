@@ -1,10 +1,14 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-vi.hoisted(() => { Object.assign(globalThis, { window: { dispatchEvent: () => true }, localStorage: { getItem: () => null } }); });
+import '../tests/browserGlobals.js';
+import { liveStore } from '../tests/liveStore.js';
+import { chatSession, renderChatPane } from '../tests/renderChatPane.js';
 import { chatFolderPath } from '../store.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
-import { readFileSync } from 'node:fs';
+
+vi.mock('../store.js', (original) => liveStore(original as never));
+vi.mock('../liveRuns.js', async (original) => ({ ...(await original<object>()), useLiveRun: () => undefined }));
 
 describe('agent companion buttons', () => {
   it('offers Changes, Files and Browser in the agent header, with the change count on Changes', () => {
@@ -20,12 +24,13 @@ describe('agent companion buttons', () => {
   });
 
   it('sits beside Logs in the chat header', () => {
-    const pane = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-    const buttons = pane.indexOf('<AgentCompanionButtons');
-    const logs = pane.indexOf('aria-label="Open agent logs"');
-    expect(buttons).toBeGreaterThan(0);
-    expect(logs - buttons).toBeGreaterThan(0);
-    expect(logs - buttons).toBeLessThan(400);
+    const html = renderChatPane(chatSession());
+    const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+    // Changes, Files and Browser come straight before Logs: no other control between them.
+    const buttons = [...header.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
+    const logs = buttons.indexOf('Open agent logs');
+    expect(logs).toBeGreaterThan(0);
+    expect(buttons.slice(logs - 3, logs)).toEqual(['Changes', 'Files', 'Browser']);
   });
 });
 

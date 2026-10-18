@@ -1,6 +1,6 @@
 import React from 'react';
-import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { cssRule, hasSelector, stylesheet } from '../tests/css.js';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_WALL_STATE, type CommandWallState } from '../commandWall.js';
 import { type WbPane } from '../layout.js';
@@ -44,10 +44,10 @@ describe('wall vacancy is state-owned, not descendant-owned', () => {
     expect(html).not.toContain('data-wall-empty');
     expect(html).toContain('command-wall-add-tile');
   });
-  it('does not use descendant :has for empty styling', () => {
-    const css = readFileSync(new URL('./commandWallLayouts.css', import.meta.url), 'utf8');
-    expect(css).toContain('.command-wall-stage[data-wall-vacant] > .command-wall-empty');
-    expect(css).not.toMatch(/:has\([^)]*(?:data-wall-empty|command-wall-empty-state)/);
+  it('centres the empty state off the stage attribute, not a descendant :has', () => {
+    const css = stylesheet('components/commandWallLayouts.css');
+    expect(cssRule(css, '.command-wall-stage[data-wall-vacant] > .command-wall-empty')).toMatchObject({ display: 'flex', 'align-items': 'center', 'justify-content': 'center' });
+    expect(hasSelector(css, /:has\([^)]*(?:data-wall-empty|command-wall-empty-state)/)).toBe(false);
   });
   it('keeps vacancy absent while streamed list descendants grow', () => {
     fixture.streamItems = 2;

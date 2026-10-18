@@ -7,6 +7,7 @@
 pub mod parse;
 pub mod probe;
 pub mod readiness;
+pub mod temps;
 
 pub use parse::{GpuDevice, GpuStats};
 pub use probe::Machine;

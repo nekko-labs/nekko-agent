@@ -17,6 +17,18 @@
    "stats": "{\"source\":\"nvidia-smi\",\"devices\":[{\"name\":\"GPU\",\"memoryTotalMB\":8192,\"memoryUsedMB\":1,\"memoryFreeMB\":8191}],\"totalMB\":8192,\"usedMB\":1,\"freeMB\":8191}"
   },
   {
+   "input": "NVIDIA GeForce RTX 5090, 32607, 2400, 29757, 7, 50",
+   "stats": "{\"source\":\"nvidia-smi\",\"devices\":[{\"name\":\"NVIDIA GeForce RTX 5090\",\"memoryTotalMB\":32607,\"memoryUsedMB\":2400,\"memoryFreeMB\":29757,\"utilizationPct\":7,\"temperatureC\":50}],\"totalMB\":32607,\"usedMB\":2400,\"freeMB\":29757}"
+  },
+  {
+   "input": "NVIDIA GeForce RTX 4090, 24564, 1200, 23000, 0, [N/A]\nNVIDIA RTX A2000, 6138, 100, 5900, 3, 41.5\n",
+   "stats": "{\"source\":\"nvidia-smi\",\"devices\":[{\"name\":\"NVIDIA GeForce RTX 4090\",\"memoryTotalMB\":24564,\"memoryUsedMB\":1200,\"memoryFreeMB\":23000,\"utilizationPct\":0},{\"name\":\"NVIDIA RTX A2000\",\"memoryTotalMB\":6138,\"memoryUsedMB\":100,\"memoryFreeMB\":5900,\"utilizationPct\":3,\"temperatureC\":41.5}],\"totalMB\":30702,\"usedMB\":1300,\"freeMB\":28900}"
+  },
+  {
+   "input": "NVIDIA GeForce GTX 1050, 2048, 300, 1748, 1, ",
+   "stats": "{\"source\":\"nvidia-smi\",\"devices\":[{\"name\":\"NVIDIA GeForce GTX 1050\",\"memoryTotalMB\":2048,\"memoryUsedMB\":300,\"memoryFreeMB\":1748,\"utilizationPct\":1}],\"totalMB\":2048,\"usedMB\":300,\"freeMB\":1748}"
+  },
+  {
    "input": "Broken, abc, 12, 3, 4.5",
    "stats": "null"
   },
@@ -192,6 +204,147 @@
   {
    "input": "",
    "usedMB": null
+  }
+ ],
+ "sensors": [
+  {
+   "chip": "k10temp",
+   "label": "Tctl",
+   "kind": "cpu"
+  },
+  {
+   "chip": "coretemp",
+   "label": "Package id 0",
+   "kind": "cpu"
+  },
+  {
+   "chip": "zenpower",
+   "label": "Tdie",
+   "kind": "cpu"
+  },
+  {
+   "chip": "spd5118",
+   "label": "",
+   "kind": "memory"
+  },
+  {
+   "chip": "jc42",
+   "label": "",
+   "kind": "memory"
+  },
+  {
+   "chip": "amdgpu",
+   "label": "edge",
+   "kind": "gpu"
+  },
+  {
+   "chip": "amdgpu",
+   "label": "junction",
+   "kind": "gpu"
+  },
+  {
+   "chip": "amdgpu",
+   "label": "mem",
+   "kind": null
+  },
+  {
+   "chip": "nouveau",
+   "label": "",
+   "kind": "gpu"
+  },
+  {
+   "chip": "nvme",
+   "label": "Composite",
+   "kind": null
+  },
+  {
+   "chip": "acpitz",
+   "label": "",
+   "kind": null
+  },
+  {
+   "chip": "",
+   "label": "PMU tdie1",
+   "kind": "cpu"
+  },
+  {
+   "chip": "",
+   "label": "PMU tp3s",
+   "kind": "cpu"
+  },
+  {
+   "chip": "",
+   "label": "GPU MTR Temp Sensor1",
+   "kind": "gpu"
+  },
+  {
+   "chip": "",
+   "label": "PMU tg0d",
+   "kind": "gpu"
+  },
+  {
+   "chip": "",
+   "label": "NAND CH0 temp",
+   "kind": null
+  },
+  {
+   "chip": "",
+   "label": "DRAM",
+   "kind": "memory"
+  }
+ ],
+ "tempFolds": [
+  {
+   "readings": [
+    [
+     "cpu",
+     48.4
+    ],
+    [
+     "cpu",
+     61.5
+    ],
+    [
+     "memory",
+     39
+    ],
+    [
+     "gpu",
+     0
+    ]
+   ],
+   "temps": {
+    "cpuC": 62,
+    "memoryC": 39
+   }
+  },
+  {
+   "readings": [
+    [
+     "gpu",
+     72.5
+    ],
+    [
+     "gpu",
+     151
+    ]
+   ],
+   "temps": {
+    "gpuC": 73
+   }
+  },
+  {
+   "readings": [
+    [
+     "cpu",
+     -5
+    ]
+   ],
+   "temps": null
+  },
+  {
+   "readings": [],
+   "temps": null
   }
  ],
  "readiness": [

@@ -586,15 +586,19 @@ pub fn install_plan(
             let bundle = app_bundle(Path::new(&installed.exe_path))
                 .ok_or_else(|| format!("{} is not inside an .app bundle", installed.exe_path))?;
             let staging = downloaded.with_extension("staging");
-            let name = bundle.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let (b, s, z) =
                 (sh_quote(&bundle.to_string_lossy()), sh_quote(&staging.to_string_lossy()), sh_quote(&file));
-            let new_app = sh_quote(&staging.join(&name).to_string_lossy());
             let old = sh_quote(&format!("{}.old", bundle.to_string_lossy()));
+            // The zip's .app is taken whatever it is named and lands at the
+            // installed path, as Squirrel.Mac does: the bundle was renamed
+            // (NekkoAgent.app → Nekko Agent.app), so an older install's name
+            // need not match the new zip's, and keeping the path keeps the
+            // Dock tile and login item pointing at the app.
             let script = format!(
                 "set -e\n{wait}rm -rf {s}\nmkdir -p {s}\n/usr/bin/ditto -x -k {z} {s}\n\
-                 test -d {new_app}\nrm -rf {old}\nmv {b} {old}\n\
-                 if mv {new_app} {b}; then rm -rf {old}; else mv {old} {b}; exit 1; fi\n\
+                 new_app=$(find {s} -mindepth 1 -maxdepth 1 -type d -name '*.app' | head -n 1)\n\
+                 test -n \"$new_app\"\nrm -rf {old}\nmv {b} {old}\n\
+                 if mv \"$new_app\" {b}; then rm -rf {old}; else mv {old} {b}; exit 1; fi\n\
                  rm -rf {s}\n/usr/bin/open -n {b}\n",
                 wait = wait_for_pid(installed.app_pid),
             );
@@ -782,6 +786,57 @@ mod tests {
             appimage_destination(Path::new("/apps/NekkoAgent-0.8.1-x86_64.AppImage"), d),
             PathBuf::from("/apps/NekkoAgent-0.9.0-x86_64.AppImage")
         );
+    }
+
+    #[test]
+    fn mac_update_installs_a_renamed_bundle_at_the_installed_path() {
+        let installed = Installed {
+            exe_path: "/Applications/NekkoAgent.app/Contents/MacOS/NekkoAgent".into(),
+            app_pid: Some(42),
+            ..Default::default()
+        };
+        let plan = install_plan(Platform::Mac, LinuxPackage::AppImage, &installed, Path::new("/c/p/update.zip"), false);
+        let Ok(InstallPlan::Script { script }) = plan else { panic!("{plan:?}") };
+        assert!(script.contains("find '/c/p/update.staging' -mindepth 1 -maxdepth 1 -type d -name '*.app'"));
+        assert!(script.contains("if mv \"$new_app\" '/Applications/NekkoAgent.app'; then"));
+        assert!(script.ends_with("/usr/bin/open -n '/Applications/NekkoAgent.app'\n"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_update_script_swaps_a_differently_named_bundle() {
+        let root = std::env::temp_dir().join(format!("nekko-mac-swap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (apps, src) = (root.join("Applications"), root.join("src"));
+        std::fs::create_dir_all(apps.join("NekkoAgent.app/Contents/MacOS")).unwrap();
+        std::fs::write(apps.join("NekkoAgent.app/old"), "").unwrap();
+        std::fs::create_dir_all(src.join("Nekko Agent.app/Contents/MacOS")).unwrap();
+        std::fs::write(src.join("Nekko Agent.app/new"), "").unwrap();
+        let zip = root.join("update.zip");
+        let zipped = std::process::Command::new("/usr/bin/ditto")
+            .args(["-c", "-k", "--keepParent"])
+            .arg(src.join("Nekko Agent.app"))
+            .arg(&zip)
+            .status()
+            .unwrap();
+        assert!(zipped.success());
+        let installed = Installed {
+            exe_path: apps.join("NekkoAgent.app/Contents/MacOS/NekkoAgent").to_string_lossy().into_owned(),
+            app_pid: Some(0x7fff_fff0),
+            ..Default::default()
+        };
+        let Ok(InstallPlan::Script { script }) =
+            install_plan(Platform::Mac, LinuxPackage::AppImage, &installed, &zip, false)
+        else {
+            panic!()
+        };
+        // Everything up to the relaunch.
+        let script = script.replace("/usr/bin/open -n", "true");
+        assert!(std::process::Command::new("/bin/sh").arg("-c").arg(&script).status().unwrap().success());
+        assert!(apps.join("NekkoAgent.app/new").exists());
+        assert!(!apps.join("NekkoAgent.app/old").exists());
+        assert!(!apps.join("NekkoAgent.app.old").exists());
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

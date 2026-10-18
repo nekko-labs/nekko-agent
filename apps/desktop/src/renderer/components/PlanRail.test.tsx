@@ -47,15 +47,46 @@ describe('plan change prompt', () => {
   it('sends the standing request followed by what was typed', () => {
     expect(planChangeMessage('  skip the migration  ')).toBe(`${PLAN_CHANGE_REQUEST}skip the migration`);
   });
-  it('pops up where questions do, in both the full chat and a wall window, and steers a running agent', () => {
+  it('is offered in a chat\'s Agent Monitor, and not in an archived (read-only) chat', async () => {
+    const { renderChatPane, chatSession, withProvider } = await chatHarness();
+    withProvider();
+    const plan = chatSession({ agentPlan: session.agentPlan });
+    /** The opening tag of the Agent Monitor's Change plan button. */
+    const button = (html: string) => {
+      const rail = html.slice(html.indexOf('aria-label="Plan and sub-agents"'));
+      const end = rail.indexOf('Change plan</button>');
+      return end < 0 ? null : rail.slice(rail.lastIndexOf('<button', end), rail.indexOf('>', rail.lastIndexOf('<button', end)) + 1);
+    };
+    expect(button(renderChatPane(plan))).not.toBeNull();
+    expect(button(renderChatPane(plan))).not.toContain('disabled=""');
+    expect(button(renderChatPane(plan, { readOnly: true }))).toContain('disabled=""');
+  });
+
+  // Source pin, pending the plan-and-mode e2e journey: the prompt opens from a
+  // click (pane state) and sending steers or sends through host calls; a server
+  // render reaches none of it.
+  it('pops up where questions do, in both the full chat and a wall window, and steers a running agent (source pin)', () => {
     const pane = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-    expect(pane).toContain('onChangePlan={readOnly ? undefined : () => setPlanChangeOpen(true)}');
-    expect(pane).toContain("surface === 'transcript' && planChangeOpen && !question");
-    expect(pane).toContain("surface !== 'composer' && planChangeOpen && !question");
+    expect(pane).toMatch(/surface === 'transcript' && planChangeOpen && !question/);
+    expect(pane).toMatch(/surface !== 'composer' && planChangeOpen && !question/);
     expect(pane).toMatch(/if \(streamingRef\.current\) \{\s*const updated = await window\.nekko\.steerChat\(sessionId, text\)/);
-    expect(pane).toContain('await send(text);');
+    expect(pane).toMatch(/await send\(text\);/);
   });
 });
+
+/** The real ChatPane at a pane wide enough for the Agent Monitor, in a fresh module graph. */
+async function chatHarness() {
+  vi.resetModules();
+  vi.doUnmock('../store.js');
+  await import('../tests/browserGlobals.js');
+  const { liveStore } = await import('../tests/liveStore.js');
+  const { elementWidthMock, paneWidth } = await import('../tests/paneWidth.js');
+  vi.doMock('../store.js', (o) => liveStore(o as never));
+  vi.doMock('../liveRuns.js', async (o) => ({ ...(await o<object>()), useLiveRun: () => undefined }));
+  vi.doMock('./agent-console/useElementWidth.js', (o) => elementWidthMock(o));
+  paneWidth.value = 1200;
+  return import('../tests/renderChatPane.js');
+}
 
 it('lists sub-agents above the agent plan', () => {
   const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={session} streaming={false} />);

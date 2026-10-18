@@ -1,7 +1,44 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
-const source = readFileSync(new URL('../../scripts/dev-launch.mjs', import.meta.url), 'utf8');
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const launcher = '../../scripts/dev-launch.mjs';
+
+afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
+
 describe('development launcher safety', () => {
+  it('refuses to start when Electron would run as plain Node', async () => {
+    vi.stubEnv('ELECTRON_RUN_AS_NODE', '1');
+    await expect(import(/* @vite-ignore */ launcher)).rejects.toThrow('Unset ELECTRON_RUN_AS_NODE');
+    vi.stubEnv('ELECTRON_RUN_AS_NODE', '');
+    vi.resetModules();
+    const mod = await import(/* @vite-ignore */ launcher);
+    expect(typeof mod.prepareWindowsRuntime).toBe('function');
+    expect(typeof mod.prepareMacBundle).toBe('function');
+  });
+
+  it('prints a banner once the app reports in, naming the API, renderer, data folder and how to stop', async () => {
+    // @ts-expect-error plain .mjs without types
+    const { devBanner } = await import('../../scripts/dev-banner.mjs');
+    const text: string = devBanner({ version: '0.8.0', pid: 42, api: { url: 'http://127.0.0.1:1439', enabled: true }, renderer: 'http://localhost:5173', dataDir: 'C:\\Users\\p\\.nekko-agent' });
+    expect(text).toContain('Nekko Agent 0.8.0 is running (pid 42)');
+    expect(text).toContain('http://127.0.0.1:1439');
+    expect(text).toContain('http://localhost:5173');
+    expect(text).toContain('.nekko-agent');
+    expect(text).toMatch(/q.*Enter.*stop cleanly/);
+    expect(text).not.toContain('\x1b[');
+    const off: string = devBanner({ api: { url: 'http://127.0.0.1:1439', enabled: false } });
+    expect(off).toContain('(off: switch it on in Settings > Server)');
+  });
+});
+
+/**
+ * Still source checks: this wiring sits in the script's top-level `if (main)`
+ * block and spawns Electron, so it cannot run in a unit test without moving it
+ * into exported functions in scripts/dev-launch.mjs (see the PR's Unfinished
+ * work). Kept so the guarantees stay pinned until then.
+ */
+describe('development launcher wiring (source checks until the launcher is refactored)', () => {
+  const source = readFileSync(new URL(launcher, import.meta.url), 'utf8');
   it('copies a versioned private runtime with relative framework symlinks preserved', () => {
     expect(source).toContain("require('electron/package.json').version");
     expect(source).toContain('verbatimSymlinks: true');
@@ -16,7 +53,7 @@ describe('development launcher safety', () => {
   it('uses LaunchServices and a distinct development bundle identity', () => {
     expect(readFileSync(new URL('../../scripts/dev-launch-wrapper.cjs', import.meta.url), 'utf8')).toContain("'/usr/bin/open'");
     expect(source).toContain('com.nekkoagent.desktop.dev');
-    expect(source).toContain("env.ELECTRON_EXEC_PATH = prepared.launcher");
+    expect(source).toContain('env.ELECTRON_EXEC_PATH = prepared.launcher');
   });
   it('stops cleanly from the keyboard and force-kills the whole tree only as a fallback', () => {
     expect(source).toContain("key === '\\r'");
@@ -25,22 +62,10 @@ describe('development launcher safety', () => {
     expect(source).toContain("'/T', '/F'");
     expect(source).toContain('process.kill(-child.pid');
   });
-  it('prints a banner once the app reports in, naming the API, renderer, data folder and how to stop', async () => {
+  it('tells the app where to report in for the banner', () => {
     expect(source).toContain('env.NEKKO_DEV_READY_FILE = readyFile');
-    // @ts-expect-error plain .mjs without types
-    const { devBanner } = await import('../../scripts/dev-banner.mjs');
-    const text: string = devBanner({ version: '0.8.0', pid: 42, api: { url: 'http://127.0.0.1:1439', enabled: true }, renderer: 'http://localhost:5173', dataDir: 'C:\\Users\\p\\.nekko-agent' });
-    expect(text).toContain('Nekko Agent 0.8.0 is running (pid 42)');
-    expect(text).toContain('http://127.0.0.1:1439');
-    expect(text).toContain('http://localhost:5173');
-    expect(text).toContain('.nekko-agent');
-    expect(text).toMatch(/q.*Enter.*stop cleanly/);
-    expect(text).not.toContain('\x1b[');
-    const off: string = devBanner({ api: { url: 'http://127.0.0.1:1439', enabled: false } });
-    expect(off).toContain('(off: switch it on in Settings > Server)');
   });
-  it('rejects node-mode Electron and leaves user privacy grants alone', () => {
-    expect(source).toContain('Unset ELECTRON_RUN_AS_NODE');
+  it('leaves user privacy grants alone', () => {
     expect(source).not.toContain('tccutil');
   });
 });

@@ -412,7 +412,7 @@ export function seedWall(state: CommandWallState, sessions: SessionSummary[], te
  * gone, and, when auto-add is on, add every chat created since the last look,
  * excluding sub-agents (opened explicitly from their parent's rail). Returns the same object when nothing changed.
  */
-export function reconcileWall(state: CommandWallState, sessions: SessionSummary[], terminals: TerminalInfo[], now: number, aspect = DEFAULT_ASPECT): CommandWallState {
+export function reconcileWall(state: CommandWallState, sessions: SessionSummary[], terminals: TerminalInfo[], now: number, aspect = DEFAULT_ASPECT, accept: (sessionId: string) => boolean = () => true): CommandWallState {
   // Seed once, and only once the lists have arrived: the view mounts with
   // empty lists, and seeding against those would watermark every chat that
   // already exists out of the wall.
@@ -426,7 +426,9 @@ export function reconcileWall(state: CommandWallState, sessions: SessionSummary[
   }
   let watermark = state.watermark;
   for (const s of sessions) {
-    if (s.createdAt > state.watermark && state.autoAdd && wallChat(s) && !s.parentSessionId && !hasPane(root, 'chat', s.id)) root = addPane(root, wallPane('chat', s.id), aspect);
+    // `accept` is multi-monitor placement: with several screens on, a new chat
+    // joins only the wall of the screen that owns it.
+    if (s.createdAt > state.watermark && state.autoAdd && wallChat(s) && !s.parentSessionId && !hasPane(root, 'chat', s.id) && accept(s.id)) root = addPane(root, wallPane('chat', s.id), aspect);
     watermark = Math.max(watermark, s.createdAt);
   }
   if (root === state.root && watermark === state.watermark) return state;
