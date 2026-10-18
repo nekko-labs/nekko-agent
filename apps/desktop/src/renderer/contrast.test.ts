@@ -27,6 +27,8 @@ const dark = { ...light, ...block("[data-theme='dark']") };
 const THEMES: Record<string, Record<string, string>> = {
   light,
   'light/solar': { ...light, ...block("[data-theme='light'][data-preset='solar']") },
+  'light/lilac': { ...light, ...block("[data-theme='light'][data-preset='lilac']") },
+  'light/lavender': { ...light, ...block("[data-theme='light'][data-preset='lavender']") },
   dark,
   'dark/nebula': { ...dark, ...block("[data-theme='dark'][data-preset='nebula']") },
   'dark/terminal': { ...dark, ...block("[data-theme='dark'][data-preset='terminal']") },
@@ -75,7 +77,7 @@ const toHex = (c: { r: number; g: number; b: number }) => '#' + [c.r, c.g, c.b].
 
 /** Each theme with the accent its preset applies (store.applyTheme). */
 const ACCENTS: Record<string, string> = {
-  light: '#6d5efc', 'light/solar': '#b45309', dark: '#8b7dff',
+  light: '#6d5efc', 'light/solar': '#b45309', 'light/lilac': '#5b4ea7', 'light/lavender': '#3b2f86', dark: '#8b7dff',
   'dark/nebula': '#9d8ce6', 'dark/terminal': '#3fb96a', 'dark/nord': '#88c0d0',
 };
 

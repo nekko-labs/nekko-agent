@@ -39,6 +39,35 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Native browser migration baseline (#752, 2026-10-17)
+
+Area: perf harness / browser driver. Result: regression in initial sequential driver comparison, not yet an alternated causal measurement.
+Conditions: Windows x64, unchanged revision `4fc3cc5c`, Playwright 1.63.0, Electron 44.7.0 / Chromium 152.0.7977.130, isolated hidden synthetic fixture, 1100x760 outer DIP, 20 fresh-chat navigation samples and 20 existing-page inspect samples. Nearest-rank percentiles.
+
+| Metric (ms) | Before | After |
+|---|---|---|
+| Fresh chat navigation p50 | 71.4239 | 93.61859999999979 |
+| Fresh chat navigation p95 | 89.70190000000002 | 103.96899999999994 |
+| Warm inspect p50 | 0.916899999999714 | 1.1934000000001106 |
+| Warm inspect p95 | 1.1640999999999622 | 1.3894000000000233 |
+
+Source: [raw samples and Electron process memory](../reports/agent-browser/playwright-baseline.json). Cold means new driver/renderer, not new Electron process or flushed caches. The [experimental native v2 candidate](../reports/agent-browser/native-candidate-v2.json) passed the smoke suite but measured higher latency in both workloads. These sequential batches are not a causal speedup/regression estimate; no performance win is claimed. Screenshot was 1359x873 device pixels at OS scaling, viewport height 698 DIP. Candidate must match these conditions; native-child memory is not included in Electron metrics and needs separate collection.
+
+### Matched alternating driver benchmark (2026-10-17)
+
+Raw [four batches and exact memory snapshots](../reports/agent-browser/matched-benchmark.json), order PW/native/PW/native, 20 cold + 20 warm per batch (40 samples per driver/workload), same common fixture bundle, Electron 44.7.0 / Chromium 152.0.7977.130, 1100x760 DIP outer and 1359x873 screenshots, light theme. Runtime native `7ff28b02`, harness-only explicit driver switch/memory probe. Nearest-rank percentiles:
+
+| Metric | Playwright before | Native after | Result |
+|---|---:|---:|---|
+| Cold chat navigation p50 ms | 66.36300000000006 | 93.87869999999998 | Slower native |
+| Cold chat navigation p95 ms | 74.38070000000016 | 102.51769999999999 | Slower native |
+| Warm inspect p50 ms | 1.006199999999808 | 1.1442999999999302 | Slightly slower native |
+| Warm inspect p95 ms | 1.4304999999999382 | 1.4756999999999607 | Near-null tail; no win |
+| Total working set bytes, batch 1 | 513273856 | 471531520 | Lower native snapshot |
+| Total working set bytes, batch 2 | 515989504 | 471937024 | Lower native snapshot |
+
+Memory totals include all Electron process metrics plus the native child (14,360,576 / 14,323,712 working-set bytes, 4,759,552 / 4,718,592 private bytes), exclude the PowerShell measurement process, and are one snapshot per warm batch—not unique committed memory or a long-run distribution. The common fixture bundle includes the baseline helper for both; production native main excludes Playwright. Two alternating batches are not randomized per-sample causal evidence. Cold is fresh chat driver/renderer, not whole-app startup; warm sub-ms deltas can be scheduler noise. Both drivers passed the same expanded actions/security fixture; screenshots await parent actual-pixel inspection. This is a latency/memory trade-off, not an across-the-board speedup.
+
 ## Themes
 
 Threads worth an article, with the entries that tell each story:
@@ -65,6 +94,38 @@ Threads worth an article, with the entries that tell each story:
   performance problem.
 
 ## 2026-10
+
+### nekkod's real-binary tests split by domain, sleeps replaced by waits (2026-10-18)
+Area: dev build
+Result: no effect on wall time (the layout that would have split binaries: regression, not taken)
+Conditions: Windows, local, Rust 1.96.0, debug test profile, worktree's own `target/`. Base `origin/main` ba6c006a (unchanged `daemon.rs`, run from a second worktree with its own target dir) vs this branch, same machine, back to back. "Clean package" is `cargo clean -p nekkod` then `cargo test -p nekkod --no-run` (dependencies stay built). Full run is `cargo test -p nekkod` with everything built, wall time from the shell.
+
+| Metric | Before | After |
+|---|---|---|
+| `cargo test -p nekkod`, 3 runs (s) | 20.07, 19.26, 19.25 | 19.20, 19.12, 19.21 |
+| `daemon` test binary's own time, 3 runs (s) | 8.60, 8.38, 8.44 | 8.31, 8.28, 8.34 |
+| `--no-run` after `cargo clean -p nekkod`, 2 runs (s) | 24.32, 24.17 | 25.21, 25.45 |
+| `--no-run` after touching one test file (s) | 7.11 (`daemon.rs`) | 2.74, 2.56 (`daemon/turns.rs`) |
+| First split: 11 test binaries, `cargo test -p nekkod`, 1 run (s) | 19.3 (median above) | 32.0 |
+
+Why: `cargo test` runs test binaries one after another, so eleven binaries added up each file's slowest test (`runs_the_model_server_itself` 7.4 s, a training run 4.4 s, the image turn 2.6 s, ...) instead of overlapping them; the split kept one binary (`tests/daemon/main.rs`) with a module per domain. The waits poll every 10 ms instead of sleeping 20 to 300 ms, which does not move the total because the slowest tests wait on product timers (engine health polls, the goal run's 4 s pause). Source: this PR.
+
+### Slowest TypeScript unit tests made faster without losing assertions (2026-10-18)
+Area: dev build
+Result: improvement (server.test.ts: no effect, left alone)
+Conditions: Windows, local, Node 24.1.0, Vitest 5.0.3, Git 2.51.0.windows.2. Per file: `npx vitest run <file> --reporter=json` from its package dir, 3 runs each, median of the file's start-to-end time from the JSON report. Whole package: one run each of `npx vitest run` in `packages/host` and `packages/core`, span from the JSON report. Base `origin/main` 75e8b29a vs this branch, same machine, back to back.
+
+| File (median of 3, s) | Before | After |
+|---|---|---|
+| host `chat-worktrees.test.ts` | 12.38 | 9.16 |
+| host `hooks.test.ts` | 10.43 | 2.93 |
+| core `agent/loop-retry.test.ts` | 6.00 | 0.01 |
+| host `workflows.test.ts` | 4.87 | 2.83 |
+| host `engine/server.test.ts` (unchanged) | 10.47 | 10.50 |
+| `packages/host` whole suite, 1 run | 19.2 | 15.9 |
+| `packages/core` whole suite, 1 run | 7.2 | 5.1 |
+
+Why: `loop-retry` waited out real 0.5 to 2 s backoffs; it now runs them on a fake `setTimeout` and still asserts the delays the loop reports. The hung hook slept 10 s against a 1 s limit; on Windows killing `cmd.exe` leaves the `node` grandchild holding the pipes, so the test lasted the full sleep. It now sleeps 2.5 s (the 1 s limit is the product's minimum and is unchanged). `chat-worktrees` builds one committed repository per file and copies it per test, turns off auto maintenance (44 `git maintenance run --auto` processes, 3.2 s in a trace2 profile), and commits in the merged-PR test's six worktrees in parallel. Workflow pass/fail steps are `exit 0`/`exit 1` instead of a `node -e` start. Under the full parallel host run, the merged-PR worktree test took 5548 ms (timed out at 5 s) before and 4721 ms after, so it keeps a 15 s timeout. `server.test.ts` is dominated by product constants (400 ms health poll, 800 ms progress sampling, a stub that listens after 2 s); changing them needs a product seam, so it is unchanged. Remaining question: the merged-PR test is still about 70 git processes, mostly in product code (`worktree add`, `status`). Source: this PR.
 
 ### CI gates recalibrated from 115 runner reports; #544 closed (2026-10-17)
 Area: perf harness
@@ -810,6 +871,8 @@ first token excluded). The model was never slow; we were reporting half its
 speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
+
+- **Native agent-browser default feasibility (2026-10-17).** Candidate `agent-browser@0.39.1` (native Rust, Chrome), Nekko base `2f81bfc0`, Windows / Node `v24.1.0`. Migration blocked before runtime edits: the native command daemon accepts unauthenticated loopback JSON outside Nekko's approval bridge. Two diagnostic clients received `success: true` for `session_info` without credentials; these are security probes, not performance samples. No browser was launched. **Before: not measured. After: not measured.** No latency, memory, warm/cold distribution or speedup is established. Playwright remains explicitly required. [Exact provenance, raw outputs, reproduction and matched benchmark acceptance criteria](../reports/agent-browser/feasibility.md). Next: secure native command IPC, then collect at least 20 interleaved cold/warm samples with the same browser revision, viewport, theme and synthetic fixture before claiming any effect.
 
 Performance-motivated changes with no recorded numbers. Measure them if they
 are ever revisited.
