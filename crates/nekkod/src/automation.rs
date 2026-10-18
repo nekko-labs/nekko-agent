@@ -9,13 +9,11 @@
 //! A run's turn goes through the router's `chat:send`, so the daemon admits it
 //! when it admits the UI's turns.
 //!
-//! A task's or a workflow step's turn is a normal chat turn: the daemon asks
-//! the TS host to admit it (`chat:send`, the same door the UI uses, so the
-//! turn's events reach the UI and the phone as any chat's do). Their chats are
-//! made by the host (`session:create`, which owns the chat defaults) and
-//! named here. A skill step asks the host for the installed skills
-//! (`workflow:skillDefs`; the marketplace catalog lives there until skills
-//! move). Actions and polls are `nekko-connectors`'; shell steps run on
+//! A task's or a workflow step's turn is a normal chat turn, sent through the
+//! router (`chat:send`, the same door the UI uses, so the turn's events reach
+//! the UI and the phone as any chat's do). Their chats are made the same way
+//! (`session:create`) and named here. A skill step reads the installed skills
+//! from nekko-workspace (`installed_skill_defs`). Actions and polls are `nekko-connectors`'; shell steps run on
 //! `nekko-tools`' shell, which kills the whole tree on a timeout.
 //!
 //! Owned only when the daemon knows the data directory; otherwise every one
@@ -127,6 +125,51 @@ impl Automation {
     }
 }
 
+/// Run a chat turn (`send`), listening on the bus meanwhile for the chat's
+/// error events: the turn's own failure, which the caller reports (the TS
+/// engine read it from its turn's callback). `Err` is a refusal of the call.
+pub(crate) async fn capture_turn_error(
+    hub: &Hub,
+    opts: &Value,
+    send: impl std::future::Future<Output = Result<(), String>>,
+) -> Result<Option<String>, String> {
+    let sid = opts.get("sessionId").and_then(Value::as_str).unwrap_or("").to_string();
+    let mut rx = hub.subscribe();
+    let failed = Arc::new(std::sync::Mutex::new(None::<String>));
+    let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
+    let watcher = {
+        let failed = failed.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = &mut stop_rx => break,
+                    ev = rx.recv() => match ev {
+                        Ok(ev) => {
+                            if !ev.text.starts_with(r#"{"channel":"agent:event""#) || !ev.text.contains(r#""error""#) {
+                                continue;
+                            }
+                            let Ok(v) = serde_json::from_str::<Value>(&ev.text) else { continue };
+                            let p = &v["payload"];
+                            if p["type"] == "error" && p["sessionId"].as_str() == Some(&sid) {
+                                *failed.lock().unwrap_or_else(|e| e.into_inner()) = p["message"].as_str().map(str::to_string);
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(_) => break,
+                    },
+                }
+            }
+        })
+    };
+    let result = send.await;
+    // Events published before the call returned are already queued for the watcher.
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    let _ = stop_tx.send(());
+    let _ = watcher.await;
+    result?;
+    Ok(failed.lock().unwrap_or_else(|e| e.into_inner()).take())
+}
+
 /// The engine as tasks and workflows see it.
 struct Engine {
     store: Arc<SessionStore>,
@@ -154,14 +197,32 @@ impl Engine {
         fields: Vec<(&'static str, Value)>,
     ) -> Result<String, String> {
         let ws = workspace_id.unwrap_or(Value::Null);
-        let created = self.backend.call("session:create", json!([ws])).await?;
+        // Through the router (the chat defaults are applied there), the host only before it is set.
+        let created = match self.dispatch.get() {
+            Some(d) => d("session:create".into(), vec![ws]).await?,
+            None => self.backend.call("session:create", json!([ws])).await?,
+        };
         let id = created.get("id").and_then(Value::as_str).ok_or("the host made no chat")?.to_string();
         let (store, sid) = (self.store.clone(), id.clone());
         tokio::task::spawn_blocking(move || store.assign(&sid, &fields)).await.map_err(|e| e.to_string())??;
         Ok(id)
     }
 
+    /// A chat turn through the router (`chat:send`), as the UI sends one:
+    /// admitted and run here, the backend only when no router is set yet.
+    async fn send(&self, opts: Value) -> Result<(), String> {
+        match self.dispatch.get() {
+            Some(d) => d("chat:send".into(), vec![opts]).await.map(|_| ()),
+            None => self.backend.call("chat:send", json!([opts])).await.map(|_| ()),
+        }
+    }
+
     async fn delete_session(&self, id: String) {
+        // Through the router: the chat's command log first, then the chat.
+        if let Some(d) = self.dispatch.get() {
+            let _ = d("session:delete".into(), vec![json!(id)]).await;
+            return;
+        }
         // As `session:delete` does: the host's command log first, then the chat.
         if self.backend.call("sessions:deleteAgentLog", json!([id])).await.is_ok() {
             let store = self.store.clone();
@@ -192,7 +253,7 @@ impl TaskHost for Engine {
     }
 
     fn send_chat(&self, opts: Value) -> tasks::BoxFut<'_, Result<(), String>> {
-        Box::pin(async move { self.backend.call("chat:send", json!([opts])).await.map(|_| ()) })
+        Box::pin(Engine::send(self, opts))
     }
 
     fn notify(&self, list: &Value) {
@@ -223,12 +284,7 @@ impl TrainingHost for Engine {
 
     /// A run's turn is a normal chat turn, through the same door as the UI's.
     fn send_chat(&self, opts: Value) -> BoxFut<'_, Result<(), String>> {
-        Box::pin(async move {
-            match self.dispatch.get() {
-                Some(d) => d("chat:send".into(), vec![opts]).await.map(|_| ()),
-                None => self.backend.call("chat:send", json!([opts])).await.map(|_| ()),
-            }
-        })
+        Box::pin(Engine::send(self, opts))
     }
 
     fn notify(&self, runs: &Value) {
@@ -260,43 +316,7 @@ impl WorkflowHost for Engine {
     /// The turn through the host, listening on the bus for the chat's error
     /// events meanwhile (the TS engine read them from its turn's callback).
     fn send_chat(&self, opts: Value) -> BoxFut<'_, Result<Option<String>, String>> {
-        Box::pin(async move {
-            let sid = opts.get("sessionId").and_then(Value::as_str).unwrap_or("").to_string();
-            let mut rx = self.hub.subscribe();
-            let failed = Arc::new(std::sync::Mutex::new(None::<String>));
-            let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
-            let watcher = {
-                let failed = failed.clone();
-                tokio::spawn(async move {
-                    loop {
-                        tokio::select! {
-                            _ = &mut stop_rx => break,
-                            ev = rx.recv() => match ev {
-                                Ok(ev) => {
-                                    if !ev.text.starts_with(r#"{"channel":"agent:event""#) || !ev.text.contains(r#""error""#) {
-                                        continue;
-                                    }
-                                    let Ok(v) = serde_json::from_str::<Value>(&ev.text) else { continue };
-                                    let p = &v["payload"];
-                                    if p["type"] == "error" && p["sessionId"].as_str() == Some(&sid) {
-                                        *failed.lock().unwrap_or_else(|e| e.into_inner()) = p["message"].as_str().map(str::to_string);
-                                    }
-                                }
-                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                                Err(_) => break,
-                            },
-                        }
-                    }
-                })
-            };
-            let result = self.backend.call("chat:send", json!([opts])).await;
-            // Events published before the call returned are already queued for the watcher.
-            tokio::time::sleep(Duration::from_millis(20)).await;
-            let _ = stop_tx.send(());
-            let _ = watcher.await;
-            result?;
-            Ok(failed.lock().unwrap_or_else(|e| e.into_inner()).take())
-        })
+        Box::pin(async move { capture_turn_error(&self.hub, &opts, Engine::send(self, opts.clone())).await })
     }
 
     fn abort_chat(&self, session_id: &str) {
@@ -306,12 +326,13 @@ impl WorkflowHost for Engine {
         }
     }
 
+    /// The skills a workflow's skill step can run (`listInstalledSkillDefs`).
     fn skill_defs(&self) -> BoxFut<'_, Vec<Value>> {
         Box::pin(async move {
-            match self.backend.call("workflow:skillDefs", json!([])).await {
-                Ok(Value::Array(a)) => a,
-                _ => Vec::new(),
-            }
+            let dir = self.store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+            tokio::task::spawn_blocking(move || nekko_workspace::skills::installed_skill_defs(&dir))
+                .await
+                .unwrap_or_default()
         })
     }
 

@@ -3,9 +3,9 @@
 //!
 //! Hypergate (`hypergated`) runs and supervises local MCP servers behind one
 //! gateway endpoint. Probing it and claiming this install's token are plain
-//! loopback HTTP, so they run here; saving the gateway as an MCP entry stays
-//! with the TS host, which owns the settings (`mcp:hypergate:save`), and the
-//! daemon then brings its tools online itself (`mcp:sync`).
+//! loopback HTTP, so they run here, and so does saving the gateway as an MCP
+//! entry (`with_hypergate`, a port of `withHypergate`); the daemon then brings
+//! its tools online itself (`mcp:sync`).
 
 use serde_json::{Map, Value, json};
 use std::time::{Duration, Instant};
@@ -180,5 +180,69 @@ mod tests {
             assert_eq!(nekko_js::stringify(&detect), nekko_js::stringify(&s["detected"]), "detect: {}", s["name"]);
             assert_eq!(nekko_js::stringify(&resolved), nekko_js::stringify(&s["resolved"]), "resolve: {}", s["name"]);
         }
+    }
+}
+
+/// `withHypergate(servers, info)`: the gateway's MCP entry put into a server
+/// list, replacing an existing one (keeping the user's name for it) or
+/// appended. Key order as JavaScript's spreads leave it; a field `info` lacks
+/// is left out, as `undefined` is by `JSON.stringify`.
+pub fn with_hypergate(servers: &[Value], info: &Value) -> Vec<Value> {
+    let mut entry = Map::new();
+    entry.insert("id".into(), json!(ENTRY_ID));
+    entry.insert("name".into(), json!("Hypergate"));
+    entry.insert("command".into(), json!(""));
+    entry.insert("args".into(), json!([]));
+    entry.insert("url".into(), info.get("url").cloned().unwrap_or(Value::Null));
+    entry.insert("token".into(), info.get("token").cloned().unwrap_or(Value::Null));
+    entry.insert("enabled".into(), json!(true));
+    let undefined = |k: &str| info.get(k).is_none();
+    let is_ours = |s: &Value| s.get("id").and_then(Value::as_str) == Some(ENTRY_ID);
+    if !servers.iter().any(is_ours) {
+        let mut entry = entry;
+        entry.retain(|k, _| !(matches!(k.as_str(), "url" | "token") && undefined(k)));
+        return servers.iter().cloned().chain(std::iter::once(Value::Object(entry))).collect();
+    }
+    servers
+        .iter()
+        .map(|s| {
+            if !is_ours(s) {
+                return s.clone();
+            }
+            let mut out = s.as_object().cloned().unwrap_or_default();
+            for (k, v) in &entry {
+                out.insert(k.clone(), v.clone());
+            }
+            let name = s.get("name").filter(|n| nekko_js::truthy(Some(n))).cloned().unwrap_or(json!("Hypergate"));
+            out.insert("name".into(), name);
+            out.retain(|k, _| !(matches!(k.as_str(), "url" | "token") && undefined(k)));
+            Value::Object(out)
+        })
+        .collect()
+}
+
+/// The id of the MCP entry the gateway is saved as (`HYPERGATE_ENTRY_ID`).
+pub const ENTRY_ID: &str = "hypergate";
+
+#[cfg(test)]
+mod with_hypergate_tests {
+    use super::*;
+
+    #[test]
+    fn appends_or_replaces_the_gateway_entry_keeping_its_name() {
+        let info = json!({ "url": "http://localhost:7777/mcp", "token": "t1" });
+        let other = json!({ "id": "fs", "name": "Files", "command": "npx", "args": [], "enabled": true });
+        let added = with_hypergate(std::slice::from_ref(&other), &info);
+        assert_eq!(
+            serde_json::to_string(&added[1]).unwrap(),
+            r#"{"id":"hypergate","name":"Hypergate","command":"","args":[],"url":"http://localhost:7777/mcp","token":"t1","enabled":true}"#
+        );
+        let mine = json!({ "id": "hypergate", "name": "My gateway", "url": "old", "token": "t0", "enabled": false, "extra": 1 });
+        let replaced = with_hypergate(&[other.clone(), mine], &info);
+        assert_eq!(replaced[0], other);
+        assert_eq!(
+            serde_json::to_string(&replaced[1]).unwrap(),
+            r#"{"id":"hypergate","name":"My gateway","url":"http://localhost:7777/mcp","token":"t1","enabled":true,"extra":1,"command":"","args":[]}"#
+        );
     }
 }

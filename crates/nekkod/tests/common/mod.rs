@@ -506,6 +506,19 @@ where
     }
 }
 
+/// A chat's agent command log (its `agent_<id>` terminal), once it shows `needle`.
+pub async fn until_agent_log(port: u16, session_id: &str, needle: &str, limit: Duration) -> String {
+    let id = format!("agent_{session_id}");
+    until(&format!("{needle:?} in {id}"), limit, || {
+        let id = id.clone();
+        async move {
+            let (_, snap) = post(port, "terminal:snapshot", json!([id]), Some(TOKEN)).await;
+            snap["buffer"].as_str().filter(|b| b.contains(needle)).map(str::to_string)
+        }
+    })
+    .await
+}
+
 /// The fake backend's record of every callback the daemon made, in order.
 pub async fn host_calls(port: u16) -> Vec<Value> {
     let (_, all) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
@@ -598,6 +611,15 @@ pub fn free_port() -> u16 {
         .map(|_| base + NEXT.fetch_add(1, Ordering::Relaxed) % 25)
         .find(|&port| std::net::TcpListener::bind(("127.0.0.1", port)).is_ok())
         .expect("a free port below the ephemeral range")
+}
+
+/// The chat whose parent is `parent_id` (a `spawn_agent` child), once it exists.
+pub fn child_of(rig: &TurnRig, parent_id: &str) -> Option<Value> {
+    std::fs::read_dir(rig.data.join("sessions")).ok()?.flatten().find_map(|e| {
+        let text = std::fs::read_to_string(e.path()).ok()?;
+        let s: Value = serde_json::from_str(&text).ok()?;
+        (s["parentSessionId"] == parent_id).then_some(s)
+    })
 }
 
 pub fn scripted_settings(rig: &TurnRig, model: &ScriptedModel) -> Value {

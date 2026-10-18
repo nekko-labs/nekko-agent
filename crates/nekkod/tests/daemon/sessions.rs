@@ -25,7 +25,18 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     assert_eq!(missing, Value::Null);
     let (_, images) = post(d.port, "session:images", json!(["s_one", 4]), Some(TOKEN)).await;
     assert_eq!(images, json!([{ "messageId": "a", "src": "data:x" }]));
-    // The UI's own writes are the daemon's too.
+    // The UI's own writes are the daemon's too, chat creation included: a
+    // folder that is not one of the user's is refused, as the host refused it.
+    let (status, refused) = post(d.port, "session:create", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "{refused}");
+    assert!(refused.to_string().contains("Workspace not found"), "{refused}");
+    post(
+        d.port,
+        "settings:update",
+        json!([{ "workspaces": [{ "id": "w1", "name": "w1", "path": data.to_string_lossy() }] }]),
+        Some(TOKEN),
+    )
+    .await;
     let (_, created) = post(d.port, "session:create", json!(["w1"]), Some(TOKEN)).await;
     let new_id = created["id"].as_str().unwrap().to_string();
     assert_eq!(created["workspaceId"], "w1");
@@ -47,8 +58,11 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     let (_, cleared) = post(d.port, "sessions:clear", json!(["all"]), Some(TOKEN)).await;
     assert_eq!(cleared, json!(1));
     assert!(!sessions.join("s_one.json").exists());
+    // The host's copy of each command log was dropped too (it may have written to one).
     let (_, callbacks) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert_eq!(callbacks, json!([[new_id], [fresh["id"]], ["s_one"]]));
+    let deletes: Vec<&Value> =
+        callbacks.as_array().unwrap().iter().filter(|c| c.as_array().is_some_and(|a| a.len() == 1)).collect();
+    assert_eq!(deletes, [&json!([new_id]), &json!([fresh["id"]]), &json!(["s_one"])], "{callbacks}");
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
@@ -115,6 +129,8 @@ async fn assert_log_callback_failure_retains_json(with_backend: bool) {
     let data = std::env::temp_dir().join(format!("nekkod-retention-{}-{with_backend}", std::process::id()));
     let sessions = data.join("sessions");
     std::fs::create_dir_all(&sessions).unwrap();
+    // A command log that cannot be removed (a folder in its place): the chat must stay.
+    std::fs::create_dir_all(sessions.join("callback_fail.commands.log/stuck")).unwrap();
     let path = sessions.join("callback_fail.json");
     let bytes = serde_json::to_vec_pretty(&json!({
         "id": "callback_fail", "title": "Keep me", "updatedAt": 5, "messages": []
@@ -125,8 +141,6 @@ async fn assert_log_callback_failure_retains_json(with_backend: bool) {
     for (channel, args) in [("session:delete", json!(["callback_fail"])), ("sessions:clear", json!(["all"]))] {
         let (status, body) = post(d.port, channel, args, Some(TOKEN)).await;
         assert_eq!(status, 400, "{channel}: {body}");
-        let expected = if with_backend { "command log unlink failed" } else { "no backend is configured" };
-        assert!(body["error"].as_str().unwrap().contains(expected), "{body}");
         assert_eq!(std::fs::read(&path).unwrap(), bytes, "{channel} must retain unchanged JSON");
         let (status, got) = post(d.port, "session:get", json!(["callback_fail"]), Some(TOKEN)).await;
         assert_eq!(status, 200);
@@ -210,6 +224,15 @@ async fn serves_files_memory_and_comments_itself() {
     assert!(data.join("skills.json").exists());
     let (_, listed) = post(d.port, "skills:installed", json!([]), Some(TOKEN)).await;
     assert_eq!(listed[0]["skillId"], json!("nekko-agent-review-council"));
+    // The install runs as a skill and as a workflow step, after the built-ins.
+    let (_, defs) = post(d.port, "workflow:skillDefs", json!([]), Some(TOKEN)).await;
+    let name = defs[0]["name"].clone();
+    assert!(name.is_string(), "{defs}");
+    let (_, runnable) = post(d.port, "skills:runnable", json!([]), Some(TOKEN)).await;
+    let runnable = runnable.as_array().unwrap();
+    assert_eq!(runnable[0]["source"], json!("builtin"));
+    let installed = runnable.iter().find(|r| r["name"] == name).expect("the install is runnable");
+    assert_eq!(installed["source"], json!("marketplace"));
     let (_, left) =
         post(d.port, "skill:uninstall", json!(["nekko-agent-review-council", "nekko-agent"]), Some(TOKEN)).await;
     assert_eq!(left, json!([]));

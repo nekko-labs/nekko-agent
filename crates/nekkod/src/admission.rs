@@ -9,15 +9,12 @@
 //! prompts after it; `chat:send` answers once the chain is done, as the host's
 //! `sendChat` did.
 //!
-//! What still involves the host, and how: the turn is handed to it
-//! (`turn:adopt`, not waited on) so its callbacks find it (the tools that
-//! still run there, hooks, `spawn_agent`, the next queued prompt's admission)
-//! and so it runs what follows a turn (the agent terminal, TurnEnd hooks, the
-//! linked spec); a setup command's output goes to its agent terminal
-//! (`loop:log`); and connector and workspace-index snippets are asked of it
-//! (`chat:connectorSnippets`, `chat:indexSnippets`) only when a connector is
-//! connected or the prompt has words to search for, until those services
-//! move. A sandbox chat is admitted here too (its setup checked, ask mode,
+//! Connector and workspace-index snippets, a setup command's output (the
+//! chat's agent terminal, agent_logs.rs) and tool hooks are all this
+//! daemon's. When a host runs beside it, the turn is handed to it as well
+//! (`turn:adopt`, not waited on) so it runs what follows a turn (TurnEnd
+//! hooks, the linked spec) and the turn's few host-side tools; with no host,
+//! turns.rs runs that after-work itself. A sandbox chat is admitted here too (its setup checked, ask mode,
 //! only its copied folders, no host context, MCP, decision runner, hooks or
 //! sub-agents) and its turn runs every tool in the daemon's container for it
 //! (sandbox.rs). Only a sandbox chat on a daemon with no containers (no data
@@ -191,17 +188,6 @@ pub(crate) fn offline_provider_allowed(provider: &Value) -> bool {
     (is_local(kind) || kind == "openai-compat") && (host == "localhost" || host == "[::1]" || loop_v4)
 }
 
-/// `hasToolHooks`.
-fn has_tool_hooks(settings: &Value) -> bool {
-    settings.get("hooks").and_then(Value::as_array).is_some_and(|hooks| {
-        hooks.iter().any(|h| {
-            h.get("enabled") != Some(&json!(false))
-                && !nekko_js::trim(s(h, "command")).is_empty()
-                && matches!(s(h, "event"), "PreToolUse" | "PostToolUse")
-        })
-    })
-}
-
 /// `clampMaxOutputTokens`.
 fn clamp_max_output_tokens(n: Option<&Value>) -> f64 {
     match n.and_then(Value::as_f64) {
@@ -297,6 +283,21 @@ enum Admit {
 async fn ended(ctx: &Ctx, session_id: &str, message: &str) -> Result<Admit, String> {
     fail(ctx, session_id, message).await?;
     Ok(Admit::Ended)
+}
+
+/// A `spawn_agent` child's turn (`admitTurn` then `buildDaemonTurn`, in the
+/// parent's `spawn` callback): admitted like any chat's, never with the
+/// browser. `None` when it cannot start; its chat was told why.
+pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String> {
+    let adm = ctx.admission.clone().ok_or("Sub-agents need the daemon to admit turns.")?;
+    let pending = adm.begin(s(&opts, "sessionId"))?;
+    match admit(ctx, &adm, opts, None, false, &pending.cancel).await? {
+        Admit::Spec(mut spec) => {
+            spec["allowBrowserControl"] = json!(false);
+            Ok(Some(spec))
+        }
+        Admit::Host | Admit::Ended => Ok(None),
+    }
 }
 
 /// `chat:send`.
@@ -554,7 +555,12 @@ async fn admit(
     );
     facts.insert("decide".into(), json!(!decide_with.is_null()));
     facts.insert("decideWith".into(), decide_with.clone());
-    facts.insert("hooks".into(), json!(!sandbox && has_tool_hooks(&settings)));
+    // Tool hooks run here (turns.rs, nekko-tools `hooks`), never through the host;
+    // a sandbox chat runs none.
+    facts.insert("hooks".into(), json!(false));
+    if !sandbox {
+        facts.insert("hookRules".into(), settings.get("hooks").filter(|h| h.is_array()).cloned().unwrap_or(json!([])));
+    }
     // The turn runs its tools in this daemon's container for the chat (turns.rs).
     facts.insert("sandbox".into(), json!(sandbox));
     facts.insert("connectorSnippets".into(), connector_snippets);
@@ -630,7 +636,8 @@ async fn admit(
     }
     // The host registers the turn for its callbacks; nothing here waits on it
     // (a queued turn's previous turn stays registered there until it lands).
-    {
+    // With no host, nothing adopts it.
+    if !ctx.backend.is_none() {
         let backend = ctx.backend.clone();
         let cancel = cancel.clone();
         let payload = json!([{
@@ -726,20 +733,16 @@ async fn provision(
         set_notice(session, &format!("Running setup: {command}"));
         announce(session).await;
         emit(ctx, json!({ "type": "session_meta", "sessionId": id })).await;
-        let log = |text: String| {
-            let backend = ctx.backend.clone();
-            let args = json!([id, folder_id, text]);
-            async move {
-                let _ = backend.call("loop:log", args).await;
-            }
-        };
-        log(format!("\r\n$ {command}  (worktree setup in {path})\r\n")).await;
+        let folder = json!(folder_id);
+        ctx.turns
+            .command_output(&ctx.backend, &id, &folder, &format!("\r\n$ {command}  (worktree setup in {path})\r\n"))
+            .await;
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let writer = {
-            let (backend, id, folder_id) = (ctx.backend.clone(), id.clone(), folder_id.clone());
+            let (turns, backend, id, folder) = (ctx.turns.clone(), ctx.backend.clone(), id.clone(), folder.clone());
             tokio::spawn(async move {
                 while let Some(text) = rx.recv().await {
-                    let _ = backend.call("loop:log", json!([id, folder_id, text])).await;
+                    turns.command_output(&backend, &id, &folder, &text).await;
                 }
             })
         };

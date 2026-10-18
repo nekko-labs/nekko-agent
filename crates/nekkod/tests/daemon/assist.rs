@@ -8,7 +8,7 @@ async fn generates_a_design_on_the_default_provider() {
     std::fs::create_dir_all(&data).unwrap();
     let model = scripted_model(vec![say_text("```html\n<!DOCTYPE html><p>Pricing</p>\n```")]).await;
     let d = start_with(true, Some(&data));
-    // No default provider yet: the host's answer is the error.
+    // No default provider yet: the refusal names what is missing.
     let (status, refused) =
         post(d.port, "design:generate", json!(["w1", { "prompt": "A pricing page" }]), Some(TOKEN)).await;
     assert_ne!(status, 200);
@@ -16,13 +16,15 @@ async fn generates_a_design_on_the_default_provider() {
     let (status, _) = post(d.port, "design:generate", json!(["w1", { "prompt": "  " }]), Some(TOKEN)).await;
     assert_ne!(status, 200);
     let provider = json!({ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) });
-    post(
+    // The default provider and model, resolved here from the settings.
+    let (status, saved) = post(
         d.port,
-        "test:designProvider",
-        json!([{ "provider": provider, "model": "synthetic", "promptCaching": true }]),
+        "settings:update",
+        json!([{ "providers": [provider], "defaultProviderId": "p1", "defaultModelId": "synthetic" }]),
         Some(TOKEN),
     )
     .await;
+    assert_eq!(status, 200, "{saved}");
     let (status, board) =
         post(d.port, "design:generate", json!(["w1", { "prompt": "  A pricing page  " }]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{board}");

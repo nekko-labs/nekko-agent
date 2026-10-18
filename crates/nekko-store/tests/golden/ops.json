@@ -27,5 +27,21 @@
   ] },
   { "fixture": "s_sandbox", "ops": [
     ["configureSandbox", "example/sandbox@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "11111111-2222-4333-8444-555555555555", 1760000000000]
+  ] },
+  { "fixture": "s_empty", "ops": [
+    ["setOptions", { "executionMode": "unified" }],
+    ["setOptions", { "gitIsolation": true, "title": "Isolated" }],
+    ["setOptions", { "executionMode": "bogus" }],
+    ["setOptions", { "executionMode": null }],
+    ["setOptions", { "sandbox": { "image": "x" } }],
+    ["setOptions", { "gitIsolation": null }],
+    ["setOptions", { "executionMode": "sandbox", "mode": "yolo" }],
+    ["setOptions", { "mode": "guardrails", "gitIsolation": true }],
+    ["setOptions", { "pinned": true }]
+  ] },
+  { "fixture": "s_long", "ops": [
+    ["setOptions", { "executionMode": "unified" }],
+    ["setOptions", { "gitIsolation": false }],
+    ["setOptions", { "executionMode": "worktree", "pinned": true }]
   ] }
 ]

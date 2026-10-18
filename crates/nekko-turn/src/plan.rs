@@ -14,7 +14,8 @@ fn strategy(id: Option<&Value>) -> &'static Value {
     all.iter().find(|s| id.is_some_and(|id| s.get("id") == Some(id))).unwrap_or(&all[1])
 }
 
-fn allows_spawn(orchestration: Option<&Value>) -> bool {
+/// Whether the orchestration strategy offers sub-agents (`getStrategy(...).allowsSpawn`).
+pub fn allows_spawn(orchestration: Option<&Value>) -> bool {
     let o = match orchestration {
         Some(o) if !o.is_null() => o,
         _ => &catalog().default_orchestration,

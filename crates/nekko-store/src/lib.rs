@@ -17,6 +17,7 @@ mod summary;
 mod write;
 
 pub use summary::summarize;
+pub use write::{STARTER_MODES, execution_mode};
 
 use serde_json::{Value, json};
 use std::collections::HashMap;

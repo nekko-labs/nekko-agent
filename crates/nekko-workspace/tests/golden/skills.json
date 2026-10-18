@@ -222,6 +222,195 @@
       }
     },
     {
+      "op": "install",
+      "result": {
+        "ok": true,
+        "installed": [
+          {
+            "skillId": "nekko-agent-review-council",
+            "target": "nekko-agent",
+            "installedAt": 0
+          },
+          {
+            "skillId": "vaizer-x",
+            "target": "codex",
+            "path": "<home>/.codex/skills/vx",
+            "installedAt": 0,
+            "skill": {
+              "id": "vaizer-x",
+              "name": "vx",
+              "description": "From Vaizer",
+              "author": "A",
+              "source": "vaizer",
+              "category": "Automation",
+              "template": "t",
+              "instructions": "i",
+              "markdown": "---\nname: vx\n---\nverbatim"
+            }
+          },
+          {
+            "skillId": "vaizer-n",
+            "target": "nekko-agent",
+            "installedAt": 0,
+            "skill": {
+              "id": "vaizer-n",
+              "name": "vn",
+              "description": "A Vaizer skill installed into Nekko Agent",
+              "author": "A",
+              "source": "vaizer",
+              "category": "Automation",
+              "template": "Run vn.",
+              "instructions": "i",
+              "markdown": "---\nname: vn\n---\n\nStep one.\nStep two.\n"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "defs",
+      "result": [
+        {
+          "id": "nekko-agent-review-council",
+          "name": "review-council",
+          "description": "Summon a council of specialised reviewers over your diff: correctness, security, and simplicity, each reporting separately",
+          "template": "Use the \"review-council\" skill. Its instructions:\n\nReview the working diff with a council of three parallel reviewer agents, each with one lens: (1) correctness bugs and edge cases, (2) security (injection, auth, secrets, unsafe input), (3) simplification and reuse. Spawn them with spawn_agent, give each the diff, then merge their findings into a single report ranked by severity, dropping duplicates. Verify each finding against the code before reporting it.\n\nTask:\nRun a review council over the current changes: spawn three parallel reviewers (correctness bugs, security, simplification), then merge their findings into one ranked report.",
+          "category": "Code quality",
+          "tools": [
+            "git diff",
+            "read_file",
+            "spawn_agent"
+          ],
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/review-council"
+              },
+              {
+                "id": "ctx",
+                "kind": "context",
+                "label": "Load diff",
+                "detail": "Changed files + context"
+              },
+              {
+                "id": "r1",
+                "kind": "agent",
+                "label": "Correctness cat",
+                "detail": "Bugs + edge cases"
+              },
+              {
+                "id": "r2",
+                "kind": "agent",
+                "label": "Security cat",
+                "detail": "Injection, auth, secrets"
+              },
+              {
+                "id": "r3",
+                "kind": "agent",
+                "label": "Simplicity cat",
+                "detail": "Reuse + clarity"
+              },
+              {
+                "id": "merge",
+                "kind": "agent",
+                "label": "Merge findings",
+                "detail": "Dedupe + rank by severity"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Council report"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "ctx"
+              },
+              {
+                "from": "ctx",
+                "to": "r1"
+              },
+              {
+                "from": "ctx",
+                "to": "r2"
+              },
+              {
+                "from": "ctx",
+                "to": "r3"
+              },
+              {
+                "from": "r1",
+                "to": "merge"
+              },
+              {
+                "from": "r2",
+                "to": "merge"
+              },
+              {
+                "from": "r3",
+                "to": "merge"
+              },
+              {
+                "from": "merge",
+                "to": "out"
+              }
+            ]
+          }
+        },
+        {
+          "id": "vaizer-n",
+          "name": "vn",
+          "description": "A Vaizer skill installed into Nekko Agent",
+          "template": "Use the \"vn\" skill. Its instructions:\n\nStep one.\nStep two.\n\nTask:\nRun vn.",
+          "category": "Automation",
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/vn",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "ctx",
+                "kind": "context",
+                "label": "Gather context",
+                "detail": "Files, diff, inputs"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Run instructions",
+                "detail": "A Vaizer skill installed into Nekko Agent"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "ctx"
+              },
+              {
+                "from": "ctx",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "op": "external",
       "result": [
         {
@@ -528,6 +717,144 @@
       ]
     },
     {
+      "op": "runnable",
+      "result": [
+        {
+          "name": "research",
+          "description": "Deep, multi-source research with a cited report",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Research the following thoroughly and produce a well-cited report. Work from sources you can actually open: pages and links I give you, read with fetch_url, and the browser when it is available. If finding sources would need a web search engine you do not have, say so instead of guessing:\n\n"
+        },
+        {
+          "name": "plan",
+          "description": "Produce a step-by-step implementation plan before coding",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Create a detailed, step-by-step implementation plan for:\n\n"
+        },
+        {
+          "name": "review",
+          "description": "Review the current code/diff for bugs and improvements",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Review the current changes for correctness bugs, edge cases, and possible improvements."
+        },
+        {
+          "name": "security-review",
+          "description": "Audit the changes for security vulnerabilities",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Do a focused security review of the current changes: look for injection, auth, secret-handling, and unsafe-input issues."
+        },
+        {
+          "name": "simplify",
+          "description": "Simplify and de-duplicate the changed code",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Review the changed code for reuse, simplification, and clarity, then apply the cleanups (no behavior change)."
+        },
+        {
+          "name": "test",
+          "description": "Write tests covering the important edge cases",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Write tests for this code, covering the important edge cases."
+        },
+        {
+          "name": "explain",
+          "description": "Explain how this code works, step by step",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Explain how this code works, step by step."
+        },
+        {
+          "name": "fix",
+          "description": "Find and fix the bug, explaining the root cause",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Find and fix the bug. Explain the root cause and the fix."
+        },
+        {
+          "name": "commit",
+          "description": "Stage and commit the current changes with a good message",
+          "category": "Delivery",
+          "source": "builtin",
+          "template": "Stage and commit the current changes with a clear, conventional commit message."
+        },
+        {
+          "name": "pr",
+          "description": "Open a pull request for the current branch",
+          "category": "Delivery",
+          "source": "builtin",
+          "template": "Push the current branch and open a pull request. Follow the repository's PR conventions (if any) and include an explicit **Unfinished work / release blockers** section listing incomplete scope, known bugs, unsupported platforms, missing tests or visual evidence, and verification limitations. Then see it through: wait for checks, fix what this change broke, and when nothing blocks it mark the PR ready and merge it the way the repository lands work. Residual notes in Unfinished work are not a reason to leave it in draft; only a real release blocker is, and name it if you stop."
+        },
+        {
+          "name": "review-council",
+          "description": "Summon a council of specialised reviewers over your diff: correctness, security, and simplicity, each reporting separately",
+          "category": "Code quality",
+          "source": "marketplace",
+          "template": "Use the \"review-council\" skill. Its instructions:\n\nReview the working diff with a council of three parallel reviewer agents, each with one lens: (1) correctness bugs and edge cases, (2) security (injection, auth, secrets, unsafe input), (3) simplification and reuse. Spawn them with spawn_agent, give each the diff, then merge their findings into a single report ranked by severity, dropping duplicates. Verify each finding against the code before reporting it.\n\nTask:\nRun a review council over the current changes: spawn three parallel reviewers (correctness bugs, security, simplification), then merge their findings into one ranked report."
+        },
+        {
+          "name": "vn",
+          "description": "A Vaizer skill installed into Nekko Agent",
+          "category": "Automation",
+          "source": "marketplace",
+          "template": "Use the \"vn\" skill. Its instructions:\n\nStep one.\nStep two.\n\nTask:\nRun vn."
+        },
+        {
+          "name": "alpha",
+          "description": "project alpha wins",
+          "category": "Imported",
+          "source": "claude",
+          "template": "Use the \"alpha\" skill below.\n\nProject alpha."
+        },
+        {
+          "name": "proj",
+          "description": "single quoted",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"proj\" skill below.\n\nProject skill."
+        },
+        {
+          "name": "beta",
+          "description": "First real line of beta.",
+          "category": "Imported",
+          "source": "claude",
+          "template": "Use the \"beta\" skill below. Its own files (scripts, references) are in <home>/.claude/skills/beta. That folder belongs to the skill, not to the user's project: do the work in the project as usual, and only read from that folder when the instructions point at one of its files.\n\n# Beta\n\nFirst real line of beta.\nMore."
+        },
+        {
+          "name": "gamma-two",
+          "description": "folded over two lines",
+          "category": "Imported",
+          "source": "codex",
+          "template": "Use the \"gamma-two\" skill below.\n\nGamma body"
+        },
+        {
+          "name": "nometa",
+          "description": "Just a body, no frontmatter.",
+          "category": "Imported",
+          "source": "gemini",
+          "template": "Use the \"nometa\" skill below.\n\nJust a body, no frontmatter."
+        },
+        {
+          "name": "hidden",
+          "description": "still read",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"hidden\" skill below.\n\nstill read"
+        },
+        {
+          "name": "literal",
+          "description": "line one\nline two",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"literal\" skill below.\n\nLiteral body"
+        }
+      ]
+    },
+    {
       "op": "skillFile",
       "result": "---\nname: review-council\ndescription: shadowed by the built-in\n---\nbody\n"
     },
@@ -559,6 +886,22 @@
             "instructions": "i",
             "markdown": "---\nname: vx\n---\nverbatim"
           }
+        },
+        {
+          "skillId": "vaizer-n",
+          "target": "nekko-agent",
+          "installedAt": 0,
+          "skill": {
+            "id": "vaizer-n",
+            "name": "vn",
+            "description": "A Vaizer skill installed into Nekko Agent",
+            "author": "A",
+            "source": "vaizer",
+            "category": "Automation",
+            "template": "Run vn.",
+            "instructions": "i",
+            "markdown": "---\nname: vn\n---\n\nStep one.\nStep two.\n"
+          }
         }
       ]
     },
@@ -577,20 +920,87 @@
           "skillId": "nekko-agent-review-council",
           "target": "nekko-agent",
           "installedAt": 0
+        },
+        {
+          "skillId": "vaizer-n",
+          "target": "nekko-agent",
+          "installedAt": 0,
+          "skill": {
+            "id": "vaizer-n",
+            "name": "vn",
+            "description": "A Vaizer skill installed into Nekko Agent",
+            "author": "A",
+            "source": "vaizer",
+            "category": "Automation",
+            "template": "Run vn.",
+            "instructions": "i",
+            "markdown": "---\nname: vn\n---\n\nStep one.\nStep two.\n"
+          }
         }
       ]
     },
     {
       "op": "uninstall",
-      "result": []
+      "result": [
+        {
+          "skillId": "vaizer-n",
+          "target": "nekko-agent",
+          "installedAt": 0,
+          "skill": {
+            "id": "vaizer-n",
+            "name": "vn",
+            "description": "A Vaizer skill installed into Nekko Agent",
+            "author": "A",
+            "source": "vaizer",
+            "category": "Automation",
+            "template": "Run vn.",
+            "instructions": "i",
+            "markdown": "---\nname: vn\n---\n\nStep one.\nStep two.\n"
+          }
+        }
+      ]
     },
     {
       "op": "uninstall",
-      "result": []
+      "result": [
+        {
+          "skillId": "vaizer-n",
+          "target": "nekko-agent",
+          "installedAt": 0,
+          "skill": {
+            "id": "vaizer-n",
+            "name": "vn",
+            "description": "A Vaizer skill installed into Nekko Agent",
+            "author": "A",
+            "source": "vaizer",
+            "category": "Automation",
+            "template": "Run vn.",
+            "instructions": "i",
+            "markdown": "---\nname: vn\n---\n\nStep one.\nStep two.\n"
+          }
+        }
+      ]
     },
     {
       "op": "list",
-      "result": []
+      "result": [
+        {
+          "skillId": "vaizer-n",
+          "target": "nekko-agent",
+          "installedAt": 0,
+          "skill": {
+            "id": "vaizer-n",
+            "name": "vn",
+            "description": "A Vaizer skill installed into Nekko Agent",
+            "author": "A",
+            "source": "vaizer",
+            "category": "Automation",
+            "template": "Run vn.",
+            "instructions": "i",
+            "markdown": "---\nname: vn\n---\n\nStep one.\nStep two.\n"
+          }
+        }
+      ]
     },
     {
       "op": "external",
@@ -940,6 +1350,197 @@
           }
         }
       ]
+    },
+    {
+      "op": "defs",
+      "result": [
+        {
+          "id": "vaizer-n",
+          "name": "vn",
+          "description": "A Vaizer skill installed into Nekko Agent",
+          "template": "Use the \"vn\" skill. Its instructions:\n\nStep one.\nStep two.\n\nTask:\nRun vn.",
+          "category": "Automation",
+          "workflow": {
+            "nodes": [
+              {
+                "id": "t",
+                "kind": "trigger",
+                "label": "/vn",
+                "detail": "Skill invoked"
+              },
+              {
+                "id": "ctx",
+                "kind": "context",
+                "label": "Gather context",
+                "detail": "Files, diff, inputs"
+              },
+              {
+                "id": "agent",
+                "kind": "agent",
+                "label": "Run instructions",
+                "detail": "A Vaizer skill installed into Nekko Agent"
+              },
+              {
+                "id": "out",
+                "kind": "output",
+                "label": "Deliverable"
+              }
+            ],
+            "edges": [
+              {
+                "from": "t",
+                "to": "ctx"
+              },
+              {
+                "from": "ctx",
+                "to": "agent"
+              },
+              {
+                "from": "agent",
+                "to": "out"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "op": "runnable",
+      "result": [
+        {
+          "name": "research",
+          "description": "Deep, multi-source research with a cited report",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Research the following thoroughly and produce a well-cited report. Work from sources you can actually open: pages and links I give you, read with fetch_url, and the browser when it is available. If finding sources would need a web search engine you do not have, say so instead of guessing:\n\n"
+        },
+        {
+          "name": "plan",
+          "description": "Produce a step-by-step implementation plan before coding",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Create a detailed, step-by-step implementation plan for:\n\n"
+        },
+        {
+          "name": "review",
+          "description": "Review the current code/diff for bugs and improvements",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Review the current changes for correctness bugs, edge cases, and possible improvements."
+        },
+        {
+          "name": "security-review",
+          "description": "Audit the changes for security vulnerabilities",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Do a focused security review of the current changes: look for injection, auth, secret-handling, and unsafe-input issues."
+        },
+        {
+          "name": "simplify",
+          "description": "Simplify and de-duplicate the changed code",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Review the changed code for reuse, simplification, and clarity, then apply the cleanups (no behavior change)."
+        },
+        {
+          "name": "test",
+          "description": "Write tests covering the important edge cases",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Write tests for this code, covering the important edge cases."
+        },
+        {
+          "name": "explain",
+          "description": "Explain how this code works, step by step",
+          "category": "Research & planning",
+          "source": "builtin",
+          "template": "Explain how this code works, step by step."
+        },
+        {
+          "name": "fix",
+          "description": "Find and fix the bug, explaining the root cause",
+          "category": "Code quality",
+          "source": "builtin",
+          "template": "Find and fix the bug. Explain the root cause and the fix."
+        },
+        {
+          "name": "commit",
+          "description": "Stage and commit the current changes with a good message",
+          "category": "Delivery",
+          "source": "builtin",
+          "template": "Stage and commit the current changes with a clear, conventional commit message."
+        },
+        {
+          "name": "pr",
+          "description": "Open a pull request for the current branch",
+          "category": "Delivery",
+          "source": "builtin",
+          "template": "Push the current branch and open a pull request. Follow the repository's PR conventions (if any) and include an explicit **Unfinished work / release blockers** section listing incomplete scope, known bugs, unsupported platforms, missing tests or visual evidence, and verification limitations. Then see it through: wait for checks, fix what this change broke, and when nothing blocks it mark the PR ready and merge it the way the repository lands work. Residual notes in Unfinished work are not a reason to leave it in draft; only a real release blocker is, and name it if you stop."
+        },
+        {
+          "name": "vn",
+          "description": "A Vaizer skill installed into Nekko Agent",
+          "category": "Automation",
+          "source": "marketplace",
+          "template": "Use the \"vn\" skill. Its instructions:\n\nStep one.\nStep two.\n\nTask:\nRun vn."
+        },
+        {
+          "name": "alpha",
+          "description": "project alpha wins",
+          "category": "Imported",
+          "source": "claude",
+          "template": "Use the \"alpha\" skill below.\n\nProject alpha."
+        },
+        {
+          "name": "proj",
+          "description": "single quoted",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"proj\" skill below.\n\nProject skill."
+        },
+        {
+          "name": "beta",
+          "description": "First real line of beta.",
+          "category": "Imported",
+          "source": "claude",
+          "template": "Use the \"beta\" skill below. Its own files (scripts, references) are in <home>/.claude/skills/beta. That folder belongs to the skill, not to the user's project: do the work in the project as usual, and only read from that folder when the instructions point at one of its files.\n\n# Beta\n\nFirst real line of beta.\nMore."
+        },
+        {
+          "name": "review-council",
+          "description": "shadowed by the built-in",
+          "category": "Imported",
+          "source": "claude",
+          "template": "Use the \"review-council\" skill below.\n\nbody"
+        },
+        {
+          "name": "gamma-two",
+          "description": "folded over two lines",
+          "category": "Imported",
+          "source": "codex",
+          "template": "Use the \"gamma-two\" skill below.\n\nGamma body"
+        },
+        {
+          "name": "nometa",
+          "description": "Just a body, no frontmatter.",
+          "category": "Imported",
+          "source": "gemini",
+          "template": "Use the \"nometa\" skill below.\n\nJust a body, no frontmatter."
+        },
+        {
+          "name": "hidden",
+          "description": "still read",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"hidden\" skill below.\n\nstill read"
+        },
+        {
+          "name": "literal",
+          "description": "line one\nline two",
+          "category": "Imported",
+          "source": "agents",
+          "template": "Use the \"literal\" skill below.\n\nLiteral body"
+        }
+      ]
     }
   ],
   "markdown": [
@@ -986,6 +1587,1125 @@
     {
       "name": "'mis\"",
       "body": "b"
+    }
+  ],
+  "skillDefs": [
+    {
+      "id": "nekko-agent-review-council",
+      "name": "review-council",
+      "description": "Summon a council of specialised reviewers over your diff: correctness, security, and simplicity, each reporting separately",
+      "template": "Use the \"review-council\" skill. Its instructions:\n\nReview the working diff with a council of three parallel reviewer agents, each with one lens: (1) correctness bugs and edge cases, (2) security (injection, auth, secrets, unsafe input), (3) simplification and reuse. Spawn them with spawn_agent, give each the diff, then merge their findings into a single report ranked by severity, dropping duplicates. Verify each finding against the code before reporting it.\n\nTask:\nRun a review council over the current changes: spawn three parallel reviewers (correctness bugs, security, simplification), then merge their findings into one ranked report.",
+      "category": "Code quality",
+      "tools": [
+        "git diff",
+        "read_file",
+        "spawn_agent"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/review-council"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Load diff",
+            "detail": "Changed files + context"
+          },
+          {
+            "id": "r1",
+            "kind": "agent",
+            "label": "Correctness cat",
+            "detail": "Bugs + edge cases"
+          },
+          {
+            "id": "r2",
+            "kind": "agent",
+            "label": "Security cat",
+            "detail": "Injection, auth, secrets"
+          },
+          {
+            "id": "r3",
+            "kind": "agent",
+            "label": "Simplicity cat",
+            "detail": "Reuse + clarity"
+          },
+          {
+            "id": "merge",
+            "kind": "agent",
+            "label": "Merge findings",
+            "detail": "Dedupe + rank by severity"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Council report"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "r1"
+          },
+          {
+            "from": "ctx",
+            "to": "r2"
+          },
+          {
+            "from": "ctx",
+            "to": "r3"
+          },
+          {
+            "from": "r1",
+            "to": "merge"
+          },
+          {
+            "from": "r2",
+            "to": "merge"
+          },
+          {
+            "from": "r3",
+            "to": "merge"
+          },
+          {
+            "from": "merge",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nekko-agent-spec-sync",
+      "name": "spec-sync",
+      "description": "Reconcile SPEC.md with the code: find shipped features the spec missed and spec promises the code broke",
+      "template": "Use the \"spec-sync\" skill. Its instructions:\n\nRead the workspace SPEC.md, then survey the codebase (entry points, routes, views, commands). Produce two lists: features that exist in code but are missing from the spec, and spec statements the code contradicts. Update SPEC.md so it describes the system as it actually is, keeping its existing voice and structure.\n\nTask:\nCompare SPEC.md against the actual code: list shipped features the spec does not mention, and spec claims the code no longer satisfies. Then update SPEC.md to match reality.",
+      "category": "Research & planning",
+      "tools": [
+        "read_file",
+        "search"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/spec-sync",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Reconcile SPEC.md with the code: find shipped fe"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "read_file, search"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nekko-agent-changelog",
+      "name": "changelog",
+      "description": "Write a user-facing changelog entry from the commits since the last release tag",
+      "template": "Use the \"changelog\" skill. Its instructions:\n\nRun git log from the last release tag to HEAD. Group the changes into Added / Changed / Fixed sections written for end users (plain language, no commit hashes, no internal refactors unless user-visible). Prepend the entry to CHANGELOG.md with the version and date.\n\nTask:\nWrite a user-facing changelog entry from the commits since the last release tag: group by Added / Changed / Fixed, plain language, no commit hashes.",
+      "category": "Delivery",
+      "tools": [
+        "git log",
+        "write_file"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/changelog",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Write a user-facing changelog entry from the com"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "git log, write_file"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nekko-agent-standup",
+      "name": "standup",
+      "description": "Summarize what changed in this workspace since yesterday, written as a standup update",
+      "template": "Use the \"standup\" skill. Its instructions:\n\nInspect git log and the working tree for the last 24 hours. Write a standup update with three short sections: Done (merged/committed), In progress (uncommitted or branch work), Blockers (failing tests, TODOs, unresolved conflicts). Keep each section to three bullets.\n\nTask:\nSummarize what changed in this repo in the last 24h as a standup update: done / in progress / blockers, three bullets each max.",
+      "category": "Delivery",
+      "tools": [
+        "git log",
+        "git diff"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/standup",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Summarize what changed in this workspace since y"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "git log, git diff"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nekko-agent-dep-audit",
+      "name": "dep-audit",
+      "description": "Audit dependencies for known vulnerabilities, unused packages, and majors you are behind on",
+      "template": "Use the \"dep-audit\" skill. Its instructions:\n\nRun the package manager audit (npm audit / cargo audit / pip-audit as appropriate), cross-check package manifests against actual imports to find unused dependencies, and list major versions the project is behind on. Produce a prioritized plan: security fixes first, then easy majors, then risky ones with their breaking changes.\n\nTask:\nAudit the dependencies: run the package manager audit, find unused packages, and list majors we are behind on, with a prioritized upgrade plan.",
+      "category": "Code quality",
+      "tools": [
+        "bash",
+        "read_file"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/dep-audit",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Audit dependencies for known vulnerabilities, un"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "bash, read_file"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nekko-agent-a11y-audit",
+      "name": "a11y-audit",
+      "description": "Audit UI code for accessibility: contrast, keyboard navigation, labels, and focus handling",
+      "template": "Use the \"a11y-audit\" skill. Its instructions:\n\nSweep the UI components for accessibility problems: interactive elements without accessible names, missing alt text, keyboard traps or unreachable controls, missing focus styles, and color pairs likely to fail WCAG AA contrast. Report findings grouped by severity, each with the file, the problem, and a concrete fix.\n\nTask:\nAudit the UI components for accessibility issues: missing labels/alt text, keyboard traps, focus handling, contrast risks. Report by severity with fixes.",
+      "category": "Code quality",
+      "tools": [
+        "read_file",
+        "search"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/a11y-audit",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Audit UI code for accessibility: contrast, keybo"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "read_file, search"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "community-i18n-sweep",
+      "name": "i18n-sweep",
+      "description": "Find hardcoded user-facing strings and move them into the translation files",
+      "template": "Use the \"i18n-sweep\" skill. Its instructions:\n\nSearch the UI code for hardcoded user-facing strings (labels, toasts, placeholders, errors). Move each into the project’s i18n catalog with a sensible key, replace the literal with the lookup, and flag strings whose meaning needs a translator note. Do not touch log lines or developer-only text.\n\nTask:\nSweep the UI code for hardcoded user-facing strings, move them into the i18n catalog, and flag any that need context notes for translators.",
+      "category": "Code quality",
+      "tools": [
+        "search",
+        "edit_file"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/i18n-sweep",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Find hardcoded user-facing strings and move them"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "search, edit_file"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anthropic-pdf",
+      "name": "pdf",
+      "description": "Read, create, merge, split, and fill PDF files",
+      "template": "Use the \"pdf\" skill. Its instructions:\n\nHandle PDF work end to end: extract text and tables from PDFs, combine or split documents, rotate pages, fill form fields, and create new PDFs from content. Prefer well-known Python libraries (pypdf, reportlab) run via the shell; verify the output file opens cleanly.\n\nTask:\nWork with the PDF file(s) I attach: extract text/tables, or create/merge/split/fill as I describe:\n\n",
+      "category": "Automation",
+      "tools": [
+        "bash",
+        "read_file",
+        "write_file"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/pdf",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Read, create, merge, split, and fill PDF files"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "bash, read_file, write_file"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anthropic-docx",
+      "name": "docx",
+      "description": "Create and edit Word documents with proper formatting, styles, and tracked changes",
+      "template": "Use the \"docx\" skill. Its instructions:\n\nCreate or edit .docx files with professional formatting: headings, tables of contents, page numbers, styled tables, and letterheads. Use python-docx via the shell. When editing an existing document, preserve its styles and structure.\n\nTask:\nCreate or edit the Word document as described, keeping professional formatting:\n\n",
+      "category": "Automation",
+      "tools": [
+        "bash",
+        "write_file"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/docx",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Create and edit Word documents with proper forma"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "bash, write_file"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anthropic-xlsx",
+      "name": "xlsx",
+      "description": "Read, clean, analyze, and build spreadsheets with formulas and charts",
+      "template": "Use the \"xlsx\" skill. Its instructions:\n\nWork with spreadsheet files: read and clean messy tabular data, compute columns and formulas, add charts, and produce well-formatted .xlsx output. Use openpyxl/pandas via the shell and sanity-check the numbers before delivering.\n\nTask:\nWork with the spreadsheet as described (read/clean/compute/chart):\n\n",
+      "category": "Automation",
+      "tools": [
+        "bash",
+        "read_file",
+        "write_file"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/xlsx",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Read, clean, analyze, and build spreadsheets wit"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "bash, read_file, write_file"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "superpowers-brainstorm",
+      "name": "brainstorm",
+      "description": "Structured brainstorming that interrogates the problem before proposing solutions",
+      "template": "Use the \"brainstorm\" skill. Its instructions:\n\nRun a structured brainstorm: first ask the clarifying questions that actually change the answer, then generate several genuinely distinct solution directions, each with its tradeoffs and a cheap way to validate it. Converge on a recommendation only after laying out the space.\n\nTask:\nBrainstorm with me on the following. First interrogate the problem with clarifying questions, then propose distinct solution directions with tradeoffs:\n\n",
+      "category": "Research & planning",
+      "tools": [],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/brainstorm",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Structured brainstorming that interrogates the p"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "superpowers-debug",
+      "name": "systematic-debug",
+      "description": "Systematic root-cause debugging: reproduce, bisect, instrument, prove the fix",
+      "template": "Use the \"systematic-debug\" skill. Its instructions:\n\nDebug systematically instead of guessing: reproduce the failure first, then isolate the cause by bisecting the input/commit/code path and adding targeted instrumentation. Fix the root cause, not the symptom, and prove the fix with a test that failed before and passes after.\n\nTask:\nDebug this systematically: reproduce it first, isolate the cause (bisect/instrument), fix the root cause, and prove the fix with a test:\n\n",
+      "category": "Code quality",
+      "tools": [
+        "read_file",
+        "edit_file",
+        "bash"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/systematic-debug"
+          },
+          {
+            "id": "repro",
+            "kind": "context",
+            "label": "Reproduce",
+            "detail": "Make it fail on demand"
+          },
+          {
+            "id": "bisect",
+            "kind": "loop",
+            "label": "Isolate",
+            "detail": "Bisect + instrument"
+          },
+          {
+            "id": "cause",
+            "kind": "decision",
+            "label": "Root cause found?"
+          },
+          {
+            "id": "fix",
+            "kind": "tool",
+            "label": "Apply fix"
+          },
+          {
+            "id": "prove",
+            "kind": "tool",
+            "label": "Prove with test"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Fix + proof"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "repro"
+          },
+          {
+            "from": "repro",
+            "to": "bisect"
+          },
+          {
+            "from": "bisect",
+            "to": "cause"
+          },
+          {
+            "from": "cause",
+            "to": "bisect",
+            "label": "no",
+            "back": true
+          },
+          {
+            "from": "cause",
+            "to": "fix",
+            "label": "yes"
+          },
+          {
+            "from": "fix",
+            "to": "prove"
+          },
+          {
+            "from": "prove",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "community-conventional-commits",
+      "name": "conventional-commits",
+      "description": "Stage and commit with strict Conventional Commits messages, splitting unrelated changes",
+      "template": "Use the \"conventional-commits\" skill. Its instructions:\n\nInspect the working tree and group related changes. Commit each group with a strict Conventional Commits message (type(scope): subject, imperative, <72 chars, body explaining why when non-obvious). Never mix unrelated changes in one commit.\n\nTask:\nCommit the current changes using Conventional Commits. Split unrelated changes into separate commits.",
+      "category": "Delivery",
+      "tools": [
+        "git status",
+        "git diff",
+        "git commit"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/conventional-commits",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Stage and commit with strict Conventional Commit"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "git status, git diff, git commit"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "md-skill",
+      "name": "md-skill",
+      "description": "A skill with its own SKILL.md and a long description that runs past forty-eight units",
+      "template": "Use the \"md-skill\" skill. Its instructions:\n\n# Steps\n\n1. Read.\n2. Write.\n\nTask:\nDo the md thing.",
+      "tools": [
+        "read_file",
+        "edit_file",
+        "bash",
+        "grep"
+      ],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/md-skill",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "A skill with its own SKILL.md and a long descrip"
+          },
+          {
+            "id": "tools",
+            "kind": "tool",
+            "label": "Use tools",
+            "detail": "read_file, edit_file, bash"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "tools"
+          },
+          {
+            "from": "tools",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "in-template",
+      "name": "in-template",
+      "description": "Instructions already in the template",
+      "template": "Review it. Check tests.",
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/in-template",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Instructions already in the template"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "empty",
+      "name": "empty",
+      "description": "No instructions",
+      "template": "Just do it.",
+      "tools": [],
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/empty",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "No instructions"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "own-flow",
+      "name": "own-flow",
+      "description": "Has a workflow",
+      "template": "t",
+      "category": "dev",
+      "workflow": {
+        "nodes": [
+          {
+            "id": "a",
+            "kind": "trigger",
+            "label": "/own"
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "id": "unicode",
+      "name": "ユニコード",
+      "description": "猫のスキル: 説明がとても長いので四十八単位を超えるかどうかを確かめるためのテキストです。",
+      "template": "Use the \"ユニコード\" skill. Its instructions:\n\n手順: 読む、書く。\n\nTask:\nテンプレート",
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/ユニコード",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "猫のスキル: 説明がとても長いので四十八単位を超えるかどうかを確かめるためのテキストです。"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "md-empty-body",
+      "name": "md-empty-body",
+      "description": "Markdown with no body falls back to instructions",
+      "template": "Use the \"md-empty-body\" skill. Its instructions:\n\nFallback instructions.\n\nTask:\nt2",
+      "workflow": {
+        "nodes": [
+          {
+            "id": "t",
+            "kind": "trigger",
+            "label": "/md-empty-body",
+            "detail": "Skill invoked"
+          },
+          {
+            "id": "ctx",
+            "kind": "context",
+            "label": "Gather context",
+            "detail": "Files, diff, inputs"
+          },
+          {
+            "id": "agent",
+            "kind": "agent",
+            "label": "Run instructions",
+            "detail": "Markdown with no body falls back to instructions"
+          },
+          {
+            "id": "out",
+            "kind": "output",
+            "label": "Deliverable"
+          }
+        ],
+        "edges": [
+          {
+            "from": "t",
+            "to": "ctx"
+          },
+          {
+            "from": "ctx",
+            "to": "agent"
+          },
+          {
+            "from": "agent",
+            "to": "out"
+          }
+        ]
+      }
     }
   ]
 }

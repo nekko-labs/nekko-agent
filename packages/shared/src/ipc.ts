@@ -312,7 +312,6 @@ export const IpcChannels = {
   voiceUninstall: 'voice:uninstall',
   voiceTranscribe: 'voice:transcribe',
   voicePermission: 'voice:permission',
-  dialogOpenFolder: 'dialog:openFolder',
 } as const;
 
 /** Push (main → renderer) channels. */

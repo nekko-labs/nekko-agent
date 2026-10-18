@@ -309,6 +309,8 @@ pub struct Turns {
     pub training: Option<Arc<nekko_automation::Training>>,
     /// Sandbox chats' containers (sandbox.rs): a sandbox turn's tools run there.
     pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
+    /// The chats' agent command logs (agent_logs.rs), with a data directory.
+    pub agent_logs: Option<Arc<crate::agent_logs::AgentLogs>>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
     /// How each queued turn the daemon started as the next of a chain ends,
@@ -318,6 +320,9 @@ pub struct Turns {
     watched: Mutex<HashMap<String, usize>>,
     /// Set once at startup when the daemon admits `chat:send`.
     preparer: OnceLock<Preparer>,
+    /// The router (`routes::route`), for a tool that asks another service
+    /// (`delegation_targets` lists a provider's models).
+    dispatch: OnceLock<crate::automation::Dispatcher>,
 }
 
 /// Admits the next queued prompt of a chain the daemon admitted itself
@@ -351,12 +356,19 @@ impl Turns {
             watches: None,
             training: None,
             sandboxes: None,
+            agent_logs: None,
             running: Mutex::default(),
             pending: Pending::default(),
             chained: Mutex::default(),
             watched: Mutex::default(),
             preparer: OnceLock::new(),
+            dispatch: OnceLock::new(),
         }
+    }
+
+    /// The router, set once the context exists.
+    pub fn set_dispatcher(&self, d: crate::automation::Dispatcher) {
+        let _ = self.dispatch.set(d);
     }
 
     /// Who admits the queued prompts of chains the daemon admitted.
@@ -392,6 +404,21 @@ impl Turns {
     pub fn with_sandboxes(mut self, sandboxes: Option<Arc<crate::sandbox::Sandboxes>>) -> Self {
         self.sandboxes = sandboxes;
         self
+    }
+
+    pub fn with_agent_logs(mut self, logs: Option<Arc<crate::agent_logs::AgentLogs>>) -> Self {
+        self.agent_logs = logs;
+        self
+    }
+
+    /// A line of a chat's command output: its agent log here, else the host's (`loop:log`).
+    pub async fn command_output(&self, backend: &Backend, session_id: &str, workspace_id: &Value, text: &str) {
+        match &self.agent_logs {
+            Some(logs) => logs.append(session_id, workspace_id.as_str(), text),
+            None => {
+                let _ = backend.call("loop:log", json!([session_id, workspace_id, text])).await;
+            }
+        }
     }
 
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
@@ -560,6 +587,14 @@ impl Turns {
             lock(&me.running).remove(&turn_id);
             me.pending.release(&shared.session_id);
             let summary = me.after_turn(&backend, &hub, &store, &spec, &turn_id, summary).await;
+            // The chat's agent terminal stops showing a running command.
+            if let Some(logs) = &me.agent_logs {
+                logs.finish(&shared.session_id);
+            }
+            // With no host to adopt the turn, what follows it runs here.
+            if backend.is_none() {
+                me.after_turn_hooks(&store, &spec, &summary);
+            }
             let _ = backend.call("turn:end", json!([turn_id, summary.clone()])).await;
             let _ = ended_tx.send((summary, lock(&shared.last_error).clone()));
         });
@@ -571,6 +606,45 @@ impl Turns {
     /// as the next turn of the chain (`summary.next`) once the host has
     /// admitted it (`turn:prepare`), or handed back to the host to run
     /// (`summary.drain`). A turn that never started has nothing after it.
+    /// `afterTurnHooks`: the TurnEnd hooks (how the reply ended; nothing waits
+    /// on them) and the linked spec kept in sync with the chat. A sandbox turn
+    /// runs neither. Here only when no host adopted the turn.
+    fn after_turn_hooks(self: &Arc<Self>, store: &Arc<SessionStore>, spec: &Value, summary: &Value) {
+        if spec.pointer("/facts/sandbox") == Some(&Value::Bool(true)) {
+            return;
+        }
+        let session_id = str_at(&spec["opts"], "sessionId").unwrap_or_default().to_string();
+        let stop = if summary.get("aborted") == Some(&Value::Bool(true)) {
+            "stopped".to_string()
+        } else {
+            str_at(summary, "stop").unwrap_or("complete").to_string()
+        };
+        let cwd =
+            spec.pointer("/facts/workspaces/0/path").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| {
+                std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
+            });
+        let hooks = self.settings.as_ref().map(|s| s.get()).and_then(|s| s.get("hooks").cloned()).unwrap_or(json!([]));
+        let rules = nekko_tools::hooks::rules(&hooks);
+        for rule in nekko_tools::hooks::matching_hooks(&rules, "TurnEnd", None) {
+            let rule = rule.clone();
+            let payload = json!({ "sessionId": session_id, "cwd": cwd, "stop": stop, "event": "TurnEnd" });
+            let (sid, cwd) = (session_id.clone(), cwd.clone());
+            tokio::spawn(async move {
+                nekko_tools::hooks::run_hook(&rule, "TurnEnd", &sid, None, &cwd, &payload).await;
+            });
+        }
+        let fresh = store.get(&session_id);
+        let linked = fresh.as_ref().is_some_and(|s| {
+            js::truthy(s.get("specLinked")) && !js::truthy(s.get("incognito")) && !js::truthy(s.get("offline"))
+        });
+        if linked && let Some(d) = self.dispatch.get() {
+            let build = d("spec:build".into(), vec![json!(session_id)]);
+            tokio::spawn(async move {
+                let _ = build.await;
+            });
+        }
+    }
+
     async fn after_turn(
         self: &Arc<Self>,
         backend: &Arc<Backend>,
@@ -657,10 +731,14 @@ impl Turns {
         // waits on it. Drained before `turn:end`.
         let (host_tx, host_rx) = mpsc::unbounded_channel::<HostMsg>();
         let wanted = host_events(&spec["facts"]);
-        let host_task = tokio::spawn(forward_to_host(host_rx, backend.clone(), shared.turn_id.clone(), wanted));
+        // With no host there is no copy to keep: the channel is just dropped.
+        let host_task = (!backend.is_none())
+            .then(|| tokio::spawn(forward_to_host(host_rx, backend.clone(), shared.turn_id.clone(), wanted)));
         let summary = self.run_turn(backend, &hub, store, spec, &shared, rx, &host_tx).await;
         drop(host_tx);
-        let _ = host_task.await;
+        if let Some(task) = host_task {
+            let _ = task.await;
+        }
         summary
     }
 
@@ -905,6 +983,11 @@ impl Turns {
             incognito,
             allow_browser: spec.get("allowBrowserControl") == Some(&Value::Bool(true)),
             training: js::truthy(lock(&session).get("trainingRunId")),
+            provider_id: spec["opts"].get("providerId").cloned().unwrap_or(Value::Null),
+            model_id: spec["opts"].get("modelId").cloned().unwrap_or(Value::Null),
+            allow_spawn: turn::plan::allows_spawn(settings.get("orchestration")),
+            decide_with: facts.get("decideWith").and_then(Value::as_str).map(str::to_string),
+            settings: settings.clone(),
             unattended_ms: (settings.get("unattendedQuestionMinutes").and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
                 * 60_000.0) as u64,
         };
@@ -1366,14 +1449,20 @@ fn native_context(
     ctx.session_id = Some(session_id.to_string());
     ctx.changes = Some(turns.changes.clone());
     ctx.processes = Some(turns.processes.clone());
-    let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
-    let b = backend.clone();
-    tokio::spawn(async move {
-        while let Some(line) = rx.recv().await {
-            let _ = b.call("loop:log", line).await;
+    ctx.command_log = match &turns.agent_logs {
+        Some(logs) => Some(logs.clone() as Arc<dyn CommandLog>),
+        // No data directory here: the host keeps the agent terminal.
+        None => {
+            let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
+            let b = backend.clone();
+            tokio::spawn(async move {
+                while let Some(line) = rx.recv().await {
+                    let _ = b.call("loop:log", line).await;
+                }
+            });
+            Some(Arc::new(HostLog(tx)))
         }
-    });
-    ctx.command_log = Some(Arc::new(HostLog(tx)));
+    };
     // Stop stops a running command too.
     let tools_cancel = ctx.cancel.clone();
     shared.cancel.on_cancel(move || tools_cancel.cancel());
@@ -1413,6 +1502,16 @@ struct TurnTools {
     incognito: bool,
     training: bool,
     unattended_ms: u64,
+    /// The turn's provider and model (`opts`): the default `delegation_targets`
+    /// lists, and what a `spawn_agent` child inherits.
+    provider_id: Value,
+    model_id: Value,
+    /// The orchestration strategy offers sub-agents (`allowSpawn`).
+    allow_spawn: bool,
+    /// Which decision runner `decide` uses (`facts.decideWith`): `local`, `typesafe`, or none.
+    decide_with: Option<String>,
+    /// The settings at the turn's start, when no store holds fresher ones.
+    settings: Value,
 }
 
 fn result(id: &str, output: impl Into<String>) -> Value {
@@ -1537,8 +1636,30 @@ impl TurnTools {
         {
             return Ok(decide_tool(service, id, &input).await);
         }
+        // TypeSafe's hosted Jev, through the daemon's decision service (`decisions:run`).
+        if name == "decide"
+            && self.decide_with.as_deref() == Some("typesafe")
+            && let Some(d) = self.turns.dispatch.get()
+        {
+            let request = turn::decide::decide_request_from_tool(&input);
+            return Ok(match d("decisions:run".into(), vec![json!("typesafe"), request]).await {
+                Ok(res) => {
+                    let mut out = Map::new();
+                    for k in ["model", "provider", "answers"] {
+                        if let Some(v) = res.get(k) {
+                            out.insert(k.into(), v.clone());
+                        }
+                    }
+                    result(id, js::stringify(&Value::Object(out)))
+                }
+                Err(e) => error(id, format!("decide failed: {e}")),
+            });
+        }
         if self.spawn && name == "spawn_agent" {
             return Ok(self.spawn_agent(call).await);
+        }
+        if name == "delegation_targets" && self.turns.dispatch.get().is_some() {
+            return Ok(self.delegation_targets(id, &input).await);
         }
         if let Some(mcp) = &self.mcp
             && name.starts_with("mcp__")
@@ -1724,6 +1845,86 @@ impl TurnTools {
     /// so; the host checks the call and makes the child; this daemon drives
     /// the child's turn, resumes it once after a recoverable failure, and
     /// answers with its last written message. Stopping the parent stops it.
+    /// `delegation_targets`: the exact chat-model ids on a provider, for an
+    /// explicit `spawn_agent` route (`runHostTool`'s branch). Never guesses:
+    /// any doubt is a coded failure the model can report.
+    async fn delegation_targets(&self, id: &str, input: &Value) -> Value {
+        let failure = |code: &str, message: &str| {
+            let output = json!({ "ok": false, "code": code, "message": message, "fallbackUsed": false });
+            json!({ "toolCallId": id, "output": js::stringify(&output), "isError": true })
+        };
+        let session = lock(&self.session).clone();
+        let spawn_off = session
+            .get("disabledTools")
+            .and_then(Value::as_array)
+            .is_some_and(|d| d.iter().any(|t| t.as_str() == Some("spawn_agent")));
+        if js::truthy(session.get("incognito")) || js::truthy(session.get("offline")) || !self.allow_spawn || spawn_off
+        {
+            return failure("delegation_unavailable", "Delegation discovery is unavailable in this chat.");
+        }
+        let Some(input) = input.as_object() else { return failure("invalid_input", "Expected an object.") };
+        let provider_id = match input.get("provider_id") {
+            None | Some(Value::Null) => self.provider_id.clone(),
+            Some(v) => v.clone(),
+        };
+        let Some(pid) = provider_id.as_str().filter(|p| !js::trim(p).is_empty() && js::trim(p) == *p) else {
+            return failure("invalid_provider_id", "Use an exact nonblank provider ID.");
+        };
+        let settings = self.turns.settings.as_ref().map(|s| s.get()).unwrap_or_else(|| self.settings.clone());
+        let provider = settings.get("providers").and_then(Value::as_array).and_then(|ps| {
+            ps.iter()
+                .find(|p| p.get("id").and_then(Value::as_str) == Some(pid) && js::truthy(p.get("enabled")))
+                .cloned()
+        });
+        let Some(provider) = provider else {
+            return failure(
+                "provider_unavailable",
+                "Provider is unknown or disabled. Enable the intended provider in Models.",
+            );
+        };
+        if crate::admission::provider_endpoint(&provider).is_none() {
+            return failure("invalid_endpoint", "Configure a valid HTTP(S) endpoint for the intended provider.");
+        }
+        if self.shared.cancel.is_cancelled() {
+            return failure("cancelled", "Discovery cancelled.");
+        }
+        let unavailable = || {
+            failure(
+                "model_list_unavailable",
+                "Could not verify the intended provider model list. Check service availability and credentials in Models, then refresh. No fallback was used.",
+            )
+        };
+        let Some(d) = self.turns.dispatch.get() else { return unavailable() };
+        let listed = match d("models:listStatus".into(), vec![json!(pid)]).await {
+            Ok(v) if v.get("error").is_none_or(Value::is_null) => v,
+            _ => return unavailable(),
+        };
+        if self.shared.cancel.is_cancelled() {
+            return failure("cancelled", "Discovery cancelled.");
+        }
+        let targets: Vec<Value> = listed
+            .get("models")
+            .and_then(Value::as_array)
+            .map(|ms| {
+                ms.iter()
+                    .filter(|m| {
+                        m.get("providerId").and_then(Value::as_str) == Some(pid)
+                            && nekko_messaging::auto::is_chat_model(m)
+                    })
+                    .map(|m| json!({ "modelId": m.get("id").cloned().unwrap_or(Value::Null) }))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let message = if targets.is_empty() {
+            "No chat models available. Load or install a model on this provider, then refresh."
+        } else {
+            "Use an exact modelId with spawn_agent."
+        };
+        let output =
+            json!({ "ok": true, "providerId": pid, "models": targets, "message": message, "fallbackUsed": false });
+        json!({ "toolCallId": id, "output": js::stringify(&output) })
+    }
+
     async fn spawn_agent(&self, call: &Value) -> Value {
         use turn::delegate::{
             MAX_CHILD_RESUMES, can_resume_child_failure, child_interrupted_message, sub_agent_answer, sub_agent_failure,
@@ -1738,8 +1939,20 @@ impl TurnTools {
         let mut failure: Option<String> = None;
         for attempt in 0..=MAX_CHILD_RESUMES {
             failure = None;
-            let args = json!([self.shared.turn_id, call, attempt, child]);
-            let prepared = match self.backend.call("spawn:prepare", args).await {
+            let prepared = match self.turns.dispatch.get().filter(|_| self.turns.store.is_some()) {
+                // Checked, made and admitted here (spawn.rs); the parent's own mode is the child's.
+                Some(d) => {
+                    let mut parent = lock(&self.session).clone();
+                    parent["mode"] = json!(self.mode);
+                    let req = json!({
+                        "parent": parent, "providerId": self.provider_id, "modelId": self.model_id,
+                        "input": call.get("input").cloned().unwrap_or(Value::Null), "attempt": attempt, "childId": child,
+                    });
+                    d("turn:spawnPrepare".into(), vec![req]).await
+                }
+                None => self.backend.call("spawn:prepare", json!([self.shared.turn_id, call, attempt, child])).await,
+            };
+            let prepared = match prepared {
                 Ok(v) => v,
                 Err(e) => return sub_agent_failure(&id, &e),
             };

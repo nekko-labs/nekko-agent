@@ -96,6 +96,12 @@ impl Backend {
         self.state.borrow().clone()
     }
 
+    /// No backend at all (`backend` absent from the config): nothing runs in
+    /// a host, so there are no host turns, approvals or busy chats to ask about.
+    pub fn is_none(&self) -> bool {
+        matches!(*self.state.borrow(), State::Disabled)
+    }
+
     async fn ready_base(&self) -> Result<String, String> {
         let mut rx = self.state.clone();
         let wait = async {

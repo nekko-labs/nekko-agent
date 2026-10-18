@@ -6,6 +6,7 @@
 
 mod accounts;
 mod admission;
+mod agent_logs;
 mod automation;
 mod backend;
 mod catalog;
@@ -31,6 +32,7 @@ mod oauth;
 mod procgroup;
 mod providers;
 mod remote;
+mod remote_image;
 mod resource_queue;
 mod routes;
 mod runtimes;
@@ -38,7 +40,9 @@ mod sandbox;
 mod settings;
 mod side;
 mod sideband;
+mod skill_sources;
 mod small_services;
+mod spawn;
 mod tooling;
 mod turns;
 mod voice;
@@ -123,13 +127,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let mcp: Arc<mcp::Mcp> = Arc::default();
     let changes = Arc::new(nekko_tools::ChangeTracker::new());
     {
-        // The host tells the UI and the phone relay, as it did when it kept the list.
-        let backend = backend.clone();
+        // The UI (and a paired phone, through the relay agent here) hears that a chat's changes moved.
+        let hub = hub.clone();
         changes.set_notifier(move |session_id| {
-            let (backend, id) = (backend.clone(), session_id.to_string());
-            tokio::spawn(async move {
-                let _ = backend.call("changes:notify", serde_json::json!([id])).await;
-            });
+            hub.publish("changes:updated", serde_json::json!({ "sessionId": session_id }), false);
         });
     }
     let accounts = Arc::new(accounts::Accounts::new(
@@ -146,8 +147,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     });
     let compactions = compaction::Compactions::new();
     let sandboxes = cfg.data_dir.clone().filter(|_| sessions.is_some()).map(|d| sandbox::Sandboxes::new(d.into()));
-    let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
-        .then(|| admission::Admission::new(compactions.clone(), cfg.allow_browser_control));
+    // Turns are admitted here wherever this daemon owns the data, with or without a TS backend.
+    let admission =
+        cfg.data_dir.is_some().then(|| admission::Admission::new(compactions.clone(), cfg.allow_browser_control));
     let catalog = settings.as_deref().map(|s| catalog::new(s, cfg.hugging_face_url.clone()));
     let automation =
         Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), backend.clone(), hub.clone()));
@@ -174,7 +176,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     };
     // Agent watches, when the daemon knows the data directory (watches.rs).
     let agent_watches = match (&cfg.data_dir, &sessions) {
-        (Some(d), Some(store)) => Some(watches::Watches::new(d.into(), store.clone(), backend.clone())),
+        (Some(d), Some(store)) => Some(watches::Watches::new(d.into(), store.clone(), backend.clone(), hub.clone())),
         _ => None,
     };
     let machine =
@@ -183,7 +185,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let model_downloads = library.clone().zip(catalog.clone()).map(|(library, catalog)| {
         let fetch =
             downloads::Rebased(nekko_engine::download::HttpFetch(reqwest::Client::new()), cfg.hugging_face_url.clone());
-        downloads::ModelDownloads::new(Arc::new(fetch), library, catalog, backend.clone(), hub.clone())
+        downloads::ModelDownloads::new(Arc::new(fetch), library, catalog, hub.clone())
     });
     // The runtimes install through the same queue as the models.
     let installs = cfg.data_dir.clone().zip(model_downloads.clone()).zip(settings.clone()).map(|((dir, d), s)| {
@@ -229,7 +231,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token)))
             .with_watches(agent_watches.clone())
             .with_training(automation.training.clone())
-            .with_sandboxes(sandboxes.clone()),
+            .with_sandboxes(sandboxes.clone())
+            .with_agent_logs(cfg.data_dir.as_ref().map(|d| {
+                let read = read_settings(&settings);
+                agent_logs::AgentLogs::new(std::path::Path::new(d), sessions.clone(), Arc::new(read), hub.clone())
+            })),
         ),
         mcp: mcp.clone(),
         accounts: accounts.clone(),
@@ -295,6 +301,14 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }));
     }
     {
+        // A turn's tool that asks another service (delegation_targets), through the router.
+        let c = ctx.clone();
+        ctx.turns.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
+            let c = c.clone();
+            Box::pin(async move { routes::route(&c, &channel, args).await })
+        }));
+    }
+    {
         // A workflow stops a chat through the router, as the UI would.
         let ctx = ctx.clone();
         automation.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
@@ -307,6 +321,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         n.start(ctx.clone());
     }
     if let Some(w) = &agent_watches {
+        let c = ctx.clone();
+        w.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
+            let c = c.clone();
+            Box::pin(async move { routes::route(&c, &channel, args).await })
+        }));
         w.start(ctx.turns.clone());
     }
     // The catalog refresh checks, where the daemon serves `updates:check`.

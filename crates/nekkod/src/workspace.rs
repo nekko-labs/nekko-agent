@@ -55,6 +55,8 @@ pub const DATA_CHANNELS: &[&str] = &[
     "design:generate",
     "skills:installed",
     "skills:external",
+    "skills:runnable",
+    "workflow:skillDefs",
     "skills:targets",
     "skill:install",
     "skill:uninstall",
@@ -300,9 +302,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "workspace:list" => Ok(settings(ctx).await.get("workspaces").cloned().unwrap_or(json!([]))),
         "workspace:addByPath" => add_folder(ctx, arg(&args, 0)).await,
         "workspace:remove" => remove_folder(ctx, &text(&args, 0)).await,
-        "skills:installed" | "skills:targets" | "skill:install" | "skill:uninstall" | "skills:external" => {
+        "skills:installed" | "skills:targets" | "skill:install" | "skill:uninstall" | "skills:external"
+        | "skills:runnable" | "workflow:skillDefs" => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
-            let roots: Vec<String> = if channel == "skills:external" {
+            let roots: Vec<String> = if matches!(channel, "skills:external" | "skills:runnable") {
                 folders(ctx).await.iter().filter_map(|w| w.get("path").map(nekko_js::display)).collect()
             } else {
                 Vec::new()
@@ -444,6 +447,9 @@ fn base36(mut n: u64) -> String {
 
 /// The chats the host or this daemon is running right now.
 async fn busy_chats(ctx: &Ctx) -> Result<Vec<String>, String> {
+    if ctx.backend.is_none() {
+        return Ok(ctx.turns.running_sessions());
+    }
     let host = tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("chats:busy", json!([]))).await;
     let mut ids: Vec<String> = match host {
         Ok(Ok(Value::Array(a))) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
@@ -514,13 +520,9 @@ fn skills_route(dir: &std::path::Path, channel: &str, args: &[Value], roots: &[S
         "skill:uninstall" => {
             skills::uninstall(dir, arg(args, 0).unwrap_or(&Value::Null), arg(args, 1)).map(Value::Array)
         }
-        "skills:external" => {
-            let exclude: Vec<String> = skills::list_installed(dir)
-                .iter()
-                .filter_map(|r| r.get("path").filter(|p| nekko_js::truthy(Some(p))).map(nekko_js::display))
-                .collect();
-            Ok(Value::Array(skills::discover_external(&home, roots, &exclude, &skills::reserved_names(dir))))
-        }
+        "skills:external" => Ok(Value::Array(skills::external_skills(dir, &home, roots))),
+        "skills:runnable" => Ok(Value::Array(skills::runnable_skills(dir, &home, roots))),
+        "workflow:skillDefs" => Ok(Value::Array(skills::installed_skill_defs(dir))),
         other => Err(format!("{other} is not a skills channel")),
     }
 }
@@ -543,7 +545,7 @@ async fn build_spec(ctx: &Ctx, args: Vec<Value>) -> Result<Value, String> {
         Ok(plan) => plan,
         Err(refusal) => return Ok(refusal),
     };
-    let resolved = match ctx.backend.call("provider:resolved", json!([plan.provider_id])).await {
+    let resolved = match resolved_provider(ctx, plan.provider_id.as_str().unwrap_or_default()).await {
         Ok(v) => v,
         Err(e) => return Ok(json!({ "ok": false, "message": e })),
     };
@@ -564,10 +566,46 @@ async fn build_spec(ctx: &Ctx, args: Vec<Value>) -> Result<Value, String> {
 
 /// `fetchPrInfo(url)`: one PR's live state, read now (gh, else the REST API
 /// with the GitHub token), `null` when it cannot be read. For agent watches.
-#[allow(dead_code, reason = "agent watches moving into the daemon call it")]
 pub async fn pr_info(ctx: &Ctx, url: &str) -> Value {
     let token = github_token(&settings(ctx).await);
     ctx.workspace.prs.fetch_info(url, token.as_deref()).await
+}
+
+/// `resolvedProvider(providerId)`: a saved provider, signed in (a subscription
+/// token refreshed) and ready for the Rust providers, with the prompt-caching
+/// setting. What a spec doc is built with.
+async fn resolved_provider(ctx: &Ctx, provider_id: &str) -> Result<Value, String> {
+    let settings = settings(ctx).await;
+    let known = settings
+        .get("providers")
+        .and_then(Value::as_array)
+        .is_some_and(|ps| ps.iter().any(|p| p.get("id").and_then(Value::as_str) == Some(provider_id)));
+    if !known {
+        return Err("Pick a provider and model, then chat first.".into());
+    }
+    let provider = crate::providers::resolve_provider(ctx, provider_id).await?;
+    Ok(json!({
+        "provider": crate::admission::host_provider_config(ctx, &provider),
+        "promptCaching": settings.get("promptCaching") != Some(&json!(false)),
+    }))
+}
+
+/// `designProvider()`: the default provider (resolved) and model a design is generated with.
+async fn design_provider(ctx: &Ctx) -> Result<Value, String> {
+    let settings = settings(ctx).await;
+    let missing = || "Set a default provider and model in Models first.".to_string();
+    let id = settings.get("defaultProviderId").and_then(Value::as_str).filter(|s| !s.is_empty()).ok_or_else(missing)?;
+    let model = settings.get("defaultModelId").and_then(Value::as_str).filter(|s| !s.is_empty()).ok_or_else(missing)?;
+    let known = settings
+        .get("providers")
+        .and_then(Value::as_array)
+        .is_some_and(|ps| ps.iter().any(|p| p.get("id").and_then(Value::as_str) == Some(id)));
+    if !known {
+        return Err(missing());
+    }
+    let mut out = resolved_provider(ctx, id).await?;
+    out["model"] = json!(model);
+    Ok(out)
 }
 
 /// `generateDesign(workspaceId, input)`: the checks and the prompt here, the
@@ -580,7 +618,7 @@ async fn generate_design(ctx: &Ctx, dir: PathBuf, args: Vec<Value>) -> Result<Va
         let (dir, workspace, input) = (dir.clone(), workspace.clone(), input.clone());
         blocking(move || design::plan(&dir, workspace.as_ref(), &input)).await??
     };
-    let chosen = ctx.backend.call("design:provider", json!([])).await?;
+    let chosen = design_provider(ctx).await?;
     let mut message =
         json!({ "id": "design", "role": "user", "content": plan.ask, "createdAt": nekko_workspace_now() });
     if let Some(images) = &plan.images {

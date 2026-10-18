@@ -7,7 +7,7 @@
 //! may be handed either side's output.
 
 use nekko_store::{SessionStore, summarize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::path::Path;
 
 fn golden() -> std::path::PathBuf {
@@ -72,6 +72,7 @@ fn every_write_leaves_the_file_the_ts_host_would() {
         )
         .unwrap();
         let store = SessionStore::new(&data);
+        let mut errors: Vec<String> = Vec::new();
         for op in case["ops"].as_array().unwrap() {
             let op = op.as_array().unwrap();
             let arg = op.get(1).cloned().unwrap_or(Value::Null);
@@ -90,10 +91,15 @@ fn every_write_leaves_the_file_the_ts_host_would() {
                     .map(Some),
                 other => panic!("unknown op {other}"),
             };
-            assert!(r.unwrap().is_some(), "{fixture}: the chat vanished");
+            match r {
+                Ok(saved) => assert!(saved.is_some(), "{fixture}: the chat vanished"),
+                Err(e) => errors.push(e),
+            }
         }
         let text = std::fs::read_to_string(data.join("sessions").join(format!("{fixture}.json"))).unwrap();
         assert_eq!(normalize(&text), expected[fixture].as_str().unwrap(), "{fixture}: file differs");
+        let refusals = expected.get(&format!("{fixture}:errors")).and_then(Value::as_str).unwrap_or("[]");
+        assert_eq!(serde_json::to_string(&errors).unwrap(), refusals, "{fixture}: refusals differ");
         std::fs::remove_dir_all(&data).ok();
     }
 }
@@ -117,7 +123,8 @@ fn creates_and_deletes_chats_the_way_the_ts_host_does() {
     let id = s["id"].as_str().unwrap().to_string();
     assert!(id.starts_with("s_") && id.len() > 12, "{id}");
     let keys: Vec<&String> = s.as_object().unwrap().keys().collect();
-    assert_eq!(keys, ["id", "title", "gitIsolation", "workspaceId", "messages", "createdAt", "updatedAt"]);
+    // The order createSession writes (golden/creates.json holds the TS output).
+    assert_eq!(keys, ["id", "title", "workspaceId", "gitIsolation", "messages", "createdAt", "updatedAt"]);
     assert_eq!(s["gitIsolation"], true);
     assert_eq!(store.get(&id).unwrap()["title"], "New chat");
     assert!(store.create(None).unwrap().get("workspaceId").is_none());
@@ -327,4 +334,41 @@ fn a_failed_purge_callback_keeps_the_chat() {
     assert_eq!(store.purge_archived(|_| Ok(())).unwrap(), 1);
     assert!(!file.exists());
     std::fs::remove_dir_all(&data).ok();
+}
+
+#[test]
+fn every_new_chat_is_the_one_create_session_makes() {
+    let cases: Value =
+        serde_json::from_str(&std::fs::read_to_string(golden().join("create-cases.json")).unwrap()).unwrap();
+    let expected: Value =
+        serde_json::from_str(&std::fs::read_to_string(golden().join("creates.json")).unwrap()).unwrap();
+    let starter: Value = serde_json::from_str(nekko_store::STARTER_MODES).unwrap();
+    assert_eq!(starter, expected["starterModes"], "STARTER_MODES drifted from saved-modes.ts");
+    for (i, k) in cases["cases"].as_array().unwrap().iter().enumerate() {
+        let data = std::env::temp_dir().join(format!("nekko-create-{}-{i}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        std::fs::create_dir_all(data.join("sessions")).unwrap();
+        for (id, parent) in cases["parents"].as_object().unwrap() {
+            std::fs::write(data.join("sessions").join(format!("{id}.json")), parent.to_string()).unwrap();
+        }
+        let store = SessionStore::new(&data);
+        let want = &expected["results"][i];
+        let made = store
+            .create_with(k["workspaceId"].as_str(), k["parent"].as_str(), k.get("supporting"), &want["settings"])
+            .unwrap();
+        let id = made["id"].as_str().unwrap().to_string();
+        let shape = id.starts_with("s_") && id.len() > 12;
+        assert_eq!(shape, want["idShape"] == json!(true), "case {i}: {id}");
+        let text = std::fs::read_to_string(data.join("sessions").join(format!("{id}.json"))).unwrap();
+        let mut saved: serde_json::Map<String, Value> = serde_json::from_str(&text).unwrap();
+        saved.insert("id".into(), json!("<id>"));
+        saved.insert("createdAt".into(), json!(0));
+        saved.insert("updatedAt".into(), json!(0));
+        assert_eq!(
+            serde_json::to_string(&Value::Object(saved)).unwrap(),
+            serde_json::to_string(&want["saved"]).unwrap(),
+            "case {i}: {k}"
+        );
+        std::fs::remove_dir_all(&data).ok();
+    }
 }

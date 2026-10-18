@@ -401,7 +401,10 @@ async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
     };
     assert!(tool_out("c_ask").contains("Q: Which bug?\nA: Login"), "{}", tool_out("c_ask"));
     assert!(tool_out("c_read").contains("pineapple"));
-    assert_eq!(tool_out("c_host"), "host tool ran");
+    // delegation_targets runs here now, never through the host: a coded answer, never a guess.
+    let delegation: Value = serde_json::from_str(&tool_out("c_host")).unwrap();
+    assert_eq!(delegation["fallbackUsed"], false, "{delegation}");
+    assert!(!host_calls(rig.d.port).await.iter().any(|c| c[0] == "turn:tool"), "no tool went through the host");
     let last = messages.last().unwrap();
     assert_eq!(last["content"], "all done");
     assert_eq!(last["turnStats"]["calls"], 1);
@@ -737,10 +740,7 @@ async fn stop_during_admission_cancels_setup_and_refuses_duplicate_send() {
     let send_opts = opts.clone();
     let port = rig.d.port;
     let sender = tokio::spawn(async move { post(port, "chat:send", json!([send_opts]), Some(TOKEN)).await });
-    until_host_call(port, "the setup command to start", Duration::from_secs(20), |c| {
-        c[0] == "loop:log" && c[1][2].as_str().is_some_and(|s| s.trim().starts_with("setup-begun"))
-    })
-    .await;
+    until_agent_log(port, "s_prepare_stop", "setup-begun", Duration::from_secs(20)).await;
     let (status, refused) = post(port, "chat:send", json!([opts.clone()]), Some(TOKEN)).await;
     assert_eq!(status, 400, "{refused}");
     assert!(refused.to_string().contains("already being prepared"));

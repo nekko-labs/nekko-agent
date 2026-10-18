@@ -60,6 +60,7 @@ fn installs_listings_and_discovery_match_the_ts_host() {
         let a = |i: usize| o.get(i);
         let out: Result<Value, String> = match op {
             "targets" => Ok(skills::targets(&home)),
+            "defs" => Ok(Value::Array(skills::installed_skill_defs(d))),
             "list" => Ok(Value::Array(skills::list_installed(d))),
             "install" => skills::install(d, &home, &o[1], a(2), a(3)),
             "uninstall" => skills::uninstall(d, &o[1], a(2)).map(Value::Array),
@@ -75,6 +76,7 @@ fn installs_listings_and_discovery_match_the_ts_host() {
                     &skills::reserved_names(d),
                 )))
             }
+            "runnable" => Ok(Value::Array(skills::runnable_skills(d, &home, std::slice::from_ref(&project)))),
             "skillFile" => {
                 Ok(json!(std::fs::read_to_string(home_dir.join(o[1].as_str().unwrap()).join("SKILL.md")).unwrap()))
             }
@@ -110,7 +112,9 @@ fn installs_listings_and_discovery_match_the_ts_host() {
             Value::Object(m)
         })
         .collect();
-    let actual = json!({ "ops": ops, "markdown": markdown, "parse": parse });
+    let market = data["market"].as_array().unwrap().iter();
+    let skill_defs: Vec<Value> = market.chain(c["defsExtra"].as_array().unwrap()).map(skills::skill_def).collect();
+    let actual = json!({ "ops": ops, "markdown": markdown, "parse": parse, "skillDefs": skill_defs });
     let text = format!("{}\n", nekko_js::stringify_pretty(&actual, "  "));
     for p in [&home_dir, &project_dir, &data_dir] {
         let _ = std::fs::remove_dir_all(p);

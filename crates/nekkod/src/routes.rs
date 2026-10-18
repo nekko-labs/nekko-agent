@@ -120,12 +120,26 @@ fn is_agent(id: &str) -> bool {
 }
 
 pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, String> {
-    // Creation and execution-policy patches belong to the host, which owns defaults and setup.
-    if channel == "session:create"
-        || (channel == "session:setOptions"
-            && ["executionMode", "sandbox", "gitIsolation"].iter().any(|key| arg(&args, 1).get(*key).is_some()))
+    // With no data directory the host owns the chats, their defaults and their setup.
+    if ctx.sessions.is_none()
+        && (channel == "session:create"
+            || (channel == "session:setOptions"
+                && ["executionMode", "sandbox", "gitIsolation"].iter().any(|key| arg(&args, 1).get(*key).is_some())))
     {
         return ctx.backend.call(channel, Value::Array(args)).await;
+    }
+    if channel == "session:create" {
+        return create_session(ctx, arg(&args, 0).as_str(), None, None).await;
+    }
+    if channel == "session:setOptions"
+        && ["executionMode", "gitIsolation"].iter().any(|key| arg(&args, 1).get(*key).is_some())
+    {
+        let id = str_arg(&args, 0).unwrap_or_default();
+        let busy = ctx.turns.running_sessions().iter().any(|s| s == id)
+            || ctx.admission.as_ref().is_some_and(|a| a.is_admitting(id));
+        if busy {
+            return Err("Wait for the current reply to finish before changing this chat's Git isolation.".into());
+        }
     }
     if matches!(channel, "terminal:create" | "mcp:call") {
         if arg(&args, 0).get("executionMode").and_then(Value::as_str) == Some("sandbox") {
@@ -167,12 +181,17 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         })),
         "terminals:list" => {
             let mut all = serde_json::to_value(ctx.terminals.list()).unwrap_or(json!([]));
-            // The agent command logs still live in the TS host.
-            // A starting backend must not hold the terminal list hostage.
-            let agent = tokio::time::timeout(AUX_WAIT, ctx.backend.call("terminals:list:agent", json!([]))).await;
-            if let Ok(Ok(Value::Array(agent))) = agent
-                && let Value::Array(list) = &mut all
-            {
+            let agent = match &ctx.turns.agent_logs {
+                Some(logs) => logs.list(),
+                // No data directory: the agent command logs live in the TS host.
+                // A starting backend must not hold the terminal list hostage.
+                None => match tokio::time::timeout(AUX_WAIT, ctx.backend.call("terminals:list:agent", json!([]))).await
+                {
+                    Ok(Ok(Value::Array(agent))) => agent,
+                    _ => Vec::new(),
+                },
+            };
+            if let Value::Array(list) = &mut all {
                 list.extend(agent);
             }
             Ok(all)
@@ -184,7 +203,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         | "terminal:signal" | "terminal:close" => {
             let id = str_arg(&args, 0).unwrap_or_default().to_string();
             if is_agent(&id) {
-                return ctx.backend.call(channel, Value::Array(args)).await;
+                return match &ctx.turns.agent_logs {
+                    Some(logs) => logs.route(channel, &id, &args).await,
+                    None => ctx.backend.call(channel, Value::Array(args)).await,
+                };
             }
             terminal_op(ctx, channel, &id, &args)
         }
@@ -215,20 +237,24 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         // waits on it, otherwise by the host (an in-process turn's).
         "tool:approve" => {
             let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
-            if ctx.turns.pending.approve(sid, cid, arg(&args, 2) == &json!(true)) {
+            if ctx.turns.pending.approve(sid, cid, arg(&args, 2) == &json!(true)) || ctx.backend.is_none() {
                 return Ok(Value::Null);
             }
             ctx.backend.call(channel, Value::Array(args)).await
         }
         "chat:answer" => {
             let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
-            if ctx.turns.pending.answer(sid, cid, arg(&args, 2).clone()) {
+            if ctx.turns.pending.answer(sid, cid, arg(&args, 2).clone()) || ctx.backend.is_none() {
                 return Ok(Value::Null);
             }
             ctx.backend.call(channel, Value::Array(args)).await
         }
         "chat:pending" => {
-            let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:pending:host", json!([]))).await;
+            let host = if ctx.backend.is_none() {
+                Ok(Ok(json!({})))
+            } else {
+                tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:pending:host", json!([]))).await
+            };
             let host = match host {
                 Ok(Ok(v)) if v.is_object() => v,
                 _ => json!({}),
@@ -247,6 +273,20 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
                     .await
                     .map_err(|e| e.to_string());
+            }
+            if ctx.backend.is_none() {
+                // Nothing running to steer: the text waits for after the turn, as `steerChat` queued it.
+                let Some(store) = ctx.sessions.clone() else { return Ok(Value::Null) };
+                if content.is_empty() {
+                    return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
+                        .await
+                        .map_err(|e| e.to_string());
+                }
+                return tokio::task::spawn_blocking(move || {
+                    store.queue(&sid, &json!(content)).map(|s| s.unwrap_or(Value::Null))
+                })
+                .await
+                .map_err(|e| e.to_string())?;
             }
             ctx.backend.call(channel, Value::Array(args)).await
         }
@@ -288,11 +328,24 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
             let Some(info) = crate::hypergate::resolve(&base).await else { return Ok(Value::Null) };
             let info = Value::Object(info);
-            let servers = ctx.backend.call("mcp:hypergate:save", json!([info])).await?;
+            let servers = if ctx.settings.is_some() {
+                let configured =
+                    crate::settings::current(ctx).await.get("mcpServers").and_then(Value::as_array).cloned();
+                let list = crate::hypergate::with_hypergate(&configured.unwrap_or_default(), &info);
+                let saved = crate::settings::update(ctx, json!({ "mcpServers": list })).await?;
+                saved.get("mcpServers").cloned().unwrap_or(json!([]))
+            } else {
+                // No data directory here: the host keeps the settings.
+                ctx.backend.call("mcp:hypergate:save", json!([info])).await?
+            };
             ctx.mcp.sync(&servers).await;
             Ok(info)
         }
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
+        // Internal: a `spawn_agent` call checked, its child made and its turn admitted (spawn.rs).
+        "turn:spawnPrepare" if ctx.sessions.is_some() => Ok(crate::spawn::prepare(ctx, arg(&args, 0)).await),
+        // Internal: one PR's live state, for an agent watch's snapshot (watches.rs).
+        "watch:prInfo" => Ok(crate::workspace::pr_info(ctx, str_arg(&args, 0).unwrap_or_default()).await),
         // `mcpStatus`: sync the configured servers here, then report them.
         "mcp:status" if ctx.settings.is_some() => {
             let settings = crate::settings::current(ctx).await;
@@ -408,11 +461,28 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             None => ctx.backend.call(channel, Value::Array(args)).await,
         },
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
-            session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
+            session_op(
+                ctx.sessions.clone().expect("checked"),
+                ctx.backend.clone(),
+                ctx.turns.agent_logs.clone(),
+                channel,
+                args,
+            )
+            .await
         }
         _ => {
             if let Some(r) = crate::engine::route(&ctx.engine, channel, &args).await {
                 return r;
+            }
+            if let Some(r) = crate::remote_image::route(ctx, channel, &args).await {
+                return r;
+            }
+            if let Some(r) = crate::skill_sources::route(ctx, channel, &args).await {
+                return r;
+            }
+            // With no host, a channel nothing here serves does not exist.
+            if ctx.backend.is_none() {
+                return Err(format!("unknown channel {channel}"));
             }
             ctx.backend.call(channel, Value::Array(args)).await
         }
@@ -430,12 +500,19 @@ pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
     ctx.turns.abort_session(session_id);
     // A dev server the agent started belongs to the work it was doing.
     ctx.turns.processes.kill_session(session_id);
+    if ctx.backend.is_none() {
+        return Ok(Value::Null);
+    }
     ctx.backend.call("chat:abort", json!([session_id])).await
 }
 
 /// The chats with a turn running, the host's and the daemon's.
 pub async fn running_chats(ctx: &Ctx) -> Vec<String> {
-    let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:running", json!([]))).await;
+    let host = if ctx.backend.is_none() {
+        Ok(Ok(json!([])))
+    } else {
+        tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:running", json!([]))).await
+    };
     let mut ids: Vec<String> = match host {
         Ok(Ok(Value::Array(a))) => a.into_iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
         _ => Vec::new(),
@@ -545,6 +622,14 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
         all.extend_from_slice(crate::messaging::CHANNELS);
     }
     all.extend_from_slice(crate::machine::CHANNELS);
+    // An attachment is written under the data directory; a remote image needs nothing.
+    all.push("image:fetch");
+    if ctx.sessions.is_some() {
+        all.push("attachment:import");
+    }
+    if ctx.settings.is_some() {
+        all.extend_from_slice(crate::skill_sources::CHANNELS);
+    }
     if ctx.resource_queue.is_some() {
         all.extend_from_slice(crate::resource_queue::CHANNELS);
     }
@@ -790,11 +875,58 @@ const SESSION_CHANNELS: &[&str] = &[
     "chat:dequeue",
 ];
 
+/// `createSession(workspaceId, parentSessionId, supportingWorkspaceIds)` with
+/// the host's check that the folder is one of the user's (`Workspace not
+/// found`): the settings' execution mode, Git management and default saved
+/// mode for a top-level chat, the parent's checkout for a sub-agent's.
+pub async fn create_session(
+    ctx: &Ctx,
+    workspace_id: Option<&str>,
+    parent_id: Option<&str>,
+    supporting: Option<Value>,
+) -> Result<Value, String> {
+    let store = ctx.sessions.clone().ok_or("session:create needs the data directory")?;
+    let settings = crate::settings::current(ctx).await;
+    if let Some(w) = workspace_id.filter(|w| !w.is_empty()) {
+        let known = settings
+            .get("workspaces")
+            .and_then(Value::as_array)
+            .is_some_and(|ws| ws.iter().any(|f| f.get("id").and_then(Value::as_str) == Some(w)));
+        if !known {
+            return Err("Workspace not found".into());
+        }
+    }
+    let (w, p) = (workspace_id.map(str::to_string), parent_id.map(str::to_string));
+    tokio::task::spawn_blocking(move || store.create_with(w.as_deref(), p.as_deref(), supporting.as_ref(), &settings))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// `deleteAgentLog` for a chat being removed, from a blocking caller: its
+/// log here, and the host's too while one runs (a host-run tool may have
+/// written to it). Without a data directory, the host's alone.
+pub fn delete_agent_log(
+    runtime: &tokio::runtime::Handle,
+    logs: Option<&crate::agent_logs::AgentLogs>,
+    backend: &Backend,
+    id: &str,
+) -> Result<(), String> {
+    let Some(logs) = logs else {
+        return runtime.block_on(backend.call("sessions:deleteAgentLog", json!([id]))).map(|_| ());
+    };
+    logs.delete_blocking(id)?;
+    if !backend.is_none() {
+        let _ = runtime.block_on(backend.call("sessions:deleteAgentLog", json!([id])));
+    }
+    Ok(())
+}
+
 /// Session reads and the UI's own writes, off the async threads: a listing
 /// reads every changed chat file, and one image chat can be tens of megabytes.
 async fn session_op(
     store: Arc<nekko_store::SessionStore>,
     backend: Arc<Backend>,
+    logs: Option<Arc<crate::agent_logs::AgentLogs>>,
     channel: &str,
     args: Vec<Value>,
 ) -> Result<Value, String> {
@@ -802,7 +934,7 @@ async fn session_op(
     let runtime = tokio::runtime::Handle::current();
     tokio::task::spawn_blocking(move || {
         let id = str_arg(&args, 0).unwrap_or_default();
-        let delete_log = |id: &str| runtime.block_on(backend.call("sessions:deleteAgentLog", json!([id]))).map(|_| ());
+        let delete_log = |id: &str| delete_agent_log(&runtime, logs.as_deref(), &backend, id);
         let or_null = |r: Result<Option<Value>, String>| r.map(|v| v.unwrap_or(Value::Null));
         match channel.as_str() {
             "sessions:summaries" => Ok(Value::Array(store.summaries())),
@@ -816,12 +948,8 @@ async fn session_op(
                 delete_log(id)?;
                 store.delete(id).map(|()| Value::Null)
             }
-            "session:setOptions" => {
-                if arg(&args, 1).get("executionMode").is_some() || arg(&args, 1).get("sandbox").is_some() {
-                    return Err("Execution mode changes require the host setup route".into());
-                }
-                or_null(store.set_options(id, arg(&args, 1)))
-            }
+            // The execution-mode rules and the sandbox refusal are the store's (`setSessionOptions`).
+            "session:setOptions" => or_null(store.set_options(id, arg(&args, 1))),
             "session:setWorkspace" => or_null(store.set_workspace(id, str_arg(&args, 1))),
             "session:setSupportingWorkspaces" => or_null(store.set_supporting(id, arg(&args, 1))),
             "session:setAttachments" => or_null(store.set_attachments(id, arg(&args, 1))),
