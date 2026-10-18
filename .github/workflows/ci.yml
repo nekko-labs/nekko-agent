@@ -227,15 +227,11 @@ jobs:
         # Judged against the 2x regression gate in budgets.mjs; a missed budget is
         # measured once more before it fails the job (noisy shared runners). The
         # runner has no GPU, so Chrome runs without its software GPU emulation.
-        # NEKKO_DAEMON=nekkod: fail rather than quietly measure the in-process engine.
-        env:
-          NEKKO_DAEMON: nekkod
         run: node scripts/perf/run.mjs --out perf-results --attempts 3 --no-gpu
       - name: Profile streaming frame work against the unchanged base after a failed gate
         if: failure() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-          NEKKO_DAEMON: nekkod
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: |
           # Diagnostic only: keep the failed speed-contract result and its budgets.

@@ -8,13 +8,12 @@ import { createInterface } from 'node:readline';
  * The engine, from the window's side: start it, know where it listens, keep it
  * running, stop it on quit.
  *
- * Normally that is `nekkod` (the Rust daemon), which in turn starts and
- * supervises the TS backend. If the daemon binary is missing (a development
- * checkout that never ran `cargo build`, or an antivirus that quarantined
- * it), the TS backend is started directly instead, so the app still works
- * with the TS terminals; `mode` says which one is running. The same fallback
- * covers a daemon Windows cannot load (STATUS_DLL_NOT_FOUND, see
- * `isMissingDllExit`), so a broken install degrades rather than spinning.
+ * That is `nekkod` (the Rust daemon), which in turn starts and supervises
+ * the TS backend. There is no engine without it: a missing binary (a
+ * development checkout that never built it, an antivirus that quarantined
+ * it) or one Windows cannot load (STATUS_DLL_NOT_FOUND, see
+ * `isMissingDllExit`) is reported as the reason the engine is down, and the
+ * tray's Restart tries again, rather than restarting in a loop.
  *
  * The Electron main process never runs the engine itself any more: a busy
  * agent loop, a pty flood or a synchronous file write there used to stall
@@ -25,7 +24,7 @@ import { createInterface } from 'node:readline';
  * STATUS_DLL_NOT_FOUND as Node reports a Windows exit code: the loader could
  * not find a DLL the executable imports, before any of its code ran. For
  * nekkod that has meant the Visual C++ runtime, which the installer now ships
- * beside it; restarting cannot fix it, so the daemon is set aside instead.
+ * beside it; restarting cannot fix it, so it is reported instead.
  */
 export function isMissingDllExit(code: number | null): boolean {
   return code === 0xc0000135 || code === -1073741515;
@@ -35,7 +34,6 @@ export interface EngineEndpoint {
   /** `http://127.0.0.1:<port>` */
   url: string;
   token: string;
-  mode: 'daemon' | 'backend';
 }
 
 export interface EngineOptions {
@@ -50,7 +48,6 @@ export interface EngineOptions {
 }
 
 const DAEMON_READY = 'NEKKOD_READY ';
-const BACKEND_READY = 'NEKKO_BACKEND_READY ';
 const MAX_BACKOFF_MS = 5000;
 
 /**
@@ -116,8 +113,8 @@ export class EngineProcess {
 
   get running(): boolean { return this.requested && !this.stopping; }
   private backoff = 500;
-  /** Why the daemon cannot run on this machine, once it has failed in a way a restart will not fix. */
-  private daemonBroken: string | null = null;
+  /** Why the engine cannot run, once it has failed in a way a restart will not fix. */
+  private failure: string | null = null;
   private readonly token = randomBytes(24).toString('base64url');
 
   constructor(private readonly opts: EngineOptions) {}
@@ -126,6 +123,7 @@ export class EngineProcess {
   endpoint(): Promise<EngineEndpoint> {
     if (!this.running) return Promise.reject(new Error('Nekko service is stopped. Start it from the tray menu.'));
     if (this.current) return Promise.resolve(this.current);
+    if (this.failure) return Promise.reject(new Error(this.failure));
     return new Promise((resolve, reject) => {
       const waiter = { resolve, reject, timer: setTimeout(() => {
         this.waiters = this.waiters.filter(w => w !== waiter);
@@ -140,13 +138,19 @@ export class EngineProcess {
     this.requested = true;
     this.stopping = false;
     clearTimeout(this.restartTimer);
-    const found = findDaemon(this.opts);
-    const daemon = this.daemonBroken ? null : found;
+    this.failure = null;
+    const daemon = findDaemon(this.opts);
+    if (!daemon) {
+      this.fail(this.opts.app.isPackaged
+        ? 'Nekko service is missing from this install (resources/bin/nekkod). Reinstall Nekko Agent; if it keeps happening, an antivirus may have quarantined it.'
+        : 'nekkod is not built. Run `npm run build:dev` (or `cargo build -p nekkod`), then restart Nekko service from the tray.');
+      return;
+    }
     const backendEnv: Record<string, string> = {
       ELECTRON_RUN_AS_NODE: '1',
       // Where the app-local Visual C++ runtime is, for llama.cpp builds (the
       // daemon sets this itself for the backend it supervises).
-      ...(found ? { NEKKOD_RUNTIME_DIR: dirname(found) } : {}),
+      NEKKOD_RUNTIME_DIR: dirname(daemon),
       NEKKO_BACKEND_DATA_DIR: this.opts.dataDir,
       NEKKO_BACKEND_APP: JSON.stringify(this.opts.app),
       NEKKO_BACKEND_ORIGINS: JSON.stringify(this.opts.origins),
@@ -157,33 +161,16 @@ export class EngineProcess {
     };
     const backend = { exe: process.execPath, args: [join(this.opts.mainDir, 'backend.js')], env: backendEnv };
 
-    let child: ChildProcess;
-    let marker: string;
-    let mode: EngineEndpoint['mode'];
-    if (daemon) {
-      mode = 'daemon';
-      marker = DAEMON_READY;
-      // The daemon runs the browser and capture tools itself and reaches the
-      // in-app browser through the same bridge (in its config, not its env).
-      // `appVersion` and `edition` answer `app:info`, which the daemon serves.
-      const config = { token: this.token, allowedOrigins: this.opts.origins, backend, dataDir: this.opts.dataDir, allowBrowserControl: true, appVersion: this.opts.app.version, edition: 'desktop', native: nativeConfig(this.opts.app), ...(this.opts.browserBridge ? { browserBridge: this.opts.browserBridge } : {}) };
-      child = spawn(daemon, [], {
-        env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) },
-        stdio: ['pipe', 'pipe', 'inherit'],
-        windowsHide: true,
-      });
-    } else {
-      mode = 'backend';
-      marker = BACKEND_READY;
-      console.warn(this.daemonBroken
-        ? `nekkod cannot run here (${this.daemonBroken}); running the TS backend directly`
-        : 'nekkod not found; running the TS backend directly (TS terminals, no daemon)');
-      child = spawn(backend.exe, backend.args, {
-        env: { ...process.env, ...backendEnv, NEKKO_BACKEND_TOKEN: this.token },
-        stdio: ['pipe', 'pipe', 'inherit'],
-        windowsHide: true,
-      });
-    }
+    const marker = DAEMON_READY;
+    // The daemon runs the browser and capture tools itself and reaches the
+    // in-app browser through the same bridge (in its config, not its env).
+    // `appVersion` and `edition` answer `app:info`, which the daemon serves.
+    const config = { token: this.token, allowedOrigins: this.opts.origins, backend, dataDir: this.opts.dataDir, allowBrowserControl: true, appVersion: this.opts.app.version, edition: 'desktop', native: nativeConfig(this.opts.app), ...(this.opts.browserBridge ? { browserBridge: this.opts.browserBridge } : {}) };
+    const child = spawn(daemon, [], {
+      env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) },
+      stdio: ['pipe', 'pipe', 'inherit'],
+      windowsHide: true,
+    });
     this.child = child;
     const startedAt = Date.now();
 
@@ -197,7 +184,7 @@ export class EngineProcess {
       }
       try {
         const { port } = JSON.parse(line.slice(at + marker.length)) as { port: number };
-        this.current = { url: `http://127.0.0.1:${port}`, token: this.token, mode };
+        this.current = { url: `http://127.0.0.1:${port}`, token: this.token };
         const waiting = this.waiters;
         this.waiters = [];
         waiting.forEach(w => { clearTimeout(w.timer); w.resolve(this.current!); });
@@ -212,14 +199,23 @@ export class EngineProcess {
       this.child = null;
       if (this.stopping) return;
       if (Date.now() - startedAt > 30_000) this.backoff = 500;
-      if (mode === 'daemon' && isMissingDllExit(code)) {
-        this.daemonBroken = 'Windows could not load a DLL it needs, usually the Microsoft Visual C++ Runtime';
-        this.backoff = 0;
+      if (isMissingDllExit(code)) {
+        this.fail('Nekko service could not start: Windows could not load a DLL it needs, usually the Microsoft Visual C++ Runtime. Reinstall Nekko Agent, or install the Visual C++ Redistributable, then restart Nekko service from the tray.');
+        return;
       }
-      console.error(`engine: ${mode} exited (${signal ?? code}); restarting in ${this.backoff}ms`);
+      console.error(`engine: nekkod exited (${signal ?? code}); restarting in ${this.backoff}ms`);
       this.restartTimer = setTimeout(() => { if (this.requested && !this.stopping) this.start(); }, this.backoff);
       this.backoff = Math.min(Math.max(this.backoff * 2, 500), MAX_BACKOFF_MS);
     });
+  }
+
+  /** Report why the engine cannot run: every waiting call gets the reason, and nothing restarts until `start()`. */
+  private fail(reason: string): void {
+    this.failure = reason;
+    console.error(`engine: ${reason}`);
+    const waiting = this.waiters;
+    this.waiters = [];
+    waiting.forEach(w => { clearTimeout(w.timer); w.reject(new Error(reason)); });
   }
 
   /** Close its stdin (the shutdown signal), then kill it if it lingers. */

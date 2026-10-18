@@ -14,7 +14,6 @@ import type { TerminalStream, TerminalStreamHandlers } from '@nekko-agent/shared
 export interface EngineEndpoint {
   url: string;
   token: string;
-  mode: 'daemon' | 'backend';
 }
 
 /** ipcRenderer-shaped, so the existing `on*` bridges needed no rewrite. */
@@ -32,16 +31,13 @@ const OP_ACK = 2;
 
 export interface EngineSocket {
   call(channel: string, args: unknown[]): Promise<unknown>;
-  /** Which engine answers: nekkod, or the TS backend alone (`backend`, no daemon build). */
-  mode(): Promise<EngineEndpoint['mode'] | null>;
   on(channel: string, listener: Listener): void;
   off(channel: string, listener: Listener): void;
   openTerminal(id: string, handlers: TerminalStreamHandlers): Promise<TerminalStream | null>;
   /**
    * Take the agent event stream of these chats only (null: every chat's).
    * Every chat's summary events still arrive (a turn starting, waiting,
-   * ending; see crates/nekkod/src/hub.rs). Kept across reconnects. Only the
-   * daemon narrows; the backend-only mode sends everything, as before.
+   * ending; see crates/nekkod/src/hub.rs). Kept across reconnects.
    */
   subscribe(sessionIds: string[] | null): void;
 }
@@ -84,7 +80,7 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
 
   /** Tell the open socket which chats this window shows, if it changed. */
   const sendSubscription = () => {
-    if (!open || !socket || endpoint?.mode !== 'daemon' || told === key(sessions)) return;
+    if (!open || !socket || !endpoint || told === key(sessions)) return;
     told = key(sessions);
     // Fire and forget: the reply carries nothing, and a replay (if any)
     // arrives before it as an `agent:replay` event.
@@ -109,10 +105,11 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
     // Narrowed from the start, so a reconnect is never sent every chat's
     // stream in between; the daemon then names the running turns of the chats
     // left out, and replays the ones named.
-    const narrowed = endpoint.mode === 'daemon' && sessions ? `sessions=${encodeURIComponent(sessions.join(','))}&` : '';
+    const narrowed = sessions ? `sessions=${encodeURIComponent(sessions.join(','))}&` : '';
     const ws = new WebSocket(`${wsBase(endpoint)}/api/ws?${narrowed}token=${encodeURIComponent(endpoint.token)}`);
     socket = ws;
-    told = narrowed ? key(sessions) : null;
+    // The URL already says which chats (none named: every chat).
+    told = key(sessions);
     ws.onopen = () => {
       open = true;
       retry = 100;
@@ -153,10 +150,6 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
         send(JSON.stringify({ id, channel, args }));
       });
     },
-    async mode() {
-      const e = endpoint ?? (await getEndpoint('engine mode').catch(() => null));
-      return e?.mode ?? null;
-    },
     on(channel, listener) {
       let set = listeners.get(channel);
       if (!set) listeners.set(channel, (set = new Set()));
@@ -172,9 +165,6 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
     async openTerminal(id, h) {
       const e = endpoint ?? (await getEndpoint(`terminal:${id}`));
       if (!e) return null;
-      // Only the daemon streams terminals; without it the caller falls back
-      // to the event bus.
-      if (e.mode !== 'daemon') return null;
       const ws = new WebSocket(`${wsBase(e)}/api/term/${encodeURIComponent(id)}?token=${encodeURIComponent(e.token)}`);
       ws.binaryType = 'arraybuffer';
       const outbox: Uint8Array<ArrayBuffer>[] = [];

@@ -89,6 +89,16 @@ installation target are unchanged.
 | `nekko-agent_train_status` | Experiment tree + leader for one run (or a summary of all runs). |
 | `nekko-agent_train_hint` | Queue guidance the agent folds into its next experiments. |
 | `nekko-agent_train_stop` | Stop a run. |
+| `nekko-agent_local_status` | Built-in engine and local runtimes: running, loaded models, memory. |
+| `nekko-agent_local_models` | Downloaded models, with size, quantization, loaded state and GPU fit. |
+| `nekko-agent_model_search` | Find GGUF models on Hugging Face. |
+| `nekko-agent_model_download` | Download a model (returns a job id); `nekko-agent_downloads` / `nekko-agent_download_cancel` follow it. |
+| `nekko-agent_model_load` / `nekko-agent_model_unload` | Run or free a local model; load starts the engine if needed. |
+| `nekko-agent_runtime_start` / `nekko-agent_runtime_stop` | Start or stop the engine (or Ollama/LM Studio via `providerId`). |
+
+So an MCP client can say "run this model": load it (downloading first if
+needed), then pass the returned `provider` and `model` to `nekko-agent_chat`.
+The same operations are in the CLI as `nekko-agent local status|list|search|download|downloads|cancel|load|unload|start|stop`.
 
 So an MCP client can say "train me a model for X": start a run whose goal is
 to benchmark existing models for X (reported as scored experiments, i.e. the

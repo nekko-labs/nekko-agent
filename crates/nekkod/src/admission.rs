@@ -20,7 +20,8 @@
 //! move. A sandbox chat is admitted here too (its setup checked, ask mode,
 //! only its copied folders, no host context, MCP, decision runner, hooks or
 //! sub-agents) and its turn runs every tool in the daemon's container for it
-//! (sandbox.rs). Every chat under `NEKKO_AGENT_LOOP=ts` goes to the host whole.
+//! (sandbox.rs). Only a sandbox chat on a daemon with no containers (no data
+//! directory) goes to the host whole.
 
 use crate::routes::Ctx;
 use nekko_loop::Cancel;
@@ -43,22 +44,15 @@ pub struct Admission {
     compactions: Arc<crate::compaction::Compactions>,
     /// The desktop app's host lets the agent drive a browser; the web edition's does not.
     pub allow_browser_control: bool,
-    /// `NEKKO_AGENT_LOOP=ts`: every turn stays in the host.
-    pub ts_loop: bool,
 }
 
 impl Admission {
-    pub fn new(
-        compactions: Arc<crate::compaction::Compactions>,
-        allow_browser_control: bool,
-        ts_loop: bool,
-    ) -> Arc<Self> {
+    pub fn new(compactions: Arc<crate::compaction::Compactions>, allow_browser_control: bool) -> Arc<Self> {
         Arc::new(Admission {
             pending: Mutex::default(),
             interrupting: Arc::default(),
             compactions,
             allow_browser_control,
-            ts_loop,
         })
     }
 
@@ -357,8 +351,8 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
     let (st, id) = (store.clone(), session_id.clone());
     let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
     let session = session.ok_or("Session not found.")?;
-    // The kill switch keeps the whole thing in the host, as does a sandbox chat without containers here.
-    if adm.ts_loop || (crate::worktrees::execution_mode(&session) == "sandbox" && ctx.sandboxes.is_none()) {
+    // A sandbox chat without containers here stays in the host whole.
+    if crate::worktrees::execution_mode(&session) == "sandbox" && ctx.sandboxes.is_none() {
         return ctx.backend.call("chat:interruptQueued", Value::Array(args)).await;
     }
     let index = nekko_turn::variants::queued_index_valid(&session, &index).ok_or("Queued prompt not found.")?;
@@ -429,10 +423,10 @@ async fn admit(
         let (st, id) = (store.clone(), session_id.clone());
         tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?
     };
-    // The kill switch keeps everything in the host; so does a sandbox chat
-    // when this daemon has no containers (no data directory).
+    // A sandbox chat stays in the host when this daemon has no containers
+    // (no data directory).
     let sandbox = session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox");
-    if adm.ts_loop || (sandbox && ctx.sandboxes.is_none()) {
+    if sandbox && ctx.sandboxes.is_none() {
         return Ok(Admit::Host);
     }
     // A chained queued prompt was admitted by the host without this check; so it stays.

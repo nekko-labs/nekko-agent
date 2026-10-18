@@ -25,10 +25,8 @@ jobs:
       - run: cargo build -p nekkod --locked
       - name: Verify exact disposable-runner safety gates (no OS interaction)
         run: node --test apps/desktop/scripts/notification-native-ci.node-test.cjs apps/desktop/scripts/notification-integration-safety.node-test.cjs
-      - name: TS zero-renderer notifications (injected adapter only)
+      - name: Zero-renderer notifications (injected adapter only)
         run: node apps/desktop/scripts/notification-engine-integration.cjs
-      - name: Daemon zero-renderer notifications (injected adapter only)
-        run: node apps/desktop/scripts/notification-engine-integration.cjs --daemon
       - name: Native toast delivery, OS click, and isolated fixture foreground
         if: runner.os == 'Windows' && runner.environment == 'github-hosted'
         env:

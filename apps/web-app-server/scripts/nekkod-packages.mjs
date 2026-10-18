@@ -21,7 +21,8 @@ import { fileURLToPath } from 'node:url';
  * refuses to start there (unsupportedPlatformReason).
  */
 export const PLATFORMS = {
-  'win32-x64': { os: 'win32', cpu: 'x64', target: 'x86_64-pc-windows-msvc', exe: 'nekkod.exe' },
+  // Windows on Arm installs and runs the x64 build under emulation (nekkodPackageName).
+  'win32-x64': { os: 'win32', cpu: 'x64', cpus: ['x64', 'arm64'], target: 'x86_64-pc-windows-msvc', exe: 'nekkod.exe' },
   'linux-x64': { os: 'linux', cpu: 'x64', target: 'x86_64-unknown-linux-gnu', exe: 'nekkod' },
   'linux-arm64': { os: 'linux', cpu: 'arm64', target: 'aarch64-unknown-linux-gnu', exe: 'nekkod' },
   'darwin-arm64': { os: 'darwin', cpu: 'arm64', target: 'aarch64-apple-darwin', exe: 'nekkod' },
@@ -62,7 +63,7 @@ export function writePackages({ bins, out, version, requireAll = false, log = co
       license: 'MIT',
       repository: { type: 'git', url: 'git+https://github.com/nekko-labs/nekko-agent.git' },
       os: [p.os],
-      cpu: [p.cpu],
+      cpu: p.cpus ?? [p.cpu],
       files: ['bin'],
     };
     writeFileSync(join(dir, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);

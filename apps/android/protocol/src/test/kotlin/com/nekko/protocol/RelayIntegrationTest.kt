@@ -80,7 +80,7 @@ class RelayIntegrationTest {
             """.trimIndent())
             val agent = node("apps/web-app-server/dist/index.js", env = mapOf(
                 "NEKKO_RELAY_URL" to relayUrl, "NEKKO_ROOM" to room, "NEKKO_PAIR_KEY" to key,
-                "NEKKO_DATA_DIR" to data.absolutePath, "NEKKO_AGENT_LOOP" to "ts",
+                "NEKKO_DATA_DIR" to data.absolutePath,
             ), dir = data) // so files the fake model writes land in the data dir, not the repo
             Thread {
                 agent.inputStream.bufferedReader().forEachLine { line ->

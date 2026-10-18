@@ -91,7 +91,7 @@ fn owns_small_services(ctx: &Ctx) -> bool {
 
 /// `chat:compact` and `chat:cancelCompaction` are the daemon's when it admits turns.
 fn owns_compaction(ctx: &Ctx) -> bool {
-    ctx.sessions.is_some() && ctx.settings.is_some() && ctx.admission.as_ref().is_some_and(|a| !a.ts_loop)
+    ctx.sessions.is_some() && ctx.settings.is_some() && ctx.admission.is_some()
 }
 
 /// `chat:generateImage` is the daemon's when it runs the model server and admits turns.
@@ -348,7 +348,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             None => ctx.backend.call(c, Value::Array(args)).await,
         },
         c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
-        // A host running a turn itself (NEKKO_AGENT_LOOP=ts) sends its agent_watch calls here.
+        // A host running a turn itself (a sandbox chat on a daemon without containers) sends its agent_watch calls here.
         "watch:tool" if ctx.turns.watches.is_some() => {
             let w = ctx.turns.watches.clone().expect("checked");
             w.tool(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1))
