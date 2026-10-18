@@ -88,6 +88,8 @@ export const ArchiveIcon = (p: P) => (<S {...p}><rect x="3" y="4" width="18" hei
 export const BinocularsIcon = (p: P) => (<S {...p}><circle cx="6.5" cy="15.5" r="3.5" /><circle cx="17.5" cy="15.5" r="3.5" /><path d="M10 15.5h4M3 15.5 5 6.5a1.5 1.5 0 0 1 3 0v5.5M21 15.5l-2-9a1.5 1.5 0 0 0-3 0v5.5M8 9h8" /></S>);
 export const RobotIcon = (p: P) => (<S {...p}><rect x="4" y="8" width="16" height="11" rx="2" /><path d="M12 8V4M9 13h.01M15 13h.01M2 13h2M20 13h2" /></S>);
 export const WandIcon = (p: P) => (<S {...p}><path d="m15 4 1 2 2 1-2 1-1 2-1-2-2-1 2-1zM6 13l1.5 3L11 17.5 7.5 19 6 22l-1.5-3L1 17.5 4.5 16zM20 14l.8 1.6L22.5 16l-1.7.4L20 18l-.8-1.6L17.5 16l1.7-.4z" /></S>);
+/** A horseshoe magnet, poles down: snap to grid. */
+export const MagnetIcon = (p: P) => (<S {...p}><path d="M6 15V9a6 6 0 0 1 12 0v6" /><path d="M6 15v4h4v-4M14 15v4h4v-4" /><path d="M10 15V9a2 2 0 0 1 4 0v6" /></S>);
 export const BoltIcon = (p: P) => (<S {...p}><path d="M13 2 4 14h6l-1 8 9-12h-6z" /></S>);
 export const WrenchIcon = (p: P) => (<S {...p}><path d="M14.7 6.3a4.5 4.5 0 0 0-6 5.7L3 17.7A2 2 0 1 0 6.3 21l5.7-5.7a4.5 4.5 0 0 0 5.7-6L14.5 12l-2.5-2.5z" /></S>);
 export const PlaneIcon = (p: P) => (<S {...p}><path d="M17.8 19.2 16 11l3.5-3.5a2.1 2.1 0 1 0-3-3L13 8 4.8 6.2a1 1 0 0 0-.9.3l-.5.5 6 4-3 3-2.6-.5-.8.8 3 2 2 3 .8-.8L8.3 16l3-3 4 6 .5-.5a1 1 0 0 0 .3-.9z" /></S>);

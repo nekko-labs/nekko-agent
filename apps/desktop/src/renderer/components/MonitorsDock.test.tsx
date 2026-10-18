@@ -11,11 +11,37 @@ vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
 const resources = vi.hoisted(() => ({ gpu: null as import('@nekko-agent/shared').GpuStats | null }));
 vi.mock('./ResourceMonitor.js', () => ({ useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: resources.gpu }) }));
-import { MonitorsDock } from './MonitorsDock.js';
+import { MonitorsDock, MonitorsToggle } from './MonitorsDock.js';
 function render(minimized = false) {
   const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: false, insights: false, hardware: true }, minimized: { ...DEFAULT_WALL_STATE.dock.minimized, hardware: minimized } } };
   return renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
 }
+describe('monitors panel show and hide', () => {
+  const props = { setState: vi.fn(), tasks: [], running: new Set<string>(), now: 0, sessions: [], providers: [], usage: null, vitals: { working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }, onOpenChat: vi.fn(), onOpenModels: vi.fn() };
+  it('puts an icon-only hide button last in the header, explained by a tooltip', () => {
+    const html = render();
+    const header = html.slice(html.indexOf('monitors-dock__toolbar'), html.indexOf('</header>'));
+    expect(header).toContain('aria-label="Hide the monitors panel"');
+    expect(header).toContain('data-hover-tip="Hide monitors"');
+    // Top right: after Configure, the last control in the header.
+    expect(header.indexOf('Configure monitors')).toBeLessThan(header.indexOf('Hide the monitors panel'));
+    expect(header.slice(header.indexOf('Hide the monitors panel')).match(/<button/g)).toBeNull();
+  });
+  it('leaves only its show button where it was when hidden, and toggles the saved setting', () => {
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, show: false } };
+    const html = renderToStaticMarkup(<MonitorsDock {...props} state={state} />);
+    expect(html).toMatch(/^<div class="monitors-dock-collapsed" data-dock-side="right">/);
+    expect(html).toContain('aria-label="Show the monitors panel"');
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).not.toContain('Hardware');
+    // The button itself flips the saved setting through onToggle.
+    const onToggle = vi.fn();
+    const tip = MonitorsToggle({ show: false, side: 'right', onToggle }) as React.ReactElement<{ children: React.ReactElement<{ onClick: () => void }> }>;
+    tip.props.children.props.onClick();
+    expect(onToggle).toHaveBeenCalledOnce();
+  });
+});
+
 describe('wall dock presentation', () => {
   it('pairs each GPU name with its own utilization, including unavailable readings', () => {
     resources.gpu = { source: 'nvidia-smi', totalMB: 0, usedMB: 0, freeMB: 0, devices: [

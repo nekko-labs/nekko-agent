@@ -11,7 +11,8 @@ import { InsightsBox, type Vitals } from './InsightsBox.js';
 import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { useMonitors, useResourceSample } from './ResourceMonitor.js';
-import { BrainIcon, ServerIcon, MoneyIcon, ListIcon, GearIcon, SlidersIcon, CloseIcon, MinimizeIcon } from '../icons.js';
+import { BrainIcon, ServerIcon, MoneyIcon, ListIcon, GearIcon, SlidersIcon, CloseIcon, MinimizeIcon, PanelIcon } from '../icons.js';
+import { HoverTip } from './HoverTip.js';
 import './monitorsDock.css';
 import type { OAuthStatus } from '@nekko-agent/shared';
 import { SubscriptionSignIn } from './SubscriptionSignIn.js';
@@ -35,6 +36,22 @@ export interface MonitorsDockProps {
 }
 
 const DEFAULT_DOCK_WIDTH = 368;
+
+/**
+ * The dock's show/hide button: an icon (the agent panel's pill, mirrored), with
+ * what it does in a hover tooltip. It sits at the top right of the dock's
+ * header, and stays in the dock's place when the dock is hidden.
+ */
+export function MonitorsToggle({ show, side, onToggle }: { show: boolean; side: CommandWallState['dock']['side']; onToggle: () => void }) {
+  const tipSide = side === 'left' ? 'right' : side === 'right' && !show ? 'left' : 'bottom';
+  return (
+    <HoverTip label={show ? 'Hide monitors' : 'Show monitors'} side={tipSide}>
+      <button type="button" className="agent-panel-pill monitors-dock__toggle" aria-label={show ? 'Hide the monitors panel' : 'Show the monitors panel'} aria-pressed={show} onClick={onToggle}>
+        <PanelIcon className="h-4 w-4 shrink-0" />
+      </button>
+    </HoverTip>
+  );
+}
 
 /** A flow-layout sibling of the wall stage. The parent places it using data-dock-side. */
 export function MonitorsDock(props: MonitorsDockProps) {
@@ -140,8 +157,14 @@ export function MonitorsDock(props: MonitorsDockProps) {
     minimizeTransition.current.start(!value || window.matchMedia('(prefers-reduced-motion: reduce)').matches, () => setCollapsing(key), commit);
   };
 
-  // The wall toolbar owns visibility and restores the hidden dock.
-  if (!dock.show) return null;
+  const setShow = (show: boolean) => setState((s) => ({ ...s, dock: { ...s.dock, show } }));
+  // Hidden, the dock leaves only its own show button where it was, the way the
+  // agent panel leaves its controls, so the way back is where it went.
+  if (!dock.show) return (
+    <div className="monitors-dock-collapsed" data-dock-side={dock.side}>
+      <MonitorsToggle show={false} side={dock.side} onToggle={() => setShow(true)} />
+    </div>
+  );
   const selectedMonitors = normalizeMonitorOrder(dock.monitorOrder).map(key => MONITORS.find(p => p.key === key)!).filter((p) => dock.monitors[p.key]);
   const expandedMonitors = selectedMonitors.filter((p) => !dock.minimized[p.key]);
   return (
@@ -167,6 +190,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
             <fieldset><legend>Panels</legend>{MONITORS.map((p) => <label key={p.key}><input type="checkbox" checked={dock.monitors[p.key]} onChange={(e) => toggleMonitor(p.key, e.target.checked)} /><span className="monitors-dock__option"><strong>{p.label}</strong><span>{p.blurb}</span></span></label>)}</fieldset>
           </div>}
         </div>
+        <MonitorsToggle show side={dock.side} onToggle={() => setShow(false)} />
       </header>
       {selectedMonitors.some((p) => dock.minimized[p.key]) && <div className="monitors-dock__minimized" role="group" aria-label="Minimized monitors">
         {selectedMonitors.filter((p) => dock.minimized[p.key]).map((p) => { const Icon = MONITOR_ICONS[p.key]; return <button key={p.key} type="button" title={`Restore ${p.label}`} aria-label={`Expand ${p.label} monitor`} aria-expanded={false} onClick={() => minimize(p.key, false)}><Icon className="monitors-dock__icon" /></button>; })}

@@ -133,6 +133,8 @@ export interface CommandWallSetting {
   watermark: number;
   /** Where the wall's one composer sits, and the size it was dragged to (CSS pixels; absent means default). */
   composer?: { side: 'top' | 'bottom'; align: 'left' | 'center' | 'right'; width?: number; height?: number };
+  /** Snap to grid: the wall keeps its windows evenly spaced. Absent means off. */
+  snap?: boolean;
 }
 
 /**

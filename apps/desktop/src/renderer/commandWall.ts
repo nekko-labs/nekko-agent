@@ -3,6 +3,7 @@ import { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK, BLOCKED_META, isArchived, s
 import {
   allPanes,
   canSplit,
+  extent,
   isSplit,
   newPaneId,
   newSplitId,
@@ -115,6 +116,8 @@ export interface CommandWallState {
   tabs?: 'top' | 'left' | 'hidden';
   /** The panel of agent cards beside (or above) the wall. */
   agentPanel?: AgentPanelPrefs;
+  /** Snap to grid: windows stay evenly spaced, and dividers snap back to even spacing. */
+  snap?: boolean;
 }
 
 export interface AgentPanelPrefs {
@@ -156,6 +159,7 @@ export const DEFAULT_WALL_STATE: CommandWallState = {
   composer: DEFAULT_COMPOSER_DOCK,
   tabs: 'top',
   agentPanel: DEFAULT_AGENT_PANEL,
+  snap: false,
 };
 
 export const WALL_STATE_KEY = 'nekko.commandWall';
@@ -239,6 +243,55 @@ export function tileTree(panes: WbPane[], aspect = DEFAULT_ASPECT): WbNode | nul
   }
   if (rows.length === 1) return rows[0];
   return { id: newSplitId(), dir: 'col', children: rows, sizes: rows.map(() => 1 / rows.length) };
+}
+
+/**
+ * The same tree with every split evened out: each child gets a share in
+ * proportion to how many windows it holds along the split's axis, so every
+ * window in a row is as wide as its neighbours and every row as tall as the
+ * next. Structure is kept; only sizes change.
+ */
+export function evenTree(node: WbNode | null): WbNode | null {
+  if (!node || !isSplit(node)) return node;
+  const weights = node.children.map((c) => (node.dir === 'row' ? extent(c).across : extent(c).down));
+  const total = weights.reduce((a, b) => a + b, 0) || 1;
+  return { ...node, children: node.children.map((c) => evenTree(c)!), sizes: weights.map((w) => w / total) };
+}
+
+/** The tree's shape without its sizes: which windows sit where, in which splits. */
+export function treeShape(node: WbNode | null): string {
+  if (!node) return '';
+  return isSplit(node) ? `${node.dir}(${node.children.map(treeShape).join(',')})` : node.id;
+}
+
+/** Where divider `index` of split `splitId` sits, as a share of that split, or null when there is no such divider. */
+export function splitBoundary(node: WbNode | null, splitId: string, index: number): number | null {
+  if (!node || !isSplit(node)) return null;
+  if (node.id === splitId) return index >= 0 && index < node.sizes.length - 1 ? node.sizes.slice(0, index + 1).reduce((a, b) => a + b, 0) : null;
+  for (const c of node.children) {
+    const found = splitBoundary(c, splitId, index);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/** How close (as a share of its split) a dragged divider must come to even spacing to snap to it. */
+export const SNAP_RANGE = 0.04;
+
+/** A dragged divider's position, pulled onto `target` when it is within reach. */
+export function snapFraction(value: number, target: number | null, range = SNAP_RANGE): number {
+  return target !== null && Math.abs(value - target) <= range ? target : value;
+}
+
+/**
+ * Keep a snapping wall even: turning snap on, or any change to which windows
+ * are on the wall and where (add, move, remove), re-evens it. Dragging a
+ * divider changes sizes only, so it is left alone; the divider snaps instead.
+ */
+export function applySnap(prev: CommandWallState, next: CommandWallState): CommandWallState {
+  if (!next.snap || !next.root) return next;
+  if (prev.snap && treeShape(prev.root) === treeShape(next.root)) return next;
+  return { ...next, root: evenTree(next.root) };
 }
 
 export interface LeafRect {
@@ -519,7 +572,7 @@ export function migrateGridState(saved: unknown): CommandWallState | null {
     dock,
     root,
     autoAdd: typeof g.autoAdd === 'boolean' ? g.autoAdd : true,
-    filter: g.filter === 'chat' || g.filter === 'terminal' ? g.filter : 'all',
+    filter: 'all',
     insights: readPanels(g.insights?.panels),
     watermark: readWatermark(g.watermark),
     composer: DEFAULT_COMPOSER_DOCK,
@@ -553,12 +606,15 @@ export function loadWallState(storage: Pick<Storage, 'getItem'> | undefined, set
       hero: typeof saved.hero === 'string' && saved.hero.length > 0 ? saved.hero : null,
       folded: readFolded(saved.folded),
       autoAdd: typeof saved.autoAdd === 'boolean' ? saved.autoAdd : true,
-      filter: saved.filter === 'chat' || saved.filter === 'terminal' ? saved.filter : 'all',
+      // The Agents/Terminals filter left the toolbar (2026-10-17), so a wall
+      // saved while filtered would hide windows with no way to show them.
+      filter: 'all',
       insights: readPanels(record(saved.insights).panels),
       watermark: readWatermark(saved.watermark),
       composer: readDock(saved.composer),
       tabs: saved.tabs === 'left' || saved.tabs === 'hidden' ? saved.tabs : 'top',
       agentPanel: readAgentPanel(saved.agentPanel),
+      snap: saved.snap === true,
     };
   } catch {
     return DEFAULT_WALL_STATE;
@@ -575,7 +631,7 @@ export function saveWallState(storage: Pick<Storage, 'setItem'> | undefined, sta
 
 /** The wall as the setting stores it: the same fields, typed loosely for the shared schema. */
 export function toWallSetting(state: CommandWallState): CommandWallSetting {
-  return { layout: state.layout, dock: state.dock, hero: state.hero, folded: state.folded, root: state.root, autoAdd: state.autoAdd, filter: state.filter, insights: state.insights, watermark: state.watermark, composer: state.composer, tabs: state.tabs, agentPanel: state.agentPanel };
+  return { layout: state.layout, dock: state.dock, hero: state.hero, folded: state.folded, root: state.root, autoAdd: state.autoAdd, filter: state.filter, insights: state.insights, watermark: state.watermark, composer: state.composer, tabs: state.tabs, agentPanel: state.agentPanel, snap: !!state.snap };
 }
 
 /* ---------- the ribbon ---------- */
