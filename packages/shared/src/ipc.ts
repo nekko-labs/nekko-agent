@@ -7,7 +7,7 @@ import type { TerminalInfo, TerminalSnapshot, ShellOption } from './terminal.js'
 import type { ContextBundle } from './context.js';
 import type { MemoryEntry, MemoryScope } from './memory.js';
 import type { WorkspaceFolder, IndexStatus, SearchHit, IndexedFile } from './workspace.js';
-import type { DirEntry, FileContent, FileChange, LineComment } from './files.js';
+import type { DirEntry, FileContent, FileChange, LineComment, RemoteImage } from './files.js';
 import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
@@ -185,6 +185,7 @@ export const IpcChannels = {
   fileWrite: 'file:write',
   dirList: 'dir:list',
   attachmentImport: 'attachment:import',
+  imageFetch: 'image:fetch',
 
   changesList: 'changes:list',
   changeAccept: 'changes:accept',
@@ -717,6 +718,11 @@ export interface NekkoApi {
   writeFile(path: string, content: string): Promise<void>;
   /** List a directory's immediate entries (file explorer). */
   listDir(path: string): Promise<DirEntry[]>;
+  /**
+   * Fetch a remote photo for the chat through the host: public http(s) only,
+   * size-capped and type-sniffed, returned as an inert data URL.
+   */
+  fetchRemoteImage(url: string): Promise<RemoteImage>;
 
   /** Files the agent changed this session (diff/approve). */
   listChanges(sessionId: string): Promise<FileChange[]>;

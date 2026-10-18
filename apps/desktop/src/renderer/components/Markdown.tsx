@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { LocalImageCard } from './LocalImageCard.js';
 import { localImagePath } from '../localImages.js';
+import { remoteImageUrl } from '../remoteImages.js';
+import { RemoteImageCard, RemoteImageGallery } from './RemoteImageCard.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
 
 import { ContextAction, ContextMenu } from './ContextMenu.js';
@@ -406,6 +408,12 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
     const para: string[] = [line];
     let j = i + 1;
     while (j < lines.length && !startsBlock(lines[j])) { para.push(lines[j]); j += 1; }
+    const gallery = remoteGallery(para);
+    if (gallery) {
+      out.push(<div key={`${key}-g${i}`}><RemoteImageGallery images={gallery} /></div>);
+      i = j;
+      continue;
+    }
     out.push(
       ctx.doc
         ? <p key={`${key}-p${i}`} className="my-2.5">{inline(para.join(' '), ctx)}</p>
@@ -524,12 +532,38 @@ function Ref({ href, basePath, children }: { href: string; basePath?: string; ch
   );
 }
 
-/** Local images load as inert data URLs; remote references remain user-activated links. */
+/**
+ * Local images load as inert data URLs. Remote photos are fetched by the host
+ * (never by the renderer) and mounted the same way; see RemoteImageCard for
+ * when one loads by itself and when it waits for a click.
+ */
 function ImageRef({ alt, src, basePath }: { alt: string; src: string; basePath?: string }) {
   const label = alt || src.split(/[\\/]/).pop() || 'image';
   if (localImagePath(src, basePath)) return <LocalImageCard src={src} title={label} basePath={basePath} />;
-  if (/^https?:\/\//i.test(src)) return <Link href={src}>{label} (remote image)</Link>;
+  const remote = remoteImageUrl(src);
+  if (remote) return <RemoteImageCard url={remote} alt={alt} />;
   return <span className="text-xs text-ink-soft">{label} (preview unavailable)</span>;
+}
+
+const IMAGE_ONLY_RE = /^\s*(?:!\[[^\]]*\]\([^\s)]+\)\s*)+$/;
+const IMAGE_ALL_RE = /!\[([^\]]*)\]\(([^\s)]+)\)/g;
+
+/**
+ * Two or more remote photos with nothing else on their lines (a search
+ * result's worth of pictures, one per line or side by side) become a gallery
+ * of tiles that share one viewer, instead of a tall stack of full-width cards.
+ */
+function remoteGallery(lines: string[]): Array<{ url: string; alt: string }> | null {
+  if (!lines.every((l) => IMAGE_ONLY_RE.test(l))) return null;
+  const images: Array<{ url: string; alt: string }> = [];
+  for (const l of lines) {
+    for (const m of l.matchAll(IMAGE_ALL_RE)) {
+      const url = remoteImageUrl(m[2]);
+      if (!url) return null;
+      images.push({ url, alt: m[1] });
+    }
+  }
+  return images.length >= 2 ? images : null;
 }
 
 /**

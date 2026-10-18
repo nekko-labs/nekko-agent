@@ -8,6 +8,29 @@ vi.mock('../store.js', () => ({ useStore: { getState: () => ({ openBrowserPane: 
 
 const html = (text: string) => renderToStaticMarkup(<Markdown text={text} />);
 
+describe('remote images', () => {
+  it('render as host-loaded cards, never as a remote <img src>', () => {
+    const out = html('Here it is:\n\n![Wall mount](https://hamilex.example/a.jpeg)');
+    expect(out).toContain('data-remote-image="https://hamilex.example/a.jpeg"');
+    expect(out).not.toMatch(/<img[^>]+src="https?:/);
+    expect(out).toContain('Wall mount');
+  });
+  it('group lines of nothing but photos into one gallery', () => {
+    const out = html('![a](https://x.example/1.png)\n![b](https://x.example/2.png) ![c](https://x.example/3.png)');
+    expect(out).toContain('aria-label="3 photos"');
+    expect(out.match(/data-remote-image=/g)).toHaveLength(3);
+  });
+  it('keep a lone photo, or photos inside prose, inline', () => {
+    expect(html('![a](https://x.example/1.png)')).not.toContain('photos"');
+    expect(html('Look ![a](https://x.example/1.png) and ![b](https://x.example/2.png)')).not.toContain('photos"');
+  });
+  it('refuse non-http schemes', () => {
+    const out = html('![x](javascript:alert(1)) ![y](data:image/svg+xml,<svg/onload=alert(1)>)');
+    expect(out).not.toContain('data-remote-image');
+    expect(out).not.toContain('<img');
+  });
+});
+
 describe('Markdown', () => {
   it('normalizes link targets and encodes HTML metacharacters from edited DOM text', () => {
     const target = 'https://example.com/?label=<img src=x onerror=alert(1)>&quote="\'`';

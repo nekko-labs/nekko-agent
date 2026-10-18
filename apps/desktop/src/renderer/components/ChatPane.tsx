@@ -47,7 +47,9 @@ import { ChatSearchBar } from './agent-console/ChatSearchBar.js';
 
 import { SHORTCUTS } from '../shortcuts.js';
 import { MarkdownEditor, type MarkdownEditorElement } from './agent-console/MarkdownEditor.js';
-import { MarkdownSandbox } from './Markdown.js';
+import { MarkdownSandbox, safeHref } from './Markdown.js';
+import { PhotoViewer } from './PhotoViewer.js';
+import { ChatImages, imageFileName, loadRemoteImage, remoteImageEvidence, urlSeenIn, type ChatImageItem, type ChatImagesApi } from '../remoteImages.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
 import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, suggestedReplyClassName } from './agent-console/interruption.js';
@@ -120,12 +122,10 @@ const CTX_REFRESH_MS = 1_500;
  *
  * The plan rail is on by default; it only gives way when the window is about
  * as narrow as two rails side by side (`PLAN_RAIL_MIN_PANE`), where it would
- * leave the conversation no more room than itself. `NARROW_PANE` is where the
- * 75% column stops helping and the text should just use the pane.
+ * leave the conversation no more room than itself.
  */
 const PLAN_RAIL_WIDTH = 280;
 const PLAN_RAIL_MIN_PANE = PLAN_RAIL_WIDTH * 2;
-const NARROW_PANE = 620;
 
 /**
  * The composer's height when the user has dragged it, remembered across chats.
@@ -200,23 +200,54 @@ async function copyImageToClipboard(src: string): Promise<void> {
 
 /** Save a chat image to disk, keeping its original format. Goes through a blob
  *  URL rather than the data URL, which Chromium won't always download. */
-async function downloadImage(src: string): Promise<void> {
+async function downloadImage(src: string, name?: string): Promise<void> {
   const blob = await imageBlob(src);
   const ext = (/^image\/([a-z0-9.+-]+)/i.exec(blob.type)?.[1] ?? 'png').toLowerCase().replace(/[^a-z0-9]/g, '');
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `nekko-agent-image.${ext === 'jpeg' ? 'jpg' : ext || 'png'}`;
+  a.download = name ?? `nekko-agent-image.${ext === 'jpeg' ? 'jpg' : ext || 'png'}`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /**
- * Right-click menu for a chat image: copy it to the clipboard, or save it. A
- * webview's native menu isn't available here, so this is the app's own, placed
- * at the pointer and flipped when it would run off the edge.
+ * The image's pixels as a data URL. A remote photo that has not loaded yet is
+ * fetched through the host (`image:fetch`), never by the renderer, so copying
+ * or saving one follows the same public-only rules as showing it.
  */
-function ImageMenu({ x, y, src, onClose }: { x: number; y: number; src: string; onClose: () => void }) {
+async function imageItemData(item: ChatImageItem): Promise<{ src: string; mime: string }> {
+  if (item.src) return { src: item.src, mime: /^data:([^;,]+)/.exec(item.src)?.[1] ?? 'image/png' };
+  if (!item.url) throw new Error('No image.');
+  const image = await loadRemoteImage(item.url);
+  return { src: image.dataUrl, mime: image.mime };
+}
+
+async function copyImageItem(item: ChatImageItem): Promise<void> {
+  try {
+    await copyImageToClipboard((await imageItemData(item)).src);
+    useStore.getState().pushToast('success', 'Image copied to the clipboard.');
+  } catch {
+    useStore.getState().pushToast('error', "Couldn't copy that image.");
+  }
+}
+
+async function saveImageItem(item: ChatImageItem): Promise<void> {
+  try {
+    const { src, mime } = await imageItemData(item);
+    await downloadImage(src, item.url ? imageFileName(item.url, mime) : undefined);
+  } catch {
+    useStore.getState().pushToast('error', "Couldn't save that image.");
+  }
+}
+
+/**
+ * Right-click menu for a chat image: copy it, save it, and for a photo from
+ * the web, copy or open its address. A webview's native menu isn't available
+ * here, so this is the app's own, placed at the pointer and flipped when it
+ * would run off the edge.
+ */
+function ImageMenu({ x, y, item, onClose }: { x: number; y: number; item: ChatImageItem; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // Close on a press *outside* the menu, tested against the element rather
@@ -230,8 +261,8 @@ function ImageMenu({ x, y, src, onClose }: { x: number; y: number; src: string; 
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       // Escape dismisses the top layer only. Captured on `window`, one step
-      // ahead of the lightbox's own document-capture handler, so stopping
-      // propagation here actually keeps the lightbox open.
+      // ahead of the viewer's own document-capture handler, so stopping
+      // propagation here actually keeps the viewer open.
       e.stopPropagation();
       onClose();
     };
@@ -245,51 +276,33 @@ function ImageMenu({ x, y, src, onClose }: { x: number; y: number; src: string; 
     };
   }, [onClose]);
 
-  const WIDTH = 176;
-  const HEIGHT = 76;
+  const link = item.url ? safeHref(item.url) : null;
+  const WIDTH = 196;
+  const HEIGHT = link ? 152 : 76;
   const left = Math.min(x, Math.max(8, window.innerWidth - WIDTH - 8));
   const top = Math.min(y, Math.max(8, window.innerHeight - HEIGHT - 8));
-
-  const copy = async () => {
-    onClose();
-    try {
-      await copyImageToClipboard(src);
-      useStore.getState().pushToast('success', 'Image copied to the clipboard.');
-    } catch {
-      useStore.getState().pushToast('error', "Couldn't copy that image.");
-    }
-  };
+  const row = 'flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2';
+  const run = (action: () => unknown) => () => { onClose(); void action(); };
 
   return createPortal(
     <div
       ref={ref}
-      className="card fixed w-44 p-1.5 shadow-lg"
+      className="card fixed w-[196px] p-1.5 shadow-lg"
       style={{ left, top, zIndex: 60 }}
       role="menu"
       aria-label="Image actions"
       onContextMenu={(e) => e.preventDefault()}
     >
-      <button
-        role="menuitem"
-        className="flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2"
-        onClick={copy}
-      >
-        Copy image
-      </button>
-      <button
-        role="menuitem"
-        className="flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2"
-        onClick={async () => {
-          onClose();
-          try {
-            await downloadImage(src);
-          } catch {
-            useStore.getState().pushToast('error', "Couldn't save that image.");
-          }
-        }}
-      >
-        Save image…
-      </button>
+      <button role="menuitem" className={row} onClick={run(() => copyImageItem(item))}>Copy image</button>
+      <button role="menuitem" className={row} onClick={run(() => saveImageItem(item))}>Save image…</button>
+      {link && <>
+        <div className="my-1 border-t border-line" role="separator" />
+        <button role="menuitem" className={row} onClick={run(() => navigator.clipboard.writeText(link).then(
+          () => useStore.getState().pushToast('success', 'Image address copied.'),
+          () => useStore.getState().pushToast('error', "Couldn't copy the address."),
+        ))}>Copy image address</button>
+        <button role="menuitem" className={row} onClick={run(() => window.nekko.openPath(link))}>Open original in browser</button>
+      </>}
     </div>,
     document.body,
   );
@@ -686,11 +699,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // that branch is going into. The same read the sidebar card makes (the host
   // caches it), so the header and the card never disagree.
   const git = useGitStatus(session ? `session:${session.id}` : undefined, session?.gitIsolation);
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  // The photo viewer: the gallery it was opened from and where in it.
+  const [viewer, setViewer] = useState<{ items: ChatImageItem[]; index: number } | null>(null);
+  const setLightbox = useCallback((src: string | null) => setViewer(src ? { items: [{ src }], index: 0 } : null), []);
   // Whether this agent's command log drawer is out on the Agents wall.
   const logsOpen = useWallLogs((s) => s.sessionId === sessionId && !s.closing);
-  // Right-click menu for a chat image (copy / save), placed at the pointer.
-  const [imageMenu, setImageMenu] = useState<{ x: number; y: number; src: string } | null>(null);
+  // Right-click menu for a chat image (copy / save / link), placed at the pointer.
+  const [imageMenu, setImageMenu] = useState<{ x: number; y: number; item: ChatImageItem } | null>(null);
   const [changeSummary, setChangeSummary] = useState({ files: 0, added: 0, removed: 0 });
   const [chatMenu, setChatMenu] = useState<{ x: number; y: number } | null>(null);
   const [doneSummary, setDoneSummary] = useState<string | null>(null);
@@ -1995,11 +2010,20 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }
   };
 
-  const openImageMenu = useCallback((e: React.MouseEvent, src: string) => {
+  const openItemMenu = useCallback((e: React.MouseEvent, item: ChatImageItem) => {
     e.preventDefault();
     e.stopPropagation();
-    setImageMenu({ x: e.clientX, y: e.clientY, src });
+    setImageMenu({ x: e.clientX, y: e.clientY, item });
   }, []);
+  const openImageMenu = useCallback((e: React.MouseEvent, src: string) => openItemMenu(e, { src }), [openItemMenu]);
+  // Remote photos load by themselves only when this chat has seen their URL
+  // from outside the model (a tool result or the user); see remoteImages.ts.
+  const imageEvidence = useMemo(() => remoteImageEvidence(session?.messages ?? []), [session?.messages]);
+  const chatImages = useMemo<ChatImagesApi>(() => ({
+    trusted: (url) => urlSeenIn(imageEvidence, url),
+    open: (items, index) => setViewer({ items, index }),
+    menu: openItemMenu,
+  }), [imageEvidence, openItemMenu]);
 
   const providerKind = providers.find((p) => p.id === providerId)?.kind;
   const activeProvider = providers.find((p) => p.id === providerId);
@@ -2233,13 +2257,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   /**
    * How wide the conversation and its controls run inside the pane.
    *
-   * Three quarters, not a fixed 768px column: on a desktop workbench pane the
-   * old cap left the composer at about half the width with dead margin on both
-   * sides. When the plan rail is showing it already takes the right quarter, so
-   * the column below it goes full width rather than indenting twice.
+   * The full pane, less the transcript scroller's 10px gutter on each side: a
+   * narrower centred column (first 768px, then 75%) left wide dead margins on
+   * a desktop workbench pane. The transcript already starts below the floating
+   * Agent Monitor toggle, so nothing sits under it.
    */
-  // Full width beside the open rail keeps clear of the floating plan toggle.
-  const contentWidth = planRailOpen ? 'mx-auto w-full pr-11' : paneWidth < NARROW_PANE ? 'mx-auto w-full' : 'mx-auto w-[75%]';
+  // Beside the open rail, keep clear of its floating plan toggle.
+  const contentWidth = planRailOpen ? 'mx-auto w-full pr-11' : 'mx-auto w-full';
 
   // --- The transcript, as windowed rows ---
   const messages = session?.messages;
@@ -2311,7 +2335,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     [artifactBasePath, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, cuts, onDelete, onRestart, openImageMenu],
   );
   // Width of the text column, for the height estimates of rows not yet measured.
-  const columnWidth = Math.max(0, (paneWidth || 800) * (contentWidth.includes('75%') ? 0.75 : 1) - 32);
+  const columnWidth = Math.max(0, (paneWidth || 800) - 20);
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
@@ -2377,6 +2401,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   return (
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
+    <ChatImages.Provider value={chatImages}>
     <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); setChatMenu({ x: e.clientX, y: e.clientY }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
       {contextChangeNotice && <Modal title="Context on your next reply" zIndex={100} overlayClassName="p-4" className="w-full max-w-md rounded-xl border border-line bg-surface p-5 text-ink shadow-xl" onClose={closeContextNotice}>
             <h2 className="font-semibold">Context on your next reply</h2>
@@ -3286,36 +3311,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           onClose={() => setScheduleOpen(false)}
         />
       )}
-      {lightbox && (
-        <Modal
-          title="Attached image"
-          onClose={() => setLightbox(null)}
-          scrim="rgba(0,0,0,0.5)"
-          overlayClassName="p-4"
-        >
-          <div className="flex max-h-[calc(100vh-2rem)] max-w-[90vw] flex-col items-center gap-3" onClick={() => setLightbox(null)}>
-            <button
-              className="flex min-h-11 items-center gap-2 self-end rounded-full bg-surface px-4 py-2 text-[14px] font-medium text-ink shadow-lg hover:bg-surface-2"
-              aria-label="Close image"
-              onClick={() => setLightbox(null)}
-            >
-              <CloseIcon className="h-5 w-5" /> Close
-            </button>
-            <img
-              src={lightbox}
-              alt="Full-size attachment"
-              className="block max-h-[calc(100vh-6rem)] max-w-full object-contain"
-              onClick={(e) => e.stopPropagation()}
-              onContextMenu={(e) => openImageMenu(e, lightbox)}
-              title="Right-click to copy or save"
-            />
-          </div>
-        </Modal>
+      {viewer && (
+        <PhotoViewer
+          items={viewer.items}
+          index={viewer.index}
+          trusted={chatImages.trusted}
+          onClose={() => setViewer(null)}
+          onMenu={openItemMenu}
+          onCopy={(item) => { void copyImageItem(item); }}
+          onSave={(item) => { void saveImageItem(item); }}
+        />
       )}
       {imageMenu && (
-        <ImageMenu x={imageMenu.x} y={imageMenu.y} src={imageMenu.src} onClose={() => setImageMenu(null)} />
+        <ImageMenu x={imageMenu.x} y={imageMenu.y} item={imageMenu.item} onClose={() => setImageMenu(null)} />
       )}
     </div>
+    </ChatImages.Provider>
     </MarkdownSandbox.Provider>
   );
 }

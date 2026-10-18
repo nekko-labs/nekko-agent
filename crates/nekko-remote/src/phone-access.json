@@ -33,6 +33,7 @@
    "dir:list",
    "file:read",
    "file:write",
+   "image:fetch",
    "providers:importCliAuth",
    "providers:remove",
    "providers:save",
