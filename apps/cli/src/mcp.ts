@@ -582,7 +582,7 @@ export function runMcpServer(opts: { url?: string; token?: string } = {}): void 
   console.error('[Nekko Agent] MCP server ready on stdio');
 }
 
-/** Stop the in-process engine if this server started it, bounded so exit never hangs. */
+/** Stop the model server and the engine if this server started them, bounded so exit never hangs. */
 async function stopLocalEngine(client: Client): Promise<void> {
   if (!client.isLocal) return;
   try {
@@ -593,5 +593,7 @@ async function stopLocalEngine(client: Client): Promise<void> {
     await Promise.race([client.runtimeStop(engine.id), new Promise((r) => setTimeout(r, 5000))]);
   } catch {
     /* best effort: exiting anyway */
+  } finally {
+    await Promise.race([client.close?.(), new Promise((r) => setTimeout(r, 10_000))]);
   }
 }

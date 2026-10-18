@@ -1,7 +1,7 @@
 // Write one npm package per platform carrying that platform's nekkod, the engine
 // daemon the web edition runs behind. The `nekko-agent-web` bundle lists them as
 // optionalDependencies (see bundle.mjs), so npm installs only the one whose
-// `os`/`cpu` match, and the server finds it at runtime (src/nekkod.ts).
+// `os`/`cpu` match, and the server finds it at runtime (apps/cli/src/engine.ts).
 //
 //   node apps/web-app-server/scripts/nekkod-packages.mjs --bins <dir> --out <dir> [--version x.y.z]
 //

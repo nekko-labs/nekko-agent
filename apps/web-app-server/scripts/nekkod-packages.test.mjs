@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PLATFORMS, packageName, writePackages } from './nekkod-packages.mjs';
-import { nekkodPackageName } from '../src/nekkod.js';
+import { nekkodPackageName } from 'nekko-agent/engine';
 
 const dirs = [];
 afterEach(() => {

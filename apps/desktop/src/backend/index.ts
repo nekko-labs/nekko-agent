@@ -20,7 +20,7 @@
  *   then the daemon's, and this host forwards terminal calls to it.
  */
 import { join } from 'node:path';
-import { createHost, flushAgentLogs, useEngineDaemon, useTerminalDaemon } from '@nekko-agent/host';
+import { createHost, flushAgentLogs, settingsSaved, useEngineDaemon, useTerminalDaemon } from '@nekko-agent/host';
 import { closeApiServer } from '../main/api-server.js';
 import { startLocalAccess, stopLocalAccess, type AppLike } from '../main/local-access.js';
 import { closeWorkflowLoopbackListener, manageWorkflowLoopbackListener } from '../main/workflow-listener.js';
@@ -109,6 +109,8 @@ async function main(): Promise<void> {
       visibility.close();
       wire.close();
     } finally {
+      // Settings changes still on their way to nekkod (it keeps serving until we exit).
+      await Promise.race([settingsSaved(), new Promise((r) => setTimeout(r, 3000))]);
       try { await flushAgentLogs(); }
       catch (error) { console.error('Command log shutdown drain failed:', error); code = 1; }
       // 'exit' handlers (runtime supervisors, model server children) run here.

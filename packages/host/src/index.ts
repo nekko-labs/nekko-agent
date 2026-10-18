@@ -17,3 +17,4 @@ export { isDaemonCopy, onDaemonOr } from './daemon-caps.js';
 export { daemonLink, useEngineDaemon } from './engine/daemon.js';
 export { reviewRepository, parseRepositoryVerdict, type RepositoryReviewer, type RepositoryReviewInput, type RepositoryReviewVerdict } from './repository-review.js';
 export { flushAgentLogs } from './agent-log.js';
+export { settingsSaved } from './store.js';

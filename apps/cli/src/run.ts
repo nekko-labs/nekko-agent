@@ -554,5 +554,8 @@ export async function runCli(argv: string[]): Promise<void> {
     if (e instanceof CliError) throw e;
     const message = (e as Error).message;
     throw new CliError(message, exitCodeForError(message));
+  } finally {
+    // A local engine this command started stops with it.
+    await client.close?.();
   }
 }

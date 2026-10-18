@@ -348,7 +348,14 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         out.flush()?;
     }
 
-    axum::serve(listener, router).with_graceful_shutdown(shutdown_signal(cfg.exit_on_stdin_close)).await?;
+    // The backend goes first, while this daemon still serves: what it is still
+    // sending (a settings change, a session save) has somewhere to land.
+    let (first, watch_stdin) = (backend.clone(), cfg.exit_on_stdin_close);
+    let stop = async move {
+        shutdown_signal(watch_stdin).await;
+        first.shutdown().await;
+    };
+    axum::serve(listener, router).with_graceful_shutdown(stop).await?;
 
     remote.stop();
     if let Some(m) = &messaging {

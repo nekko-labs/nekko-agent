@@ -7,15 +7,15 @@ import { createInterface } from 'node:readline';
 import { ENV_PREFIXES } from '@nekko-agent/shared';
 
 /**
- * The web edition's engine daemon: find `nekkod`, start it, keep it running,
- * stop it on exit.
+ * The engine daemon outside the desktop app: find `nekkod`, start it, keep it
+ * running, stop it on exit. Used by the web edition (`apps/web-app-server`),
+ * the CLI's local mode and `nekko-agent mcp` (lib.ts), and relay-agent mode.
  *
  * The same topology as the desktop app (see `apps/desktop/src/main/engine-process.ts`):
  * nekkod binds a random loopback port with a per-launch token, owns the
- * channels it has ported (terminals, session storage, the inference router,
- * MCP, the agent run) and starts a TS host backend for the rest. Here the
- * backend is this same script run with `--nekko-backend` under the Node that
- * runs us, since there is no Electron binary to borrow.
+ * channels it has ported and starts a TS host backend for the rest. Here the
+ * backend is the running script itself with `--nekko-backend` (backend.ts),
+ * under the Node (or Electron-as-Node) that runs us.
  */
 
 /** The npm package that carries this platform's daemon (an optional dependency of the npx bundle). */
@@ -38,7 +38,7 @@ export interface FindOptions {
 export interface FoundDaemon {
   path: string;
   /** Where it came from, for the startup log. */
-  source: 'NEKKOD_PATH' | 'npm package' | 'bundled' | 'cargo build';
+  source: 'NEKKOD_PATH' | 'npm package' | 'bundled' | 'app' | 'cargo build';
 }
 
 function defaultResolvePackage(name: string): string | null {
@@ -51,9 +51,11 @@ function defaultResolvePackage(name: string): string | null {
 
 /**
  * The daemon binary, in order: an explicit `NEKKOD_PATH`, this platform's npm
- * package, a `bin/` folder beside the script (the Docker image), then a cargo
- * build in a development checkout, newest of release and debug (as the
- * desktop does: preferring release once ran a stale daemon against a fresh host).
+ * package, a `bin/` folder beside the script (the Docker image), the installed
+ * app's `resources/bin` (the CLI the app ships runs from `resources/cli`),
+ * then a cargo build in a development checkout, newest of release and debug
+ * (as the desktop does: preferring release once ran a stale daemon against a
+ * fresh host).
  */
 export function findNekkod(opts: FindOptions): FoundDaemon | null {
   const env = opts.env ?? process.env;
@@ -70,8 +72,10 @@ export function findNekkod(opts: FindOptions): FoundDaemon | null {
 
   const bundled = join(opts.here, 'bin', exe);
   if (existsSync(bundled)) return { path: bundled, source: 'bundled' };
+  const app = join(opts.here, '..', 'bin', exe);
+  if (existsSync(app)) return { path: app, source: 'app' };
 
-  // apps/web-app-server/dist -> the repository root.
+  // apps/web-app-server/dist or apps/cli/dist -> the repository root.
   const root = resolve(opts.here, '../../..');
   const builds = [join(root, 'target/release', exe), join(root, 'target/debug', exe)].flatMap((p) => {
     try {
@@ -96,14 +100,20 @@ export function childEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEn
   return out;
 }
 
+/** The flag a script runs as the TS backend under (backend.ts). */
+export const BACKEND_FLAG = '--nekko-backend';
+
 /**
  * How to start this script as the TS backend. Node 20 and 21 hide the global
  * WebSocket the host's terminal client uses behind a flag; 22 has it on.
+ * Under Electron-as-Node (the CLI the app ships) the backend borrows the same
+ * binary the same way.
  */
 export function backendCommand(script: string, extraEnv: Record<string, string>): { exe: string; args: string[]; env: Record<string, string> } {
   const major = Number(process.versions.node.split('.')[0]);
-  const flags = major < 22 ? ['--experimental-websocket'] : [];
-  return { exe: process.execPath, args: [...flags, script, '--nekko-backend'], env: extraEnv };
+  const flags = major < 22 && !process.versions.electron ? ['--experimental-websocket'] : [];
+  const electron: Record<string, string> = process.versions.electron ? { ELECTRON_RUN_AS_NODE: '1' } : {};
+  return { exe: process.execPath, args: [...flags, script, BACKEND_FLAG], env: { ...electron, ...extraEnv } };
 }
 
 export interface DaemonEndpoint {
@@ -116,6 +126,14 @@ export interface DaemonOptions {
   dataDir: string;
   backend: { exe: string; args: string[]; env: Record<string, string> };
   log?: (line: string) => void;
+  /**
+   * Whether the daemon runs subscription sign-in (OAuth). The web edition
+   * says no (sign-in needs the desktop's browser handoff); the CLI's local
+   * engine says yes, so its subscription tokens still refresh.
+   */
+  signIn?: boolean;
+  /** Restart a daemon that dies (servers); a one-shot command fails instead. */
+  restart?: boolean;
 }
 
 const READY = 'NEKKOD_READY ';
@@ -179,8 +197,8 @@ export class DaemonProcess {
       allowedOrigins: [],
       backend: this.opts.backend,
       dataDir: this.opts.dataDir,
-      // OAuth sign-in is desktop-only (web-channels.ts): the daemon answers its channels with the same refusal.
-      signIn: false,
+      // OAuth sign-in is desktop-only in the web edition (web-channels.ts): the daemon answers its channels with the same refusal.
+      signIn: this.opts.signIn ?? false,
     };
     const child = spawn(this.opts.exe, [], {
       env: { ...childEnv(), NEKKOD_CONFIG: JSON.stringify(config) },
@@ -217,6 +235,14 @@ export class DaemonProcess {
         this.current = null;
       }
       if (this.stopping) return;
+      if (this.opts.restart === false) {
+        this.stopping = true;
+        for (const w of this.waiters.splice(0)) {
+          clearTimeout(w.timer);
+          w.reject(new Error(`nekkod exited (${signal ?? code}) before it was ready`));
+        }
+        return;
+      }
       if (Date.now() - startedAt > HEALTHY_RUN_MS) this.backoff = 500;
       this.log(`[nekko-agent] nekkod exited (${signal ?? code}); restarting in ${this.backoff}ms`);
       this.restarts += 1;
@@ -248,4 +274,64 @@ export class DaemonProcess {
     });
     return this.stopPromise;
   }
+}
+
+export interface StartOptions {
+  /** Directory of the running script: where to look for a bundled or installed nekkod. */
+  here: string;
+  /** The script nekkod runs as its TS backend (with `--nekko-backend`). */
+  script: string;
+  dataDir: string;
+  /** Extra environment for the backend. */
+  backendEnv?: Record<string, string>;
+  signIn?: boolean;
+  restart?: boolean;
+  log?: (line: string) => void;
+  /** How long to wait for the daemon to say it is listening. */
+  readyMs?: number;
+}
+
+/** Why there is no nekkod to start, said plainly. */
+export function missingNekkodMessage(env: Record<string, string | undefined> = process.env): string {
+  const override = env.NEKKOD_PATH;
+  return override
+    ? `nekkod (the engine daemon) was not found: NEKKOD_PATH points at ${override}, which does not exist.`
+    : 'nekkod (the engine daemon) was not found: no NEKKOD_PATH, no ' +
+        `${nekkodPackageName()} package, no bin/ beside this script, no installed Nekko Agent app beside it and no cargo build.`;
+}
+
+/** Start nekkod (the engine daemon) and wait for it. There is no engine without it. */
+export async function startNekkod(opts: StartOptions): Promise<{ daemon: DaemonProcess; found: FoundDaemon }> {
+  const found = findNekkod({ here: opts.here });
+  if (!found) throw new Error(missingNekkodMessage());
+  const daemon = new DaemonProcess({
+    exe: found.path,
+    dataDir: opts.dataDir,
+    backend: backendCommand(opts.script, { NEKKO_DATA_DIR: opts.dataDir, ...opts.backendEnv }),
+    signIn: opts.signIn,
+    restart: opts.restart,
+    log: opts.log,
+  });
+  daemon.start();
+  try {
+    await daemon.endpoint(opts.readyMs ?? 20_000);
+    return { daemon, found };
+  } catch (e) {
+    await daemon.stop();
+    throw new Error(`nekkod at ${found.path} did not start: ${(e as Error).message}`);
+  }
+}
+
+/** One call on a running daemon's HTTP route. */
+export async function daemonRequest<T>(daemon: DaemonProcess, channel: string, ...args: unknown[]): Promise<T> {
+  const { port, token } = await daemon.endpoint();
+  const res = await fetch(`http://127.0.0.1:${port}/api/${channel}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ args }),
+  });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error(body?.error ?? `${channel}: HTTP ${res.status}`);
+  return body as T;
 }
