@@ -36,8 +36,10 @@ it('looks joined to its window and animates out and back in', () => {
   expect(css).toContain('.agent-logs-drawer[data-closing]');
   // The window keeps its rounded corners; concave fillets flow its edge into the drawer.
   expect(css).not.toContain('.command-wall-window[data-wall-logs-open] > .panel');
-  expect(css).toMatch(/\.agent-logs-drawer:not\(\[data-overlay\]\)::before \{[^}]*radial-gradient\(circle at 100% 0/);
-  expect(css).toMatch(/\.agent-logs-drawer:not\(\[data-overlay\]\)::after \{[^}]*radial-gradient\(circle at 100% 100%/);
+  expect(css).toMatch(/\.agent-logs-drawer:not\(\[data-overlay\]\)::before \{[^}]*radial-gradient\(circle at 100% 1px/);
+  expect(css).toMatch(/\.agent-logs-drawer:not\(\[data-overlay\]\)::after \{[^}]*radial-gradient\(circle at 100% calc\(100% - 1px\)/);
+  // The fillets cover the drawer's own border row too, or it runs on straight under each arc.
+  expect(css).toMatch(/\.agent-logs-drawer:not\(\[data-overlay\]\)::after \{[^}]*height: calc\(var\(--logs-fillet\) \+ 1px\)/);
   expect(css).toContain('--logs-fillet: 12px;');
 });
 

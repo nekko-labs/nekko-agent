@@ -3,7 +3,7 @@ import { MonitorArtifacts } from './MonitorArtifacts.js';
 import { MonitorTasks } from './MonitorTasks.js';
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { QueuedPrompt, Session } from '@nekko-agent/shared';
-import { DEFAULT_ORCHESTRATION, getStrategy, planProgress, queueItemPayload } from '@nekko-agent/shared';
+import { DEFAULT_ORCHESTRATION, getStrategy, lastReplyInterrupted, planProgress, queueItemPayload } from '@nekko-agent/shared';
 import { useLiveRunsVersion, getLiveRun, runningSessionIds } from '../liveRuns.js';
 import { childActivity, activitySentence } from '../subagentActivity.js';
 import { useStore } from '../store.js';
@@ -48,6 +48,9 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan, onMinimi
   const activeChildren = children;
   const agentPlan = session?.agentPlan;
   const progress = planProgress(agentPlan);
+  // An active plan entry is not tied to token streaming. Only an explicit
+  // interruption pauses it; a resumed live run takes precedence over history.
+  const planPaused = !streaming && !getLiveRun(sessionId) && !session?.activeRun && lastReplyInterrupted(session?.messages ?? []);
   const queued = session?.queue ?? [];
   const settings = useStore(s => s.settings);
   const basePath = session?.workspaceId ? session.gitWorktrees?.[session.workspaceId]?.path ?? settings?.workspaces.find(w => w.id === session.workspaceId)?.path : undefined;
@@ -96,9 +99,14 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan, onMinimi
             <ol className="space-y-0.5">
               {agentPlan.map((step) => (
                 <li key={step.id} className="group flex items-start gap-1.5 rounded-lg px-1 py-0.5">
-                  <span className="mt-[5px] shrink-0">
+                  <span className="mt-[3px] grid h-3 w-3 shrink-0 place-items-center" role="img" aria-label={step.status === 'active' ? (planPaused ? 'Paused' : 'Working') : step.status === 'done' ? 'Done' : step.status === 'skipped' ? 'Skipped' : 'Pending'} title={step.status === 'active' ? (planPaused ? 'Paused' : 'Working') : step.status === 'done' ? 'Done' : step.status === 'skipped' ? 'Skipped' : 'Pending'}>
                     {step.status === 'done' ? <CheckIcon className="h-3 w-3 text-success" /> :
-                      <span className="block h-2.5 w-2.5 rounded-full border" style={{ borderColor: step.status === 'active' ? 'var(--accent)' : 'var(--ink-faint)', background: step.status === 'active' ? 'var(--accent)' : 'transparent' }} />}
+                      <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: step.status === 'active' ? 'var(--accent)' : 'var(--ink-faint)' }}>
+                        {step.status === 'active' ? (planPaused ? <path d="M8 5v14M16 5v14" /> : <path d="M12 3v3m6.36-.36-2.12 2.12M21 12h-3m.36 6.36-2.12-2.12M12 21v-3m-6.36.36 2.12-2.12M3 12h3m-.36-6.36 2.12 2.12" />) : <>
+                          <circle cx="12" cy="12" r="8" />
+                          {step.status === 'skipped' && <path d="M6 18 18 6" />}
+                        </>}
+                      </svg>}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className={`block break-words text-[12px] leading-snug ${step.status === 'skipped' ? 'text-ink-faint line-through' : 'text-ink-soft'}`}>{step.title}</span>

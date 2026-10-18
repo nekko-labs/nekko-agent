@@ -8,8 +8,10 @@ import type { AgentType } from '@nekko-agent/shared';
 import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
+import { putCachedSession } from '../sessionCache.js';
+import { newAgentSetup } from '../newAgentSetup.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { GridIcon, PhotoIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
+import { PhotoIcon, TerminalIcon, FocusLayoutIcon, BoltIcon, PanelIcon, WandIcon } from '../icons.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -261,10 +263,16 @@ export function CommandCenterView() {
           if (!relocated) throw new Error('Could not configure the new agent working folder.');
           s = relocated;
         }
-        const updated = await window.nekko.setSessionOptions(s.id, { chatType: selection.chatType ?? 'multimodal', ...(selection.providerId ? { providerId: selection.providerId } : {}), ...(selection.modelId ? { modelId: selection.modelId, autoModel: selection.modelId === AUTO_MODEL_ID } : {}) });
-        if (!updated) throw new Error('Could not configure the new agent window.');
-        s = updated;
-        if (selection.workspaceIds) {
+        // Each call is a host round trip before the window can open, so skip
+        // the ones that would change nothing on a just-created chat.
+        const needs = newAgentSetup(s, selection);
+        const chatType = selection.chatType ?? 'multimodal';
+        if (needs.options) {
+          const updated = await window.nekko.setSessionOptions(s.id, { chatType, ...(selection.providerId ? { providerId: selection.providerId } : {}), ...(selection.modelId ? { modelId: selection.modelId, autoModel: selection.modelId === AUTO_MODEL_ID } : {}) });
+          if (!updated) throw new Error('Could not configure the new agent window.');
+          s = updated;
+        }
+        if (needs.supporting) {
           const configured = await window.nekko.setSessionSupportingWorkspaces(s.id, supportingFolders);
           if (!configured) throw new Error('Could not configure the new agent folders.');
           s = configured;
@@ -281,6 +289,9 @@ export function CommandCenterView() {
       }
     }
     unfinishedChat.current = null;
+    // The host returned the full record: cached, the window's first frame is
+    // the finished chat, not a placeholder swapped out mid-reveal.
+    putCachedSession(s);
     addCreatedSession(s);
     return s.id;
   };
@@ -526,17 +537,6 @@ export function WallToolbar({
   onPick?: (selection: AgentWindowSelection) => Promise<void>;
 }) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
-  const [fixedOpen, setFixedOpen] = useState(false);
-  const [hoverSize, setHoverSize] = useState({ rows: wall.layout.rows, cols: wall.layout.cols });
-  const fixedRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!fixedOpen) return;
-    const down = (e: MouseEvent) => { if (!fixedRef.current?.contains(e.target as Node)) setFixedOpen(false); };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setFixedOpen(false); };
-    window.addEventListener('mousedown', down);
-    window.addEventListener('keydown', key);
-    return () => { window.removeEventListener('mousedown', down); window.removeEventListener('keydown', key); };
-  }, [fixedOpen]);
   const canArrange = wall.layout.mode === 'grid' && !!wall.root && isSplit(wall.root);
   const panel = readAgentPanel(wall.agentPanel);
   // In the desktop shell the controls share the title bar's row with the
@@ -579,13 +579,10 @@ export function WallToolbar({
           <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" ref={addButtonRef} onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
-        <div className="wall-layout-control" ref={fixedRef}>
+        <div className="wall-layout-control">
           <div className="wall-layout-segments" role="group" aria-label="Wall layout">
-            {(['focus', 'grid', 'fixed'] as const).map((mode) => (
-              <button key={mode} type="button" title={`${LAYOUT_LABEL[mode]} (${layoutShortcutLabel(mode)})`} aria-pressed={wall.layout.mode === mode} aria-expanded={mode === 'fixed' ? fixedOpen : undefined} onClick={() => {
-                if (mode === 'fixed') { setHoverSize({ rows: wall.layout.rows, cols: wall.layout.cols }); setFixedOpen((open) => !open); }
-                else { setFixedOpen(false); setWall((w) => ({ ...w, layout: { ...w.layout, mode } })); }
-              }}>{React.createElement(mode === 'focus' ? FocusLayoutIcon : mode === 'grid' ? GridIcon : FixedLayoutIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[mode]}</button>
+            {(['focus', 'grid'] as const).map((mode) => (
+              <button key={mode} type="button" title={`${LAYOUT_LABEL[mode]} (${layoutShortcutLabel(mode)})`} aria-pressed={wall.layout.mode === mode} onClick={() => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))}>{React.createElement(mode === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[mode]}</button>
             ))}
           </div>
           <div className="wall-auto-arrange" data-visible={wall.layout.mode === 'grid'}>
@@ -594,17 +591,6 @@ export function WallToolbar({
             </button>
             <span id="wall-auto-arrange-tip" role="tooltip">Fit windows above the composer in even rows and columns.</span>
           </div>
-          {fixedOpen && <div className="wall-fixed-picker" role="dialog" aria-label="Grid size">
-            <p className="wall-fixed-shortcut">{layoutShortcutLabel('fixed')} · Grid view</p>
-            <p>{hoverSize.cols} columns × {hoverSize.rows} rows</p>
-            <div className="wall-fixed-cells" onMouseLeave={() => setHoverSize({ rows: wall.layout.rows, cols: wall.layout.cols })}>
-              {Array.from({ length: 36 }, (_, i) => {
-                const rows = Math.floor(i / 6) + 1;
-                const cols = i % 6 + 1;
-                return <button key={i} type="button" aria-label={`${cols} columns by ${rows} rows`} className={rows <= hoverSize.rows && cols <= hoverSize.cols ? 'is-preview' : ''} onMouseEnter={() => setHoverSize({ rows, cols })} onFocus={() => setHoverSize({ rows, cols })} onClick={() => { setWall((w) => ({ ...w, layout: { mode: 'fixed', rows, cols } })); setFixedOpen(false); }} />;
-              })}
-            </div>
-          </div>}
         </div>
         {/* Same frame as the layout segments beside it (plain 8px corners, not
             the squircle `rounded-lg` gets), so the two groups match. */}

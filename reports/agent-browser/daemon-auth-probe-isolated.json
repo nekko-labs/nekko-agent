@@ -1,0 +1,64 @@
+{
+  "at": "2026-10-17T16:27:09.164Z",
+  "platform": "win32",
+  "node": "v24.1.0",
+  "binarySha256": "af1ff5f2afd5c187fb50ac3bbc1e7114baadc180d67cef63f644af9031be5049",
+  "packageVersion": "0.39.1",
+  "sourceTag": "1165952d74ceed98fdc2dd97190ad41f44dd0e24",
+  "upstreamMainChecked": "dac13bb87468fe9d74a040d862720f6cc17a9565",
+  "pid": 68952,
+  "request": {
+    "id": "untrusted-client",
+    "action": "session_info"
+  },
+  "response": {
+    "data": {
+      "backgroundPid": 68952,
+      "browserLaunched": false,
+      "compatibilityStatus": "current",
+      "effectiveLaunch": {
+        "browserLaunched": false,
+        "engine": "chrome",
+        "launchHash": null
+      },
+      "engine": "chrome",
+      "launchHash": null,
+      "lifecycle": {
+        "effectiveLaunch": {
+          "browserLaunched": false,
+          "engine": "chrome",
+          "launchHash": null
+        },
+        "launched": false,
+        "relaunchedBrowser": false,
+        "restartedBackground": false,
+        "restoreStatus": "not_configured",
+        "reused": false,
+        "saveStatus": "not_attempted"
+      },
+      "namespace": null,
+      "pageCount": 0,
+      "restoreCheckFn": null,
+      "restoreCheckText": null,
+      "restoreCheckUrl": null,
+      "restoreKey": null,
+      "restoreLoadedPath": null,
+      "restoreSave": "auto",
+      "restoreSavedPath": null,
+      "restoreStatus": "not_configured",
+      "restoreStatusDetail": null,
+      "restoreValidationPending": false,
+      "saveStatus": "not_attempted",
+      "session": "nekko-probe-9f7502bac06b90b919b194d9",
+      "socketDir": "C:\\Users\\phili\\AppData\\Local\\Temp\\nekko-ab-probe-tBhVvd"
+    },
+    "id": "untrusted-client",
+    "success": true
+  },
+  "authenticationSent": false,
+  "browserLaunched": false,
+  "cleanup": {
+    "ownedProcessTreeEnded": true,
+    "temporaryDirectoryRemoved": true
+  }
+}
