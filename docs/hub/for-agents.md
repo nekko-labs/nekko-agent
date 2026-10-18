@@ -33,12 +33,11 @@ An agent changing Nekko Agent should read these files in the repo first:
 
 ## Editing these docs
 
-Each page is rendered from one Markdown file in the repo, listed in `docs/hub/nav.json`. Edit the Markdown, then regenerate the site:
+Each page is rendered from one Markdown file in the repo, listed in `docs/hub/nav.json`. Edit the Markdown; the generated site is not committed, Vercel builds it on every deploy. To look at the result before it ships, build it and serve it. `npm run website` serves the site on [http://127.0.0.1:8080](http://127.0.0.1:8080) (set `PORT` to change it), with the same clean URLs as production.
 
 ```bash
 npm run docs
+npm run website
 ```
 
-To look at the result before it ships, `npm run website` serves the site on [http://127.0.0.1:8080](http://127.0.0.1:8080) (set `PORT` to change it), with the same clean URLs as production.
-
-If you skip that step, the **Docs site** workflow rebuilds the pages on the pull request and commits them to its branch, but only when the output actually changed. A pull request that changes user-facing behaviour should also update the page that describes it.
+A change to `nav.json` also changes `apps/website/llms.txt` and `apps/website/sitemap.xml`, which are committed; `npm run docs` updates them, and if you skip it the **Docs site** workflow commits them to the pull request. A pull request that changes user-facing behaviour should also update the page that describes it.

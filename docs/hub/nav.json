@@ -1,5 +1,5 @@
 {
-  "$comment": "The docs hub at nekkoagent.com/docs. Each page renders from one Markdown file in this repo; `npm run docs` regenerates apps/website/docs. The first page is the hub's landing page (/docs).",
+  "$comment": "The docs hub at nekkoagent.com/docs. Each page renders from one Markdown file in this repo; `npm run docs` (Vercel's build command) generates apps/website/docs, which is gitignored. The first page is the hub's landing page (/docs).",
   "sections": [
     {
       "title": "Introduction",

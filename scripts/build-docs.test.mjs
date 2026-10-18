@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { build, loadNav, slugify } from './build-docs.mjs';
 
-// Staleness itself is not a test: the Docs site workflow regenerates the pages
-// and commits them to the PR, so failing CI on the author's commit would only
+// Staleness itself is not a test: the pages are built on deploy, and the Docs
+// site workflow commits the regenerated llms.txt and sitemap.xml to the PR, so failing CI on the author's commit would only
 // add a red run before the fix lands. It does need to run for every source.
 test('the Docs site workflow runs for every page source', () => {
   const workflow = readFileSync(new URL('../.github/workflows/docs-site.yml', import.meta.url), 'utf8');
