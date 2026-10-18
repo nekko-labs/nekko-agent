@@ -9,6 +9,7 @@ const fake = vi.hoisted(() => {
     handlers = new Map<string, (...args: any[]) => void>();
     webContents = {
       setWindowOpenHandler: vi.fn(), on: vi.fn(), getTitle: () => 'Example',
+      beginFrameSubscription: vi.fn(), endFrameSubscription: vi.fn(),
       session: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), on: vi.fn() },
     };
     constructor(opts: any) { this.opts = opts; windows.push(this); }
@@ -24,7 +25,7 @@ const fake = vi.hoisted(() => {
   return { Window, windows };
 });
 vi.mock('electron', () => ({ BrowserWindow: fake.Window, app: { userAgentFallback: 'test', getPath: () => '' } }));
-import { errorLine, startAgentBrowser, type BrowserDriver } from './agentBrowser.js';
+import { errorLine, startAgentBrowser, withFramesAwake, type BrowserDriver } from './agentBrowser.js';
 
 afterEach(() => { fake.windows.length = 0; });
 
@@ -171,6 +172,78 @@ describe('private Electron browser bridge', () => {
       expect(shell.quitForUpdate).toHaveBeenCalledOnce();
       expect(fake.windows).toHaveLength(0);
     } finally { bridge.close(); }
+  });
+});
+
+describe('phase timings', () => {
+  it('reports startup phases on a fresh chat, only action phases when warm, and failures', async () => {
+    const { driver } = fakeDriver();
+    const adopt = driver.adopt.bind(driver);
+    driver.adopt = async (win: any, mark?: any) => mark('attach', () => adopt(win));
+    const timings: any[] = [];
+    const bridge = await startAgentBrowser({ driver: async () => driver, onTiming: (t) => timings.push(t) });
+    const post = (input: object) => fetch(bridge.url, { method: 'POST', headers: { Authorization: `Bearer ${bridge.token}` }, body: JSON.stringify({ sessionId: 'timed', ...input }) });
+    try {
+      await post({ action: 'navigate', url: 'https://example.com' });
+      await post({ action: 'inspect' });
+      await post({ action: 'tab_switch', tab: 5 });
+      expect(timings.map((t) => [t.action, t.fresh, t.ok])).toEqual([['navigate', true, true], ['inspect', false, true], ['tab_switch', false, false]]);
+      expect(timings[0].phases.map((p: any) => p.phase)).toEqual(['driver', 'window', 'attach', 'navigate', 'summary']);
+      expect(timings[1].phases.map((p: any) => p.phase)).toEqual(['summary']);
+      for (const t of timings) {
+        expect(t.totalMs).toBeGreaterThanOrEqual(0);
+        for (const phase of t.phases) expect(phase.ms).toBeGreaterThanOrEqual(0);
+      }
+      // The size of the reply as the backend receives it.
+      expect(timings[1].responseBytes).toBe(Buffer.byteLength(JSON.stringify({ output: 'Example\nBody' })));
+      expect(timings[2].responseBytes).toBe(Buffer.byteLength(JSON.stringify({ error: 'No tab 5. Use the tabs action to list them.' })));
+    } finally { bridge.close(); }
+  });
+
+  it('never lets a throwing listener fail the request', async () => {
+    const bridge = await startAgentBrowser({ driver: async () => fakeDriver().driver, onTiming: () => { throw new Error('listener'); } });
+    try {
+      const res = await fetch(bridge.url, { method: 'POST', headers: { Authorization: `Bearer ${bridge.token}` }, body: JSON.stringify({ sessionId: 'x', action: 'inspect' }) });
+      expect(res.status).toBe(200);
+    } finally { bridge.close(); }
+  });
+});
+
+describe('hidden-window frames', () => {
+  const win = (visible = false) => {
+    const calls: string[] = [];
+    return { calls, win: { isDestroyed: () => false, isVisible: () => visible, webContents: { beginFrameSubscription: () => calls.push('begin'), endFrameSubscription: () => calls.push('end') } } as any };
+  };
+
+  it('keeps frames coming only while the action runs, and always releases them', async () => {
+    const hidden = win();
+    expect(await withFramesAwake(hidden.win, async () => { hidden.calls.push('work'); return 1; })).toBe(1);
+    expect(hidden.calls).toEqual(['begin', 'work', 'end']);
+    await expect(withFramesAwake(hidden.win, async () => { throw new Error('page'); })).rejects.toThrow('page');
+    expect(hidden.calls.slice(3)).toEqual(['begin', 'end']);
+  });
+
+  it('leaves a visible window alone', async () => {
+    const shown = win(true);
+    await withFramesAwake(shown.win, async () => {});
+    expect(shown.calls).toEqual([]);
+  });
+
+  it('wakes frames for clicks and screenshots only, unless turned off', async () => {
+    for (const wakeFrames of [undefined, false]) {
+      const { driver } = fakeDriver();
+      const bridge = await startAgentBrowser({ driver: async () => driver, wakeFrames });
+      const post = (input: object) => fetch(bridge.url, { method: 'POST', headers: { Authorization: `Bearer ${bridge.token}` }, body: JSON.stringify({ sessionId: 'frames', ...input }) });
+      try {
+        await post({ action: 'navigate', url: 'https://example.com' });
+        const w = fake.windows.at(-1);
+        const subscribed: string[] = [];
+        w.webContents.beginFrameSubscription = vi.fn(() => subscribed.push('begin'));
+        w.webContents.endFrameSubscription = vi.fn(() => subscribed.push('end'));
+        for (const action of ['inspect', 'fill', 'click', 'screenshot']) await post({ action, selector: '#a', value: 'x' });
+        expect(subscribed).toEqual(wakeFrames === false ? [] : ['begin', 'end', 'begin', 'end']);
+      } finally { bridge.close(); }
+    }
   });
 });
 

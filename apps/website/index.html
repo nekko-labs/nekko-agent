@@ -10,8 +10,10 @@
     />
     <link rel="canonical" href="https://nekkoagent.com/" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
-    <meta name="theme-color" content="#101714" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta name="theme-color" content="#f3effe" />
+    <!-- apply a saved white/colourful choice before first paint, so the page never flashes the wrong look -->
+    <script>try{if(localStorage.getItem('nekko-theme')==='colour')document.documentElement.dataset.theme='colour';}catch(e){}</script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-6" />
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Nekko Agent" />
@@ -40,7 +42,7 @@
     <!-- Non-blocking webfont load: the system stack renders immediately; Inter
          Tight / JetBrains Mono swap in when fetched (site works fully offline). -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&family=Handjet:wght@400..700&family=Space+Mono:wght@400;700&display=swap"
       rel="stylesheet"
       media="print"
       onload="this.media='all'"
@@ -112,22 +114,29 @@
     <!-- drifting starfield, the whole page floats over it -->
     <canvas id="stars" aria-hidden="true" hidden></canvas>
     <div class="nebula" aria-hidden="true"></div>
+    <canvas id="pixelwave" aria-hidden="true"></canvas>
 
     <header class="nav">
-      <a class="brand" href="#top" aria-label="Nekko Agent home"><img class="brand-mark" src="/favicon.svg?v=nekko-agent-5" alt="" width="26" height="26" /> NEKKO AGENT</a>
+      <a class="brand" href="#top" aria-label="Nekko Agent home"><img class="brand-mark" src="/logo.svg?v=nekko-agent-6" alt="" width="30" height="23" /> NEKKO AGENT</a>
       <nav class="nav-links" aria-label="Main navigation">
         <a href="#pillars">What it does</a>
         <a href="#local">AI on your computer</a>
+        <a href="#beta">Beta</a>
         <a href="#roadmap">What's next</a>
         <a href="#download">Download</a>
         <a href="/docs">Docs</a>
         <a href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener">GitHub</a>
       </nav>
+      <button class="theme-toggle" type="button" aria-label="Switch between light and dark" title="Light or dark">
+        <svg class="ic-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        <svg class="ic-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
       <a class="btn btn-primary btn-sm" href="#download">Download</a>
     </header>
 
     <main id="top">
-      <!-- ===== hero: immersive, giant type over the starfield ===== -->
+      <!-- ===== hero: one lavender band holds the headline, the app rises out of it ===== -->
+      <div class="hero-band">
       <section class="hero">
         <p class="eyebrow reveal">YOUR AI ASSISTANT · FREE &amp; OPEN SOURCE</p>
         <h1 class="display reveal">Nekko Agent</h1>
@@ -172,13 +181,13 @@
         <div class="mascot" title="Nekko is keeping you company">
           <svg class="pixel-nekko" viewBox="0 0 32 32" width="112" height="112" shape-rendering="crispEdges" role="img" aria-label="Nekko, a pixel cat with blinking eyes">
             <g data-part="pixel-head" stroke-linejoin="miter">
-      <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#101714" stroke="#f2f1e9" stroke-width="2" />
-      <g fill="#f2f1e9">
+      <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" style="fill: var(--mascot-face); stroke: var(--mascot-line)" stroke-width="2" />
+      <g style="fill: var(--mascot-eyes)">
         <path class="pixel-eyes-open" d="M11 15H13V18H11Z M20 15H22V18H20Z" />
         <path class="pixel-eyes-happy" d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" />
         <path class="pixel-eyes-closed" d="M10 17H14V18H10Z M19 17H23V18H19Z" />
       </g>
-      <path d="M15 20H17V21H15Z" fill="#a7c8ac" />
+      <path d="M15 20H17V21H15Z" fill="#9d8ce6" />
     </g>
           </svg>
           <span>MEET NEKKO</span>
@@ -186,29 +195,13 @@
         <div class="scroll-hint" aria-hidden="true">SCROLL<br />▾</div>
       </section>
 
-      <!-- ===== app window mock floats up out of the stars ===== -->
+      </div>
+
+      <!-- ===== app window mock rises out of the hero band ===== -->
       <section class="showcase reveal" aria-label="Illustration of the workspace, not a live session">
-        <p class="eyebrow">AN EXAMPLE OF NEKKO HELPING WITH CODE</p>
-        <div class="window-mock glass">
-          <div class="wm-bar"><span></span><span></span><span></span></div>
-          <div class="wm-body">
-            <div class="wm-rail">
-              <div class="wm-dot active"></div><div class="wm-dot"></div><div class="wm-dot"></div>
-              <div class="wm-dot"></div><div class="wm-dot"></div>
-            </div>
-            <div class="wm-chat">
-              <div class="bubble user">Add a dark-mode toggle to the settings page</div>
-              <div class="bubble ai">On it, editing <code>SettingsView.tsx</code> and wiring the theme store…</div>
-              <div class="tool">edit_file · SettingsView.tsx · review changes</div>
-            </div>
-            <div class="wm-ctx">
-              <div class="ctx-h">Context · 1,284 tok</div>
-              <div class="ctx-item"><b>AGENTS.md</b><i>guideline</i></div>
-              <div class="ctx-item"><b>SettingsView.tsx</b><i>file</i></div>
-              <div class="ctx-item"><b>Prefers tabs</b><i>memory</i></div>
-            </div>
-          </div>
-        </div>
+                <button class="media media-hero" type="button" aria-label="Product screenshot coming soon. Opens larger.">
+          <span>Product screenshot</span>
+        </button>
       </section>
 
       <!-- ===== chapters ===== -->
@@ -218,24 +211,28 @@
         <p class="chapter-lede reveal">A model is the AI you choose. Local means it runs on your computer, rather than an online service. Start with the tools below, and see what we are planning next.</p>
         <div class="grid two reveal">
           <div class="card glass">
+            <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
             <span class="mf-num">01 · YOUR AI OPTIONS</span>
             <h3>Use AI on your computer or online</h3>
             <p>Chat and work in the Nekko app with an AI model installed on your computer, or connect an online service such as Anthropic or OpenAI. You can also use Nekko from supported coding tools.</p>
             <a class="card-link" href="https://github.com/nekko-labs/nekko-agent/blob/main/apps/cli/README.md">Connect your coding tools <span aria-hidden="true">↗</span></a>
           </div>
           <div class="card glass">
+            <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
             <span class="mf-num">02 · THE RIGHT TOOL</span>
             <h3>Choose the right AI for the job</h3>
             <p>Use a powerful online model for a difficult plan, then a model on your computer or a cheaper service for smaller tasks. Running AI on your hardware avoids per-token API charges. Your hardware, electricity, and any paid services still cost money.</p>
             <p class="card-note">Choose the model for each chat or workflow today. The unreleased rebrand source also lets you choose a provider and model for delegated tasks. Automatically choosing the best model is still a future direction.</p>
           </div>
           <div class="card glass">
+            <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
             <span class="mf-num">03 · REPEAT TASKS</span>
             <h3>Automate repetitive work</h3>
             <p>Save a series of steps as a workflow, schedule it, and check the results in one place. Set up recurring checks, called watchers, for work you want Nekko to keep an eye on.</p>
             <p class="card-note">Your computer and the app running the workflow need to stay on for scheduled tasks and checks.</p>
           </div>
           <div class="card glass">
+            <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
             <span class="mf-num">04 · MODEL SETUP</span>
             <h3>Manage your AI models in one place</h3>
             <p>Connect Ollama, LM Studio, or vLLM, the software that runs AI models on your computer. Use the model controls each supports, keep an existing setup, and add online AI services when you need them.</p>
@@ -252,7 +249,67 @@
         </div>
       </section>
 
-      <section id="local" class="chapter">
+      <!-- ===== beta sign-up: after the "what it does" tour, before the technical detail ===== -->
+      <section id="beta" class="chapter band band-lavender" aria-labelledby="beta-title">
+        <div class="beta">
+          <div class="reveal">
+            <p class="eyebrow">NEKKO BETA · FREE TO JOIN</p>
+            <h2 id="beta-title">Help shape what Nekko becomes</h2>
+            <p class="chapter-lede">Join the beta list and get a front-row seat as Nekko grows. You try new things first, and your feedback decides what we build next.</p>
+            <ul class="beta-perks">
+              <li>A chance to try the iOS and Android apps before anyone else</li>
+              <li>First to test new features as they land</li>
+              <li>More beta-only extras to come</li>
+            </ul>
+          </div>
+          <!-- TODO before launch: point data-endpoint at the sign-up service (Formspree, Loops, Buttondown or similar).
+               Until then the form only shows its thank-you message and sends nothing. -->
+          <div class="beta-stage reveal" data-beta>
+            <!-- Nekko hosts the sign-up: she peeks over the card and reacts.
+                 States (data-mood): idle, watching, eager, confused, celebrate. -->
+            <p class="nekko-bubble" aria-live="polite" data-bubble>Psst… want to see what's next?</p>
+            <div class="nekko-peek" data-mood="idle" aria-hidden="true">
+              <svg class="nekko-peek-svg" viewBox="0 0 32 30" width="104" height="98" shape-rendering="crispEdges">
+                <g class="np-body">
+                  <path class="np-head" d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" stroke-width="2" />
+                  <g class="np-eyes">
+                    <g class="np-look">
+                      <path class="np-eyes-open" d="M11 15H13V18H11Z M20 15H22V18H20Z" />
+                    </g>
+                    <path class="np-eyes-happy" d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" />
+                    <path class="np-eyes-closed" d="M10 17H14V18H10Z M19 17H23V18H19Z" />
+                    <path class="np-eyes-confused" d="M11 15H13V18H11Z M19 17H23V18H19Z" />
+                  </g>
+                  <path class="np-nose" d="M15 20H17V21H15Z" />
+                </g>
+                <g class="np-paws"><path class="np-paw-fill" d="M7 23H12V28H7Z M20 23H25V28H20Z" /><path class="np-paw-line" d="M6 22H13V27H12V23H7V27H6Z M19 22H26V27H25V23H20V27H19Z" /><path class="np-paw-toes" d="M8.5 23H9V24.5H8.5Z M10 23H10.5V24.5H10Z M21.5 23H22V24.5H21.5Z M23 23H23.5V24.5H23Z" /></g>
+                <g class="np-question"><path d="M28 0H31V1H32V3H31V4H30V5H29V6H28V4H29V3H30V1H28Z M28 7H29V8H28Z" /></g>
+                <g class="np-sparkles"><path d="M1 2H2V3H1Z M0 3H1V4H0Z M2 3H3V4H2Z M1 4H2V5H1Z M30 9H31V10H30Z M29 10H30V11H29Z M31 10H32V11H31Z M30 11H31V12H30Z M2 12H3V13H2Z" /></g>
+              </svg>
+            </div>
+            <!-- TODO before launch: point data-endpoint at the sign-up service (Formspree, Loops, Buttondown or similar).
+                 Until then the form only shows its thank-you and sends nothing. -->
+            <form class="beta-card" data-beta-form data-endpoint="" novalidate>
+              <div class="beta-ask">
+                <h3>Join the beta</h3>
+                <label for="beta-email">YOUR EMAIL</label>
+                <div class="beta-field">
+                  <input id="beta-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required aria-describedby="beta-note" />
+                  <button class="btn btn-primary" type="submit">Count me in</button>
+                </div>
+                <p class="beta-note" id="beta-note">We'll email you when spots open and new builds are ready to try.</p>
+              </div>
+              <div class="beta-done" role="status" hidden>
+                <p class="beta-badge">BETA TESTER</p>
+                <h3>Welcome to the beta!</h3>
+                <p>You're in. Nekko will be in touch when new builds are ready to try.</p>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section id="local" class="chapter band band-aqua">
         <p class="eyebrow reveal">AI ON YOUR COMPUTER</p>
         <h2 class="reveal">Run AI on your own computer</h2>
         <p class="chapter-lede reveal">Install a model runner such as Ollama, LM Studio, or vLLM separately, then connect it to Nekko. A runner is the software that loads and runs your chosen AI. Nekko adds tools for your files and supported model controls; it does not bundle or automatically install the runner today.</p>
@@ -393,7 +450,7 @@
         </div>
       </section>
 
-      <section id="editions" class="chapter">
+      <section id="editions" class="chapter band band-blend">
         <p class="eyebrow reveal">GETTING STARTED</p>
         <h2 class="reveal">Choose how to use Nekko</h2>
         <p class="chapter-lede reveal">Download the desktop app to get started. If you prefer a technical setup, run Nekko in your browser, in Docker, or from a terminal.</p>
@@ -409,14 +466,14 @@
       <section id="roadmap" class="chapter roadmap">
         <p class="eyebrow reveal">FUTURE IDEAS · NOT AVAILABLE TODAY</p>
         <h2 class="reveal">What we are planning next</h2>
-        <p class="chapter-lede reveal">Alongside planned voice and computer control, we are exploring ways to share work across a team. These ideas have no committed delivery date.</p>
+        <p class="chapter-lede reveal">Voice and computer control are only the beginning. Here is a glimpse of where Nekko is heading next, and the bigger ideas we are exploring behind the scenes.</p>
         <div class="grid two reveal">
-          <div class="card glass"><span class="chip">Exploring</span><h3>Share work across team computers</h3><p>Use spare team computers to divide up jobs, with shared workflows to organize the steps. This is a future direction, not an available team-computing service.</p></div>
+          <div class="card glass"><span class="chip">Exploring</span><h3>Ways to work together using Nekko Agent</h3><p>Great work is rarely a solo act. We are exploring how Nekko can bring people together, so ideas, projects and progress flow between you and the people you build with. Watch this space.</p></div>
           <div class="card glass"><span class="chip">Exploring</span><h3>Run project checks on your machines</h3><p>Explore a local CI and task-runner alternative for repeat jobs such as code tests, with possible cloud runners for extra capacity. This is not a promise of GitHub Actions compatibility.</p></div>
         </div>
       </section>
 
-      <section id="download" class="chapter download">
+      <section id="download" class="chapter download band band-lavender">
         <p class="eyebrow reveal">READY WHEN YOU ARE</p>
         <h2 class="reveal">Download Nekko Agent</h2>
         <p class="chapter-lede reveal">Free, open-source software. Pick the build for your machine. Model providers and hardware may have their own costs.</p>
@@ -467,13 +524,17 @@
     </main>
 
     <footer>
-      <span class="footer-brand"><img class="brand-mark" src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</span>
+      <span class="footer-brand"><img class="brand-mark" src="/logo.svg?v=nekko-agent-6" alt="" width="26" height="20" /> NEKKO AGENT</span>
       <span class="micro">nekkoagent.com · Backup: nekkoagent.com · MIT · Nekko Labs</span>
       <a href="/docs">Docs</a>
       <a href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener">github.com/nekko-labs/nekko-agent</a>
     </footer>
 
-    <script src="site.js?v=3"></script>
+    <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged view" hidden>
+      <button class="lightbox-close btn btn-ghost btn-sm" type="button" aria-label="Close">Close ✕</button>
+      <div class="lightbox-stage"></div>
+    </div>
+    <script src="site.js?v=10"></script>
     <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

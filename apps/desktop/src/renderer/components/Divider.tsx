@@ -12,9 +12,11 @@ const KEY_STEP = 0.02;
  * same way wherever two windows meet.
  */
 export function Divider({
-  splitId, index, dir, onResize,
+  splitId, index, dir, onResize, snapped,
 }: {
   splitId: string; index: number; dir: 'row' | 'col';
+  /** Snap to grid is on and this divider sits on its even-spacing snap point. */
+  snapped?: boolean;
   onResize: (splitId: string, index: number, fraction: number) => void;
 }) {
   const row = dir === 'row';
@@ -62,6 +64,7 @@ export function Divider({
       aria-orientation={row ? 'vertical' : 'horizontal'}
       aria-label="Resize these windows"
       tabIndex={0}
+      data-snapped={snapped || undefined}
       /* The gap between two panels is the handle: there is no line to draw any
          more, so the divider is the space itself and shows a grip on hover. */
       className={`group relative shrink-0 ${row ? 'cursor-col-resize' : 'cursor-row-resize'}`}

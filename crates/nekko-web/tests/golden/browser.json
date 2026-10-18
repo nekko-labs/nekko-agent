@@ -743,6 +743,195 @@
  },
  {
   "case": {
+   "tool": "browser",
+   "session": "b7",
+   "input": {
+    "mode": "dedicated",
+    "action": "snapshot"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "Signup\n- textbox \"Email\" [ref=e1]\n- button \"Subscribe\" [ref=e2]"
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: snapshot."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "snapshot",
+    "sessionId": "b7"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-28",
+   "output": "Signup\n- textbox \"Email\" [ref=e1]\n- button \"Subscribe\" [ref=e2]"
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b7",
+   "input": {
+    "mode": "dedicated",
+    "action": "snapshot",
+    "selector": "form"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "Signup\n- textbox \"Email\" [ref=e1]"
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: snapshot form."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "snapshot",
+    "selector": "form",
+    "sessionId": "b7"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-29",
+   "output": "Signup\n- textbox \"Email\" [ref=e1]"
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b7",
+   "input": {
+    "mode": "dedicated",
+    "action": "fill",
+    "selector": "@e1",
+    "value": "a@b.c"
+   },
+   "reply": {
+    "ok": true,
+    "body": {
+     "output": "Field filled."
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: fill @e1."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "fill",
+    "selector": "@e1",
+    "value": "a@b.c",
+    "sessionId": "b7"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-30",
+   "output": "Field filled."
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b7",
+   "input": {
+    "mode": "dedicated",
+    "action": "click",
+    "selector": "@e2"
+   },
+   "reply": {
+    "ok": false,
+    "body": {
+     "error": "Unknown ref: e2. Take a new snapshot; refs expire when the page changes."
+    }
+   }
+  },
+  "reasons": [
+   "Browser dedicated: click @e2."
+  ],
+  "requests": [
+   {
+    "mode": "dedicated",
+    "action": "click",
+    "selector": "@e2",
+    "sessionId": "b7"
+   }
+  ],
+  "result": {
+   "toolCallId": "call-31",
+   "output": "Unknown ref: e2. Take a new snapshot; refs expire when the page changes.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b7",
+   "input": {
+    "mode": "dedicated",
+    "action": "snapshot",
+    "selector": "@e1"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-32",
+   "output": "A snapshot scope is a CSS selector, not a ref.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b7",
+   "input": {
+    "mode": "dedicated",
+    "action": "scroll",
+    "selector": "@e1"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-33",
+   "output": "scroll takes a CSS selector; click, fill and type on a ref already scroll it into view.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
+   "tool": "browser",
+   "session": "b7",
+   "input": {
+    "mode": "existing",
+    "action": "snapshot"
+   }
+  },
+  "reasons": [],
+  "requests": [],
+  "result": {
+   "toolCallId": "call-34",
+   "output": "The snapshot action needs dedicated mode (the in-app browser). Existing mode supports navigate, inspect, click, fill and close.",
+   "isError": true
+  },
+  "written": null
+ },
+ {
+  "case": {
    "tool": "capture",
    "session": "c1",
    "input": {
@@ -777,7 +966,7 @@
    }
   ],
   "result": {
-   "toolCallId": "call-28",
+   "toolCallId": "call-35",
    "output": "{\n  \"windows\": [\n    {\n      \"window_id\": \"window:1\",\n      \"title\": \"Editor\",\n      \"size\": [\n        1200,\n        800\n      ]\n    }\n  ],\n  \"empty\": [],\n  \"none\": {}\n}"
   },
   "written": null
@@ -797,7 +986,7 @@
   ],
   "requests": [],
   "result": {
-   "toolCallId": "call-29",
+   "toolCallId": "call-36",
    "output": "Window capture not approved.",
    "isError": true
   },
@@ -815,7 +1004,7 @@
   "reasons": [],
   "requests": [],
   "result": {
-   "toolCallId": "call-30",
+   "toolCallId": "call-37",
    "output": "Window capture is available only in a local desktop chat.",
    "isError": true
   },
@@ -835,7 +1024,7 @@
   ],
   "requests": [],
   "result": {
-   "toolCallId": "call-31",
+   "toolCallId": "call-38",
    "output": "Desktop capture bridge is unavailable. Restart the desktop app; no browser fallback was used.",
    "isError": true
   },
@@ -852,7 +1041,7 @@
   "reasons": [],
   "requests": [],
   "result": {
-   "toolCallId": "call-32",
+   "toolCallId": "call-39",
    "output": "Choose list, screenshot, or record.",
    "isError": true
   },
@@ -870,7 +1059,7 @@
   "reasons": [],
   "requests": [],
   "result": {
-   "toolCallId": "call-33",
+   "toolCallId": "call-40",
    "output": "inspect must be a boolean.",
    "isError": true
   },
@@ -888,7 +1077,7 @@
   "reasons": [],
   "requests": [],
   "result": {
-   "toolCallId": "call-34",
+   "toolCallId": "call-41",
    "output": "List windows and choose a window_id first.",
    "isError": true
   },
@@ -906,7 +1095,7 @@
   "reasons": [],
   "requests": [],
   "result": {
-   "toolCallId": "call-35",
+   "toolCallId": "call-42",
    "output": "An output path is required.",
    "isError": true
   },
@@ -926,7 +1115,7 @@
   "reasons": [],
   "requests": [],
   "result": {
-   "toolCallId": "call-36",
+   "toolCallId": "call-43",
    "output": "Capture output must be inside the chat project, without escaping through links.",
    "isError": true
   },
@@ -946,7 +1135,7 @@
   "reasons": [],
   "requests": [],
   "result": {
-   "toolCallId": "call-37",
+   "toolCallId": "call-44",
    "output": "Sandbox: <OUT>/outside.png is outside the workspace folders. Add the folder or switch sandbox mode in Settings.",
    "isError": true
   },
@@ -965,7 +1154,7 @@
   "reasons": [],
   "requests": [],
   "result": {
-   "toolCallId": "call-38",
+   "toolCallId": "call-45",
    "output": "Use .png for screenshots or .webm for recordings.",
    "isError": true
   },
@@ -985,7 +1174,7 @@
   "reasons": [],
   "requests": [],
   "result": {
-   "toolCallId": "call-39",
+   "toolCallId": "call-46",
    "output": "Capture output already exists; choose a new path.",
    "isError": true
   },
@@ -1005,7 +1194,7 @@
   "reasons": [],
   "requests": [],
   "result": {
-   "toolCallId": "call-40",
+   "toolCallId": "call-47",
    "output": "Recording duration must be 1–15 seconds.",
    "isError": true
   },
@@ -1044,7 +1233,7 @@
    }
   ],
   "result": {
-   "toolCallId": "call-41",
+   "toolCallId": "call-48",
    "output": "{\n  \"window_id\": \"window:1\",\n  \"mime\": \"video/webm\",\n  \"seconds\": 3,\n  \"path\": \"<ROOT>/clip.webm\",\n  \"bytes\": 10,\n  \"inspection\": \"Saved without model inspection.\"\n}"
   },
   "written": "d2VibS1ieXRlcw=="
@@ -1084,7 +1273,7 @@
    }
   ],
   "result": {
-   "toolCallId": "call-42",
+   "toolCallId": "call-49",
    "output": "{\n  \"title\": \"Other\",\n  \"window_id\": \"window:1\",\n  \"mime\": \"image/png\",\n  \"width\": 1200,\n  \"height\": 800,\n  \"path\": \"<ROOT>/.shots/after.png\",\n  \"bytes\": 9,\n  \"inspection\": \"Pixels attached to the selected model; vision support is required. Capture alone does not prove verification.\"\n}",
    "images": [
     "data:image/png;base64,cG5nLWJ5dGVz"
@@ -1122,7 +1311,7 @@
    }
   ],
   "result": {
-   "toolCallId": "call-43",
+   "toolCallId": "call-50",
    "output": "{\n  \"mime\": \"image/png\",\n  \"path\": \"<ROOT>/deep/er/quiet.PNG\",\n  \"bytes\": 9,\n  \"inspection\": \"Saved without model inspection.\"\n}"
   },
   "written": "cG5nLWJ5dGVz"
@@ -1156,7 +1345,7 @@
    }
   ],
   "result": {
-   "toolCallId": "call-44",
+   "toolCallId": "call-51",
    "output": "Desktop bridge returned invalid capture media.",
    "isError": true
   },
@@ -1191,7 +1380,7 @@
    }
   ],
   "result": {
-   "toolCallId": "call-45",
+   "toolCallId": "call-52",
    "output": "Desktop bridge returned empty capture media.",
    "isError": true
   },
@@ -1225,7 +1414,7 @@
    }
   ],
   "result": {
-   "toolCallId": "call-46",
+   "toolCallId": "call-53",
    "output": "Window is gone.",
    "isError": true
   },
@@ -1257,7 +1446,7 @@
    }
   ],
   "result": {
-   "toolCallId": "call-47",
+   "toolCallId": "call-54",
    "output": "Window capture failed.",
    "isError": true
   },

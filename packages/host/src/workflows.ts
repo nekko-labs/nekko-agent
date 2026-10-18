@@ -24,6 +24,7 @@ import {
   findWorkflowAction,
   matchWorkflows,
   nextScheduledRun,
+  pausedBlocks,
   readStepOutcome,
   slugify,
   stepOutcomeInstruction,
@@ -161,6 +162,8 @@ export function createWorkflow(input: NewWorkflow): Workflow {
     workspaceId: input.workspaceId ?? settings.workspaces[0]?.id,
     providerId: input.providerId,
     modelId: input.modelId,
+    notify: input.notify,
+    templateId: input.templateId,
     createdAt: now,
     updatedAt: now,
     runCount: 0,
@@ -302,6 +305,8 @@ async function execute(
 ): Promise<WorkflowRun | undefined> {
   const wf = loadWorkflows().find((w) => w.id === workflowId);
   if (!wf) return undefined;
+  // "Pause all automations" holds back what nobody asked for just now.
+  if (depth === 0 && pausedBlocks(triggerKind, getSettings().automationsPaused)) return undefined;
   // One run per workflow at a time: a schedule that fires while the last run is
   // still going should be skipped, not stacked.
   if (inFlight.has(workflowId)) return undefined;
@@ -593,7 +598,7 @@ async function runAgentStep(
   const before = getSession(sessionId)?.messages.length ?? 0;
   let failed: string | undefined;
   try {
-    await sendChat({ sessionId, providerId, modelId, text: prompt }, (e) => {
+    await sendChat({ sessionId, providerId, modelId, text: prompt, ...(step.tools === 'none' ? { noTools: true } : {}) }, (e) => {
       if (e.type === 'error') failed = e.message;
       workflowSender?.(e);
     });

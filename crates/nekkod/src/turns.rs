@@ -723,6 +723,7 @@ impl Turns {
             "allowBrowserControl": spec.get("allowBrowserControl").cloned().unwrap_or(json!(false)),
             "mcpTools": mcp_tools,
             "decide": !sandbox && facts.get("decide") == Some(&Value::Bool(true)),
+            "noTools": js::truthy(opts.get("noTools")),
         });
         let mut tools = turn::turn_tools(&tool_input);
         // A sandbox turn: only the container's tools, the copied folders as

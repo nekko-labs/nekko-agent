@@ -11,12 +11,13 @@
 //
 // Usage: node scripts/itest-messaging-daemon.mjs [path/to/nekkod]
 // Needs `npm run build:web` and `cargo build -p nekkod`.
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
+import { killTree, treeOptions } from './itest-procs.mjs';
 
 const exe = process.platform === 'win32' ? '.exe' : '';
 const targetDir = process.env.CARGO_TARGET_DIR ?? 'target';
@@ -130,7 +131,7 @@ const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
     USERPROFILE: home,
   },
   stdio: ['pipe', 'pipe', 'pipe'],
-  windowsHide: true,
+  ...treeOptions,
 });
 procs.push(server);
 let serverOut = '';
@@ -155,16 +156,6 @@ const until = async (what, fn, ms = 20_000) => {
   }
   throw new Error(`timed out waiting for ${what}`);
 };
-
-function killTree(p) {
-  if (!p.pid || p.exitCode !== null) return;
-  try {
-    if (process.platform === 'win32') execFileSync('taskkill', ['/PID', String(p.pid), '/T', '/F'], { stdio: 'ignore' });
-    else process.kill(-p.pid, 'SIGKILL');
-  } catch {
-    /* already gone */
-  }
-}
 
 try {
   await until('the server', async () => {
@@ -254,8 +245,8 @@ try {
   telegram.closeAllConnections?.();
   model.closeAllConnections?.();
   await sleep(500);
-  rmSync(root, { recursive: true, force: true });
+  try { rmSync(root, { recursive: true, force: true }); } catch { /* a child may still hold a file */ }
 }
-const ok = results.every(Boolean);
+const ok = results.length > 0 && results.every(Boolean);
 console.log(`${results.filter(Boolean).length}/${results.length} checks passed`);
 process.exit(ok ? 0 : 1);

@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
+import { killTree, treeOptions } from './itest-procs.mjs';
 
 const exe = process.platform === 'win32' ? '.exe' : '';
 const targetDir = process.env.CARGO_TARGET_DIR ?? 'target';
@@ -113,7 +114,7 @@ const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
     USERPROFILE: home,
   },
   stdio: ['pipe', 'pipe', 'pipe'],
-  windowsHide: true,
+  ...treeOptions,
 });
 procs.push(server);
 let serverOut = '';
@@ -214,14 +215,11 @@ try {
 } catch (e) {
   check('run', false, `${e.message}\n${serverOut.slice(-4000)}`);
 } finally {
-  for (const p of procs) {
-    try {
-      if (process.platform === 'win32') spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-      else p.kill('SIGKILL');
-    } catch { /* gone */ }
-  }
+  for (const p of procs) killTree(p);
   model.close();
   gh.close();
+  model.closeAllConnections?.();
+  gh.closeAllConnections?.();
   await sleep(1500);
   try { rmSync(root, { recursive: true, force: true }); } catch { /* a child may still hold a file */ }
 }

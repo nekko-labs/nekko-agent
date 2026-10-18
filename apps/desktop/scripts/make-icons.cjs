@@ -17,7 +17,7 @@
 const { app, BrowserWindow, nativeImage } = require('electron');
 const { writeFileSync } = require('fs');
 const { join } = require('path');
-const { iconSvg, bareMarkSvg, bannerSvg, TILE } = require('./icon-art.cjs');
+const { iconSvg, bareMarkSvg, bannerSvg } = require('./icon-art.cjs');
 
 const BUILD = join(__dirname, '..', 'build');
 const PUBLIC = join(__dirname, '..', 'src', 'renderer', 'public');
@@ -169,7 +169,7 @@ app.whenReady().then(async () => {
   writeFileSync(join(MOBILE, 'splash-icon.png'), (await bare(512, { inset: 0.8 })).toPNG());
   writeFileSync(join(MOBILE, 'android-icon-foreground.png'), (await bare(512, { inset: 0.5 })).toPNG());
   writeFileSync(join(MOBILE, 'android-icon-monochrome.png'), (await bare(512, { inset: 0.5, color: '#ffffff' })).toPNG());
-  writeFileSync(join(MOBILE, 'android-icon-background.png'), (await bare(512, { inset: 0, background: TILE })).toPNG());
+  writeFileSync(join(MOBILE, 'android-icon-background.png'), (await bare(512, { inset: 0, background: 'gradient' })).toPNG());
 
   console.log(
     `wrote icon.svg, icon.png (512), icon.ico (${SIZES.join(', ')}), renderer icon.svg + icon-512.png, the two installer BMPs, and the phone app's icons`,
