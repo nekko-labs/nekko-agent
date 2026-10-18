@@ -2469,7 +2469,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             onGrowWhileUnpinned={onGrowWhileUnpinned}
             header={welcomeState.welcome ? (
 
-              <div className="fade-in mt-16 flex flex-col items-center gap-3 text-center">
+              // On the wall the window's own reveal is the entrance; a second
+              // fade here played inside it as a separate animation.
+              <div className={`${commandCenter ? '' : 'fade-in '}mt-16 flex flex-col items-center gap-3 text-center`} data-chat-welcome>
                 {!hasProvider ? <SetupIllustration /> : <div className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={30} /></div>}
                 <div>
                   <h2 className="text-[15px] font-semibold">
@@ -3214,8 +3216,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             folder and usage controls live in the agent window), so it draws no
             chrome of its own: empty, it used to show as a bare band under the
             composer. */}
+        {/* The PR deck sits above the strip and rises from its top divider. */}
+        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} />}
         {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 border-t border-line bg-surface px-3 py-1.5'} aria-label="Chat actions and information">
-          <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} />
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
           {!imageMode && surface !== 'composer' && <div className="flex flex-wrap items-center gap-2">

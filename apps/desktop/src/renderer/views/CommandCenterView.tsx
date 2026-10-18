@@ -8,6 +8,8 @@ import type { AgentType } from '@nekko-agent/shared';
 import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
+import { putCachedSession } from '../sessionCache.js';
+import { newAgentSetup } from '../newAgentSetup.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { PhotoIcon, TerminalIcon, FocusLayoutIcon, BoltIcon, PanelIcon, WandIcon } from '../icons.js';
 import { NekkoAvatar } from '../components/Mascot.js';
@@ -315,10 +317,16 @@ export function CommandCenterView() {
           if (!relocated) throw new Error('Could not configure the new agent working folder.');
           s = relocated;
         }
-        const updated = await window.nekko.setSessionOptions(s.id, { chatType: selection.chatType ?? 'multimodal', ...(selection.providerId ? { providerId: selection.providerId } : {}), ...(selection.modelId ? { modelId: selection.modelId, autoModel: selection.modelId === AUTO_MODEL_ID } : {}) });
-        if (!updated) throw new Error('Could not configure the new agent window.');
-        s = updated;
-        if (selection.workspaceIds) {
+        // Each call is a host round trip before the window can open, so skip
+        // the ones that would change nothing on a just-created chat.
+        const needs = newAgentSetup(s, selection);
+        const chatType = selection.chatType ?? 'multimodal';
+        if (needs.options) {
+          const updated = await window.nekko.setSessionOptions(s.id, { chatType, ...(selection.providerId ? { providerId: selection.providerId } : {}), ...(selection.modelId ? { modelId: selection.modelId, autoModel: selection.modelId === AUTO_MODEL_ID } : {}) });
+          if (!updated) throw new Error('Could not configure the new agent window.');
+          s = updated;
+        }
+        if (needs.supporting) {
           const configured = await window.nekko.setSessionSupportingWorkspaces(s.id, supportingFolders);
           if (!configured) throw new Error('Could not configure the new agent folders.');
           s = configured;
@@ -335,6 +343,9 @@ export function CommandCenterView() {
       }
     }
     unfinishedChat.current = null;
+    // The host returned the full record: cached, the window's first frame is
+    // the finished chat, not a placeholder swapped out mid-reveal.
+    putCachedSession(s);
     addCreatedSession(s);
     return s.id;
   };

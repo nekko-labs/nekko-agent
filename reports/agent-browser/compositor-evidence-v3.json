@@ -1,0 +1,520 @@
+{
+  "scope": "Evidence-only run through original fixture actions to capture, not full smoke or benchmark rerun",
+  "baseline": {
+    "platform": "win32",
+    "versions": {
+      "node": "24.21.0",
+      "acorn": "8.18.0",
+      "ada": "4.0.0",
+      "amaro": "1.1.11",
+      "ares": "1.34.8",
+      "brotli": "1.2.0",
+      "cldr": "48.0",
+      "icu": "78.2",
+      "llhttp": "9.4.3",
+      "merve": "1.2.2",
+      "modules": "149",
+      "napi": "10",
+      "nbytes": "0.1.4",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.70.0",
+      "nghttp3": "",
+      "ngtcp2": "",
+      "openssl": "0.0.0",
+      "simdjson": "4.6.7",
+      "simdutf": "7.7.0",
+      "sqlite": "3.53.4",
+      "tz": "2026d",
+      "undici": "7.29.1",
+      "unicode": "17.0",
+      "uv": "1.52.1",
+      "uvwasi": "0.0.23",
+      "v8": "15.2.124.28-electron.0",
+      "zlib": "1.3.2.1-motley",
+      "zstd": "1.6.0",
+      "electron": "44.7.0",
+      "chrome": "152.0.7977.130"
+    },
+    "driver": "baseline",
+    "revision": "4fc3cc5c",
+    "samples": {
+      "cold": [],
+      "warm": []
+    },
+    "steps": {
+      "navigate": {
+        "ms": 218,
+        "output": "Smoke fixture\nAgent browser smoke\nGo\n\nReady\n\nSecond page Example\n\nBottom of page"
+      },
+      "fill": {
+        "ms": 20,
+        "output": "Field filled."
+      },
+      "click": {
+        "ms": 14,
+        "output": "Smoke fixture\nAgent browser smoke\nGo\n\nClicked\n\nSecond page Example\n\nBottom of page"
+      },
+      "wait": {
+        "ms": 833,
+        "output": "Text \"Arrived late\" is visible (833 ms)."
+      },
+      "pressEnd": {
+        "ms": 5,
+        "output": "Pressed End."
+      },
+      "type": {
+        "ms": 4,
+        "output": "Typed 6 characters into the focused element."
+      },
+      "press": {
+        "ms": 4,
+        "output": "Pressed Enter."
+      },
+      "evaluate": {
+        "ms": 2,
+        "output": "Submitted Nekko Agent"
+      },
+      "scroll": {
+        "ms": 62,
+        "output": "Scrolled. Position x=0, y=800 of 4238px (viewport 698px)."
+      },
+      "scrollIntoView": {
+        "ms": 1090,
+        "output": "Scrolled #bottom into view. Position x=0, y=3540 of 4238px (viewport 698px)."
+      },
+      "extractText": {
+        "ms": 2,
+        "output": "Submitted Nekko Agent"
+      },
+      "extractLinks": {
+        "ms": 2,
+        "output": "Second page (http://127.0.0.1:60055/second)\nExample (https://example.com/)"
+      },
+      "scrollTop": {
+        "ms": 1,
+        "output": "Scrolled. Position x=0, y=0 of 4238px (viewport 698px)."
+      }
+    },
+    "memory": [
+      {
+        "cpu": {
+          "cumulativeCPUUsage": 0.453125,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "pid": 60644,
+        "type": "Browser",
+        "creationTime": 1792258431015.586,
+        "memory": {
+          "workingSetSize": 153408,
+          "peakWorkingSetSize": 153408,
+          "privateBytes": 87880
+        },
+        "integrityLevel": "high",
+        "sandboxed": false
+      },
+      {
+        "cpu": {
+          "cumulativeCPUUsage": 0.28125,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "pid": 62392,
+        "type": "GPU",
+        "creationTime": 1792258431129.682,
+        "serviceName": "GPU",
+        "memory": {
+          "workingSetSize": 105748,
+          "peakWorkingSetSize": 105748,
+          "privateBytes": 89840
+        },
+        "integrityLevel": "low",
+        "sandboxed": true
+      },
+      {
+        "cpu": {
+          "cumulativeCPUUsage": 0.0625,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "pid": 73956,
+        "type": "Utility",
+        "creationTime": 1792258431133.647,
+        "serviceName": "network.mojom.NetworkService",
+        "name": "Network Service",
+        "memory": {
+          "workingSetSize": 49448,
+          "peakWorkingSetSize": 49448,
+          "privateBytes": 12960
+        },
+        "integrityLevel": "high",
+        "sandboxed": false
+      },
+      {
+        "cpu": {
+          "cumulativeCPUUsage": 0.03125,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "pid": 7584,
+        "type": "Tab",
+        "creationTime": 1792258431509.618,
+        "memory": {
+          "workingSetSize": 71688,
+          "peakWorkingSetSize": 71688,
+          "privateBytes": 24412
+        },
+        "integrityLevel": "untrusted",
+        "sandboxed": true
+      },
+      {
+        "cpu": {
+          "cumulativeCPUUsage": 0.046875,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "pid": 59896,
+        "type": "Tab",
+        "creationTime": 1792258431701.193,
+        "memory": {
+          "workingSetSize": 93984,
+          "peakWorkingSetSize": 93984,
+          "privateBytes": 29636
+        },
+        "integrityLevel": "untrusted",
+        "sandboxed": true
+      }
+    ],
+    "fixture": {
+      "url": "http://127.0.0.1:60055/",
+      "outer": [
+        1100,
+        760
+      ],
+      "theme": "light",
+      "sampleMeaning": {
+        "cold": "new chat driver and renderer through navigation",
+        "warm": "inspect existing loaded fixture"
+      }
+    },
+    "screenshotFidelity": {
+      "before": {
+        "html": "<html><head><title>Smoke fixture</title></head><body style=\"font:16px sans-serif\"><h1>Agent browser smoke</h1><form id=\"form\" onsubmit=\"event.preventDefault(); document.querySelector('#status').textContent = 'Submitted ' + document.querySelector('#name').value;\"><input id=\"name\" value=\"\"><button id=\"go\" type=\"button\" onclick=\"document.querySelector('#status').textContent='Clicked'\">Go</button></form><p id=\"status\">Submitted Nekko Agent</p><a href=\"/second\">Second page</a> <a href=\"https://example.com/\">Example</a><div id=\"late\">Arrived late</div><div style=\"height:4000px\"></div><p id=\"bottom\">Bottom of page</p><script>console.error(\"fixture console error\"); fetch(\"/missing\"); setTimeout(() => { document.querySelector(\"#late\").textContent = \"Arrived late\"; }, 700);</script></body></html>",
+        "x": 0,
+        "y": 0,
+        "width": 1087,
+        "height": 698,
+        "clientWidth": 1072,
+        "scrollHeight": 4238,
+        "overflow": "visible",
+        "scrollbarWidth": "auto",
+        "activeElement": "name",
+        "hasFocus": true,
+        "devicePixelRatio": 1.25
+      },
+      "after": {
+        "html": "<html><head><title>Smoke fixture</title></head><body style=\"font:16px sans-serif\"><h1>Agent browser smoke</h1><form id=\"form\" onsubmit=\"event.preventDefault(); document.querySelector('#status').textContent = 'Submitted ' + document.querySelector('#name').value;\"><input id=\"name\" value=\"\"><button id=\"go\" type=\"button\" onclick=\"document.querySelector('#status').textContent='Clicked'\">Go</button></form><p id=\"status\">Submitted Nekko Agent</p><a href=\"/second\">Second page</a> <a href=\"https://example.com/\">Example</a><div id=\"late\">Arrived late</div><div style=\"height:4000px\"></div><p id=\"bottom\">Bottom of page</p><script>console.error(\"fixture console error\"); fetch(\"/missing\"); setTimeout(() => { document.querySelector(\"#late\").textContent = \"Arrived late\"; }, 700);</script></body></html>",
+        "x": 0,
+        "y": 0,
+        "width": 1087,
+        "height": 698,
+        "clientWidth": 1072,
+        "scrollHeight": 4238,
+        "overflow": "visible",
+        "scrollbarWidth": "auto",
+        "activeElement": "name",
+        "hasFocus": true,
+        "devicePixelRatio": 1.25
+      },
+      "repeatedPixelsEqual": true,
+      "dimensions": {
+        "width": 1359,
+        "height": 872
+      },
+      "captureRoute": "owned BrowserWindow.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true}) after two animation frames",
+      "bounds": {
+        "x": 986,
+        "y": 484,
+        "width": 1102,
+        "height": 760
+      },
+      "contentBounds": {
+        "x": 994,
+        "y": 540,
+        "width": 1087,
+        "height": 697
+      },
+      "zoom": 1
+    },
+    "hidden": {
+      "visible": false,
+      "focused": false,
+      "activations": 0
+    },
+    "windowsAfterClose": 0,
+    "foreground": {
+      "unchanged": true
+    },
+    "passed": true
+  },
+  "native": {
+    "platform": "win32",
+    "versions": {
+      "node": "24.21.0",
+      "acorn": "8.18.0",
+      "ada": "4.0.0",
+      "amaro": "1.1.11",
+      "ares": "1.34.8",
+      "brotli": "1.2.0",
+      "cldr": "48.0",
+      "icu": "78.2",
+      "llhttp": "9.4.3",
+      "merve": "1.2.2",
+      "modules": "149",
+      "napi": "10",
+      "nbytes": "0.1.4",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.70.0",
+      "nghttp3": "",
+      "ngtcp2": "",
+      "openssl": "0.0.0",
+      "simdjson": "4.6.7",
+      "simdutf": "7.7.0",
+      "sqlite": "3.53.4",
+      "tz": "2026d",
+      "undici": "7.29.1",
+      "unicode": "17.0",
+      "uv": "1.52.1",
+      "uvwasi": "0.0.23",
+      "v8": "15.2.124.28-electron.0",
+      "zlib": "1.3.2.1-motley",
+      "zstd": "1.6.0",
+      "electron": "44.7.0",
+      "chrome": "152.0.7977.130"
+    },
+    "driver": "native",
+    "revision": "7e733f53bbc893336207a2fbcca8c00dc2d6cb5f",
+    "samples": {
+      "cold": [],
+      "warm": []
+    },
+    "steps": {
+      "navigate": {
+        "ms": 122,
+        "output": "Smoke fixture\nAgent browser smoke\nGo\n\nReady\n\nSecond page Example\n\nBottom of page"
+      },
+      "fill": {
+        "ms": 6,
+        "output": "Field filled."
+      },
+      "click": {
+        "ms": 6,
+        "output": "Smoke fixture\nAgent browser smoke\nGo\n\nClicked\n\nSecond page Example\n\nBottom of page"
+      },
+      "wait": {
+        "ms": 681,
+        "output": "Text \"Arrived late\" is visible (680 ms)."
+      },
+      "pressEnd": {
+        "ms": 5,
+        "output": "Pressed End."
+      },
+      "type": {
+        "ms": 4,
+        "output": "Typed 6 characters into the focused element."
+      },
+      "press": {
+        "ms": 4,
+        "output": "Pressed Enter."
+      },
+      "evaluate": {
+        "ms": 2,
+        "output": "Submitted Nekko Agent"
+      },
+      "scroll": {
+        "ms": 64,
+        "output": "Scrolled. Position x=0, y=800 of 4238px (viewport 698px)."
+      },
+      "scrollIntoView": {
+        "ms": 4,
+        "output": "Scrolled #bottom into view. Position x=0, y=3540 of 4238px (viewport 698px)."
+      },
+      "extractText": {
+        "ms": 2,
+        "output": "Submitted Nekko Agent"
+      },
+      "extractLinks": {
+        "ms": 1,
+        "output": "Second page (http://127.0.0.1:65468/second)\nExample (https://example.com/)"
+      },
+      "scrollTop": {
+        "ms": 2,
+        "output": "Scrolled. Position x=0, y=0 of 4238px (viewport 698px)."
+      }
+    },
+    "memory": [
+      {
+        "cpu": {
+          "cumulativeCPUUsage": 0.32063,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "pid": 53688,
+        "type": "Browser",
+        "creationTime": 1792258439320.233,
+        "memory": {
+          "workingSetSize": 109552,
+          "peakWorkingSetSize": 109552,
+          "privateBytes": 45100
+        },
+        "integrityLevel": "high",
+        "sandboxed": false
+      },
+      {
+        "cpu": {
+          "cumulativeCPUUsage": 0.253052,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "pid": 54612,
+        "type": "GPU",
+        "creationTime": 1792258439422.719,
+        "serviceName": "GPU",
+        "memory": {
+          "workingSetSize": 106416,
+          "peakWorkingSetSize": 108152,
+          "privateBytes": 90340
+        },
+        "integrityLevel": "low",
+        "sandboxed": true
+      },
+      {
+        "cpu": {
+          "cumulativeCPUUsage": 0.066833,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "pid": 38600,
+        "type": "Utility",
+        "creationTime": 1792258439427.944,
+        "serviceName": "network.mojom.NetworkService",
+        "name": "Network Service",
+        "memory": {
+          "workingSetSize": 50160,
+          "peakWorkingSetSize": 50164,
+          "privateBytes": 12920
+        },
+        "integrityLevel": "high",
+        "sandboxed": false
+      },
+      {
+        "cpu": {
+          "cumulativeCPUUsage": 0.043535,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "pid": 11736,
+        "type": "Tab",
+        "creationTime": 1792258439776.545,
+        "memory": {
+          "workingSetSize": 75004,
+          "peakWorkingSetSize": 75004,
+          "privateBytes": 26100
+        },
+        "integrityLevel": "untrusted",
+        "sandboxed": true
+      },
+      {
+        "cpu": {
+          "cumulativeCPUUsage": 0.051166,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "pid": 71344,
+        "type": "Tab",
+        "creationTime": 1792258439856.519,
+        "memory": {
+          "workingSetSize": 91376,
+          "peakWorkingSetSize": 91376,
+          "privateBytes": 28920
+        },
+        "integrityLevel": "untrusted",
+        "sandboxed": true
+      }
+    ],
+    "fixture": {
+      "url": "http://127.0.0.1:65468/",
+      "outer": [
+        1100,
+        760
+      ],
+      "theme": "light",
+      "sampleMeaning": {
+        "cold": "new chat driver and renderer through navigation",
+        "warm": "inspect existing loaded fixture"
+      }
+    },
+    "screenshotFidelity": {
+      "before": {
+        "html": "<html><head><title>Smoke fixture</title></head><body style=\"font:16px sans-serif\"><h1>Agent browser smoke</h1><form id=\"form\" onsubmit=\"event.preventDefault(); document.querySelector('#status').textContent = 'Submitted ' + document.querySelector('#name').value;\"><input id=\"name\" value=\"\"><button id=\"go\" type=\"button\" onclick=\"document.querySelector('#status').textContent='Clicked'\">Go</button></form><p id=\"status\">Submitted Nekko Agent</p><a href=\"/second\">Second page</a> <a href=\"https://example.com/\">Example</a><div id=\"late\">Arrived late</div><div style=\"height:4000px\"></div><p id=\"bottom\">Bottom of page</p><script>console.error(\"fixture console error\"); fetch(\"/missing\"); setTimeout(() => { document.querySelector(\"#late\").textContent = \"Arrived late\"; }, 700);</script></body></html>",
+        "x": 0,
+        "y": 0,
+        "width": 1087,
+        "height": 698,
+        "clientWidth": 1072,
+        "scrollHeight": 4238,
+        "overflow": "visible",
+        "scrollbarWidth": "auto",
+        "activeElement": "name",
+        "hasFocus": true,
+        "devicePixelRatio": 1.25
+      },
+      "after": {
+        "html": "<html><head><title>Smoke fixture</title></head><body style=\"font:16px sans-serif\"><h1>Agent browser smoke</h1><form id=\"form\" onsubmit=\"event.preventDefault(); document.querySelector('#status').textContent = 'Submitted ' + document.querySelector('#name').value;\"><input id=\"name\" value=\"\"><button id=\"go\" type=\"button\" onclick=\"document.querySelector('#status').textContent='Clicked'\">Go</button></form><p id=\"status\">Submitted Nekko Agent</p><a href=\"/second\">Second page</a> <a href=\"https://example.com/\">Example</a><div id=\"late\">Arrived late</div><div style=\"height:4000px\"></div><p id=\"bottom\">Bottom of page</p><script>console.error(\"fixture console error\"); fetch(\"/missing\"); setTimeout(() => { document.querySelector(\"#late\").textContent = \"Arrived late\"; }, 700);</script></body></html>",
+        "x": 0,
+        "y": 0,
+        "width": 1087,
+        "height": 698,
+        "clientWidth": 1072,
+        "scrollHeight": 4238,
+        "overflow": "visible",
+        "scrollbarWidth": "auto",
+        "activeElement": "name",
+        "hasFocus": true,
+        "devicePixelRatio": 1.25
+      },
+      "repeatedPixelsEqual": true,
+      "dimensions": {
+        "width": 1359,
+        "height": 872
+      },
+      "captureRoute": "owned BrowserWindow.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true}) after two animation frames",
+      "bounds": {
+        "x": 986,
+        "y": 484,
+        "width": 1102,
+        "height": 760
+      },
+      "contentBounds": {
+        "x": 994,
+        "y": 540,
+        "width": 1087,
+        "height": 697
+      },
+      "zoom": 1
+    },
+    "hidden": {
+      "visible": false,
+      "focused": false,
+      "activations": 0
+    },
+    "windowsAfterClose": 0,
+    "foreground": {
+      "unchanged": true
+    },
+    "passed": true
+  },
+  "pairBytesEqual": true,
+  "sha256": "a8fdefccf61541444768b9c152d185cc6ad9f358bf3546897d336468e6a52dbb",
+  "parentPixelApproval": "pending"
+}

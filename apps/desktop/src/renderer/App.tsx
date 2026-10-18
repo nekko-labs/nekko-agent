@@ -15,6 +15,7 @@ import { BrandMark } from './components/BrandMark.js';
 import { RailBackdrop } from './components/RailBackdrop.js';
 import { AboutNekko } from './components/AboutNekko.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
+import { PixelWaveBackground } from './components/PixelWaveBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
 import { Mascot, NekkoAvatar } from './components/Mascot.js';
@@ -249,7 +250,10 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col" style={{ background: 'var(--paper)' }}>
+    <div className="flex h-full w-full flex-col" style={{ background: settings?.themePreset === 'lilac' || settings?.themePreset === 'lavender' ? 'transparent' : 'var(--paper)' }}>
+      {/* With the Lilac / Lavender pixel field on, the shell stays see-through so
+          the dots (drawn behind it) show in the space around the panels; the
+          body still paints --paper beneath them. */}
       {/* The window's own title bar, in the desktop shell only. */}
       <ErrorBoundary label="Title bar"><TitleBar /></ErrorBoundary>
       <ErrorBoundary label="About"><AboutNekko /></ErrorBoundary>
@@ -376,6 +380,7 @@ export function App() {
       {/* Global overlays stay mounted even while settings load, so deep links,
           toasts, and update banners keep working on any settings failure. */}
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
+      {(settings?.themePreset === 'lilac' || settings?.themePreset === 'lavender') && <PixelWaveBackground variant={settings?.themePreset === 'lavender' ? 'lavender' : 'lilac'} />}
       <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>
       {view !== 'command' && <ErrorBoundary label="Resource monitor"><ResourceHud /></ErrorBoundary>}

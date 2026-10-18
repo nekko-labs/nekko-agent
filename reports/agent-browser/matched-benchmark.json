@@ -1,0 +1,1623 @@
+{
+  "conditions": {
+    "order": [
+      "pw-1",
+      "native-1",
+      "pw-2",
+      "native-2"
+    ],
+    "samplesPerBatch": 20,
+    "revision": "7ff28b02 plus harness-only driver switch and child memory probe",
+    "browser": "Electron 44.7.0 Chromium 152.0.7977.130",
+    "outerDIP": [
+      1100,
+      760
+    ],
+    "screenshotPixels": [
+      1359,
+      873
+    ],
+    "theme": "light",
+    "cold": "fresh chat driver/renderer, not fresh app",
+    "warm": "existing page inspect"
+  },
+  "groups": {
+    "pw": {
+      "cold": {
+        "n": 40,
+        "p50": 66.36300000000006,
+        "p95": 74.38070000000016
+      },
+      "warm": {
+        "n": 40,
+        "p50": 1.006199999999808,
+        "p95": 1.4304999999999382
+      },
+      "memory": [
+        {
+          "batch": "pw-1",
+          "electronWorkingSetBytes": 513273856,
+          "nativeWorkingSetBytes": 0,
+          "nativePrivateBytes": 0,
+          "totalWorkingSetBytes": 513273856
+        },
+        {
+          "batch": "pw-2",
+          "electronWorkingSetBytes": 515989504,
+          "nativeWorkingSetBytes": 0,
+          "nativePrivateBytes": 0,
+          "totalWorkingSetBytes": 515989504
+        }
+      ]
+    },
+    "native": {
+      "cold": {
+        "n": 40,
+        "p50": 93.87869999999998,
+        "p95": 102.51769999999999
+      },
+      "warm": {
+        "n": 40,
+        "p50": 1.1442999999999302,
+        "p95": 1.4756999999999607
+      },
+      "memory": [
+        {
+          "batch": "native-1",
+          "electronWorkingSetBytes": 457170944,
+          "nativeWorkingSetBytes": 14360576,
+          "nativePrivateBytes": 4759552,
+          "totalWorkingSetBytes": 471531520
+        },
+        {
+          "batch": "native-2",
+          "electronWorkingSetBytes": 457613312,
+          "nativeWorkingSetBytes": 14323712,
+          "nativePrivateBytes": 4718592,
+          "totalWorkingSetBytes": 471937024
+        }
+      ]
+    }
+  },
+  "batches": [
+    {
+      "name": "pw-1",
+      "platform": "win32",
+      "versions": {
+        "node": "24.21.0",
+        "acorn": "8.18.0",
+        "ada": "4.0.0",
+        "amaro": "1.1.11",
+        "ares": "1.34.8",
+        "brotli": "1.2.0",
+        "cldr": "48.0",
+        "icu": "78.2",
+        "llhttp": "9.4.3",
+        "merve": "1.2.2",
+        "modules": "149",
+        "napi": "10",
+        "nbytes": "0.1.4",
+        "ncrypto": "0.0.1",
+        "nghttp2": "1.70.0",
+        "nghttp3": "",
+        "ngtcp2": "",
+        "openssl": "0.0.0",
+        "simdjson": "4.6.7",
+        "simdutf": "7.7.0",
+        "sqlite": "3.53.4",
+        "tz": "2026d",
+        "undici": "7.29.1",
+        "unicode": "17.0",
+        "uv": "1.52.1",
+        "uvwasi": "0.0.23",
+        "v8": "15.2.124.28-electron.0",
+        "zlib": "1.3.2.1-motley",
+        "zstd": "1.6.0",
+        "electron": "44.7.0",
+        "chrome": "152.0.7977.130"
+      },
+      "driver": "playwright-baseline-explicit",
+      "revision": "7ff28b02ff40f9b837fb4572410a213b733aa2be",
+      "samples": {
+        "cold": [
+          204.38330000000002,
+          74.01380000000006,
+          67.31500000000005,
+          67.34899999999993,
+          66.27549999999997,
+          68.91319999999996,
+          67.83480000000009,
+          72.17329999999993,
+          67.32150000000001,
+          69.4394000000002,
+          66.81539999999995,
+          65.94080000000008,
+          66.24569999999994,
+          66.45389999999998,
+          67.62709999999993,
+          67.02699999999982,
+          66.42509999999993,
+          65.72350000000006,
+          67.43909999999983,
+          69.38080000000014
+        ],
+        "warm": [
+          1.193000000000211,
+          0.9893999999999323,
+          0.9287999999996828,
+          0.9776000000001659,
+          1.0452000000000226,
+          1.1864999999997963,
+          0.9849000000003798,
+          0.9369000000001506,
+          0.9614999999998872,
+          1.4455000000002656,
+          0.8944000000001324,
+          0.9560999999998785,
+          0.9291000000002896,
+          1.0554999999999382,
+          0.8748000000000502,
+          0.7656999999999243,
+          1.189300000000003,
+          0.8748999999997977,
+          0.8915999999999258,
+          0.8560999999999694
+        ]
+      },
+      "steps": {
+        "navigate": {
+          "ms": 70,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nReady\n\nSecond page Example\n\nBottom of page"
+        },
+        "fill": {
+          "ms": 17,
+          "output": "Field filled."
+        },
+        "click": {
+          "ms": 15,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nClicked\n\nSecond page Example\n\nBottom of page"
+        },
+        "wait": {
+          "ms": 194,
+          "output": "Text \"Arrived late\" is visible (194 ms)."
+        },
+        "pressEnd": {
+          "ms": 4,
+          "output": "Pressed End."
+        },
+        "type": {
+          "ms": 5,
+          "output": "Typed 6 characters into the focused element."
+        },
+        "press": {
+          "ms": 4,
+          "output": "Pressed Enter."
+        },
+        "evaluate": {
+          "ms": 1,
+          "output": "Submitted Nekko Agent"
+        },
+        "scroll": {
+          "ms": 63,
+          "output": "Scrolled. Position x=0, y=800 of 4238px (viewport 698px)."
+        },
+        "scrollIntoView": {
+          "ms": 1738,
+          "output": "Scrolled #bottom into view. Position x=0, y=3540 of 4238px (viewport 698px)."
+        },
+        "extractText": {
+          "ms": 2,
+          "output": "Submitted Nekko Agent"
+        },
+        "extractLinks": {
+          "ms": 1,
+          "output": "Second page (http://127.0.0.1:51539/second)\nExample (https://example.com/)"
+        },
+        "scrollTop": {
+          "ms": 2,
+          "output": "Scrolled. Position x=0, y=0 of 4238px (viewport 698px)."
+        },
+        "screenshot": {
+          "ms": 3020,
+          "output": "Screenshot of tab 0 (1359x873, http://127.0.0.1:51539/). Page content only, without native window chrome."
+        },
+        "logs": {
+          "ms": 1,
+          "output": "HTTP errors (1):\n- 404 GET http://127.0.0.1:51539/missing\n\nConsole (3):\n- [error] fixture console error\n- [error] Failed to load resource: the server responded "
+        },
+        "logsDrained": {
+          "ms": 1,
+          "output": "No console messages, page errors or failed requests since the last logs call."
+        },
+        "tabNew": {
+          "ms": 61,
+          "output": "Second page\nSecond tab content"
+        },
+        "tabs": {
+          "ms": 0,
+          "output": "  [0] http://127.0.0.1:51539/ Smoke fixture\n* [1] http://127.0.0.1:51539/second Second page"
+        },
+        "tabSwitch": {
+          "ms": 1,
+          "output": "* [0] http://127.0.0.1:51539/ Smoke fixture\n  [1] http://127.0.0.1:51539/second Second page"
+        },
+        "inspectAfterSwitch": {
+          "ms": 3,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nSubmitted Nekko Agent\n\nSecond page Example\nArrived late\n\nBottom of page"
+        },
+        "tabClose": {
+          "ms": 3,
+          "output": "Closed tab 1.\n* [0] http://127.0.0.1:51539/ Smoke fixture"
+        },
+        "selectAllChord": {
+          "ms": 5,
+          "output": "Pressed Control+A."
+        },
+        "replaceSelected": {
+          "ms": 3,
+          "output": "Typed 5 characters into the focused element."
+        },
+        "chordResult": {
+          "ms": 1,
+          "output": "Chord"
+        },
+        "waitAttached": {
+          "ms": 2,
+          "output": "Selector #name is attached (1 ms)."
+        },
+        "waitHidden": {
+          "ms": 1,
+          "output": "Selector #absent is hidden (1 ms)."
+        },
+        "waitDetached": {
+          "ms": 1,
+          "output": "Selector #absent is detached (0 ms)."
+        },
+        "firstMatch": {
+          "ms": 1996,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nSubmitted Nekko Agent\n\nSecond page Example\nArrived late\n\nBottom of page\n\nDuplicate 1Duplicate 2"
+        },
+        "firstMatchResult": {
+          "ms": 2,
+          "output": "1"
+        },
+        "pageError": {
+          "ms": 2,
+          "output": "Page errors (1):\n- parity-page-error"
+        },
+        "popupDenied": {
+          "ms": 2,
+          "output": "true"
+        },
+        "permissionsDenied": {
+          "ms": 1,
+          "output": "denied"
+        },
+        "dialogDisabled": {
+          "ms": 2,
+          "output": "returned"
+        },
+        "fileNavigationBlocked": true,
+        "close": {
+          "ms": 4,
+          "output": "In-app browser closed."
+        }
+      },
+      "memory": [
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 1.493988,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 74388,
+          "type": "Browser",
+          "creationTime": 1792256891169.022,
+          "memory": {
+            "workingSetSize": 168532,
+            "peakWorkingSetSize": 169052,
+            "privateBytes": 131240
+          },
+          "integrityLevel": "high",
+          "sandboxed": false
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.582226,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 70356,
+          "type": "GPU",
+          "creationTime": 1792256891286.418,
+          "serviceName": "GPU",
+          "memory": {
+            "workingSetSize": 109864,
+            "peakWorkingSetSize": 110220,
+            "privateBytes": 94940
+          },
+          "integrityLevel": "low",
+          "sandboxed": true
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.106953,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 26212,
+          "type": "Utility",
+          "creationTime": 1792256891289.371,
+          "serviceName": "network.mojom.NetworkService",
+          "name": "Network Service",
+          "memory": {
+            "workingSetSize": 50108,
+            "peakWorkingSetSize": 50116,
+            "privateBytes": 12864
+          },
+          "integrityLevel": "high",
+          "sandboxed": false
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.039875,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 74204,
+          "type": "Tab",
+          "creationTime": 1792256891656.131,
+          "memory": {
+            "workingSetSize": 72272,
+            "peakWorkingSetSize": 72272,
+            "privateBytes": 23380
+          },
+          "integrityLevel": "untrusted",
+          "sandboxed": true
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.057335,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 11420,
+          "type": "Tab",
+          "creationTime": 1792256893292.4,
+          "memory": {
+            "workingSetSize": 100468,
+            "peakWorkingSetSize": 100468,
+            "privateBytes": 30196
+          },
+          "integrityLevel": "untrusted",
+          "sandboxed": true
+        }
+      ],
+      "childMemory": [
+        {
+          "Id": 70356,
+          "ProcessName": "electron",
+          "WorkingSet64": 112488448,
+          "PrivateMemorySize64": 97218560
+        },
+        {
+          "Id": 26212,
+          "ProcessName": "electron",
+          "WorkingSet64": 51310592,
+          "PrivateMemorySize64": 13172736
+        },
+        {
+          "Id": 74204,
+          "ProcessName": "electron",
+          "WorkingSet64": 74014720,
+          "PrivateMemorySize64": 23937024
+        },
+        {
+          "Id": 11420,
+          "ProcessName": "electron",
+          "WorkingSet64": 102907904,
+          "PrivateMemorySize64": 30924800
+        },
+        {
+          "Id": 14672,
+          "ProcessName": "powershell",
+          "WorkingSet64": 101638144,
+          "PrivateMemorySize64": 85229568
+        }
+      ],
+      "fixture": {
+        "url": "http://127.0.0.1:51539/",
+        "outer": [
+          1100,
+          760
+        ],
+        "theme": "light",
+        "sampleMeaning": {
+          "cold": "new chat driver and renderer through navigation",
+          "warm": "inspect existing loaded fixture"
+        }
+      },
+      "download": {
+        "prevented": true,
+        "filename": "blocked.txt"
+      },
+      "security": {
+        "uiDebuggerAttached": false,
+        "remoteDebuggingSwitch": false,
+        "devToolsActivePortFile": false,
+        "rawTransportPages": 0,
+        "browserCdpSessionRefused": true
+      },
+      "stage": "raw connected",
+      "hidden": {
+        "visible": false,
+        "focused": false,
+        "activations": 0
+      },
+      "windowsAfterClose": 0,
+      "foreground": {
+        "unchanged": true
+      },
+      "passed": true
+    },
+    {
+      "name": "native-1",
+      "platform": "win32",
+      "versions": {
+        "node": "24.21.0",
+        "acorn": "8.18.0",
+        "ada": "4.0.0",
+        "amaro": "1.1.11",
+        "ares": "1.34.8",
+        "brotli": "1.2.0",
+        "cldr": "48.0",
+        "icu": "78.2",
+        "llhttp": "9.4.3",
+        "merve": "1.2.2",
+        "modules": "149",
+        "napi": "10",
+        "nbytes": "0.1.4",
+        "ncrypto": "0.0.1",
+        "nghttp2": "1.70.0",
+        "nghttp3": "",
+        "ngtcp2": "",
+        "openssl": "0.0.0",
+        "simdjson": "4.6.7",
+        "simdutf": "7.7.0",
+        "sqlite": "3.53.4",
+        "tz": "2026d",
+        "undici": "7.29.1",
+        "unicode": "17.0",
+        "uv": "1.52.1",
+        "uvwasi": "0.0.23",
+        "v8": "15.2.124.28-electron.0",
+        "zlib": "1.3.2.1-motley",
+        "zstd": "1.6.0",
+        "electron": "44.7.0",
+        "chrome": "152.0.7977.130"
+      },
+      "driver": "native-default",
+      "revision": "7ff28b02ff40f9b837fb4572410a213b733aa2be",
+      "samples": {
+        "cold": [
+          126.6017,
+          102.51769999999999,
+          94.22309999999993,
+          98.75660000000005,
+          93.94749999999999,
+          94.84649999999988,
+          97.05349999999999,
+          97.62380000000007,
+          94.96499999999992,
+          94.46590000000015,
+          94.27980000000002,
+          95.01149999999984,
+          93.87869999999998,
+          96.2786000000001,
+          95.33889999999997,
+          92.45620000000008,
+          93.25850000000037,
+          98.02339999999958,
+          99.31880000000001,
+          92.5626000000002
+        ],
+        "warm": [
+          1.3995999999997366,
+          1.2442999999998392,
+          1.537199999999757,
+          1.189300000000003,
+          1.087800000000243,
+          1.1975999999999658,
+          1.151299999999992,
+          1.175300000000334,
+          1.0951000000000022,
+          1.117200000000139,
+          1.1119000000003325,
+          1.0794000000000779,
+          1.0424999999995634,
+          1.2917999999999665,
+          1.1687000000001717,
+          1.4057999999999993,
+          1.203200000000379,
+          1.4756999999999607,
+          1.1442999999999302,
+          1.107300000000123
+        ]
+      },
+      "steps": {
+        "navigate": {
+          "ms": 93,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nReady\n\nSecond page Example\n\nBottom of page"
+        },
+        "fill": {
+          "ms": 4,
+          "output": "Field filled."
+        },
+        "click": {
+          "ms": 7,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nClicked\n\nSecond page Example\n\nBottom of page"
+        },
+        "wait": {
+          "ms": 252,
+          "output": "Text \"Arrived late\" is visible (250 ms)."
+        },
+        "pressEnd": {
+          "ms": 4,
+          "output": "Pressed End."
+        },
+        "type": {
+          "ms": 4,
+          "output": "Typed 6 characters into the focused element."
+        },
+        "press": {
+          "ms": 4,
+          "output": "Pressed Enter."
+        },
+        "evaluate": {
+          "ms": 1,
+          "output": "Submitted Nekko Agent"
+        },
+        "scroll": {
+          "ms": 65,
+          "output": "Scrolled. Position x=0, y=800 of 4238px (viewport 698px)."
+        },
+        "scrollIntoView": {
+          "ms": 3,
+          "output": "Scrolled #bottom into view. Position x=0, y=3540 of 4238px (viewport 698px)."
+        },
+        "extractText": {
+          "ms": 2,
+          "output": "Submitted Nekko Agent"
+        },
+        "extractLinks": {
+          "ms": 2,
+          "output": "Second page (http://127.0.0.1:55318/second)\nExample (https://example.com/)"
+        },
+        "scrollTop": {
+          "ms": 2,
+          "output": "Scrolled. Position x=0, y=0 of 4238px (viewport 698px)."
+        },
+        "screenshot": {
+          "ms": 2692,
+          "output": "Screenshot of tab 0 (1359x873, http://127.0.0.1:55318/). Page content only, without native window chrome."
+        },
+        "logs": {
+          "ms": 2,
+          "output": "HTTP errors (1):\n- 404 GET http://127.0.0.1:55318/missing\n\nConsole (2):\n- [error] fixture console error\n- [warning] %cElectron Security Warning (Insecure Conten"
+        },
+        "logsDrained": {
+          "ms": 0,
+          "output": "No console messages, page errors or failed requests since the last logs call."
+        },
+        "tabNew": {
+          "ms": 84,
+          "output": "Second page\nSecond tab content"
+        },
+        "tabs": {
+          "ms": 0,
+          "output": "  [0] http://127.0.0.1:55318/ Smoke fixture\n* [1] http://127.0.0.1:55318/second Second page"
+        },
+        "tabSwitch": {
+          "ms": 1,
+          "output": "* [0] http://127.0.0.1:55318/ Smoke fixture\n  [1] http://127.0.0.1:55318/second Second page"
+        },
+        "inspectAfterSwitch": {
+          "ms": 1,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nSubmitted Nekko Agent\n\nSecond page Example\nArrived late\n\nBottom of page"
+        },
+        "tabClose": {
+          "ms": 5,
+          "output": "Closed tab 1.\n* [0] http://127.0.0.1:55318/ Smoke fixture"
+        },
+        "selectAllChord": {
+          "ms": 4,
+          "output": "Pressed Control+A."
+        },
+        "replaceSelected": {
+          "ms": 4,
+          "output": "Typed 5 characters into the focused element."
+        },
+        "chordResult": {
+          "ms": 1,
+          "output": "Chord"
+        },
+        "waitAttached": {
+          "ms": 1,
+          "output": "Selector #name is attached (1 ms)."
+        },
+        "waitHidden": {
+          "ms": 1,
+          "output": "Selector #absent is hidden (1 ms)."
+        },
+        "waitDetached": {
+          "ms": 1,
+          "output": "Selector #absent is detached (0 ms)."
+        },
+        "firstMatch": {
+          "ms": 998,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nSubmitted Nekko Agent\n\nSecond page Example\nArrived late\n\nBottom of page\n\nDuplicate 1Duplicate 2"
+        },
+        "firstMatchResult": {
+          "ms": 2,
+          "output": "1"
+        },
+        "pageError": {
+          "ms": 1,
+          "output": "Page errors (1):\n- Error: parity-page-error\n    at <anonymous>:1:26\n\nConsole (1):\n- [error] Uncaught Error: parity-page-error"
+        },
+        "popupDenied": {
+          "ms": 2,
+          "output": "true"
+        },
+        "permissionsDenied": {
+          "ms": 2,
+          "output": "denied"
+        },
+        "dialogDisabled": {
+          "ms": 2,
+          "output": "returned"
+        },
+        "fileNavigationBlocked": true,
+        "close": {
+          "ms": 5,
+          "output": "In-app browser closed."
+        }
+      },
+      "memory": [
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 1.394522,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 52568,
+          "type": "Browser",
+          "creationTime": 1792256902247.074,
+          "memory": {
+            "workingSetSize": 119900,
+            "peakWorkingSetSize": 120076,
+            "privateBytes": 51640
+          },
+          "integrityLevel": "high",
+          "sandboxed": false
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.575838,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 70756,
+          "type": "GPU",
+          "creationTime": 1792256902350.238,
+          "serviceName": "GPU",
+          "memory": {
+            "workingSetSize": 108872,
+            "peakWorkingSetSize": 109260,
+            "privateBytes": 92924
+          },
+          "integrityLevel": "low",
+          "sandboxed": true
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.105907,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 68440,
+          "type": "Utility",
+          "creationTime": 1792256902354.042,
+          "serviceName": "network.mojom.NetworkService",
+          "name": "Network Service",
+          "memory": {
+            "workingSetSize": 50128,
+            "peakWorkingSetSize": 50132,
+            "privateBytes": 12940
+          },
+          "integrityLevel": "high",
+          "sandboxed": false
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.040649,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 58836,
+          "type": "Tab",
+          "creationTime": 1792256902704.695,
+          "memory": {
+            "workingSetSize": 72260,
+            "peakWorkingSetSize": 72268,
+            "privateBytes": 23364
+          },
+          "integrityLevel": "untrusted",
+          "sandboxed": true
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.05309,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 70108,
+          "type": "Tab",
+          "creationTime": 1792256904803.247,
+          "memory": {
+            "workingSetSize": 95296,
+            "peakWorkingSetSize": 95296,
+            "privateBytes": 26208
+          },
+          "integrityLevel": "untrusted",
+          "sandboxed": true
+        }
+      ],
+      "childMemory": [
+        {
+          "Id": 70756,
+          "ProcessName": "electron",
+          "WorkingSet64": 111484928,
+          "PrivateMemorySize64": 95154176
+        },
+        {
+          "Id": 68440,
+          "ProcessName": "electron",
+          "WorkingSet64": 51331072,
+          "PrivateMemorySize64": 13250560
+        },
+        {
+          "Id": 58836,
+          "ProcessName": "electron",
+          "WorkingSet64": 73994240,
+          "PrivateMemorySize64": 23924736
+        },
+        {
+          "Id": 70108,
+          "ProcessName": "electron",
+          "WorkingSet64": 97611776,
+          "PrivateMemorySize64": 26845184
+        },
+        {
+          "Id": 9244,
+          "ProcessName": "agent-browser",
+          "WorkingSet64": 14360576,
+          "PrivateMemorySize64": 4759552
+        },
+        {
+          "Id": 61532,
+          "ProcessName": "powershell",
+          "WorkingSet64": 101949440,
+          "PrivateMemorySize64": 85200896
+        }
+      ],
+      "fixture": {
+        "url": "http://127.0.0.1:55318/",
+        "outer": [
+          1100,
+          760
+        ],
+        "theme": "light",
+        "sampleMeaning": {
+          "cold": "new chat driver and renderer through navigation",
+          "warm": "inspect existing loaded fixture"
+        }
+      },
+      "download": {
+        "prevented": true,
+        "filename": "blocked.txt"
+      },
+      "security": {
+        "uiDebuggerAttached": false,
+        "remoteDebuggingSwitch": false,
+        "devToolsActivePortFile": false,
+        "rawTransportPages": 0,
+        "browserCdpSessionRefused": true
+      },
+      "stage": "raw connected",
+      "hidden": {
+        "visible": false,
+        "focused": false,
+        "activations": 0
+      },
+      "windowsAfterClose": 0,
+      "foreground": {
+        "unchanged": true
+      },
+      "passed": true
+    },
+    {
+      "name": "pw-2",
+      "platform": "win32",
+      "versions": {
+        "node": "24.21.0",
+        "acorn": "8.18.0",
+        "ada": "4.0.0",
+        "amaro": "1.1.11",
+        "ares": "1.34.8",
+        "brotli": "1.2.0",
+        "cldr": "48.0",
+        "icu": "78.2",
+        "llhttp": "9.4.3",
+        "merve": "1.2.2",
+        "modules": "149",
+        "napi": "10",
+        "nbytes": "0.1.4",
+        "ncrypto": "0.0.1",
+        "nghttp2": "1.70.0",
+        "nghttp3": "",
+        "ngtcp2": "",
+        "openssl": "0.0.0",
+        "simdjson": "4.6.7",
+        "simdutf": "7.7.0",
+        "sqlite": "3.53.4",
+        "tz": "2026d",
+        "undici": "7.29.1",
+        "unicode": "17.0",
+        "uv": "1.52.1",
+        "uvwasi": "0.0.23",
+        "v8": "15.2.124.28-electron.0",
+        "zlib": "1.3.2.1-motley",
+        "zstd": "1.6.0",
+        "electron": "44.7.0",
+        "chrome": "152.0.7977.130"
+      },
+      "driver": "playwright-baseline-explicit",
+      "revision": "7ff28b02ff40f9b837fb4572410a213b733aa2be",
+      "samples": {
+        "cold": [
+          200.3329,
+          71.78300000000002,
+          65.35559999999998,
+          66.36300000000006,
+          65.44949999999994,
+          64.53039999999999,
+          63.809099999999944,
+          65.35130000000004,
+          64.1543999999999,
+          62.85130000000004,
+          66.2478000000001,
+          65.36599999999999,
+          65.30999999999995,
+          65.28250000000003,
+          63.468599999999924,
+          63.446699999999964,
+          72.96080000000006,
+          74.38070000000016,
+          65.36969999999997,
+          63.790500000000065
+        ],
+        "warm": [
+          1.3435999999996966,
+          1.282799999999952,
+          1.2671000000000276,
+          1.159400000000005,
+          1.0100999999999658,
+          1.2012999999997191,
+          1.4304999999999382,
+          0.972400000000107,
+          1.0480000000002292,
+          1.6642000000001644,
+          0.9027000000000953,
+          0.9983999999999469,
+          1.1136999999998807,
+          1.1048000000000684,
+          1.043699999999717,
+          1.0470000000000255,
+          1.0489999999999782,
+          0.8483000000001084,
+          1.006199999999808,
+          0.9773000000000138
+        ]
+      },
+      "steps": {
+        "navigate": {
+          "ms": 68,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nReady\n\nSecond page Example\n\nBottom of page"
+        },
+        "fill": {
+          "ms": 16,
+          "output": "Field filled."
+        },
+        "click": {
+          "ms": 14,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nClicked\n\nSecond page Example\n\nBottom of page"
+        },
+        "wait": {
+          "ms": 318,
+          "output": "Text \"Arrived late\" is visible (318 ms)."
+        },
+        "pressEnd": {
+          "ms": 4,
+          "output": "Pressed End."
+        },
+        "type": {
+          "ms": 4,
+          "output": "Typed 6 characters into the focused element."
+        },
+        "press": {
+          "ms": 3,
+          "output": "Pressed Enter."
+        },
+        "evaluate": {
+          "ms": 1,
+          "output": "Submitted Nekko Agent"
+        },
+        "scroll": {
+          "ms": 50,
+          "output": "Scrolled. Position x=0, y=800 of 4238px (viewport 698px)."
+        },
+        "scrollIntoView": {
+          "ms": 1854,
+          "output": "Scrolled #bottom into view. Position x=0, y=3540 of 4238px (viewport 698px)."
+        },
+        "extractText": {
+          "ms": 2,
+          "output": "Submitted Nekko Agent"
+        },
+        "extractLinks": {
+          "ms": 2,
+          "output": "Second page (http://127.0.0.1:60543/second)\nExample (https://example.com/)"
+        },
+        "scrollTop": {
+          "ms": 2,
+          "output": "Scrolled. Position x=0, y=0 of 4238px (viewport 698px)."
+        },
+        "screenshot": {
+          "ms": 3025,
+          "output": "Screenshot of tab 0 (1359x873, http://127.0.0.1:60543/). Page content only, without native window chrome."
+        },
+        "logs": {
+          "ms": 2,
+          "output": "HTTP errors (1):\n- 404 GET http://127.0.0.1:60543/missing\n\nConsole (3):\n- [error] fixture console error\n- [error] Failed to load resource: the server responded "
+        },
+        "logsDrained": {
+          "ms": 0,
+          "output": "No console messages, page errors or failed requests since the last logs call."
+        },
+        "tabNew": {
+          "ms": 59,
+          "output": "Second page\nSecond tab content"
+        },
+        "tabs": {
+          "ms": 2,
+          "output": "  [0] http://127.0.0.1:60543/ Smoke fixture\n* [1] http://127.0.0.1:60543/second Second page"
+        },
+        "tabSwitch": {
+          "ms": 1,
+          "output": "* [0] http://127.0.0.1:60543/ Smoke fixture\n  [1] http://127.0.0.1:60543/second Second page"
+        },
+        "inspectAfterSwitch": {
+          "ms": 2,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nSubmitted Nekko Agent\n\nSecond page Example\nArrived late\n\nBottom of page"
+        },
+        "tabClose": {
+          "ms": 2,
+          "output": "Closed tab 1.\n* [0] http://127.0.0.1:60543/ Smoke fixture"
+        },
+        "selectAllChord": {
+          "ms": 4,
+          "output": "Pressed Control+A."
+        },
+        "replaceSelected": {
+          "ms": 4,
+          "output": "Typed 5 characters into the focused element."
+        },
+        "chordResult": {
+          "ms": 1,
+          "output": "Chord"
+        },
+        "waitAttached": {
+          "ms": 1,
+          "output": "Selector #name is attached (1 ms)."
+        },
+        "waitHidden": {
+          "ms": 1,
+          "output": "Selector #absent is hidden (1 ms)."
+        },
+        "waitDetached": {
+          "ms": 2,
+          "output": "Selector #absent is detached (0 ms)."
+        },
+        "firstMatch": {
+          "ms": 1997,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nSubmitted Nekko Agent\n\nSecond page Example\nArrived late\n\nBottom of page\n\nDuplicate 1Duplicate 2"
+        },
+        "firstMatchResult": {
+          "ms": 1,
+          "output": "1"
+        },
+        "pageError": {
+          "ms": 1,
+          "output": "Page errors (1):\n- parity-page-error"
+        },
+        "popupDenied": {
+          "ms": 2,
+          "output": "true"
+        },
+        "permissionsDenied": {
+          "ms": 1,
+          "output": "denied"
+        },
+        "dialogDisabled": {
+          "ms": 2,
+          "output": "returned"
+        },
+        "fileNavigationBlocked": true,
+        "close": {
+          "ms": 4,
+          "output": "In-app browser closed."
+        }
+      },
+      "memory": [
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 1.426769,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 73028,
+          "type": "Browser",
+          "creationTime": 1792256910828.292,
+          "memory": {
+            "workingSetSize": 169520,
+            "peakWorkingSetSize": 169520,
+            "privateBytes": 131928
+          },
+          "integrityLevel": "high",
+          "sandboxed": false
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.548522,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 39044,
+          "type": "GPU",
+          "creationTime": 1792256910926.988,
+          "serviceName": "GPU",
+          "memory": {
+            "workingSetSize": 108892,
+            "peakWorkingSetSize": 109016,
+            "privateBytes": 93356
+          },
+          "integrityLevel": "low",
+          "sandboxed": true
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.104333,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 11392,
+          "type": "Utility",
+          "creationTime": 1792256910929.951,
+          "serviceName": "network.mojom.NetworkService",
+          "name": "Network Service",
+          "memory": {
+            "workingSetSize": 50020,
+            "peakWorkingSetSize": 50028,
+            "privateBytes": 12756
+          },
+          "integrityLevel": "high",
+          "sandboxed": false
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.040389,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 70516,
+          "type": "Tab",
+          "creationTime": 1792256911266.484,
+          "memory": {
+            "workingSetSize": 74956,
+            "peakWorkingSetSize": 74956,
+            "privateBytes": 26080
+          },
+          "integrityLevel": "untrusted",
+          "sandboxed": true
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.058489,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 74408,
+          "type": "Tab",
+          "creationTime": 1792256912853.039,
+          "memory": {
+            "workingSetSize": 100508,
+            "peakWorkingSetSize": 100508,
+            "privateBytes": 31208
+          },
+          "integrityLevel": "untrusted",
+          "sandboxed": true
+        }
+      ],
+      "childMemory": [
+        {
+          "Id": 39044,
+          "ProcessName": "electron",
+          "WorkingSet64": 111505408,
+          "PrivateMemorySize64": 95596544
+        },
+        {
+          "Id": 11392,
+          "ProcessName": "electron",
+          "WorkingSet64": 51220480,
+          "PrivateMemorySize64": 13062144
+        },
+        {
+          "Id": 70516,
+          "ProcessName": "electron",
+          "WorkingSet64": 76754944,
+          "PrivateMemorySize64": 26705920
+        },
+        {
+          "Id": 74408,
+          "ProcessName": "electron",
+          "WorkingSet64": 102948864,
+          "PrivateMemorySize64": 31965184
+        },
+        {
+          "Id": 70016,
+          "ProcessName": "powershell",
+          "WorkingSet64": 101470208,
+          "PrivateMemorySize64": 85037056
+        }
+      ],
+      "fixture": {
+        "url": "http://127.0.0.1:60543/",
+        "outer": [
+          1100,
+          760
+        ],
+        "theme": "light",
+        "sampleMeaning": {
+          "cold": "new chat driver and renderer through navigation",
+          "warm": "inspect existing loaded fixture"
+        }
+      },
+      "download": {
+        "prevented": true,
+        "filename": "blocked.txt"
+      },
+      "security": {
+        "uiDebuggerAttached": false,
+        "remoteDebuggingSwitch": false,
+        "devToolsActivePortFile": false,
+        "rawTransportPages": 0,
+        "browserCdpSessionRefused": true
+      },
+      "stage": "raw connected",
+      "hidden": {
+        "visible": false,
+        "focused": false,
+        "activations": 0
+      },
+      "windowsAfterClose": 0,
+      "foreground": {
+        "unchanged": true
+      },
+      "passed": true
+    },
+    {
+      "name": "native-2",
+      "platform": "win32",
+      "versions": {
+        "node": "24.21.0",
+        "acorn": "8.18.0",
+        "ada": "4.0.0",
+        "amaro": "1.1.11",
+        "ares": "1.34.8",
+        "brotli": "1.2.0",
+        "cldr": "48.0",
+        "icu": "78.2",
+        "llhttp": "9.4.3",
+        "merve": "1.2.2",
+        "modules": "149",
+        "napi": "10",
+        "nbytes": "0.1.4",
+        "ncrypto": "0.0.1",
+        "nghttp2": "1.70.0",
+        "nghttp3": "",
+        "ngtcp2": "",
+        "openssl": "0.0.0",
+        "simdjson": "4.6.7",
+        "simdutf": "7.7.0",
+        "sqlite": "3.53.4",
+        "tz": "2026d",
+        "undici": "7.29.1",
+        "unicode": "17.0",
+        "uv": "1.52.1",
+        "uvwasi": "0.0.23",
+        "v8": "15.2.124.28-electron.0",
+        "zlib": "1.3.2.1-motley",
+        "zstd": "1.6.0",
+        "electron": "44.7.0",
+        "chrome": "152.0.7977.130"
+      },
+      "driver": "native-default",
+      "revision": "7ff28b02ff40f9b837fb4572410a213b733aa2be",
+      "samples": {
+        "cold": [
+          116.04840000000002,
+          100.62029999999993,
+          101.37379999999996,
+          99.1911,
+          87.82449999999994,
+          91.44490000000008,
+          89.2699,
+          88.45659999999998,
+          91.39139999999998,
+          89.37290000000007,
+          86.81669999999986,
+          90.6757,
+          90.89840000000004,
+          88.90560000000005,
+          89.23180000000002,
+          88.30819999999994,
+          88.89150000000018,
+          89.08230000000003,
+          90.58440000000019,
+          90.37480000000005
+        ],
+        "warm": [
+          1.2631999999998698,
+          1.2159999999998945,
+          1.1383999999998196,
+          1.1174000000000888,
+          1.3651999999997315,
+          1.1601000000000568,
+          1.1486999999997352,
+          1.0882999999998901,
+          1.0769999999997708,
+          1.1782000000002881,
+          1.022899999999936,
+          1.0462999999999738,
+          1.1420000000002801,
+          1.072400000000016,
+          1.0275000000001455,
+          1.0230000000001382,
+          1.05600000000004,
+          1.1442999999999302,
+          1.5474999999996726,
+          1.094000000000051
+        ]
+      },
+      "steps": {
+        "navigate": {
+          "ms": 89,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nReady\n\nSecond page Example\n\nBottom of page"
+        },
+        "fill": {
+          "ms": 5,
+          "output": "Field filled."
+        },
+        "click": {
+          "ms": 8,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nClicked\n\nSecond page Example\n\nBottom of page"
+        },
+        "wait": {
+          "ms": 255,
+          "output": "Text \"Arrived late\" is visible (255 ms)."
+        },
+        "pressEnd": {
+          "ms": 3,
+          "output": "Pressed End."
+        },
+        "type": {
+          "ms": 4,
+          "output": "Typed 6 characters into the focused element."
+        },
+        "press": {
+          "ms": 3,
+          "output": "Pressed Enter."
+        },
+        "evaluate": {
+          "ms": 1,
+          "output": "Submitted Nekko Agent"
+        },
+        "scroll": {
+          "ms": 66,
+          "output": "Scrolled. Position x=0, y=800 of 4238px (viewport 698px)."
+        },
+        "scrollIntoView": {
+          "ms": 3,
+          "output": "Scrolled #bottom into view. Position x=0, y=3540 of 4238px (viewport 698px)."
+        },
+        "extractText": {
+          "ms": 2,
+          "output": "Submitted Nekko Agent"
+        },
+        "extractLinks": {
+          "ms": 1,
+          "output": "Second page (http://127.0.0.1:52089/second)\nExample (https://example.com/)"
+        },
+        "scrollTop": {
+          "ms": 2,
+          "output": "Scrolled. Position x=0, y=0 of 4238px (viewport 698px)."
+        },
+        "screenshot": {
+          "ms": 2695,
+          "output": "Screenshot of tab 0 (1359x873, http://127.0.0.1:52089/). Page content only, without native window chrome."
+        },
+        "logs": {
+          "ms": 2,
+          "output": "HTTP errors (1):\n- 404 GET http://127.0.0.1:52089/missing\n\nConsole (2):\n- [error] fixture console error\n- [warning] %cElectron Security Warning (Insecure Conten"
+        },
+        "logsDrained": {
+          "ms": 0,
+          "output": "No console messages, page errors or failed requests since the last logs call."
+        },
+        "tabNew": {
+          "ms": 85,
+          "output": "Second page\nSecond tab content"
+        },
+        "tabs": {
+          "ms": 1,
+          "output": "  [0] http://127.0.0.1:52089/ Smoke fixture\n* [1] http://127.0.0.1:52089/second Second page"
+        },
+        "tabSwitch": {
+          "ms": 1,
+          "output": "* [0] http://127.0.0.1:52089/ Smoke fixture\n  [1] http://127.0.0.1:52089/second Second page"
+        },
+        "inspectAfterSwitch": {
+          "ms": 1,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nSubmitted Nekko Agent\n\nSecond page Example\nArrived late\n\nBottom of page"
+        },
+        "tabClose": {
+          "ms": 4,
+          "output": "Closed tab 1.\n* [0] http://127.0.0.1:52089/ Smoke fixture"
+        },
+        "selectAllChord": {
+          "ms": 5,
+          "output": "Pressed Control+A."
+        },
+        "replaceSelected": {
+          "ms": 3,
+          "output": "Typed 5 characters into the focused element."
+        },
+        "chordResult": {
+          "ms": 2,
+          "output": "Chord"
+        },
+        "waitAttached": {
+          "ms": 1,
+          "output": "Selector #name is attached (1 ms)."
+        },
+        "waitHidden": {
+          "ms": 1,
+          "output": "Selector #absent is hidden (1 ms)."
+        },
+        "waitDetached": {
+          "ms": 2,
+          "output": "Selector #absent is detached (0 ms)."
+        },
+        "firstMatch": {
+          "ms": 990,
+          "output": "Smoke fixture\nAgent browser smoke\nGo\n\nSubmitted Nekko Agent\n\nSecond page Example\nArrived late\n\nBottom of page\n\nDuplicate 1Duplicate 2"
+        },
+        "firstMatchResult": {
+          "ms": 2,
+          "output": "1"
+        },
+        "pageError": {
+          "ms": 1,
+          "output": "Page errors (1):\n- Error: parity-page-error\n    at <anonymous>:1:26\n\nConsole (1):\n- [error] Uncaught Error: parity-page-error"
+        },
+        "popupDenied": {
+          "ms": 2,
+          "output": "true"
+        },
+        "permissionsDenied": {
+          "ms": 2,
+          "output": "denied"
+        },
+        "dialogDisabled": {
+          "ms": 2,
+          "output": "returned"
+        },
+        "fileNavigationBlocked": true,
+        "close": {
+          "ms": 6,
+          "output": "In-app browser closed."
+        }
+      },
+      "memory": [
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 1.305906,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 63624,
+          "type": "Browser",
+          "creationTime": 1792256921926.882,
+          "memory": {
+            "workingSetSize": 119924,
+            "peakWorkingSetSize": 120124,
+            "privateBytes": 51180
+          },
+          "integrityLevel": "high",
+          "sandboxed": false
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.549649,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 2820,
+          "type": "GPU",
+          "creationTime": 1792256922026.926,
+          "serviceName": "GPU",
+          "memory": {
+            "workingSetSize": 109228,
+            "peakWorkingSetSize": 109696,
+            "privateBytes": 93460
+          },
+          "integrityLevel": "low",
+          "sandboxed": true
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.100586,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 66524,
+          "type": "Utility",
+          "creationTime": 1792256922030.588,
+          "serviceName": "network.mojom.NetworkService",
+          "name": "Network Service",
+          "memory": {
+            "workingSetSize": 50096,
+            "peakWorkingSetSize": 50100,
+            "privateBytes": 12832
+          },
+          "integrityLevel": "high",
+          "sandboxed": false
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.038397,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 69268,
+          "type": "Tab",
+          "creationTime": 1792256922371.391,
+          "memory": {
+            "workingSetSize": 72324,
+            "peakWorkingSetSize": 72332,
+            "privateBytes": 24432
+          },
+          "integrityLevel": "untrusted",
+          "sandboxed": true
+        },
+        {
+          "cpu": {
+            "cumulativeCPUUsage": 0.052073,
+            "percentCPUUsage": 0,
+            "idleWakeupsPerSecond": 0
+          },
+          "pid": 9160,
+          "type": "Tab",
+          "creationTime": 1792256924361.403,
+          "memory": {
+            "workingSetSize": 95316,
+            "peakWorkingSetSize": 95316,
+            "privateBytes": 26308
+          },
+          "integrityLevel": "untrusted",
+          "sandboxed": true
+        }
+      ],
+      "childMemory": [
+        {
+          "Id": 2820,
+          "ProcessName": "electron",
+          "WorkingSet64": 111849472,
+          "PrivateMemorySize64": 95703040
+        },
+        {
+          "Id": 66524,
+          "ProcessName": "electron",
+          "WorkingSet64": 51298304,
+          "PrivateMemorySize64": 13139968
+        },
+        {
+          "Id": 69268,
+          "ProcessName": "electron",
+          "WorkingSet64": 74059776,
+          "PrivateMemorySize64": 25018368
+        },
+        {
+          "Id": 9160,
+          "ProcessName": "electron",
+          "WorkingSet64": 97628160,
+          "PrivateMemorySize64": 26943488
+        },
+        {
+          "Id": 23332,
+          "ProcessName": "agent-browser",
+          "WorkingSet64": 14323712,
+          "PrivateMemorySize64": 4718592
+        },
+        {
+          "Id": 63616,
+          "ProcessName": "powershell",
+          "WorkingSet64": 101834752,
+          "PrivateMemorySize64": 85327872
+        }
+      ],
+      "fixture": {
+        "url": "http://127.0.0.1:52089/",
+        "outer": [
+          1100,
+          760
+        ],
+        "theme": "light",
+        "sampleMeaning": {
+          "cold": "new chat driver and renderer through navigation",
+          "warm": "inspect existing loaded fixture"
+        }
+      },
+      "download": {
+        "prevented": true,
+        "filename": "blocked.txt"
+      },
+      "security": {
+        "uiDebuggerAttached": false,
+        "remoteDebuggingSwitch": false,
+        "devToolsActivePortFile": false,
+        "rawTransportPages": 0,
+        "browserCdpSessionRefused": true
+      },
+      "stage": "raw connected",
+      "hidden": {
+        "visible": false,
+        "focused": false,
+        "activations": 0
+      },
+      "windowsAfterClose": 0,
+      "foreground": {
+        "unchanged": true
+      },
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Two alternating batches each, not randomized per-sample.",
+    "Warm latency sub-millisecond differences can be scheduler noise.",
+    "One warm memory snapshot per batch; exclude the measurement PowerShell itself; working set is not unique committed memory.",
+    "Identical common fixture bundle includes baseline helper for both; production native excludes Playwright.",
+    "Screenshot and fixture captured but parent pixel inspection pending."
+  ]
+}
