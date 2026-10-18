@@ -24,6 +24,8 @@
     "dist/index.d.ts",
     "dist/run.js",
     "dist/run.d.ts",
+    "dist/engine.js",
+    "dist/backend.js",
     "README.md",
     "LICENSE"
   ],
@@ -39,6 +41,14 @@
     "./run": {
       "types": "./dist/run.d.ts",
       "import": "./dist/run.js"
+    },
+    "./engine": {
+      "types": "./dist/engine.d.ts",
+      "import": "./dist/engine.js"
+    },
+    "./backend": {
+      "types": "./dist/backend.d.ts",
+      "import": "./dist/backend.js"
     }
   },
   "scripts": {
@@ -51,7 +61,9 @@
     "prepublishOnly": "npm run build:publish"
   },
   "dependencies": {
-    "@lydell/node-pty": "^1.2.0-beta.15"
+    "@fastify/websocket": "^11.3.3",
+    "@lydell/node-pty": "^1.2.0-beta.15",
+    "fastify": "^5.12.5"
   },
   "devDependencies": {
     "esbuild": "^0.28.2"

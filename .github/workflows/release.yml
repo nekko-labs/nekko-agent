@@ -303,7 +303,8 @@ jobs:
 
   publish-cli:
     name: Publish CLI package
-    needs: release
+    # After publish-web: it publishes the @nekko-agent/nekkod-* packages this one pins.
+    needs: [release, publish-web]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -341,6 +342,11 @@ jobs:
           npm ci
           npm run build:core
           npm run build -w @nekko-agent/host
+          # The CLI's local mode runs nekkod: npm installs the one for this machine
+          # (apps/cli/src/engine.ts finds it), at the same version.
+          for key in win32-x64 linux-x64 linux-arm64 darwin-arm64; do
+            npm pkg set "optionalDependencies.@nekko-agent/nekkod-$key=$version" --workspace=apps/cli
+          done
           publish_args=(npm publish --workspace=apps/cli --access public)
           if [ -n "${NPM_TOKEN:-}" ]; then
             publish_args+=(--provenance)

@@ -204,6 +204,32 @@ impl RemoteService {
         Ok(self.status_of(self.handle(), &cfg))
     }
 
+    /// `attach({ relayUrl, room, secret })`: join a room someone else chose
+    /// (relay-agent mode, `NEKKO_RELAY_URL` + `NEKKO_ROOM` + `NEKKO_PAIR_KEY`),
+    /// keeping the devices already paired. Internal: not an IPC channel the
+    /// UI has, and a phone may not call any `remote:` channel.
+    pub fn attach(&self, opts: &Value) -> Result<Value, String> {
+        let relay_url = opts.get("relayUrl").cloned().unwrap_or(Value::Null);
+        if let Some(problem) = crate::route::relay_url_problem(relay_url.as_str().unwrap_or("")) {
+            return Err(problem);
+        }
+        let text = |k: &str| opts.get(k).and_then(Value::as_str).filter(|s| !s.is_empty()).map(|s| json!(s));
+        let (Some(room), Some(secret)) = (text("room"), text("secret")) else {
+            return Err("remote:attach needs a room and a secret".into());
+        };
+        let _io = lock(&self.io);
+        let cfg = self
+            .load()
+            .with("enabled", Some(json!(true)))
+            .with("relayUrl", Some(relay_url))
+            .with("room", Some(room))
+            .with("secret", Some(secret));
+        self.save(&cfg)?;
+        self.connect(&mut lock(&self.state), &cfg);
+        drop(_io);
+        Ok(self.status_of(self.handle(), &cfg))
+    }
+
     pub fn disable(&self) -> Result<Value, String> {
         let _io = lock(&self.io);
         let mut st = lock(&self.state);
@@ -333,6 +359,7 @@ impl RemoteService {
         let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
         match channel {
             "remote:enable" => self.enable(arg(0)),
+            "remote:attach" => self.attach(arg(0)),
             "remote:disable" => self.disable(),
             "remote:status" => Ok(self.status()),
             "remote:pairing" => Ok(self.pairing()),
@@ -349,6 +376,7 @@ impl RemoteService {
 /// The channels `route` serves.
 pub const CHANNELS: &[&str] = &[
     "remote:enable",
+    "remote:attach",
     "remote:disable",
     "remote:status",
     "remote:pairing",

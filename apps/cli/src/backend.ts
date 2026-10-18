@@ -1,11 +1,22 @@
+import { timingSafeEqual } from 'node:crypto';
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
-import { createDispatcher, createHost, flushAgentLogs, useEngineDaemon, useTerminalDaemon } from '@nekko-agent/host';
-import { tokenMatches } from './security.js';
-import { overrideFor, subscribeHostEvents, webChannelOverrides } from './web-channels.js';
+import {
+  createDispatcher,
+  createHost,
+  flushAgentLogs,
+  settingsSaved,
+  isDaemonCopy,
+  listAgentTerminals,
+  useEngineDaemon,
+  useTerminalDaemon,
+  type Host,
+} from '@nekko-agent/host';
+import { IpcEvents } from '@nekko-agent/shared';
 
 /**
- * The web edition's TS host backend, run by nekkod (`--nekko-backend`).
+ * The TS host backend nekkod runs (`--nekko-backend`), outside the desktop app:
+ * the web edition's and the CLI's local engine's.
  *
  * The same contract as the desktop backend (`apps/desktop/src/backend/index.ts`):
  * a loopback wire with `POST /api/:channel` and `/api/events`, guarded by the
@@ -14,7 +25,52 @@ import { overrideFor, subscribeHostEvents, webChannelOverrides } from './web-cha
  * signal. The ptys and model-server processes are nekkod's, reached through
  * `NEKKOD_URL`.
  */
-export async function runBackend(dataDir: string): Promise<void> {
+
+export type ChannelHandler = (args: unknown[]) => unknown;
+/** A Map, so a channel named `constructor` or `__proto__` can never reach Object.prototype. */
+export type ChannelOverrides = Map<string, ChannelHandler>;
+
+/** What every backend answers beside the shared dispatcher. */
+export function baseOverrides(): ChannelOverrides {
+  // nekkod merges the terminals it owns with the ones it does not (the agent command logs).
+  return new Map<string, ChannelHandler>([['terminals:list:agent', () => listAgentTerminals()]]);
+}
+
+/** Every host event, keyed by the host's event name, with the channel clients know it by. */
+export const HOST_EVENTS = Object.entries(IpcEvents) as [string, string][];
+
+/**
+ * Subscribe `send` to every host event (or `only` that channel); returns the
+ * unsubscribe. `forDaemon` leaves out what the daemon already has (`isDaemonCopy`).
+ */
+export function subscribeHostEvents(host: Host, send: (frame: string) => void, only?: string | null, forDaemon = false): () => void {
+  const offs = HOST_EVENTS.filter(([, channel]) => !only || channel === only).map(([name, channel]) => {
+    const listener = (payload: unknown) => {
+      if (forDaemon && isDaemonCopy(name, payload)) return;
+      send(JSON.stringify({ channel, payload }));
+    };
+    host.events.on(name, listener);
+    return () => host.events.off(name, listener);
+  });
+  return () => offs.forEach((off) => off());
+}
+
+function tokenMatches(expected: string, supplied?: string): boolean {
+  if (!supplied || supplied.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+}
+
+export interface BackendOptions {
+  /** Channels this edition answers differently (on top of `baseOverrides`). */
+  overrides?: (host: Host) => ChannelOverrides;
+  /**
+   * Bring the local model server up at start when the settings say so. A
+   * one-shot CLI command must not (`NEKKO_BACKEND_AUTOSTART=0`).
+   */
+  autoStartEngine?: boolean;
+}
+
+export async function runBackend(dataDir: string, opts: BackendOptions = {}): Promise<void> {
   const token = process.env.NEKKO_BACKEND_TOKEN;
   if (!token) throw new Error('NEKKO_BACKEND_TOKEN is not set; the backend is started by nekkod, not by hand');
   delete process.env.NEKKO_BACKEND_TOKEN;
@@ -26,11 +82,13 @@ export async function runBackend(dataDir: string): Promise<void> {
     useEngineDaemon({ url: daemonUrl, token: daemonToken });
   }
 
-  const host = createHost({ dataDir });
+  const autoStartEngine = opts.autoStartEngine ?? process.env.NEKKO_BACKEND_AUTOSTART !== '0';
+  const host = createHost({ dataDir, autoStartEngine });
   const dispatch = createDispatcher(host);
-  const overrides = webChannelOverrides(host);
+  const overrides = baseOverrides();
+  for (const [channel, fn] of opts.overrides?.(host) ?? []) overrides.set(channel, fn);
   const run = (channel: string, args: unknown[]) => {
-    const own = overrideFor(overrides, channel);
+    const own = overrides.get(channel);
     return typeof own === 'function' ? own(args) : dispatch(channel, args);
   };
 
@@ -70,6 +128,8 @@ export async function runBackend(dataDir: string): Promise<void> {
     } catch {
       /* closing anyway */
     }
+    // Settings changes still on their way to nekkod (it keeps serving until we exit).
+    await Promise.race([settingsSaved(), new Promise((r) => setTimeout(r, 3000))]);
     try {
       await flushAgentLogs();
     } catch (error) {

@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { createHost, defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/host';
+import { dirname, join } from 'node:path';
+import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/host';
+import { startNekkod, type DaemonProcess } from './engine.js';
 import { brandEnv, CLI_LINK_FILE, isCliLink, IpcChannels, IpcEvents, unsupportedPlatformReason, type CliLink } from '@nekko-agent/shared';
 import type {
   AppSettings,
@@ -98,9 +99,11 @@ function appAlive(pid: number | undefined): boolean {
  * either an in-process host (local data dir) or a running server over HTTP+WS.
  */
 export interface Client {
-  /** In-process host on the data dir (true), or a running server over HTTP (false). */
+  /** A private engine on the data dir this process started (true), or a running server (false). */
   readonly isLocal?: boolean;
   ready(): Promise<void>;
+  /** Let go of the connection, and stop the engine if this process started it. */
+  close?(): Promise<void>;
   getSettings(): Promise<AppSettings>;
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
   listProviders(): Promise<ProviderConfig[]>;
@@ -159,71 +162,68 @@ export interface Client {
 }
 
 /**
- * In-process client backed by createHost on the data dir. `longLived` is the
- * MCP server, which may bring the engine up as the app would; a one-shot
- * command must not, or its listening socket keeps the process from exiting.
+ * The local engine: a private nekkod on the data dir, with this same script as
+ * its TS backend (`--nekko-backend`), driven over the same HTTP wire as a
+ * running app (`httpClient`). Started on first use and stopped by `close()`
+ * (or when this process exits: nekkod reads our end of its stdin closing as
+ * its shutdown signal). `longLived` is the MCP server, which may bring the
+ * model server up as the app would; a one-shot command must not.
  */
-function localClient(longLived = false): Client {
-  // A remote client (--url) still works from an Intel Mac; a local engine does not.
+function engineClient(longLived = false): Client {
+  // A remote client (--url) still works on an unsupported platform; a local engine does not.
   const unsupported = unsupportedPlatformReason(process.platform, process.arch);
   if (unsupported) throw new Error(unsupported);
-  const host = createHost({ dataDir: prepareUserDataRoot(), autoStartEngine: longLived });
-  return {
+  const dir = prepareUserDataRoot();
+  const script = process.argv[1];
+  let started: Promise<{ daemon: DaemonProcess; client: Client }> | null = null;
+  const start = () =>
+    (started ??= startNekkod({
+      here: dirname(script),
+      script,
+      dataDir: dir,
+      backendEnv: longLived ? {} : { NEKKO_BACKEND_AUTOSTART: '0' },
+      signIn: true,
+      // A one-shot command fails rather than waiting on a restart loop; the MCP server keeps its engine.
+      restart: longLived,
+      log: (line) => console.error(line),
+    }).then(async ({ daemon }) => {
+      const { port, token } = await daemon.endpoint();
+      return { daemon, client: httpClient(`http://127.0.0.1:${port}`, token) };
+    }));
+  const unsubscribers = new Set<() => void>();
+  const target: Partial<Client> = {
     isLocal: true,
-    ready: async () => {},
-    getSettings: async () => host.getSettings(),
-    updateSettings: async (patch) => host.updateSettings(patch),
-    listProviders: async () => host.listProviders(),
-    listModels: async (id) => host.listModels(id),
-    listSessions: async () => host.listSessions(),
-    createSession: async (w) => host.createSession(w),
-    getSession: async (id) => host.getSession(id),
-    listWorkspaces: async () => host.listWorkspaces(),
-    addWorkspaceByPath: async (path) => host.addWorkspaceByPath(path),
-    removeWorkspace: async (id) => host.removeWorkspace(id),
-    indexWorkspace: async (id) => host.indexWorkspace(id),
-    searchWorkspace: async (id, query) => host.searchWorkspace(id, query),
-    listTasks: async () => host.listTasks(),
-    createTask: async (task) => host.createTask(task),
-    runTaskNow: async (id) => host.runTaskNow(id),
-    deleteTask: async (id) => host.deleteTask(id),
-    listInstalledSkills: async () => host.listInstalledSkills(),
-    installSkill: async (id, target, payload) => host.installSkill(id, target, payload),
-    vaizerCatalog: async (refresh) => host.vaizerCatalog(refresh),
-    vaizerSkillMd: async (slug) => host.vaizerSkillMd(slug),
-    listTools: async () => host.listTools(),
-    usageSummary: async () => host.usageSummary(),
-    remoteStatus: async () => host.remoteStatus(),
-    sendChat: (o) => host.sendChat(o),
-    abortChat: async (id) => host.abortChat(id),
-    approveTool: async (s, c, a) => host.approveTool(s, c, a),
+    ready: () => start().then(({ client }) => client.ready()),
     onAgentEvent: (cb) => {
-      host.events.on('agentEvent', cb);
-      return () => host.events.off('agentEvent', cb);
+      let off: (() => void) | null = null;
+      let cancelled = false;
+      void start().then(({ client }) => {
+        if (!cancelled) off = client.onAgentEvent(cb);
+      });
+      const unsubscribe = () => {
+        cancelled = true;
+        off?.();
+        unsubscribers.delete(unsubscribe);
+      };
+      unsubscribers.add(unsubscribe);
+      return unsubscribe;
     },
-    setSessionOptions: async (i, p) => void host.setSessionOptions(i, p),
-    listTrainingRuns: async () => host.listTrainingRuns(),
-    createTrainingRun: async (input) => host.createTrainingRun(input),
-    startTrainingRun: async (id) => host.startTrainingRun(id),
-    stopTrainingRun: async (id) => host.stopTrainingRun(id),
-    addTrainingHint: async (id, text) => host.addTrainingHint(id, text),
-    listWorkflows: async () => host.listWorkflows(),
-    runWorkflow: (id) => host.runWorkflow(id),
-    dispatchWorkflowEvent: (event) => host.dispatchWorkflowEvent(event),
-    engineStatus: () => host.engineStatus(),
-    engineModels: () => host.engineModels(),
-    engineCatalog: (query) => host.engineCatalog(query),
-    engineCatalogModel: (id) => host.engineCatalogModel(id),
-    engineDownloadModel: (id, quant) => host.engineDownloadModel(id, quant),
-    engineDownloads: () => host.engineDownloads(),
-    engineCancelDownload: (id) => host.engineCancelDownload(id),
-    engineDeleteModel: (id) => host.engineDeleteModel(id),
-    runtimeStatus: (id) => host.runtimeStatus(id),
-    runtimeStart: (id) => host.runtimeStart(id),
-    runtimeStop: (id, force) => host.runtimeStop(id, force),
-    runtimeLoad: (id, model, params) => host.runtimeLoad(id, model, params),
-    unloadModel: (id, model) => host.unloadModel(id, model),
+    close: async () => {
+      for (const off of [...unsubscribers]) off();
+      if (!started) return;
+      const { daemon, client } = await started.catch(() => ({ daemon: null, client: null }));
+      await client?.close?.();
+      await daemon?.stop();
+    },
   };
+  return new Proxy(target as Client, {
+    get(t, name: string | symbol) {
+      if (name in t) return (t as unknown as Record<string | symbol, unknown>)[name];
+      if (typeof name !== 'string' || name === 'then') return undefined;
+      return (...args: unknown[]) =>
+        start().then(({ client }) => (client as unknown as Record<string, (...a: unknown[]) => unknown>)[name](...args));
+    },
+  });
 }
 
 /** Remote client over a running server's HTTP (`POST /api/:channel`) + WS events. */
@@ -232,8 +232,19 @@ function httpClient(url: string, token?: string): Client {
   const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   const call = async (channel: string, ...args: unknown[]) => {
     const res = await fetch(`${base}/api/${channel}`, { method: 'POST', headers, body: JSON.stringify({ args }) });
-    if (!res.ok) throw new Error(`${channel}: HTTP ${res.status}`);
     const t = await res.text();
+    if (!res.ok) {
+      let error: unknown;
+      try {
+        error = (JSON.parse(t) as { error?: unknown })?.error;
+      } catch {
+        /* not JSON */
+      }
+      // The engine's own message is what the user needs (an in-process host threw it as is);
+      // the status stays for the ones that mean "cannot reach" (exitCodeForError).
+      if (typeof error === 'string' && error && ![401, 403, 404].includes(res.status)) throw new Error(error);
+      throw new Error(`${channel}: HTTP ${res.status}${typeof error === 'string' && error ? ` (${error})` : ''}`);
+    }
     return t ? JSON.parse(t) : null;
   };
 
@@ -261,6 +272,11 @@ function httpClient(url: string, token?: string): Client {
 
   return {
     ready: () => connect(),
+    close: async () => {
+      ws?.close();
+      ws = null;
+      openP = null;
+    },
     getSettings: () => call('settings:get'),
     updateSettings: (patch) => call('settings:update', patch),
     listProviders: () => call('providers:list'),
@@ -319,11 +335,11 @@ function httpClient(url: string, token?: string): Client {
 
 /**
  * Build a client: `--url`, else NEKKO_URL, else the running app's link file,
- * else an in-process host on the local data directory.
+ * else a private engine (nekkod) on the local data directory.
  */
 export function getClient(opts: { url?: string; token?: string; longLived?: boolean } = {}): Client {
   const target = resolveTarget(opts);
-  return target.url ? httpClient(target.url, target.token) : localClient(opts.longLived);
+  return target.url ? httpClient(target.url, target.token) : engineClient(opts.longLived);
 }
 
 /** Resolve provider + model from flags, the session, then saved defaults. */

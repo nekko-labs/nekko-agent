@@ -13,10 +13,10 @@ import { createApiSecurityHook, type RequestSecurityOptions } from './request-se
 import { registerWebhookRoutes, type WebhookTarget } from './webhooks.js';
 import { reviewRepository } from '@nekko-agent/host';
 import { githubReviewConfig, registerGitHubReviewRoutes, ReviewReplayLedger } from './github-review.js';
-import { runBackend } from './backend.js';
-import { backendCommand, DaemonProcess, findNekkod, type FoundDaemon } from './nekkod.js';
+import { runBackend } from 'nekko-agent/backend';
+import { BACKEND_FLAG, startNekkod } from 'nekko-agent/engine';
 import { forwardCall, isSocketRoute, proxyUpgrade, refuse, upgradeAllowed, upstreamPath } from './proxy.js';
-import { WEBHOOK_DISPATCH, type WebhookDispatchResult } from './web-channels.js';
+import { WEBHOOK_DISPATCH, webChannelOverrides, type WebhookDispatchResult } from './web-channels.js';
 
 /** Subcommands handled by the embedded CLI (so `npx nekko-agent mcp|chat|…` works). */
 const CLI_SUBCOMMANDS = new Set([
@@ -24,8 +24,6 @@ const CLI_SUBCOMMANDS = new Set([
   'skills', 'tools', 'models', 'train', 'help', 'version',
 ]);
 
-/** Argument nekkod starts this script with to run it as the TS host backend. */
-const BACKEND_FLAG = '--nekko-backend';
 /** Answered by this server itself: what the page may expect of the transport. */
 const CAPABILITIES_CHANNEL = 'web:capabilities';
 
@@ -57,32 +55,6 @@ function findRendererDir(): string {
 }
 const RENDERER_DIR = findRendererDir();
 
-/** Start nekkod (the engine daemon) and wait for it. There is no engine without it. */
-async function startDaemon(): Promise<{ daemon: DaemonProcess; found: FoundDaemon }> {
-  const found = findNekkod({ here: __dirname });
-  if (!found) {
-    const override = process.env.NEKKOD_PATH;
-    const message = override
-      ? `nekkod (the engine daemon) was not found: NEKKOD_PATH points at ${override}, which does not exist.`
-      : 'nekkod (the engine daemon) was not found: no NEKKOD_PATH, no @nekko-agent/nekkod-' +
-        `${process.platform}-${process.arch} package, no bin/ beside this script and no cargo build.`;
-    throw new Error(message);
-  }
-  const daemon = new DaemonProcess({
-    exe: found.path,
-    dataDir: DATA_DIR,
-    backend: backendCommand(SCRIPT, { NEKKO_DATA_DIR: DATA_DIR }),
-  });
-  daemon.start();
-  try {
-    await daemon.endpoint(20_000);
-    return { daemon, found };
-  } catch (e) {
-    await daemon.stop();
-    throw new Error(`nekkod at ${found.path} did not start: ${(e as Error).message}`);
-  }
-}
-
 async function main() {
   // Subcommand → embedded CLI (e.g. `npx nekko-agent mcp`, `nekko-agent status`).
   const sub = process.argv[2];
@@ -92,7 +64,7 @@ async function main() {
   }
   // Started by nekkod as its TS host backend.
   if (process.argv.includes(BACKEND_FLAG)) {
-    await runBackend(DATA_DIR);
+    await runBackend(DATA_DIR, { overrides: webChannelOverrides });
     return;
   }
 
@@ -111,6 +83,8 @@ async function main() {
       room: relayRoom,
       key: env('PAIR_KEY') || randomUUID().slice(0, 8),
       dataDir: DATA_DIR,
+      here: __dirname,
+      script: SCRIPT,
     });
     return;
   }
@@ -144,7 +118,7 @@ async function main() {
     }
   }
 
-  const engine = await startDaemon();
+  const engine = await startNekkod({ here: __dirname, script: SCRIPT, dataDir: DATA_DIR });
   const daemon = engine.daemon;
   const security: RequestSecurityOptions = {
     host: HOST,
