@@ -33,6 +33,7 @@ const DEDICATED: &[&str] = &[
     "tab_switch",
     "tab_close",
     "logs",
+    "snapshot",
 ];
 const WAIT_STATES: &[&str] = &["visible", "attached", "hidden", "detached"];
 const SCROLL_DIRECTIONS: &[&str] = &["up", "down", "left", "right"];
@@ -68,6 +69,11 @@ fn finite_in(v: Option<&Value>, lo: f64, hi: f64) -> bool {
 
 fn one_of(v: Option<&Value>, set: &[&str]) -> bool {
     v.and_then(Value::as_str).is_some_and(|s| set.contains(&s))
+}
+
+/// A snapshot element ref (`@e12`), the shared `/^@e\d+$/`.
+fn is_element_ref(s: &str) -> bool {
+    s.strip_prefix("@e").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// `validateBrowserInput(input)`: the action, or why the input cannot run.
@@ -137,6 +143,13 @@ pub fn validate_browser_input(input: &Value) -> Result<String, String> {
     }
     if input.get("visible").is_some() && !input.get("visible").is_some_and(Value::is_boolean) {
         return Err("visible must be a boolean.".into());
+    }
+    let is_ref = selector.is_some_and(is_element_ref);
+    if a == "snapshot" && is_ref {
+        return Err("A snapshot scope is a CSS selector, not a ref.".into());
+    }
+    if a == "scroll" && is_ref {
+        return Err("scroll takes a CSS selector; click, fill and type on a ref already scroll it into view.".into());
     }
     Ok(action)
 }
@@ -676,6 +689,18 @@ mod tests {
         bad(json!({ "mode": "existing", "action": "screenshot" }), "needs dedicated mode");
         bad(json!({ "mode": "existing", "action": "inspect", "port": 70000 }), "CDP port");
         bad(json!({ "mode": "existing", "action": "inspect", "visible": true }), "visible is a boolean");
+        bad(json!({ "mode": "existing", "action": "snapshot" }), "needs dedicated mode");
+        bad(json!({ "mode": "dedicated", "action": "snapshot", "selector": "@e2" }), "not a ref");
+        bad(json!({ "mode": "dedicated", "action": "scroll", "selector": "@e12" }), "scroll takes a CSS selector");
+        for ok in [
+            json!({ "mode": "dedicated", "action": "snapshot" }),
+            json!({ "mode": "dedicated", "action": "snapshot", "selector": "form" }),
+            json!({ "mode": "dedicated", "action": "click", "selector": "@e3" }),
+            json!({ "mode": "dedicated", "action": "scroll", "selector": "@e" }),
+        ] {
+            assert!(browser_preflight(&ok).is_ok(), "{ok}");
+        }
+        assert!(is_element_ref("@e10") && !is_element_ref("@e") && !is_element_ref("e1") && !is_element_ref("@e1x"));
         assert_eq!(
             browser_preflight(&json!({ "mode": "existing", "action": "inspect" })).unwrap(),
             ("existing".into(), "inspect".into(), Some(9222))

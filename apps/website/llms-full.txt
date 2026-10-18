@@ -560,7 +560,9 @@ In Agent Monitor, each active plan step has a static **Working** glyph and toolt
 
 The desktop `browser` tool opens hidden, sandboxed Electron Chromium windows owned by the current chat, never your personal browser. Each chat has a separate in-memory session and up to eight tabs. Every browser action goes through Nekko's existing approval policy. Explicit visibility shows the owned window without activating it.
 
-Navigate HTTP(S), inspect, click/fill the first match, type, press keys/chords, wait for content, scroll, extract text/links, evaluate page JavaScript, screenshot, manage tabs and read logs. Approved screenshots go to the selected model. Evaluation runs in the page, not the app; pages can see text you enter.
+Navigate HTTP(S), inspect, click/fill the first match, type, press keys/chords, wait for content, scroll, extract text/links, evaluate page JavaScript, screenshot, manage tabs, read logs and take a snapshot.
+
+A **snapshot** lists what the agent can act on: the page's links, buttons, fields and other interactive elements, one per line, each with a short ref such as `@e3`. The agent can then click `@e3` or fill `@e5` instead of guessing a CSS selector or writing a script to find the field. Pass a CSS selector to snapshot only part of the page. Refs belong to the page as it was; after the page changes, the agent takes a new snapshot. Approved screenshots go to the selected model. Evaluation runs in the page, not the app; pages can see text you enter.
 
 Popups, downloads, JavaScript dialogs and device permissions are blocked. Local file navigation/uploads are blocked. Idle hidden sessions close after ten minutes. Requires a local desktop chat, not web/server/CLI or sandboxed execution.
 
@@ -572,12 +574,17 @@ The unmodified upstream Windows command daemon is unsafe for this boundary: it a
 
 Build the exact patch with `node scripts/build-agent-browser.mjs` (Rust toolchain and native linker required). Dist/release call this builder and package the native binary, license and pin outside asar. Source/dependency pinning is verified, not bit-identical output across toolchains. Windows x64 has been tested; installer/signing and macOS/Linux/arm64 remain unverified.
 
+## Speed (2026-10-18)
+
+A hidden window that has gone idle renders only about one frame a second, so clicks used to wait about a second and screenshots about two. The browser now keeps the hidden window's frames coming for just the duration of a click or screenshot; the window stays hidden. On a sample signup task (open the page, find the form, fill it, submit, check the result, take a screenshot) a new chat's browser finished in about half a second instead of about three and a third, on Windows. Opening the browser itself takes about 60 ms. A chat that keeps its browser open skips that and reuses the page cache. See [performance history](https://github.com/nekko-labs/nekko-agent/blob/main/docs/perf-history.md) and the [benchmark report](https://github.com/nekko-labs/nekko-agent/blob/main/reports/agent-browser/flow-benchmark.md).
+
 ## Checks and evidence
 
 - `node --test scripts/agent-browser-native.test.mjs`: native framing/auth/argv/no-listener security.
 - `node scripts/agent-browser-native-smoke.mjs [outDir]`: isolated hidden Electron native action/security fixture plus 20 cold-chat and 20 warm-inspect samples. Set `NEKKO_SMOKE_ELECTRON` to a matching owned Electron executable when needed.
 - `apps/desktop/src/main/agentNativeRelay.test.ts`: wrong/missing auth, Origin, second-client and owned-target negative checks.
 - `apps/desktop/src/main/agentCdpTransport.test.ts`, `agentBrowserActions.test.ts`, `agentBrowser.test.ts`: transport/page/bridge behavior.
+- `node scripts/agent-browser-flow-benchmark.mjs [out.json] [--rounds 20] [--launches 12] [--drivers native,native-nowake,playwright]`: whole-task benchmark (navigate, locate, fill, submit, verify, screenshot) through the real bridge in hidden Electron, with first-in-process, fresh-chat and warm-session scenarios, tool calls, retries, reply bytes and startup phase timings. A `-nowake` driver runs without the hidden-frame wake.
 - `scripts/agent-browser-benchmark.mjs`: explicit Playwright baseline-only helper; not the production default.
 - `scripts/perf/lib/browser.mjs`: existing separate renderer-performance helper, not yet migrated by this task.
 
@@ -640,6 +647,15 @@ type, then says what it chose and what it costs. *Advanced* is every llama.cpp f
 context, GPU layers, KV cache type, parallel slots, flash attention, batch and physical
 batch, threads, mmap and mlock, RoPE base and scale, seed, idle TTL. They are the same
 state, so moving one moves the other, and either can be saved as that model's default.
+
+**Seeing what is loaded from anywhere.** The Agents view's **Panels** dock has a **Local
+models** monitor, under Hardware: each model the engine holds in memory, whether it runs on
+the GPU, split across GPU and CPU (with the layer count, in amber), or on the CPU, plus its
+context and footprint. **Settings** on a row opens Nekko Server with that model's drawer
+unfolded on *Advanced*, where **Runs on** (GPU only, Hybrid, CPU only) lives. The chat's
+right panel has the same jump as **All settings** inside each model under Model settings.
+Switch the monitor off in the dock's **Configure** menu. Changing a setting reloads the
+model, which interrupts a reply it is generating.
 
 **The Server tab** carries port, whether it is reachable from your network or only this
 computer, an API key, allowed browser origins, how many models may be resident, the idle
@@ -1479,6 +1495,90 @@ nekko-agent train stop RUN_ID --json
 
 ---
 
+<!-- https://nekkoagent.com/docs/automations -->
+
+# Automations
+
+An automation is a workflow that runs on its own: on a schedule, when something happens in a
+connected app, or when you start it. They live in the **Workflows** tab. This page covers the
+ready-made ones, how you hear about their runs, and how to stop them all at once. For building
+your own step by step, see the Workflows tab's **How workflows work** strip; for running a repo's
+CI on your machine, see [Local CI runner](https://nekkoagent.com/docs/local-ci-runner).
+
+## Turn on a ready-made automation
+
+**Workflows → New workflow** opens on a gallery. An empty Workflows tab shows the same cards.
+
+| Automation | When it runs | What it needs |
+|---|---|---|
+| Summarize my GitHub notifications every morning | Weekdays at a time you pick | GitHub connected, the `gh` CLI signed in, a default model |
+| Review every PR I open | Each pull request you open in a repo you pick (checked every 2 minutes) | GitHub connected, the `gh` CLI signed in, a default model |
+| Nightly dependency check | Every night at a time you pick | A project folder, a default model |
+
+Each card marks what you already have. Click one to open its setup sheet:
+
+1. **What it needs.** Anything missing has a button: **Connect** opens Connectors, **Choose a
+   model** opens Models. A template that runs in a project asks which folder.
+2. **Its questions.** A time of day, or a repository (`owner/name`) and your GitHub username.
+   Only PRs you open start a review: the trigger checks the event's author and its `opened`
+   action exactly, so other people's PRs, reopened PRs and closed ones never reach the agent.
+3. **Notify me.** Digests default to *After every run*; change it here or later in the editor.
+4. **Turn on.** The automation is created, enabled and armed. The toast says when it runs first.
+
+**Customize** opens the same automation in the workflow editor instead, where you can change its
+steps, triggers and model before saving.
+
+Every ready-made automation only reads: it summarizes or reviews, and never comments, posts,
+installs or changes anything. Results land in the run history (and a notification, if you asked
+for one).
+
+Digests read text other people wrote, such as notification titles or package advisories. So a
+fixed command fetches it first, and the agent that summarizes it has **no tools**: it can only
+write the summary, so nothing in that text can make it run a command. You can set **No tools** on
+any prompt or skill step in the editor. Keep such a step last, because later steps share its
+chat and see the same text.
+
+## How a run went
+
+Expand a workflow to see its runs. The selected run shows how long it took and when it started,
+then either:
+
+- **Failed at "step"**: the step that failed, its error, and a **Transcript** button for that
+  step's chat, or
+- **Result**: the last agent step's answer, which for a digest is the digest itself.
+
+The history on the right lists the last ten runs with their status, duration, what started
+them, and the step a failed run stopped at.
+
+## Notifications
+
+Each workflow's **Notify me** setting decides when a finished run tells you:
+
+- **When a run fails** (the default, also for workflows made before this setting existed),
+- **After every run**, for digests, or
+- **Never**.
+
+Clicking a notification opens the Workflows tab on that run. Notifications follow
+**Settings → Notifications → Desktop notifications**, and stay quiet while the Workflows tab is on
+screen. A run cut short because the app quit is reported as a failure the next time it starts.
+
+Phone notifications for failed runs are not available yet.
+
+## Pause all automations
+
+The **Pause all automations** switch in the Workflows header is the kill switch:
+
+- schedules, pull request and push events, Slack messages, connector polls and webhooks start no
+  runs, and scheduled tasks (from a chat's **⚡ Automate** menu) wait;
+- whatever is running when you switch it on is stopped;
+- the **Run** button, a task's **Run now** and `nekko-agent workflow run` still work.
+
+A schedule that came due while paused runs once when you resume. Events that arrived during the
+pause are skipped, not replayed. The setting is shared, so pausing from one window or the web
+edition pauses everywhere.
+
+---
+
 <!-- https://nekkoagent.com/docs/local-ci-runner -->
 
 # Local CI runner
@@ -1491,7 +1591,7 @@ on the PR when it fails. It saves hosted-runner minutes by burning your own hard
 ## What it is - and what it is not
 
 A "Local CI runner" is a **workflow template**, not a new subsystem. Create it from
-**Workflows → New workflow → Local CI runner** (it's also one of the cards on the empty state).
+**Workflows → New workflow → Local CI runner** (under *Build your own*).
 Behind the scenes it is ordinary workflow pieces you already have:
 
 - a **trigger** that fires on repo events (see [Getting events in](#getting-events-in)),

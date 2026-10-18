@@ -82,3 +82,40 @@ fn leaves_small_and_unreadable_images_unchanged() {
         assert_eq!(sources(&messages)[0], &json!({ "type": "base64", "media_type": media, "data": data }));
     }
 }
+
+#[test]
+fn never_sends_empty_text_blocks() {
+    // The saved shape that broke a chat for good: an image pasted with no
+    // words, then more user turns, after a reply. Every retry resent it.
+    let mut pasted = ChatMessage::new(Role::User, "");
+    pasted.images = Some(vec![picture(10, 10, image::ImageFormat::Png)]);
+    let req = ChatRequest {
+        messages: vec![
+            ChatMessage::new(Role::User, "hi"),
+            ChatMessage::new(Role::Assistant, "done"),
+            pasted,
+            ChatMessage::new(Role::User, "   "),
+            ChatMessage::new(Role::User, "[Agent watch] PR changed"),
+            ChatMessage::new(Role::Assistant, ""),
+        ],
+        ..Default::default()
+    };
+    let wire = to_anthropic_messages(&req);
+    let roles: Vec<&str> = wire.iter().map(|m| m["role"].as_str().unwrap()).collect();
+    assert_eq!(roles, ["user", "assistant", "user"]);
+    for m in &wire {
+        match &m["content"] {
+            Value::String(text) => assert!(!text.trim().is_empty()),
+            Value::Array(blocks) => {
+                assert!(!blocks.is_empty());
+                for b in blocks.iter().filter(|b| b["type"] == "text") {
+                    assert!(!b["text"].as_str().unwrap().trim().is_empty(), "empty text block in {m}");
+                }
+            }
+            other => panic!("unexpected content {other}"),
+        }
+    }
+    let last = wire[2]["content"].as_array().unwrap();
+    assert_eq!(last.iter().filter(|b| b["type"] == "image").count(), 1);
+    assert_eq!(last.last().unwrap()["text"], "[Agent watch] PR changed");
+}

@@ -1,6 +1,6 @@
 // First, so every module below sees the real packaging state in dev.
 import './devRuntime.js';
-import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, notificationWindowContext, trustedNotificationReporter } from '../notificationVisibility.js';
+import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, visibleNotificationView, notificationWindowContext, trustedNotificationReporter } from '../notificationVisibility.js';
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
@@ -31,6 +31,8 @@ let trayCompanion: ReturnType<typeof createTrayCompanion> | undefined;
 let stopNotifications: (() => void) | undefined;
 let nativeNotifications: ReturnType<typeof createNativeNotificationPoster> | undefined;
 const notificationSessions = new Map<number, string | null>();
+/** Each window's view on screen, so a workflow run notice stays quiet on the Workflows view. */
+const notificationViews = new Map<number, string | null>();
 
 function showWindow(): void {
   trayCompanion?.dismiss();
@@ -248,9 +250,10 @@ function createWindow(): void {
 
   applicationWindows.add(win.webContents.id);
   const windowId = win.webContents.id;
-  win.once('closed', () => { applicationWindows.delete(windowId); notificationSessions.delete(windowId); });
-  win.webContents.on('did-start-loading', () => notificationSessions.delete(windowId));
-  win.webContents.on('render-process-gone', () => notificationSessions.delete(windowId));
+  const forgetVisibility = () => { notificationSessions.delete(windowId); notificationViews.delete(windowId); };
+  win.once('closed', () => { applicationWindows.delete(windowId); forgetVisibility(); });
+  win.webContents.on('did-start-loading', forgetVisibility);
+  win.webContents.on('render-process-gone', forgetVisibility);
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
@@ -444,11 +447,13 @@ app.whenReady().then(async () => {
   stopNotifications = startMainNotifications(engine, nativeNotifications.post, undefined, () => {
     const focused = BrowserWindow.getFocusedWindow();
     const owned = focused && applicationWindows.has(focused.webContents.id) ? focused : null;
-    return notificationWindowContext(owned, owned ? notificationSessions.get(owned.webContents.id) ?? null : null);
+    const id = owned?.webContents.id;
+    return notificationWindowContext(owned, id != null ? notificationSessions.get(id) ?? null : null, id != null ? notificationViews.get(id) ?? null : null);
   });
   ipcMain.on(NOTIFICATION_VISIBILITY_CHANNEL, (event, report: unknown) => {
     if (!trustedNotificationReporter(applicationWindows.has(event.sender.id), event.senderFrame, event.sender.mainFrame)) return;
     notificationSessions.set(event.sender.id, visibleNotificationSession(report));
+    notificationViews.set(event.sender.id, visibleNotificationView(report));
   });
   registerIpc(engine);
   setWindowStateDir(dataDir);
