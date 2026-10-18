@@ -639,7 +639,8 @@ async fn admit(
     }
     // The host registers the turn for its callbacks; nothing here waits on it
     // (a queued turn's previous turn stays registered there until it lands).
-    {
+    // With no host, nothing adopts it.
+    if !ctx.backend.is_none() {
         let backend = ctx.backend.clone();
         let cancel = cancel.clone();
         let payload = json!([{

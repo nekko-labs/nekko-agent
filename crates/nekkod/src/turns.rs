@@ -731,10 +731,14 @@ impl Turns {
         // waits on it. Drained before `turn:end`.
         let (host_tx, host_rx) = mpsc::unbounded_channel::<HostMsg>();
         let wanted = host_events(&spec["facts"]);
-        let host_task = tokio::spawn(forward_to_host(host_rx, backend.clone(), shared.turn_id.clone(), wanted));
+        // With no host there is no copy to keep: the channel is just dropped.
+        let host_task = (!backend.is_none())
+            .then(|| tokio::spawn(forward_to_host(host_rx, backend.clone(), shared.turn_id.clone(), wanted)));
         let summary = self.run_turn(backend, &hub, store, spec, &shared, rx, &host_tx).await;
         drop(host_tx);
-        let _ = host_task.await;
+        if let Some(task) = host_task {
+            let _ = task.await;
+        }
         summary
     }
 
