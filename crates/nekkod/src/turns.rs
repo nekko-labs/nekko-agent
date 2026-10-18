@@ -44,7 +44,7 @@ use crate::backend::Backend;
 use crate::decide::DecideService;
 use crate::hub::Hub;
 use crate::mcp::Mcp;
-use nekko_agent::{ProviderConfig, create_provider};
+use nekko_agent::{ProviderConfig, ProviderKind, create_provider};
 use nekko_chat::ProviderClient;
 use nekko_js as js;
 use nekko_loop::{Cancel, RunOptions, Steering, ToolRunner, run_agent};
@@ -311,6 +311,8 @@ pub struct Turns {
     pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
     /// The chats' agent command logs (agent_logs.rs), with a data directory.
     pub agent_logs: Option<Arc<crate::agent_logs::AgentLogs>>,
+    /// Claude Agent chats' Claude Code children (harness.rs).
+    pub harness: Arc<crate::harness::Harness>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
     /// How each queued turn the daemon started as the next of a chain ends,
@@ -357,6 +359,7 @@ impl Turns {
             training: None,
             sandboxes: None,
             agent_logs: None,
+            harness: crate::harness::Harness::new(),
             running: Mutex::default(),
             pending: Pending::default(),
             chained: Mutex::default(),
@@ -779,13 +782,19 @@ impl Turns {
             return early("chat:turn is unsupported for sandbox sessions; use the host container router");
         }
         let incognito = js::truthy(loaded.get("incognito"));
+        // A Claude Agent chat: the user's Claude Code runs the turn and its
+        // own tools, so none of Nekko's tools or MCP servers are set up.
+        let claude_code = facts.pointer("/provider/kind").and_then(Value::as_str) == Some("claude-code");
+        if claude_code && sandbox {
+            return early("Claude Agent chats run Claude Code on this computer, so they cannot use a sandbox.");
+        }
 
         // MCP: a host that hands over the server list (`turn:mcp`) leaves the
         // sync and the calls to this daemon; an older one sends the tool specs.
         // A sandbox chat has none.
-        let own_mcp = facts.get("mcpServers").filter(|s| s.is_array() && !sandbox).cloned();
+        let own_mcp = facts.get("mcpServers").filter(|s| s.is_array() && !sandbox && !claude_code).cloned();
         let mcp_tools = match &own_mcp {
-            _ if sandbox => json!([]),
+            _ if sandbox || claude_code => json!([]),
             Some(configs) if !js::truthy(loaded.get("offline")) => {
                 let any = configs.as_array().is_some_and(|a| a.iter().any(|c| c.get("enabled") == Some(&json!(true))));
                 if any { self.mcp.sync(configs).await["specs"].clone() } else { self.mcp.snapshot()["specs"].clone() }
@@ -920,6 +929,15 @@ impl Turns {
             },
         ));
 
+        if config.kind == ProviderKind::ClaudeCode {
+            let mode = str_at(&lock(&session), "mode")
+                .map(str::to_string)
+                .or_else(|| shared.default_mode.clone())
+                .unwrap_or_else(|| "guardrails".into());
+            self.claude_code_turn(shared, &store, &session, incognito, &workspaces, opts, &mode).await;
+            return self.end_turn(&store, shared, &session, forwarder, incognito).await;
+        }
+
         let provider = create_provider(config);
         let headers_key = account.as_ref().and_then(|a| a.token_key.clone());
         let client = if facts.get("headers") == Some(&Value::Bool(true))
@@ -1028,6 +1046,131 @@ impl Turns {
         })
         .await;
         drop(runner);
+        self.end_turn(&store, shared, &session, forwarder, incognito).await
+    }
+
+    /// A Claude Agent turn: the chat's Claude Code child (started, reused or
+    /// resumed) runs it, and its stream becomes this turn's events and
+    /// transcript, checkpointed as a Nekko turn is. Stop and Steer reach it
+    /// through the turn's own cancel and steering (nekko_harness::run_turn).
+    #[allow(clippy::too_many_arguments)]
+    async fn claude_code_turn(
+        self: &Arc<Self>,
+        shared: &Arc<Shared>,
+        store: &Arc<SessionStore>,
+        session: &Arc<Mutex<Value>>,
+        incognito: bool,
+        workspaces: &[Value],
+        opts: &Value,
+        mode: &str,
+    ) {
+        use crate::harness::{INTERRUPT_GRACE, Wanted, permission_mode};
+        use nekko_harness::{Mapped, Mapper, SessionStart, TurnExit, TurnInput};
+
+        let session_id = shared.session_id.clone();
+        let mut history: Vec<Value> =
+            lock(session).get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
+        let events = shared.events.clone();
+        let send = |event: Value, history: &[Value]| {
+            let snapshot = is_checkpoint(&event).then(|| history.to_vec());
+            let _ = events.send(Out::Loop(event, snapshot));
+        };
+        let fail = |message: &str, history: &[Value]| {
+            send(json!({ "type": "error", "sessionId": session_id, "message": message }), history);
+        };
+        let Some(user) = history.iter().rev().find(|m| str_at(m, "role") == Some("user")).cloned() else {
+            return fail("There is no message to send.", &history);
+        };
+        let paths: Vec<PathBuf> =
+            workspaces.iter().filter_map(|w| str_at(w, "path")).filter(|p| !p.is_empty()).map(PathBuf::from).collect();
+        let Some((cwd, rest)) = paths.split_first() else {
+            return fail("A Claude Agent chat needs a workspace folder to run in.", &history);
+        };
+        let wanted = Wanted {
+            cwd: cwd.clone(),
+            add_dirs: rest.to_vec(),
+            model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
+            permission_mode: permission_mode(mode),
+        };
+
+        // One turn per chat at a time: the slot stays locked until the end.
+        let slot = self.harness.slot(&session_id);
+        let mut slot = slot.lock().await;
+        let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && wanted.matches(&s.spec));
+        if !reuse {
+            slot.session = None;
+            let bin = match nekko_harness::locate(None).await {
+                Ok(bin) => bin,
+                Err(e) => return fail(&e, &history),
+            };
+            let stored = str_at(&lock(session), "claudeCodeSessionId").map(str::to_string);
+            let spec = wanted.launch(bin, stored.as_deref());
+            if let SessionStart::New(id) = &spec.session {
+                // Saved before the launch, so a crash mid-turn still resumes.
+                if let Some(obj) = lock(session).as_object_mut() {
+                    obj.insert("claudeCodeSessionId".into(), json!(id));
+                }
+                persist(store, session, incognito).await;
+            }
+            match nekko_harness::Session::spawn(spec) {
+                Ok(child) => slot.session = Some(child),
+                Err(e) => return fail(&format!("Could not start Claude Code: {e}"), &history),
+            }
+        }
+        let Some(child) = slot.session.as_mut() else { return };
+        let resumed = matches!(child.spec.session, SessionStart::Resume(_));
+        let mut mapper = Mapper::new(session_id.clone());
+        let input = TurnInput {
+            content: nekko_harness::user_content(&user),
+            cancel: &shared.cancel,
+            steering: &shared.steering,
+            interrupt_grace: INTERRUPT_GRACE,
+            require_mcp: None,
+        };
+        let mut seen: Option<String> = None;
+        let exit = nekko_harness::run_turn(child, &mut mapper, input, &mut |m| match m {
+            Mapped::Message(message) => history.push(message),
+            Mapped::Event(event) => send(event, &history),
+            Mapped::Init(init) => seen = Some(init.session_id),
+            Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
+            _ => {}
+        })
+        .await;
+
+        let stored = str_at(&lock(session), "claudeCodeSessionId").map(str::to_string);
+        let next = match (&seen, exit) {
+            (Some(id), _) => Some(id.clone()),
+            // A resume that died before Claude Code started its turn: the
+            // session is gone on its side, so the next message starts afresh.
+            (None, TurnExit::Dead) if resumed => None,
+            (None, _) => stored.clone(),
+        };
+        if next != stored {
+            if let Some(obj) = lock(session).as_object_mut() {
+                match &next {
+                    Some(id) => obj.insert("claudeCodeSessionId".into(), json!(id)),
+                    None => obj.shift_remove("claudeCodeSessionId"),
+                };
+            }
+            persist(store, session, incognito).await;
+        }
+        if exit == TurnExit::Dead {
+            slot.session = None;
+        }
+        slot.last_used = Some(std::time::Instant::now());
+    }
+
+    /// The end of every turn: the forwarder drained, nothing left waiting,
+    /// the chat saved, steering that arrived too late queued, the summary.
+    async fn end_turn(
+        &self,
+        store: &Arc<SessionStore>,
+        shared: &Arc<Shared>,
+        session: &Arc<Mutex<Value>>,
+        forwarder: tokio::task::JoinHandle<Option<Value>>,
+        incognito: bool,
+    ) -> Value {
+        let session_id = shared.session_id.clone();
         // The routes keep a sender for as long as the turn is listed, so the
         // forwarder is told it has had the loop's last event.
         let _ = shared.events.send(Out::End);
@@ -1035,10 +1178,10 @@ impl Turns {
 
         // The turn is over: nothing it waited on can still be answered.
         self.pending.release(&session_id);
-        if let Some(obj) = lock(&session).as_object_mut() {
+        if let Some(obj) = lock(session).as_object_mut() {
             obj.remove("activeRun");
         }
-        persist(&store, &session, incognito).await;
+        persist(store, session, incognito).await;
 
         // Steering that arrived during the final model call runs next, queued.
         let left: Vec<Value> = std::mem::take(&mut *lock(&shared.steering));

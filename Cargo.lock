@@ -1864,6 +1864,7 @@ dependencies = [
  "nekko-context",
  "nekko-decide",
  "nekko-engine",
+ "nekko-harness",
  "nekko-infer",
  "nekko-js",
  "nekko-loop",

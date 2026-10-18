@@ -22,6 +22,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod harness;
 mod hub;
 mod hypergate;
 mod image_turns;
@@ -381,6 +382,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let c = ctx.clone();
         tokio::spawn(async move { d.start(&c).await });
     }
+    // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
+    ctx.turns.harness.start_reaper();
     let after = ctx.clone();
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
     let router = wire::router(app);

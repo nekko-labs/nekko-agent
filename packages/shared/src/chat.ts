@@ -8,6 +8,10 @@ export interface ToolCall {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  /** Set when Claude Code ran the call (a Claude Agent chat): shown, never run by Nekko. */
+  executedBy?: 'claude-code';
+  /** A Claude Code sub-agent's call: the id of the call that started the sub-agent. */
+  parentToolCallId?: string;
 }
 
 export interface ToolResult {
@@ -17,6 +21,11 @@ export interface ToolResult {
   /** Approved screenshot PNG data URLs delivered to the selected model. */
   images?: string[];
   isError?: boolean;
+  /** Claude Code denied the call itself (a Claude Agent chat), with its reason. */
+  denied?: boolean;
+  deniedReason?: string;
+  /** A Claude Code sub-agent's result: the id of the call that started the sub-agent. */
+  parentToolCallId?: string;
 }
 
 /**
@@ -197,6 +206,11 @@ export interface Session {
   trainingRunId?: string;
   providerId?: string;
   modelId?: string;
+  /**
+   * A Claude Agent chat's Claude Code session id, so the next turn after an
+   * idle reap or a restart continues it (`claude --resume`). Set by nekkod.
+   */
+  claudeCodeSessionId?: string;
   messages: ChatMessage[];
   contextPrefs?: ContextPrefs;
   /** Files explicitly attached to this chat's context (absolute paths). */

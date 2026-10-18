@@ -28,6 +28,7 @@ pub use http::{AbortController, AbortSignal};
 pub use providers::Io;
 pub use providers::anthropic::AnthropicProvider;
 pub use providers::chatgpt::ChatGptProvider;
+pub use providers::claude_code::ClaudeCodeProvider;
 pub use providers::ollama::OllamaProvider;
 pub use providers::openai_compat::OpenAiCompatProvider;
 pub use stream::ChunkStream;
@@ -69,6 +70,7 @@ provider!(OpenAiCompatProvider);
 provider!(AnthropicProvider);
 provider!(OllamaProvider);
 provider!(ChatGptProvider);
+provider!(ClaudeCodeProvider);
 
 /// Any provider, picked by kind (`createProvider`).
 #[derive(Clone)]
@@ -77,6 +79,7 @@ pub enum AnyProvider {
     Anthropic(AnthropicProvider),
     Ollama(OllamaProvider),
     ChatGpt(ChatGptProvider),
+    ClaudeCode(ClaudeCodeProvider),
 }
 
 impl Provider for AnyProvider {
@@ -86,6 +89,7 @@ impl Provider for AnyProvider {
             Self::Anthropic(p) => p.config(),
             Self::Ollama(p) => p.config(),
             Self::ChatGpt(p) => p.config(),
+            Self::ClaudeCode(p) => p.config(),
         }
     }
 
@@ -95,6 +99,7 @@ impl Provider for AnyProvider {
             Self::Anthropic(p) => p.list_models().await,
             Self::Ollama(p) => p.list_models().await,
             Self::ChatGpt(p) => p.list_models().await,
+            Self::ClaudeCode(p) => p.list_models().await,
         }
     }
 
@@ -104,6 +109,7 @@ impl Provider for AnyProvider {
             Self::Anthropic(p) => p.chat(req),
             Self::Ollama(p) => p.chat(req),
             Self::ChatGpt(p) => p.chat(req),
+            Self::ClaudeCode(p) => p.chat(req),
         }
     }
 }
@@ -116,6 +122,7 @@ impl AnyProvider {
             Self::Anthropic(p) => p.test().await,
             Self::Ollama(p) => p.test().await,
             Self::ChatGpt(p) => p.test().await,
+            Self::ClaudeCode(p) => p.test().await,
         }
     }
 }
@@ -131,6 +138,7 @@ pub fn create_provider_with(config: ProviderConfig, io: Io) -> AnyProvider {
         ProviderKind::Anthropic => AnyProvider::Anthropic(AnthropicProvider::new(config, io)),
         ProviderKind::Ollama => AnyProvider::Ollama(OllamaProvider::new(config, io)),
         ProviderKind::Chatgpt => AnyProvider::ChatGpt(ChatGptProvider::new(config, io)),
+        ProviderKind::ClaudeCode => AnyProvider::ClaudeCode(ClaudeCodeProvider::new(config)),
         // The Nekko engine's router is OpenAI-compatible on purpose, so chat
         // needs no provider of its own.
         ProviderKind::Openai
@@ -187,5 +195,6 @@ mod tests {
         assert!(matches!(create_provider(config("anthropic")), AnyProvider::Anthropic(_)));
         assert!(matches!(create_provider(config("ollama")), AnyProvider::Ollama(_)));
         assert!(matches!(create_provider(config("chatgpt")), AnyProvider::ChatGpt(_)));
+        assert!(matches!(create_provider(config("claude-code")), AnyProvider::ClaudeCode(_)));
     }
 }
