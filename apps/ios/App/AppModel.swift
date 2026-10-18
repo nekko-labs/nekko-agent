@@ -18,6 +18,7 @@ final class AppModel {
     let store: ComputersStore
     let lock: AppLock
     let notifier = Notifier()
+    let chatLists = ChatListFiles()
     private let activities = RunActivities()
     private let network = NetworkWatcher()
     private var started = false
@@ -32,6 +33,8 @@ final class AppModel {
     var firstMessages: [String: String] = [:]
     /// Text shared from another app (the share extension), waiting for New chat to take it.
     var sharedText: String?
+    /// `nekko-agent://new` (the Control Center control): open New chat once.
+    var newChatRequested = false
     private let shareInbox = ShareInbox(defaults: UserDefaults(suiteName: StatusSnapshot.appGroup) ?? .standard)
 
     init() {
@@ -75,9 +78,11 @@ final class AppModel {
             Task { await self.store.registerActivity(sessionId: sid, token: token) }
         }
         _ = store.subscribe { [weak self] e in self?.onEvent(e) }
+        WatchBridge.shared.start()
         watchWidget()
         network.onChange = { [weak self] in Task { @MainActor in self?.store.reconnect() } }
         network.start()
+        if prefs.keepChatList { store.chatListCache = chatLists }
         store.load(preferredId: prefs.defaultComputer)
         if !store.computers.isEmpty { registerForPush() }
     }
@@ -129,7 +134,10 @@ final class AppModel {
             computer: store.active?.name, online: store.conn == .online,
             needsYou: store.needsYouCount, running: store.runningCount, at: .now
         )
-        if snapshot.save() { WidgetCenter.shared.reloadTimelines(ofKind: StatusSnapshot.kind) }
+        if snapshot.save() {
+            WidgetCenter.shared.reloadTimelines(ofKind: StatusSnapshot.kind)
+            WatchBridge.shared.send(snapshot)
+        }
     }
 
     // MARK: Events → haptics, notifications, Live Activities
@@ -182,10 +190,14 @@ final class AppModel {
     // MARK: Pairing, links, push
 
     /// `nekko-agent-pair:?relay=…` (QR / camera), `https://…/?relay=…` (web
-    /// edition link) or `nekko-agent://chat/<id>`.
+    /// edition link), `nekko-agent://chat/<id>` or `nekko-agent://new`.
     func handle(url: URL) {
         if url.scheme == "nekko-agent", url.host == "chat" {
             openChat = url.pathComponents.dropFirst().first
+            return
+        }
+        if url.scheme == "nekko-agent", url.host == "new" {
+            newChatRequested = true
             return
         }
         if let link = Pairing.parse(url.absoluteString) { pendingLink = link }
@@ -223,9 +235,17 @@ final class AppModel {
         if store.computers.isEmpty { activities.endAll() }
     }
 
+    /// Settings → Keep the chat list when offline. Off deletes every saved list.
+    func setKeepChatList(_ on: Bool) {
+        prefs.keepChatList = on
+        store.chatListCache = on ? chatLists : nil
+        if !on { chatLists.removeAll() }
+    }
+
     /// Settings → Forget everything on this iPhone.
     func forgetEverything() {
         for c in store.computers { store.forget(c.id) }
+        chatLists.removeAll()
         keychain.wipe()
         activities.endAll()
         prefs.defaultComputer = nil

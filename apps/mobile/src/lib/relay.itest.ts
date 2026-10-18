@@ -1,6 +1,6 @@
 /**
  * The phone's relay client against the real thing: a local relay
- * (apps/relay/dist), a headless agent (apps/server/dist in relay-agent mode)
+ * (apps/relay/dist), a headless agent (apps/web-app-server/dist in relay-agent mode)
  * and a fake OpenAI-compatible model server that streams a reply. Proves the
  * whole phone path: enrollment with the one-time code, the host's channels,
  * a chat turn streamed back as `agent:event`s, and denial of a stranger.
@@ -90,7 +90,7 @@ describe.skipIf(!process.env.NEKKO_ITEST)('phone ↔ relay ↔ computer', () => 
         defaultModelId: 'fake-model',
       }),
     );
-    const agent = spawn(process.execPath, [join(ROOT, 'apps/server/dist/index.js')], {
+    const agent = spawn(process.execPath, [join(ROOT, 'apps/web-app-server/dist/index.js')], {
       env: {
         ...process.env,
         NEKKO_RELAY_URL: RELAY_URL,

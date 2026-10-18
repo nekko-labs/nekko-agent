@@ -176,10 +176,13 @@ describe('playwright-core runtime dependency', () => {
     expect(Object.keys(pwPkg.scripts ?? {}).filter((s) => /install/.test(s))).toEqual([]);
   });
 
-  it('is required at runtime by the main bundle, not bundled into it', () => {
+  it('is absent from the native-default main bundle (explicit baseline helper only)', () => {
     const src = readFileSync(join(root, 'out/main/index.js'), 'utf8');
-    expect(src).toMatch(/require\(\s*["']playwright-core["']\s*\)/);
+    expect(src).not.toMatch(/require\(\s*["']playwright-core["']\s*\)/);
     expect(src).not.toContain('class CRBrowser');
+    const browser = readFileSync(join(root, 'src/main/agentBrowser.ts'), 'utf8');
+    expect(browser).toContain('options.driver ?? nativeDriver');
+    expect(browser).not.toContain('playwrightDriver');
   });
 });
 

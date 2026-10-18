@@ -46,6 +46,11 @@ class Notices(private val context: Context) {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .setContentIntent(openChat(n.sessionId))
+            .apply {
+                // Deny is safe to answer unseen (nothing runs), so it skips the app lock;
+                // Allow needs the command in view, so it is only in the chat.
+                if (n.canDeny) addAction(0, "Deny", deny(n.sessionId, n.callId!!))
+            }
             .build()
         try {
             manager.notify(EventNotice.tag(n.sessionId), ID_EVENT, notification)
@@ -57,12 +62,20 @@ class Notices(private val context: Context) {
     /** The chat was opened: its notification is no longer news. */
     fun clear(sessionId: String) = manager.cancel(EventNotice.tag(sessionId), ID_EVENT)
 
-    /** The ongoing notification of [KeepAliveService]; tapping it opens the app. */
-    fun keepAlive(line: String): Notification =
+    /**
+     * The ongoing notification of [KeepAliveService]; tapping it opens the app.
+     * On Android 16+ it asks to be a Live Update: a "Running" chip in the status
+     * bar and a place at the top of the lock screen, like the iPhone's Live
+     * Activity. The user can turn that off per app; it then stays an ordinary
+     * ongoing notification. Counts only, never chat content.
+     */
+    fun keepAlive(status: KeepAlive.Status): Notification =
         NotificationCompat.Builder(context, CHANNEL_CONNECTION)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Staying connected")
-            .setContentText(line)
+            .setContentText(status.line)
+            .setRequestPromotedOngoing(true)
+            .setShortCriticalText(status.chip)
             .setOngoing(true)
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -74,6 +87,14 @@ class Notices(private val context: Context) {
         // The same deep link as nekko-agent://chat/<id>; it goes through the app lock like any other.
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nekko-agent://chat/${Uri.encode(sessionId)}"), context, MainActivity::class.java)
         return PendingIntent.getActivity(context, sessionId.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    private fun deny(sessionId: String, callId: String): PendingIntent {
+        val intent = Intent(context, DenyReceiver::class.java)
+            .setAction(DenyReceiver.ACTION)
+            .putExtra(DenyReceiver.SESSION, sessionId)
+            .putExtra(DenyReceiver.CALL, callId)
+        return PendingIntent.getBroadcast(context, sessionId.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
     private fun openApp(): PendingIntent {

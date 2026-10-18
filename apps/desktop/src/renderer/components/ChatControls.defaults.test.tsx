@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); });
 function controls(toolsInWindow = true) {
-  [true, false, '', {}].forEach((v) => vi.mocked(useState).mockReturnValueOnce([v, vi.fn()] as never));
+  [true, false, {}].forEach((v) => vi.mocked(useState).mockReturnValueOnce([v, vi.fn()] as never));
   const onChange = vi.fn();
   const tree = ChatControls({ session, isCloudModel: false, onChange, toolsInWindow });
   const nodes: React.ReactElement<Record<string, any>>[] = [];
@@ -26,41 +26,16 @@ function controls(toolsInWindow = true) {
     if (React.isValidElement<Record<string, any>>(child)) { nodes.push(child); walk(child.props.children); }
   });
   walk(tree);
-  return { onChange, nodes, mode: (m: string) => nodes.find((n) => n.props['data-chat-mode'] === m)! };
+  return { onChange, nodes };
 }
-describe('new-window control defaults', () => {
-  it('saves permission mode only after the session update succeeds', async () => {
-    let finish!: (s: Session) => void;
-    vi.mocked(window.nekko.setSessionOptions).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-    const view = controls();
-    view.mode('ask').props.onClick();
-    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
-    finish({ ...session, mode: 'ask' });
-    await vi.waitFor(() => expect(store.refreshSettings).toHaveBeenCalledOnce());
-    expect(window.nekko.updateSettings).toHaveBeenCalledExactlyOnceWith({ defaultChatMode: 'ask' });
-    expect(view.onChange).toHaveBeenCalledWith(expect.objectContaining({ mode: 'ask' }));
-  });
-  it.each(['reject', 'missing'])('does not persist a permission change when the session update is %s', async (result) => {
-    if (result === 'reject') vi.mocked(window.nekko.setSessionOptions).mockRejectedValue(new Error('unavailable'));
-    else vi.mocked(window.nekko.setSessionOptions).mockResolvedValue(null);
-    const view = controls();
-    view.mode('yolo').props.onClick();
-    await vi.waitFor(() => expect(result === 'reject' ? store.pushToast : view.onChange).toHaveBeenCalled());
-    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
-  });
+// Approvals, execution, work mode and saved modes live in the Mode panel: ModePanel.test.tsx.
+describe('privacy switches', () => {
   it('keeps incognito session-only', async () => {
     const view = controls();
     const toggle = view.nodes.find((n) => n.type === 'button' && n.props.title === "Don't save this chat or update memory")!;
     await toggle.props.onClick();
     expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { incognito: true });
     expect(window.nekko.updateSettings).not.toHaveBeenCalled();
-  });
-  it('retains execution default persistence', async () => {
-    const view = controls();
-    const unified = view.nodes.find((n) => n.props.role === 'menuitemradio' && n.key === 'unified')!;
-    await unified.props.onClick();
-    await vi.waitFor(() => expect(store.refreshSettings).toHaveBeenCalledOnce());
-    expect(window.nekko.updateSettings).toHaveBeenCalledWith({ defaultExecutionMode: 'unified', gitManagement: { mode: 'shared' } });
   });
 });
 
@@ -71,3 +46,4 @@ it('keeps offline session-only', async () => {
   expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { offline: true });
   expect(window.nekko.updateSettings).not.toHaveBeenCalled();
 });
+

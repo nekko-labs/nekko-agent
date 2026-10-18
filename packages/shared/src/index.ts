@@ -57,6 +57,8 @@ export * from './phone-changes.js';
 export * from './update.js';
 export * from './mcp.js';
 export * from './spec.js';
+export * from './work-modes.js';
+export * from './saved-modes.js';
 export * from './orchestration.js';
 export * from './insights.js';
 export * from './messaging.js';

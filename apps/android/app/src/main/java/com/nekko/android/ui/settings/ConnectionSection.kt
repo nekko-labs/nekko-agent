@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nekko.android.data.ChatListFiles
 import com.nekko.android.NekkoApp
 import com.nekko.android.connection.KeepAlive
 import com.nekko.android.connection.Notices
@@ -57,6 +58,7 @@ fun ConnectionSection(deps: SettingsDeps) {
     val lock = LocalAppLock.current
     val keep by deps.phonePrefs.flow(KeepAlive.ENABLED).collectAsStateWithLifecycle()
     val notify by deps.phonePrefs.flow(Notices.ENABLED).collectAsStateWithLifecycle()
+    val keepList by deps.phonePrefs.flow(ChatListFiles.ENABLED).collectAsStateWithLifecycle()
     val notices = (context.applicationContext as? NekkoApp)?.connection?.notices
     var allowed by remember { mutableStateOf(notices?.allowed() ?: true) }
     var restricted by remember { mutableStateOf(backgroundRestricted(context)) }
@@ -96,6 +98,15 @@ fun ConnectionSection(deps: SettingsDeps) {
                 onChange = { want ->
                     deps.phonePrefs.set(Notices.ENABLED, want)
                     if (want && !allowed && Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                },
+            )
+            HorizontalDivider(color = p.line)
+            SwitchRow(
+                title = "Keep the chat list when offline",
+                detail = "Chat titles and folders as last seen, never what they say. Not backed up; off deletes it",
+                checked = keepList,
+                onChange = { on ->
+                    (context.applicationContext as? NekkoApp)?.setKeepChatList(on) ?: deps.phonePrefs.set(ChatListFiles.ENABLED, on)
                 },
             )
         }

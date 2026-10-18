@@ -142,6 +142,15 @@ class TranscriptTest {
         assertTrue(tool.output!!.endsWith("3 images, on the computer"))
     }
 
+    @Test fun `a prompt keeps its thumbnails, one per photo, blank where the phone has none`() {
+        val s = Session.from(WireJson.parseToJsonElement("""
+            {"id":"s1","messages":[{"id":"u","role":"user","content":"look","images":["data:image/jpeg;base64,QQ==","",7]}]}
+        """.trimIndent()))!!
+        val u = Transcript.fromMessages(s.messages).single() as Block.User
+        assertEquals(listOf("data:image/jpeg;base64,QQ==", "", ""), u.thumbs)
+        assertEquals(3, u.images)
+    }
+
     @Test fun `a full session from an older computer reads as before`() {
         val s = Session.from(WireJson.parseToJsonElement("""{"id":"s1","messages":[]}"""))!!
         assertEquals(0, s.omittedMessages)

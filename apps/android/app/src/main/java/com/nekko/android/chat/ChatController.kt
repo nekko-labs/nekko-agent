@@ -155,10 +155,10 @@ class ChatController(
     }
 
     /** Throws when the prompt couldn't be sent, so the composer can keep the text. */
-    suspend fun send(text: String, skill: SkillSummary? = null) {
+    suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) {
         if (_state.value.turn.running) {
             // Same as the desktop: a prompt sent mid-run waits its turn.
-            val s = Session.from(caller.call(Channels.CHAT_QUEUE, JsonPrimitive(sessionId), queuePrompt(text, skill)))
+            val s = Session.from(caller.call(Channels.CHAT_QUEUE, JsonPrimitive(sessionId), queuePrompt(text, skill, images)))
             if (s != null) _state.update { it.copy(session = s) }
             return
         }
@@ -167,12 +167,12 @@ class ChatController(
         val at = now()
         _state.update {
             val shown = if (skill == null) text else "/${skill.name} $text".trim()
-            it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-$at", shown, at))))
+            it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-$at", shown, at, images))))
         }
         // Resolves only when the whole turn ends; the events carry the progress.
         scope.launch {
             try {
-                caller.callWithTimeout(TURN_TIMEOUT_MS, Channels.CHAT_SEND, sendOptions(sessionId, providerId, modelId, text, skill))
+                caller.callWithTimeout(TURN_TIMEOUT_MS, Channels.CHAT_SEND, sendOptions(sessionId, providerId, modelId, text, skill, images))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

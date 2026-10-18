@@ -37,7 +37,7 @@ class KeepAliveService : Service() {
         ServiceCompat.startForeground(
             this,
             Notices.ID_KEEP_ALIVE,
-            keeper.notices.keepAlive(line ?: "Finishing up"),
+            keeper.notices.keepAlive(line ?: KeepAlive.FINISHING),
             if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING else 0,
         )
         if (!started) {

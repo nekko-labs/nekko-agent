@@ -49,7 +49,7 @@ if (!relayArg) {
 
 // 2. relay-agent (the "local machine"); capture its printed pairing code.
 let pairCode = null;
-const agent = spawn('node', ['apps/server/dist/index.js'], {
+const agent = spawn('node', ['apps/web-app-server/dist/index.js'], {
   env: {
     ...process.env,
     NEKKO_RELAY_URL: RELAY_URL,

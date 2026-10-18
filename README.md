@@ -233,7 +233,7 @@ npm-workspaces monorepo:
 | [`packages/core`](packages/core) | Engine: providers, agent loop, guardrails, context assembler, indexer, memory, connectors. Pure TS, unit-tested. |
 | [`packages/host`](packages/host) | Transport-agnostic host facade and persistence |
 | [`apps/desktop`](apps/desktop) | Electron app (main / preload / React renderer) |
-| [`apps/server`](apps/server) | Self-hosted Fastify web edition |
+| [`apps/web-app-server`](apps/web-app-server) | Self-hosted Fastify web edition |
 | [`apps/relay`](apps/relay) | End-to-end encrypted remote relay |
 | [`apps/cli`](apps/cli) | CLI and MCP stdio subagent surface |
 | [`apps/cloud`](apps/cloud) | Cloud edition |

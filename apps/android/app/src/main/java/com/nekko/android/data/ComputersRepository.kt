@@ -20,6 +20,7 @@ import com.nekko.protocol.RelayConfig
 import com.nekko.protocol.RelayException
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RemoteDefaults
+import com.nekko.protocol.SavedChatList
 import com.nekko.protocol.SessionSummary
 import com.nekko.protocol.WorkspaceFolder
 import kotlinx.coroutines.CancellationException
@@ -121,6 +122,15 @@ class ComputersRepository(
     private var connJob: Job? = null
     private var summariesJob: Job? = null
     private var cachedDeviceId: String? = null
+    /** The live list has been read since connecting, so it may be saved. */
+    @Volatile private var liveList = false
+
+    /** Set while *Keep the chat list when offline* is on; null keeps nothing. */
+    @Volatile var chatListCache: ChatListCache? = null
+        set(value) {
+            field = value
+            if (value == null) _state.update { it.copy(savedListAt = null) } else saveList()
+        }
 
     /** Calls the active computer at call time; throws when none is connected. */
     val caller: Caller = object : Caller {
@@ -178,6 +188,7 @@ class ComputersRepository(
             val wasActive = _state.value.activeId == id
             if (wasActive) disconnect()
             store.set(secretKey(id), null)
+            chatListCache?.remove(id)
             onForget(id)
             val next = _state.value.computers.filter { it.id != id }
             saveIndex(next)
@@ -213,7 +224,13 @@ class ComputersRepository(
                 // Another computer, or the same one later: its settings are unknown until it answers.
                 pcSettings = PcSettings(),
                 lastError = null,
+                savedListAt = null,
             )
+        }
+        liveList = false
+        // Opening the app away from the computer: the list as it was, marked as saved.
+        chatListCache?.load(id)?.let { saved ->
+            _state.update { it.copy(summaries = saved.summaries, workspaces = saved.folders, savedListAt = saved.savedAt) }
         }
         val config = RelayConfig(
             relayUrl = computer.relayUrl,
@@ -348,9 +365,11 @@ class ComputersRepository(
                 r.pending.forEach { (sid, p) -> if (p.approval != null || p.question != null) activity[sid] = Activity.NEEDS_YOU }
                 s.copy(
                     summaries = r.summaries, providers = r.providers, defaults = r.defaults, appearance = r.appearance, pcSettings = r.pcSettings,
-                    workspaces = r.workspaces, activity = activity, summariesLoading = false,
+                    workspaces = r.workspaces, activity = activity, summariesLoading = false, savedListAt = null,
                 )
             }
+            liveList = true
+            saveList()
             learnPlatform(r.info?.platform)
         } catch (e: CancellationException) {
             throw e
@@ -393,6 +412,15 @@ class ComputersRepository(
         modelGroups(_state.value)
     }
 
+    /** The live list, as the phone's saved copy (only when the user keeps one). */
+    private fun saveList() {
+        val cache = chatListCache ?: return
+        val s = _state.value
+        val id = s.activeId ?: return
+        if (!liveList || s.savedListAt != null) return
+        cache.save(id, SavedChatList(now(), s.summaries, s.workspaces))
+    }
+
     private fun scheduleSummaries() {
         if (summariesJob?.isActive == true) return
         val c = client ?: return
@@ -401,7 +429,10 @@ class ComputersRepository(
             if (client !== c) return@launch
             try {
                 val list = SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES))
-                if (client === c) _state.update { it.copy(summaries = list) }
+                if (client === c) {
+                    _state.update { it.copy(summaries = list) }
+                    saveList()
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {

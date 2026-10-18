@@ -74,14 +74,16 @@ function rowRanges(row: HTMLElement, pattern: RegExp): Range[] {
   return out;
 }
 
-export function ChatSearchBar({ rows, scrollRoot, transcript, onClose }: {
+export function ChatSearchBar({ rows, scrollRoot, transcript, onClose, initialQuery = '' }: {
   rows: readonly TranscriptRow[];
   /** The transcript's scroller, found from the pane. */
   scrollRoot: () => HTMLElement | null;
   transcript: React.RefObject<VirtualTranscriptHandle | null>;
   onClose: () => void;
+  /** Text to search for at once (a chat opened from a Search chats message match). */
+  initialQuery?: string;
 }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [current, setCurrent] = useState(-1);
   const input = useRef<HTMLInputElement>(null);
   const matches = useMemo(() => findChatMatches(rows, query), [rows, query]);

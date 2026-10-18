@@ -135,7 +135,7 @@ export function ConnectorGrid({ compact = false }: { compact?: boolean }) {
   };
 
   return (
-    <div className={compact ? 'grid grid-cols-1 gap-3 sm:grid-cols-2' : 'space-y-4'}>
+    <div className={compact ? 'grid grid-cols-1 gap-3 sm:grid-cols-2' : 'grid grid-cols-1 gap-4 @3xl:grid-cols-2 @6xl:grid-cols-3'}>
       {CONNECTOR_CATALOG.map((meta) => (
         <ConnectorCard
           key={meta.kind}
@@ -191,9 +191,9 @@ function ConnectorCard({
   const help = HELP[meta.kind];
   return (
     <div className={`card ${compact ? 'p-4' : 'p-5'}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-xl" style={{ background: 'var(--surface-2)' }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ background: 'var(--surface-2)' }}>
             <ConnectorIcon kind={meta.kind} size={20} />
           </div>
           <div>
@@ -209,7 +209,7 @@ function ConnectorCard({
       </div>
 
       {connected ? (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex justify-end gap-2">
           {!compact && (
             <button className="btn btn-outline py-1.5 text-[12px]" onClick={onFetch}>
               Fetch sample
@@ -235,7 +235,7 @@ function ConnectorCard({
               disabled={busy}
             />
           ))}
-          <div className="flex gap-2">
+          <div className="flex justify-end gap-2">
             {!NO_TOKEN.has(meta.kind) && <input
               className="input py-1.5 text-[12px]"
               type="password"

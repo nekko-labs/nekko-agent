@@ -43,7 +43,12 @@ struct RootView: View {
         .onChange(of: app.sharedText, initial: true) { _, text in
             if text != nil { open(.newChat) }
         }
-        .onChange(of: store.ready, initial: true) { _, _ in app.takeShare() }
+        .onChange(of: store.ready, initial: true) { _, _ in
+            app.takeShare()
+            takeNewChat()
+        }
+        // The Control Center control: New chat on the active computer, nothing typed.
+        .onChange(of: app.newChatRequested, initial: true) { _, _ in takeNewChat() }
         .onChange(of: app.openChat) { _, id in
             guard let id else { return }
             open(.chat(id))
@@ -53,6 +58,13 @@ struct RootView: View {
         .sheet(item: Binding(get: { covered ? nil : app.pendingLink.map(LinkBox.init) }, set: { app.pendingLink = $0?.link })) { box in
             ConfirmPairSheet(link: box.link) { path = [] }
         }
+    }
+
+    /// A cold launch from the control waits until the computers are loaded.
+    private func takeNewChat() {
+        guard app.newChatRequested, store.ready else { return }
+        app.newChatRequested = false
+        if !store.computers.isEmpty { open(.newChat) }
     }
 
     private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }

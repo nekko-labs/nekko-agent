@@ -1,5 +1,6 @@
 package com.nekko.android
 
+import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -88,6 +89,26 @@ class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(!hide)
     }
 
+    /** API 34+: tells the lock a screenshot was taken, so the screenshot toolbar does not cover the app. */
+    private val screenCapture: Any? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            Activity.ScreenCaptureCallback { (application as NekkoApp).appLock.onScreenshot() }
+        } else null
+
+    override fun onStart() {
+        super.onStart()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            registerScreenCaptureCallback(mainExecutor, screenCapture as Activity.ScreenCaptureCallback)
+        }
+    }
+
+    override fun onStop() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            unregisterScreenCaptureCallback(screenCapture as Activity.ScreenCaptureCallback)
+        }
+        super.onStop()
+    }
+
     override fun onPause() {
         (application as NekkoApp).appLock.onPause()
         super.onPause()
@@ -108,7 +129,16 @@ class MainActivity : FragmentActivity() {
         // Our own dialogs and popups take focus too; only cover when it went
         // outside the app. Checked after the focus has moved to its new window.
         window.decorView.post {
-            if (!window.decorView.hasWindowFocus() && !focusStayedInApp()) lock.onFocus(false)
+            if (window.decorView.hasWindowFocus() || focusStayedInApp()) return@post
+            lock.onFocus(false)
+            // A popup (the composer's + menu) can get focus a frame or two after
+            // the activity loses it: look again and lift the cover if it did.
+            // Covering first keeps the recent-apps overview private meanwhile.
+            for (delay in FOCUS_RECHECK_MS) {
+                window.decorView.postDelayed({
+                    if (!window.decorView.hasWindowFocus() && focusStayedInApp()) lock.onFocus(true)
+                }, delay)
+            }
         }
     }
 
@@ -121,6 +151,11 @@ class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
         val decor = window.decorView
         return WindowInspector.getGlobalWindowViews().any { it !== decor && it.hasWindowFocus() }
+    }
+
+    private companion object {
+        /** When to look again for an in-app popup that took focus late. */
+        val FOCUS_RECHECK_MS = longArrayOf(50, 150, 400)
     }
 
     override fun onNewIntent(intent: Intent) {

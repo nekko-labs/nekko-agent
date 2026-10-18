@@ -1,7 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { ChatMode, McpServerStatus, Session } from '@nekko-agent/shared';
-import { getExecutionMode, groupToolsByCategory, toolAllowedOffline, type ExecutionMode } from '@nekko-agent/shared';
+import { getExecutionMode, groupToolsByCategory, toolAllowedOffline } from '@nekko-agent/shared';
+import { ModePanel, modeButtonLabel } from './ModePanel.js';
 import { SandboxSetup, SandboxReview } from './SandboxSetup.js';
 import { useStore } from '../store.js';
 import { WrenchIcon, PlaneIcon, IncognitoIcon, PlugIcon, PlusIcon, GlobeIcon, GlobeOffIcon } from '../icons.js';
@@ -51,8 +52,6 @@ function useFloatingMenu(open: boolean, anchor: React.RefObject<HTMLElement | nu
 export function McpMenu() {
   const servers = useStore((s) => s.settings?.mcpServers) ?? [];
   const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState<McpServerStatus[] | null>(null);
-  const [checking, setChecking] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
@@ -67,27 +66,7 @@ export function McpMenu() {
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open]);
 
-  // Probe live connection status the first time the menu opens (getMcpStatus can
-  // spawn/dial servers, so we don't do it on every render).
-  useEffect(() => {
-    if (!open || status !== null || servers.length === 0) return;
-    setChecking(true);
-    window.nekko.getMcpStatus()
-      .then(setStatus)
-      .catch(() => setStatus([]))
-      .finally(() => setChecking(false));
-  }, [open, status, servers.length]);
-
   const enabledCount = servers.filter((s) => s.enabled).length;
-  const statusOf = (id: string) => status?.find((s) => s.id === id);
-
-  const toggle = async (id: string) => {
-    const next = servers.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s));
-    await window.nekko.updateSettings({ mcpServers: next });
-    await useStore.getState().refreshSettings();
-    // Config changed: re-probe so the dots reflect the new enablement.
-    setStatus(null);
-  };
 
   return (
     <div ref={ref} className="relative shrink-0">
@@ -106,6 +85,47 @@ export function McpMenu() {
       </button>
       {open && createPortal(
         <div ref={pop} style={floating} className="card fixed z-[100] overflow-y-auto p-1.5 shadow-lg" role="menu" aria-label="MCP servers">
+          <McpServerList onLeave={() => setOpen(false)} />
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+/**
+ * Every configured MCP server with a live status dot and an on/off switch,
+ * then Add server and the Hypergate recommendation. Shared by the MCP menu and
+ * the Mode panel. Enablement is global: a server switched on here is offered
+ * to every chat.
+ */
+export function McpServerList({ onLeave }: { onLeave?: () => void }) {
+  const servers = useStore((s) => s.settings?.mcpServers) ?? [];
+  const [status, setStatus] = useState<McpServerStatus[] | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  // Probe live connection status once the list shows (getMcpStatus can
+  // spawn/dial servers, so we don't do it on every render).
+  useEffect(() => {
+    if (status !== null || servers.length === 0) return;
+    setChecking(true);
+    window.nekko.getMcpStatus()
+      .then(setStatus)
+      .catch(() => setStatus([]))
+      .finally(() => setChecking(false));
+  }, [status, servers.length]);
+
+  const statusOf = (id: string) => status?.find((s) => s.id === id);
+
+  const toggle = async (id: string) => {
+    const next = servers.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s));
+    await window.nekko.updateSettings({ mcpServers: next });
+    await useStore.getState().refreshSettings();
+    // Config changed: re-probe so the dots reflect the new enablement.
+    setStatus(null);
+  };
+
+  return (<>
           {servers.length === 0 && (
             <p className="px-2.5 py-2 text-[11px] text-ink-faint">
               No MCP servers yet. Add one to extend every chat with its tools.
@@ -159,7 +179,7 @@ export function McpMenu() {
             <button
               role="menuitem"
               className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-accent hover:bg-surface-2"
-              onClick={() => { setOpen(false); useStore.getState().setView('settings'); }}
+              onClick={() => { onLeave?.(); useStore.getState().setView('settings'); }}
             >
               <PlusIcon className="h-3.5 w-3.5" /> Add MCP server
             </button>
@@ -173,11 +193,7 @@ export function McpMenu() {
               <span>Manage servers securely with <span className="font-medium text-ink-soft">Hypergate</span> ↗</span>
             </button>
           </div>
-        </div>,
-        document.body,
-      )}
-    </div>
-  );
+  </>);
 }
 
 /**
@@ -187,15 +203,12 @@ export function McpMenu() {
  * Online and MCP groups are off and every local tool keeps working.
  */
 export function ToolsMenu({ session, onChange }: { session: Session; onChange: (s: Session | null) => void }) {
-  const [tools, setTools] = useState<Array<{ name: string; description: string }>>([]);
+  const tools = useChatTools();
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const floating = useFloatingMenu(open, button, 448);
-  // After the first frame: a pane that just opened paints before it asks.
-  useEffect(() => afterPaint(() => { window.nekko.listTools().then(setTools).catch(() => {}); }), []);
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node) && !pop.current?.contains(e.target as Node)) setOpen(false); };
@@ -204,14 +217,67 @@ export function ToolsMenu({ session, onChange }: { session: Session; onChange: (
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open]);
+  const offline = !!session.offline;
+  const { enabled, usable } = toolCounts(session, tools);
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        ref={button}
+        className="ctl-menu whitespace-nowrap"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={offline ? 'Internet blocked: online tools are off, local tools still work' : 'Enable/disable tools for this chat'}
+      >
+        <WrenchIcon className="h-3 w-3 text-ink-faint" />
+        <span className="ctl-menu-label">Tools</span>
+        <span className="tabular-nums">{`${enabled}/${usable}`}</span>
+        <span className="ctl-caret">▾</span>
+      </button>
+      {open && createPortal(
+        <div ref={pop} style={floating} className="card fixed z-[100] flex flex-col p-1.5 shadow-lg" role="menu" aria-label="Tools">
+          <ToolsList session={session} onChange={onChange} tools={tools} />
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+/** The built-in and MCP tools, fetched once after the first paint. */
+export function useChatTools() {
+  const [tools, setTools] = useState<Array<{ name: string; description: string }>>([]);
+  // After the first frame: a pane that just opened paints before it asks.
+  useEffect(() => afterPaint(() => { window.nekko.listTools().then(setTools).catch(() => {}); }), []);
+  return tools;
+}
+
+const SANDBOX_TOOLS = ['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash'];
+/** The tools a chat can run where it is: file and shell tools only in a sandbox. */
+function toolsFor(session: Session, tools: Array<{ name: string; description: string }>) {
+  return getExecutionMode(session) === 'sandbox' ? tools.filter((t) => SANDBOX_TOOLS.includes(t.name)) : tools;
+}
+/** How many tools this chat may switch on, and how many are on. */
+export function toolCounts(session: Session, tools: Array<{ name: string; description: string }>) {
+  const disabled = new Set(session.disabledTools ?? []);
+  const usable = toolsFor(session, tools).filter((t) => !(session.offline && !toolAllowedOffline(t.name)));
+  return { usable: usable.length, enabled: usable.filter((t) => !disabled.has(t.name)).length };
+}
+
+/**
+ * Which tools this chat may call, grouped by category with a filter once the
+ * list is long. Shared by the Tools menu and the Mode panel. While the chat is
+ * blocked from the internet the online tools are off and every local tool keeps
+ * working.
+ */
+export function ToolsList({ session, onChange, tools }: { session: Session; onChange: (s: Session | null) => void; tools: Array<{ name: string; description: string }> }) {
+  const [query, setQuery] = useState('');
   // Blocking the internet turns off only the tools that reach a network; the
   // local ones (files, shell, desktop) keep working and keep their switches.
   const offline = !!session.offline;
   const disabled = new Set(session.disabledTools ?? []);
-  const availableTools = getExecutionMode(session) === 'sandbox' ? tools.filter((t) => ['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash'].includes(t.name)) : tools;
+  const availableTools = toolsFor(session, tools);
   const blockedOffline = (name: string) => offline && !toolAllowedOffline(name);
-  const usable = availableTools.filter((t) => !blockedOffline(t.name));
-  const enabledCount = usable.filter((t) => !disabled.has(t.name)).length;
   const q = query.trim().toLowerCase();
   const shown = q ? availableTools.filter((t) => toolMatchesQuery(t, q)) : availableTools;
   const groups = groupToolsByCategory(shown);
@@ -227,23 +293,7 @@ export function ToolsMenu({ session, onChange }: { session: Session; onChange: (
     for (const n of names) allOn ? next.add(n) : next.delete(n);
     onChange(await window.nekko.setSessionOptions(session.id, { disabledTools: [...next] } as Partial<Session> as any));
   };
-  return (
-    <div ref={ref} className="relative shrink-0">
-      <button
-        ref={button}
-        className="ctl-menu whitespace-nowrap"
-        onClick={() => { setOpen((o) => !o); setQuery(''); }}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title={offline ? 'Internet blocked: online tools are off, local tools still work' : 'Enable/disable tools for this chat'}
-      >
-        <WrenchIcon className="h-3 w-3 text-ink-faint" />
-        <span className="ctl-menu-label">Tools</span>
-        <span className="tabular-nums">{`${enabledCount}/${usable.length}`}</span>
-        <span className="ctl-caret">▾</span>
-      </button>
-      {open && createPortal(
-        <div ref={pop} style={floating} className="card fixed z-[100] flex flex-col p-1.5 shadow-lg" role="menu" aria-label="Tools">
+  return (<>
           {availableTools.length > 7 && (
             <input className="input mb-1 rounded-lg px-2.5 py-1 text-[12px]" placeholder="Filter tools…" value={query} autoFocus aria-label="Filter tools" onChange={(e) => setQuery(e.target.value)} />
           )}
@@ -289,11 +339,7 @@ export function ToolsMenu({ session, onChange }: { session: Session; onChange: (
               );
             })}
           </div>
-        </div>,
-        document.body,
-      )}
-    </div>
-  );
+  </>);
 }
 
 /**
@@ -361,9 +407,12 @@ export function ChatControls({
   leading,
   toolsInWindow = false,
   only,
+  modelId,
 }: {
   session: Session | null;
   isCloudModel: boolean;
+  /** The chat's model, for the effort rungs it offers. */
+  modelId?: string;
   onChange: (s: Session | null) => void;
   /** Tools and MCP live in the agent window's footer, so the wall composer leaves them out. */
   toolsInWindow?: boolean;
@@ -372,10 +421,9 @@ export function ChatControls({
   /** Render just one control, for a host that lays them out itself (the wall composer's bottom bar). */
   only?: 'mode' | 'privacy';
 }) {
-  const defaultChatMode = useStore((s) => s.settings?.defaultChatMode);
+  const settings = useStore((s) => s.settings);
   const [modeOpen, setModeOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
-  const [executionError, setExecutionError] = useState('');
   const modeButton = useRef<HTMLButtonElement>(null);
   const modeMenu = useRef<HTMLDivElement>(null);
   const [modePosition, setModePosition] = useState<React.CSSProperties>({});
@@ -387,7 +435,7 @@ export function ChatControls({
       if (!anchor) return;
       const above = Math.max(0, anchor.top - 16);
       const below = Math.max(0, window.innerHeight - anchor.bottom - 16);
-      const width = Math.min(480, window.innerWidth - 16);
+      const width = Math.min(980, window.innerWidth - 16);
       setModePosition({
         width, left: Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8)),
         maxHeight: Math.max(above, below),
@@ -403,7 +451,8 @@ export function ChatControls({
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node) && !modeMenu.current?.contains(e.target as Node)) setModeOpen(false);
+      // The panel and its side lists are portals; any of them counts as inside.
+      if (ref.current && !ref.current.contains(e.target as Node) && !(e.target as Element | null)?.closest?.('[data-mode-panel]')) setModeOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { setModeOpen(false); if (modeMenu.current) modeButton.current?.focus({ preventScroll: true }); }
@@ -415,29 +464,13 @@ export function ChatControls({
 
   if (!session) return null;
 
-  const execution = getExecutionMode(session);
-  const sandbox = execution === 'sandbox';
-  const selectExecution = async (executionMode: ExecutionMode) => {
-    setModeOpen(false); setExecutionError('');
-    if (executionMode === 'sandbox') { setSetupOpen(true); return; }
-    try {
-      onChange(await window.nekko.setSessionOptions(session.id, { executionMode, gitIsolation: executionMode === 'worktree' }));
-      await window.nekko.updateSettings({ defaultExecutionMode: executionMode, gitManagement: { ...useStore.getState().settings?.gitManagement, mode: executionMode === 'worktree' ? 'worktree' : 'shared' } });
-      await useStore.getState().refreshSettings();
-    } catch (e) { setExecutionError(String((e as Error).message ?? e)); }
-  };
-  const mode: ChatMode = session.mode ?? defaultChatMode ?? 'guardrails';
+  const sandbox = getExecutionMode(session) === 'sandbox';
+  const label = modeButtonLabel(session, settings);
+  const mode: ChatMode = sandbox ? 'ask' : session.mode ?? settings?.defaultChatMode ?? 'guardrails';
   const offline = !!session.offline;
   const incognito = !!session.incognito;
 
-  const patch = async (p: Partial<Session>) => {
-    const next = await window.nekko.setSessionOptions(session.id, p as any);
-    onChange(next);
-    if (next && p.mode) {
-      await window.nekko.updateSettings({ defaultChatMode: p.mode });
-      await useStore.getState().refreshSettings();
-    }
-  };
+  const patch = async (p: Partial<Session>) => onChange(await window.nekko.setSessionOptions(session.id, p as any));
 
   const showMode = only !== 'privacy';
   const showPrivacy = only !== 'mode';
@@ -452,41 +485,25 @@ export function ChatControls({
       <div className={only ? 'relative min-w-0' : 'relative shrink-0'}>
         <button
           ref={modeButton}
+          data-chat-mode-button
           className="ctl-menu max-w-full whitespace-nowrap"
           onClick={() => setModeOpen((o) => !o)}
-          aria-haspopup="menu"
+          aria-haspopup="dialog"
           aria-expanded={modeOpen}
-          title={MODE_DESC[mode]}
+          title={`${label.name}: ${label.summary}. ${MODE_DESC[mode]}`}
         >
           <span className="ctl-menu-label">Mode</span>
-          <span className="min-w-0 truncate">{execution === 'worktree' ? 'Worktree' : sandbox ? 'Sandbox' : 'Unified'} - {MODE_LABEL[mode]}</span>
+          <label.icon className="h-3 w-3 shrink-0 text-ink-faint" />
+          <span className="min-w-0 truncate"><span className="text-ink">{label.name}</span>{label.summary ? ` · ${label.summary}` : ''}</span>
           <span className="ctl-caret">▾</span>
         </button>
         {modeOpen && createPortal(
-          <div ref={modeMenu} style={modePosition} className="card fixed z-[100] overflow-y-auto p-1.5 shadow-lg" role="menu" aria-label="Chat mode">
-            <div className="grid grid-cols-2 gap-2">
-            <div><p className="px-2.5 text-[11px] text-ink-faint">Execution</p>
-              {([{ value: 'sandbox', label: 'Sandbox', description: 'Scoped files and bash in a local container.' }, { value: 'worktree', label: 'Worktree', description: 'Isolated Git checkout from committed HEAD.' }, { value: 'unified', label: 'Unified', description: 'Share current folders and local changes.' }] as const).map((item) => <button key={item.value} role="menuitemradio" aria-checked={execution === item.value} className="flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2" onClick={() => void selectExecution(item.value)}><span className="text-[13px] font-medium">{item.label}</span><span className="text-[11px] text-ink-faint">{item.description}</span></button>)}
-            </div><div><p className="px-2.5 text-[11px] text-ink-faint">Permissions</p>
-            {(['ask', 'guardrails', 'yolo'] as ChatMode[]).map((m) => (
-              <button
-                key={m}
-                role="menuitemradio"
-                data-chat-mode={m}
-                aria-checked={mode === m}
-                className={`flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 ${mode === m ? 'text-accent' : ''}`}
-                onClick={() => { void patch({ mode: m }).catch((e) => useStore.getState().pushToast('error', String(e))); setModeOpen(false); modeButton.current?.focus({ preventScroll: true }); }}
-              >
-                <span className="text-[13px] font-medium">{MODE_LABEL[m]}{m === 'guardrails' ? ' (recommended)' : ''}</span>
-                <span className="text-[11px] text-ink-faint">{MODE_DESC[m]}</span>
-              </button>
-            ))}
-            </div></div>
-          </div>, document.body
+          <ModePanel session={session} isCloudModel={isCloudModel} modelId={modelId} onChange={onChange} style={modePosition} panelRef={modeMenu}
+            onSandboxSetup={() => { setModeOpen(false); setSetupOpen(true); }} />,
+          document.body,
         )}
       </div>
 
-      {executionError && <p role="alert" className="text-danger">{executionError}</p>}
       {setupOpen && <SandboxSetup session={session} onChange={onChange} onClose={() => setSetupOpen(false)} />}
       {sandbox && <><span className="text-[11px] text-ink-faint">Scoped files/bash only; host previews, hooks and MCP unavailable.</span><button className="ctl-menu" onClick={() => setSetupOpen(true)}>Sandbox setup</button><SandboxReview sessionId={session.id} /></>}
       {/* Tools: the same grouped picker the agent window's footer carries. */}

@@ -10,6 +10,7 @@ import com.nekko.android.chat.PhoneEvent
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.lock.AppLock
+import com.nekko.protocol.AgentEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,16 +42,16 @@ class ConnectionKeeper(
     private val foreground = MutableStateFlow(false)
     private val lastEventAt = MutableStateFlow(0L)
 
-    private val _status = MutableStateFlow<String?>(null)
-    /** The keep-alive notification's line while the service should run, else null. */
-    val status: StateFlow<String?> = _status.asStateFlow()
+    private val _status = MutableStateFlow<KeepAlive.Status?>(null)
+    /** What the keep-alive notification says while the service should run, else null. */
+    val status: StateFlow<KeepAlive.Status?> = _status.asStateFlow()
 
     fun start() {
         watchNetwork()
         scope.launch {
             repo.events.collect { e ->
                 lastEventAt.value = now()
-                onEvent(e.sessionId, PhoneEvent.of(e) ?: return@collect)
+                onEvent(e.sessionId, PhoneEvent.of(e) ?: return@collect, (e as? AgentEvent.ApprovalRequired)?.approval?.call?.id)
             }
         }
         // A minute tick so a run that went silent stops the service after IDLE_LIMIT_MS.
@@ -59,7 +60,7 @@ class ConnectionKeeper(
             combine(prefs.flow(KeepAlive.ENABLED), repo.state, lastEventAt, tick) { on, s, last, _ ->
                 val busy = s.activity.size
                 val wanted = KeepAlive.wanted(on, s.conn, busy, now() - last)
-                if (wanted) KeepAlive.line(busy, s.active?.name ?: "your computer") else null
+                if (wanted) KeepAlive.status(busy, s.active?.name ?: "your computer") else null
             }.distinctUntilChanged().collect { line ->
                 _status.value = line
                 // In the app nothing needs keeping alive; on leaving, onForeground starts it.
@@ -77,7 +78,7 @@ class ConnectionKeeper(
         if (!visible && _status.value != null) startService()
     }
 
-    private fun onEvent(sessionId: String, event: PhoneEvent) {
+    private fun onEvent(sessionId: String, event: PhoneEvent, callId: String?) {
         // In the app the chat itself shows it (and A6's haptics react).
         if (foreground.value || !prefs.get(Notices.ENABLED)) return
         val s = repo.state.value
@@ -90,6 +91,7 @@ class ConnectionKeeper(
                 chatTitle = chat.title,
                 computer = s.active?.name ?: "your computer",
                 hideContent = lock.enabled.value,
+                callId = callId,
             ),
         )
     }

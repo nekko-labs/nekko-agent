@@ -72,7 +72,10 @@ describe('hooks', () => {
   it('never lets a hook that hangs or cannot start block the tool', async () => {
     const settings = {
       hooks: [
-        rule({ name: 'slow', command: node('setTimeout(()=>{},10000)'), timeoutMs: 1_000 }),
+        // 1 s is the shortest limit runHook allows; sleeping 2.5 s still outlasts it.
+        // Kept short because on Windows killing cmd.exe leaves the node grandchild
+        // holding the pipes, so the outcome only settles when the sleep ends.
+        rule({ name: 'slow', command: node('setTimeout(()=>{},2500)'), timeoutMs: 1_000 }),
         rule({ name: 'missing', command: 'definitely-not-a-command-xyz' }),
       ],
     };

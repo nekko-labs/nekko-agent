@@ -21,7 +21,9 @@ async function main() {
   fs.writeFileSync(path.join(out, 'styled.css'), css.css);
   fs.writeFileSync(path.join(out, 'index.html'), '<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\' data: blob:; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; connect-src \'none\'"><link rel="stylesheet" href="styled.css"></head><body style="margin:0;height:100vh"><div id="root" style="height:100%"></div><script src="fixture.js"></script></body></html>');
   const env = { ...process.env, NEKKO_INTEGRATION_OUT: out }; delete env.ELECTRON_RUN_AS_NODE;
-  const r = cp.spawnSync(require(path.join(modules, 'electron')), [path.join(__dirname, 'layout-evidence-sandbox.cjs')], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
+  // NEKKO_LAYOUT_SANDBOX picks another capture script for the same fixture.
+  const sandbox = path.join(__dirname, path.basename(process.env.NEKKO_LAYOUT_SANDBOX || 'layout-evidence-sandbox.cjs'));
+  const r = cp.spawnSync(require(path.join(modules, 'electron')), [sandbox], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
   if (r.error) throw r.error;
   process.exitCode = r.status || 0;
 }

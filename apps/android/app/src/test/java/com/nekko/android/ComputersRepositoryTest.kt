@@ -1,5 +1,6 @@
 package com.nekko.android
 
+import com.nekko.android.data.ChatListCache
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.DEFAULT_COMPUTER_NAME
 import com.nekko.android.data.osName
@@ -10,6 +11,7 @@ import com.nekko.protocol.E2E
 import com.nekko.protocol.Events
 import com.nekko.protocol.PairingLink
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.SavedChatList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -61,6 +63,79 @@ class ComputersRepositoryTest {
 
     private fun secretOf(store: FakeStore, id: String) =
         Json.parseToJsonElement(store.map.getValue(ComputersRepository.secretKey(id))).jsonObject
+
+    private class MemoryLists : ChatListCache {
+        val lists = mutableMapOf<String, SavedChatList>()
+        override fun load(computerId: String) = lists[computerId]
+        override fun save(computerId: String, list: SavedChatList) { lists[computerId] = list }
+        override fun remove(computerId: String) { lists.remove(computerId) }
+    }
+
+    private val listAnswers = FakeRemotes { c ->
+        when (c.channel) {
+            Channels.SESSIONS_SUMMARIES -> Json.parseToJsonElement(
+                """[{"id":"s1","title":"Fix it","updatedAt":5,"lastReplyText":"secret reply"},{"id":"sub","title":"x","updatedAt":9,"parentSessionId":"s1"}]""",
+            )
+            Channels.WORKSPACE_LIST -> Json.parseToJsonElement("""[{"id":"w","name":"App"}]""")
+            else -> FakeRemotes.defaultAnswer(c)
+        }
+    }
+
+    @Test
+    fun `the saved list shows until the computer answers and never keeps content`() = runTest {
+        val store = FakeStore()
+        val lists = MemoryLists()
+        val repo = repo(store, listAnswers)
+        repo.chatListCache = lists
+        val id = repo.pair(link)
+        runCurrent()
+        assertNull("nothing saved before the computer answers", lists.lists[id])
+        listAnswers.last.goOnline()
+        runCurrent()
+        val saved = lists.lists.getValue(id)
+        assertEquals(listOf("s1"), saved.summaries.map { it.id })
+        assertEquals(listOf("App"), saved.folders.map { it.name })
+        assertFalse(saved.json().toString().contains("secret"))
+        assertNull(repo.state.value.savedListAt)
+
+        // Next launch, the computer unreachable: the saved list, marked as saved.
+        val again = repo(store, FakeRemotes())
+        again.chatListCache = lists
+        again.load()
+        runCurrent()
+        assertEquals(listOf("Fix it"), again.state.value.summaries.map { it.title })
+        assertEquals(listOf("w"), again.state.value.workspaces.map { it.id })
+        assertEquals(1_000L, again.state.value.savedListAt)
+
+        again.forget(id)
+        runCurrent()
+        assertNull("forgetting a computer drops its list", lists.lists[id])
+    }
+
+    @Test
+    fun `nothing is kept until the setting is turned on`() = runTest {
+        val repo = repo(remotes = listAnswers)
+        val id = repo.pair(link)
+        runCurrent()
+        listAnswers.last.goOnline()
+        runCurrent()
+        val lists = MemoryLists()
+        assertTrue(lists.lists.isEmpty())
+        repo.chatListCache = lists
+        assertEquals("turned on while online: the list as it is now", listOf("s1"), lists.lists[id]?.summaries?.map { it.id })
+        repo.chatListCache = null
+        assertNull(repo.state.value.savedListAt)
+    }
+
+    @Test
+    fun `the saved list's note says when and that it is not live`() {
+        val zone = java.time.ZoneOffset.UTC
+        val now = 1_800_000_000_000L
+        val today = com.nekko.android.ui.screens.savedListNote(now - 600_000, "Mac", now, zone)
+        assertTrue(today, today.startsWith("Saved list from ") && today.endsWith("It updates when Mac answers."))
+        val older = com.nekko.android.ui.screens.savedListNote(now - 3 * 86_400_000L, "Mac", now, zone)
+        assertTrue("an older list also names the day", older.length > today.length)
+    }
 
     @Test
     fun `the connection log follows the active computer and holds no secrets`() = runTest {

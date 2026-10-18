@@ -10,8 +10,8 @@ import { hasAppChrome } from '../chrome.js';
  */
 export function ConnectorsView() {
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+    <div className="@container h-full overflow-y-auto">
+      <div className="mx-auto max-w-[1600px] px-8 py-8">
         {!hasAppChrome && <h1 className="view-title">Connectors</h1>}
         <p className="mt-1 text-[13px] text-ink-faint">
           Pull issues, messages, and docs into context. Credentials are stored locally and validated on
@@ -25,7 +25,7 @@ export function ConnectorsView() {
           Drive a chat from a messaging app: each channel binds a conversation to one Nekko Agent session,
           and only allowlisted chat ids can reach it.
         </p>
-        <div className="mt-4">
+        <div className="mt-4 grid grid-cols-1 gap-4 @3xl:grid-cols-2 @6xl:grid-cols-3">
           <MessagingChannels />
         </div>
       </div>

@@ -131,12 +131,15 @@ data class ChatMessage(
     val content: String,
     val reasoning: String? = null,
     val createdAt: Long? = null,
-    val imageCount: Int = 0,
+    /** The message's photos as the computer sent them to the phone: small JPEG data URLs, `""` for one not sent. */
+    val images: List<String> = emptyList(),
     val skill: Pair<String, String>? = null,
     val toolCalls: List<ToolCall> = emptyList(),
     val toolResult: ToolResult? = null,
     val interrupted: Boolean = false,
 ) {
+    val imageCount: Int get() = images.size
+
     companion object {
         fun from(e: JsonElement?): ChatMessage? {
             val o = e.obj() ?: return null
@@ -147,7 +150,7 @@ data class ChatMessage(
                 content = o.str("content") ?: "",
                 reasoning = o.str("reasoning"),
                 createdAt = o.long("createdAt"),
-                imageCount = o["images"].arr()?.size ?: 0,
+                images = o["images"].arr()?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: "" } ?: emptyList(),
                 skill = skill,
                 toolCalls = o["toolCalls"].arr()?.mapNotNull { ToolCall.from(it) } ?: emptyList(),
                 toolResult = ToolResult.from(o["toolResult"]),
@@ -678,24 +681,30 @@ fun skillCall(name: String, input: String): JsonObject = buildJsonObject {
     put("input", input)
 }
 
-/** `chat:send` argument (SendOptions). Only the fields the phone uses. */
+/**
+ * `chat:send` argument (SendOptions). Only the fields the phone uses.
+ * [images] are `data:image/jpeg;base64,…` URLs, as the iPhone app sends them.
+ */
 fun sendOptions(
     sessionId: String,
     providerId: String,
     modelId: String,
     text: String,
     skill: SkillSummary? = null,
+    images: List<String> = emptyList(),
 ): JsonObject = buildJsonObject {
     put("sessionId", sessionId)
     put("providerId", providerId)
     put("modelId", modelId)
     put("text", text)
     if (skill != null) put("skill", skillCall(skill.name, text))
+    if (images.isNotEmpty()) put("images", JsonArray(images.map(::JsonPrimitive)))
 }
 
-/** `chat:queue` prompt: plain text, or `{ text, skill }` for a skill turn (the computer expands it). */
-fun queuePrompt(text: String, skill: SkillSummary? = null): JsonElement =
-    if (skill == null) JsonPrimitive(text) else buildJsonObject {
+/** `chat:queue` prompt: plain text, or `{ text, skill, images }` (the computer expands a skill). */
+fun queuePrompt(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()): JsonElement =
+    if (skill == null && images.isEmpty()) JsonPrimitive(text) else buildJsonObject {
         put("text", text)
-        put("skill", skillCall(skill.name, text))
+        if (skill != null) put("skill", skillCall(skill.name, text))
+        if (images.isNotEmpty()) put("images", JsonArray(images.map(::JsonPrimitive)))
     }

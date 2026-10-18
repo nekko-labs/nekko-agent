@@ -7,6 +7,7 @@ import {
   PHONE_SETTINGS_VIEW,
   PhoneAccessError,
   callFromPhone,
+  thumbnailPhoneImages,
   phoneAlwaysDenied,
   phoneChannelAllowed,
   phoneSettingsUpdate,
@@ -266,6 +267,34 @@ describe('a chat as a phone receives it (session:get)', () => {
     const s = { id: 's1', messages: [{ id: 't', role: 'tool', content: '', toolResult: { toolCallId: 'c', output: out } }] };
     const r = (phoneSessionView(s) as { messages: { toolResult: { output: string } }[] }).messages[0].toolResult.output;
     expect(r).toBe('z'.repeat(n - 1));
+  });
+
+  it('keeps the newest user photos as thumbnails, blanks the rest, never changes the count', () => {
+    const { images: n, thumbChars } = PHONE_SESSION_VIEW;
+    const small = 'data:image/jpeg;base64,AAAA';
+    const msgs = Array.from({ length: n + 2 }, (_, i) => ({ id: `u${i}`, role: 'user', content: '', images: [small] }));
+    msgs.push({ id: 'big', role: 'user', content: '', images: ['data:image/jpeg;base64,' + 'A'.repeat(thumbChars), 7 as unknown as string] });
+    const v = phoneSessionView({ id: 's', messages: msgs }) as { messages: { images: string[] }[] };
+    const last = v.messages.at(-1)!.images;
+    expect(last).toEqual(['', '']); // too large, not a string
+    expect(v.messages.at(-2)!.images).toEqual([small]);
+    expect(v.messages[2].images).toEqual([small]);
+    expect(v.messages[1].images).toEqual(['']); // past the newest `images`
+    expect(v.messages[0].images).toEqual(['']);
+    expect(msgs[0].images).toEqual([small]); // the computer's copy is untouched
+  });
+
+  it('thumbnails only the newest photos the phone will get, and callFromPhone uses it', async () => {
+    const seen: string[] = [];
+    const thumb = async (u: string) => { seen.push(u); return u === 'bad' ? Promise.reject(new Error('x')) : `t:${u}`; };
+    const s = { id: 's', messages: [{ id: 'a', role: 'user', content: '', images: ['p1', 'bad'] }, { id: 'b', role: 'assistant', content: 'ok' }] };
+    const out = await thumbnailPhoneImages(s, thumb) as { messages: { images?: string[] }[] };
+    expect(out.messages[0].images).toEqual(['t:p1', '']);
+    expect(seen).toEqual(['bad', 'p1']); // newest first
+    expect(s.messages[0].images).toEqual(['p1', 'bad']);
+    await expect(callFromPhone(() => s, 'session:get', ['s'], async () => 'data:image/jpeg;base64,T')).resolves.toMatchObject({
+      messages: [{ images: ['data:image/jpeg;base64,T', 'data:image/jpeg;base64,T'] }, { content: 'ok' }],
+    });
   });
 
   it('is what callFromPhone returns for session:get; other values pass through', async () => {

@@ -49,6 +49,10 @@ createServer((req, res) => {
       res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_write', type: 'function', function: { name: 'write_file', arguments: '' } }] }));
       res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }));
       res.write(chunk({}, 'tool_calls'));
+    } else if (last?.role === 'user' && /markdown/i.test(userText)) {
+      const md = '## Build steps\n\n1. Install with **npm ci**\n2. Run `npm test`\n- [x] lint\n\n```sh\nnpm ci && npm test -- --reporter=dot --run-in-band\n```\n\nSee [the docs](https://nekkoagent.com/docs).';
+      for (const piece of md.match(/[\s\S]{1,12}/g)) res.write(chunk({ content: piece }));
+      res.write(chunk({}, 'stop'));
     } else if (last?.role === 'user' && /slow/i.test(userText)) {
       const words = Array.from({ length: 20 }, (_, i) => `word${i + 1} `);
       let i = 0;
