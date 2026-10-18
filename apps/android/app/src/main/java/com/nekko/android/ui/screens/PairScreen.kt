@@ -261,6 +261,7 @@ fun PairScreen(
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         ) { Text("Pair") }
                     }
+                    NearbyCard()
                 }
             }
             error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = p.danger) }

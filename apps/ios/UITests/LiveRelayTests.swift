@@ -120,8 +120,8 @@ final class LiveRelayTests: XCTestCase {
                       "the slow reply never started streaming")
         XCUIDevice.shared.press(.home)
         sleep(3)
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let shot = XCTAttachment(screenshot: springboard.screenshot())
+        // The whole screen, without querying SpringBoard: on a loaded simulator finding it timed out.
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         shot.name = "\(theme)-6c-live-activity"
         shot.lifetime = .keepAlways
         add(shot)
@@ -181,7 +181,11 @@ final class LiveRelayTests: XCTestCase {
         let sheet = app.navigationBars["Pair with a computer?"]
         XCTAssertTrue(sheet.waitForExistence(timeout: 10), "the link opens the confirmation sheet")
         attach(app, "deeplink-1-confirm")
-        sheet.buttons["Pair"].tap()
+        // The sheet is still sliding up when its bar first exists; a tap then lands
+        // where the button was and is lost. Tap once it has stopped moving.
+        let pair = sheet.buttons["Pair"]
+        XCTAssertTrue(waitForSteadyFrame(pair, in: app, 10), "the sheet's Pair button never settled")
+        pair.tap()
         tapSystemAlertIfShown()
 
         let newChat = app.navigationBars.buttons["New chat"]
@@ -219,6 +223,21 @@ final class LiveRelayTests: XCTestCase {
             let f = e.frame
             if e.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { return true }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        } while Date() < deadline
+        return false
+    }
+
+    /// Like `waitForFrame`, and the frame is the same on two reads half a second apart.
+    private func waitForSteadyFrame(_ e: XCUIElement, in app: XCUIApplication, _ seconds: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        var last: CGRect?
+        repeat {
+            if waitForFrame(e, in: app, max(0.5, deadline.timeIntervalSinceNow)) {
+                let f = e.frame
+                if f == last { return true }
+                last = f
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         } while Date() < deadline
         return false
     }

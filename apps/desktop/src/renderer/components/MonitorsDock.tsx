@@ -156,7 +156,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
         <span aria-hidden className="pane-grip monitors-dock__grip" />
       </div>}
       <header className="monitors-dock__toolbar">
-        <strong>Panels</strong>
+        <strong>Monitors</strong>
         <span className="monitors-dock__count">{selectedMonitors.length} of {MONITORS.length}</span>
         <span role="status" aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>{reorderAnnouncement}</span>
         <div className="monitors-dock__configure" ref={configureRef}>

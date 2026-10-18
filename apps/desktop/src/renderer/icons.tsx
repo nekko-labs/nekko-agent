@@ -47,6 +47,7 @@ export const SendIcon = (p: P) => (
 );
 export const PlusIcon = (p: P) => (<S {...p}><path d="M12 5v14M5 12h14" /></S>);
 export const SearchIcon = (p: P) => (<S {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.4-4.4" /></S>);
+export const CalendarIcon = (p: P) => (<S {...p}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></S>);
 export const ChevronUpIcon = (p: P) => (<S {...p}><path d="m6 15 6-6 6 6" /></S>);
 export const ChevronDownIcon = (p: P) => (<S {...p}><path d="m6 9 6 6 6-6" /></S>);
 export const TrashIcon = (p: P) => (<S {...p}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></S>);
@@ -124,8 +125,8 @@ export const SleepIcon = (p: P) => (<S {...p}><path d="M4 9h6l-6 8h6M14 5h5l-5 6
 export const CompactIcon = (p: P) => (<S {...p}><path d="M12 3v6m0 0-3-3m3 3 3-3M12 21v-6m0 0-3 3m3-3 3 3M4 12h16" /></S>);
 export const ChevronIcon = (p: P) => (<S {...p}><path d="m9 6 6 6-6 6" /></S>);
 
-/** A quiet meditation glyph for focusing one agent window. */
-export const ZenIcon = (p: P) => <S {...p}><circle cx="12" cy="5" r="2" /><path d="m8 11 4-2 4 2m-4-2v6m-4-4-3 5 7 3 7-3-3-5M5 16l7-1 7 1" /></S>;
+/** A target ring (two rings and a centre dot) for focusing one agent window. */
+export const TargetIcon = (p: P) => <S {...p}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></S>;
 /** Configure: three vertical sliders, each knob at a different height. */
 export const SlidersIcon = (p: P) => <S {...p}><path d="M6 4v4m0 4v8M12 4v10m0 4v2M18 4v1m0 4v11" /><circle cx="6" cy="10" r="2" /><circle cx="12" cy="16" r="2" /><circle cx="18" cy="7" r="2" /></S>;
 export const ControlPanelIcon = (p: P) => <S {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 6v3m0 4v5m8-12v7m0 4v1M6 9h4m4 4h4" /><circle cx="8" cy="11" r="2" /><circle cx="16" cy="15" r="2" /></S>;

@@ -24,6 +24,9 @@ import { join } from 'node:path';
 import { startAgentBrowser } from ${JSON.stringify(join(root, 'apps/desktop/src/main/agentBrowser.ts'))};
 import { captureWindow } from ${JSON.stringify(join(root, 'apps/desktop/src/main/windowCapture.ts'))};
 app.setPath('userData', ${JSON.stringify(profile)});
+// The temporary bundled entry is not the desktop app root. Resolve staged native
+// resources from the real desktop path, just as an unpackaged app launch does.
+app.setAppPath(${JSON.stringify(join(root, 'apps/desktop'))});
 const out = ${JSON.stringify(out)};
 const native = ${native};
 const pause = ms => new Promise(r => setTimeout(r, ms));

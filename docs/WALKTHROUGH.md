@@ -64,6 +64,8 @@ model servers are first-class, not an afterthought.
 
 > Tip: set a default provider + model in Settings so new chats start ready to go.
 
+> Can't find a setting? Click the search icon at the right of the **Appearance** heading in Settings and type a word such as "prompt". A second after you stop typing (or straight away when you press Enter) the page scrolls to the first match and highlights it. Use the up/down arrows (or the arrow keys) to step through the rest, and the X or Esc to close the search.
+
 ### Example: connect an LM Studio server
 
 1. In LM Studio, load a model and start its server (Developer → Start Server).
@@ -98,7 +100,7 @@ A successfully completed reply should not retain a stale **Reply interrupted** w
 
 The left navigation panel curves into its tails about 10px beyond the icon rows, with matching curves at both ends. Opening a wall window reveals the incoming window and slides existing windows aside, without a separate corner-resize animation. Reduced motion disables the wall transitions.
 
-On the Agents wall, the agent, image, and terminal icons with small bottom-right **+** indicators create new windows. A subtle divider separates them from the Focused, Dynamic, and Grid view modes. Inside a window header, the larger accent-colored **Focus** icon sits immediately beside Minimize and opens that window in Focused view. Minimize removes only the wall window, keeping the chat in the Agent panel. The left navigation keeps its position and tint, with broad curved wings above and below the destinations.
+On the Agents wall, the agent, image, and terminal icons with small bottom-right **+** indicators create new windows. A subtle divider separates them from the **Focused** and **Dynamic** view modes. Dynamic uses a lightning bolt icon. For an even **Grid**, open **Settings > Command Center**, choose Grid under Wall layout, and set Grid rows and Grid columns (1 to 6 each). These dimensions are remembered when switching layouts. The existing **Ctrl/Cmd+Shift+1**, **2**, and **3** shortcuts still select Focused, Dynamic, and Grid respectively; saved Grid layouts reopen unchanged. In Focused view, **New agent** fades straight into the new chat's prompt; once you send your first message, the composer expands into the full chat. The Focused window's border is a quiet tint rather than a bright outline. The right-hand dock is headed **Monitors**. Inside a window header, the larger accent-colored **Focus** icon sits immediately beside Minimize and opens that window in Focused view. Minimize removes only the wall window, keeping the chat in the Agent panel. The left navigation keeps its position and tint, with broad curved wings above and below the destinations.
 
 The **Chat** tab is the heart of the app. There are no separate "chat", "cowork",
 and "code" modes, it's one thread. Ask a question, or hand off a task and let
@@ -400,3 +402,7 @@ The desktop navigation rail stays 52px wide at rest. Hover a destination or Tab 
 The **Artifacts** tab on the left rail collects what agents made across all your chats: documents, web pages, designs, diagrams, images, data and office files, grouped by kind. Pick one to preview it, **Open file** to hand it to its usual app, or **Open chat** to see the chat it came from on the Agents wall in Focused view. Source code the agent edits is not listed.
 
 At the top of **Agent Monitor**, expand **Artifacts** to see the session’s linked documents. It starts collapsed and always displays a count, including 0. A newly discovered artifact path expands just this section and highlights it with an accent border/background and a visible, screen-reader-announced **New artifact** status for ten seconds. Another new path restarts that deadline, including when one path replaces another without changing the count. The whole monitor never opens automatically. Initial history, switching chats and history loaded after a missing session do not trigger the highlight. Repeated links and previously seen paths do not retrigger it. You can collapse the section during the highlight; it stays collapsed until another new path arrives. When the highlight expires, the section keeps its current open or closed state. Non-image documents are not read until you open them; image cards load automatically when rendered. Host previews remain unavailable in Sandbox.
+
+### Plan step status icons
+
+In Agent Monitor, each active plan step has a static **Working** glyph and tooltip. Multiple steps can be working at once, even between streamed replies. If a reply was explicitly interrupted and no turn is running, active entries show pause bars labeled **Paused** until work resumes. Completed steps show a check, pending steps a hollow circle, and skipped steps a slashed circle with a struck-through title.

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { MessagingStatus, TelegramMessagingConfig } from '@nekko-agent/shared';
 import { Badge } from './primitives/index.js';
+import { TelegramIcon } from '../connectorIcons.js';
 
 /**
  * Inbound messaging channels (T151): let a messaging app drive a chat, so the
@@ -54,12 +55,17 @@ export function MessagingChannels() {
   const running = !!status?.running;
   return (
     <div className="card p-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold">Telegram</h3>
-          <p className="text-[12px] text-ink-faint">
-            Message your agent from Telegram; it replies in the same chat. Long-polls, so no public URL needed.
-          </p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ background: 'var(--surface-2)' }}>
+            <TelegramIcon size={20} />
+          </div>
+          <div>
+            <h3 className="font-semibold">Telegram</h3>
+            <p className="text-[12px] text-ink-faint">
+              Message your agent from Telegram; it replies in the same chat. Long-polls, so no public URL needed.
+            </p>
+          </div>
         </div>
         {running ? (
           <Badge tone="success" variant="solid">
@@ -88,7 +94,7 @@ export function MessagingChannels() {
           onChange={(e) => setChatIds(e.target.value)}
           disabled={saving}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-row-reverse items-center gap-2">
           <button
             className="btn btn-primary py-1.5 text-[12px]"
             disabled={saving || !token.trim() || !chatIds.trim()}
