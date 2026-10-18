@@ -1,5 +1,5 @@
 import { IpcChannels, withApiServerDefaults, type AgentToolId, type ApiServerSettings, type SubagentTarget } from '@nekko-agent/shared';
-import { listAgentTerminals, type Host } from '@nekko-agent/host';
+import { listAgentTerminals, onDaemonOr, type Host } from '@nekko-agent/host';
 import { apiServerStatus, newApiToken, syncApiServer } from '../main/api-server.js';
 import { cliInstallStatus, installCli } from '../main/cli-install.js';
 import { refreshLocalAccess, subagentTarget, type AppLike } from '../main/local-access.js';
@@ -53,10 +53,17 @@ export function desktopChannels(app: AppLike, host: Host, localRelay?: LocalRela
     // MCP entries written from this window point at this app's server: the
     // renderer asks for "install into Claude Code" and the backend fills in
     // the address, token and launcher, which the renderer never has to hold.
-    [C.integrationsInstall]: ([tool, target]) =>
-      host.installSubagent(tool as AgentToolId, (target as SubagentTarget | undefined) ?? subagentTarget(app, host)),
-    [C.integrationsSnippet]: ([tool, target]) =>
-      host.subagentSnippet(tool as AgentToolId, (target as SubagentTarget | undefined) ?? subagentTarget(app, host)),
+    // nekkod writes the entries; it asks `integrations:target` for that
+    // target when a call reaches it without one.
+    'integrations:target': () => subagentTarget(app, host),
+    [C.integrationsInstall]: ([tool, target]) => {
+      const t = (target as SubagentTarget | null | undefined) ?? subagentTarget(app, host);
+      return onDaemonOr(C.integrationsInstall, [tool, t], () => host.installSubagent(tool as AgentToolId, t));
+    },
+    [C.integrationsSnippet]: ([tool, target]) => {
+      const t = (target as SubagentTarget | null | undefined) ?? subagentTarget(app, host);
+      return onDaemonOr(C.integrationsSnippet, [tool, t], () => host.subagentSnippet(tool as AgentToolId, t));
+    },
 
     // The relay this computer runs on its Tailscale address (Remote access card).
     // Not `remote:*`: those are nekkod's, and phones never reach these.

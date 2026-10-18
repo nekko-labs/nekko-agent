@@ -1,5 +1,19 @@
 @import 'tailwindcss';
 
+/* Lilac / Lavender: the website's drifting pixel-dot field. It sits BEHIND
+   the app (z-index -1, above only the page background), so it shows in the
+   field around the floating panels while chat windows and every other panel,
+   which paint their own solid surface, cover it and keep text clear. Never
+   intercepts input. */
+.pixel-wave-background {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+}
+
 /* Faint seasonal decoration; never intercepts app input. */
 .autumn-background {
   position: fixed;
@@ -901,7 +915,7 @@
 #command-titlebar-slot > .wall-toolbar-titlebar { flex: 1; min-width: 0; flex-wrap: nowrap; }
 #command-titlebar-slot .wall-fixed-picker { z-index: 60; }
 #command-titlebar-slot > .wall-toolbar-titlebar > div { flex-wrap: nowrap; }
-#command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button, #command-titlebar-slot [role='tab'] { padding-top: 2px; padding-bottom: 2px; }
+#command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button { padding-top: 2px; padding-bottom: 2px; }
 
 .titlebar-updater {
   position: relative;
@@ -1368,6 +1382,42 @@
     /* Warmer, darker paper and a browner ink-soft: a lighter wash keeps the
      title on the banner's purple end above 4.5:1. */
     --merged-wash: rgba(147, 51, 234, 0.16);
+  }
+
+  /* Lilac and Lavender: the marketing site's two looks (nekkoagent.com).
+     Lilac is its white version: lavender-white paper, white panels, the
+     logo's indigo-to-lavender gradient as the accent. Lavender is its
+     colourful version: the whole ground is the logo's #9D8CE6, text stays dark
+     ink and panels are frosted white, never a dark or black surface. Both
+     add the site's drifting pixel-dot field (PixelWaveBackground). */
+  [data-theme='light'][data-preset='lilac'] {
+    --paper: #fbfaff;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f1edff;
+    --ink: #17151f;
+    --ink-soft: #5d5970;
+    --ink-faint: #8f8aa3;
+    --line: #e6e1f5;
+  }
+
+  [data-theme='light'][data-preset='lavender'] {
+    /* Panels are the website's frosted card (white at 72% over the lavender),
+       an off-white that keeps Lavender apart from Lilac's pure white. */
+    --paper: #9d8ce6;
+    --win: #e9e4fa;
+    --surface: #e4dff8;
+    --surface-2: #d9d2f5;
+    --ink: #17151f;
+    --ink-soft: #2c2640;
+    --ink-faint: #4a4366;
+    --line: #c4b8ee;
+    /* On a lavender ground the merged-PR violet would vanish: lighten the
+       washes with white and take the label to the deepest violet. */
+    --merged-ink: #2e1065;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
   }
 
   /* Belt-and-suspenders for the native <select> popup list. The OS draws that
@@ -2165,9 +2215,12 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-auto-arrange { position: relative; display: grid; grid-template-columns: 1fr; align-items: center; margin-left: 6px; opacity: 0; visibility: hidden; transform: scale(.6); transition: opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
 .wall-auto-arrange[data-visible='true'] { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .wall-auto-arrange > button { min-width: 0; overflow: hidden; }
+/* Snap to grid: an icon toggle with the outline button's frame; lit in the accent while on. */
+.wall-snap-toggle { display: inline-grid; place-items: center; width: 32px; height: 28px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-faint); transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease; }
+.wall-snap-toggle:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); }
+.wall-snap-toggle[aria-pressed='true'] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--accent-soft); }
+.wall-snap-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.wall-auto-arrange [role='tooltip'] { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; width: 230px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--win); color: var(--ink); font-size: 12px; pointer-events: none; opacity: 0; visibility: hidden; }
-.wall-auto-arrange[data-visible='true']:hover [role='tooltip'], .wall-auto-arrange[data-visible='true']:focus-within [role='tooltip'] { opacity: 1; visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .wall-auto-arrange { transition: none; transform: none; } }
 /* Focused only: one window fills the board, so its selection ring is a quiet
    hint (accent mixed well into the line colour), not a full-strength outline. */
@@ -2186,7 +2239,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* The All/Agents/Terminals filter shares this frame exactly. It used to be
    `rounded-lg`, which also picks up `corner-shape: squircle`, so its corners
    looked squarer than the layout group's beside it. */
-.wall-layout-segments, .wall-filter-segments { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
+.wall-layout-segments { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
 .wall-layout-segments button { padding: 4px 10px; border-radius: 6px; font-size: 12px; color: var(--ink-faint); }
 .wall-layout-segments button[aria-pressed='true'] { background: var(--surface-2); color: var(--ink); font-weight: 500; }
 .wall-fixed-picker { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }

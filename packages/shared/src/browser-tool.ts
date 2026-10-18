@@ -7,7 +7,7 @@
 /** Actions both modes support: the original five. */
 export const BROWSER_BASIC_ACTIONS = ['navigate', 'inspect', 'click', 'fill', 'close'] as const;
 /** Playwright-backed actions, dedicated (in-app) mode only. */
-export const BROWSER_DEDICATED_ACTIONS = ['wait', 'type', 'press', 'scroll', 'extract', 'evaluate', 'screenshot', 'tabs', 'tab_new', 'tab_switch', 'tab_close', 'logs'] as const;
+export const BROWSER_DEDICATED_ACTIONS = ['wait', 'type', 'press', 'scroll', 'extract', 'evaluate', 'screenshot', 'tabs', 'tab_new', 'tab_switch', 'tab_close', 'logs', 'snapshot'] as const;
 export const BROWSER_ACTIONS = [...BROWSER_BASIC_ACTIONS, ...BROWSER_DEDICATED_ACTIONS] as const;
 export type BrowserAction = (typeof BROWSER_ACTIONS)[number];
 
@@ -56,5 +56,7 @@ export function validateBrowserInput(input: Record<string, unknown>): BrowserAct
   if (action === 'evaluate' && (typeof input.expression !== 'string' || !input.expression.trim() || input.expression.length > 5_000)) throw new Error('evaluate needs an expression of at most 5000 characters.');
   if ((action === 'tab_switch' || (action === 'tab_close' && input.tab !== undefined)) && (typeof input.tab !== 'number' || !Number.isInteger(input.tab) || input.tab < 0 || input.tab > 50)) throw new Error('tab must be a tab index from the tabs action.');
   if (input.visible !== undefined && typeof input.visible !== 'boolean') throw new Error('visible must be a boolean.');
+  if (action === 'snapshot' && selector && /^@e\d+$/.test(selector)) throw new Error('A snapshot scope is a CSS selector, not a ref.');
+  if (action === 'scroll' && selector && /^@e\d+$/.test(selector)) throw new Error('scroll takes a CSS selector; click, fill and type on a ref already scroll it into view.');
   return action;
 }

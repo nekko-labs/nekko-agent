@@ -1,5 +1,6 @@
-import type { Page } from 'playwright-core';
+import type { AgentPage as Page } from './agentPage.js';
 import { BROWSER_MAX_WAIT_MS } from '@nekko-agent/shared';
+import { untimed, type PhaseMark } from './agentBrowserTiming.js';
 
 /** Text returned to the model is capped so one page cannot flood the context. */
 export const PAGE_TEXT_LIMIT = 6_000;
@@ -52,18 +53,19 @@ export function formatEvaluated(value: unknown): string {
  * Run one validated page-level action. Tab handling, visibility, screenshots
  * and logs live with the window bookkeeping in agentBrowser.ts.
  */
-export async function runPageAction(page: Page, input: Record<string, unknown>): Promise<string> {
+export async function runPageAction(page: Page, input: Record<string, unknown>, mark: PhaseMark = untimed): Promise<string> {
+  const summary = () => mark('summary', () => pageSummary(page));
   const selector = typeof input.selector === 'string' && input.selector ? input.selector : undefined;
   switch (input.action) {
     case 'navigate':
-      await page.goto(String(input.url), { waitUntil: 'load', timeout: 25_000 });
-      return pageSummary(page);
+      await mark('navigate', () => page.goto(String(input.url), { waitUntil: 'load', timeout: 25_000 }));
+      return summary();
     case 'inspect':
-      return pageSummary(page);
+      return summary();
     case 'click':
       // The first match, as document.querySelector picked before Playwright.
-      await page.locator(selector!).first().click({ timeout: ACTION_TIMEOUT_MS });
-      return pageSummary(page);
+      await mark('click', () => page.locator(selector!).first().click({ timeout: ACTION_TIMEOUT_MS }));
+      return summary();
     case 'fill':
       await page.locator(selector!).first().fill(String(input.value ?? ''), { timeout: ACTION_TIMEOUT_MS });
       return 'Field filled.';
@@ -113,6 +115,13 @@ export async function runPageAction(page: Page, input: Record<string, unknown>):
       if (!selector) return pageSummary(page);
       const text = await page.locator(selector).first().innerText({ timeout: ACTION_TIMEOUT_MS });
       return text.slice(0, PAGE_TEXT_LIMIT);
+    }
+    case 'snapshot': {
+      if (!page.snapshot) throw new Error('snapshot needs the native in-app browser.');
+      const { tree, refs } = await mark('snapshot', () => page.snapshot!(selector));
+      if (!refs) return `${await page.title()}\nNo interactive elements${selector ? ` in ${selector}` : ''}. Use inspect or extract for the text, or wait and take a new snapshot.`;
+      const body = tree.length > PAGE_TEXT_LIMIT ? `${tree.slice(0, PAGE_TEXT_LIMIT)}\n...(truncated; pass a selector to snapshot part of the page)` : tree;
+      return `${await page.title()}\n${body}\nUse a ref such as @e1 as the selector for click, fill, type, press, wait or extract. Refs expire when the page changes.`;
     }
     case 'evaluate':
       // A string is evaluated as an expression in the page's main world. The

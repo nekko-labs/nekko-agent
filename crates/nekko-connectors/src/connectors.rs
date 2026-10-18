@@ -262,6 +262,7 @@ async fn github_poll(http: &dyn Http, token: &str, settings: &Value, cursor: f64
             ("text", Some(json!(text))),
             ("source", Some(source)),
             ("payload", Some(payload.filter(|p| !p.is_null()).cloned().unwrap_or(json!({})))),
+            ("actor", at(&ev, &["actor", "login"]).and_then(Value::as_str).filter(|s| !s.is_empty()).map(|s| json!(s))),
         ]));
     }
     Ok(poll_result(events, cursor))

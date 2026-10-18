@@ -53,6 +53,9 @@ describe('in-app browser routing', () => {
       [{ mode: 'dedicated', action: 'tab_switch' }, 'tab must be'],
       [{ mode: 'dedicated', action: 'scroll', direction: 'sideways' }, 'direction'],
       [{ mode: 'existing', action: 'screenshot' }, 'needs dedicated mode'],
+      [{ mode: 'existing', action: 'snapshot' }, 'needs dedicated mode'],
+      [{ mode: 'dedicated', action: 'snapshot', selector: '@e2' }, 'not a ref'],
+      [{ mode: 'dedicated', action: 'scroll', selector: '@e12' }, 'scroll takes a CSS selector'],
     ] as const) {
       const result = await run(input);
       expect(result.isError, JSON.stringify(input)).toBe(true);

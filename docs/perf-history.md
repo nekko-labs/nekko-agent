@@ -39,6 +39,35 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Native browser migration baseline (#752, 2026-10-17)
+
+Area: perf harness / browser driver. Result: regression in initial sequential driver comparison, not yet an alternated causal measurement.
+Conditions: Windows x64, unchanged revision `4fc3cc5c`, Playwright 1.63.0, Electron 44.7.0 / Chromium 152.0.7977.130, isolated hidden synthetic fixture, 1100x760 outer DIP, 20 fresh-chat navigation samples and 20 existing-page inspect samples. Nearest-rank percentiles.
+
+| Metric (ms) | Before | After |
+|---|---|---|
+| Fresh chat navigation p50 | 71.4239 | 93.61859999999979 |
+| Fresh chat navigation p95 | 89.70190000000002 | 103.96899999999994 |
+| Warm inspect p50 | 0.916899999999714 | 1.1934000000001106 |
+| Warm inspect p95 | 1.1640999999999622 | 1.3894000000000233 |
+
+Source: [raw samples and Electron process memory](../reports/agent-browser/playwright-baseline.json). Cold means new driver/renderer, not new Electron process or flushed caches. The [experimental native v2 candidate](../reports/agent-browser/native-candidate-v2.json) passed the smoke suite but measured higher latency in both workloads. These sequential batches are not a causal speedup/regression estimate; no performance win is claimed. Screenshot was 1359x873 device pixels at OS scaling, viewport height 698 DIP. Candidate must match these conditions; native-child memory is not included in Electron metrics and needs separate collection.
+
+### Matched alternating driver benchmark (2026-10-17)
+
+Raw [four batches and exact memory snapshots](../reports/agent-browser/matched-benchmark.json), order PW/native/PW/native, 20 cold + 20 warm per batch (40 samples per driver/workload), same common fixture bundle, Electron 44.7.0 / Chromium 152.0.7977.130, 1100x760 DIP outer and 1359x873 screenshots, light theme. Runtime native `7ff28b02`, harness-only explicit driver switch/memory probe. Nearest-rank percentiles:
+
+| Metric | Playwright before | Native after | Result |
+|---|---:|---:|---|
+| Cold chat navigation p50 ms | 66.36300000000006 | 93.87869999999998 | Slower native |
+| Cold chat navigation p95 ms | 74.38070000000016 | 102.51769999999999 | Slower native |
+| Warm inspect p50 ms | 1.006199999999808 | 1.1442999999999302 | Slightly slower native |
+| Warm inspect p95 ms | 1.4304999999999382 | 1.4756999999999607 | Near-null tail; no win |
+| Total working set bytes, batch 1 | 513273856 | 471531520 | Lower native snapshot |
+| Total working set bytes, batch 2 | 515989504 | 471937024 | Lower native snapshot |
+
+Memory totals include all Electron process metrics plus the native child (14,360,576 / 14,323,712 working-set bytes, 4,759,552 / 4,718,592 private bytes), exclude the PowerShell measurement process, and are one snapshot per warm batch—not unique committed memory or a long-run distribution. The common fixture bundle includes the baseline helper for both; production native main excludes Playwright. Two alternating batches are not randomized per-sample causal evidence. Cold is fresh chat driver/renderer, not whole-app startup; warm sub-ms deltas can be scheduler noise. Both drivers passed the same expanded actions/security fixture; screenshots await parent actual-pixel inspection. This is a latency/memory trade-off, not an across-the-board speedup.
+
 ## Themes
 
 Threads worth an article, with the entries that tell each story:
@@ -65,6 +94,54 @@ Threads worth an article, with the entries that tell each story:
   performance problem.
 
 ## 2026-10
+
+### Agent browser: snapshot and element refs (2026-10-18)
+Area: browser driver / agent context
+Result: mixed (half the bytes the model writes and no locating script; more to read unless scoped; no time effect)
+Conditions: same machine, build and fixture as the full-flow entry below, hidden-frame wake on, native driver. Three scripted strategies for locating the form, alternated sample by sample: `selectors` (evaluate a script listing controls, then CSS), `snapshot` (whole-page snapshot, then refs), `snapshot-scoped` (snapshot of `main`, then refs). 12 fresh processes, then 20 fresh-chat and 20 warm-session rounds per arm. Nearest-rank percentiles. Reply text excludes screenshot pixels; request is the JSON of the tool inputs.
+
+| Fresh chat, per flow | selectors | snapshot | snapshot-scoped |
+|---|---|---|---|
+| Tool calls / retries | 10 / 1 | 10 / 1 | 10 / 1 |
+| Reply text p50 | 6889 B | 11193 B | 6935 B |
+| Request p50 | 986 B | 462 B | 512 B |
+| Locate step p50 / p95 | 2.79 / 3.24 ms | 21.1 / 21.89 ms | 22.03 / 32.43 ms |
+| Whole flow p50 / p95 | 465.22 / 475.69 ms | 424.18 / 466 ms | 435.32 / 489.66 ms |
+
+Warm session, whole flow p50 / p95: 378.32 / 394.93, 357.1 / 399.45 and 348.48 / 414.72 ms. Why: a snapshot replaces a DOM-listing script the model would otherwise write, but a whole-page one lists every link (2,584 bytes once the form is there, against 559 for the evaluate); scoped to `main` it is 435 bytes. The snapshot takes about 20 ms against about 3, absorbed by the fixture's form API wait, so the flow-time differences are not an effect. Not measured: pages without ids or with custom controls, where refs should matter most; a live model choosing actions. Source: this PR, [report](../reports/agent-browser/snapshot-refs.md), [raw data](../reports/agent-browser/snapshot-refs.json).
+
+### Agent browser: full-flow benchmark, startup phases, hidden-window frame wake (2026-10-18)
+Area: perf harness / browser driver
+Result: improvement (and a new measurement)
+Conditions: Windows 11 10.0.26300, Ryzen 9 9950X3D (32 threads), Electron 44.7.0 / Chromium 152.0.7977.130, native agent-browser 0.39.1 (pinned), hidden 1100x760 window, synthetic signup app (`scripts/agent-browser-flow-fixture.mjs`). Each flow is navigate, locate (list controls, wait and retry once because the form renders after a 120 ms API call), fill twice, click submit, wait and extract the confirmation, screenshot: 10 tool calls through the real bridge, no model. Before and after are the same build with the wake off and on (`wakeFrames`), alternated sample by sample: 12 fresh processes (6 first flows each), then 20 fresh-chat and 20 warm-session rounds in one process. Nearest-rank percentiles.
+
+| Metric (native) | Before | After |
+|---|---|---|
+| Whole flow p50 / p95, first flow in a new process | 3377.57 / 3418.12 ms | 484.72 / 612.5 ms |
+| Whole flow p50 / p95, fresh chat | 3321.87 / 3345.81 ms | 466.29 / 489.61 ms |
+| Whole flow p50 / p95, warm session | 3242.25 / 3260.74 ms | 388.44 / 404.39 ms |
+| Click p50 / p95, fresh chat | 1001.11 / 1005.73 ms | 10.86 / 13.5 ms |
+| Screenshot p50 / p95, fresh chat | 1905.49 / 1918.75 ms | 37.66 / 56.07 ms |
+| Tool calls / retries per flow | 10 / 1 | 10 / 1 |
+
+Startup on a fresh chat's first request, measured by the new `onTiming` phases (with wake, p50 / p95): window 35.54 / 37.22 ms, relay 1.01 / 1.18 ms, native spawn to ready 17.47 / 19.72 ms, CDP attach 6.45 / 7.82 ms, navigate 24.93 / 26.65 ms, summary 1.29 / 1.6 ms. Startup was never the problem. A warm session's navigate step was 17.14 ms p50 against 101.02 ms fresh (no window, relay, process or attach, and the HTTP cache served JS and CSS: 3 requests instead of 5); the rest of the flow cost the same either way.
+
+Why: once a hidden window goes idle it renders about one frame a second, measured in a bare `BrowserWindow` with no driver; `backgroundThrottling: false` and Chromium's background/occlusion switches did not change it. A click's input is acknowledged on the next frame (about 1 s) and the native screenshot waits two frames (about 2 s). A frame subscription held only for a click or screenshot on a hidden tab keeps frames coming; the window stays hidden. Playwright cross-check (4 launches, 10 rounds): without the wake 0 of 24 flows finished (`page.screenshot: Timeout 10000ms exceeded.` every time, clicks 1008 to 2010 ms); with it 24 of 24, fresh-chat flow 628.84 / 709.81 ms. Native smoke screenshots before and after differ in 21 pixels, a 1x21 caret column. Not measured: macOS, Linux. Tool calls and reply bytes did not change; that is the snapshot/refs work. Source: this PR, [report](../reports/agent-browser/flow-benchmark.md), [raw data](../reports/agent-browser/flow-benchmark.json).
+
+### nekkod's real-binary tests split by domain, sleeps replaced by waits (2026-10-18)
+Area: dev build
+Result: no effect on wall time (the layout that would have split binaries: regression, not taken)
+Conditions: Windows, local, Rust 1.96.0, debug test profile, worktree's own `target/`. Base `origin/main` ba6c006a (unchanged `daemon.rs`, run from a second worktree with its own target dir) vs this branch, same machine, back to back. "Clean package" is `cargo clean -p nekkod` then `cargo test -p nekkod --no-run` (dependencies stay built). Full run is `cargo test -p nekkod` with everything built, wall time from the shell.
+
+| Metric | Before | After |
+|---|---|---|
+| `cargo test -p nekkod`, 3 runs (s) | 20.07, 19.26, 19.25 | 19.20, 19.12, 19.21 |
+| `daemon` test binary's own time, 3 runs (s) | 8.60, 8.38, 8.44 | 8.31, 8.28, 8.34 |
+| `--no-run` after `cargo clean -p nekkod`, 2 runs (s) | 24.32, 24.17 | 25.21, 25.45 |
+| `--no-run` after touching one test file (s) | 7.11 (`daemon.rs`) | 2.74, 2.56 (`daemon/turns.rs`) |
+| First split: 11 test binaries, `cargo test -p nekkod`, 1 run (s) | 19.3 (median above) | 32.0 |
+
+Why: `cargo test` runs test binaries one after another, so eleven binaries added up each file's slowest test (`runs_the_model_server_itself` 7.4 s, a training run 4.4 s, the image turn 2.6 s, ...) instead of overlapping them; the split kept one binary (`tests/daemon/main.rs`) with a module per domain. The waits poll every 10 ms instead of sleeping 20 to 300 ms, which does not move the total because the slowest tests wait on product timers (engine health polls, the goal run's 4 s pause). Source: this PR.
 
 ### Slowest TypeScript unit tests made faster without losing assertions (2026-10-18)
 Area: dev build
@@ -827,6 +904,8 @@ first token excluded). The model was never slow; we were reporting half its
 speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
+
+- **Native agent-browser default feasibility (2026-10-17).** Candidate `agent-browser@0.39.1` (native Rust, Chrome), Nekko base `2f81bfc0`, Windows / Node `v24.1.0`. Migration blocked before runtime edits: the native command daemon accepts unauthenticated loopback JSON outside Nekko's approval bridge. Two diagnostic clients received `success: true` for `session_info` without credentials; these are security probes, not performance samples. No browser was launched. **Before: not measured. After: not measured.** No latency, memory, warm/cold distribution or speedup is established. Playwright remains explicitly required. [Exact provenance, raw outputs, reproduction and matched benchmark acceptance criteria](../reports/agent-browser/feasibility.md). Next: secure native command IPC, then collect at least 20 interleaved cold/warm samples with the same browser revision, viewport, theme and synthetic fixture before claiming any effect.
 
 Performance-motivated changes with no recorded numbers. Measure them if they
 are ever revisited.

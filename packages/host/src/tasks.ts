@@ -230,6 +230,8 @@ export function startTaskScheduler(): void {
   if (timer) return;
   reconcileTasks();
   timer = setInterval(() => {
+    // "Pause all automations": due tasks wait; Run now still works.
+    if (getSettings().automationsPaused) return;
     const now = Date.now();
     for (const t of load()) {
       if (t.status !== 'active' || inFlight.has(t.id)) continue;

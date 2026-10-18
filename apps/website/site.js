@@ -384,3 +384,182 @@
       });
   }
 })();
+
+// ---- media slots: click a feature GIF or product image to see it large ----
+(() => {
+  const box = document.getElementById('lightbox');
+  if (!box) return;
+  const stage = box.querySelector('.lightbox-stage');
+  const close = box.querySelector('.lightbox-close');
+  let opener = null;
+  const shut = () => {
+    box.hidden = true; stage.replaceChildren(); document.body.style.overflow = '';
+    if (opener) opener.focus();
+  };
+  document.querySelectorAll('.media').forEach((el) => {
+    el.addEventListener('click', () => {
+      opener = el;
+      const src = el.querySelector('img, video');
+      let big;
+      if (src) {
+        big = src.cloneNode(true);
+        if (big.tagName === 'VIDEO') { big.controls = true; big.autoplay = true; big.muted = true; big.loop = true; }
+      } else {
+        big = document.createElement('div');
+        big.className = 'media-placeholder';
+        big.textContent = (el.textContent || 'Coming soon').trim() + ' · coming soon';
+      }
+      stage.replaceChildren(big);
+      box.hidden = false; document.body.style.overflow = 'hidden';
+      close.focus();
+    });
+  });
+  close.addEventListener('click', shut);
+  box.addEventListener('click', (e) => { if (e.target === box || e.target === stage) shut(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) shut(); });
+})();
+
+// ---- white / colourful toggle: white by default, remembered once chosen ----
+(() => {
+  const btn = document.querySelector('.theme-toggle');
+  if (!btn) return;
+  const root = document.documentElement;
+  btn.addEventListener('click', () => {
+    const colour = root.dataset.theme !== 'colour';
+    if (colour) root.dataset.theme = 'colour'; else delete root.dataset.theme;
+    try { localStorage.setItem('nekko-theme', colour ? 'colour' : 'white'); } catch (e) { /* private mode: the choice lasts this page only */ }
+  });
+})();
+
+// ---- beta sign-up, hosted by Nekko: she peeks over the card and reacts.
+//      idle: blinks now and then · watching: eyes follow the typing ·
+//      eager: happy eyes over the button · confused: a bad email ·
+//      celebrate: hop and sparkles once signed up ----
+(() => {
+  const stage = document.querySelector('[data-beta]');
+  if (!stage) return;
+  const form = stage.querySelector('[data-beta-form]');
+  const input = form.querySelector('input[type="email"]');
+  const button = form.querySelector('button[type="submit"]');
+  const peek = stage.querySelector('.nekko-peek');
+  const look = stage.querySelector('.np-look');
+  const bubble = stage.querySelector('[data-bubble]');
+  const note = form.querySelector('.beta-note');
+  const lines = {
+    idle: "Psst… want to see what's next?",
+    watching: 'Ooh, keep going…',
+    eager: 'Do it, do it!',
+    confused: 'Hmm, that email looks a bit off.',
+    celebrate: "Yay! You're in!",
+  };
+  let mood = 'idle';
+  const setMood = (m) => {
+    if (mood === 'celebrate') return; // signed up: stay happy
+    mood = m;
+    peek.dataset.mood = m;
+    bubble.textContent = lines[m];
+  };
+  // eyes follow the text: left at the start of the box, right as it fills, a little down towards it
+  const follow = () => {
+    const t = Math.min(input.value.length / 24, 1);
+    look.setAttribute('transform', `translate(${(-1 + 2 * t).toFixed(2)} 1)`);
+  };
+  input.addEventListener('focus', () => { if (mood !== 'confused') setMood('watching'); follow(); });
+  input.addEventListener('input', () => { if (mood === 'confused') setMood('watching'); follow(); });
+  input.addEventListener('blur', () => { look.removeAttribute('transform'); if (mood === 'watching') setMood('idle'); });
+  button.addEventListener('mouseenter', () => { if (mood !== 'confused') setMood('eager'); });
+  button.addEventListener('mouseleave', () => { if (mood === 'eager') setMood(document.activeElement === input ? 'watching' : 'idle'); });
+  // idle blink every few seconds
+  setInterval(() => {
+    if (mood !== 'idle') return;
+    peek.classList.add('blink');
+    setTimeout(() => peek.classList.remove('blink'), 160);
+  }, 3800);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!input.checkValidity()) { setMood('confused'); input.focus(); return; }
+    const endpoint = form.dataset.endpoint;
+    if (endpoint) {
+      try {
+        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ email: input.value }) });
+        if (!res.ok) throw new Error(String(res.status));
+      } catch (err) {
+        note.textContent = "That didn't go through. Please try again in a moment.";
+        setMood('confused');
+        bubble.textContent = 'Oops, something went wrong. Try again?';
+        return;
+      }
+    }
+    look.removeAttribute('transform');
+    setMood('celebrate');
+    form.querySelector('.beta-ask').hidden = true;
+    form.querySelector('.beta-done').hidden = false;
+  });
+})();
+
+// ---- dot-matrix swell background: a fine grid of pixel dots that mostly
+//      sits invisible, with a soft wave of brightness drifting through it.
+//      The grid is pinned to the page, so it scrolls with the content, and
+//      scrolling also pushes the wave along. Brand gradient (indigo to
+//      lavender, left to right) on the white version, white on the colourful
+//      one. ~20 fps, pauses when the tab is hidden, and holds still (but
+//      still follows the scroll) for reduced-motion visitors. ----
+(() => {
+  const c = document.getElementById('pixelwave');
+  if (!c || !c.getContext) return;
+  const ctx = c.getContext('2d');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const CELL = 9; // small dots, high density
+  let W = 0, H = 0, dpr = 1, t = 0, last = 0, raf = 0;
+  const size = () => {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+  };
+  const colour = () => document.documentElement.dataset.theme === 'colour';
+  const draw = () => {
+    const sy = window.scrollY;
+    const push = sy / 260; // scrolling moves the wave
+    const white = colour();
+    ctx.clearRect(0, 0, W, H);
+    const y0 = -(sy % CELL);
+    for (let y = y0; y < H; y += CELL) {
+      const py = y + sy; // position on the page, not the screen
+      for (let x = 0; x < W; x += CELL) {
+        const w = Math.sin(x / 110 - t * 1.4 - push + Math.sin(py / 150 + t * 0.5 + push * 0.4) * 1.6);
+        const a = Math.max(0, w) ** 3 * 0.34;
+        if (a < 0.025) continue;
+        const s = a > 0.18 ? 3 : 2;
+        if (white) ctx.fillStyle = `rgba(255,255,255,${(a * 1.6).toFixed(3)})`;
+        else {
+          const k = x / W; // 0 = indigo #453A92, 1 = lavender #9D8CE6
+          ctx.fillStyle = `rgba(${Math.round(69 + 88 * k)},${Math.round(58 + 82 * k)},${Math.round(146 + 84 * k)},${a.toFixed(3)})`;
+        }
+        ctx.fillRect(Math.round(x + (CELL - s) / 2), Math.round(y + (CELL - s) / 2), s, s);
+      }
+    }
+  };
+  const loop = (now) => {
+    raf = requestAnimationFrame(loop);
+    if (now - last < 50) return;
+    t += (now - last) / 1000 * 0.9;
+    last = now;
+    draw();
+  };
+  const start = () => { if (!raf && !reduced) { last = performance.now(); raf = requestAnimationFrame(loop); } };
+  const stop = () => { cancelAnimationFrame(raf); raf = 0; };
+  size(); draw();
+  window.addEventListener('resize', () => { size(); draw(); });
+  // follow the scroll every frame, even between animation ticks
+  let pending = false;
+  window.addEventListener('scroll', () => {
+    if (pending) return; pending = true;
+    requestAnimationFrame(() => { pending = false; draw(); });
+  }, { passive: true });
+  document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  start();
+})();

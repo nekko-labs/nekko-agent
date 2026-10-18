@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import '../tests/browserGlobals.js';
-import { cssRule, stylesheet } from '../tests/css.js';
+import { cssRule, hasSelector, stylesheet } from '../tests/css.js';
 import { loadWall, summary, windowBody } from '../tests/renderWall.js';
 import { AgentPanelControls } from './AgentPanelControls.js';
 import { NumberedAgentIcon } from './NumberedChatIcon.js';
@@ -13,16 +13,17 @@ const layouts = stylesheet('components/commandWallLayouts.css');
 const two = { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never, layout: { mode: 'grid' as const, cols: 2, rows: 1 } };
 
 describe('agent panel controls', () => {
-  it('are icon pills whose label is there to grow out on hover', () => {
+  it('are icon-only buttons that explain themselves in a hover tooltip instead of growing a label', () => {
     const html = renderToStaticMarkup(<AgentPanelControls show orientation="vertical" onToggle={noop} onOrientation={noop} />);
     expect(html).toContain('aria-label="Hide the agent panel"');
     expect(html).toContain('aria-label="Show agents in a row"');
-    expect(html.match(/agent-panel-pill-label/g)).toHaveLength(2);
-    // Label first, icon last: it grows out to the left of the icon.
-    expect(html.indexOf('Hide agents')).toBeLessThan(html.indexOf('<svg'));
-    for (const trigger of [':hover', ':focus-visible']) {
-      expect(cssRule(layouts, `.agent-panel-pill${trigger} .agent-panel-pill-label`)).toMatchObject({ 'max-width': '120px', opacity: '1' });
-    }
+    expect(html).not.toContain('agent-panel-pill-label');
+    expect(html).toContain('data-hover-tip="Hide agents"');
+    expect(html).toContain('data-hover-tip="Show agents in a row"');
+    // No native title alongside the tooltip, and a fixed size that never grows.
+    expect(html).not.toContain('title=');
+    expect(cssRule(layouts, '.agent-panel-pill')).toMatchObject({ width: '28px', height: '28px' });
+    expect(hasSelector(layouts, /agent-panel-pill-label/)).toBe(false);
   });
   it('stack in a row panel and lie in a row in a column panel, and swap again when collapsed', () => {
     const stacked = (show: boolean, orientation: 'vertical' | 'horizontal') =>
@@ -67,7 +68,7 @@ describe('wall chrome fixes', () => {
     expect(cssRule(styles, '.wall-composer-side[data-edge="right"]').right).toBe('-14px');
     expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe('-14px');
   });
-  it('reserves Auto-arrange space so revealing it never shifts the controls beside it', () => {
+  it('reserves snap-to-grid space so revealing it never shifts the controls beside it', () => {
     const hidden = cssRule(styles, '.wall-auto-arrange');
     expect(hidden).toMatchObject({ 'grid-template-columns': '1fr', 'margin-left': '6px', visibility: 'hidden' });
     expect(hidden.width).toBeUndefined();

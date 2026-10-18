@@ -1,13 +1,15 @@
-import { app, BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import type { Page } from 'playwright-core';
+import type { AgentPage as Page } from './agentPage.js';
 import { validateBrowserInput } from '@nekko-agent/shared';
 import { captureWindow } from './windowCapture.js';
-import { AgentCdpTransport, isAllowedNavigation } from './agentCdpTransport.js';
+import { nativeDriver } from './agentNativeDriver.js';
+import { isAllowedNavigation } from './agentCdpTransport.js';
 import { describeLogs, runPageAction, watchPage, type PageLogEntry } from './agentBrowserActions.js';
+import { phaseRecorder, untimed, type BrowserTiming, type PhaseMark } from './agentBrowserTiming.js';
+
+export type { BrowserTiming } from './agentBrowserTiming.js';
 
 /** A hidden browser nobody has touched for this long is closed. Each one is a
  *  full renderer that keeps painting (backgroundThrottling is off), and agents
@@ -17,12 +19,11 @@ const MAX_TABS = 8;
 /** Screenshot pixels above this size are not attached to the model. */
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
 
-/** Playwright's view of one chat's windows. The default drives real Playwright
- *  through the in-process CDP transport; tests substitute a fake. */
+/** One chat's owned native pages; tests may substitute a fake. */
 export interface BrowserDriver {
-  /** Hand a fresh about:blank window to Playwright and get its Page. */
-  adopt(win: BrowserWindow): Promise<Page>;
-  /** Tell Playwright a window went away without it (reaper, crash). */
+  /** Adopt a fresh about:blank owned window. `mark` times its startup phases. */
+  adopt(win: BrowserWindow, mark?: PhaseMark): Promise<Page>;
+  /** Release a window after reaper, crash or tab close. */
   forget(win: BrowserWindow): void;
   close(): Promise<void>;
 }
@@ -40,39 +41,26 @@ export interface ShellBridge {
   quitForUpdate(): void;
 }
 
-/** Connect playwright-core to this chat's windows only, with no debugging port. */
-export const playwrightDriver: BrowserDriverFactory = async () => {
-  // A plain require: the main bundle is CommonJS and playwright-core stays an
-  // external dependency (see bundleExternals.test.ts). Loaded on first use only.
-  const { chromium } = require('playwright-core') as typeof import('playwright-core');
-  const transport = new AgentCdpTransport({
-    product: `Chrome/${process.versions.chrome}`,
-    userAgent: app.userAgentFallback,
-    // Tabs are opened by the bridge (tab_new), never by Playwright itself.
-    createTarget: async () => { throw new Error('Open tabs with the tab_new action.'); },
-    closeTarget: (target) => (target as unknown as BrowserWindow).destroy(),
-  });
-  // A fixed artifacts folder instead of a fresh temp folder per chat that a
-  // hard exit would leave behind. Downloads are denied, so it stays empty.
-  const artifactsDir = join(app.getPath('userData'), 'agent-browser');
-  mkdirSync(artifactsDir, { recursive: true });
-  const browser = await chromium.connectOverCDP(transport, { timeout: 15_000, artifactsDir });
-  const context = browser.contexts()[0];
-  if (!context) throw new Error('Agent browser context did not start.');
-  return {
-    async adopt(win) {
-      const next = context.waitForEvent('page', { timeout: 15_000 });
-      await transport.add(win);
-      return next;
-    },
-    forget: (win) => transport.forget(win),
-    // Closing the transport first detaches every debugger; Playwright then
-    // sees the disconnect, so browser.close() cannot wait on a dead window.
-    close: async () => { transport.close(); await browser.close().catch(() => {}); },
-  };
-};
 
 interface Tab { win: BrowserWindow; page: Page; log: PageLogEntry[] }
+
+/** Actions that wait on the page's next frame: a click's input ack, a screenshot's paint. */
+const FRAME_ACTIONS = new Set(['click', 'screenshot']);
+
+/**
+ * Run `work` with the hidden window's compositor kept awake. Once a hidden
+ * window has gone idle it produces about one frame a second, so a click (whose
+ * input event is acknowledged on the next frame) took about 1 s and a
+ * screenshot (two animation frames, then the capture) about 2 s. A frame
+ * subscription for just the action keeps frames coming; the window stays
+ * hidden, and nothing is subscribed between actions.
+ */
+export async function withFramesAwake<T>(win: BrowserWindow, work: () => Promise<T>): Promise<T> {
+  if (win.isDestroyed() || win.isVisible()) return work();
+  win.webContents.beginFrameSubscription(false, () => {});
+  try { return await work(); }
+  finally { if (!win.isDestroyed()) win.webContents.endFrameSubscription(); }
+}
 
 /** First line of anything thrown. A page-side rejection (a DOMException from
  *  getDisplayMedia, say) crosses executeJavaScript as a plain object with no
@@ -97,8 +85,12 @@ export async function startAgentBrowser(options: {
    * downloaded update can install (`quitForUpdate`).
    */
   shell?: ShellBridge;
+  /** Phase timings for each chat request (diagnostics; never sent to the model). */
+  onTiming?: (timing: BrowserTiming) => void;
+  /** Keep hidden windows producing frames during clicks and screenshots (default true; benchmarks compare without). */
+  wakeFrames?: boolean;
 } = {}): Promise<{ url: string; token: string; close: () => void }> {
-  const createDriver = options.driver ?? playwrightDriver;
+  const createDriver = options.driver ?? nativeDriver;
   const token = randomBytes(32).toString('hex');
   const chats = new Map<string, ChatBrowser>();
   const starting = new Map<string, Promise<ChatBrowser>>();
@@ -153,12 +145,12 @@ export async function startAgentBrowser(options: {
     return win;
   };
 
-  const openTab = async (sessionId: string, chat: ChatBrowser): Promise<Tab> => {
+  const openTab = async (sessionId: string, chat: ChatBrowser, mark: PhaseMark = untimed): Promise<Tab> => {
     if (chat.tabs.length >= MAX_TABS) throw new Error(`At most ${MAX_TABS} tabs per chat; close one first.`);
     const win = makeWindow(sessionId);
     try {
-      await win.loadURL('about:blank');
-      const page = await chat.driver.adopt(win);
+      await mark('window', () => win.loadURL('about:blank'));
+      const page = await chat.driver.adopt(win, mark);
       const tab: Tab = { win, page, log: [] };
       watchPage(page, tab.log);
       win.on('closed', () => {
@@ -178,15 +170,15 @@ export async function startAgentBrowser(options: {
     }
   };
 
-  const ensureChat = async (sessionId: string): Promise<ChatBrowser> => {
+  const ensureChat = async (sessionId: string, mark: PhaseMark = untimed): Promise<ChatBrowser> => {
     const existing = chats.get(sessionId);
     if (existing) return existing;
     let start = starting.get(sessionId);
     if (!start) {
       start = (async () => {
-        const chat: ChatBrowser = { tabs: [], active: 0, driver: await createDriver(), lastUsed: Date.now(), queue: Promise.resolve() };
+        const chat: ChatBrowser = { tabs: [], active: 0, driver: await mark('driver', createDriver), lastUsed: Date.now(), queue: Promise.resolve() };
         chats.set(sessionId, chat);
-        try { await openTab(sessionId, chat); }
+        try { await openTab(sessionId, chat, mark); }
         catch (error) { closeChat(sessionId); throw error; }
         return chat;
       })().finally(() => starting.delete(sessionId));
@@ -197,20 +189,22 @@ export async function startAgentBrowser(options: {
 
   const describeTabs = (chat: ChatBrowser) => chat.tabs.map((tab, i) => `${i === chat.active ? '*' : ' '} [${i}] ${tab.page.url()}${tab.win.isDestroyed() ? '' : ` ${tab.win.webContents.getTitle()}`}`).join('\n') || 'No tabs open.';
 
-  async function run(sessionId: string, input: Record<string, unknown>): Promise<{ output: string; image?: { data: string; mime: 'image/png'; width: number; height: number } }> {
+  async function run(sessionId: string, input: Record<string, unknown>, trace: { mark: PhaseMark; fresh: boolean } = { mark: untimed, fresh: false }): Promise<{ output: string; image?: { data: string; mime: 'image/png'; width: number; height: number } }> {
     const action = input.action;
     if (action === 'close') { closeChat(sessionId); return { output: 'In-app browser closed.' }; }
     if (action === 'tabs' && !chats.has(sessionId)) return { output: 'No tabs open.' };
     if (action === 'logs' && !chats.has(sessionId)) return { output: describeLogs([]) };
     if (action === 'tab_close' && !chats.has(sessionId)) return { output: 'No tabs open.' };
     const fresh = !chats.has(sessionId);
-    const chat = await ensureChat(sessionId);
+    trace.fresh = fresh;
+    const { mark } = trace;
+    const chat = await ensureChat(sessionId, mark);
     chat.lastUsed = Date.now();
     // One action at a time per chat, so tab bookkeeping never interleaves.
     const result = chat.queue.then(async () => {
       if (action === 'tab_new') {
-        const tab = fresh ? activeTab(chat)! : await openTab(sessionId, chat);
-        if (typeof input.url === 'string') return { output: await runPageAction(tab.page, { action: 'navigate', url: input.url }) };
+        const tab = fresh ? activeTab(chat)! : await openTab(sessionId, chat, mark);
+        if (typeof input.url === 'string') return { output: await runPageAction(tab.page, { action: 'navigate', url: input.url }, mark) };
         return { output: `Opened tab ${chat.active}.\n${describeTabs(chat)}` };
       }
       if (action === 'tab_switch' || action === 'tab_close') {
@@ -233,20 +227,24 @@ export async function startAgentBrowser(options: {
       if (input.visible === false) tab.win.hide();
       if (action === 'tabs') return { output: describeTabs(chat) };
       if (action === 'logs') { const text = describeLogs(tab.log); tab.log.length = 0; return { output: text }; }
-      if (action === 'screenshot') {
-        // Playwright asks the renderer for a fresh frame. capturePage on a
-        // hidden window can return the last composited frame instead, which
-        // went stale after a scroll in the smoke run.
-        const png = await tab.page.screenshot({ type: 'png', timeout: 10_000 });
-        if (png.length > MAX_SCREENSHOT_BYTES) throw new Error('The screenshot is larger than 5 MB; use the capture tool to save it to a file instead.');
-        if (png.length < 24 || png.toString('ascii', 12, 16) !== 'IHDR') throw new Error('The page did not produce a frame; retry after it finishes rendering.');
-        const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
-        return { output: `Screenshot of tab ${chat.active} (${width}x${height}, ${tab.page.url()}). Page content only, without native window chrome.`, image: { data: png.toString('base64'), mime: 'image/png' as const, width, height } };
-      }
-      return { output: await runPageAction(tab.page, input) };
+      if (options.wakeFrames !== false && FRAME_ACTIONS.has(String(action))) return withFramesAwake(tab.win, () => pageAction(tab, chat, input, mark));
+      return pageAction(tab, chat, input, mark);
     });
     chat.queue = result.catch(() => {});
     return result;
+  }
+
+  async function pageAction(tab: Tab, chat: ChatBrowser, input: Record<string, unknown>, mark: PhaseMark): Promise<{ output: string; image?: { data: string; mime: 'image/png'; width: number; height: number } }> {
+    if (input.action === 'screenshot') {
+      // The native page waits for rendering before capturing its owned hidden
+      // compositor, preserving real scrollbars without changing page layout.
+      const png = await mark('screenshot', () => tab.page.screenshot({ type: 'png', timeout: 10_000 }));
+      if (png.length > MAX_SCREENSHOT_BYTES) throw new Error('The screenshot is larger than 5 MB; use the capture tool to save it to a file instead.');
+      if (png.length < 24 || png.toString('ascii', 12, 16) !== 'IHDR') throw new Error('The page did not produce a frame; retry after it finishes rendering.');
+      const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+      return { output: `Screenshot of tab ${chat.active} (${width}x${height}, ${tab.page.url()}). Page content only, without native window chrome.`, image: { data: png.toString('base64'), mime: 'image/png' as const, width, height } };
+    }
+    return { output: await runPageAction(tab.page, input, mark) };
   }
 
   let recorderUrl: string | undefined;
@@ -294,7 +292,18 @@ export async function startAgentBrowser(options: {
       }
       validateBrowserInput(input);
       if (input.action === 'navigate' && !isAllowedNavigation(input.url)) throw new Error('Only HTTP(S) pages can be opened.');
-      reply(200, await run(sessionId, input));
+      if (!options.onTiming) { reply(200, await run(sessionId, input)); return; }
+      const started = performance.now();
+      const { mark, phases } = phaseRecorder();
+      const trace = { mark, fresh: false };
+      const emit = (ok: boolean, body: unknown) => {
+        const timing: BrowserTiming = { action: String(input.action), fresh: trace.fresh, ok, totalMs: Math.round((performance.now() - started) * 1000) / 1000, phases, responseBytes: Buffer.byteLength(JSON.stringify(body)) };
+        try { options.onTiming!(timing); } catch { /* diagnostics never fail a request */ }
+      };
+      try {
+        const result = await run(sessionId, input, trace);
+        emit(true, result); reply(200, result);
+      } catch (error) { const body = { error: errorLine(error) }; emit(false, body); reply(400, body); }
     } catch (error) { reply(400, { error: errorLine(error) }); }
   });
   server.requestTimeout = 30_000;

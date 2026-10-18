@@ -1,0 +1,6 @@
+# These bytes are compared against the exact maintained native source patch.
+/vendor/agent-browser/* text eol=lf
+# The patch adds two upstream lines that end in CRLF, so its bytes are mixed on
+# purpose. Store it exactly: eol=lf would keep "normalising" it and leave every
+# checkout reporting it as modified.
+/vendor/agent-browser/stdio.patch -text

@@ -3,17 +3,13 @@
     <clipPath id="squircle">
       <rect x="0" y="0" width="512" height="512" rx="114" ry="114"/>
     </clipPath>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#453A92"/><stop offset="1" stop-color="#9D8CE6"/></linearGradient>
   </defs>
 
   <g clip-path="url(#squircle)">
-    <rect width="512" height="512" fill="#101714"/>
-    <g transform="translate(13.46 73.87) scale(20.2117)" fill="#f2f1e9" fill-rule="evenodd">
+    <rect width="512" height="512" fill="url(#tile)"/>
+    <g transform="translate(13.46 73.87) scale(20.2117)" fill="#ffffff" fill-rule="evenodd">
       <path d="M4.059,10.357C4.034,10.285 4.015,10.212 4.003,10.138L3.007,4.165L2.649,2.016L9.117,5.897C11.039,5.29 12.961,5.29 14.883,5.897L21.351,2.016L20.005,10.088C19.987,10.199 19.959,10.308 19.921,10.415L19.921,10.416C18.733,13.756 15.551,16.006 12,16.006C8.428,16.006 5.23,13.729 4.059,10.357L4.059,10.357ZM5.009,10.027C6.04,12.996 8.856,15 12,15C15.126,15 17.927,13.019 18.973,10.079C18.991,10.028 19.004,9.976 19.013,9.923L20,4L15,7C13,6.267 11,6.267 9,7L4,4L4.995,9.972C4.999,9.991 5.003,10.009 5.009,10.027Z"/>
     </g>
   </g>
-
-  <!-- Rim light. A dark tile on a dark taskbar loses its own edge; a hairline of
-       the accent gives it back without lightening the art. -->
-  <rect x="3" y="3" width="506" height="506" rx="111" ry="111"
-        fill="none" stroke="#a7c8ac" stroke-opacity="0.72" stroke-width="6"/>
 </svg>

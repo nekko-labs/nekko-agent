@@ -139,8 +139,10 @@ async fn tasks_json_and_every_side_effect_match() {
                 Value::Null
             }
             "tick" => {
-                for id in svc.due(op["now"].as_f64().unwrap()) {
-                    svc.fire(&id).await;
+                // As the daemon's loop does: fire only what is still due.
+                let now = op["now"].as_f64().unwrap();
+                for id in svc.due(now) {
+                    svc.fire_if_due(&id, now).await;
                 }
                 Value::Null
             }
@@ -163,7 +165,9 @@ async fn tasks_json_and_every_side_effect_match() {
             // Fires run concurrently in the TS, so their middle snapshots
             // interleave differently; the count and the last one must agree.
             assert_eq!(notices.len(), want.len(), "op {i} tick notices");
-            same(notices.last().unwrap(), want.last().unwrap(), &format!("op {i} last notice"));
+            if let (Some(got), Some(last)) = (notices.last(), want.last()) {
+                same(got, last, &format!("op {i} last notice"));
+            }
         } else {
             same(&json!(notices), &json!(want), &format!("op {i} {name} notices"));
         }
@@ -195,12 +199,13 @@ fn prompts_and_finished_fires_match() {
 
 /// A host whose settings read yields to the runtime before answering, as the
 /// daemon's real host does (it asks the backend over IPC).
-struct SlowSettings(Fake);
+struct SlowSettings(Fake, tokio::sync::Notify, tokio::sync::Notify);
 
 impl TaskHost for SlowSettings {
     fn settings(&self) -> BoxFut<'_, Value> {
         Box::pin(async move {
-            tokio::task::yield_now().await;
+            self.1.notify_one();
+            self.2.notified().await;
             self.0.settings.lock().unwrap().clone()
         })
     }
@@ -230,19 +235,26 @@ async fn two_fires_at_once_send_one_turn() {
     let dir = std::env::temp_dir().join(format!("nekko-automation-double-fire-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let host = Arc::new(SlowSettings(Fake::default()));
+    let host = Arc::new(SlowSettings(Fake::default(), tokio::sync::Notify::new(), tokio::sync::Notify::new()));
     *host.0.settings.lock().unwrap() = json!({});
     let svc = Tasks::new(&dir, host.clone(), Arc::new(|| 1_000.0), Arc::new(|| "t1".to_string()));
     let input = json!({ "title": "Nightly", "kind": "recurring", "prompt": "Summarize", "intervalMs": 3_600_000, "providerId": "p1", "modelId": "m1" });
+    // Creating the task also reads settings; let that read complete first.
+    host.2.notify_one();
     svc.create(&input).await.unwrap();
+    host.1.notified().await;
     let (a, b) = (svc.clone(), svc.clone());
-    let (ra, rb) =
-        tokio::join!(tokio::spawn(async move { a.fire("t1").await }), tokio::spawn(async move { b.fire("t1").await }));
-    ra.unwrap();
-    rb.unwrap();
-    assert_eq!(host.0.turns.lock().unwrap().len(), 1, "{:?}", host.0.turns.lock().unwrap());
+    let first = tokio::spawn(async move { a.fire("t1").await });
+    host.1.notified().await;
+    // The first fire is claimed and blocked in settings until the second returns.
+    b.fire("t1").await;
+    host.2.notify_one();
+    first.await.unwrap();
+    let turns = host.0.turns.lock().unwrap().clone();
+    assert_eq!(turns.len(), 1, "{turns:?}");
     assert_eq!(svc.list()[0]["runCount"], json!(1));
     // Once the first fire is done the task can fire again on demand.
+    host.2.notify_one();
     svc.fire("t1").await;
     assert_eq!(host.0.turns.lock().unwrap().len(), 2);
     let _ = std::fs::remove_dir_all(&dir);

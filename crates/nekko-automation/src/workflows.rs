@@ -303,6 +303,11 @@ impl Workflows {
         if let Some(m) = input.get("modelId") {
             wf.insert("modelId".into(), m.clone());
         }
+        for k in ["notify", "templateId"] {
+            if let Some(v) = input.get(k) {
+                wf.insert(k.into(), v.clone());
+            }
+        }
         wf.insert("createdAt".into(), num(now));
         wf.insert("updatedAt".into(), num(now));
         wf.insert("runCount".into(), json!(0));
@@ -534,6 +539,13 @@ impl Workflows {
                 let _io = lock(&self.io);
                 self.load_workflows().into_iter().find(|w| id_of(w) == Some(workflow_id))
             }?;
+            // "Pause all automations" holds back what nobody asked for just now.
+            if depth == 0 {
+                let kind = trigger_kind.as_str().unwrap_or("");
+                if rules::paused_blocks(kind, self.host.settings().await.get("automationsPaused")) {
+                    return None;
+                }
+            }
             let steps: Vec<Value> = wf.get("steps").and_then(Value::as_array).cloned().unwrap_or_default();
             {
                 let mut flying = lock(&self.in_flight);
@@ -915,11 +927,12 @@ impl Workflows {
             .get_session(session_id)
             .and_then(|s| s.get("messages").and_then(Value::as_array).map(Vec::len))
             .unwrap_or(0);
-        let failed = match self
-            .host
-            .send_chat(json!({ "sessionId": session_id, "providerId": provider, "modelId": model, "text": prompt }))
-            .await
-        {
+        let mut opts = json!({ "sessionId": session_id, "providerId": provider, "modelId": model, "text": prompt });
+        // A tools-off step reads text someone else wrote: no tool that acts.
+        if str_field(step, "tools") == Some("none") {
+            opts["noTools"] = json!(true);
+        }
+        let failed = match self.host.send_chat(opts).await {
             Ok(f) => f,
             Err(e) => return fail(&e),
         };
@@ -1211,6 +1224,7 @@ impl Workflows {
                 ("channel", t.get("channel")),
                 ("text", ev.get("text")),
                 ("payload", ev.get("payload")),
+                ("actor", ev.get("actor")),
             ] {
                 if let Some(v) = v {
                     event.insert(k.into(), v.clone());

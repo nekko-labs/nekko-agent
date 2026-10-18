@@ -39,6 +39,22 @@ test('auto-merge queues only ready PRs into main, never a stacked layer', () => 
   assert.ok(merge.split('Enqueue once gate passes')[1].split('run:')[0].includes('GH_TOKEN: ${{ steps.app-token.outputs.token }}'));
 });
 
+test('capture builds the verified native browser even on cache hits', () => {
+  const capture = read('../.github/workflows/ci.yml').split('\n  capture:')[1].split('\n  perf:')[0];
+  for (const input of ['vendor/agent-browser/pin.json', 'vendor/agent-browser/stdio.patch', 'vendor/agent-browser/main.rs', 'scripts/build-agent-browser.mjs']) assert.ok(capture.includes(input));
+  assert.ok(capture.includes('.scratch/agent-browser-native/cli/target'));
+  assert.ok(capture.includes('dtolnay/rust-toolchain@stable'));
+  assert.ok(capture.indexOf('run: node scripts/build-agent-browser.mjs') < capture.indexOf('run: node apps/desktop/scripts/capture-smoke.mjs'));
+  assert.ok(!capture.includes('cache-hit'));
+  const build = read('./build-agent-browser.mjs');
+  assert.ok(build.includes("['build', '--locked', '--release'"));
+  assert.ok(build.includes('Build source differs from maintained patch'));
+  assert.ok(build.includes("'core.autocrlf=false', '-c', 'core.eol=lf'"));
+  assert.ok(read('../.gitattributes').includes('/vendor/agent-browser/* text eol=lf'));
+  const smoke = read('../apps/desktop/scripts/capture-smoke.mjs');
+  assert.ok(smoke.includes("app.setAppPath(${JSON.stringify(join(root, 'apps/desktop'))})"));
+});
+
 test('required build restores a dedicated Rust cache before compiling', () => {
   const build = read('../.github/workflows/ci.yml').split('\n  build:')[1].split('\n  daemon:')[0];
   assert.ok(build.indexOf('Swatinem/rust-cache@v2') < build.indexOf('cargo build -p nekkod --locked'));

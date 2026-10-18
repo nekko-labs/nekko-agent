@@ -12,6 +12,7 @@ import type {
   WorkflowTransition,
   WorkflowTrigger,
   WorkflowTriggerKind,
+  WorkflowNotify,
 } from '@nekko-agent/shared';
 import {
   CONNECTOR_CATALOG,
@@ -20,6 +21,7 @@ import {
   GIT_PROVIDERS,
   UNCATEGORIZED,
   WORKFLOW_ACTIONS,
+  WORKFLOW_NOTIFY_OPTIONS,
   WORKFLOW_STEP_KINDS,
   WORKFLOW_TRIGGER_KINDS,
   cliCommand,
@@ -51,6 +53,20 @@ interface Draft {
   category: string;
   enabled: boolean;
   workspaceId?: string;
+  notify: WorkflowNotify;
+  templateId?: string;
+  steps: WorkflowStep[];
+  triggers: WorkflowTrigger[];
+}
+
+/** What a template hands the editor for a new workflow ("Customize" in the gallery). */
+export interface WorkflowSeed {
+  name?: string;
+  category?: string;
+  description?: string;
+  workspaceId?: string;
+  notify?: WorkflowNotify;
+  templateId?: string;
   steps: WorkflowStep[];
   triggers: WorkflowTrigger[];
 }
@@ -62,6 +78,8 @@ function toDraft(wf?: Workflow): Draft {
     category: wf?.category ?? UNCATEGORIZED,
     enabled: wf?.enabled ?? true,
     workspaceId: wf?.workspaceId,
+    notify: wf?.notify ?? 'failure',
+    templateId: wf?.templateId,
     steps: (wf?.steps ?? []).map((s) => ({ ...s })),
     triggers: (wf?.triggers ?? [{ id: newStepId('trg'), kind: 'manual' }]).map((t) => ({ ...t })),
   };
@@ -78,7 +96,7 @@ export function WorkflowEditor({
   /** The workflow being edited, or undefined when creating one. */
   workflow?: Workflow;
   /** Starting steps/triggers for a new workflow (from a template). */
-  seed?: { name?: string; category?: string; description?: string; steps: WorkflowStep[]; triggers: WorkflowTrigger[] };
+  seed?: WorkflowSeed;
   /** Every workflow, so a `workflow` step can pick a target. */
   workflows: Workflow[];
   /** Installed skills, so a `skill` step can pick one. */
@@ -101,6 +119,9 @@ export function WorkflowEditor({
           name: seed.name ?? base.name,
           description: seed.description ?? base.description,
           category: seed.category ?? base.category,
+          workspaceId: seed.workspaceId ?? base.workspaceId,
+          notify: seed.notify ?? base.notify,
+          templateId: seed.templateId,
           steps: seed.steps,
           triggers: seed.triggers,
         }
@@ -128,6 +149,8 @@ export function WorkflowEditor({
         category: draft.category.trim() || UNCATEGORIZED,
         enabled: draft.enabled,
         workspaceId: draft.workspaceId,
+        notify: draft.notify,
+        templateId: draft.templateId,
         steps: draft.steps,
         triggers: draft.triggers,
       });
@@ -227,7 +250,13 @@ export function WorkflowEditor({
               ))}
             </select>
           </label>
-          <label className="flex items-end gap-2 pb-1.5">
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Notify me</span>
+            <select className="input w-full" value={draft.notify} onChange={(e) => set('notify', e.target.value as WorkflowNotify)}>
+              {WORKFLOW_NOTIFY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="flex items-end gap-2 pb-1.5 sm:col-span-2">
             <input type="checkbox" checked={draft.enabled} onChange={(e) => set('enabled', e.target.checked)} />
             <span className="text-[12.5px]">Enabled (triggers fire)</span>
           </label>
@@ -497,6 +526,16 @@ function StepEditor({
         />
         <span className="text-[11.5px] text-ink-soft">Keep going even if this step fails</span>
       </label>
+      {(step.kind === 'prompt' || step.kind === 'skill') && (
+        <label className="mt-1 flex items-center gap-2" title="For a step that reads text someone else wrote. Later steps share the chat, so keep it last.">
+          <input
+            type="checkbox"
+            checked={step.tools === 'none'}
+            onChange={(e) => onPatch({ tools: e.target.checked ? 'none' : undefined })}
+          />
+          <span className="text-[11.5px] text-ink-soft">No tools: only reads what the step gives it</span>
+        </label>
+      )}
     </div>
   );
 }
@@ -620,6 +659,7 @@ function ConnectorTriggerFields({
   const intervalMin = trigger.pollIntervalMs ? Math.max(1, Math.round(trigger.pollIntervalMs / 60_000)) : '';
   const isRepo = trigger.connector === 'github' || trigger.connector === 'gitlab';
   const isChannel = trigger.connector === 'slack' || trigger.connector === 'discord';
+  const isGitHub = trigger.connector === 'github';
   return (
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
       <label className="block">
@@ -627,7 +667,7 @@ function ConnectorTriggerFields({
         <select
           className="input w-full py-1! text-[12px]"
           value={trigger.connector ?? ''}
-          onChange={(e) => onPatch({ connector: e.target.value as ConnectorKind, event: undefined, channel: undefined, repo: undefined })}
+          onChange={(e) => onPatch({ connector: e.target.value as ConnectorKind, event: undefined, channel: undefined, repo: undefined, action: undefined, actor: undefined })}
         >
           <option value="">Pick a connector…</option>
           {POLLABLE_CONNECTORS.map((k) => (
@@ -677,6 +717,28 @@ function ConnectorTriggerFields({
             onChange={(e) => onPatch({ repo: e.target.value || undefined })}
           />
         </label>
+      )}
+      {isGitHub && (
+        <>
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Action</span>
+            <input
+              className="input w-full text-[12px]"
+              placeholder="opened (any)"
+              value={trigger.action ?? ''}
+              onChange={(e) => onPatch({ action: e.target.value.trim() || undefined })}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Only by</span>
+            <input
+              className="input w-full text-[12px]"
+              placeholder="GitHub username (anyone)"
+              value={trigger.actor ?? ''}
+              onChange={(e) => onPatch({ actor: e.target.value.trim() || undefined })}
+            />
+          </label>
+        </>
       )}
       <label className="block sm:col-span-2">
         <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Filter</span>

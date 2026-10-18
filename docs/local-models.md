@@ -52,6 +52,15 @@ context, GPU layers, KV cache type, parallel slots, flash attention, batch and p
 batch, threads, mmap and mlock, RoPE base and scale, seed, idle TTL. They are the same
 state, so moving one moves the other, and either can be saved as that model's default.
 
+**Seeing what is loaded from anywhere.** The Agents view's **Panels** dock has a **Local
+models** monitor, under Hardware: each model the engine holds in memory, whether it runs on
+the GPU, split across GPU and CPU (with the layer count, in amber), or on the CPU, plus its
+context and footprint. **Settings** on a row opens Nekko Server with that model's drawer
+unfolded on *Advanced*, where **Runs on** (GPU only, Hybrid, CPU only) lives. The chat's
+right panel has the same jump as **All settings** inside each model under Model settings.
+Switch the monitor off in the dock's **Configure** menu. Changing a setting reloads the
+model, which interrupts a reply it is generating.
+
 **The Server tab** carries port, whether it is reachable from your network or only this
 computer, an API key, allowed browser origins, how many models may be resident, the idle
 timeout, load-on-demand, start-with-the-app, and the models folder. The defaults are

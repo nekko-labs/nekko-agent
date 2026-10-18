@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { App } from 'electron';
-import { defaultUserDataDir, type Host } from '@nekko-agent/host';
+import { defaultUserDataDir, onDaemonOr, type Host } from '@nekko-agent/host';
 import { brandEnv, withApiServerDefaults, type SubagentTarget } from '@nekko-agent/shared';
 import { apiServerStatus, ensureApiServerToken, syncApiServer } from './api-server.js';
 import { cliInstallStatus, installCli, writeCliLink } from './cli-install.js';
@@ -62,15 +62,20 @@ export function refreshLocalAccess(app: AppLike, host: Host): void {
     pid: process.pid,
   });
   const target = subagentTarget(app, host);
-  for (const tool of host.detectAgentTools()) {
-    if (!tool.installed) continue;
-    try {
-      // Only entries this app wrote; a hand-written one is its author's.
-      host.refreshSubagent(tool.id, target);
-    } catch {
-      /* someone else's config file; the Server tab still offers the snippet */
+  // nekkod writes the entries when it serves them (the same loop, in Rust).
+  void onDaemonOr('integrations:refresh', [target], () => {
+    for (const tool of host.detectAgentTools()) {
+      if (!tool.installed) continue;
+      try {
+        // Only entries this app wrote; a hand-written one is its author's.
+        host.refreshSubagent(tool.id, target);
+      } catch {
+        /* someone else's config file; the Server tab still offers the snippet */
+      }
     }
-  }
+  }).catch(() => {
+    /* the daemon went away mid-call; the next settings change refreshes again */
+  });
 }
 
 /**

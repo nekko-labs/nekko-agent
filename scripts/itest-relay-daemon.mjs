@@ -2,7 +2,8 @@
 // a device on a local apps/relay reaches the web edition, which runs behind
 // nekkod, whose agent dials the relay. Checks transport auth, the sealed HELLO,
 // one-time pairing, requests to the daemon and through it to the TS host,
-// host events fanned out to the phone, and live revocation.
+// host events fanned out to the phone, the phone channel allowlist, and live
+// revocation.
 //
 // Never point this at the managed relay with real devices: it always starts
 // its own relay on loopback.
@@ -10,11 +11,12 @@
 // Usage: node scripts/itest-relay-daemon.mjs [path/to/nekkod]
 // Needs `npm run build:web`, `npm run build -w @nekko-agent/relay` and a cargo build of nekkod.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { deriveKey, seal, open } from '@nekko-agent/shared';
+import { killTree, treeOptions } from './itest-procs.mjs';
 
 const exe = process.platform === 'win32' ? 'nekkod.exe' : 'nekkod';
 const nekkod =
@@ -28,18 +30,16 @@ const RELAY_PORT = 4400 + Math.floor(Math.random() * 500);
 const SERVER_PORT = 5400 + Math.floor(Math.random() * 500);
 const RELAY_URL = `ws://127.0.0.1:${RELAY_PORT}`;
 const TOKEN = randomBytes(24).toString('hex');
-const dataDir = mkdtempSync(join(tmpdir(), 'nekko-relay-daemon-'));
+const root = mkdtempSync(join(tmpdir(), 'nekko-relay-daemon-'));
+const dataDir = join(root, 'data');
+const home = join(root, 'home');
+mkdirSync(dataDir, { recursive: true });
+mkdirSync(home, { recursive: true });
 
 const procs = [];
 const stop = () => {
-  for (const p of procs) {
-    try {
-      if (process.platform === 'win32') spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { windowsHide: true });
-      else p.kill('SIGKILL');
-    } catch {
-      /* gone */
-    }
-  }
+  for (const p of procs) killTree(p);
+  try { rmSync(root, { recursive: true, force: true }); } catch { /* a child may still hold a file */ }
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
@@ -52,7 +52,7 @@ procs.push(
   spawn(process.execPath, ['apps/relay/dist/index.js'], {
     env: { ...process.env, NEKKO_RELAY_PORT: String(RELAY_PORT), NEKKO_RELAY_HOST: '127.0.0.1', NEKKO_RELAY_ALLOW_UNAUTHENTICATED: '1' },
     stdio: 'ignore',
-    windowsHide: true,
+    ...treeOptions,
   }),
 );
 let serverOut = '';
@@ -65,9 +65,11 @@ const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
     NEKKO_TOKEN: TOKEN,
     NEKKO_DAEMON: 'nekkod',
     NEKKOD_PATH: nekkod,
+    HOME: home,
+    USERPROFILE: home,
   },
   stdio: ['pipe', 'pipe', 'pipe'],
-  windowsHide: true,
+  ...treeOptions,
 });
 procs.push(server);
 server.stdout.on('data', (d) => (serverOut += d));
@@ -179,12 +181,12 @@ try {
   check('the phone reaches the TS host through the daemon (settings:get)', typeof settings === 'object' && settings !== null);
   const sessions = await phone.call('sessions:summaries');
   check('the phone reaches a daemon service (sessions:summaries)', Array.isArray(sessions));
-  check(
-    'internal callbacks are not public',
-    await phone.call('turn:pending').then(() => false, (e) => /Unknown channel/.test(e.message)),
-  );
-  // A host event fans out to the phone: creating a task fires tasks:updated.
-  await phone.call('task:create', { title: 'From the phone', kind: 'scheduled', prompt: 'hi', runAt: Date.now() + 3_600_000 });
+  // A phone may call only the channels in PHONE_CHANNELS (packages/shared/src/phone-access.ts).
+  const denied = (channel) => (e) => e.message === `Not allowed from a paired phone (channel-denied): ${channel}`;
+  check('internal callbacks are not public', await phone.call('turn:pending').then(() => false, denied('turn:pending')));
+  check('a phone cannot pair devices itself', await phone.call('remote:pair').then(() => false, denied('remote:pair')));
+  // A host event fans out to the phone: a task made on the computer fires tasks:updated.
+  await api('task:create', { title: 'From the computer', kind: 'scheduled', prompt: 'hi', runAt: Date.now() + 3_600_000 });
   for (let i = 0; i < 40 && !phone.events.some((e) => e.channel === 'tasks:updated'); i++) await sleep(100);
   check('host events reach the phone (tasks:updated)', phone.events.some((e) => e.channel === 'tasks:updated'));
 
@@ -192,10 +194,10 @@ try {
   const r = await replay.doHello();
   check('the code is single-use', r.type === 'denied' && r.reason === 'bad-code');
 
-  const g2 = await phone.call('remote:pair');
+  const g2 = await api('remote:pair');
   const tablet = await device({ deviceId: 'tablet-1', name: 'Tablet', pair: g2.code });
-  check('the phone pairs a second device', (await tablet.doHello()).type === 'welcome');
-  await phone.call('remote:revoke', 'tablet-1');
+  check('the computer pairs a second device', (await tablet.doHello()).type === 'welcome');
+  await api('remote:revoke', 'tablet-1');
   check('revocation kicks it live (4001)', (await tablet.closed) === 4001);
   const zombie = await device({ deviceId: 'tablet-1', name: 'Tablet' });
   const z = await zombie.doHello();
@@ -204,7 +206,6 @@ try {
   const pass = results.every(Boolean);
   console.log(`\n${pass ? 'DAEMON RELAY PATH PASS' : 'FAIL'} (relay ${RELAY_URL})`);
   stop();
-  rmSync(dataDir, { recursive: true, force: true });
   process.exit(pass ? 0 : 1);
 } catch (e) {
   console.error('FAIL', e.message, '\n', serverOut.slice(-3000));
