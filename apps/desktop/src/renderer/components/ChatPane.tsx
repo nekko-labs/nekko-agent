@@ -120,12 +120,10 @@ const CTX_REFRESH_MS = 1_500;
  *
  * The plan rail is on by default; it only gives way when the window is about
  * as narrow as two rails side by side (`PLAN_RAIL_MIN_PANE`), where it would
- * leave the conversation no more room than itself. `NARROW_PANE` is where the
- * 75% column stops helping and the text should just use the pane.
+ * leave the conversation no more room than itself.
  */
 const PLAN_RAIL_WIDTH = 280;
 const PLAN_RAIL_MIN_PANE = PLAN_RAIL_WIDTH * 2;
-const NARROW_PANE = 620;
 
 /**
  * The composer's height when the user has dragged it, remembered across chats.
@@ -2233,13 +2231,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   /**
    * How wide the conversation and its controls run inside the pane.
    *
-   * Three quarters, not a fixed 768px column: on a desktop workbench pane the
-   * old cap left the composer at about half the width with dead margin on both
-   * sides. When the plan rail is showing it already takes the right quarter, so
-   * the column below it goes full width rather than indenting twice.
+   * The full pane, less the transcript scroller's 10px gutter on each side: a
+   * narrower centred column (first 768px, then 75%) left wide dead margins on
+   * a desktop workbench pane. The transcript already starts below the floating
+   * Agent Monitor toggle, so nothing sits under it.
    */
-  // Full width beside the open rail keeps clear of the floating plan toggle.
-  const contentWidth = planRailOpen ? 'mx-auto w-full pr-11' : paneWidth < NARROW_PANE ? 'mx-auto w-full' : 'mx-auto w-[75%]';
+  // Beside the open rail, keep clear of its floating plan toggle.
+  const contentWidth = planRailOpen ? 'mx-auto w-full pr-11' : 'mx-auto w-full';
 
   // --- The transcript, as windowed rows ---
   const messages = session?.messages;
@@ -2311,7 +2309,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     [artifactBasePath, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, cuts, onDelete, onRestart, openImageMenu],
   );
   // Width of the text column, for the height estimates of rows not yet measured.
-  const columnWidth = Math.max(0, (paneWidth || 800) * (contentWidth.includes('75%') ? 0.75 : 1) - 32);
+  const columnWidth = Math.max(0, (paneWidth || 800) - 20);
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
