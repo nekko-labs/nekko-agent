@@ -14,7 +14,8 @@ See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17
 - [x] ✅ 2026-10-17 Playwright-Electron end-to-end suite with the sidebar and chat-finder journeys (see the section below).
 - [ ] Port the remaining wired and documented harnesses into journeys, then delete the triads.
 - [ ] Rewrite the 38 source-text tests (`readFileSync('ChatPane.tsx')` + `toContain`) as rendered assertions or journey steps.
-- [ ] Speed: fake timers in `core/loop-retry` and `host/hooks`, a shared git fixture in `chat-worktrees`, one root Vitest workspace, a shared CI build artifact.
+- [x] ✅ 2026-10-18 Speed: fake timers in `core/loop-retry` (6.00 to 0.01 s), a shorter hang in `host/hooks` (10.43 to 2.93 s; real spawns kept, so no fake timers there), a shared git fixture in `chat-worktrees` (12.38 to 9.16 s), builtin pass/fail steps in `workflows` (4.87 to 2.83 s). Median of 3, Windows; see `docs/perf-history.md`.
+- [ ] Speed: one root Vitest workspace, a shared CI build artifact.
 - [ ] Split `crates/nekkod/tests/daemon.rs` by domain with event waits instead of sleeps; promote 4 `itest-*.mjs` to a main-only job.
 
 ## Desktop end-to-end journeys, Playwright-Electron (added 2026-10-17)

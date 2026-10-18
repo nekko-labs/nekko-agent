@@ -22,8 +22,10 @@ import {
  * pass/fail signal an agent step reports with its token, so the routing, retry,
  * and loop-cap behaviour under test is identical without needing a live model.
  */
-const pass = (): string => `node -e "process.exit(0)"`;
-const fail = (): string => `node -e "process.exit(1)"`;
+// A shell builtin, the same on cmd.exe and sh, so a step costs one shell start
+// rather than a shell plus a node start.
+const pass = (): string => 'exit 0';
+const fail = (): string => 'exit 1';
 
 function shell(id: string, command: string, over: Partial<WorkflowStep> = {}): WorkflowStep {
   return { id, name: id, kind: 'shell', run: command, ...over };
