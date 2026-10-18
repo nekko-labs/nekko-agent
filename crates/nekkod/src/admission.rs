@@ -586,12 +586,6 @@ async fn admit(
     if let Some(e) = &provider_error {
         facts.insert("providerError".into(), json!(e));
     }
-    facts.insert(
-        "headers".into(),
-        json!(
-            kind == "anthropic" && s(&provider, "auth") == "subscription" && nekko_js::truthy(provider.get("tokenKey"))
-        ),
-    );
     // An API key's own rate limits, read off each response (`limitsKeyFor`).
     if kind == "anthropic" && s(&provider, "auth") != "subscription" && nekko_js::truthy(provider.get("apiKey")) {
         facts.insert("apiLimitsKey".into(), json!(format!("provider:{}", s(&provider, "id"))));

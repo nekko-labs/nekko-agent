@@ -7,11 +7,11 @@ import type { SubscriptionLimits } from '@nekko-agent/shared';
 import { setDataDir } from './paths.js';
 import { saveSettings } from './store.js';
 import { setToken } from './oauth.js';
-import { get, initLimits, poll, recordFromHeaders } from './limits.js';
+import { initLimits, poll } from './limits.js';
 import { recordQuotaHistory } from './quota-history.js';
 
 let dir: string;
-const key = 'claude:private-account';
+const key = 'chatgpt:private-account';
 const now = 1_700_000_000_000;
 const log = () => join(dir, 'quota-history.jsonl');
 const rows = () => readFileSync(log(), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
@@ -20,7 +20,7 @@ beforeEach(() => {
   setDataDir(dir);
   vi.useFakeTimers();
   vi.setSystemTime(now);
-  saveSettings({ providers: [{ id: 'configured-claude', name: 'Private name', kind: 'anthropic', enabled: true, auth: 'subscription', tokenKey: key, apiKey: 'secret-key' }] });
+  saveSettings({ providers: [{ id: 'configured-chatgpt', name: 'Private name', kind: 'chatgpt', enabled: true, auth: 'subscription', tokenKey: key, apiKey: 'secret-key' }] });
   initLimits(new EventEmitter());
 });
 afterEach(() => {
@@ -38,29 +38,19 @@ it('appends durable whitelist-only JSONL, not credentials, account IDs or conten
   recordQuotaHistory(key, 'poll', snapshot);
   recordQuotaHistory(key, 'headers', snapshot);
   expect(rows()).toEqual(['poll', 'headers'].map((source) => ({
-    timestamp: now, providerId: 'configured-claude', source,
+    timestamp: now, providerId: 'configured-chatgpt', source,
     windows: [{ id: '5h', scope: 'session', usedPercent: 25, resetsAt: now + 1000, status: 'allowed' }],
   })));
 });
 
-it('records fresh header windows only while preserving merged display windows', () => {
-  recordFromHeaders(key, 'anthropic', { 'anthropic-ratelimit-unified-7d_opus-utilization': '0.4' });
-  recordFromHeaders(key, 'claude', { 'anthropic-ratelimit-unified-5h-utilization': '0.2' });
-  expect(get(key)!.windows.map((w) => w.id)).toEqual(['5h', '7d_opus']);
-  expect(rows()[1].windows.map((w: { id: string }) => w.id)).toEqual(['5h']);
-  recordFromHeaders(key, 'anthropic', {});
-  recordFromHeaders(key, 'chatgpt', { 'anthropic-ratelimit-unified-5h-utilization': '0.9' });
-  expect(rows()).toHaveLength(2);
-});
-
 it('skips unknown providers without exposing the token key', () => {
-  recordFromHeaders('claude:unknown-account', 'anthropic', { 'anthropic-ratelimit-unified-5h-utilization': '0.1' });
+  recordQuotaHistory('chatgpt:unknown-account', 'poll', { updatedAt: now, staleAfterMs: 1000, windows: [{ id: '5h', label: '5-hour', scope: 'session', usedPercent: 10, resetAt: 0, status: 'allowed' }] });
   expect(existsSync(log())).toBe(false);
 });
 
 it('logs successful polls once, not cached, throttled or failed reads; adds no polls', async () => {
-  setToken(key, { provider: 'claude', accessToken: 'secret-token', expiresAt: now + 3600_000, obtainedAt: now });
-  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ five_hour: { utilization: 30 } })));
+  setToken(key, { provider: 'chatgpt', accessToken: 'secret-token', accountId: 'acct', expiresAt: now + 3600_000, obtainedAt: now });
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ rate_limit: { allowed: true, primary_window: { used_percent: 30, limit_window_seconds: 18000 } } })));
   await poll(key);
   await poll(key);
   expect(fetchMock).toHaveBeenCalledOnce();
@@ -73,10 +63,9 @@ it('logs successful polls once, not cached, throttled or failed reads; adds no p
   expect(rows()).toHaveLength(1);
 });
 
-it('keeps filesystem failures nonfatal for headers and successful polls', async () => {
+it('keeps filesystem failures nonfatal for successful polls', async () => {
   mkdirSync(log());
-  expect(() => recordFromHeaders(key, 'anthropic', { 'anthropic-ratelimit-unified-5h-utilization': '0.1' })).not.toThrow();
-  setToken(key, { provider: 'claude', accessToken: 'secret-token', expiresAt: now + 3600_000, obtainedAt: now });
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ five_hour: { utilization: 30 } })));
+  setToken(key, { provider: 'chatgpt', accessToken: 'secret-token', accountId: 'acct', expiresAt: now + 3600_000, obtainedAt: now });
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ rate_limit: { allowed: true, primary_window: { used_percent: 30, limit_window_seconds: 18000 } } })));
   expect(await poll(key)).toMatchObject({ windows: [{ usedPercent: 30 }] });
 });

@@ -2,9 +2,11 @@ import React from 'react';
 import type { ProviderKind } from '@nekko-agent/shared';
 import { PROVIDER_DEFAULTS } from '@nekko-agent/shared';
 
+// Claude is an API-key provider here. The Claude Agent choice (runs the user's
+// installed Claude Code) joins this list beside it in the harness UI step.
 const choices: { kind: ProviderKind; icon?: string; description: string }[] = [
   { kind: 'chatgpt', icon: 'openai', description: 'Sign in with your ChatGPT plan' },
-  { kind: 'anthropic', icon: 'anthropic', description: 'Sign in with your Claude plan' },
+  { kind: 'anthropic', icon: 'anthropic', description: 'Use an Anthropic API key · billed separately' },
   { kind: 'openrouter', icon: 'openrouter', description: 'Many models · pay for what you use' },
   { kind: 'openai', icon: 'openai', description: 'Use an API key · billed separately' },
   { kind: 'ollama', icon: 'ollama', description: 'Connect Ollama on your computer' },

@@ -12,6 +12,7 @@ mod automation;
 mod backend;
 mod boot;
 mod catalog;
+mod claude_plan;
 mod cli_install;
 mod compaction;
 mod config;
@@ -146,6 +147,18 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         hub.clone(),
     ));
     let settings = cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), backend.clone(), hub.clone()));
+    // Older builds signed in to Claude plans; delete what they left (claude_plan.rs).
+    if let (Some(d), Some(s)) = (&cfg.data_dir, &settings) {
+        match claude_plan::migrate(std::path::Path::new(d), &s.store, nekko_oauth::now_ms()) {
+            Ok(done) if !done.is_empty() => eprintln!(
+                "nekkod: removed {} Claude sign-in token(s) and turned off {} Claude plan provider(s)",
+                done.tokens.len(),
+                done.providers.len()
+            ),
+            Ok(_) => {}
+            Err(e) => eprintln!("nekkod: Claude sign-in cleanup failed: {e}"),
+        }
+    }
     // Voice reads its settings from the daemon's store.
     let voice = cfg.data_dir.clone().zip(settings.clone()).map(|(d, s)| {
         let store = s.store.clone();

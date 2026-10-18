@@ -103,7 +103,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 
 - [Browser automation](https://nekkoagent.com/docs/browser-automation.md): Chat-owned browser actions, security boundaries and native driver migration status.
 - [Running models locally](https://nekkoagent.com/docs/local-models.md): Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM).
-- [Subscription sign-in](https://nekkoagent.com/docs/subscriptions.md): Use your Claude or ChatGPT subscription instead of a metered API key.
+- [Subscription sign-in](https://nekkoagent.com/docs/subscriptions.md): Use your ChatGPT subscription instead of a metered API key, and how Claude works in Nekko Agent.
 - [Usage limits and prices](https://nekkoagent.com/docs/usage-limits.md): Where the usage numbers and price estimates come from, and what they mean.
 - [Phone remote control](https://nekkoagent.com/docs/remote.md): Drive the agent on your computer from your phone, end-to-end encrypted.
 - [CLI and MCP](https://nekkoagent.com/docs/cli.md): Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor.

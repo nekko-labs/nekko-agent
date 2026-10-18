@@ -1,7 +1,7 @@
 /** Host-side subscription-limits capture and polling service. */
 
 import { EventEmitter } from 'node:events';
-import type { LimitWindow, LimitsProblem, OAuthProvider, ProviderConfig, ProviderKind, SubscriptionLimits } from '@nekko-agent/shared';
+import type { LimitWindow, LimitsProblem, ProviderConfig, SubscriptionLimits } from '@nekko-agent/shared';
 import { getToken, ensureFreshToken } from './oauth.js';
 import { getSettings } from './store.js';
 import { recordQuotaHistory } from './quota-history.js';
@@ -77,70 +77,15 @@ function recordProblem(tokenKey: string, e: unknown): void {
   // The cached snapshot is kept: getLimits already refuses to hand it back
   // once stale, and a short network blip should not blank fresh numbers.
 }
-const HEADER_STALE_MS = 60_000;
 const POLL_STALE_MS = 35_000;
 
-const ANTHROPIC_PREFIX = 'anthropic-ratelimit-unified-';
-
-/**
- * Anthropic's window names, in both spellings: `5h` / `7d` on the rate-limit
- * headers, `five_hour` / `seven_day` in the usage JSON.
- */
-const ANTHROPIC_PERIODS: Array<{ id: string; header: string; json: string; label: string; scope: LimitWindow['scope'] }> = [
-  { id: '5h', header: '5h', json: 'five_hour', label: '5-hour', scope: 'session' },
-  { id: '7d', header: '7d', json: 'seven_day', label: '7-day', scope: 'weekly' },
-];
-
-/**
- * One window Anthropic reports, read from its name rather than from a list.
- *
- * The per-model windows are `<period>_<family>`: `7d_opus`, `7d_sonnet`, and
- * now `7d_fable`. A fixed list of them meant every new model family was
- * invisible here until someone shipped a build that mentioned it by name —
- * which is exactly why the Fable window never appeared — so the family is taken
- * from the name Anthropic sent. A period we do not recognise is still reported,
- * under its raw name, rather than dropped.
- */
-export function describeAnthropicWindow(
-  period: string,
-  family: string | undefined,
-): { id: string; label: string; scope: LimitWindow['scope']; modelFamily?: string } {
-  const known = ANTHROPIC_PERIODS.find((p) => p.id === period);
-  const label = known?.label ?? period;
-  if (!family) {
-    return { id: period, label, scope: known?.scope ?? 'weekly' };
-  }
-  return {
-    id: `${period}_${family}`,
-    label: `${label} ${titleCase(family)}`,
-    scope: 'model',
-    modelFamily: family,
-  };
-}
-
-/** `fable` → `Fable`, `claude_next` → `Claude Next`. */
+/** `primary` → `Primary`, `five_hour` → `Five Hour`. */
 function titleCase(value: string): string {
   return value
     .split(/[_-]+/)
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
-}
-
-/**
- * Split a window name into its period and, when it has one, its model family.
- * Accepts either spelling, so the headers and the usage JSON produce the same
- * window ids and the two sources can update each other.
- */
-function splitAnthropicWindow(name: string): { period: string; family?: string } | null {
-  for (const p of ANTHROPIC_PERIODS) {
-    for (const spelling of [p.header, p.json]) {
-      if (name === spelling) return { period: p.id };
-      if (name.startsWith(`${spelling}_`)) return { period: p.id, family: name.slice(spelling.length + 1) };
-    }
-  }
-  // An unrecognised period with no family we can separate out: report it whole.
-  return name ? { period: name } : null;
 }
 
 type DaemonCall = NonNullable<ReturnType<typeof daemonCall>>;
@@ -233,75 +178,8 @@ export async function getLimits(tokenKey: string, refresh = false): Promise<Subs
 }
 
 /**
- * Capture provider rate-limit headers from a subscription response.
- * Anthropic headers are only parsed for the anthropic/claude provider;
- * other providers' headers are left alone. If no recognized headers are
- * present, the existing state is left unchanged.
- */
-export function recordFromHeaders(
-  tokenKey: string,
-  provider: OAuthProvider | ProviderKind,
-  headers: Headers | Record<string, string> | Iterable<[string, string]>,
-): SubscriptionLimits | undefined {
-  if (provider !== 'anthropic' && provider !== 'claude') {
-    return get(tokenKey);
-  }
-  if (daemonCall()) {
-    // The daemon may own the state; it hears the same pairs this would parse.
-    const pairs = [...headerMap(headers)];
-    void daemonLimits()
-      .then((call) => (call ? call('limits:headers', tokenKey, provider, pairs) : recordHeaders(tokenKey, pairs)))
-      .catch(() => {});
-    return get(tokenKey);
-  }
-  return recordHeaders(tokenKey, headers);
-}
-
-function recordHeaders(
-  tokenKey: string,
-  headers: Headers | Record<string, string> | Iterable<[string, string]>,
-): SubscriptionLimits | undefined {
-  const parsed = parseAnthropicHeaders(headers);
-  if (parsed.windows.length === 0) {
-    return get(tokenKey);
-  }
-  // Merge rather than replace, windows included. The rate-limit headers report
-  // windows and nothing else, so writing them over the snapshot dropped the plan
-  // and credit figures the usage endpoint had supplied: the popover showed them
-  // once and then lost them the moment the user sent a message.
-  //
-  // The window list needs the same treatment, and for the same reason. A single
-  // response only carries headers for the windows that response was billed
-  // against, typically `5h` and `7d`; the per-model windows (`7d_fable`,
-  // `7d_opus`) only ever come from the usage endpoint. Taking the header list
-  // wholesale therefore deleted every per-model window the poll had discovered,
-  // which is why the Fable limit appeared after a poll and then vanished on the
-  // next message. Header windows are newer for the windows they mention, so they
-  // win per id, and windows they say nothing about are carried forward.
-  recordQuotaHistory(tokenKey, 'headers', parsed);
-  const previous = get(tokenKey);
-  const limits: SubscriptionLimits = {
-    ...parsed,
-    windows: mergeWindows(previous?.windows ?? [], parsed.windows),
-    planType: previous?.planType,
-    creditsBalance: previous?.creditsBalance,
-    creditsState: previous?.creditsState,
-  };
-  store.set(tokenKey, limits);
-  const bus = events;
-  if (bus) {
-    try {
-      bus.emit('limitsUpdated', { tokenKey, limits });
-    } catch {
-      // A throwing observer must not abort an in-flight chat turn.
-    }
-  }
-  return limits;
-}
-
-/**
  * On-demand provider poll. Throttled to at most once every 30 seconds per
- * token key. Fetches the authoritative usage endpoint for Claude or ChatGPT.
+ * token key. Fetches the authoritative usage endpoint for ChatGPT or OpenRouter.
  */
 export async function poll(tokenKey: string): Promise<SubscriptionLimits | undefined> {
   if (daemonCall()) {
@@ -350,9 +228,7 @@ async function pollHere(tokenKey: string): Promise<SubscriptionLimits | undefine
         const fresh = getToken(tokenKey);
         if (!fresh) return get(tokenKey);
 
-        if (fresh.provider === 'claude') {
-          next = await pollClaude(tokenKey, accessToken);
-        } else if (fresh.provider === 'chatgpt') {
+        if (fresh.provider === 'chatgpt') {
           next = await pollChatGpt(tokenKey, accessToken, fresh.accountId);
         } else if (fresh.provider === 'openrouter') {
           next = await pollOpenRouter(tokenKey, accessToken);
@@ -387,23 +263,6 @@ async function pollHere(tokenKey: string): Promise<SubscriptionLimits | undefine
 
   inFlight.set(tokenKey, promise);
   return promise;
-}
-
-async function pollClaude(tokenKey: string, accessToken: string): Promise<SubscriptionLimits | undefined> {
-  const res = await fetch('https://api.anthropic.com/api/oauth/usage', {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'anthropic-beta': 'oauth-2025-04-20',
-    },
-  });
-  if (!res.ok) throw failure(res);
-
-  const text = await res.text();
-  const json = safeJson(text);
-  if (!json || typeof json !== 'object') throw new LimitsReadError('unreadable', res.status);
-
-  return parseAnthropicUsageJson(json as Record<string, unknown>);
 }
 
 async function pollChatGpt(
@@ -531,100 +390,6 @@ function safeJson(text: string): unknown {
   }
 }
 
-function headerMap(
-  headers: Headers | Record<string, string> | Iterable<[string, string]>,
-): Map<string, string> {
-  const map = new Map<string, string>();
-  // An array of pairs has a forEach too, with the index where a Headers object
-  // passes the name: the pairs a daemon-driven turn relays went through that
-  // branch and threw, so its rate limits were never recorded.
-  if (!Array.isArray(headers) && typeof (headers as Headers).forEach === 'function') {
-    (headers as Headers).forEach((v, k) => map.set(k.toLowerCase(), v));
-  } else if (typeof (headers as Iterable<[string, string]>)[Symbol.iterator] === 'function') {
-    for (const [k, v] of headers as Iterable<[string, string]>) {
-      map.set(k.toLowerCase(), v);
-    }
-  } else {
-    for (const [k, v] of Object.entries(headers as Record<string, string>)) {
-      map.set(k.toLowerCase(), v);
-    }
-  }
-  return map;
-}
-
-function getHeader(
-  map: Map<string, string>,
-  name: string,
-): string | undefined {
-  return map.get(name.toLowerCase());
-}
-
-function normalizeStatus(value: string | undefined): LimitWindow['status'] {
-  const s = value?.toLowerCase() ?? '';
-  if (s === 'rate_limited' || s === 'rejected') return 'rate_limited';
-  if (s === 'warning' || s === 'allowed_warning') return 'warning';
-  return 'allowed';
-}
-
-export function parseAnthropicHeaders(
-  headers: Headers | Record<string, string> | Iterable<[string, string]>,
-): SubscriptionLimits {
-  const map = headerMap(headers);
-  const windows: LimitWindow[] = [];
-
-  // Every `…-<window>-utilization` header there is, rather than the handful we
-  // happened to know the names of when this shipped.
-  for (const [key, util] of map) {
-    if (!key.startsWith(ANTHROPIC_PREFIX) || !key.endsWith('-utilization')) continue;
-    const name = key.slice(ANTHROPIC_PREFIX.length, -'-utilization'.length);
-    const parts = splitAnthropicWindow(name);
-    if (!parts) continue;
-
-    const utilization = parseFloat(util);
-    if (!Number.isFinite(utilization)) continue;
-
-    const reset = getHeader(map, `${ANTHROPIC_PREFIX}${name}-reset`);
-    const resetAt = reset ? parseInt(reset, 10) * 1000 : 0;
-    const status = normalizeStatus(getHeader(map, `${ANTHROPIC_PREFIX}${name}-status`) ?? 'allowed');
-
-    windows.push({
-      ...describeAnthropicWindow(parts.period, parts.family),
-      // Headers report a fraction (0.62 = 62%), unlike the usage JSON below.
-      usedPercent: clampPercent(utilization * 100),
-      resetAt,
-      status,
-    });
-  }
-
-  return { windows: sortWindows(windows), updatedAt: Date.now(), staleAfterMs: HEADER_STALE_MS };
-}
-
-/**
- * Combine a previous window list with a fresher one, by window id.
- *
- * Neither source is complete on its own: the usage endpoint reports every
- * window including the per-model ones, while a response's rate-limit headers
- * only mention the windows that request was billed against. So a fresh window
- * replaces its older namesake, and a window the fresh source is simply silent
- * about survives rather than being read as "gone".
- */
-export function mergeWindows(previous: LimitWindow[], fresh: LimitWindow[]): LimitWindow[] {
-  const byId = new Map(previous.map((w) => [w.id, w]));
-  for (const w of fresh) byId.set(w.id, w);
-  return sortWindows([...byId.values()]);
-}
-
-/**
- * Window order: the two plan-wide windows first, then the per-model ones
- * alphabetically. Discovery hands them over in whatever order the provider
- * serialized them, and a list that reshuffles itself between polls is harder to
- * read than one that is merely incomplete.
- */
-export function sortWindows(windows: LimitWindow[]): LimitWindow[] {
-  const rank = (w: LimitWindow) => (w.scope === 'session' ? 0 : w.scope === 'weekly' ? 1 : 2);
-  return [...windows].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
-}
-
 /**
  * Clamp a percentage into 0-100. A scale surprise from a provider must degrade
  * to "pegged at 100%", never to the 6200% the usage endpoint once produced when
@@ -632,83 +397,6 @@ export function sortWindows(windows: LimitWindow[]): LimitWindow[] {
  */
 function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, Math.round(value * 100) / 100));
-}
-
-/**
- * Parse `GET /api/oauth/usage`.
- *
- * The two Anthropic surfaces disagree on scale and the difference is load-bearing:
- * the rate-limit *headers* report `utilization` as a fraction (`0.62`), this JSON
- * endpoint reports whole percent (`62`). Multiplying here as the header parser
- * does is what made a 62%-used week render as "6200%" until the first real
- * request replaced the snapshot with header-derived numbers.
- */
-export function parseAnthropicUsageJson(json: Record<string, unknown>): SubscriptionLimits {
-  const windows: LimitWindow[] = [];
-
-  for (const [key, win] of Object.entries(json)) {
-    if (!win || typeof win !== 'object') continue;
-    const parts = splitAnthropicWindow(key);
-    if (!parts) continue;
-    // A key that parses only because `splitAnthropicWindow` reports anything it
-    // cannot split is not a window: `extra_usage` has no utilization figure.
-    const obj = win as Record<string, unknown>;
-    if (obj.utilization === undefined) continue;
-
-    const utilization =
-      typeof obj.utilization === 'number'
-        ? obj.utilization
-        : parseFloat(String(obj.utilization ?? ''));
-    if (!Number.isFinite(utilization)) continue;
-
-    const usedPercent = clampPercent(utilization);
-    const resetsAt = typeof obj.resets_at === 'string' ? Date.parse(obj.resets_at) : 0;
-    const reported = normalizeStatus(typeof obj.status === 'string' ? obj.status : undefined);
-    let status: LimitWindow['status'] = 'allowed';
-    if (reported === 'rate_limited' || usedPercent >= 100) {
-      status = 'rate_limited';
-    } else if (reported === 'warning' || usedPercent >= 80) {
-      status = 'warning';
-    }
-
-    windows.push({
-      ...describeAnthropicWindow(parts.period, parts.family),
-      usedPercent,
-      resetAt: resetsAt > 0 ? resetsAt : 0,
-      status,
-    });
-  }
-
-  return {
-    windows: sortWindows(windows),
-    ...parseAnthropicCredits(json),
-    updatedAt: Date.now(),
-    staleAfterMs: POLL_STALE_MS,
-  };
-}
-
-/**
- * Anthropic's credit position, from the `extra_usage` block.
- *
- * `extra_usage` is the pay-as-you-go allowance beyond the plan: a monthly limit
- * and what has been spent against it. Switched off is a real answer and not the
- * same as unlimited, and a block we cannot read is `unknown` rather than either.
- */
-function parseAnthropicCredits(
-  json: Record<string, unknown>,
-): Pick<SubscriptionLimits, 'creditsBalance' | 'creditsState'> {
-  const extra = json.extra_usage;
-  if (!extra || typeof extra !== 'object') return { creditsState: 'unknown' };
-
-  const obj = extra as Record<string, unknown>;
-  if (obj.is_enabled === false) return { creditsState: 'disabled' };
-
-  const limit = Number(obj.monthly_limit);
-  const used = Number(obj.used_credits);
-  if (!Number.isFinite(limit)) return { creditsState: 'unknown' };
-  // A limit with nothing spent against it yet still has its whole balance left.
-  const spent = Number.isFinite(used) ? used : 0;
-  return { creditsBalance: Math.max(0, limit - spent), creditsState: 'balance' };
 }
 
 /** WHAM slots are not periods: even primary can be the weekly window. */

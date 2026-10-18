@@ -28,8 +28,7 @@
 //! `turn:tool` (delegation targets, and MCP, sub-agents, `decide` or the run
 //! tools for a host that keeps them), `turn:hook` (tool
 //! hooks, for a host that keeps them; given `facts.hookRules` they run here),
-//! `turn:headers` (Anthropic subscription rate
-//! limits), `loop:log` (the agent terminal); and it sends the host the events
+//! `loop:log` (the agent terminal); and it sends the host the events
 //! it asks for (`turn:event`, deltas batched; `facts.hostEvents`, every one
 //! when the host does not say, which a TS phone relay, messaging bridge or
 //! accounting needs), then `turn:end`.
@@ -921,35 +920,13 @@ impl Turns {
         ));
 
         let provider = create_provider(config);
-        let headers_key = account.as_ref().and_then(|a| a.token_key.clone());
-        let client = if facts.get("headers") == Some(&Value::Bool(true))
-            && let Some(key) = headers_key
-        {
-            // Anthropic subscription rate limits, kept here.
-            let accounts = self.accounts.clone();
-            ProviderClient::with_headers(
-                provider,
-                Arc::new(move |headers: &Vec<(String, String)>| {
-                    accounts.record_from_headers(&key, "anthropic", headers);
-                }),
-            )
-        } else if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
+        // An Anthropic API key's own rate limits, read off each response.
+        let client = if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
             let accounts = self.accounts.clone();
             ProviderClient::with_headers(
                 provider,
                 Arc::new(move |headers: &Vec<(String, String)>| {
                     accounts.record_api_headers(&key, headers);
-                }),
-            )
-        } else if facts.get("headers") == Some(&Value::Bool(true)) {
-            let (b, id) = (backend.clone(), shared.turn_id.clone());
-            ProviderClient::with_headers(
-                provider,
-                Arc::new(move |headers: &Vec<(String, String)>| {
-                    let (b, id, pairs) = (b.clone(), id.clone(), json!(headers));
-                    tokio::spawn(async move {
-                        let _ = b.call("turn:headers", json!([id, pairs])).await;
-                    });
                 }),
             )
         } else {

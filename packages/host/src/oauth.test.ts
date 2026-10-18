@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import http from 'node:http';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { CLAUDE_SIGN_IN_UNAVAILABLE } from '@nekko-agent/shared';
 import { setDataDir } from './paths.js';
 import {
   pkcePair,
@@ -38,65 +39,9 @@ describe('OAuth core', () => {
   });
 
   describe('beginOAuth', () => {
-    it('builds a Claude URL where state equals the verifier', async () => {
-      const session = await beginOAuth('claude');
-      const url = new URL(session.authUrl);
-      expect(url.hostname).toBe('claude.com');
-      expect(url.pathname).toBe('/cai/oauth/authorize');
-      expect(url.searchParams.get('response_type')).toBe('code');
-      expect(url.searchParams.get('client_id')).toBe('9d1c250a-e61b-44d9-88ed-5944d1962f5e');
-      expect(url.searchParams.get('code_challenge_method')).toBe('S256');
-      const state = url.searchParams.get('state');
-      const challenge = url.searchParams.get('code_challenge');
-      expect(state).toBeTruthy();
-      expect(challenge).toBeTruthy();
-      // Finishing with code#state should exchange with code_verifier == state.
-      const captured = await captureTokenExchange(fetchMock, 'claude', async () => {
-        fetchMock.mockResolvedValueOnce(
-          new Response(
-            JSON.stringify({
-              access_token: 'claude-access',
-              refresh_token: 'claude-refresh',
-              expires_in: 3600,
-              scope: 'user:profile user:inference',
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          ),
-        );
-        await finishOAuth(session.id, `auth-code#${state}`);
-      });
-      const body = JSON.parse(captured.body);
-      expect(body).toMatchObject({
-        client_id: '9d1c250a-e61b-44d9-88ed-5944d1962f5e',
-        grant_type: 'authorization_code',
-        code: 'auth-code',
-        // Anthropic rejects the exchange as "Invalid request format" without it.
-        state,
-        code_verifier: state,
-      });
-      expect(captured.headers['Content-Type']).toBe('application/json');
-    });
-
-    it('asks Claude to render the pasteable code only on the manual console callback', async () => {
-      const loopback = await beginOAuth('claude');
-      const loopbackUrl = new URL(loopback.authUrl);
-      expect(loopbackUrl.searchParams.get('redirect_uri')).toMatch(/^http:\/\/localhost:\d+\/callback$/);
-      expect(loopbackUrl.searchParams.get('code')).toBeNull();
-      cancelOAuth(loopback.id);
-
-      // With every loopback port taken, begin falls back to the console
-      // callback, which needs `code=true` to show a code worth pasting.
-      const blockers = await occupyClaudeLoopbackPorts();
-      try {
-        const manual = await beginOAuth('claude');
-        const manualUrl = new URL(manual.authUrl);
-        expect(manual.mode).toBe('manual');
-        expect(manualUrl.searchParams.get('redirect_uri')).toBe('https://platform.claude.com/oauth/code/callback');
-        expect(manualUrl.searchParams.get('code')).toBe('true');
-        cancelOAuth(manual.id);
-      } finally {
-        await Promise.all(blockers.map((s) => new Promise<void>((r) => s.close(() => r()))));
-      }
+    it('refuses Claude sign-in while its approved-client slot is empty', async () => {
+      await expect(beginOAuth('claude')).rejects.toThrow(CLAUDE_SIGN_IN_UNAVAILABLE);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('builds a ChatGPT URL and exchanges with form-urlencoded body', async () => {
@@ -333,9 +278,9 @@ describe('OAuth core', () => {
     });
 
     it('ensureFreshToken returns a still-valid token without hitting the network', async () => {
-      const tokenKey = 'claude/account-2';
+      const tokenKey = 'chatgpt/account-2';
       setToken(tokenKey, {
-        provider: 'claude',
+        provider: 'chatgpt',
         accessToken: 'live-access',
         refreshToken: 'live-refresh',
         expiresAt: Date.now() + 120_000,
@@ -358,7 +303,7 @@ describe('OAuth core', () => {
   });
 
   describe('importCliAuth', () => {
-    it('adopts tokens from CLI credential files and reports what was found', () => {
+    it('adopts the Codex CLI sign-in and never reads Claude Code credentials', () => {
       const originalHome = process.env.HOME;
       const originalUserProfile = process.env.USERPROFILE;
       process.env.HOME = dir;
@@ -389,9 +334,9 @@ describe('OAuth core', () => {
           }),
         );
         const summary = importCliAuth();
-        expect(summary.claude).toBe(true);
+        expect(summary.claude).toBe(false);
         expect(summary.chatgpt).toBe(true);
-        expect(getToken('claude')?.accessToken).toBe('claude-cli-access');
+        expect(getToken('claude')).toBeUndefined();
         expect(getToken('chatgpt')?.accountId).toBe('codex-account-1');
       } finally {
         process.env.HOME = originalHome;
@@ -403,7 +348,7 @@ describe('OAuth core', () => {
 
 async function captureTokenExchange(
   mock: Mock,
-  provider: 'claude' | 'chatgpt',
+  provider: 'chatgpt',
   fn: () => Promise<void>,
 ): Promise<{
   url: string;
@@ -413,35 +358,12 @@ async function captureTokenExchange(
   await fn();
   expect(mock).toHaveBeenCalledTimes(1);
   const [url, init] = mock.mock.calls[0];
-  expect(String(url)).toContain(provider === 'claude' ? 'platform.claude.com' : 'auth.openai.com');
+  expect(String(url)).toContain(provider === 'chatgpt' ? 'auth.openai.com' : provider);
   return {
     url: String(url),
     headers: (init as any).headers as Record<string, string>,
     body: (init as any).body as any,
   };
-}
-
-/** Hold every port Claude's loopback listener scans, forcing the manual fallback. */
-async function occupyClaudeLoopbackPorts(): Promise<http.Server[]> {
-  const servers: http.Server[] = [];
-  for (let port = 8765; port <= 8795; port++) {
-    const server = http.createServer(() => {});
-    try {
-      await new Promise<void>((resolve, reject) => {
-        server.once('error', reject);
-        server.listen(port, () => {
-          server.removeListener('error', reject);
-          resolve();
-        });
-      });
-      servers.push(server);
-    } catch {
-      // A port we cannot bind (Windows reserves ranges for Hyper-V) is a port
-      // the host cannot bind either, so it counts as occupied for this test.
-      server.close();
-    }
-  }
-  return servers;
 }
 
 /** Sit on ChatGPT's fixed callback port to force the manual fallback. */
