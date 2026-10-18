@@ -3,7 +3,7 @@
 //! The mirror of `packages/shared/src/claude-policy.ts`, which is the source:
 //! `tests/claude_policy.rs` checks this table, its reasons and the auth mapping
 //! against the golden file the TS test writes
-//! (`packages/shared/src/claude-policy.golden.test.ts`).
+//! (`packages/host/src/claude-policy.golden.test.ts`).
 //!
 //! Claude on the user's own API key or cloud account keeps every feature.
 //! Claude on a plan only runs through the user's own Claude Code, and some
@@ -167,9 +167,11 @@ impl ReasonId {
             Self::NekkoToolsNeedApiKey => {
                 ("awaiting_anthropic", "Nekko tools inside a Claude chat need Claude with an API key.", "Not yet")
             }
-            Self::ContextNoteNeedsApiKey => {
-                ("awaiting_anthropic", "Nekko's workspace note for Claude Code needs Claude with an API key.", "Not yet")
-            }
+            Self::ContextNoteNeedsApiKey => (
+                "awaiting_anthropic",
+                "Nekko's workspace note for Claude Code needs Claude with an API key.",
+                "Not yet",
+            ),
             Self::UsageInClaudeCode => {
                 ("awaiting_anthropic", "Check your plan's usage in Claude Code.", "No, check in Claude Code")
             }
@@ -421,7 +423,9 @@ mod tests {
     #[test]
     fn preview_enables_awaiting_rows_only() {
         let p = preview(&Policy::shipped(), ClaudeAuth::Subscription);
-        for cap in [Capability::UnattendedRuns, Capability::NekkoTools, Capability::ContextNote, Capability::UsageLimits] {
+        for cap in
+            [Capability::UnattendedRuns, Capability::NekkoTools, Capability::ContextNote, Capability::UsageLimits]
+        {
             assert!(p.row(ClaudeAuth::Subscription, cap).enabled());
         }
         assert_eq!(p.row(ClaudeAuth::Subscription, Capability::ModelRouting).state, RowState::Unsupported);

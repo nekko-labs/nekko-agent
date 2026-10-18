@@ -590,6 +590,7 @@ Anthropic's rules (code.claude.com/docs/en/legal-and-compliance) do not let a th
 - [ ] CL2: Claude on Amazon Bedrock (Nekko engine): the Messages-API endpoint `https://bedrock-mantle.{region}.api.aws/anthropic` with a Bedrock bearer token, `anthropic.`-prefixed model ids. SigV4 from the user's AWS profile is a follow-up. Added: 2026-10-19.
 - [ ] CL3: Claude on Google Vertex AI and Microsoft Foundry (Nekko engine), with the user's own Google ADC and Foundry key. Added: 2026-10-19.
 - [ ] CL4: Claude Code harness provider (`crates/nekko-harness`), permission bridge, Claude policy table and approval-ready gates, limits UX, then the removal of the subscription sign-in with its startup migration and a CI compliance check. Added: 2026-10-19. Not started.
+- [ ] CL5: Claude policy table (`CLAUDE_POLICY`, TS + Rust mirror with a golden parity test), reason copy and generated comparison table, signed `claudePolicy` override verified with Ed25519 (release key still a placeholder), unattended-run gate at nekkod admission plus `nekko_tools`, `context_note` and plan-usage gate points, `claude:*` channels for the renderer, and the dev-only `NEKKO_CLAUDE_POLICY_PREVIEW` (nekkod `dev-tools` feature) with an "Example data" plan-usage fixture. Added: 2026-10-19. See SPEC.md, Claude policy. Remaining: Philip sets the release signing key; the harness (CL4) and UI call the gates.
 
 ### Page recovery and startup appearance (2026-10-12)
 

@@ -1,8 +1,10 @@
 //! The Rust policy table must be the TS one (`packages/shared/src/claude-policy.ts`):
 //! `tests/golden/claude-policy.json` is written by
-//! `packages/shared/src/claude-policy.golden.test.ts` (UPDATE_GOLDEN=1).
+//! `packages/host/src/claude-policy.golden.test.ts` (UPDATE_GOLDEN=1).
 
-use nekko_agent::claude_policy::{Capability, ClaudeAuth, Policy, ReasonId, auth_for, claude_code_unsupported, reasons_json};
+use nekko_agent::claude_policy::{
+    Capability, ClaudeAuth, Policy, ReasonId, auth_for, claude_code_unsupported, reasons_json,
+};
 use serde_json::{Value, json};
 
 fn golden() -> Value {

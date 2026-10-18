@@ -270,6 +270,22 @@ export function claudeReasonText(row: ClaudePolicyRow): string | null {
   return CLAUDE_REASONS[row.reason ?? 'awaiting_anthropic'].text;
 }
 
+/**
+ * Why an unattended turn (`SendOptions.unattended`) may not run on
+ * `provider`, or `null` when it may. Only Claude Code harness turns are
+ * gated (nekkod's `gate_turn` is the same rule); with no auth status here,
+ * an auth Nekko did not set itself is `unknown` and fails closed.
+ */
+export function claudeUnattendedRefusal(
+  provider: ClaudeProviderLike,
+  authStatus?: ClaudeCodeAuthStatus | null,
+  policy: ClaudePolicy = CLAUDE_POLICY,
+): string | null {
+  if (provider.kind !== CLAUDE_CODE_PROVIDER_KIND) return null;
+  const auth = claudeAuthFor(provider, authStatus) ?? 'unknown';
+  return claudeReasonText(claudeCapability(auth, 'unattended_runs', 'claude-code', policy));
+}
+
 /** One column of the comparison table under the two Claude provider cards. */
 export interface ClaudeComparisonColumn {
   id: 'claude_api' | 'agent_api_key' | 'agent_plan';
@@ -337,3 +353,15 @@ export interface ClaudePolicyStatus {
   /** The dev-only preview (`NEKKO_CLAUDE_POLICY_PREVIEW`); always `null` in a release build. */
   preview: ClaudeAuth | null;
 }
+
+/** `claude:capability(providerId, capability)`: the row one provider gets, for a greyed control. */
+export type ClaudeCapabilityStatus =
+  | { claude: false }
+  | { claude: true; auth: ClaudeAuth; state: ClaudeRowState; reason: ClaudeReasonId | null; message: string | null };
+
+/**
+ * `claude:planUsage(providerId)`: there is no sanctioned source of plan usage,
+ * so this is `none` with the reason; the dev-only preview answers `example`
+ * and the UI renders `claudePlanUsageExample()` with its label.
+ */
+export type ClaudePlanUsageStatus = { source: 'none'; message: string } | { source: 'example'; label: string };

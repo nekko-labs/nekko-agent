@@ -161,8 +161,9 @@ impl Native {
         Ok(body)
     }
 
-    /// Find the latest release's feed and the file this machine would download.
-    async fn latest(&self) -> Result<(update::UpdateInfo, update::Resolved), String> {
+    /// Find the latest release's feed and the file this machine would download,
+    /// and the feed file's URL (the release's other files sit beside it).
+    async fn latest(&self) -> Result<(update::UpdateInfo, update::Resolved, url::Url), String> {
         let (feed, _, _) = self.feed()?;
         let arch = update::current_arch();
         let channel = update::channel_file(self.platform, arch);
@@ -198,7 +199,7 @@ impl Native {
         let info = update::parse_update_info(&text, &channel)?;
         let files = update::resolve_files(&feed, &tag, &info)?;
         let file = update::pick_download(&files, self.platform, arch, update::linux_package(&self.installed()))?;
-        Ok((info, file))
+        Ok((info, file, feed_url))
     }
 
     /// `checkForUpdates()`.
@@ -211,7 +212,8 @@ impl Native {
         let result = async {
             let current = semver::parse(&self.version)
                 .ok_or_else(|| format!("App version is not a valid semver version: \"{}\"", self.version))?;
-            let (info, file) = self.latest().await?;
+            let (info, file, feed_url) = self.latest().await?;
+            self.fetch_claude_policy(ctx, &feed_url).await;
             let available = semver::is_update_available(&current, &info.version)?;
             Ok::<_, String>((info, file, available))
         }
@@ -233,6 +235,23 @@ impl Native {
                 self.set(ctx, json!({ "state": "none", "version": null, "percent": null, "message": null }))
             }
             Err(e) => self.set(ctx, json!({ "state": "error", "message": e })),
+        }
+    }
+
+    /// The release's signed `claude-policy.json`, beside its feed file, when it
+    /// has one: nekkod verifies it with the release key and applies it
+    /// (claude_policy.rs). Best effort: a release without one, or one that does
+    /// not verify, leaves the policy as it is.
+    async fn fetch_claude_policy(&self, ctx: &Ctx, feed_url: &url::Url) {
+        let Ok(url) = feed_url.join(crate::claude_policy::FEED_FILE) else { return };
+        let Ok(text) = self.fetch_text(&url, "application/json").await else { return };
+        match serde_json::from_str::<Value>(&text) {
+            Ok(doc) => {
+                if let Err(e) = ctx.claude_policy.apply_signed(&doc) {
+                    eprintln!("nekkod: claude policy from {url} not applied: {e}");
+                }
+            }
+            Err(e) => eprintln!("nekkod: claude policy from {url} is not JSON: {e}"),
         }
     }
 
