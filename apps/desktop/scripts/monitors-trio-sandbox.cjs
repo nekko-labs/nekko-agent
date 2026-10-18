@@ -6,6 +6,8 @@ const out = process.env.NEKKO_INTEGRATION_OUT, shots = process.env.NEKKO_SHOTS_O
 if (!out) throw Error('Launch through monitors-trio-integration.cjs');
 const tag = base ? 'before' : 'after';
 app.setPath('userData', path.join(out, 'profile')); app.setPath('sessionData', path.join(out, 'profile'));
+// JSON.stringify leaves <, >, / and U+2028/2029 raw; escape them before splicing into evaluated code.
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((r, done) => done({ cancel: !/^(file:|data:|blob:)/.test(r.url) }));
@@ -16,7 +18,7 @@ app.whenReady().then(async () => {
   win.on('focus', () => report.errors.push('Fixture took focus'));
   win.webContents.on('console-message', (e) => { if (e.level === 'error') report.errors.push(String(e.message).slice(0, 300)); });
   const run = (s) => win.webContents.executeJavaScript(s, true);
-  const rect = (sel) => run(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});if(!e)return null;const b=e.getBoundingClientRect();return {x:Math.floor(b.left),y:Math.floor(b.top),width:Math.ceil(b.width),height:Math.ceil(b.height)}})()`);
+  const rect = (sel) => run(`(()=>{const e=document.querySelector(${js(sel)});if(!e)return null;const b=e.getBoundingClientRect();return {x:Math.floor(b.left),y:Math.floor(b.top),width:Math.ceil(b.width),height:Math.ceil(b.height)}})()`);
   const shot = async (name, sel, pad = 0) => {
     const r = await rect(sel);
     if (!r) { report.errors.push(`missing ${sel}`); return; }
