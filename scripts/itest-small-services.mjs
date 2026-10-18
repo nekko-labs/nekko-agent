@@ -1,4 +1,4 @@
-// The small services through the web edition behind nekkod (PF14 A4):
+// The small services through the Local Web UI behind nekkod (PF14 A4):
 // `app:info`, `workspace:add` (headless), `session:watches`, `updates:check`
 // with a provider whose model list changes, `pr:continueStack` and
 // `pr:linkStack` against a loopback GitHub API, and `data:wipe`, each
@@ -96,7 +96,7 @@ write('agent-watches.json', JSON.stringify([{ id: 'w1', sessionId: 's_src', kind
 
 // The configuration nekkod gets is written by the server; the GitHub API
 // address reaches it through the environment the server passes on.
-const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
+const server = spawn(process.execPath, ['apps/local-web-ui/dist/index.js'], {
   env: {
     ...process.env,
     NEKKO_PORT: String(SERVER_PORT),
@@ -171,7 +171,7 @@ try {
   }
 
   const appInfo = await api('app:info');
-  check('app:info is the web edition at the server version', appInfo.edition === 'web' && appInfo.version === '7.7.7' && appInfo.platform === process.platform, JSON.stringify(appInfo));
+  check('app:info is the Local Web UI at the server version', appInfo.edition === 'web' && appInfo.version === '7.7.7' && appInfo.platform === process.platform, JSON.stringify(appInfo));
   const added = await api('workspace:add');
   check('workspace:add lists the folders headless', Array.isArray(added) && added.length === 1 && added[0].id === ws.id, JSON.stringify(added));
   const views = await api('session:watches', 's_src');

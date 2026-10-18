@@ -1867,9 +1867,9 @@
           "{\"ok\":true,\"message\":\"The engine is serving on port 11500.\"}",
           "null",
           "{\"ok\":false,\"message\":\"nope is not in the library.\"}",
-          "{\"ok\":false,\"message\":\"Install stable-diffusion.cpp from Nekko Server to run this image-generation model.\"}",
+          "{\"ok\":false,\"message\":\"Install stable-diffusion.cpp from Model Server to run this image-generation model.\"}",
           "{\"ok\":false,\"message\":\"Whisper is a speech-recognition model, which llama.cpp cannot serve. It needs a speech engine such as whisper.cpp or parakeet.cpp.\"}",
-          "{\"ok\":false,\"message\":\"Install MLX from Nekko Server to run this model.\"}",
+          "{\"ok\":false,\"message\":\"Install MLX from Model Server to run this model.\"}",
           "{\"ok\":false,\"message\":\"MLX PC is an MLX model, which runs on Apple Silicon Macs only.\"}",
           "{\"ok\":false,\"message\":\"Split is split into 3 files and big-00003-of-00003.gguf is missing. Re-download it so every piece lands.\"}",
           "{\"ok\":false,\"message\":\"Not enough memory to load it. Lower the context size or GPU layers in the model's settings, or unload something else first.\"}",
@@ -2477,7 +2477,7 @@
           "{\"ok\":false,\"message\":\"No engine is installed yet. Install one from the Models tab first.\"}",
           "{\"running\":false,\"resident\":[],\"loading\":[],\"log\":[],\"port\":11500}",
           "{\"ok\":false,\"message\":\"No engine is installed.\"}",
-          "{\"ok\":false,\"message\":\"Install stable-diffusion.cpp from Nekko Server to run this image-generation model.\"}"
+          "{\"ok\":false,\"message\":\"Install stable-diffusion.cpp from Model Server to run this image-generation model.\"}"
         ],
         "calls": [],
         "templates": {}

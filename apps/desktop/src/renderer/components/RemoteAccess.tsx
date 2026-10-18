@@ -12,7 +12,7 @@ import { useStore } from '../store.js';
  * sees ciphertext. Self-hosting the relay is documented and first-class.
  */
 
-/** Managed relay (free during beta; becomes a Nekko Agent Cloud perk). */
+/** Managed relay (free during beta; becomes a Nekko Cloud perk). */
 export const MANAGED_RELAY_URL = 'wss://nekko-agent-relay.fly.dev';
 const SELF_HOST_DOCS = 'https://github.com/nekko-labs/nekko-agent/blob/main/docs/REMOTE.md';
 const TAILSCALE_DOWNLOAD = 'https://tailscale.com/download';
@@ -57,7 +57,7 @@ export function RemoteAccess() {
 
   const liveGrant = grant && grant.expiresAt > now ? grant : null;
 
-  // Pairing link: on an http origin (web edition) the link opens this same UI;
+  // Pairing link: on an http origin (Local Web UI) the link opens this same UI;
   // the desktop app has no web origin, so the QR carries the raw pairing params
   // (the Nekko Agent phone app parses those directly).
   useEffect(() => {

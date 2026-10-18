@@ -2,7 +2,7 @@
 
 The CLI makes the Nekko Agent host a subagent for Devin, Claude Code, Codex,
 Cursor, and other harnesses. It uses the same host engine as the desktop and
-web editions.
+Local Web UI installs.
 
 ## Install and target
 
@@ -24,7 +24,7 @@ node apps/cli/dist/index.js status
 Use `nekko-agent` after a global install or linking the built package, or invoke
 the bundled binary from `apps/cli/dist/index.js`. Without `--url`, the CLI runs
 an in-process host
-against `~/.nekko` (override with `NEKKO_DATA_DIR`). To drive a web edition,
+against `~/.nekko` (override with `NEKKO_DATA_DIR`). To drive a Local Web UI,
 use:
 
 ```bash

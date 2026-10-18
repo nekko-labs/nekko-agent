@@ -1,0 +1,4 @@
+node_modules
+cloud
+dist
+*.test.ts

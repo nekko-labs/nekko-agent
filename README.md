@@ -105,7 +105,7 @@ workspaces stay inside the container.
 docker compose up    # build + run, then open http://localhost:1440
 ```
 
-**4. Run the web edition.** The backup approach when you don't plan to use the
+**4. Run the Local Web UI.** The backup approach when you don't plan to use the
 desktop app: the same engine and same UI in your browser, fully offline.
 
 ```bash
@@ -113,7 +113,7 @@ npm run web          # builds everything, serves http://localhost:1440
 ```
 
 Details for each are below: [signing and the installer](#the-installer),
-[Docker](#run-with-docker), and the [web edition](#run-the-web-edition).
+[Docker](#run-with-docker), and the [Local Web UI](#run-the-web-edition).
 
 ### The installer
 
@@ -169,11 +169,11 @@ Same engine, same UI, multiple runtimes (see the design in the project spec):
 | **Self-hosted web** | `npm run web`, offline, the same UI in your browser | ✅ available |
 | **Docker** | `docker compose up`, workspaces as volumes, local models via `host.docker.internal` | ✅ available |
 | **Phone remote control** | pair your phone (QR, one-time code) and run chats/training/goals on your home machine from anywhere, end-to-end encrypted; the iOS/Android app also runs small models on the phone itself; managed relay free in beta, or [self-host it](docs/REMOTE.md) with one Docker command | ✅ available |
-| **Nekko Agent Cloud** (paid) | managed hosting: subscriptions, always-available **Zero-Data-Retention** mode, cloud chat-history + file management | 🔜 planned |
+| **Nekko Cloud** (paid) | managed hosting: subscriptions, always-available **Zero-Data-Retention** mode, cloud chat-history + file management | 🔜 planned |
 
 The desktop, web, and (coming) Docker editions all run the **same engine + same React UI**, only the transport differs (Electron IPC vs HTTP/WebSocket), via the shared `@nekko-agent/host`.
 
-### Run the web edition
+### Run the Local Web UI
 
 ```bash
 npm install
@@ -189,7 +189,7 @@ checks can be extended for a proxy with comma-separated
 `NEKKO_ALLOWED_HOSTS` and `NEKKO_ALLOWED_ORIGINS`. Data lives in
 `~/.nekko` (override with `NEKKO_DATA_DIR`).
 
-![Nekko Agent web edition](docs/screenshots/web-edition.png)
+![Nekko Agent Local Web UI](docs/screenshots/web-edition.png)
 
 ### Run with Docker
 
@@ -233,10 +233,10 @@ npm-workspaces monorepo:
 | [`packages/core`](packages/core) | Engine: providers, agent loop, guardrails, context assembler, indexer, memory, connectors. Pure TS, unit-tested. |
 | [`packages/host`](packages/host) | Transport-agnostic host facade and persistence |
 | [`apps/desktop`](apps/desktop) | Electron app (main / preload / React renderer) |
-| [`apps/web-app-server`](apps/web-app-server) | Self-hosted Fastify web edition |
-| [`apps/relay`](apps/relay) | End-to-end encrypted remote relay |
+| [`apps/local-web-ui`](apps/local-web-ui) | Self-hosted Fastify Local Web UI |
+| [`apps/relay-server`](apps/relay-server) | End-to-end encrypted remote relay |
 | [`apps/cli`](apps/cli) | CLI and MCP stdio subagent surface |
-| [`apps/cloud`](apps/cloud) | Cloud edition |
+| [`apps/nekko-agent-api/cloud`](apps/nekko-agent-api/cloud) | Cloud edition |
 
 The core engine is Electron-free so it can be tested in isolation and reused.
 
@@ -293,7 +293,7 @@ your current OS, no need to download the released installer:
 
 ```bash
 npm run local        # build everything + launch the built desktop app (Windows/macOS)
-npm run web          # build + serve the web edition at http://localhost:1440
+npm run web          # build + serve the Local Web UI at http://localhost:1440
 ```
 
 `npm run local` builds the production renderer/main and runs it via

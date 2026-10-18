@@ -18,7 +18,7 @@ class PairingTest {
         assertEquals("ABCD2345", l.pair)
     }
 
-    @Test fun `parses the web edition link and a bare query`() {
+    @Test fun `parses the Local Web UI link and a bare query`() {
         val web = Pairing.parse("https://host.example/?relay=wss%3A%2F%2Fr.example&room=$room&key=$key#frag")!!
         assertEquals("wss://r.example", web.relayUrl)
         assertNull(web.pair)

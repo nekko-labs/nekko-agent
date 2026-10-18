@@ -139,7 +139,7 @@ export function ModelsView() {
               </p>
             </div>
             <button className="btn btn-outline shrink-0 py-1.5 text-[12px]" onClick={() => setView('modelserver')}>
-              Open Nekko Server
+              Open Model Server
             </button>
           </div>
         </section>

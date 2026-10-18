@@ -21,8 +21,8 @@ Sending is deliberately absent: the host's `chat:send` awaits an agent run and e
 
 Sources inspected:
 
-- `../../web-app-server/src/index.ts`: `POST /api/:channel`, JSON `{ "args": [...] }`, direct result (including `null`), HTTP 400 `{error}` on dispatcher failure.
-- `../../web-app-server/src/request-security.ts`: host bearer authentication and host/origin validation.
+- `../../local-web-ui/src/index.ts`: `POST /api/:channel`, JSON `{ "args": [...] }`, direct result (including `null`), HTTP 400 `{error}` on dispatcher failure.
+- `../../local-web-ui/src/request-security.ts`: host bearer authentication and host/origin validation.
 - `../../../packages/shared/src/ipc.ts`: `sessions:summaries` and `session:get`.
 - `../../../packages/shared/src/chat.ts` and `session-summary.ts`: milliseconds since Unix epoch, summaries and transcripts.
 - `../../mobile/src/lib/protocol.ts`: top-level unarchived list filtering; Expo's separate relay protocol is **not** implemented here.

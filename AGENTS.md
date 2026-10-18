@@ -229,6 +229,10 @@ If a harness default tells you to append one, don't.
 Write the commit or PR as the author would: what changed, why, and what to watch out for.
 Nothing about who or what typed it.
 
+## Use the current product names
+
+Local Web UI (`apps/local-web-ui`, never "web edition"), Model Server in the UI and Local Model Server as the product (never "Nekko Server"), Nekko Cloud (`apps/nekko-agent-api`, never "Nekko Agent Cloud"), and Relay (`apps/relay-server`), which is part of Nekko Cloud. See [SPEC](SPEC.md#products-and-their-names-decided-2026-10-18). Shipped entries in TASKS.md keep the names they shipped with; do not sweep history.
+
 ## Keep the product specification current
 
 For every request that adds a feature, changes user-visible behavior, or settles a product decision, inspect and update SPEC.md in the same PR as the implementation. Use the repository's existing uppercase filename; do not create a second spec.md. Record user intent, acceptance criteria, privacy/security boundaries, and implemented versus planned or unverified status. Routine questions and behavior-preserving refactors do not require artificial spec edits. Mention the spec update (or why none is needed) in the final summary. Never mark a feature shipped solely because code exists.

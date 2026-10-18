@@ -57,7 +57,7 @@ function ImageCompanions({ model, onChanged, onDefaults }: { model: LocalModel; 
 }
 
 /**
- * An image model's setup in Nekko Server: its companion files and memory
+ * An image model's setup in Model Server: its companion files and memory
  * settings. Generating happens in chat (an Image chat), where prompts and
  * pictures stay together as a history; this panel opens one on this model.
  */

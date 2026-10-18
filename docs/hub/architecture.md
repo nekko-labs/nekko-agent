@@ -1,15 +1,15 @@
 # Architecture
 
-Nekko Agent is one engine and one React UI that run in several places: the desktop app, the self-hosted web edition, Docker and the phone. This page is a map of the code for contributors. The full technical plan, with every decision and task, is in [`TASKS.md`](../../TASKS.md); what the product does and why is in [`SPEC.md`](../../SPEC.md).
+Nekko Agent is one engine and one React UI that run in several places: the desktop app, the self-hosted Local Web UI, Docker and the phone. This page is a map of the code for contributors. The full technical plan, with every decision and task, is in [`TASKS.md`](../../TASKS.md); what the product does and why is in [`SPEC.md`](../../SPEC.md).
 
 ## The big picture
 
 ```text
- desktop window (Electron + React)        browser (web edition, Docker)
+ desktop window (Electron + React)        browser (Local Web UI, Docker)
             |                                        |
             |  IPC                          HTTP + WebSocket
             v                                        v
-       apps/desktop main                  apps/web-app-server
+       apps/desktop main                  apps/local-web-ui
             \                                        /
              \----------- nekkod (Rust) ------------/
                      engine daemon on loopback
@@ -41,11 +41,11 @@ Status: implemented, unit and isolated fixture interaction tested; image/motion 
 | `packages/core` | The TypeScript engine: providers, agent loop, guardrails, context, indexer, memory, connectors. No Electron imports, unit tested with Vitest. |
 | `packages/host` | Wires the engine to the file system, shell and settings. Shared by every edition. |
 | `apps/desktop` | The Electron app: `src/main` (Node), `src/preload` (the bridge) and `src/renderer` (React). |
-| `apps/web-app-server` | The self-hosted web edition, also the `npx nekko-agent-web` package. |
+| `apps/local-web-ui` | The self-hosted Local Web UI, also the `npx nekko-agent-local-web-ui` package. |
 | `apps/cli` | The `nekko-agent` CLI and MCP server. |
 | `apps/mobile` | The iOS and Android app (Expo). |
-| `apps/relay` | The relay that pairs a phone with a computer. It only ever sees encrypted frames. |
-| `apps/cloud` | Nekko Agent Cloud, the planned hosted edition. |
+| `apps/relay-server` | The relay that pairs a phone with a computer. It only ever sees encrypted frames. |
+| `apps/nekko-agent-api/cloud` | Nekko Cloud, the planned hosted edition. |
 | `apps/website` | nekkoagent.com, including these docs. |
 | `crates/nekkod` | The engine daemon. |
 | `crates/nekko-*` | The daemon's services: chat turns, tools, terminals, inference, remote access, storage, usage and more. |

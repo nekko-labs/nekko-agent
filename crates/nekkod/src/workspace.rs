@@ -82,7 +82,7 @@ pub struct Workspace {
 
 impl Workspace {
     /// `github_api` is where GitHub's REST API is (`config.githubApiUrl`, else
-    /// `NEKKO_GITHUB_API_URL` for the web edition, whose server writes the
+    /// `NEKKO_GITHUB_API_URL` for the Local Web UI, whose server writes the
     /// config). Tests point it at a loopback server, with `NEKKO_GH_PATH`
     /// naming a `gh` that does not exist so the REST fallback runs.
     pub fn new(data_dir: Option<PathBuf>, github_api: Option<&str>) -> Self {

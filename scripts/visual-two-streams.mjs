@@ -1,4 +1,4 @@
-// Visual check for #551: two chats streaming at once in the web edition, on
+// Visual check for #551: two chats streaming at once in the Local Web UI, on
 // the Agents wall, in headless Playwright Chromium. An isolated scratch data
 // dir and ports, a mock model, nothing of the user's touched; every process
 // tree started here is ended on exit.
@@ -35,7 +35,7 @@ cleanups.push(() => mock.close());
 // Six chats on the wall, small transcripts; two of them will stream.
 const { dir: data, ids } = seedDataDir({ mockPort, chats: [6, 6, 6, 6, 6, 6] });
 cleanups.push(() => rmSync(data, { recursive: true, force: true }));
-const server = spawn(process.execPath, [join(APP, 'apps/web-app-server/dist/index.js')], {
+const server = spawn(process.execPath, [join(APP, 'apps/local-web-ui/dist/index.js')], {
   cwd: APP,
   env: { ...process.env, NEKKO_DATA_DIR: data, NEKKO_PORT: String(appPort), NEKKO_HOST: '127.0.0.1' },
   stdio: ['ignore', 'pipe', 'pipe'],

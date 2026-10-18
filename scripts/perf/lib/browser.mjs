@@ -81,7 +81,7 @@ function playwrightChromium() {
 
 /**
  * End a spawned process and everything it started. Chromium's GPU, renderer
- * and utility processes, and the web edition's ptys and tool children, outlive
+ * and utility processes, and the Local Web UI's ptys and tool children, outlive
  * a plain `kill()` of their parent on Windows.
  */
 export function killTree(proc) {

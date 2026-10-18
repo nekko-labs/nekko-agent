@@ -14,7 +14,7 @@ describe('parsePairingLink', () => {
     });
   });
 
-  it('reads the web edition link and a bare query', () => {
+  it('reads the Local Web UI link and a bare query', () => {
     expect(parsePairingLink(`https://nekko.local:1440/?${q}#x`)?.room).toBe('a1b2c3d4e5f60718');
     expect(parsePairingLink(q)?.relayUrl).toBe(RELAY);
   });

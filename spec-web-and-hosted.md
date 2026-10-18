@@ -1,8 +1,8 @@
 # Nekko Agent, Web, Docker & Hosted Editions (Spec)
 
 > Added 2026-06-20. Expands the canonical [master-build-prompt.md](master-build-prompt.md) with three new pillars requested by Philip:
-> 1. An **offline web edition** that runs the *same code* as the native app via one npm command or `docker compose`.
-> 2. A **paid hosted edition** ("Nekko Agent Cloud") with subscriptions, an always-available **Zero Data Retention (ZDR)** option, cloud-hosted chat history + file management, and **phone connectivity to your locally-running model**.
+> 1. An **offline Local Web UI** that runs the *same code* as the native app via one npm command or `docker compose`.
+> 2. A **paid hosted edition** ("Nekko Cloud") with subscriptions, an always-available **Zero Data Retention (ZDR)** option, cloud-hosted chat history + file management, and **phone connectivity to your locally-running model**.
 > 3. **Positioning**: real on-device + codebase usability (vs LM Studio's chat-only experience) with IDE-like file viewing/editing (vs terminal-only CLIs).
 
 This is a planning/spec document. Implementation lands in phases (see [Build plan](#build-plan--phases)).
@@ -11,7 +11,7 @@ This is a planning/spec document. Implementation lands in phases (see [Build pla
 
 ## 1. Editions overview
 
-| | **Desktop** (today) | **Self-hosted web** | **Docker** | **Nekko Agent Cloud** (paid) |
+| | **Desktop** (today) | **Self-hosted web** | **Docker** | **Nekko Cloud** (paid) |
 |---|---|---|---|---|
 | Runtime | Electron | Node server + browser | Node server in a container | Managed multi-tenant service |
 | Install | installer / `npm run dev` | `npx nekko-agent` or `npm run web` | `docker compose up` | sign in at app.nekkoagent.com |
@@ -47,7 +47,7 @@ packages/host/        // Node-only, no Electron, no HTTP, just services + a Host
 `createHost()` returns one object whose methods are exactly the `NekkoApi` surface (minus the `on*` subscriptions, which become an EventEmitter). Every edition wraps the same `Host`:
 
 - **Electron** (`apps/desktop/src/main`): `ipcMain.handle(channel, (e,...args) => host[method](...args))`; forwards `host.on('agentEvent', …)` to `webContents.send`. (This is a thin rewrite of today's `ipc.ts`.)
-- **Web server** (`apps/web-app-server`): one HTTP route per request method + a WebSocket for streamed events. (Details in §3.)
+- **Web server** (`apps/local-web-ui`): one HTTP route per request method + a WebSocket for streamed events. (Details in §3.)
 
 ### 2.3 Renderer transport adapter
 The renderer must get `window.nekko` regardless of runtime. Introduce a tiny bootstrap that picks an adapter:
@@ -58,14 +58,14 @@ The renderer must get `window.nekko` regardless of runtime. Introduce a tiny boo
 Selection is by build target / presence of the preload bridge: `window.nekko ??= makeWebClient()`.
 
 ### 2.4 Net effect
-`@nekko-agent/core` + `apps/desktop/src/renderer` are shared verbatim. New code is: `packages/host` (mostly moved), `apps/web-app-server` (new, thin), and `renderer/web-client.ts` (new, thin). The desktop `main` shrinks to a host wiring file.
+`@nekko-agent/core` + `apps/desktop/src/renderer` are shared verbatim. New code is: `packages/host` (mostly moved), `apps/local-web-ui` (new, thin), and `renderer/web-client.ts` (new, thin). The desktop `main` shrinks to a host wiring file.
 
 ---
 
-## 3. Self-hosted web edition
+## 3. Self-hosted Local Web UI
 
 ### 3.1 One command
-`apps/web-app-server` is a small Fastify (or Express) app that:
+`apps/local-web-ui` is a small Fastify (or Express) app that:
 1. Calls `createHost()` (local FS storage, same data dir as desktop so they can share state).
 2. Mounts `POST /api/:channel` → `host[method](...args)` (validated against the IPC contract).
 3. Exposes `GET /api/events` (WebSocket) streaming `AgentEvent` + `IndexProgress`.
@@ -74,7 +74,7 @@ Selection is by build target / presence of the preload bridge: `window.nekko ??=
 
 Run paths:
 - `npx nekko-agent` (published bin) → downloads + starts the server.
-- In-repo: `npm run web` → builds renderer + core + host, starts `apps/web-app-server`.
+- In-repo: `npm run web` → builds renderer + core + host, starts `apps/local-web-ui`.
 - The server is **offline-first**: it makes no outbound calls except to the model servers and connectors the user configures.
 
 ### 3.2 Docker
@@ -98,7 +98,7 @@ volumes: { nekko-agent-data: {} }
 - Workspaces map to mounted volumes; the **workspace-jail sandbox** confines tool file access to `/workspace`.
 - Local models on the host are reachable at `http://host.docker.internal:<port>`; the base-URL field accepts that directly.
 
-### 3.3 Security for the web edition
+### 3.3 Security for the Local Web UI
 The web server grants file + shell access to whoever can reach it. Therefore:
 - **Bind to `127.0.0.1` by default.** Exposing on `0.0.0.0`/LAN requires `--host` **and** a generated access token (printed once, required as a `Authorization` header / `?token=`).
 - Guardrails + sandbox modes apply identically (they live in the host, not the UI).
@@ -107,7 +107,7 @@ The web server grants file + shell access to whoever can reach it. Therefore:
 
 ---
 
-## 4. Nekko Agent Cloud (paid, hosted)
+## 4. Nekko Cloud (paid, hosted)
 
 > **Engine shape, decided 2026-10-13 (Philip):** when the TS engine is retired (PF14), Cloud runs on **one shared, multi-tenant `nekkod`**, not a daemon per account; per-account daemons stay an option if isolation or load ever demands them. Today Cloud still runs one in-process TS host per account. See PF14 step 4 in [TASKS.md](TASKS.md).
 
@@ -131,7 +131,7 @@ The managed edition. Everything the OSS app does, plus convenience that only a h
 ### 4.3 Payments & plans (Stripe), implemented
 - **Stripe Checkout** for subscription start; **Stripe Customer Portal** for management; **webhooks** drive entitlement state (`active`, `past_due`, `canceled`).
 - Entitlements gate cloud-only features (sync, relay, managed connectors). The OSS app never checks a license, paid features are server-side only.
-- **Implementation** (`apps/cloud/src/billing.ts`): hand-rolled against the Stripe REST API (no SDK dependency), gated on `STRIPE_SECRET_KEY` so the server runs without a Stripe account. `/api/billing/checkout` opens a Checkout Session for the chosen plan's price; `/api/billing/portal` opens the Customer Portal; `/api/billing/webhook` verifies the `Stripe-Signature` (HMAC-SHA256 over `${t}.${body}`, with a replay-window check) and applies plan changes via `store.setPlan` (`checkout.session.completed` and `customer.subscription.updated|deleted`). The account remembers its `stripeCustomerId` so subscription events map back to it. Requires keys to bill for real: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`, `CLOUD_PUBLIC_URL`.
+- **Implementation** (`apps/nekko-agent-api/cloud/src/billing.ts`): hand-rolled against the Stripe REST API (no SDK dependency), gated on `STRIPE_SECRET_KEY` so the server runs without a Stripe account. `/api/billing/checkout` opens a Checkout Session for the chosen plan's price; `/api/billing/portal` opens the Customer Portal; `/api/billing/webhook` verifies the `Stripe-Signature` (HMAC-SHA256 over `${t}.${body}`, with a replay-window check) and applies plan changes via `store.setPlan` (`checkout.session.completed` and `customer.subscription.updated|deleted`). The account remembers its `stripeCustomerId` so subscription events map back to it. Requires keys to bill for real: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`, `CLOUD_PUBLIC_URL`.
 - Plans (draft, see §6): Free (OSS, BYO everything), Pro (individual), Team.
 - Free trial of Pro; annual discount.
 
@@ -146,7 +146,7 @@ A first-class, always-available mode (not an enterprise-only afterthought):
 Goal: open Nekko Agent on your phone, talk to the LLM running on your home machine, securely, through NAT, without port-forwarding.
 
 ```
-[ Phone / browser ]  --TLS-->  [ Nekko Agent Cloud relay ]  <--outbound WSS--  [ Local agent on your machine ]
+[ Phone / browser ]  --TLS-->  [ Nekko Cloud relay ]  <--outbound WSS--  [ Local agent on your machine ]
        (Cloud web UI)              (auth + routing,            (desktop app or `nekko-agent agent`;
                                     no plaintext storage)        holds the model + tools + files)
 ```
@@ -208,7 +208,7 @@ Numbers are placeholders pending cost modeling (relay bandwidth, storage). ZDR i
 Phase ordering keeps the OSS app shippable throughout.
 
 - [ ] **P2.1, Host extraction**: move `apps/desktop/src/main` services into `packages/host`; rewrite desktop `main` as thin IPC wiring over `createHost()`. No user-visible change; keep build + tests green.
-- [ ] **P2.2, Web server**: `apps/web-app-server` (Fastify) mapping the IPC contract to HTTP + WS; `renderer/web-client.ts` adapter; `npm run web`; localhost bind + token for non-local.
+- [ ] **P2.2, Web server**: `apps/local-web-ui` (Fastify) mapping the IPC contract to HTTP + WS; `renderer/web-client.ts` adapter; `npm run web`; localhost bind + token for non-local.
 - [ ] **P2.3, Docker**: `Dockerfile`, `docker-compose.yml`, `host.docker.internal` model access, volume-mounted workspaces, non-root, published image via CI.
 - [ ] **P2.4, Packaging/publish**: `npx nekko-agent` bin; website download/run section updated; docs.
 - [ ] **P3.1, Cloud foundation**: accounts/auth, Postgres, entitlements, app.nekkoagent.com shell reusing the same renderer with a cloud transport.

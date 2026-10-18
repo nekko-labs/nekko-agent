@@ -15,7 +15,7 @@ object Wav {
     /**
      * What the phone records at most. The wire sends the WAV as a JSON array of
      * numbers, sealed and base64'd: about 150 KB per second, so 30 s is ~4.6 MB,
-     * well under the relay's 10 MB frame limit (apps/relay/src/server.ts), where
+     * well under the relay's 10 MB frame limit (apps/relay-server/src/server.ts), where
      * 60 s (~9.1 MB) would sit right at it.
      */
     const val MAX_SECONDS = 30

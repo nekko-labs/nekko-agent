@@ -87,11 +87,11 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # The installers carry apps/desktop's version and the web edition
-          # apps/web-app-server's, so a partial bump would ship assets labelled with the
+          # The installers carry apps/desktop's version and the Local Web UI
+          # apps/local-web-ui's, so a partial bump would ship assets labelled with the
           # old number. Fail before tagging rather than after publishing.
           status=0
-          for pkg in apps/desktop apps/web-app-server; do
+          for pkg in apps/desktop apps/local-web-ui; do
             have=$(node -p "require('./$pkg/package.json').version")
             if [ "$have" != "$VERSION" ]; then
               echo "$pkg is $have but the root is $VERSION." >&2

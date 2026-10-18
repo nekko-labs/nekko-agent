@@ -7,7 +7,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - 'apps/ios/**'
-      - 'apps/relay/src/**'
+      - 'apps/relay-server/src/**'
       - 'packages/shared/src/phone-access.ts'
       - '.github/workflows/ios-native.yml'
   schedule:
@@ -46,8 +46,8 @@ jobs:
           npm run build:core
           npm run build -w @nekko-agent/host
           npm run build --workspace=apps/cli
-          npm run build -w @nekko-agent/server
-          npm run build -w @nekko-agent/relay
+          npm run build -w @nekko-agent/local-web-ui
+          npm run build -w @nekko-agent/relay-server
       - name: Phone ↔ relay ↔ computer over URLSessionTransport
         run: apps/ios/scripts/itest.sh
       - name: Install XcodeGen

@@ -11,7 +11,7 @@ beforeEach(() => {
 });
 
 describe('openLocalModelSettings', () => {
-  it('goes to Nekko Server and asks for that model', () => {
+  it('goes to Model Server and asks for that model', () => {
     useStore.getState().openLocalModelSettings('qwen3-8b');
     expect(useStore.getState().view).toBe('modelserver');
     expect(useStore.getState().localModelFocus).toBe('qwen3-8b');

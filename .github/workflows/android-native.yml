@@ -7,7 +7,7 @@ on:
   pull_request:
     paths:
       - 'apps/android/**'
-      - 'apps/relay/**'
+      - 'apps/relay-server/**'
       - 'packages/shared/src/e2e.ts'
       - 'packages/shared/src/remote.ts'
       - 'packages/shared/src/ipc.ts'
@@ -49,8 +49,8 @@ jobs:
           npm run build:core
           npm run build -w @nekko-agent/host
           npm run build --workspace=apps/cli
-          npm run build -w @nekko-agent/server
-          npm run build -w @nekko-agent/relay
+          npm run build -w @nekko-agent/local-web-ui
+          npm run build -w @nekko-agent/relay-server
       - name: Unit, cross-language and integration tests
         working-directory: apps/android
         env:
@@ -107,8 +107,8 @@ jobs:
           npm run build:core
           npm run build -w @nekko-agent/host
           npm run build --workspace=apps/cli
-          npm run build -w @nekko-agent/server
-          npm run build -w @nekko-agent/relay
+          npm run build -w @nekko-agent/local-web-ui
+          npm run build -w @nekko-agent/relay-server
       - name: Build the app and its UI tests
         working-directory: apps/android
         run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --console=plain

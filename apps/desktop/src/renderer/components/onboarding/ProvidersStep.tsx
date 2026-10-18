@@ -249,12 +249,12 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
                   Nekko Agent <span className="font-normal text-ink-faint">(this app)</span>
                 </h3>
                 <p className="mt-0.5 text-[12px] text-ink-faint">
-                  Run models here, with nothing else installed. Nekko Server downloads the engine, and picks up
+                  Run models here, with nothing else installed. Model Server downloads the engine, and picks up
                   anything Ollama or LM Studio already pulled onto this machine.
                 </p>
               </div>
               <button className="btn btn-outline shrink-0 py-1.5 text-[12px]" onClick={openModels}>
-                Open Nekko Server
+                Open Model Server
               </button>
             </div>
           </div>

@@ -10,7 +10,7 @@ import { hasAppChrome } from '../chrome.js';
 /**
  * Design board: create designs two ways, both first-class.
  * 1) DRAW: sketch a rough layout on a pen/touch-friendly canvas (built for
- *    iPad/iPhone use in the web edition) and it gets turned into a working,
+ *    iPad/iPhone use in the Local Web UI) and it gets turned into a working,
  *    self-contained HTML code prototype.
  * 2) DESCRIBE: write a prompt and watch a design pop up, then refine it
  *    iteratively with follow-up prompts (a Claude Design-style loop).

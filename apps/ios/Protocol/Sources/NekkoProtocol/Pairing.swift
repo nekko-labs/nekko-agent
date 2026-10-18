@@ -1,7 +1,7 @@
 import Foundation
 
 /// Pairing links. Settings → Remote access on the computer shows a QR carrying
-/// `nekko-agent-pair:?relay=&room=&key=&pair=` (or, from the web edition,
+/// `nekko-agent-pair:?relay=&room=&key=&pair=` (or, from the Local Web UI,
 /// `https://host/?relay=…`). Either form, or a bare query string, parses to the
 /// same credentials. Mirrors `apps/mobile/src/lib/pairing.ts` and Android's `Pairing.kt`.
 public struct PairingLink: Equatable, Sendable, CustomStringConvertible {

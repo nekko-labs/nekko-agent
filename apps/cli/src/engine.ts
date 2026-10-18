@@ -8,7 +8,7 @@ import { ENV_PREFIXES } from '@nekko-agent/shared';
 
 /**
  * The engine daemon outside the desktop app: find `nekkod`, start it, keep it
- * running, stop it on exit. Used by the web edition (`apps/web-app-server`),
+ * running, stop it on exit. Used by the Local Web UI (`apps/local-web-ui`),
  * the CLI's local mode and `nekko-agent mcp` (lib.ts), and relay-agent mode.
  *
  * The same topology as the desktop app (see `apps/desktop/src/main/engine-process.ts`):
@@ -75,7 +75,7 @@ export function findNekkod(opts: FindOptions): FoundDaemon | null {
   const app = join(opts.here, '..', 'bin', exe);
   if (existsSync(app)) return { path: app, source: 'app' };
 
-  // apps/web-app-server/dist or apps/cli/dist -> the repository root.
+  // apps/local-web-ui/dist or apps/cli/dist -> the repository root.
   const root = resolve(opts.here, '../../..');
   const builds = [join(root, 'target/release', exe), join(root, 'target/debug', exe)].flatMap((p) => {
     try {
@@ -127,7 +127,7 @@ export interface DaemonOptions {
   backend: { exe: string; args: string[]; env: Record<string, string> };
   log?: (line: string) => void;
   /**
-   * Whether the daemon runs subscription sign-in (OAuth). The web edition
+   * Whether the daemon runs subscription sign-in (OAuth). The Local Web UI
    * says no (sign-in needs the desktop's browser handoff); the CLI's local
    * engine says yes, so its subscription tokens still refresh.
    */
@@ -197,7 +197,7 @@ export class DaemonProcess {
       allowedOrigins: [],
       backend: this.opts.backend,
       dataDir: this.opts.dataDir,
-      // OAuth sign-in is desktop-only in the web edition (web-channels.ts): the daemon answers its channels with the same refusal.
+      // OAuth sign-in is desktop-only in the Local Web UI (web-channels.ts): the daemon answers its channels with the same refusal.
       signIn: this.opts.signIn ?? false,
     };
     const child = spawn(this.opts.exe, [], {

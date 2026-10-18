@@ -23,7 +23,7 @@ import { terminalKeyAction, terminalKeyLabels } from './terminalClipboard.js';
  * Two data paths. On the desktop the engine daemon streams each terminal on
  * its own socket: output arrives at most once per frame, and every chunk is
  * acknowledged once parsed so a flood slows the program instead of this pane
- * (see `nekko_term::session`). Elsewhere (the web edition, the agent command
+ * (see `nekko_term::session`). Elsewhere (the Local Web UI, the agent command
  * log) output rides the shared event bus as before.
  */
 

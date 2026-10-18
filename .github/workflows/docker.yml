@@ -57,7 +57,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
-          file: apps/relay/Dockerfile
+          file: apps/relay-server/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

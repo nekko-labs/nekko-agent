@@ -122,7 +122,7 @@ flowchart LR
     T[ws://pc.tailnet.ts.net:4400]
   end
   subgraph PC[Your computer]
-    R[apps/relay private relay] --> H[Nekko Agent host - device registry, PHONE_CHANNELS]
+    R[apps/relay-server private relay] --> H[Nekko Agent host - device registry, PHONE_CHANNELS]
   end
   T --> R
   A -.->|no Tailscale: wss://| N[Nekko relay / self-hosted relay] -.-> H

@@ -342,7 +342,7 @@ export function UpdateBanner() {
   const notesUrl = update?.notesUrl ?? 'https://github.com/nekko-labs/nekko-agent/releases/latest';
   const openNotes = () => window.nekko.openPath(notesUrl);
 
-  // First-run prompt (desktop only, the web edition just refreshes).
+  // First-run prompt (desktop only, the Local Web UI just refreshes).
   const showFirstRun =
     isDesktop && settings != null && !settings.autoUpdatePrompted && !dismissedFirstRun;
 

@@ -5,7 +5,7 @@ $evidence = Join-Path $root '.shots/perf-investigation/narrow-controls'
 New-Item -ItemType Directory -Force $evidence | Out-Null
 $env:PERF_BROWSER = Join-Path $root '.shots/perf-investigation/browsers/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe'
 $env:NEKKO_RENDERER_DIR = Join-Path $root '.shots/perf-investigation/current-renderer'
-$backend = 'C:/Users/phili/code/nekko-agent/apps/web-app-server/dist'
+$backend = 'C:/Users/phili/code/nekko-agent/apps/local-web-ui/dist'
 function Save-BackendHashes($name) {
   Get-ChildItem $backend -Recurse -File | Sort-Object FullName | ForEach-Object {
     [PSCustomObject]@{ path = $_.FullName; sha256 = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([IO.File]::ReadAllBytes($_.FullName)))).Replace('-', '') }

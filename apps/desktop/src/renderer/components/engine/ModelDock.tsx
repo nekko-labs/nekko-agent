@@ -113,7 +113,7 @@ export function ModelDock() {
           )}
           {!status.running && (
             <p className="text-[11px] leading-snug text-ink-faint">
-              The model server is stopped. Start it on the Nekko Server page to load models here.
+              The model server is stopped. Start it on the Model Server page to load models here.
             </p>
           )}
           {rows.map(({ model, resident }) => (
@@ -295,7 +295,7 @@ function DockRow({
               className="ml-auto text-[11px] text-ink-faint underline underline-offset-2 hover:text-ink"
               data-local-model-settings={model.id}
               onClick={() => useStore.getState().openLocalModelSettings(model.id)}
-              title={`Open all of ${model.name}'s settings on Nekko Server`}
+              title={`Open all of ${model.name}'s settings on Model Server`}
             >
               All settings
             </button>

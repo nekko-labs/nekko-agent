@@ -459,7 +459,7 @@ it('matches the server golden set the engine daemon replays', { timeout: 120_000
   // The sweeper, the residency sync and the load-progress sampler never fire
   // here: the scenarios call them, so their timing cannot change the record.
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
-  const root = await mkdtemp(join(tmpdir(), 'nekko-server-golden-'));
+  const root = await mkdtemp(join(tmpdir(), 'local-model-server-golden-'));
   roots.push(root);
   for (const [rel, text] of Object.entries(FILES)) {
     const p = join(root, rel);
@@ -522,7 +522,7 @@ it('matches the server golden set the engine daemon replays', { timeout: 120_000
 
   const scenarios = [];
   for (const s of SCENARIOS) {
-    const dir = await mkdtemp(join(tmpdir(), 'nekko-server-scn-'));
+    const dir = await mkdtemp(join(tmpdir(), 'local-model-server-scn-'));
     roots.push(dir);
     scenarios.push({ ...s, result: await runServer(dir, s) });
   }

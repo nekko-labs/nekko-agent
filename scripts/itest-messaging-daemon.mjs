@@ -1,4 +1,4 @@
-// The Telegram bridge through the web edition behind nekkod (PF14 A4): the
+// The Telegram bridge through the Local Web UI behind nekkod (PF14 A4): the
 // daemon polls a loopback stand-in for the Bot API, refuses an unlisted
 // chat, starts a turn for an allowed one through its own admission, streams
 // the reply into one Telegram message, answers `messaging:status`, and stops
@@ -117,7 +117,7 @@ const push = (batch) => {
   } else queued.push(...batch);
 };
 
-const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
+const server = spawn(process.execPath, ['apps/local-web-ui/dist/index.js'], {
   env: {
     ...process.env,
     NEKKO_PORT: String(SERVER_PORT),

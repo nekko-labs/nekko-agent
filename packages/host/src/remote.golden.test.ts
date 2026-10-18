@@ -35,7 +35,7 @@ import {
  *   packages/shared/src/phone-access.ts) and how it decides a set of phone
  *   requests (`phone.json`).
  *
- * The phone apps (Expo, iOS, Android) and apps/relay speak this protocol, so
+ * The phone apps (Expo, iOS, Android) and apps/relay-server speak this protocol, so
  * any drift here breaks every paired device. Fails if the file is stale;
  * rewrite it with UPDATE_GOLDEN=1.
  */

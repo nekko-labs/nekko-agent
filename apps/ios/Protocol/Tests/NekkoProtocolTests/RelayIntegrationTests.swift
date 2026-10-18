@@ -2,8 +2,8 @@ import Foundation
 import XCTest
 @testable import NekkoProtocol
 
-/// The Swift relay client against the real thing: the relay (apps/relay/dist),
-/// a headless agent (apps/web-app-server/dist in relay-agent mode) and a fake
+/// The Swift relay client against the real thing: the relay (apps/relay-server/dist),
+/// a headless agent (apps/local-web-ui/dist in relay-agent mode) and a fake
 /// OpenAI-compatible model, over the real `URLSessionTransport`. The same
 /// journey as Android's `RelayIntegrationTest.kt`: enrollment with the
 /// one-time code, provider keys stripped, a streamed turn, a guarded tool call

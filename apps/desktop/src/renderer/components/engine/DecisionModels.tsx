@@ -20,7 +20,7 @@ const EXAMPLE_QUESTIONS = JSON.stringify({
 }, null, 2);
 
 /**
- * Decision models in Nekko Server: fetch and run Laya locally (in the engine
+ * Decision models in Model Server: fetch and run Laya locally (in the engine
  * daemon, no Python), keep a TypeSafe key for the hosted Jev, and try either
  * on a state and a few typed questions. Both answer the same request shape,
  * so what is tried here is what an agent tool or the engine's

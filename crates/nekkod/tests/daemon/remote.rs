@@ -2,7 +2,7 @@
 
 use crate::common::*;
 
-/// A relay socket as the test sees it (it plays apps/relay).
+/// A relay socket as the test sees it (it plays apps/relay-server).
 type RelaySide = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
 
 /// The agent's next frame other than the backend's repeating test event.

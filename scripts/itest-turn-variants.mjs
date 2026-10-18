@@ -1,4 +1,4 @@
-// The turn variants through the web edition behind nekkod (PF14 A2):
+// The turn variants through the Local Web UI behind nekkod (PF14 A2):
 // compaction, cancelling one, starting a queued prompt at once, and an image
 // turn, each answered by the daemon with the real TS backend beside it.
 //
@@ -80,7 +80,7 @@ writeFileSync(imageModel, tinyGguf('sd1', 'Tiny SD'));
 mkdirSync(join(dataDir, 'engine', 'diffusion'), { recursive: true });
 writeFileSync(join(dataDir, 'engine', 'diffusion', 'engine.json'), JSON.stringify({ buildId: 'fake', binPath: fakeSd, version: 'fake' }));
 
-const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
+const server = spawn(process.execPath, ['apps/local-web-ui/dist/index.js'], {
   env: {
     ...process.env,
     NEKKO_PORT: String(SERVER_PORT),

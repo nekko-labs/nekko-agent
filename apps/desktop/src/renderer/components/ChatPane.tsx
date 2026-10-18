@@ -1524,7 +1524,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         return;
       }
     } catch {
-      useStore.getState().pushToast('error', 'Could not check image setup. Try again or open Nekko Server.');
+      useStore.getState().pushToast('error', 'Could not check image setup. Try again or open Model Server.');
       return;
     }
     if (fromDraft) { setDraft(''); clearDraft(sessionId); }

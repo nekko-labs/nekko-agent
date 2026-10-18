@@ -14,8 +14,8 @@ $ip = (& tailscale ip -4 2>$null | Select-Object -First 1)
 if (-not $ip) { throw 'Tailscale is not running on this computer. Start it (tailscale up) and retry.' }
 $self = (& tailscale status --json | ConvertFrom-Json).Self
 $dns = if ($self.DNSName) { $self.DNSName.TrimEnd('.') } else { $ip }
-$entry = Join-Path $root 'apps/relay/dist/index.js'
-if (-not (Test-Path $entry)) { npm run build -w @nekko-agent/relay --prefix $root | Out-Host }
+$entry = Join-Path $root 'apps/relay-server/dist/index.js'
+if (-not (Test-Path $entry)) { npm run build -w @nekko-agent/relay-server --prefix $root | Out-Host }
 $env:NEKKO_RELAY_HOST = $ip
 $env:NEKKO_RELAY_PORT = "$Port"
 $env:NEKKO_RELAY_ALLOW_UNAUTHENTICATED = '1'   # safe: only tailnet devices can reach this bind address

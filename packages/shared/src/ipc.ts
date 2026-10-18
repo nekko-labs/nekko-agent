@@ -250,7 +250,7 @@ export const IpcChannels = {
   workflowRuns: 'workflow:runs',
   /**
    * Feed an external event to the listeners. One door for every transport: the
-   * CLI calls it directly, and the web edition's generic `/api/:channel` route
+   * CLI calls it directly, and the Local Web UI's generic `/api/:channel` route
    * makes it the endpoint a Slack app or a git provider webhook posts to.
    */
   workflowEvent: 'workflow:event',
@@ -918,7 +918,7 @@ export interface NekkoApi {
    * One terminal's raw byte stream straight from the engine daemon, with
    * flow control: output arrives at most once per frame, and a flood waits
    * for `ack` instead of piling up. Resolves null where there is no daemon
-   * (the web edition, or the desktop app running without one); callers then
+   * (the Local Web UI, or the desktop app running without one); callers then
    * use `onTerminalEvent` and `writeTerminal`.
    */
   openTerminalStream?(

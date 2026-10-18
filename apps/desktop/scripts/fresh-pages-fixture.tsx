@@ -34,7 +34,7 @@ function show(view: 'settings' | 'modelserver' | 'command' | 'crash', fail = fal
   useStore.getState().applyTheme();
   root.render(<UpdateProvider><div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
     <TitleBar />
-    <nav><button id="nav-settings" onClick={() => show('settings')}>Settings</button><button id="nav-server" onClick={() => show('modelserver')}>Nekko Server</button></nav>
+    <nav><button id="nav-settings" onClick={() => show('settings')}>Settings</button><button id="nav-server" onClick={() => show('modelserver')}>Model Server</button></nav>
     <main style={{ flex: 1, minHeight: 0, overflow: 'auto' }}><Boundary key={view + fail} label="Page">
       {view === 'settings' ? <SettingsView /> : view === 'modelserver' ? <ModelServerView /> : view === 'crash' ? <><Boundary label="Section"><Crash /></Boundary><p id="sibling">Other section remains usable</p></> : <p>Agents</p>}
     </Boundary></main>

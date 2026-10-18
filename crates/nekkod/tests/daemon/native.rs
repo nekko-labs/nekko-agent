@@ -149,7 +149,7 @@ async fn answers_the_channels_electron_main_used_to() {
     assert!(!calls.to_string().contains("dialog:") && !calls.to_string().contains("update:"), "{calls}");
     drop(d);
 
-    // Without `native` (the web edition), nothing here is the daemon's.
+    // Without `native` (the Local Web UI), nothing here is the daemon's.
     let web = start_with(true, Some(&data));
     let (_, info) = post(web.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(!info["owned"].as_array().unwrap().iter().any(|o| o == "update:check"));

@@ -31,7 +31,7 @@ test('a renderer change: Windows capture on the PR; capture and perf in the queu
   assert.deepEqual(queue(['apps/desktop/src/renderer/App.tsx']), q({ daemon_os: [], capture_os: ['windows-latest'], perf: true }));
 });
 
-test('a desktop main-process change skips perf, which measures the web edition', () => {
+test('a desktop main-process change skips perf, which measures the Local Web UI', () => {
   assert.equal(queue(['apps/desktop/src/main/index.ts']).perf, false);
 });
 

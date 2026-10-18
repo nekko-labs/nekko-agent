@@ -1,4 +1,4 @@
-# Nekko Agent, self-hosted web edition in Docker.
+# Nekko Agent, self-hosted Local Web UI in Docker.
 #   docker compose up        (build + run)
 # Then open http://localhost:1440
 services:

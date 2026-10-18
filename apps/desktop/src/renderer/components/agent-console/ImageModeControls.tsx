@@ -59,7 +59,7 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
           const relevant = jobs.filter((job) => job.target === params.modelId && job.id.startsWith('image-companions:'));
           if (relevant.length && !relevant.some((job) => ['queued', 'downloading', 'verifying'].includes(job.state))) {
             setFetching(false);
-            pushToast('error', 'Image setup did not finish. Open Nekko Server > Downloads for details, then retry.');
+            pushToast('error', 'Image setup did not finish. Open Model Server > Downloads for details, then retry.');
           }
         }).catch(() => setFetching(false));
       }).catch(() => setFetching(false));
@@ -71,7 +71,7 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
     return (
       <span className="min-w-0 truncate text-[11px] text-ink-faint">
         No image models yet.{' '}
-        <button className="underline hover:text-ink" onClick={() => setView('modelserver')}>Get one in Nekko Server</button>
+        <button className="underline hover:text-ink" onClick={() => setView('modelserver')}>Get one in Model Server</button>
       </span>
     );
   }

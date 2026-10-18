@@ -206,7 +206,7 @@ How the Android and iOS apps each handle the connection (URL rules, pairing, rec
 
 ### Managed relay (default): `wss://nekko-agent-relay.fly.dev`
 
-Zero setup; free during beta with per-connection rate limits. When Nekko Agent Cloud launches, the
+Zero setup; free during beta with per-connection rate limits. When Nekko Cloud launches, the
 managed relay becomes part of the paid plans (it already supports gating via
 `NEKKO_RELAY_AUTHZ_URL`), while self-hosting stays free forever.
 
@@ -294,7 +294,7 @@ services:
 `ghcr.io/nekko-labs/nekko-agent-relay:latest`, expose port 4400, attach a domain, and let Coolify's
 proxy terminate TLS. Point Nekko Agent at `wss://relay.your-domain.com`.
 
-**Fly.io**: `fly deploy -c apps/relay/fly.toml` from a repo checkout. Keep it at **one machine**
+**Fly.io**: `fly deploy -c apps/relay-server/fly.toml` from a repo checkout. Keep it at **one machine**
 (`fly scale count 1`): rooms live in a machine's memory, so agent and phone must land on the same
 instance.
 
@@ -309,7 +309,7 @@ Environment knobs:
 | `NEKKO_RELAY_PORT` / `NEKKO_RELAY_HOST` | Bind (default `0.0.0.0:4400`) |
 | `APNS_KEY_P8` / `APNS_KEY_ID` / `APNS_TEAM_ID` | Enable iOS push |
 | `FCM_SERVICE_ACCOUNT` | Enable Android push (service-account JSON) |
-| `NEKKO_RELAY_AUTHZ_URL` | Gate agent enrollment on a Nekko Agent Cloud account (managed hosting) |
+| `NEKKO_RELAY_AUTHZ_URL` | Gate agent enrollment on a Nekko Cloud account (managed hosting) |
 | `NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` | Explicitly allow unauthenticated agent enrollment for trusted/private deployments; otherwise agent enrollment is disabled when no authz URL is configured |
 
 The relay validates device IDs as UUIDs and push tokens as non-empty platform

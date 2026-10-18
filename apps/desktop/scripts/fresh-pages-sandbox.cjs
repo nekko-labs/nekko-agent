@@ -27,7 +27,7 @@ app.whenReady().then(async () => {
         await run(`window.__fixture.show('${view}');window.__fixture.theme('${theme}')`); await sleep(350);
         await check(`document.body.textContent.includes('${view === 'settings' ? 'Appearance' : 'Model server'}')`, `Fresh ${view} renders ${theme}/${size}`);
         await check(`document.documentElement.dataset.theme==='${theme}'`, 'Requested theme survives settings refresh');
-        await check(`document.querySelector('.titlebar h1').textContent==='${view === 'settings' ? 'Settings' : 'Nekko Server'}'`, 'Header names destination');
+        await check(`document.querySelector('.titlebar h1').textContent==='${view === 'settings' ? 'Settings' : 'Model Server'}'`, 'Header names destination');
         await capture(`${view}-${theme}-${size}`);
       }
     }

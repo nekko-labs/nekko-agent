@@ -40,7 +40,7 @@ export function CommandPalette() {
       go('artifacts', 'Go to Artifacts'),
       go('skills', 'Go to Skills'),
       go('models', 'Go to Model Providers'),
-      go('modelserver', 'Go to Nekko Server'),
+      go('modelserver', 'Go to Model Server'),
       go('connectors', 'Go to Connectors'),
       // Experimental destinations stay out of the palette while their flag is off.
       ...(viewEnabled('memory', settings) ? [go('memory', 'Go to Memory')] : []),
