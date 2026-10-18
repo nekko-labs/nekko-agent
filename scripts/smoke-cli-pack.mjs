@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,13 @@ let mcp;
 let mcpClosed;
 const dataDir = join(temp, 'data');
 const workspace = join(temp, 'workspace');
+// The CLI's local mode runs nekkod. The published package gets it from its
+// platform dependency; here, from this checkout's build (CI builds it first).
+const nekkod = ['debug', 'release']
+  .map((profile) => join(root, 'target', profile, process.platform === 'win32' ? 'nekkod.exe' : 'nekkod'))
+  .find((p) => existsSync(p));
+if (!nekkod) throw new Error('Build nekkod first (cargo build -p nekkod): the CLI runs its local engine on it.');
+const cliEnv = { ...process.env, NEKKO_URL: '', NEKKO_DATA_DIR: dataDir, NEKKOD_PATH: nekkod };
 mkdirSync(tarballs);
 mkdirSync(installed);
 mkdirSync(dataDir);
@@ -32,7 +39,7 @@ function run(command, args, options = {}) {
 function jsonCommand(args, executable = 'nekko-agent') {
   const output = run(join(binDir, executable), args, {
     cwd: temp,
-    env: { ...process.env, NEKKO_URL: '', NEKKO_DATA_DIR: dataDir },
+    env: cliEnv,
   });
   try {
     return JSON.parse(output);
@@ -65,7 +72,7 @@ try {
     throw new Error('Published package identity must be nekko-agent.');
   }
   const packedDist = readdirSync(join(unpacked, 'dist')).sort();
-  const expectedDist = ['index.d.ts', 'index.js', 'run.d.ts', 'run.js'];
+  const expectedDist = ['backend.js', 'engine.js', 'index.d.ts', 'index.js', 'run.d.ts', 'run.js'];
   if (JSON.stringify(packedDist) !== JSON.stringify(expectedDist)) {
     throw new Error(`Packed package contains unexpected dist files: ${packedDist.join(', ')}`);
   }
@@ -96,7 +103,7 @@ try {
 
   run('npm', ['install', '--prefix', installed, '--ignore-scripts', '--no-package-lock', tarball]);
   for (const executable of executables) {
-    const options = { cwd: temp, env: { ...process.env, NEKKO_URL: '', NEKKO_DATA_DIR: dataDir } };
+    const options = { cwd: temp, env: cliEnv };
     const help = run(join(binDir, executable), ['--help'], options);
     if (!help.startsWith('Nekko Agent CLI (nekko-agent ')) {
       throw new Error(`${executable} --help did not identify Nekko Agent.`);
@@ -128,7 +135,7 @@ try {
   for (const executable of executables) {
     mcp = spawn(join(binDir, executable), ['mcp'], {
       cwd: temp,
-      env: { ...process.env, NEKKO_URL: '', NEKKO_DATA_DIR: dataDir },
+      env: cliEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     mcpClosed = new Promise((resolveClosed) => mcp.once('close', resolveClosed));
@@ -182,7 +189,8 @@ try {
       throw new Error('MCP nekko-agent_status returned no status payload.');
     }
     console.log(`${executable} MCP tools/call: nekko-agent_status ok`);
-    mcp.kill();
+    // Closing stdin is how an MCP client ends a session; the engine stops with it.
+    mcp.stdin.end();
     await mcpClosed;
     mcp = undefined;
   }
