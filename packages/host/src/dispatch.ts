@@ -17,6 +17,9 @@ import { daemonCall } from './engine/daemon.js';
  */
 export const DAEMON_SERVED = new Set<string>([
   IpcChannels.workspaceList,
+  IpcChannels.integrationsDetect,
+  IpcChannels.integrationsInstall,
+  IpcChannels.integrationsSnippet,
   IpcChannels.workspaceAddByPath,
   IpcChannels.workspaceRemove,
   IpcChannels.fileRead,
@@ -388,8 +391,11 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.connectorFetch]: ([kind, query]) => host.fetchConnector(kind, query),
 
     [C.integrationsDetect]: () => host.detectAgentTools(),
-    [C.integrationsInstall]: ([tool, target]) => host.installSubagent(tool, target),
-    [C.integrationsSnippet]: ([tool, target]) => host.subagentSnippet(tool, target),
+    [C.integrationsInstall]: ([tool, target]) => host.installSubagent(tool, target ?? undefined),
+    [C.integrationsSnippet]: ([tool, target]) => host.subagentSnippet(tool, target ?? undefined),
+    // For nekkod: where an MCP entry written with no target should point. The
+    // desktop backend answers with its local server; elsewhere the portable form.
+    'integrations:target': () => null,
 
     [C.guardrailsClassify]: ([cmd]) => host.classifyCommand(cmd),
     [C.usageSummary]: () => host.usageSummary(),
