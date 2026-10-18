@@ -692,7 +692,12 @@ mod tests {
         bad(json!({ "mode": "existing", "action": "snapshot" }), "needs dedicated mode");
         bad(json!({ "mode": "dedicated", "action": "snapshot", "selector": "@e2" }), "not a ref");
         bad(json!({ "mode": "dedicated", "action": "scroll", "selector": "@e12" }), "scroll takes a CSS selector");
-        for ok in [json!({ "mode": "dedicated", "action": "snapshot" }), json!({ "mode": "dedicated", "action": "snapshot", "selector": "form" }), json!({ "mode": "dedicated", "action": "click", "selector": "@e3" }), json!({ "mode": "dedicated", "action": "scroll", "selector": "@e" })] {
+        for ok in [
+            json!({ "mode": "dedicated", "action": "snapshot" }),
+            json!({ "mode": "dedicated", "action": "snapshot", "selector": "form" }),
+            json!({ "mode": "dedicated", "action": "click", "selector": "@e3" }),
+            json!({ "mode": "dedicated", "action": "scroll", "selector": "@e" }),
+        ] {
             assert!(browser_preflight(&ok).is_ok(), "{ok}");
         }
         assert!(is_element_ref("@e10") && !is_element_ref("@e") && !is_element_ref("e1") && !is_element_ref("@e1x"));
