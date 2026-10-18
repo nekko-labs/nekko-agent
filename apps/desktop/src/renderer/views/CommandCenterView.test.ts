@@ -38,7 +38,7 @@ it.each(['focus', 'grid', 'fixed'] as const)('direct creation replaces More with
 
 it('hosts the detailed picker in the toolbar rather than a wall tile', () => {
   vi.mocked(useState).mockReturnValueOnce([null, vi.fn()]);
-  const tree = WallToolbar({ wall: DEFAULT_WALL_STATE, setWall: vi.fn(), setAddOpen: vi.fn(), addOpen: true, onAutoArrange: vi.fn(), onAdd: vi.fn(), onPick: vi.fn() });
+  const tree = WallToolbar({ wall: DEFAULT_WALL_STATE, setWall: vi.fn(), setAddOpen: vi.fn(), addOpen: true, onAdd: vi.fn(), onPick: vi.fn() });
   const elements: React.ReactElement<Record<string, any>>[] = [];
   const walk = (node: React.ReactNode) => React.Children.forEach(node, (child) => {
     if (!React.isValidElement<Record<string, any>>(child)) return;
