@@ -1,10 +1,10 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { AppSettings } from '@nekko-agent/shared';
+import './tests/browserGlobals.js';
+import { liveStore } from './tests/liveStore.js';
+import { renderApp } from './tests/renderApp.js';
 
-vi.hoisted(() => {
-  Object.assign(globalThis, { window: { innerWidth: 1280, addEventListener() {} }, localStorage: { getItem: () => null } });
-});
+vi.mock('./store.js', (original) => liveStore(original as never));
 const { useStore, viewEnabled } = await import('./store.js');
 const { LANGUAGES, translate } = await import('./i18n.js');
 const settings = (developer: AppSettings['developer']) => ({ developer }) as AppSettings;
@@ -44,12 +44,16 @@ describe('navigation visibility', () => {
     }
   });
 
-  it('uses the still cat for Agents and filters both rails with viewEnabled', () => {
-    const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
-    expect(app).toContain('<NekkoAvatar size={22} stationary eyes={false} />');
-    expect(app).toContain("{ view: 'command', labelKey: 'nav.command', Icon: AgentCatIcon }");
-    expect(app).toContain('filter(n => viewEnabled(n.view, settings))');
-    expect(app).toContain('MOBILE_NAV.filter((v) => viewEnabled(v, settings))');
-    expect(app).toContain("if (!viewEnabled(view, settings)) setView('command')");
+  it('uses the still, eyeless cat for Agents and filters both rails with viewEnabled', async () => {
+    const off = await renderApp({ developer: { chat: false } });
+    const agents = off.slice(off.indexOf('aria-label="Agents"'), off.indexOf('</button>', off.indexOf('aria-label="Agents"')));
+    expect(agents).toContain('pixel-stationary');
+    expect(agents).toContain('data-part="pixel-head"');
+    expect(agents).not.toContain('pixel-eyes');
+    // Chat is off: neither the side rail nor the phone tabs offer it.
+    expect(off.match(/aria-label="Agents"/g)).toHaveLength(2);
+    expect(off).not.toContain('aria-label="Chat"');
+    const on = await renderApp({ developer: { chat: true } });
+    expect(on.match(/aria-label="Chat"/g)).toHaveLength(2);
   });
 });

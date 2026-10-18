@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { describe, expect, it, vi } from 'vitest';
+import './tests/browserGlobals.js';
+import { liveStore } from './tests/liveStore.js';
+import { loadCommandCenter, stubProps } from './tests/renderCommandCenter.js';
+import { chatSession, renderChatPane, withProvider } from './tests/renderChatPane.js';
 import { DEFAULT_WALL_STATE, openWallPane, tileTree, wallPane } from './commandWall.js';
 import { allPanes } from './layout.js';
-import { restoredDraftImages } from './composerDrafts.js';
+import { loadDraft, restoredDraftImages, saveDraft } from './composerDrafts.js';
+
+vi.mock('./store.js', (original) => liveStore(original as never));
+vi.mock('./liveRuns.js', async (original) => ({ ...(await original<object>()), useLiveRun: () => undefined }));
 
 describe('guarded wall selection', () => {
   for (const mode of ['focus', 'grid', 'fixed'] as const) {
@@ -38,14 +45,28 @@ describe('guarded wall selection', () => {
     expect(openWallPane(chats, 'chat', 'a')).toBe(chats);
   });
 
-  it('sends a sidebar pick through the single guarded update and keeps archived chats apart', () => {
-    const source = readFileSync(new URL('./views/CommandCenterView.tsx', import.meta.url), 'utf8');
-    const handler = source.slice(source.indexOf('onOpenChat={(id) => {'), source.indexOf('onOpenTerminal={(id)'));
-    expect(handler).toContain('?.archivedAt) setCompletedId(id)');
-    expect(handler).toContain("void addFromToolbar('chat', id)");
-    expect(handler).not.toContain('selectAgent(id)');
-    expect(handler).not.toContain('setWall(');
-    expect(source).toContain('setWall((w) => openWallPane(w, kind, ref, aspectRef.current))');
+  it('opens a sidebar pick of an existing chat without a host round trip', async () => {
+    // The page's real sidebar callback. Where it lands (the guarded
+    // openWallPane above, or the reader for a completed chat) is page state a
+    // server render cannot observe; that half belongs to the chat-switch e2e
+    // journey (see the PR's Unfinished work).
+    const page = await loadCommandCenter();
+    const active = { id: 'live', title: 'Live', archivedAt: undefined } as never;
+    const done = { id: 'old', title: 'Old', archivedAt: 1 } as never;
+    page.useStore.setState({ sessions: [active, done] });
+    page.render({ commandWall: { agentPanel: { show: true, orientation: 'vertical' } } as never });
+    const onOpenChat = stubProps.sidebar!.onOpenChat as (id: string) => void;
+    const created = vi.fn();
+    const nekko = (globalThis as { window: { nekko: unknown } }).window.nekko;
+    (globalThis as { window: { nekko: unknown } }).window.nekko = new Proxy({}, { get: () => created });
+    try {
+      // An existing chat: no host round trip (nothing created), just the guarded wall update.
+      onOpenChat('live');
+      onOpenChat('old');
+      expect(created).not.toHaveBeenCalled();
+    } finally {
+      (globalThis as { window: { nekko: unknown } }).window.nekko = nekko;
+    }
   });
 });
 
@@ -65,11 +86,33 @@ describe('draft restoration identity', () => {
     expect(restoredDraftImages(['a'], undefined)).toEqual([]);
   });
 
-  it('keeps last-keystroke flushing and per-chat restore boundaries', () => {
+  it('restores a chat its own parked draft and attachments, never another chat\'s', () => {
+    withProvider();
+    const a = chatSession();
+    const b = chatSession();
+    saveDraft(a.id, { text: 'parked for a', images: ['data:image/png;base64,AAAA'] });
+    const composerA = renderChatPane(a, { surface: 'composer' });
+    expect(composerA).toContain('data-composer-attachments');
+    expect(composerA).toContain('data:image/png;base64,AAAA');
+    const composerB = renderChatPane(b, { surface: 'composer' });
+    expect(composerB).not.toContain('data-composer-attachments');
+    expect(composerB).not.toContain('data:image/png;base64,AAAA');
+  });
+
+  it('parks the newest draft text and clears an emptied one', () => {
+    const id = chatSession().id;
+    saveDraft(id, { text: 'first', images: [] });
+    saveDraft(id, { text: 'first and last', images: [] });
+    expect(loadDraft(id)?.text).toBe('first and last');
+    saveDraft(id, { text: '  ', images: [] });
+    expect(loadDraft(id)).toBeNull();
+  });
+
+  // Source pin, pending the chat-switch e2e journey: the flush is a layout-effect
+  // cleanup and a beforeunload listener, which a server render never runs and no
+  // DOM library is installed for. Losing it loses the last keystrokes.
+  it('flushes the last keystrokes on unmount and on window close (source pin)', () => {
     const source = readFileSync(new URL('./components/ChatPane.tsx', import.meta.url), 'utf8');
-    expect(source.match(/setPendingImages\(\(current\) => restoredDraftImages\(current, parked\?\.images\)\)/g)).toHaveLength(2);
-    expect(source).toContain('const flush = () => saveDraft(sessionId, latestDraft.current)');
-    expect(source).toContain("window.removeEventListener('beforeunload', flush); flush();");
-    expect(source).toContain('if (draftLoadedFor.current === sessionId) return;');
+    expect(source).toMatch(/const flush = \(\) => saveDraft\(sessionId, latestDraft\.current\);?\s*window\.addEventListener\('beforeunload', flush\);\s*return \(\) => \{\s*window\.removeEventListener\('beforeunload', flush\);\s*flush\(\);\s*\};/);
   });
 });

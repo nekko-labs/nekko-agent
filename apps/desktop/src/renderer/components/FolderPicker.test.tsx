@@ -37,11 +37,14 @@ describe('composer folder picker', () => {
     } finally { useStore.setState({ settings: prev.settings, sessions: prev.sessions }); }
   });
 
-  it('keeps the menu open when a folder is revoked', async () => {
+  // Source pin, pending a composer e2e journey: the revoke handler lives in the
+  // open (portalled) menu's click path, which a server render never reaches.
+  it('keeps the menu open when a folder is revoked (source pin)', async () => {
     const source = (await import('node:fs')).readFileSync(new URL('./FolderPicker.tsx', import.meta.url), 'utf8');
-    const remove = source.slice(source.indexOf('const remove = '), source.indexOf('return (', source.indexOf('const remove = ')));
-    expect(remove).not.toContain('setOpen(false)');
-    expect(remove).not.toContain('run(');
+    const remove = source.match(/const remove = [^]*?\n {2}\};/)?.[0] ?? '';
+    expect(remove).toContain('removeWorkspace');
+    expect(remove).not.toMatch(/setOpen\(\s*false\s*\)/);
+    expect(remove).not.toMatch(/\brun\(/);
   });
 
   it('checks the primary and marks supporting folders', () => {

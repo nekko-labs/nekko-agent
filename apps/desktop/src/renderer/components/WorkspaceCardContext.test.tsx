@@ -48,15 +48,19 @@ describe('workspace card context readout', () => {
     expect(card()).toContain('76k/1M');
   });
 
-  it('publishes every included bundle item, not just the conversation', () => {
+  // Source pins, pending the wall e2e journey: the card's number is published
+  // from ChatPane effects (on mount, on a context bundle from the host, and on
+  // unmount), none of which a server render runs.
+  it('publishes every included bundle item, not just the conversation (source pin)', () => {
     const chat = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-    expect(chat).toContain('bundle.items.filter((i) => i.included).reduce((s, i) => s + i.tokens, 0)');
-    expect(chat).not.toContain("i.included && i.source === 'conversation')?.tokens");
+    const publish = chat.match(/const publish = \(\) => \{[^]*?setSessionCtxEstimate\(sessionId, base \+ live\);/)?.[0] ?? '';
+    expect(publish).toMatch(/bundle\.items\.filter\(\(i\) => i\.included\)\.reduce\(\(s, i\) => s \+ i\.tokens, 0\)/);
+    expect(publish).not.toMatch(/source === 'conversation'/);
   });
 
-  it('lets only the pane that draws the gauge publish, not the wall composer copy of the same chat', () => {
+  it('lets only the pane that draws the gauge publish, not the wall composer copy of the same chat (source pin)', () => {
     const chat = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-    expect(chat).toContain("const publishesContext = surface !== 'composer' && !readOnly;");
+    expect(chat).toMatch(/const publishesContext = surface !== 'composer' && !readOnly;/);
     // Both the publish effect and the clear-on-unmount effect are gated.
     expect(chat.match(/if \(!publishesContext\) return;/g)?.length).toBe(2);
   });

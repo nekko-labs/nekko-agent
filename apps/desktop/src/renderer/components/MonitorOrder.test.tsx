@@ -2,6 +2,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { cssRule, cssValue, stylesheet } from '../tests/css.js';
 import { DEFAULT_WALL_STATE, sanitizeMonitorsDock } from '../commandWall.js';
 vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ settings: {} }) }));
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => ({ byToken: {}, answered: new Set() }) }));
@@ -27,19 +28,23 @@ describe('dock reorder headers', () => {
     expect(html).not.toContain('aria-label="Budget monitor"');
     expect(html).toContain('aria-label="Minimize Hardware monitor"');
   });
-  it('opens a dashed landing zone while dragging and flies the panel into it on drop', () => {
+  it('shows no landing zone until a panel is lifted, and styles the zone and the lifted panel', () => {
     const html = render('right');
-    // No zones until a panel is lifted.
     expect(html).not.toContain('monitors-dock__landing');
     expect(html).toContain('data-monitor="hardware"');
+    const css = stylesheet('components/monitorsDock.css');
+    expect(cssRule(css, '.monitors-dock__landing[data-open]').height).toBe(cssValue('calc(var(--landing-height) + 12px)'));
+    expect(Object.values(cssRule(css, '.monitors-dock__landing > span')).join(' ')).toMatch(/\bdashed\b/);
+    expect(cssRule(css, '.monitors-dock__monitor[data-monitor-lifted]').display).toBe('none');
+  });
+  // Source pin, pending a monitors-dock e2e journey: the lift starts on a timer
+  // after dragstart and the zones are page state, which a server render never
+  // reaches; placeMonitor itself is unit-tested in monitorOrder.test.ts.
+  it('opens a landing zone per slot while dragging and flies the panel into it on drop (source pin)', () => {
     const source = readFileSync(new URL('./MonitorsDock.tsx', import.meta.url), 'utf8');
-    expect(source).toContain('<LandingZone open={slot === restIndex} height={lift.height} />');
-    expect(source).toContain('placeMonitor(s.dock.monitorOrder, key, anchor.key, where)');
-    expect(source).toContain('node.animate([');
-    const css = readFileSync(new URL('./monitorsDock.css', import.meta.url), 'utf8');
-    expect(css).toContain('.monitors-dock__landing[data-open] { height: calc(var(--landing-height) + 12px); }');
-    expect(css).toMatch(/\.monitors-dock__landing > span \{[^}]*dashed/);
-    expect(css).toContain('.monitors-dock__monitor[data-monitor-lifted] { display: none; }');
+    expect(source).toMatch(/<LandingZone open=\{slot === restIndex\} height=\{lift\.height\} \/>/);
+    expect(source).toMatch(/placeMonitor\(s\.dock\.monitorOrder, key, anchor\.key, where\)/);
+    expect(source).toMatch(/node\.animate\(\[/);
   });
   it.each(['top', 'bottom'])('does not expose vertical reorder controls on the %s', side => {
     const html = render(side);

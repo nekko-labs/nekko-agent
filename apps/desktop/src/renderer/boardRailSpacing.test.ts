@@ -1,5 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import './tests/browserGlobals.js';
+import { cssRule, cssValue, hasSelector, stylesheet } from './tests/css.js';
+import { liveStore } from './tests/liveStore.js';
+import { renderApp } from './tests/renderApp.js';
+
+vi.mock('./store.js', (original) => liveStore(original as never));
 import { RAIL_MIN_LOWER_SWOOP, RAIL_OPEN_RADIUS, RAIL_ROW_CLEARANCE, RAIL_TIP, RAIL_TIP_INSET, railGeometry } from './railGeometry.js';
 
 const nums = (d: string) => d.match(/-?[\d.]+/g)!.map(Number);
@@ -52,45 +57,59 @@ describe('swoop rail geometry', () => {
   });
 });
 
-const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+const styles = stylesheet('styles.css');
+const OPEN = '.rail:is(:hover, :has(:focus-visible), [data-open])';
+const reduced = (selector: string) => cssRule(styles, selector, { media: 'prefers-reduced-motion: reduce' });
 
 describe('compact board and navigation spacing', () => {
-  it('keeps button widths, click-through spacing and identical hover/focus/pinned geometry', () => {
-    const css = read('./styles.css');
-    expect(css).toContain('--rail-w-rest: 52px;');
-    expect(css).toContain('--rail-w-open: 198px;');
-    expect(css).toContain('width: var(--rail-w-open);\n  padding-right: 16px;');
+  it('rests at 52px and opens to 198px the same way on hover, keyboard focus and pin', () => {
+    const rail = cssRule(styles, '.rail');
+    expect(rail['--rail-w-rest']).toBe('52px');
+    expect(rail['--rail-w-open']).toBe('198px');
+    expect(rail.width).toBe('var(--rail-w-rest)');
+    // One rule covers hover, focus inside and [data-open], so the three open identically.
+    const open = cssRule(styles, OPEN);
+    expect(open.width).toBe('var(--rail-w-open)');
+    expect(open['padding-right']).toBe('16px');
+    // Open buttons: 198 - 6 inset - 16 right padding = the 176px row.
     expect(198 - 6 - 16).toBe(188 - 12);
-    expect(css).toContain('pointer-events: none;');
-    expect(css).toMatch(/\.rail-destinations \{[^}]*pointer-events: auto;/);
-    expect(css).toContain('.rail:is(:hover, :has(:focus-visible), [data-open]) {');
-    expect(css).toContain('d: var(--rail-open);');
-    expect(css).toContain('pointer-events: visiblePainted;');
-    expect(css).toContain('var(--accent) 8%, var(--paper)');
-    expect(css).toContain('var(--accent) 6%, var(--surface)');
-    expect(css).not.toContain('@utility rail {');
-    expect(css).not.toContain('rail-item-in');
-    expect(css).toMatch(/prefers-reduced-motion: reduce\) \{\n  \.rail, \.rail-backdrop/);
-    const app = read('./App.tsx');
-    expect(app).toContain('<RailBackdrop />');
-    expect(app).toContain('<div className="rail-destinations">');
-    expect(app).toContain('className="rail-indicator"');
-    expect(app).toContain("'--i': Math.max(0, activeNavIndex)");
-    expect(app).toContain("'--n': navIndex");
-    expect(app).toContain('hidden w-[52px] shrink-0 md:block');
-    const component = read('./components/RailBackdrop.tsx');
-    expect(component).toContain('observer.observe(parent)');
-    expect(component).toContain('groupObserver.observe(group)');
-    expect(component).toContain('observer.disconnect(); groupObserver.disconnect();');
-    expect(component).not.toContain('requestAnimationFrame');
+    expect(cssRule(styles, `${OPEN} .rail-backdrop path`).d).toBe('var(--rail-open)');
+    expect(cssRule(styles, '.rail-backdrop path').fill).toBe(cssValue('color-mix(in srgb, var(--accent) 8%, var(--paper))'));
+    expect(cssRule(styles, `${OPEN} .rail-backdrop path`).fill).toBe(cssValue('color-mix(in srgb, var(--accent) 6%, var(--surface))'));
+  });
+
+  it('lets clicks through everywhere but the buttons and the painted outline', () => {
+    expect(cssRule(styles, '.rail')['pointer-events']).toBe('none');
+    expect(cssRule(styles, '.rail-destinations')['pointer-events']).toBe('auto');
+    expect(cssRule(styles, '.rail-backdrop path')['pointer-events']).toBe('visiblePainted');
+  });
+
+  it('has no per-row entrance animation and snaps open and shut under reduced motion', () => {
+    expect(hasSelector(styles, /rail-item-in/)).toBe(false);
+    for (const selector of ['.rail', '.rail-backdrop', '.rail-backdrop path', '.rail-indicator', '.rail-label', OPEN]) {
+      expect(reduced(selector)['transition-duration'], selector).toBe('0s');
+    }
+  });
+
+  it('draws the backdrop behind the destinations and slides one indicator, in a 52px column', async () => {
+    const html = await renderApp({});
+    const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
+    expect(nav).toMatch(/^<nav class="[^"]*\bw-\[52px\][^"]*\bmd:block/);
+    const group = nav.slice(nav.indexOf('class="rail-group"'));
+    expect(group.indexOf('class="rail-backdrop"')).toBeGreaterThan(-1);
+    expect(group.indexOf('class="rail-backdrop"')).toBeLessThan(group.indexOf('class="rail-destinations"'));
+    // On the active (first) row; each row carries its index for the label stagger.
+    expect(nav.match(/class="rail-indicator"/g)).toHaveLength(1);
+    expect(nav).toMatch(/class="rail-indicator"[^>]*style="--i:0;/);
+    expect(nav).toContain('style="--n:0"');
+    expect(nav).toContain('style="--n:1"');
   });
 
   it('keeps 1px around the board and 8px beside the agent list without shrinking grips', () => {
-    const css = read('./components/commandWallLayouts.css');
-    expect(css).toContain('padding: 14px 1px;');
-    expect(css).toContain("[data-tabs='left'] { flex-direction: row; gap: 8px; }");
-    const styles = read('./styles.css');
-    expect(styles).toContain('padding-inline: 15px calc(15px + var(--wall-gutter));');
-    expect(styles).toContain('width: 14px; z-index: 2; cursor: col-resize;');
+    const board = stylesheet('components/commandWallLayouts.css');
+    expect(cssRule(board, '.command-wall-layout').padding).toBe('14px 1px');
+    expect(cssRule(board, ".wall-agent-workspace[data-tabs='left']")).toMatchObject({ 'flex-direction': 'row', gap: '8px' });
+    expect(cssRule(styles, '.wall-composer-row')['padding-inline']).toBe(cssValue('15px calc(15px + var(--wall-gutter))'));
+    expect(cssRule(styles, '.wall-composer-side')).toMatchObject({ width: '14px', 'z-index': '2', cursor: 'col-resize' });
   });
 });

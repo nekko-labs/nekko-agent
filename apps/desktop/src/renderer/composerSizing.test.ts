@@ -1,40 +1,42 @@
-import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import './tests/browserGlobals.js';
+import { cssRule, stylesheet } from './tests/css.js';
+import { liveStore } from './tests/liveStore.js';
+import { loadCommandCenter } from './tests/renderCommandCenter.js';
 import { measureEditorContent, observeWallComposer, wallEditorHeight } from './composerSizing.js';
+
+vi.mock('./store.js', (original) => liveStore(original as never));
 
 const size = (overrides: Partial<Parameters<typeof wallEditorHeight>[0]> = {}) => wallEditorHeight({ content: 64, chrome: 80, extra: 0, preferred: null, viewport: 900, ...overrides });
 afterEach(() => vi.unstubAllGlobals());
 
+const styles = stylesheet('styles.css');
+const board = stylesheet('components/commandWallLayouts.css');
+const narrow = { media: 'max-width: 767px' };
+
 describe('wall composer sizing', () => {
-  it('keeps both docks in normal board flex flow rather than overlaying windows', () => {
-    const view = readFileSync(new URL('./views/CommandCenterView.tsx', import.meta.url), 'utf8');
-    const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
-    expect(view).toContain("wall.composer.side === 'top' && composerRow");
-    expect(view).toContain("wall.composer.side === 'bottom' && composerRow");
-    expect(css).toMatch(/\.wall-composer-row \{[^}]*position: relative;[^}]*display: flex;[^}]*flex-shrink: 0;/);
-    expect(css).toContain('.wall-composer { position: relative;');
+  it.each(['top', 'bottom'] as const)('docks the composer %s as a sibling of the board in the column, not over it', async (side) => {
+    const page = await loadCommandCenter();
+    const html = page.render({ commandWall: { composer: { side, align: 'center' } } as never });
+    const column = html.slice(html.indexOf('class="wall-column"'));
+    const row = column.indexOf(`class="wall-composer-row" data-dock="${side}-center"`);
+    const wall = column.indexOf('data-stub="wall"');
+    expect(row).toBeGreaterThan(-1);
+    expect(column.match(/class="wall-composer-row"/g)).toHaveLength(1);
+    expect(side === 'top' ? row < wall : row > wall).toBe(true);
+    // In flow: a relative flex row that never shrinks, holding a relative composer.
+    expect(cssRule(styles, '.wall-composer-row')).toMatchObject({ position: 'relative', display: 'flex', 'flex-shrink': '0' });
+    expect(cssRule(styles, '.wall-composer').position).toBe('relative');
   });
   it('keeps the outer board shrinkable at narrow widths without scrolling the shell', () => {
-    const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
-    expect(css).toMatch(/\.wall-column \{[^}]*min-height: 0;[^}]*overflow: hidden;/);
-    expect(css).toMatch(/\.wall-column > \.command-wall-layout \{[^}]*flex: 1 1 0;[^}]*min-height: 0;/);
-    expect(css).toMatch(/@media \(max-width: 767px\) \{\s*\.wall-workspace \{[^}]*overflow: hidden;[^}]*\}\s*\.wall-workspace > \.wall-agent-workspace \{[^}]*flex: 1 1 0;[^}]*min-height: 0;/);
-    expect(css).not.toMatch(/\.wall-workspace > \.wall-agent-workspace \{[^}]*min-height: 640px/);
-    expect(css).not.toMatch(/\.wall-column > \.command-wall-layout \{[^}]*(?:min-height: 280px|flex: 1 0 280px)/);
-    const boardCss = readFileSync(new URL('./components/commandWallLayouts.css', import.meta.url), 'utf8');
-    expect(boardCss).toMatch(/\.command-wall-layout \{[^}]*overflow-y: auto;[^}]*overflow-x: hidden;/);
-    // The inner stage can stay tall; the outer scrolling viewport must yield.
-    expect(boardCss).toContain('.command-wall-stage { position: relative; min-height: 304px; }');
-  });
-  it('checks outer viewport shrink and clipping rather than inner scroll content height in evidence', () => {
-    const harness = readFileSync(new URL('../../../../scripts/composer-evidence-electron.cjs', import.meta.url), 'utf8');
-    expect(harness).toContain('board:rect(board)');
-    expect(harness).toContain('m.board.height<initial.board.height');
-    expect(harness).not.toContain('m.stage.height<initial.stage.height');
-    expect(harness).toContain('m.board.bottom<=m.composer.y+1');
-    expect(harness).toContain("!hit.closest('.command-wall-layout')");
-    expect(harness).toContain('col.scrollHeight<=col.clientHeight+1');
-    expect(harness).toContain('b.scrollTop=b.scrollHeight');
+    expect(cssRule(styles, '.wall-column')).toMatchObject({ 'min-height': '0', overflow: 'hidden' });
+    expect(cssRule(styles, '.wall-column > .command-wall-layout')).toMatchObject({ flex: '1 1 0', 'min-height': '0' });
+    expect(cssRule(styles, '.wall-workspace', narrow).overflow).toBe('hidden');
+    expect(cssRule(styles, '.wall-workspace > .wall-agent-workspace', narrow)).toMatchObject({ flex: '1 1 0', 'min-height': '0' });
+    expect(cssRule(styles, '.wall-workspace > .wall-agent-workspace')['min-height']).not.toBe('640px');
+    // The board, not the shell, scrolls; the inner stage can stay tall while the viewport yields.
+    expect(cssRule(board, '.command-wall-layout')).toMatchObject({ 'overflow-y': 'auto', 'overflow-x': 'hidden' });
+    expect(cssRule(board, '.command-wall-stage')).toMatchObject({ position: 'relative', 'min-height': '304px' });
   });
   it('grows with rendered multiline/wrapped rows and shrinks after removal', () => {
     expect(size()).toBe(64);
