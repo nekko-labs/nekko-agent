@@ -11,6 +11,17 @@
 - **Grid moves to Settings.** The Agents toolbar shows only **Focused** and **Dynamic**; Dynamic's icon is a lightning bolt. **Settings > Command Center > Wall layout** chooses Focused, Dynamic or Grid and sets Grid rows and columns (1–6). Saved `fixed` layouts and Ctrl/Cmd+Shift+3 still open Grid, and Grid placeholders behave as before. This supersedes the toolbar Grid size picker described under 2026-10-08.
 - Reduced motion turns both animations off. Renderer-only: no new settings keys, permissions or network use.
 
+## Brand refresh and website redesign (2026-10-18)
+
+`[implemented; icons and docs regenerated with repo tooling; no before/after screenshots yet; beta form not live]` The brand moves from a dark tile to a **gradient**: deep indigo `#453A92` to lavender `#9D8CE6`, left to right. This supersedes the dark-tile and "dark-only" wording under *App icon*, *Marketing website* and *Documentation hub* below.
+
+- **App icon and installers.** The same outline cat mark, now white on a gradient squircle tile with no rim light. `apps/desktop/scripts/icon-art.cjs` is still the one source: `make-icons.cjs` repaints the desktop icons, the NSIS installer bitmaps (gradient panel, white product name) and the phone icons; Android's adaptive-icon background is the gradient and the Expo splash/adaptive colour is `#453A92`. The in-app `BrandMark` is unchanged.
+- **Site mark.** `scripts/make-site-icon.cjs` writes `favicon.svg` (the tile) and a new `logo.svg`: the cat in the gradient with no tile, used in the site and docs nav and footer.
+- **Two looks, White by default.** A sun/moon button switches the homepage between **White** and **Colourful** (lavender ground). The choice is kept in `localStorage` (`nekko-theme`), applied before first paint, and read by the docs pages too; it never leaves the browser. If storage is blocked the choice lasts for that page only. The docs are now light, with a matching colourful variant, instead of dark-only.
+- **Homepage redesign.** Handjet and Space Mono accent fonts, retro sticker buttons, a liquid-glass floating nav and lavender/aqua section bands. A dot-matrix pixel wave canvas replaces the starfield: about 20 fps, moved along by scrolling, paused while the tab is hidden, and held still (still following scroll) under reduced motion.
+- **Media slots.** The product screenshot and feature GIF slots open in a lightbox (Escape, backdrop or Close shuts it and returns focus). They are placeholders until the real media lands.
+- **Beta sign-up section.** An email form hosted by an animated Nekko (idle, watching, eager, confused, celebrate). An invalid email shows the confused state. When the form has an endpoint it POSTs `{ email }` as JSON and shows an error on failure. **Planned, not live:** `data-endpoint` is empty, so today it only shows the thank-you card and sends nothing. Wiring it to the signup backend above is separate work.
+
 ## Local marketing website preview (2026-10-17)
 
 `[implemented; unit-tested; verified by serving the site locally and loading pages and docs]` `npm run website` serves the static marketing site and docs in `apps/website` on `http://127.0.0.1:8080` (set `PORT` to change it), so a contributor can look at a website or docs change before it ships. It needs no build, package installation, agent backend or app data, and every response is `no-store`, so a refresh shows the latest edit.
@@ -1719,6 +1730,16 @@ User intent (Philip): the right-side dock's cards are **monitors** (the Budget m
 - **+ menu** `[implemented; renderer-verified in an isolated fixture]`: Agent shows the Nekko mark, **Create or Edit Photos and Videos** (was "Media gen") the photo glyph, Terminal the terminal glyph.
 
 Not verified: packaged app and native window chrome.
+
+### Local models monitor in Panels (2026-10-17)
+
+User intent: from the Agents view's Panels dock, see which local models are running and jump straight to the place where their GPU/CPU placement is changed.
+
+- **Local models monitor** `[implemented; unit-tested; renderer-verified in an isolated fixture]`. A sixth dock monitor, `localModels`, on by default and placed under Hardware for new docks (saved docks keep their order and gain it at the end, switched on). It polls the engine every 6 s and lists each resident model: name, placement (`on GPU · 36/36 layers`, `GPU + CPU · 38/62 layers` in amber, `on CPU`), context and footprint. It says plainly when nothing is loaded, the server is stopped, or no engine is installed, and links to Nekko Server. It is read-only: load-time settings stay on Nekko Server, where their reload cost is explained.
+- **Jump to a model's settings** `[implemented; unit-tested; renderer-verified in an isolated fixture]`. **Settings** on a row (and **All settings** in the chat's Model settings group, whose inline quick edit is unchanged) calls `openLocalModelSettings(id)`: the app switches to Nekko Server, the In memory list unfolds that model's drawer on **Advanced** (where Runs on GPU only / Hybrid / CPU only sits), scrolls it into view and clears the request. A request for a model that is not resident is held until it is, and replaced by any later request.
+- **Not changed / known limit.** Settings are per model, not per chat. Reloading a model with new settings still unloads it immediately, so a reply it is generating is cut off; waiting for in-flight requests before a reload is planned, not built.
+
+Not verified: packaged app, native window chrome, and a real engine (the fixture uses synthetic engine status).
 
 ### Task systems, Agent Monitor Tasks and focus-mode clean start (2026-10-16)
 

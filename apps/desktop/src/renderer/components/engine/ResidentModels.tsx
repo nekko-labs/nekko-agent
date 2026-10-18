@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { EngineSettings, LoadingModel, LocalModel, ResidentModel } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
@@ -36,7 +36,24 @@ export function ResidentModels({
   const pushToast = useStore((s) => s.pushToast);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  // Set when the drawer was opened by a jump from another surface.
+  const [jumped, setJumped] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const focus = useStore((s) => s.localModelFocus);
+  const clearFocus = useStore((s) => s.clearLocalModelFocus);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+
+  // Another surface (the Local models panel, the chat's model dock) asked for
+  // one model's settings: unfold its drawer and bring the row into view. The
+  // request waits until that model is in the resident list, since the first
+  // status read can land after this page mounts, and is dropped once served.
+  useEffect(() => {
+    if (!focus || !resident.some((r) => r.id === focus) || !models.some((m) => m.id === focus)) return;
+    setOpen(focus);
+    setJumped(focus);
+    clearFocus();
+    requestAnimationFrame(() => rowRefs.current.get(focus)?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  }, [focus, resident, models, clearFocus]);
 
   const loadingRows = loading.filter((l) => !resident.some((r) => r.id === l.id));
 
@@ -102,7 +119,15 @@ export function ResidentModels({
             const evictIn = r.expiresAt ? r.expiresAt - now : undefined;
             const kept = !r.expiresAt;
             return (
-              <div key={r.id}>
+              <div
+                key={r.id}
+                data-resident-row={r.id}
+                className="scroll-mt-4"
+                ref={(el) => {
+                  if (el) rowRefs.current.set(r.id, el);
+                  else rowRefs.current.delete(r.id);
+                }}
+              >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-2.5 py-2 text-[12px]" style={{ borderColor: 'var(--line)' }}>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
@@ -140,7 +165,7 @@ export function ResidentModels({
                       className="rounded-full border px-2 py-1 text-[11px] hover:border-[var(--accent)]"
                       style={{ borderColor: open === r.id ? 'var(--accent)' : 'var(--line)' }}
                       title="Adjust this model's settings and reload it"
-                      onClick={() => setOpen(open === r.id ? null : r.id)}
+                      onClick={() => { setJumped(null); setOpen(open === r.id ? null : r.id); }}
                     >
                       Settings
                     </button>
@@ -177,6 +202,7 @@ export function ResidentModels({
                   model={{ ...model, loaded: true }}
                   onDone={() => { onChanged(); }}
                   onClose={() => setOpen(null)}
+                  initialSurface={jumped === r.id ? 'advanced' : 'simple'}
                 />
               )}
               </div>

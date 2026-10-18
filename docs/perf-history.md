@@ -95,6 +95,21 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### nekkod's real-binary tests split by domain, sleeps replaced by waits (2026-10-18)
+Area: dev build
+Result: no effect on wall time (the layout that would have split binaries: regression, not taken)
+Conditions: Windows, local, Rust 1.96.0, debug test profile, worktree's own `target/`. Base `origin/main` ba6c006a (unchanged `daemon.rs`, run from a second worktree with its own target dir) vs this branch, same machine, back to back. "Clean package" is `cargo clean -p nekkod` then `cargo test -p nekkod --no-run` (dependencies stay built). Full run is `cargo test -p nekkod` with everything built, wall time from the shell.
+
+| Metric | Before | After |
+|---|---|---|
+| `cargo test -p nekkod`, 3 runs (s) | 20.07, 19.26, 19.25 | 19.20, 19.12, 19.21 |
+| `daemon` test binary's own time, 3 runs (s) | 8.60, 8.38, 8.44 | 8.31, 8.28, 8.34 |
+| `--no-run` after `cargo clean -p nekkod`, 2 runs (s) | 24.32, 24.17 | 25.21, 25.45 |
+| `--no-run` after touching one test file (s) | 7.11 (`daemon.rs`) | 2.74, 2.56 (`daemon/turns.rs`) |
+| First split: 11 test binaries, `cargo test -p nekkod`, 1 run (s) | 19.3 (median above) | 32.0 |
+
+Why: `cargo test` runs test binaries one after another, so eleven binaries added up each file's slowest test (`runs_the_model_server_itself` 7.4 s, a training run 4.4 s, the image turn 2.6 s, ...) instead of overlapping them; the split kept one binary (`tests/daemon/main.rs`) with a module per domain. The waits poll every 10 ms instead of sleeping 20 to 300 ms, which does not move the total because the slowest tests wait on product timers (engine health polls, the goal run's 4 s pause). Source: this PR.
+
 ### Slowest TypeScript unit tests made faster without losing assertions (2026-10-18)
 Area: dev build
 Result: improvement (server.test.ts: no effect, left alone)

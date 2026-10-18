@@ -240,8 +240,8 @@ describe('wall preferences and panel migration', () => {
     expect(MONITORS.map(p => p.key)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
     expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true,
       monitorOrder: MONITORS.map(p => p.key),
-      minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false },
-      monitors: { automations: true, utilization: true, budget: true, insights: false, hardware: true } });
+      minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false, localModels: false },
+      monitors: { automations: true, utilization: true, budget: true, insights: false, hardware: true, localModels: true } });
     expect(seedWall(DEFAULT_WALL_STATE, [], [], 9).root).toBeNull();
     expect(DEFAULT_WALL_STATE.hero).toBeNull();
     expect(DEFAULT_WALL_STATE.folded).toEqual({});

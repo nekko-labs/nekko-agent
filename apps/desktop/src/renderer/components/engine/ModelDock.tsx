@@ -289,6 +289,16 @@ function DockRow({
               in the corner rather than beside the reload it has nothing to do with. */}
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Settings</span>
+            {/* The quick fields below are a subset; everything else (Runs on,
+                threads, batch, flash attention) is one jump away. */}
+            <button
+              className="ml-auto text-[11px] text-ink-faint underline underline-offset-2 hover:text-ink"
+              data-local-model-settings={model.id}
+              onClick={() => useStore.getState().openLocalModelSettings(model.id)}
+              title={`Open all of ${model.name}'s settings on Nekko Server`}
+            >
+              All settings
+            </button>
             <button
               className="btn btn-outline h-6 rounded-lg px-2 py-0.5 text-[11px] disabled:opacity-60"
               disabled={busy !== null}

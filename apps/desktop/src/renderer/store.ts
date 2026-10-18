@@ -212,6 +212,16 @@ interface UiState {
   monitorDockRect: { x: number; y: number; w: number; h: number } | null;
   setMonitorDockRect: (r: { x: number; y: number; w: number; h: number } | null) => void;
 
+  /**
+   * A loaded local model whose settings were asked for from outside Nekko
+   * Server (the Local models panel, the chat's model dock). The resident list
+   * opens that model's drawer, scrolls to it, and clears the request.
+   */
+  localModelFocus: string | null;
+  /** Go to Nekko Server with this resident model's settings open. */
+  openLocalModelSettings: (modelId: string) => void;
+  clearLocalModelFocus: () => void;
+
   // Workspaces: one split layout of windows each, plus the live terminals they
   // can show.
   terminals: TerminalInfo[];
@@ -624,6 +634,10 @@ export const useStore = create<UiState>((set, get) => ({
       if (p === r || (p && r && p.x === r.x && p.y === r.y && p.w === r.w && p.h === r.h)) return s;
       return { monitorDockRect: r };
     }),
+  localModelFocus: null,
+  openLocalModelSettings: (modelId) =>
+    set((s) => (viewEnabled('modelserver', s.settings) ? { view: 'modelserver', localModelFocus: modelId } : { view: 'command' })),
+  clearLocalModelFocus: () => set({ localModelFocus: null }),
   newChat: async (workspaceId) => {
     await get().refreshProviders();
     if (needsProviderSetup(get().providers, get().activeModelId ?? get().models[0]?.id)) {

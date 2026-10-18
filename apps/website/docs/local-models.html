@@ -9,8 +9,9 @@
     <link rel="alternate" type="text/markdown" href="/docs/local-models.md" />
     <link rel="alternate" type="text/plain" href="/llms.txt" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
-    <meta name="theme-color" content="#101714" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-5" />
+    <meta name="theme-color" content="#f3effe" />
+    <script>try{if(localStorage.getItem('nekko-theme')==='colour')document.documentElement.dataset.theme='colour';}catch(e){}</script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-6" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="Nekko Agent" />
     <meta property="og:url" content="https://nekkoagent.com/docs/local-models" />
@@ -35,7 +36,7 @@
       <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
       </button>
-      <a class="brand" href="/"><img src="/favicon.svg?v=nekko-agent-5" alt="" width="22" height="22" /> NEKKO AGENT</a>
+      <a class="brand" href="/"><img src="/logo.svg?v=nekko-agent-6" alt="" width="26" height="20" /> NEKKO AGENT</a>
       <a class="docs-home" href="/docs">Docs</a>
       <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
         <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -100,6 +101,14 @@ type, then says what it chose and what it costs. <em>Advanced</em> is every llam
 context, GPU layers, KV cache type, parallel slots, flash attention, batch and physical
 batch, threads, mmap and mlock, RoPE base and scale, seed, idle TTL. They are the same
 state, so moving one moves the other, and either can be saved as that model&#39;s default.</p>
+<p><strong>Seeing what is loaded from anywhere.</strong> The Agents view&#39;s <strong>Panels</strong> dock has a <strong>Local
+models</strong> monitor, under Hardware: each model the engine holds in memory, whether it runs on
+the GPU, split across GPU and CPU (with the layer count, in amber), or on the CPU, plus its
+context and footprint. <strong>Settings</strong> on a row opens Nekko Server with that model&#39;s drawer
+unfolded on <em>Advanced</em>, where <strong>Runs on</strong> (GPU only, Hybrid, CPU only) lives. The chat&#39;s
+right panel has the same jump as <strong>All settings</strong> inside each model under Model settings.
+Switch the monitor off in the dock&#39;s <strong>Configure</strong> menu. Changing a setting reloads the
+model, which interrupts a reply it is generating.</p>
 <p><strong>The Server tab</strong> carries port, whether it is reachable from your network or only this
 computer, an API key, allowed browser origins, how many models may be resident, the idle
 timeout, load-on-demand, start-with-the-app, and the models folder. The defaults are

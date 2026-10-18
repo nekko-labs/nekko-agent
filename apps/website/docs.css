@@ -1,25 +1,33 @@
 /* Docs hub (nekkoagent.com/docs): a three-column reading layout modelled on
    svelte.dev/docs: the page list on the left, the article in the middle and
    "On this page" on the right. Same palette and type as the marketing site,
-   but quiet: no starfield, no display type. */
+   but quiet: no aura, no display type. */
 
 :root {
-  --bg: #101714;
-  --bg-2: #141d18;
-  --bg-3: #1a2620;
-  --ink: #f2f1e9;
-  --ink-2: #d9ddd4;
-  --muted: #9fb0a5;
-  --line: rgba(220, 235, 223, 0.12);
-  --line-2: rgba(220, 235, 223, 0.2);
-  --accent: #a7c8ac;
-  --accent-2: #c4dfb6;
-  --on-accent: #101714;
-  --code-bg: #0b110e;
+  --bg: #fbfaff;
+  --bg-2: #ffffff;
+  --bg-3: #f1eef9;
+  --ink: #17151f;
+  --ink-2: #2b2838;
+  --muted: #5d5970;
+  --line: rgba(23, 21, 31, 0.1);
+  --line-2: rgba(23, 21, 31, 0.18);
+  --accent: #5b4ea7;
+  --accent-2: #453a92;
+  --on-accent: #ffffff;
+  --code-bg: #f3f1f8;
   --sans: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
   --top: 60px;
-  color-scheme: dark;
+  color-scheme: light;
+  --topbar-bg: rgba(255, 255, 255, 0.9);
+}
+/* colourful mode, chosen on the homepage: lavender ground, dark ink, white reading surface */
+:root[data-theme='colour'] {
+  --bg: #9d8ce6; --bg-2: #ffffff; --bg-3: #e7e1fc;
+  --line: rgba(23, 21, 31, 0.14); --line-2: rgba(23, 21, 31, 0.22);
+  --muted: #2c2640; --accent: #2e2570; --accent-2: #241d5c;
+  --code-bg: #f1edff; --topbar-bg: rgba(178, 164, 238, 0.9);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -31,7 +39,7 @@ body {
   line-height: 1.65;
   font-size: 16px;
 }
-::selection { background: rgba(167, 200, 172, 0.4); }
+::selection { background: rgba(157, 140, 230, 0.35); }
 a { color: var(--accent-2); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 
@@ -47,7 +55,7 @@ a { color: var(--accent-2); }
   position: sticky; top: 0; z-index: 20; height: var(--top);
   display: flex; align-items: center; gap: 18px;
   padding: 0 24px;
-  background: rgba(16, 23, 20, 0.92);
+  background: var(--topbar-bg);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
 }
@@ -56,7 +64,7 @@ a { color: var(--accent-2); }
   font-weight: 800; letter-spacing: 0.14em; font-size: 14px;
   color: var(--ink); text-decoration: none;
 }
-.brand img { border-radius: 5px; }
+.brand img { display: block; }
 .docs-home {
   color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 600;
   padding-left: 18px; border-left: 1px solid var(--line);
@@ -164,7 +172,7 @@ main { min-width: 0; padding: 40px 56px 96px; }
 .prose li > ul, .prose li > ol { margin: 6px 0 0; }
 .prose li::marker { color: var(--accent); }
 .prose strong { color: var(--ink); font-weight: 650; }
-.prose a { text-underline-offset: 3px; text-decoration-color: rgba(196, 223, 182, 0.4); }
+.prose a { text-underline-offset: 3px; text-decoration-color: rgba(91, 78, 167, 0.4); }
 .prose a:hover { text-decoration-color: var(--accent-2); }
 .prose hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
 /* Section rules in the source would double the rule every h2 already has. */
@@ -221,9 +229,9 @@ main { min-width: 0; padding: 40px 56px 96px; }
   margin: 12vh auto 0; width: min(640px, calc(100vw - 32px)); max-height: 70vh;
   background: var(--bg-2); color: var(--ink-2);
   border: 1px solid var(--line-2); border-radius: 14px; padding: 0;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 24px 80px rgba(23, 21, 31, 0.2);
 }
-.search-dialog::backdrop { background: rgba(5, 8, 7, 0.6); backdrop-filter: blur(2px); }
+.search-dialog::backdrop { background: rgba(23, 21, 31, 0.3); backdrop-filter: blur(2px); }
 .search-box { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .search-box input::-webkit-search-cancel-button { display: none; }
 .search-box input {
@@ -258,7 +266,7 @@ main { min-width: 0; padding: 40px 56px 96px; }
   }
   body.nav-open .sidebar { transform: none; visibility: visible; transition: transform 0.22s ease; }
   body.nav-open::after {
-    content: ''; position: fixed; inset: var(--top) 0 0 0; z-index: 14; background: rgba(5, 8, 7, 0.55);
+    content: ''; position: fixed; inset: var(--top) 0 0 0; z-index: 14; background: rgba(23, 21, 31, 0.3);
   }
   main { padding: 28px 16px 72px; }
   .top-links a:not(.download) { display: none; }
@@ -276,3 +284,4 @@ main { min-width: 0; padding: 40px 56px 96px; }
 @media (prefers-reduced-motion: reduce) {
   .sidebar, body.nav-open .sidebar { transition: none; }
 }
+:root[data-theme='colour'] .brand img { filter: brightness(0) invert(1); }
