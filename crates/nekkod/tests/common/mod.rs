@@ -509,7 +509,7 @@ where
 /// A chat's agent command log (its `agent_<id>` terminal), once it shows `needle`.
 pub async fn until_agent_log(port: u16, session_id: &str, needle: &str, limit: Duration) -> String {
     let id = format!("agent_{session_id}");
-    until(&format!("{needle:?} in {id}"), limit, || {
+    until(&format!("{needle:?} in the agent log"), limit, || {
         let id = id.clone();
         async move {
             let (_, snap) = post(port, "terminal:snapshot", json!([id]), Some(TOKEN)).await;
