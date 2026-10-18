@@ -169,7 +169,8 @@ fn is_local(kind: &str) -> bool {
 /// `providerEndpoint`: a provider's URL when it is one a turn may call.
 pub(crate) fn provider_endpoint(provider: &Value) -> Option<url::Url> {
     let kind = s(provider, "kind");
-    if !is_local(kind) && !["anthropic", "openai", "openrouter", "chatgpt", "openai-compat"].contains(&kind) {
+    if !is_local(kind) && !["anthropic", "bedrock", "openai", "openrouter", "chatgpt", "openai-compat"].contains(&kind)
+    {
         return None;
     }
     let url = url::Url::parse(provider.get("baseUrl").and_then(Value::as_str)?).ok()?;

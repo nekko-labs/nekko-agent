@@ -12,6 +12,7 @@ export const ADD_PROVIDER_KINDS: ProviderKind[] = [
   'lmstudio',
   'vllm',
   'anthropic',
+  'bedrock',
   'chatgpt',
   'openai',
   'openrouter',

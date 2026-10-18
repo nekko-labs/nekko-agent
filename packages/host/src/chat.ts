@@ -531,7 +531,7 @@ function sessionDepth(sessionId: string): number {
 }
 
 function providerEndpoint(provider: ProviderConfig): URL | null {
-  if (!isLocalProvider(provider.kind) && !['anthropic', 'openai', 'openrouter', 'chatgpt', 'openai-compat'].includes(provider.kind)) return null;
+  if (!isLocalProvider(provider.kind) && !['anthropic', 'bedrock', 'openai', 'openrouter', 'chatgpt', 'openai-compat'].includes(provider.kind)) return null;
   try {
     const url = new URL(provider.baseUrl);
     return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? url : null;

@@ -134,6 +134,31 @@ function modelsResponse(data: unknown[], status = 200): Response {
   return new Response(JSON.stringify({ data, has_more: false }), { status });
 }
 
+describe('Claude in Amazon Bedrock', () => {
+  const bedrockCfg: ProviderConfig = {
+    id: 'b1',
+    kind: 'bedrock',
+    label: 'Bedrock',
+    baseUrl: 'https://bedrock-mantle.us-east-1.api.aws/anthropic',
+    apiKey: 'bedrock-token',
+    enabled: true,
+  };
+
+  it('serves the Bedrock list without asking for a Models API Bedrock does not have', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+    const models = await new AnthropicProvider(bedrockCfg).listModels();
+    expect(spy).not.toHaveBeenCalled();
+    expect(models[0]).toMatchObject({ id: 'anthropic.claude-opus-5-5', providerId: 'b1', contextLength: 1_000_000 });
+    expect(models.every((m) => m.id.startsWith('anthropic.claude-'))).toBe(true);
+    expect(models.find((m) => m.id === 'anthropic.claude-haiku-4-5')?.contextLength).toBe(200_000);
+  });
+
+  it('says whether a Bedrock token is set', async () => {
+    expect(await new AnthropicProvider(bedrockCfg).test()).toEqual({ ok: true, message: 'Bedrock token set' });
+    expect((await new AnthropicProvider({ ...bedrockCfg, apiKey: undefined }).test()).ok).toBe(false);
+  });
+});
+
 describe('the live Claude catalog', () => {
   const live = [
     { type: 'model', id: 'claude-opus-6', display_name: 'Claude Opus 6' },

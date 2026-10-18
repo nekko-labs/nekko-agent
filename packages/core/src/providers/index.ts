@@ -17,6 +17,8 @@ export { OllamaProvider } from './ollama.js';
 export function createProvider(config: ProviderConfig): Provider {
   switch (config.kind) {
     case 'anthropic':
+    // Bedrock serves the same Messages API shape, so it is the same provider.
+    case 'bedrock':
       return new AnthropicProvider(config);
     case 'ollama':
       return new OllamaProvider(config);

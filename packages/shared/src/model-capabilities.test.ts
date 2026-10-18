@@ -28,6 +28,12 @@ describe('parseClaudeModel', () => {
     expect(parseClaudeModel('claude-opus-4-20250514')).toEqual({ family: 'opus', major: 4, minor: 0 });
     expect(parseClaudeModel('gpt-5')).toBeNull();
   });
+
+  it('reads Bedrock ids, with or without an inference-profile prefix', () => {
+    expect(parseClaudeModel('anthropic.claude-opus-5-5')).toEqual({ family: 'opus', major: 5, minor: 5 });
+    expect(parseClaudeModel('us.anthropic.claude-haiku-4-5')).toEqual({ family: 'haiku', major: 4, minor: 5 });
+    expect(parseClaudeModel('anthropic.titan-text')).toBeNull();
+  });
 });
 
 describe('claudeContextWindow', () => {
