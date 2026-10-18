@@ -933,6 +933,14 @@ impl Turns {
                     accounts.record_from_headers(&key, "anthropic", headers);
                 }),
             )
+        } else if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
+            let accounts = self.accounts.clone();
+            ProviderClient::with_headers(
+                provider,
+                Arc::new(move |headers: &Vec<(String, String)>| {
+                    accounts.record_api_headers(&key, headers);
+                }),
+            )
         } else if facts.get("headers") == Some(&Value::Bool(true)) {
             let (b, id) = (backend.clone(), shared.turn_id.clone());
             ProviderClient::with_headers(

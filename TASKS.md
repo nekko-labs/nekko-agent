@@ -581,6 +581,16 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
+### CL: Claude within Anthropic's auth rules, and full Claude support on API keys and clouds (added 2026-10-19)
+
+Anthropic's rules (code.claude.com/docs/en/legal-and-compliance) do not let a third-party app sign users in to Claude plans, route requests on plan credentials, or read Claude Code's credentials. The Claude subscription sign-in (T138) does all three, so it is replaced, in the same release, by a harness that drives the user's own unmodified `claude` CLI, alongside Claude on the user's own API key or cloud account with every Nekko feature. Design: obsurdian `projects/nekko-agent/features/claude-code-harness/prompt.md`.
+
+- [ ] CL0: Claude Code CLI spike: drive `claude -p` over stream-json in an isolated `CLAUDE_CONFIG_DIR`, record the auth status JSON, init and result events, interrupt, steering and permission-prompt round trip. Unauthenticated half recorded; the authenticated half needs a test API key. Added: 2026-10-19.
+- [ ] CL1: Anthropic API-key rate limits: read the standard `anthropic-ratelimit-{requests,input-tokens,output-tokens,tokens}-*` headers off each response into per-minute windows under the provider's `provider:<id>` limits key (`nekko_usage::parse_anthropic_api_headers`, nekkod `record_api_headers`, shared `limitsKeyFor`). Added: 2026-10-19.
+- [ ] CL2: Claude on Amazon Bedrock (Nekko engine): the Messages-API endpoint `https://bedrock-mantle.{region}.api.aws/anthropic` with a Bedrock bearer token, `anthropic.`-prefixed model ids. SigV4 from the user's AWS profile is a follow-up. Added: 2026-10-19.
+- [ ] CL3: Claude on Google Vertex AI and Microsoft Foundry (Nekko engine), with the user's own Google ADC and Foundry key. Added: 2026-10-19.
+- [ ] CL4: Claude Code harness provider (`crates/nekko-harness`), permission bridge, Claude policy table and approval-ready gates, limits UX, then the removal of the subscription sign-in with its startup migration and a CI compliance check. Added: 2026-10-19. Not started.
+
 ### Page recovery and startup appearance (2026-10-12)
 
 - [ ] FR1: Land shared-settings recovery, model-server loading/error/retry states, page/section/overlay render isolation, system appearance before first mount, and pixel Nekko in every desktop title bar. Implemented in PR #489; 900 desktop tests, typecheck, full production build and hidden fresh-default/failure/retry checks pass in both themes and widths. See SPEC.md, Page recovery and startup appearance. Hosted gates and landing pending. Friend-specific service failure and packaged-install reproduction remain unverified; these are diagnostic limitations, not a claimed engine repair.

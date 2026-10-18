@@ -592,6 +592,10 @@ async fn admit(
             kind == "anthropic" && s(&provider, "auth") == "subscription" && nekko_js::truthy(provider.get("tokenKey"))
         ),
     );
+    // An API key's own rate limits, read off each response (`limitsKeyFor`).
+    if kind == "anthropic" && s(&provider, "auth") != "subscription" && nekko_js::truthy(provider.get("apiKey")) {
+        facts.insert("apiLimitsKey".into(), json!(format!("provider:{}", s(&provider, "id"))));
+    }
     facts.insert("spawn".into(), json!(!sandbox));
     let mut account = pick(&provider, &["auth", "kind", "tokenKey"]);
     account["incognito"] = json!(incognito);
