@@ -29,7 +29,7 @@ export async function completeText(provider: ProviderConfig, request: CompleteRe
       auth: provider.auth, local: isLocalProvider(provider.kind),
     });
   };
-  const daemon = process.env.NEKKO_AGENT_LOOP === 'ts' ? undefined : daemonCall();
+  const daemon = daemonCall();
   if (daemon && (await daemonOwns(daemon, 'provider:complete')) &&
       (await daemonOwns(daemon, 'provider:prompt-caching'))) {
     const out = await daemon<{ text?: string; usage?: Array<Extract<ProviderChunk, { type: 'usage' }>>; error?: string }>('provider:complete', { provider, request, timeoutMs, usageOnFailure: true });
