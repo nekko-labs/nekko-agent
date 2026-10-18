@@ -27,6 +27,11 @@ export interface ProviderConfig {
   auth?: 'apikey' | 'subscription';
   /** Vendor account id (decoded from ChatGPT id_token, or a stable account handle). */
   accountId?: string;
+  /**
+   * Anthropic workspace an organization-level API key bills to, sent as
+   * `anthropic-workspace-id`. A key created inside a workspace needs none.
+   */
+  workspaceId?: string;
   /** Key into the host's token store. This is not the token itself. */
   tokenKey?: string;
   /** Whether this provider was auto-discovered on the local network. */

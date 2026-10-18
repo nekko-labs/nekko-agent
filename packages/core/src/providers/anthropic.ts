@@ -219,6 +219,18 @@ function anthropicEffort(model: string, setting: ChatRequest['effort']): string 
   return level === 'low' ? 'low' : 'high';
 }
 
+/**
+ * What the user reads when an organization-level key is sent without a
+ * workspace. Kept word for word with `WORKSPACE_HINT` in the Rust provider.
+ */
+export const WORKSPACE_HINT =
+  "This Anthropic API key belongs to your organization, not to a workspace, so Anthropic needs to know which workspace to use. Add the workspace's ID (Claude Console, Settings, Workspaces) in the Workspace ID field of the Anthropic provider, or use a key created inside a workspace.";
+
+/** The hint above when a 400 says the key is not scoped to a workspace. */
+function workspaceError(status: number, body: string): string | null {
+  return status === 400 && body.includes('not scoped to a workspace') ? WORKSPACE_HINT : null;
+}
+
 /** Client for the Anthropic Messages API (native, with SSE streaming). */
 export class AnthropicProvider implements Provider {
   constructor(public readonly config: ProviderConfig) {}
@@ -234,10 +246,14 @@ export class AnthropicProvider implements Provider {
         'anthropic-beta': OAUTH_BETA,
       };
     }
+    // An organization-level key has no workspace of its own, so the
+    // workspace it bills to rides along on every request.
+    const workspace = this.config.workspaceId?.trim();
     return {
       'Content-Type': 'application/json',
       'x-api-key': this.config.apiKey ?? '',
       'anthropic-version': '2023-06-01',
+      ...(workspace ? { 'anthropic-workspace-id': workspace } : {}),
     };
   }
 
@@ -365,7 +381,7 @@ export class AnthropicProvider implements Provider {
         continue;
       }
       const next = isSamplingParamError(res.status, text) ? nextSamplingShape(shape, tried) : null;
-      if (!next) throw httpError(`anthropic ${res.status}: ${text.slice(0, 200)}`, res);
+      if (!next) throw httpError(workspaceError(res.status, text) ?? `anthropic ${res.status}: ${text.slice(0, 200)}`, res);
       shape = next;
     }
     learnSamplingShape(req.model, shape);

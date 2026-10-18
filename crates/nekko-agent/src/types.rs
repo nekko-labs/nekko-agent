@@ -50,6 +50,10 @@ pub struct ProviderConfig {
     /// Vendor account id (the ChatGPT account the token belongs to).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account_id: Option<String>,
+    /// Anthropic workspace an organization-level API key bills to, sent as
+    /// `anthropic-workspace-id`. A key created inside a workspace needs none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

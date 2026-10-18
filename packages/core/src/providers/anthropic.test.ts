@@ -9,6 +9,7 @@ import {
   nextSamplingShape,
   rejectsSampling,
   resetLearnedSampling,
+  WORKSPACE_HINT,
 } from './anthropic.js';
 import type { EffortLevel, ProviderConfig } from '@nekko-agent/shared';
 
@@ -510,5 +511,42 @@ describe('output cap', () => {
     expect(bodies[0].max_tokens).toBe(64_000);
     expect(bodies[1].max_tokens).toBe(32_000);
     expect(outputCapFor('claude-opus-5', undefined)).toBe(32_000);
+  });
+});
+
+describe('Anthropic workspace ID', () => {
+  const workspaceCfg: ProviderConfig = { ...apiKeyCfg, workspaceId: ' wrkspc_01 ' };
+
+  it('sends anthropic-workspace-id on chat only when one is set', async () => {
+    expect((await runChat(workspaceCfg)).headers['anthropic-workspace-id']).toBe('wrkspc_01');
+    expect((await runChat(apiKeyCfg)).headers).not.toHaveProperty('anthropic-workspace-id');
+    expect((await runChat({ ...apiKeyCfg, workspaceId: '  ' })).headers).not.toHaveProperty('anthropic-workspace-id');
+    // A subscription token is not an organization key.
+    expect((await runChat({ ...subCfg, workspaceId: 'wrkspc_01' })).headers).not.toHaveProperty('anthropic-workspace-id');
+  });
+
+  it('sends it on the catalog fetch too', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => modelsResponse([{ type: 'model', id: 'claude-opus-5-5' }]));
+    await new AnthropicProvider(workspaceCfg).listModels();
+    await new AnthropicProvider(apiKeyCfg).listModels();
+    const headers = spy.mock.calls.map(([, init]) => (init as RequestInit).headers as Record<string, string>);
+    expect(headers[0]['anthropic-workspace-id']).toBe('wrkspc_01');
+    expect(headers[1]).not.toHaveProperty('anthropic-workspace-id');
+  });
+
+  it('turns the unscoped-key 400 into a hint at the Workspace ID field', async () => {
+    const body = JSON.stringify({
+      type: 'error',
+      error: {
+        type: 'invalid_request_error',
+        message: 'This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use.',
+      },
+    });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 400 }));
+    const chat = new AnthropicProvider(apiKeyCfg).chat({ model: 'claude-opus-5-5', messages: [] });
+    await expect((async () => { for await (const _ of chat) { /* drain */ } })()).rejects.toMatchObject({
+      message: WORKSPACE_HINT,
+      status: 400,
+    });
   });
 });
