@@ -7,15 +7,19 @@
 mod accounts;
 mod admission;
 mod agent_logs;
+mod api_server;
 mod automation;
 mod backend;
+mod boot;
 mod catalog;
+mod cli_install;
 mod compaction;
 mod config;
 mod connectors;
 mod context;
 mod decide;
 mod decisions;
+mod desktop;
 mod downloads;
 mod engine;
 mod hub;
@@ -23,8 +27,10 @@ mod hypergate;
 mod image_turns;
 mod installs;
 mod library;
+mod local_relay;
 mod machine;
 mod mcp;
+mod mdns;
 mod messaging;
 mod model_server;
 mod native;
@@ -47,6 +53,7 @@ mod tooling;
 mod turns;
 mod voice;
 mod watches;
+mod webhook_listener;
 mod wire;
 mod workspace;
 mod worktrees;
@@ -291,6 +298,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             .clone()
             .filter(|_| cfg.browser_bridge.is_some())
             .map(|n| native::Native::new(n, cfg.app_version.clone())),
+        desktop: match (&cfg.native, &cfg.data_dir, &settings) {
+            // A desktop backend, while one runs, still serves these itself.
+            (Some(n), Some(d), Some(_)) if cfg.backend.is_none() => Some(desktop::Desktop::new(n, std::path::Path::new(d))),
+            _ => None,
+        },
     };
     routes::forward_terminal_events(&ctx);
     if let Some(adm) = ctx.admission.clone() {
@@ -315,6 +327,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             let ctx = ctx.clone();
             Box::pin(async move { routes::route(&ctx, &channel, args).await })
         }));
+    }
+    // What a host used to do when it started, with no host to do it (boot.rs):
+    // first, so no turn starts before the last run's leftovers are written off.
+    if backend.is_none() {
+        boot::start(&ctx);
     }
     automation.start();
     if let Some(n) = &ctx.native {
@@ -358,6 +375,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         m.start(&hub);
     }
 
+    if let Some(d) = ctx.desktop.clone() {
+        let c = ctx.clone();
+        tokio::spawn(async move { d.start(&c).await });
+    }
+    let after = ctx.clone();
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
     let router = wire::router(app);
 
@@ -376,6 +398,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     };
     axum::serve(listener, router).with_graceful_shutdown(stop).await?;
 
+    if let Some(d) = &after.desktop {
+        d.shutdown(&after).await;
+    }
     remote.stop();
     if let Some(m) = &messaging {
         m.stop();

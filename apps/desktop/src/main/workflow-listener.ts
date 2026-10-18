@@ -46,7 +46,7 @@ function checkRateLimit(key: string, now: number): boolean {
   return true;
 }
 
-function parseWebhookPayload(raw: string): Record<string, unknown> {
+export function parseWebhookPayload(raw: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {

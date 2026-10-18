@@ -94,7 +94,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
 // ---- integrations:* ----
 
 /// `os.homedir()`.
-fn home_dir() -> String {
+pub(crate) fn home_dir() -> String {
     std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default()
 }
 
@@ -111,6 +111,9 @@ async fn subagent_target(ctx: &Ctx, given: &Value) -> Value {
     if given.is_object() {
         return given.clone();
     }
+    if let Some(desktop) = &ctx.desktop {
+        return desktop.target(ctx).await;
+    }
     match tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("integrations:target", json!([]))).await {
         Ok(Ok(t)) if t.is_object() => t,
         _ => json!({}),
@@ -120,7 +123,7 @@ async fn subagent_target(ctx: &Ctx, given: &Value) -> Value {
 /// `refreshLocalAccess`'s loop: every tool that already carries an entry,
 /// re-pointed when this app wrote it. A config someone else broke is skipped,
 /// as the TS loop's `catch` skipped it. The ids rewritten.
-fn refresh_all(home: &str, target: &Value) -> Result<Value, String> {
+pub(crate) fn refresh_all(home: &str, target: &Value) -> Result<Value, String> {
     let tools = integrations::detect(home);
     let mut done = Vec::new();
     for tool in tools.as_array().into_iter().flatten() {

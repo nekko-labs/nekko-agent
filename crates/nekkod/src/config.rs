@@ -93,6 +93,14 @@ pub struct NativeConfig {
     /// `bridge` has Electron main draw the dialogs (macOS always does; tests
     /// use it so no real dialog opens). Absent, the daemon draws them.
     pub dialogs: Option<String>,
+    /// `app.getPath('userData')`: the CLI launcher goes in its `bin`.
+    /// Absent, the data directory.
+    pub user_data: Option<String>,
+    /// `app.getAppPath()`, where a development checkout's CLI build is found.
+    pub app_path: Option<String>,
+    /// The bundled relay (`out/main/relay.js`) for "Relay on this computer",
+    /// run with `exePath` as Node. Absent, the relay cannot start.
+    pub relay_entry: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

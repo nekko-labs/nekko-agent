@@ -18,6 +18,9 @@ axum.workspace = true
 base64 = "0.22"
 bytes.workspace = true
 futures-util.workspace = true
+# The computer's name and addresses, for "Visible on this network" and the local relay.
+gethostname = "1"
+if-addrs = "0.13"
 getrandom.workspace = true
 icu_normalizer = "2"
 nekko-agent = { path = "../nekko-agent" }
@@ -50,6 +53,8 @@ reqwest = { workspace = true, features = ["native-tls"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
+# The mDNS responder's socket: SO_REUSEADDR before bind, multicast membership per interface.
+socket2 = "0.6"
 tokio.workspace = true
 tokio-tungstenite.workspace = true
 url = "2.5"

@@ -1,0 +1,1655 @@
+{
+  "ifaces": {
+    "none": {},
+    "loopbackOnly": {
+      "lo": [
+        [
+          "127.0.0.1",
+          true
+        ]
+      ]
+    },
+    "lan": {
+      "lo": [
+        [
+          "127.0.0.1",
+          true
+        ]
+      ],
+      "en0": [
+        [
+          "fe80::1",
+          false,
+          "IPv6"
+        ],
+        [
+          "192.168.1.20",
+          false
+        ]
+      ]
+    },
+    "tailnetFirst": {
+      "tailscale0": [
+        [
+          "100.101.102.103",
+          false
+        ]
+      ],
+      "en0": [
+        [
+          "10.0.0.5",
+          false
+        ]
+      ]
+    },
+    "tailnetEdges": {
+      "a": [
+        [
+          "100.63.255.255",
+          false
+        ],
+        [
+          "100.128.0.1",
+          false
+        ],
+        [
+          "100.64.0.0",
+          false
+        ],
+        [
+          "100.127.255.255",
+          false
+        ]
+      ]
+    },
+    "twoLans": {
+      "en0": [
+        [
+          "192.168.1.20",
+          false
+        ]
+      ],
+      "en1": [
+        [
+          "172.16.4.2",
+          false
+        ],
+        [
+          "100.64.1.1",
+          false
+        ]
+      ],
+      "lo": [
+        [
+          "127.0.0.1",
+          true
+        ]
+      ]
+    },
+    "internalTailnet": {
+      "lo": [
+        [
+          "100.100.1.1",
+          true
+        ]
+      ],
+      "wg": [
+        [
+          "100.100.1.2",
+          false,
+          "IPv6"
+        ]
+      ]
+    }
+  },
+  "apiServer": [
+    {
+      "input": {},
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "",
+        "token": ""
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "http://127.0.0.1:1439",
+      "clientUrlLan": "http://127.0.0.1:1439",
+      "refusal": "A token is required. Anything that can reach this port can otherwise run the agent."
+    },
+    {
+      "input": {
+        "token": "tok"
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "http://127.0.0.1:1439",
+      "clientUrlLan": "http://127.0.0.1:1439",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "bind": "lan"
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "lan",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "0.0.0.0",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://192.168.1.20:1439",
+      "clientUrl": "http://127.0.0.1:1439",
+      "clientUrlLan": "http://192.168.1.20:1439",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "bind": "custom",
+        "host": " 192.168.1.20 "
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "custom",
+        "host": " 192.168.1.20 ",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "192.168.1.20",
+      "url": "http://192.168.1.20:1439",
+      "urlLan": "http://192.168.1.20:1439",
+      "clientUrl": "http://192.168.1.20:1439",
+      "clientUrlLan": "http://192.168.1.20:1439",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "bind": "custom",
+        "host": ""
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "custom",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "http://127.0.0.1:1439",
+      "clientUrlLan": "http://127.0.0.1:1439",
+      "refusal": "Enter the address to bind, or pick one of the presets."
+    },
+    {
+      "input": {
+        "token": "tok",
+        "bind": "custom",
+        "host": "::1"
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "custom",
+        "host": "::1",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "::1",
+      "url": "http://[::1]:1439",
+      "urlLan": "http://[::1]:1439",
+      "clientUrl": "http://[::1]:1439",
+      "clientUrlLan": "http://[::1]:1439",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "bind": "custom",
+        "host": "::"
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "custom",
+        "host": "::",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "::",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://192.168.1.20:1439",
+      "clientUrl": "http://127.0.0.1:1439",
+      "clientUrlLan": "http://192.168.1.20:1439",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "bind": "custom",
+        "host": "0.0.0.0"
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "custom",
+        "host": "0.0.0.0",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "0.0.0.0",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://192.168.1.20:1439",
+      "clientUrl": "http://127.0.0.1:1439",
+      "clientUrlLan": "http://192.168.1.20:1439",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "port": 80
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 80,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:80",
+      "urlLan": "http://127.0.0.1:80",
+      "clientUrl": "http://127.0.0.1:80",
+      "clientUrlLan": "http://127.0.0.1:80",
+      "refusal": "Pick a port between 1024 and 65535."
+    },
+    {
+      "input": {
+        "token": "tok",
+        "port": 1023
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1023,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1023",
+      "urlLan": "http://127.0.0.1:1023",
+      "clientUrl": "http://127.0.0.1:1023",
+      "clientUrlLan": "http://127.0.0.1:1023",
+      "refusal": "Pick a port between 1024 and 65535."
+    },
+    {
+      "input": {
+        "token": "tok",
+        "port": 1024
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1024,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1024",
+      "urlLan": "http://127.0.0.1:1024",
+      "clientUrl": "http://127.0.0.1:1024",
+      "clientUrlLan": "http://127.0.0.1:1024",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "port": 65535
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 65535,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:65535",
+      "urlLan": "http://127.0.0.1:65535",
+      "clientUrl": "http://127.0.0.1:65535",
+      "clientUrlLan": "http://127.0.0.1:65535",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "port": 65536
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 65536,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:65536",
+      "urlLan": "http://127.0.0.1:65536",
+      "clientUrl": "http://127.0.0.1:65536",
+      "clientUrlLan": "http://127.0.0.1:65536",
+      "refusal": "Pick a port between 1024 and 65535."
+    },
+    {
+      "input": {
+        "token": "tok",
+        "port": 1439.5
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439.5,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439.5",
+      "urlLan": "http://127.0.0.1:1439.5",
+      "clientUrl": "http://127.0.0.1:1439.5",
+      "clientUrlLan": "http://127.0.0.1:1439.5",
+      "refusal": "Pick a port between 1024 and 65535."
+    },
+    {
+      "input": {
+        "token": "   "
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "   "
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "http://127.0.0.1:1439",
+      "clientUrlLan": "http://127.0.0.1:1439",
+      "refusal": "A token is required. Anything that can reach this port can otherwise run the agent."
+    },
+    {
+      "input": {
+        "token": "tok",
+        "advertisedUrl": "http://nekko.tailnet.ts.net:1439///"
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "http://nekko.tailnet.ts.net:1439///",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "http://nekko.tailnet.ts.net:1439",
+      "clientUrlLan": "http://nekko.tailnet.ts.net:1439",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "advertisedUrl": "  HTTPS://x  "
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "  HTTPS://x  ",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "HTTPS://x",
+      "clientUrlLan": "HTTPS://x",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "advertisedUrl": "nekko.local:1439"
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "nekko.local:1439",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "nekko.local:1439",
+      "clientUrlLan": "nekko.local:1439",
+      "refusal": "The address clients use must be a full URL, e.g. http://nekko.tailnet.ts.net:1439."
+    },
+    {
+      "input": {
+        "token": "tok",
+        "advertisedUrl": "http:// spaced"
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "http:// spaced",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "http:// spaced",
+      "clientUrlLan": "http:// spaced",
+      "refusal": "The address clients use must be a full URL, e.g. http://nekko.tailnet.ts.net:1439."
+    },
+    {
+      "input": {
+        "token": "tok",
+        "advertisedUrl": "   "
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "   ",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "http://127.0.0.1:1439",
+      "clientUrlLan": "http://127.0.0.1:1439",
+      "refusal": null
+    },
+    {
+      "input": {
+        "enabled": false,
+        "startOnLaunch": false,
+        "token": "tok",
+        "extra": 1
+      },
+      "settings": {
+        "enabled": false,
+        "startOnLaunch": false,
+        "port": 1439,
+        "bind": "local",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok",
+        "extra": 1
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "http://127.0.0.1:1439",
+      "clientUrlLan": "http://127.0.0.1:1439",
+      "refusal": null
+    },
+    {
+      "input": {
+        "token": "tok",
+        "bind": "weird"
+      },
+      "settings": {
+        "enabled": true,
+        "startOnLaunch": true,
+        "port": 1439,
+        "bind": "weird",
+        "host": "",
+        "advertisedUrl": "",
+        "token": "tok"
+      },
+      "bindHost": "127.0.0.1",
+      "url": "http://127.0.0.1:1439",
+      "urlLan": "http://127.0.0.1:1439",
+      "clientUrl": "http://127.0.0.1:1439",
+      "clientUrlLan": "http://127.0.0.1:1439",
+      "refusal": null
+    }
+  ],
+  "launchers": [
+    {
+      "platform": "win32",
+      "electron": "C:\\Program Files\\Nekko Agent\\Nekko Agent.exe",
+      "cli": "C:\\Program Files\\Nekko Agent\\resources\\cli\\nekko-agent-cli.cjs",
+      "script": "@echo off\r\nrem Nekko Agent CLI launcher. Regenerated by the app; edits will be lost.\r\nsetlocal\r\nset ELECTRON_RUN_AS_NODE=1\r\n\"C:\\Program Files\\Nekko Agent\\Nekko Agent.exe\" \"C:\\Program Files\\Nekko Agent\\resources\\cli\\nekko-agent-cli.cjs\" %*\r\nendlocal\r\n"
+    },
+    {
+      "platform": "darwin",
+      "electron": "/Applications/Nekko Agent.app/Contents/MacOS/Nekko Agent",
+      "cli": "/Applications/Nekko Agent.app/Contents/Resources/cli/nekko-agent-cli.cjs",
+      "script": "#!/bin/sh\n# Nekko Agent CLI launcher. Regenerated by the app; edits will be lost.\nELECTRON_RUN_AS_NODE=1 exec \"/Applications/Nekko Agent.app/Contents/MacOS/Nekko Agent\" \"/Applications/Nekko Agent.app/Contents/Resources/cli/nekko-agent-cli.cjs\" \"$@\"\n"
+    },
+    {
+      "platform": "linux",
+      "electron": "/opt/Nekko Agent/nekko-agent",
+      "cli": "/opt/Nekko Agent/resources/cli/nekko-agent-cli.cjs",
+      "script": "#!/bin/sh\n# Nekko Agent CLI launcher. Regenerated by the app; edits will be lost.\nELECTRON_RUN_AS_NODE=1 exec \"/opt/Nekko Agent/nekko-agent\" \"/opt/Nekko Agent/resources/cli/nekko-agent-cli.cjs\" \"$@\"\n"
+    }
+  ],
+  "webhookBodies": [
+    {
+      "raw": "{\"ref\":\"main\"}",
+      "payload": {
+        "ref": "main",
+        "__raw": "{\"ref\":\"main\"}"
+      }
+    },
+    {
+      "raw": "{\"__raw\":\"x\",\"a\":1}",
+      "payload": {
+        "__raw": "{\"__raw\":\"x\",\"a\":1}",
+        "a": 1
+      }
+    },
+    {
+      "raw": "[1,2]",
+      "payload": {
+        "__raw": "[1,2]"
+      }
+    },
+    {
+      "raw": "\"text\"",
+      "payload": {
+        "__raw": "\"text\""
+      }
+    },
+    {
+      "raw": "42",
+      "payload": {
+        "__raw": "42"
+      }
+    },
+    {
+      "raw": "null",
+      "payload": {
+        "__raw": "null"
+      }
+    },
+    {
+      "raw": "not json",
+      "payload": {
+        "__raw": "not json"
+      }
+    },
+    {
+      "raw": "{\"a\":",
+      "payload": {
+        "__raw": "{\"a\":"
+      }
+    },
+    {
+      "raw": " {\"b\":[true]} ",
+      "payload": {
+        "b": [
+          true
+        ],
+        "__raw": " {\"b\":[true]} "
+      }
+    },
+    {
+      "raw": "{}",
+      "payload": {
+        "__raw": "{}"
+      }
+    }
+  ],
+  "relay": {
+    "tailnet": [
+      {
+        "ifaces": "none",
+        "address": null
+      },
+      {
+        "ifaces": "loopbackOnly",
+        "address": null
+      },
+      {
+        "ifaces": "lan",
+        "address": null
+      },
+      {
+        "ifaces": "tailnetFirst",
+        "address": "100.101.102.103"
+      },
+      {
+        "ifaces": "tailnetEdges",
+        "address": "100.64.0.0"
+      },
+      {
+        "ifaces": "twoLans",
+        "address": "100.64.1.1"
+      },
+      {
+        "ifaces": "internalTailnet",
+        "address": null
+      }
+    ],
+    "urls": [
+      {
+        "name": null,
+        "ip": "100.101.102.103",
+        "port": 4400,
+        "url": "ws://100.101.102.103:4400"
+      },
+      {
+        "name": "studio.tail1234.ts.net",
+        "ip": "100.101.102.103",
+        "port": 4400,
+        "url": "ws://studio.tail1234.ts.net:4400"
+      },
+      {
+        "name": null,
+        "ip": "100.64.0.1",
+        "port": 9000,
+        "url": "ws://100.64.0.1:9000"
+      }
+    ],
+    "failures": [
+      {
+        "stderr": "",
+        "port": 4400,
+        "message": "The relay could not start."
+      },
+      {
+        "stderr": "NEKKO_RELAY_ERROR {\"code\":\"EADDRINUSE\",\"message\":\"listen EADDRINUSE\"}\n",
+        "port": 4400,
+        "message": "Port 4400 is already in use on this computer. Close whatever is using it (another relay?) and try again."
+      },
+      {
+        "stderr": "noise\nNEKKO_RELAY_ERROR {\"code\":\"EADDRNOTAVAIL\"}\n",
+        "port": 4400,
+        "message": "The Tailscale address went away while the relay was starting. It retries on its own."
+      },
+      {
+        "stderr": "NEKKO_RELAY_ERROR {\"code\":\"EACCES\"}",
+        "port": 4400,
+        "message": "The relay could not start."
+      },
+      {
+        "stderr": "NEKKO_RELAY_ERROR {not json}",
+        "port": 4400,
+        "message": "The relay could not start."
+      },
+      {
+        "stderr": "NEKKO_RELAY_ERROR {\"message\":\"no code\"}",
+        "port": 4400,
+        "message": "The relay could not start."
+      },
+      {
+        "stderr": "NEKKO_RELAY_ERROR {\"code\":\"EADDRINUSE\"} NEKKO_RELAY_ERROR {\"code\":\"EACCES\"}",
+        "port": 4400,
+        "message": "The relay could not start."
+      }
+    ]
+  },
+  "mdns": {
+    "labels": [
+      {
+        "raw": "Studio",
+        "service": "53747564696f",
+        "host": "studio"
+      },
+      {
+        "raw": "studio.local",
+        "service": "73747564696f",
+        "host": "studio"
+      },
+      {
+        "raw": "Studio.local.",
+        "service": "53747564696f",
+        "host": "studio"
+      },
+      {
+        "raw": "My.Mac.Book",
+        "service": "4d79204d616320426f6f6b",
+        "host": "my"
+      },
+      {
+        "raw": "  spaced\tout\nname  ",
+        "service": "737061636564206f7574206e616d65",
+        "host": "spaced-out-name"
+      },
+      {
+        "raw": "",
+        "service": "4e656b6b6f204167656e74",
+        "host": "nekko-agent"
+      },
+      {
+        "raw": "...",
+        "service": "4e656b6b6f204167656e74",
+        "host": "nekko-agent"
+      },
+      {
+        "raw": "Philip's MacBook Pro",
+        "service": "5068696c69702773204d6163426f6f6b2050726f",
+        "host": "philip-s-macbook-pro"
+      },
+      {
+        "raw": "DESKTOP-ABC123",
+        "service": "4445534b544f502d414243313233",
+        "host": "desktop-abc123"
+      },
+      {
+        "raw": "\u0000ctl",
+        "service": "63746c",
+        "host": "ctl"
+      },
+      {
+        "raw": " nbsp em ",
+        "service": "6e62737020656d",
+        "host": "nbsp-em"
+      },
+      {
+        "raw": "ünïcödé-host",
+        "service": "c3bc6ec3af63c3b664c3a92d686f7374",
+        "host": "n-c-d--host"
+      },
+      {
+        "raw": "İstanbul",
+        "service": "c4b07374616e62756c",
+        "host": "i-stanbul"
+      },
+      {
+        "raw": "--dash--",
+        "service": "2d2d646173682d2d",
+        "host": "dash"
+      },
+      {
+        "raw": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "service": "616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161",
+        "host": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "raw": "éééééééééééééééééééééééééééééééééééééééé",
+        "service": "c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9c3a9",
+        "host": "nekko-agent"
+      },
+      {
+        "raw": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀",
+        "service": "616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161efbfbd",
+        "host": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "raw": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀",
+        "service": "61616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161",
+        "host": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "raw": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀😀",
+        "service": "6161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161f09f9880",
+        "host": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "raw": "host_name.with.dots",
+        "service": "686f73745f6e616d65207769746820646f7473",
+        "host": "host-name"
+      }
+    ],
+    "lanAddresses": [
+      {
+        "ifaces": "none",
+        "addresses": []
+      },
+      {
+        "ifaces": "loopbackOnly",
+        "addresses": []
+      },
+      {
+        "ifaces": "lan",
+        "addresses": [
+          "192.168.1.20"
+        ]
+      },
+      {
+        "ifaces": "tailnetFirst",
+        "addresses": [
+          "10.0.0.5"
+        ]
+      },
+      {
+        "ifaces": "tailnetEdges",
+        "addresses": [
+          "100.63.255.255",
+          "100.128.0.1"
+        ]
+      },
+      {
+        "ifaces": "twoLans",
+        "addresses": [
+          "192.168.1.20",
+          "172.16.4.2"
+        ]
+      },
+      {
+        "ifaces": "internalTailnet",
+        "addresses": []
+      }
+    ],
+    "txt": [
+      [
+        "v=1",
+        "name=Studio"
+      ],
+      [
+        "v=1",
+        "name=Studio",
+        "relay=ws://studio.tail1234.ts.net:4400"
+      ],
+      [
+        "v=1",
+        "name=Philip's MacBook"
+      ],
+      [
+        "v=1",
+        "name=Ünï"
+      ]
+    ],
+    "records": [
+      {
+        "ad": {
+          "name": "Studio",
+          "host": "studio",
+          "addresses": [
+            "192.168.1.20"
+          ],
+          "port": 0
+        },
+        "records": [
+          {
+            "name": "_nekko-agent._tcp.local",
+            "type": 12,
+            "ttl": 4500,
+            "data": "Studio._nekko-agent._tcp.local"
+          },
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 33,
+            "ttl": 120,
+            "unique": true,
+            "data": {
+              "port": 0,
+              "target": "studio.local"
+            }
+          },
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 16,
+            "ttl": 4500,
+            "unique": true,
+            "data": [
+              "v=1",
+              "name=Studio"
+            ]
+          },
+          {
+            "name": "studio.local",
+            "type": 1,
+            "ttl": 120,
+            "unique": true,
+            "data": "192.168.1.20"
+          }
+        ],
+        "announce": "0000840000000004000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010000119400200653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002180010000007800140000000000000673747564696f056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100001194001003763d310b6e616d653d53747564696f0673747564696f056c6f63616c0000018001000000780004c0a80114",
+        "goodbye": "0000840000000004000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010000000000200653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002180010000000000140000000000000673747564696f056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100000000001003763d310b6e616d653d53747564696f0673747564696f056c6f63616c0000018001000000000004c0a80114"
+      },
+      {
+        "ad": {
+          "name": "Studio",
+          "host": "studio",
+          "addresses": [
+            "192.168.1.20"
+          ],
+          "port": 4400,
+          "relayUrl": "ws://studio.tail1234.ts.net:4400"
+        },
+        "records": [
+          {
+            "name": "_nekko-agent._tcp.local",
+            "type": 12,
+            "ttl": 4500,
+            "data": "Studio._nekko-agent._tcp.local"
+          },
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 33,
+            "ttl": 120,
+            "unique": true,
+            "data": {
+              "port": 4400,
+              "target": "studio.local"
+            }
+          },
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 16,
+            "ttl": 4500,
+            "unique": true,
+            "data": [
+              "v=1",
+              "name=Studio",
+              "relay=ws://studio.tail1234.ts.net:4400"
+            ]
+          },
+          {
+            "name": "studio.local",
+            "type": 1,
+            "ttl": 120,
+            "unique": true,
+            "data": "192.168.1.20"
+          }
+        ],
+        "announce": "0000840000000004000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010000119400200653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002180010000007800140000000011300673747564696f056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100001194003703763d310b6e616d653d53747564696f2672656c61793d77733a2f2f73747564696f2e7461696c313233342e74732e6e65743a343430300673747564696f056c6f63616c0000018001000000780004c0a80114",
+        "goodbye": "0000840000000004000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010000000000200653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002180010000000000140000000011300673747564696f056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100000000003703763d310b6e616d653d53747564696f2672656c61793d77733a2f2f73747564696f2e7461696c313233342e74732e6e65743a343430300673747564696f056c6f63616c0000018001000000000004c0a80114"
+      },
+      {
+        "ad": {
+          "name": "Philip's MacBook",
+          "host": "philips-macbook",
+          "addresses": [
+            "192.168.1.20",
+            "10.0.0.5"
+          ],
+          "port": 0
+        },
+        "records": [
+          {
+            "name": "_nekko-agent._tcp.local",
+            "type": 12,
+            "ttl": 4500,
+            "data": "Philip's MacBook._nekko-agent._tcp.local"
+          },
+          {
+            "name": "Philip's MacBook._nekko-agent._tcp.local",
+            "type": 33,
+            "ttl": 120,
+            "unique": true,
+            "data": {
+              "port": 0,
+              "target": "philips-macbook.local"
+            }
+          },
+          {
+            "name": "Philip's MacBook._nekko-agent._tcp.local",
+            "type": 16,
+            "ttl": 4500,
+            "unique": true,
+            "data": [
+              "v=1",
+              "name=Philip's MacBook"
+            ]
+          },
+          {
+            "name": "philips-macbook.local",
+            "type": 1,
+            "ttl": 120,
+            "unique": true,
+            "data": "192.168.1.20"
+          },
+          {
+            "name": "philips-macbook.local",
+            "type": 1,
+            "ttl": 120,
+            "unique": true,
+            "data": "10.0.0.5"
+          }
+        ],
+        "announce": "0000840000000005000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c000100001194002a105068696c69702773204d6163426f6f6b0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00105068696c69702773204d6163426f6f6b0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000021800100000078001d0000000000000f7068696c6970732d6d6163626f6f6b056c6f63616c00105068696c69702773204d6163426f6f6b0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100001194001a03763d31156e616d653d5068696c69702773204d6163426f6f6b0f7068696c6970732d6d6163626f6f6b056c6f63616c0000018001000000780004c0a801140f7068696c6970732d6d6163626f6f6b056c6f63616c00000180010000007800040a000005",
+        "goodbye": "0000840000000005000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c000100000000002a105068696c69702773204d6163426f6f6b0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00105068696c69702773204d6163426f6f6b0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000021800100000000001d0000000000000f7068696c6970732d6d6163626f6f6b056c6f63616c00105068696c69702773204d6163426f6f6b0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100000000001a03763d31156e616d653d5068696c69702773204d6163426f6f6b0f7068696c6970732d6d6163626f6f6b056c6f63616c0000018001000000000004c0a801140f7068696c6970732d6d6163626f6f6b056c6f63616c00000180010000000000040a000005"
+      },
+      {
+        "ad": {
+          "name": "Ünï",
+          "host": "uni",
+          "addresses": [],
+          "port": 0
+        },
+        "records": [
+          {
+            "name": "_nekko-agent._tcp.local",
+            "type": 12,
+            "ttl": 4500,
+            "data": "Ünï._nekko-agent._tcp.local"
+          },
+          {
+            "name": "Ünï._nekko-agent._tcp.local",
+            "type": 33,
+            "ttl": 120,
+            "unique": true,
+            "data": {
+              "port": 0,
+              "target": "uni.local"
+            }
+          },
+          {
+            "name": "Ünï._nekko-agent._tcp.local",
+            "type": 16,
+            "ttl": 4500,
+            "unique": true,
+            "data": [
+              "v=1",
+              "name=Ünï"
+            ]
+          }
+        ],
+        "announce": "0000840000000003000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c000100001194001f05c39c6ec3af0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c0005c39c6ec3af0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000021800100000078001100000000000003756e69056c6f63616c0005c39c6ec3af0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100001194000f03763d310a6e616d653dc39c6ec3af",
+        "goodbye": "0000840000000003000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c000100000000001f05c39c6ec3af0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c0005c39c6ec3af0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000021800100000000001100000000000003756e69056c6f63616c0005c39c6ec3af0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100000000000f03763d310a6e616d653dc39c6ec3af"
+      }
+    ],
+    "answers": [
+      {
+        "questions": [
+          {
+            "name": "_nekko-agent._tcp.local",
+            "type": 12,
+            "unicast": false
+          }
+        ],
+        "answers": [
+          {
+            "name": "_nekko-agent._tcp.local",
+            "type": 12,
+            "ttl": 4500,
+            "data": "Studio._nekko-agent._tcp.local"
+          },
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 33,
+            "ttl": 120,
+            "unique": true,
+            "data": {
+              "port": 4400,
+              "target": "studio.local"
+            }
+          },
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 16,
+            "ttl": 4500,
+            "unique": true,
+            "data": [
+              "v=1",
+              "name=Studio",
+              "relay=ws://studio.tail1234.ts.net:4400"
+            ]
+          },
+          {
+            "name": "studio.local",
+            "type": 1,
+            "ttl": 120,
+            "unique": true,
+            "data": "192.168.1.20"
+          }
+        ],
+        "multicast": "0000840000000004000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010000119400200653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002180010000007800140000000011300673747564696f056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100001194003703763d310b6e616d653d53747564696f2672656c61793d77733a2f2f73747564696f2e7461696c313233342e74732e6e65743a343430300673747564696f056c6f63616c0000018001000000780004c0a80114",
+        "legacy": "1234840000010004000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010000000a00200653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002100010000000a00140000000011300673747564696f056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00001000010000000a003703763d310b6e616d653d53747564696f2672656c61793d77733a2f2f73747564696f2e7461696c313233342e74732e6e65743a343430300673747564696f056c6f63616c00000100010000000a0004c0a80114"
+      },
+      {
+        "questions": [
+          {
+            "name": "_NEKKO-AGENT._TCP.LOCAL",
+            "type": 255,
+            "unicast": true
+          }
+        ],
+        "answers": [
+          {
+            "name": "_nekko-agent._tcp.local",
+            "type": 12,
+            "ttl": 4500,
+            "data": "Studio._nekko-agent._tcp.local"
+          },
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 33,
+            "ttl": 120,
+            "unique": true,
+            "data": {
+              "port": 4400,
+              "target": "studio.local"
+            }
+          },
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 16,
+            "ttl": 4500,
+            "unique": true,
+            "data": [
+              "v=1",
+              "name=Studio",
+              "relay=ws://studio.tail1234.ts.net:4400"
+            ]
+          },
+          {
+            "name": "studio.local",
+            "type": 1,
+            "ttl": 120,
+            "unique": true,
+            "data": "192.168.1.20"
+          }
+        ],
+        "multicast": "0000840000000004000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010000119400200653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002180010000007800140000000011300673747564696f056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100001194003703763d310b6e616d653d53747564696f2672656c61793d77733a2f2f73747564696f2e7461696c313233342e74732e6e65743a343430300673747564696f056c6f63616c0000018001000000780004c0a80114",
+        "legacy": "1234840000010004000000000c5f4e454b4b4f2d4147454e54045f544350054c4f43414c0000ff80010c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010000000a00200653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002100010000000a00140000000011300673747564696f056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00001000010000000a003703763d310b6e616d653d53747564696f2672656c61793d77733a2f2f73747564696f2e7461696c313233342e74732e6e65743a343430300673747564696f056c6f63616c00000100010000000a0004c0a80114"
+      },
+      {
+        "questions": [
+          {
+            "name": "_services._dns-sd._udp.local",
+            "type": 12,
+            "unicast": false
+          }
+        ],
+        "answers": [
+          {
+            "name": "_services._dns-sd._udp.local",
+            "type": 12,
+            "ttl": 4500,
+            "data": "_nekko-agent._tcp.local"
+          }
+        ],
+        "multicast": "000084000000000100000000095f7365727669636573075f646e732d7364045f756470056c6f63616c00000c00010000119400190c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00",
+        "legacy": "123484000001000100000000095f7365727669636573075f646e732d7364045f756470056c6f63616c00000c0001095f7365727669636573075f646e732d7364045f756470056c6f63616c00000c00010000000a00190c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00"
+      },
+      {
+        "questions": [
+          {
+            "name": "_services._dns-sd._udp.local",
+            "type": 255,
+            "unicast": false
+          },
+          {
+            "name": "_services._dns-sd._udp.local",
+            "type": 12,
+            "unicast": false
+          }
+        ],
+        "answers": [
+          {
+            "name": "_services._dns-sd._udp.local",
+            "type": 12,
+            "ttl": 4500,
+            "data": "_nekko-agent._tcp.local"
+          },
+          {
+            "name": "_services._dns-sd._udp.local",
+            "type": 12,
+            "ttl": 4500,
+            "data": "_nekko-agent._tcp.local"
+          }
+        ],
+        "multicast": "000084000000000200000000095f7365727669636573075f646e732d7364045f756470056c6f63616c00000c00010000119400190c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00095f7365727669636573075f646e732d7364045f756470056c6f63616c00000c00010000119400190c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00",
+        "legacy": "123484000002000200000000095f7365727669636573075f646e732d7364045f756470056c6f63616c0000ff0001095f7365727669636573075f646e732d7364045f756470056c6f63616c00000c0001095f7365727669636573075f646e732d7364045f756470056c6f63616c00000c00010000000a00190c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00095f7365727669636573075f646e732d7364045f756470056c6f63616c00000c00010000000a00190c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00"
+      },
+      {
+        "questions": [
+          {
+            "name": "_services._dns-sd._udp.local",
+            "type": 33,
+            "unicast": false
+          }
+        ],
+        "answers": [],
+        "multicast": "000084000000000000000000",
+        "legacy": "123484000001000000000000095f7365727669636573075f646e732d7364045f756470056c6f63616c0000210001"
+      },
+      {
+        "questions": [
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 33,
+            "unicast": false
+          }
+        ],
+        "answers": [
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 33,
+            "ttl": 120,
+            "unique": true,
+            "data": {
+              "port": 4400,
+              "target": "studio.local"
+            }
+          }
+        ],
+        "multicast": "0000840000000001000000000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002180010000007800140000000011300673747564696f056c6f63616c00",
+        "legacy": "1234840000010001000000000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002100010653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002100010000000a00140000000011300673747564696f056c6f63616c00"
+      },
+      {
+        "questions": [
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 16,
+            "unicast": false
+          },
+          {
+            "name": "studio.local",
+            "type": 1,
+            "unicast": false
+          }
+        ],
+        "answers": [
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 16,
+            "ttl": 4500,
+            "unique": true,
+            "data": [
+              "v=1",
+              "name=Studio",
+              "relay=ws://studio.tail1234.ts.net:4400"
+            ]
+          },
+          {
+            "name": "studio.local",
+            "type": 1,
+            "ttl": 120,
+            "unique": true,
+            "data": "192.168.1.20"
+          }
+        ],
+        "multicast": "0000840000000002000000000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100001194003703763d310b6e616d653d53747564696f2672656c61793d77733a2f2f73747564696f2e7461696c313233342e74732e6e65743a343430300673747564696f056c6f63616c0000018001000000780004c0a80114",
+        "legacy": "1234840000020002000000000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00001000010673747564696f056c6f63616c00000100010653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00001000010000000a003703763d310b6e616d653d53747564696f2672656c61793d77733a2f2f73747564696f2e7461696c313233342e74732e6e65743a343430300673747564696f056c6f63616c00000100010000000a0004c0a80114"
+      },
+      {
+        "questions": [
+          {
+            "name": "studio.local",
+            "type": 255,
+            "unicast": false
+          }
+        ],
+        "answers": [
+          {
+            "name": "studio.local",
+            "type": 1,
+            "ttl": 120,
+            "unique": true,
+            "data": "192.168.1.20"
+          }
+        ],
+        "multicast": "0000840000000001000000000673747564696f056c6f63616c0000018001000000780004c0a80114",
+        "legacy": "1234840000010001000000000673747564696f056c6f63616c0000ff00010673747564696f056c6f63616c00000100010000000a0004c0a80114"
+      },
+      {
+        "questions": [
+          {
+            "name": "other.local",
+            "type": 1,
+            "unicast": false
+          }
+        ],
+        "answers": [],
+        "multicast": "000084000000000000000000",
+        "legacy": "123484000001000000000000056f74686572056c6f63616c0000010001"
+      },
+      {
+        "questions": [
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 255,
+            "unicast": false
+          },
+          {
+            "name": "_nekko-agent._tcp.local",
+            "type": 12,
+            "unicast": false
+          }
+        ],
+        "answers": [
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 33,
+            "ttl": 120,
+            "unique": true,
+            "data": {
+              "port": 4400,
+              "target": "studio.local"
+            }
+          },
+          {
+            "name": "Studio._nekko-agent._tcp.local",
+            "type": 16,
+            "ttl": 4500,
+            "unique": true,
+            "data": [
+              "v=1",
+              "name=Studio",
+              "relay=ws://studio.tail1234.ts.net:4400"
+            ]
+          },
+          {
+            "name": "_nekko-agent._tcp.local",
+            "type": 12,
+            "ttl": 4500,
+            "data": "Studio._nekko-agent._tcp.local"
+          },
+          {
+            "name": "studio.local",
+            "type": 1,
+            "ttl": 120,
+            "unique": true,
+            "data": "192.168.1.20"
+          }
+        ],
+        "multicast": "0000840000000004000000000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002180010000007800140000000011300673747564696f056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000010800100001194003703763d310b6e616d653d53747564696f2672656c61793d77733a2f2f73747564696f2e7461696c313233342e74732e6e65743a343430300c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010000119400200653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000673747564696f056c6f63616c0000018001000000780004c0a80114",
+        "legacy": "1234840000020004000000000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c0000ff00010c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00002100010000000a00140000000011300673747564696f056c6f63616c000653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00001000010000000a003703763d310b6e616d653d53747564696f2672656c61793d77733a2f2f73747564696f2e7461696c313233342e74732e6e65743a343430300c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c00010000000a00200653747564696f0c5f6e656b6b6f2d6167656e74045f746370056c6f63616c000673747564696f056c6f63616c00000100010000000a0004c0a80114"
+      },
+      {
+        "questions": [],
+        "answers": [],
+        "multicast": "000084000000000000000000",
+        "legacy": "123484000000000000000000"
+      }
+    ],
+    "query": "0000000000010000000000000c5f4e454b4b4f2d4147454e54045f544350054c4f43414c0000ff8001",
+    "decode": [
+      {
+        "name": "short",
+        "hex": "010203",
+        "packet": null
+      },
+      {
+        "name": "empty",
+        "hex": "000000000000000000000000",
+        "packet": {
+          "id": 0,
+          "response": false,
+          "questions": [],
+          "answers": []
+        }
+      },
+      {
+        "name": "ptrQuestionQu",
+        "hex": "0000000000010000000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c8001",
+        "packet": {
+          "id": 0,
+          "response": false,
+          "questions": [
+            {
+              "name": "_nekko-agent._tcp.local",
+              "type": 12,
+              "unicast": true
+            }
+          ],
+          "answers": []
+        }
+      },
+      {
+        "name": "compressed",
+        "hex": "0000000000020000000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c80010653747564696fc00c00210001",
+        "packet": {
+          "id": 0,
+          "response": false,
+          "questions": [
+            {
+              "name": "_nekko-agent._tcp.local",
+              "type": 12,
+              "unicast": true
+            },
+            {
+              "name": "Studio._nekko-agent._tcp.local",
+              "type": 33,
+              "unicast": false
+            }
+          ],
+          "answers": []
+        }
+      },
+      {
+        "name": "selfPointer",
+        "hex": "000000000001000000000000c00c000c0001",
+        "packet": null
+      },
+      {
+        "name": "labelPastEnd",
+        "hex": "0000000000010000000000002841",
+        "packet": null
+      },
+      {
+        "name": "pointerPastEnd",
+        "hex": "000000000001000000000000c0",
+        "packet": null
+      },
+      {
+        "name": "nameNoType",
+        "hex": "0000000000010000000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00",
+        "packet": null
+      },
+      {
+        "name": "thirtyTwoLabels",
+        "hex": "000000000001000000000000016101610161016101610161016101610161016101610161016101610161016101610161016101610161016101610161016101610161016101610161016101610000010001",
+        "packet": null
+      },
+      {
+        "name": "thirtyOneLabels",
+        "hex": "00000000000100000000000001610161016101610161016101610161016101610161016101610161016101610161016101610161016101610161016101610161016101610161016101610000010001",
+        "packet": {
+          "id": 0,
+          "response": false,
+          "questions": [
+            {
+              "name": "a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a",
+              "type": 1,
+              "unicast": false
+            }
+          ],
+          "answers": []
+        }
+      },
+      {
+        "name": "invalidUtf8",
+        "hex": "00000000000100000000000003fffe410000010001",
+        "packet": {
+          "id": 0,
+          "response": false,
+          "questions": [
+            {
+              "name": "��A",
+              "type": 1,
+              "unicast": false
+            }
+          ],
+          "answers": []
+        }
+      },
+      {
+        "name": "extendedLabelBits",
+        "hex": "00000000000100000000000041410000010001",
+        "packet": null
+      },
+      {
+        "name": "response",
+        "hex": "0007840000000001000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c0001000011940002c00c",
+        "packet": {
+          "id": 7,
+          "response": true,
+          "questions": [],
+          "answers": [
+            {
+              "name": "_nekko-agent._tcp.local",
+              "type": 12,
+              "ttl": 4500,
+              "unique": false,
+              "data": "_nekko-agent._tcp.local"
+            }
+          ]
+        }
+      },
+      {
+        "name": "txtOverrun",
+        "hex": "00008400000000010000000000001080010000000a0003026162747261696c696e67",
+        "packet": {
+          "id": 0,
+          "response": true,
+          "questions": [],
+          "answers": [
+            {
+              "name": "",
+              "type": 16,
+              "ttl": 10,
+              "unique": true,
+              "data": [
+                "ab"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "txtEmptyEntries",
+        "hex": "00008400000000010000000000001000010000000a000400017a00",
+        "packet": {
+          "id": 0,
+          "response": true,
+          "questions": [],
+          "answers": [
+            {
+              "name": "",
+              "type": 16,
+              "ttl": 10,
+              "unique": false,
+              "data": [
+                "z"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "srvShort",
+        "hex": "00008400000000010000000000002100010000000a00020000",
+        "packet": null
+      },
+      {
+        "name": "srvTargetPointer",
+        "hex": "0000840000000001000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c0000218001000000780008000000001130c00c",
+        "packet": {
+          "id": 0,
+          "response": true,
+          "questions": [],
+          "answers": [
+            {
+              "name": "_nekko-agent._tcp.local",
+              "type": 33,
+              "ttl": 120,
+              "unique": true,
+              "data": {
+                "port": 4400,
+                "target": "_nekko-agent._tcp.local"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "aWrongLength",
+        "hex": "00008400000000010000000000000100010000000a0003010203",
+        "packet": {
+          "id": 0,
+          "response": true,
+          "questions": [],
+          "answers": [
+            {
+              "name": "",
+              "type": 1,
+              "ttl": 10,
+              "unique": false,
+              "data": ""
+            }
+          ]
+        }
+      },
+      {
+        "name": "unknownType",
+        "hex": "00008400000000010000000000006300010000000a00020909",
+        "packet": {
+          "id": 0,
+          "response": true,
+          "questions": [],
+          "answers": [
+            {
+              "name": "",
+              "type": 99,
+              "ttl": 10,
+              "unique": false,
+              "data": ""
+            }
+          ]
+        }
+      },
+      {
+        "name": "rdataPastEnd",
+        "hex": "00008400000000010000000000000100010000000a00040102",
+        "packet": null
+      },
+      {
+        "name": "answerCountTooHigh",
+        "hex": "0000000000010002000000000c5f6e656b6b6f2d6167656e74045f746370056c6f63616c00000c0001",
+        "packet": null
+      }
+    ]
+  }
+}

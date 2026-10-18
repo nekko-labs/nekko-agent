@@ -623,6 +623,30 @@ impl Prs {
         info
     }
 
+    /// `branchPrHead`: the state and head commit of the PR gh resolves for
+    /// `branch` in `cwd`, for the merged-worktree sweep. The head commit is
+    /// what proves the local branch is the one that merged (a reused branch
+    /// name resolves to an older PR). `None` when gh is missing, paused,
+    /// unauthenticated, or finds no PR.
+    pub async fn branch_pr_head(&self, cwd: &str, branch: &str) -> Option<(&'static str, String)> {
+        if self.gh_missing.load(Ordering::SeqCst) || self.cooling() {
+            return None;
+        }
+        let res =
+            self.gh_read(&["pr", "view", branch, "--json", "state,mergedAt,headRefOid"], Duration::from_secs(10), Some(cwd)).await;
+        if res.missing {
+            self.gh_missing.store(true, Ordering::SeqCst);
+            return None;
+        }
+        if !res.ok {
+            return None;
+        }
+        let j: Value = serde_json::from_str(&res.stdout).ok()?;
+        let head = j.get("headRefOid").filter(|h| js::truthy(Some(h))).map(js::display)?;
+        let state = j.get("state").filter(|s| !s.is_null()).map(js::display).unwrap_or_default();
+        Some((gh_state(&state, j.get("mergedAt")), head))
+    }
+
     /// `listSessionPrs`: live state for every PR the chat created.
     pub async fn session_prs(&self, messages: &[Value], token: Option<&str>, force: bool) -> Vec<Value> {
         let urls = collect_session_pr_urls(messages);

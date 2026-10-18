@@ -1,15 +1,15 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
 /**
  * The engine, from the window's side: start it, know where it listens, keep it
  * running, stop it on quit.
  *
- * That is `nekkod` (the Rust daemon), which in turn starts and supervises
- * the TS backend. There is no engine without it: a missing binary (a
+ * That is `nekkod` (the Rust daemon), with no TS backend beside it (PF14
+ * step 5 prep): it serves every channel itself. There is no engine without it: a missing binary (a
  * development checkout that never built it, an antivirus that quarantined
  * it) or one Windows cannot load (STATUS_DLL_NOT_FOUND, see
  * `isMissingDllExit`) is reported as the reason the engine is down, and the
@@ -39,11 +39,11 @@ export interface EngineEndpoint {
 export interface EngineOptions {
   browserBridge?: { url: string; token: string };
   dataDir: string;
-  /** Plain facts about the app the backend needs (see `backend/index.ts`). */
+  /** Plain facts about the app nekkod needs (`nativeConfig`). */
   app: { isPackaged: boolean; appPath: string; userData: string; version: string; resourcesPath?: string; exePath?: string; pid?: number };
   /** Page origins allowed to open sockets: the packaged `null` and, in dev, the renderer server. */
   origins: string[];
-  /** Where the Electron main bundle lives (`out/main`), next to `backend.js`. */
+  /** Where the Electron main bundle lives (`out/main`), next to `relay.js`. */
   mainDir: string;
 }
 
@@ -87,11 +87,16 @@ export function findDaemon(opts: Pick<EngineOptions, 'app'>): string | null {
  * `NEKKO_UPDATE_FEED_URL` points the updater at a generic feed instead of
  * `app-update.yml` (a sandbox's loopback feed), `NEKKO_UPDATE_CACHE_DIR` keeps
  * its downloads elsewhere, and `NEKKO_NATIVE_DIALOGS=bridge` has main draw
- * the dialogs.
+ * the dialogs. `userData` and `appPath` place the CLI launcher and find a
+ * development checkout's CLI build; `relayEntry` is the bundled relay for
+ * "Relay on this computer", run with `exePath` as Node.
  */
-export function nativeConfig(app: EngineOptions['app'], env: NodeJS.ProcessEnv = process.env): Record<string, unknown> {
+export function nativeConfig(app: EngineOptions['app'], env: NodeJS.ProcessEnv = process.env, mainDir?: string): Record<string, unknown> {
   return {
     isPackaged: app.isPackaged,
+    userData: app.userData,
+    appPath: app.appPath,
+    ...(mainDir ? { relayEntry: join(mainDir, 'relay.js') } : {}),
     exePath: app.exePath ?? process.execPath,
     ...(app.resourcesPath ? { resourcesPath: app.resourcesPath } : {}),
     ...(env.APPIMAGE ? { appImage: env.APPIMAGE } : {}),
@@ -146,26 +151,14 @@ export class EngineProcess {
         : 'nekkod is not built. Run `npm run build:dev` (or `cargo build -p nekkod`), then restart Nekko service from the tray.');
       return;
     }
-    const backendEnv: Record<string, string> = {
-      ELECTRON_RUN_AS_NODE: '1',
-      // Where the app-local Visual C++ runtime is, for llama.cpp builds (the
-      // daemon sets this itself for the backend it supervises).
-      NEKKOD_RUNTIME_DIR: dirname(daemon),
-      NEKKO_BACKEND_DATA_DIR: this.opts.dataDir,
-      NEKKO_BACKEND_APP: JSON.stringify(this.opts.app),
-      NEKKO_BACKEND_ORIGINS: JSON.stringify(this.opts.origins),
-      ...(this.opts.browserBridge ? {
-        NEKKO_BROWSER_URL: this.opts.browserBridge.url,
-        NEKKO_BROWSER_TOKEN: this.opts.browserBridge.token,
-      } : {}),
-    };
-    const backend = { exe: process.execPath, args: [join(this.opts.mainDir, 'backend.js')], env: backendEnv };
-
     const marker = DAEMON_READY;
     // The daemon runs the browser and capture tools itself and reaches the
     // in-app browser through the same bridge (in its config, not its env).
     // `appVersion` and `edition` answer `app:info`, which the daemon serves.
-    const config = { token: this.token, allowedOrigins: this.opts.origins, backend, dataDir: this.opts.dataDir, allowBrowserControl: true, appVersion: this.opts.app.version, edition: 'desktop', native: nativeConfig(this.opts.app), ...(this.opts.browserBridge ? { browserBridge: this.opts.browserBridge } : {}) };
+    // No `backend`: nekkod serves everything itself, the desktop-only features
+    // (local API server, CLI install, webhook listener, local relay, network
+    // visibility) included, from what `native` tells it about the app.
+    const config = { token: this.token, allowedOrigins: this.opts.origins, dataDir: this.opts.dataDir, allowBrowserControl: true, appVersion: this.opts.app.version, edition: 'desktop', native: nativeConfig(this.opts.app, process.env, this.opts.mainDir), ...(this.opts.browserBridge ? { browserBridge: this.opts.browserBridge } : {}) };
     const child = spawn(daemon, [], {
       env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) },
       stdio: ['pipe', 'pipe', 'inherit'],

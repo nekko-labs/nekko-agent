@@ -71,6 +71,9 @@ pub struct Ctx {
     pub messaging: Option<Arc<crate::messaging::Messaging>>,
     /// What Electron main used to answer (dialogs, shell, microphone, updater), for the desktop app.
     pub native: Option<Arc<crate::native::Native>>,
+    /// What the TS desktop backend served (the local API server, CLI install, the
+    /// webhook listener, the local relay, network visibility), for the desktop app.
+    pub desktop: Option<Arc<crate::desktop::Desktop>>,
 }
 
 /// The app around the daemon: its facts and the desktop bridge.
@@ -417,6 +420,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         }
         c if crate::native::CHANNELS.contains(&c) && ctx.native.is_some() => {
             ctx.native.clone().expect("checked").route(ctx, c, &args).await
+        }
+        c if crate::desktop::CHANNELS.contains(&c) && ctx.desktop.is_some() => {
+            ctx.desktop.clone().expect("checked").route(ctx, c, &args).await
         }
         c if crate::small_services::CHANNELS.contains(&c) && owns_small_services(ctx) => {
             crate::small_services::route(ctx, c, &args).await
