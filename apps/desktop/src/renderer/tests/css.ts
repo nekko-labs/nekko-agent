@@ -91,6 +91,24 @@ export function hasSelector(sheet: Root, pattern: RegExp): boolean {
   return hit;
 }
 
+/**
+ * The declarations a Tailwind `@utility name` block gives `&<suffix>` (its own
+ * declarations for an empty suffix, e.g. `:focus-within` for the nested rule).
+ */
+export function cssUtility(sheet: Root, name: string, suffix = ''): Record<string, string> {
+  const out: Record<string, string> = {};
+  sheet.walkAtRules('utility', (at) => {
+    if (at.params.trim() !== name) return;
+    at.each((node) => {
+      if (!suffix && node.type === 'decl') out[node.prop] = norm(node.value) + (node.important ? ' !important' : '');
+      if (suffix && node.type === 'rule' && node.selectors.some((s) => norm(s) === norm(`&${suffix}`))) {
+        node.each((d) => { if (d.type === 'decl') out[d.prop] = norm(d.value) + (d.important ? ' !important' : ''); });
+      }
+    });
+  });
+  return out;
+}
+
 /** Whether `@keyframes name` is defined. */
 export function hasKeyframes(sheet: Root, name: string): boolean {
   let hit = false;

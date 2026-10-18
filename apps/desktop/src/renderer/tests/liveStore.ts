@@ -11,6 +11,17 @@
  */
 export async function liveStore<T extends { useStore: { getState: () => unknown } }>(original: () => Promise<T>): Promise<T> {
   const actual = await original();
-  const useStore = Object.assign((select: (s: unknown) => unknown) => select(actual.useStore.getState()), actual.useStore);
-  return { ...actual, useStore };
+  return { ...actual, useStore: live(actual.useStore) };
+}
+
+/** The same, for any zustand hook exported by a module (e.g. `useWallLogs` from `wallLogs.js`). */
+export function liveHook<K extends string>(name: K) {
+  return async <T extends Record<K, { getState: () => unknown }>>(original: () => Promise<T>): Promise<T> => {
+    const actual = await original();
+    return { ...actual, [name]: live(actual[name]) };
+  };
+}
+
+function live<H extends { getState: () => unknown }>(hook: H): H {
+  return Object.assign((select: (s: unknown) => unknown = (s) => s) => select(hook.getState()), hook);
 }

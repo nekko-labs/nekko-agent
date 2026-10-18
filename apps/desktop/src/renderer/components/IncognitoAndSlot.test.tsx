@@ -15,7 +15,7 @@ describe('incognito icon', () => {
   it('replaces the old mask everywhere', () => {
     expect('MaskIcon' in icons).toBe(false);
     const glyph = renderToStaticMarkup(<IncognitoIcon className="h-3.5 w-3.5" />);
-    const privacy = renderToStaticMarkup(<ChatControls session={{ id: 's', title: 'Chat', messages: [], createdAt: 0, updatedAt: 0 } as never} onChange={() => {}} only="privacy" />);
+    const privacy = renderToStaticMarkup(<ChatControls session={{ id: 's', title: 'Chat', messages: [], createdAt: 0, updatedAt: 0 } as never} isCloudModel={false} onChange={() => {}} only="privacy" />);
     expect(privacy).toContain(glyph);
   });
 });

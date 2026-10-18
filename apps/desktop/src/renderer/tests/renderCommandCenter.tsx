@@ -15,7 +15,11 @@ import type { AppSettings } from '@nekko-agent/shared';
  */
 export const stubProps: { wall?: Record<string, unknown>; sidebar?: Record<string, unknown> } = {};
 
-export async function loadCommandCenter() {
+export async function loadCommandCenter(): Promise<{
+  CommandCenterView: typeof import('../views/CommandCenterView.js').CommandCenterView;
+  useStore: typeof import('../store.js').useStore;
+  render: (settings?: Partial<AppSettings>) => string;
+}> {
   vi.doMock('../chrome.js', () => ({ hasAppChrome: false, isMacChrome: false }));
   vi.doMock('../components/CommandWall.js', () => ({
     CommandWall: (p: Record<string, unknown>) => { stubProps.wall = p; return <div data-stub="wall" data-add-content={String(p.addContent !== undefined)} />; },
@@ -28,7 +32,7 @@ export async function loadCommandCenter() {
   const view = await import('../views/CommandCenterView.js');
   const { useStore } = await import('../store.js');
   return {
-    ...view,
+    CommandCenterView: view.CommandCenterView,
     useStore,
     render(settings: Partial<AppSettings> = {}) {
       useStore.setState({ settings: settings as AppSettings });

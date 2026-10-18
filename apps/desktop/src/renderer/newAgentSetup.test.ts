@@ -29,7 +29,8 @@ describe('new agent setup calls', () => {
 
   it('seeds the cache and the list so the new window paints the created chat on its first frame', async () => {
     const page = await loadCommandCenter();
-    page.render();
+    // The detailed picker is the toolbar's; the page never hands the wall an add tile.
+    expect(page.render()).toContain('data-stub="wall" data-add-content="false"');
     const created = chatSession({ title: 'Fresh agent', messages: [] });
     const nekko = (globalThis as unknown as { window: { nekko: Record<string, unknown> } }).window.nekko;
     const createSession = vi.fn(async () => created);
