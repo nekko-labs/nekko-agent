@@ -1,14 +1,16 @@
 import React from 'react';
-import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import '../tests/browserGlobals.js';
+import { cssRule, stylesheet } from '../tests/css.js';
+import { loadWall, summary, windowBody } from '../tests/renderWall.js';
 import { AgentPanelControls } from './AgentPanelControls.js';
 import { NumberedAgentIcon } from './NumberedChatIcon.js';
 
 const noop = () => {};
-const styles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
-const layouts = readFileSync(new URL('./commandWallLayouts.css', import.meta.url), 'utf8');
-const wall = readFileSync(new URL('./CommandWall.tsx', import.meta.url), 'utf8');
+const styles = stylesheet('styles.css');
+const layouts = stylesheet('components/commandWallLayouts.css');
+const two = { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never, layout: { mode: 'grid' as const, cols: 2, rows: 1 } };
 
 describe('agent panel controls', () => {
   it('are icon pills whose label is there to grow out on hover', () => {
@@ -18,7 +20,9 @@ describe('agent panel controls', () => {
     expect(html.match(/agent-panel-pill-label/g)).toHaveLength(2);
     // Label first, icon last: it grows out to the left of the icon.
     expect(html.indexOf('Hide agents')).toBeLessThan(html.indexOf('<svg'));
-    expect(layouts).toMatch(/\.agent-panel-pill:hover \.agent-panel-pill-label[^{]*\{ max-width: 120px; opacity: 1; \}/);
+    for (const trigger of [':hover', ':focus-visible']) {
+      expect(cssRule(layouts, `.agent-panel-pill${trigger} .agent-panel-pill-label`)).toMatchObject({ 'max-width': '120px', opacity: '1' });
+    }
   });
   it('stack in a row panel and lie in a row in a column panel, and swap again when collapsed', () => {
     const stacked = (show: boolean, orientation: 'vertical' | 'horizontal') =>
@@ -37,32 +41,39 @@ describe('agent panel controls', () => {
 });
 
 describe('agent window identity and activity', () => {
-  it('draws an agent with the window number as its face', () => {
+  it('draws an agent with the window number as its face, in every wall window strip', async () => {
     const html = renderToStaticMarkup(<NumberedAgentIcon number={4} />);
     expect(html).toContain('numbered-agent-icon');
     expect(html).toContain('aria-label="Window 4"');
     expect(html).toContain('Ctrl+4 selects it');
-    expect(wall).toContain('<NumberedAgentIcon number={n} />');
-    expect(wall).not.toContain('<NumberedChatIcon');
+    const wall = (await loadWall()).render(two, { sessions: [summary('a'), summary('b')] });
+    expect(windowBody(wall, 'a')).toMatch(/data-frame-icon[^]*numbered-agent-icon[^]*aria-label="Window 1"/);
+    expect(windowBody(wall, 'b')).toMatch(/data-frame-icon[^]*numbered-agent-icon[^]*aria-label="Window 2"/);
+    expect(wall).not.toContain('numbered-chat-icon');
   });
-  it('gives a working window a quieter copy of the composer beam', () => {
-    expect(wall).toContain("{agentStatus === 'working' && <span className=\"composer-beam-ring wall-window-beam\"");
-    expect(styles).toMatch(/\.wall-window-beam \{[^}]*opacity: 0\.55;/);
-    expect(styles).toMatch(/\.wall-window-beam \.composer-beam-spin \{[^}]*animation-duration: 5s;/);
+  it('gives a working window a quieter copy of the composer beam', async () => {
+    const wall = (await loadWall()).render(two, { sessions: [summary('a'), summary('b')], running: ['a'] });
+    expect(windowBody(wall, 'a')).toContain('class="composer-beam-ring wall-window-beam"');
+    expect(windowBody(wall, 'b')).not.toContain('wall-window-beam');
+    expect(cssRule(styles, '.wall-window-beam').opacity).toBe('0.55');
+    expect(cssRule(styles, '.wall-window-beam .composer-beam-spin')['animation-duration']).toBe('5s');
   });
 });
 
 describe('wall chrome fixes', () => {
   it('floats the composer resize grips outside its edges', () => {
-    expect(styles).toContain('.wall-composer.panel { overflow: visible; }');
-    expect(styles).toContain('.wall-composer-side[data-edge="left"] { left: -14px; }');
-    expect(styles).toContain('.wall-composer-side[data-edge="right"] { right: -14px; }');
-    expect(styles).toContain('.wall-composer[data-dock^="bottom"] > .wall-composer-split { top: -14px; }');
+    expect(cssRule(styles, '.wall-composer.panel').overflow).toBe('visible');
+    expect(cssRule(styles, '.wall-composer-side[data-edge="left"]').left).toBe('-14px');
+    expect(cssRule(styles, '.wall-composer-side[data-edge="right"]').right).toBe('-14px');
+    expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe('-14px');
   });
   it('reserves Auto-arrange space so revealing it never shifts the controls beside it', () => {
-    expect(styles).not.toContain("[data-visible='true'] { width: 38px;");
-    expect(styles).toMatch(/\.wall-auto-arrange \{[^}]*grid-template-columns: 1fr;[^}]*margin-left: 6px;[^}]*visibility: hidden;/);
-    expect(styles).not.toMatch(/\.wall-auto-arrange[^{]*\{[^}]*grid-template-columns: 0fr/);
-    expect(styles).not.toMatch(/\.wall-auto-arrange\[data-visible='true'\] \{[^}]*(margin|grid-template-columns|width)/);
+    const hidden = cssRule(styles, '.wall-auto-arrange');
+    expect(hidden).toMatchObject({ 'grid-template-columns': '1fr', 'margin-left': '6px', visibility: 'hidden' });
+    expect(hidden.width).toBeUndefined();
+    // Revealing it changes only paint (opacity, visibility, transform), never its box.
+    const shown = cssRule(styles, ".wall-auto-arrange[data-visible='true']");
+    for (const prop of ['margin', 'margin-left', 'grid-template-columns', 'width']) expect(shown[prop], prop).toBeUndefined();
+    expect(shown.visibility).toBe('visible');
   });
 });

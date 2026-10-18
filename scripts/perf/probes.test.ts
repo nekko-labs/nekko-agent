@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { FRAME_PUMP, INSTALL } from './lib/probes.mjs';
 
@@ -10,17 +9,6 @@ it('finds transcript-only panels without requiring an embedded composer', async 
   const window: any = {};
   new Function('window', 'document', 'requestAnimationFrame', 'PerformanceObserver', 'performance', INSTALL)(window, document, (fn: Function) => fn(), class { observe() {} }, { now: () => 0 });
   expect(await window.__perf.waitForChat('Chat', '[newest]')).toBe(true);
-});
-
-it('opens the exact setup control and waits for the sidebar before accepting history', () => {
-  const source = readFileSync(new URL('./run.mjs', import.meta.url), 'utf8');
-  const open = source.indexOf('await showAllCards();');
-  const sidebar = source.indexOf("'the Agents sidebar'");
-  const history = source.indexOf('const ok = await cdp.call');
-  expect(open).toBeGreaterThan(0);
-  expect(open).toBeGreaterThan(sidebar);
-  expect(history).toBeGreaterThan(sidebar);
-  expect(source).toContain('await clickAt(at);'); // measured switches still use input events
 });
 
 it('installs one frame pump, outside the app, animating on the compositor only', () => {

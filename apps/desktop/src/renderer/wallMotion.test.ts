@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EDGE_DUST_MS, WALL_PUSH_EASE, WALL_PUSH_MS, edgeClip, foldWindow, growWindow, mostOverlapping, outerSide, scatterEdgeDust } from './wallMotion.js';
+import { cssRule, cssValue, stylesheet } from './tests/css.js';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
@@ -35,8 +35,9 @@ describe('wall push geometry', () => {
 
   it('stays well inside half a second, in step with the CSS slide', () => {
     expect(WALL_PUSH_MS).toBeLessThan(500);
-    const css = readFileSync(new URL('./components/commandWallLayouts.css', import.meta.url), 'utf8');
-    expect(css).toContain(`--wall-push-ms: ${WALL_PUSH_MS}ms; --wall-push-ease: ${WALL_PUSH_EASE};`);
+    const wall = cssRule(stylesheet('components/commandWallLayouts.css'), '.command-wall-layout');
+    expect(wall['--wall-push-ms']).toBe(`${WALL_PUSH_MS}ms`);
+    expect(wall['--wall-push-ease']).toBe(cssValue(WALL_PUSH_EASE));
   });
 });
 

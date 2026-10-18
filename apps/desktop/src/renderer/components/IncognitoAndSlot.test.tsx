@@ -1,10 +1,9 @@
 import React from 'react';
-import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import * as icons from '../icons.js';
 import { IncognitoIcon } from '../icons.js';
-
-const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8');
+import { ChatControls } from './ChatControls.js';
 
 describe('incognito icon', () => {
   it('is the hat-and-sunglasses glyph: a brim, a hat crown and two round lenses with a bridge', () => {
@@ -14,15 +13,12 @@ describe('incognito icon', () => {
     expect(svg).toContain('d="M10.5 17a2.1 2.1 0 0 1 3 0"');
   });
   it('replaces the old mask everywhere', () => {
-    expect(read('./ChatControls.tsx')).toContain('<IncognitoIcon className="h-3.5 w-3.5" />');
-    expect(read('../icons.tsx')).not.toContain('MaskIcon');
+    expect('MaskIcon' in icons).toBe(false);
+    const glyph = renderToStaticMarkup(<IncognitoIcon className="h-3.5 w-3.5" />);
+    const privacy = renderToStaticMarkup(<ChatControls session={{ id: 's', title: 'Chat', messages: [], createdAt: 0, updatedAt: 0 } as never} onChange={() => {}} only="privacy" />);
+    expect(privacy).toContain(glyph);
   });
 });
 
-describe('title bar slot observer', () => {
-  it('watches only the host ancestors, never the whole body subtree', () => {
-    const view = read('../views/CommandCenterView.tsx');
-    expect(view).not.toContain("observer.observe(document.body, { childList: true, subtree: true });");
-    expect(view).toContain('observer.observe(ancestor, { childList: true });');
-  });
-});
+// The title-bar slot observer case moved to views/CommandCenterView.test.ts, where
+// the toolbar is rendered.
