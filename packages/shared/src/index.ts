@@ -45,6 +45,7 @@ export * from './browser-tool.js';
 export * from './tool-categories.js';
 export * from './project-detect.js';
 export * from './connectors.js';
+export * from './tasksMarkdown.js';
 export * from './integrations.js';
 export * from './ipc.js';
 export * from './settings.js';

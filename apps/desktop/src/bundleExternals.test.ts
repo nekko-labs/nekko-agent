@@ -123,6 +123,8 @@ describe('staged product identity', () => {
     expect(builder).toContain('productName: Nekko Agent');
     expect(builder).toContain('appId: dev.nekkolabs.nekkoagent');
     expect(builder).toContain('executableName: NekkoAgent');
+    // macOS: "Nekko Agent.app", the name Finder and the DMG window show.
+    expect(builder).toMatch(/\nmac:\n(?: {2}.*\n)*? {2}executableName: Nekko Agent\n/);
     expect(builder.match(/artifactName: NekkoAgent-\$\{version\}-\$\{arch\}\.\$\{ext\}/g)).toHaveLength(3);
     expect(builder).toContain('repo: nekko-agent');
     expect(pkg.name).toBe('@nekko-agent/desktop');

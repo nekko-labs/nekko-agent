@@ -65,4 +65,21 @@ export interface SystemStats {
   cpuModel?: string;
   memUsedMB: number;
   memTotalMB: number;
+  /**
+   * Temperature sensors in °C, hottest per row, when the machine exposes them
+   * without admin rights (Linux hwmon, Apple Silicon sensors, the Windows ACPI
+   * thermal zone). Each is absent rather than guessed. `gpuC` covers GPUs the
+   * GPU probe has no temperature for (AMD and Intel on Linux, Apple Silicon).
+   */
+  temps?: { cpuC?: number; memoryC?: number; gpuC?: number };
+}
+
+/** A °C reading for a monitor row, or null when there is none. */
+export function formatTemperature(c: number | undefined | null): string | null {
+  return c == null || !Number.isFinite(c) ? null : `${Math.round(c)}°C`;
+}
+
+/** Severity of a temperature, on the monitors' shared scale (quiet, warn, danger). */
+export function temperatureTone(c: number): 'ok' | 'warn' | 'hot' {
+  return c >= 90 ? 'hot' : c >= 80 ? 'warn' : 'ok';
 }

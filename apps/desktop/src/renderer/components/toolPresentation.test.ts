@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
 import { TOOL_LABELS, toolMatchesQuery, toolPickerLabel } from './toolPresentation.js';
+
+vi.mock('../store.js', () => ({ useStore: Object.assign(() => undefined, { getState: () => ({}) }) }));
+const { ToolsList } = await import('./ChatControls.js');
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -28,16 +33,50 @@ describe('tool picker presentation', () => {
     expect(toolMatchesQuery(tool, 'filenames')).toBe(false);
     expect(toolMatchesQuery({ name: 'mcp__server__find_issues', description: '' }, 'Find issues')).toBe(true);
   });
-  it('keeps native keyboard activation, checkbox semantics and untruncated descriptions', () => {
+  const tools = [
+    { name: 'grep', description: 'Match a regular expression across the project, with a long description that must wrap rather than be cut off.' },
+    { name: 'web_fetch', description: 'Fetch a page.' },
+    { name: 'mcp__srv__find', description: 'Find things.' },
+  ];
+  const session = (patch: object = {}) => ({ id: 's', title: 'Chat', messages: [], createdAt: 0, updatedAt: 0, ...patch }) as never;
+  const list = (patch: object = {}) => renderToStaticMarkup(React.createElement(ToolsList, { session: session(patch), onChange: () => {}, tools }));
+
+  it('lists tools as native buttons with checkbox semantics and untruncated descriptions', () => {
+    const html = list({ disabledTools: ['grep'] });
+    const rows = [...html.matchAll(/<button[^>]*data-tool-name="([^"]+)"[^>]*>/g)];
+    expect(rows.map((m) => m[1]).sort()).toEqual(['grep', 'mcp__srv__find', 'web_fetch']);
+    for (const [tag] of rows) {
+      expect(tag).toContain('role="menuitemcheckbox"');
+      expect(tag).toMatch(/focus-visible:outline-2/);
+    }
+    expect(rows.find((m) => m[1] === 'grep')![0]).toContain('aria-checked="false"');
+    expect(rows.find((m) => m[1] === 'web_fetch')![0]).toContain('aria-checked="true"');
+    // The full description is there, wrapping, never truncated; the tick box is decoration.
+    expect(html).toMatch(/<span class="[^"]*whitespace-normal[^"]*">Match a regular expression across the project, with a long description that must wrap rather than be cut off\.<\/span>/);
+    expect(html).not.toMatch(/class="[^"]*\btruncate\b[^"]*">Match a regular/);
+    expect(html).toMatch(/<span aria-hidden="true" class="mt-0\.5 inline-flex/);
+  });
+
+  it('disables only the tools that need the internet while it is blocked', () => {
+    const html = list({ offline: true });
+    const tag = (name: string) => html.match(new RegExp(`<button[^>]*data-tool-name="${name}"[^>]*>`))![0];
+    expect(tag('web_fetch')).toContain('disabled=""');
+    expect(tag('grep')).not.toContain('disabled=""');
+  });
+
+  it('offers only file and shell tools in a sandbox', () => {
+    const html = renderToStaticMarkup(React.createElement(ToolsList, {
+      session: session({ executionMode: 'sandbox' }), onChange: () => {},
+      tools: ['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash', 'web_fetch', 'browser'].map((name) => ({ name, description: name })),
+    }));
+    expect([...html.matchAll(/data-tool-name="([^"]+)"/g)].map((m) => m[1]).sort()).toEqual(['bash', 'edit_file', 'glob', 'grep', 'list_dir', 'read_file', 'write_file']);
+  });
+
+  // Source pins: the menu's popover width and the toggle's write run on click,
+  // in a portal, which a server render never reaches.
+  it('opens a 448px popover and saves a toggle as the chat\'s disabled tools (source pin)', () => {
     const source = read('./ChatControls.tsx');
-    expect(source).toContain('useFloatingMenu(open, button, 448)');
-    expect(source).toContain('role="menuitemcheckbox" aria-checked={on}');
-    expect(source).toContain('disabled={blocked}');
-    expect(source).toContain('aria-hidden="true" className="mt-0.5 inline-flex');
-    expect(source).toContain('focus-visible:outline-2');
-    expect(source).toContain('whitespace-normal text-[11px] leading-relaxed');
-    expect(source).not.toContain('block truncate text-[11px] text-ink-faint">{t.description}');
-    expect(source).toContain("['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash']");
-    expect(source).toContain('onChange(await window.nekko.setSessionOptions(session.id, { disabledTools: [...next] }');
+    expect(source).toMatch(/useFloatingMenu\(open, button, 448\)/);
+    expect(source).toMatch(/onChange\(await window\.nekko\.setSessionOptions\(session\.id, \{ disabledTools: \[\.\.\.next\] \}/);
   });
 });

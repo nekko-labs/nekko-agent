@@ -17,6 +17,8 @@ pub struct GpuDevice {
     pub used_mb: f64,
     pub free_mb: f64,
     pub utilization_pct: Option<f64>,
+    /// Core temperature in °C, when the probe reports one.
+    pub temperature_c: Option<f64>,
 }
 
 /// `GpuStats`: the devices and their aggregate.
@@ -45,6 +47,9 @@ impl GpuStats {
                 o.insert("memoryFreeMB".into(), num(d.free_mb));
                 if let Some(u) = d.utilization_pct {
                     o.insert("utilizationPct".into(), num(u));
+                }
+                if let Some(t) = d.temperature_c {
+                    o.insert("temperatureC".into(), num(t));
                 }
                 Value::Object(o)
             })
@@ -119,7 +124,17 @@ fn number_or_zero(s: &str) -> f64 {
     if n.is_nan() || n == 0.0 { 0.0 } else { n }
 }
 
-/// `parseNvidiaSmi`: `nvidia-smi --query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader,nounits`.
+/// `smiTemperature`: a reading in °C, `None` for a blank, `N/A` or `[N/A]` column.
+fn smi_temperature(col: Option<&&str>) -> Option<f64> {
+    let s = col?;
+    if s.is_empty() {
+        return None;
+    }
+    let n = nekko_js::string_to_number(s);
+    n.is_finite().then_some(n)
+}
+
+/// `parseNvidiaSmi`: `nvidia-smi --query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu[,temperature.gpu] --format=csv,noheader,nounits`.
 pub fn parse_nvidia_smi(stdout: &str) -> Option<GpuStats> {
     let devices = nekko_js::trim(stdout)
         .split('\n')
@@ -134,6 +149,7 @@ pub fn parse_nvidia_smi(stdout: &str) -> Option<GpuStats> {
                 .get(4)
                 .filter(|u| !u.is_empty() && **u != "[N/A]")
                 .map(|u| nekko_js::string_to_number(u)),
+            temperature_c: smi_temperature(cols.get(5)),
         })
         .filter(|d| d.total_mb > 0.0)
         .collect();
@@ -217,6 +233,7 @@ pub fn to_gpu_devices(entries: Vec<MacGpuEntry>, unified_total_mb: f64) -> Vec<G
                 used_mb: used,
                 free_mb: (unified_total_mb - used).max(0.0),
                 utilization_pct: e.utilization_pct,
+                temperature_c: None,
             }
         })
         .collect()
@@ -279,6 +296,7 @@ pub fn listed_to_stats(listed: &[ListedDevice]) -> Option<GpuStats> {
             used_mb: (d.total_mb - d.free_mb).max(0.0),
             free_mb: d.free_mb,
             utilization_pct: None,
+            temperature_c: None,
         })
         .collect();
     aggregate("llama-server", devices, false)

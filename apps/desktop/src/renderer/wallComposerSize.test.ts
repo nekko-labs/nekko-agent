@@ -60,13 +60,14 @@ describe('the widest the composer can be', () => {
 });
 
 describe('saving the composer size when leaving the page', () => {
-  it('flushes a change still inside the settle delay on unmount and on window close', async () => {
+  // Source pin, pending the wall e2e journey: the flush runs from an effect
+  // cleanup and a beforeunload listener, which a server render never runs.
+  // Otherwise a resize just before switching tabs is lost: the next load
+  // prefers the host's older setting over the browser copy.
+  it('flushes a change still inside the settle delay on unmount and on window close (source pin)', async () => {
     const { readFileSync } = await import('node:fs');
     const view = readFileSync(new URL('./views/CommandCenterView.tsx', import.meta.url), 'utf8');
-    // Otherwise a resize just before switching tabs is lost: the next load
-    // prefers the host's older setting over the browser copy.
-    expect(view).toContain('unsaved.current = wall;');
-    expect(view).toContain("window.addEventListener('beforeunload', flushWall);");
-    expect(view).toContain("return () => { window.removeEventListener('beforeunload', flushWall); flushWall(); };");
+    expect(view).toMatch(/unsaved\.current = wall;/);
+    expect(view).toMatch(/window\.addEventListener\('beforeunload', flushWall\);\s*return \(\) => \{\s*window\.removeEventListener\('beforeunload', flushWall\);\s*flushWall\(\);\s*\};/);
   });
 });

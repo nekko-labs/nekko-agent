@@ -7,6 +7,7 @@ import { ioregStats, parseNvidiaSmi } from './gpu.js';
 import { listedToStats, parseListDevices } from './gpu-vulkan.js';
 import { cpuinfoFeatures, gpuBackends, sysctlFeatures } from './readiness.js';
 import { macMemoryUsedMB } from './system.js';
+import { classifySensor, foldTemps } from './temps.js';
 
 /**
  * The machine probes' parsers and the readiness advisor as the TS host runs
@@ -25,6 +26,9 @@ const NVIDIA = [
   'NVIDIA GeForce RTX 4090, 24564, 1200, 23000, 0\nNVIDIA RTX A2000, 6138, 100, 5900, [N/A]\n',
   'NVIDIA GeForce GTX 1050, 2048, 300, 1748, \r\nTesla K80, 0, 0, 0, 0\r\n',
   ', 8192, 1, 8191',
+  'NVIDIA GeForce RTX 5090, 32607, 2400, 29757, 7, 50',
+  'NVIDIA GeForce RTX 4090, 24564, 1200, 23000, 0, [N/A]\nNVIDIA RTX A2000, 6138, 100, 5900, 3, 41.5\n',
+  'NVIDIA GeForce GTX 1050, 2048, 300, 1748, 1, ',
   'Broken, abc, 12, 3, 4.5',
   'only, three, cols',
   '',
@@ -98,6 +102,19 @@ const VM_STAT = [
   '',
 ];
 
+const SENSORS: [string, string][] = [
+  ['k10temp', 'Tctl'], ['coretemp', 'Package id 0'], ['zenpower', 'Tdie'], ['spd5118', ''], ['jc42', ''],
+  ['amdgpu', 'edge'], ['amdgpu', 'junction'], ['amdgpu', 'mem'], ['nouveau', ''], ['nvme', 'Composite'], ['acpitz', ''],
+  ['', 'PMU tdie1'], ['', 'PMU tp3s'], ['', 'GPU MTR Temp Sensor1'], ['', 'PMU tg0d'], ['', 'NAND CH0 temp'], ['', 'DRAM'],
+];
+
+const TEMP_FOLDS: Array<Array<['cpu' | 'memory' | 'gpu', number]>> = [
+  [['cpu', 48.4], ['cpu', 61.5], ['memory', 39], ['gpu', 0]],
+  [['gpu', 72.5], ['gpu', 151]],
+  [['cpu', -5]],
+  [],
+];
+
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
 
@@ -124,6 +141,8 @@ it('the machine probes and the readiness advisor match the daemon golden set', (
     sysctl: SYSCTL.map((input) => ({ input, features: sysctlFeatures(input) })),
     backends: BACKENDS.map(([smi, vk]) => ({ smi, vk, backends: gpuBackends(smi, vk) })),
     vmStat: VM_STAT.map((input) => ({ input, usedMB: macMemoryUsedMB(input) })),
+    sensors: SENSORS.map(([chip, label]) => ({ chip, label, kind: classifySensor(chip, label) })),
+    tempFolds: TEMP_FOLDS.map((readings) => ({ readings, temps: foldTemps(readings) })),
     readiness: FACTS.flatMap((facts) =>
       LANGUAGES.map((language) => ({
         facts,

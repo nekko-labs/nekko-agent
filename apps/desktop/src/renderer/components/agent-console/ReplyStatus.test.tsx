@@ -1,6 +1,6 @@
 import React from 'react';
-import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { cssRule, stylesheet } from '../../tests/css.js';
 import { describe, expect, it } from 'vitest';
 import { emptyLiveActivity } from '@nekko-agent/shared';
 import { replyIconState, ReplyStatus } from './ReplyStatus.js';
@@ -103,7 +103,9 @@ describe('reply status icon', () => {
   });
 
   it('stills the icons under reduced motion', () => {
-    const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
-    expect(css).toContain('.reply-activity-icon, .reply-activity-icon * { animation: none !important; }');
+    const css = stylesheet('styles.css');
+    for (const selector of ['.reply-activity-icon', '.reply-activity-icon *']) {
+      expect(cssRule(css, selector, { media: 'prefers-reduced-motion: reduce' }).animation, selector).toBe('none !important');
+    }
   });
 });
