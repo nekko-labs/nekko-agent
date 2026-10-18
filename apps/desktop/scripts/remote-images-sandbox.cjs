@@ -15,6 +15,9 @@ fs.mkdirSync(dir, { recursive: true });
 app.setPath('userData', path.join(dir, 'profile'));
 app.setPath('sessionData', path.join(dir, 'profile'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// A selector handed to executeJavaScript as character codes, so no text from
+// it is ever parsed as code (only digits and commas reach the source).
+const js = (value) => `String.fromCharCode(${[...String(value)].map((ch) => ch.charCodeAt(0)).join(',')})`;
 // The narrow pass swaps windows; without this, closing the first quits the app.
 app.on('window-all-closed', () => {});
 
@@ -45,12 +48,12 @@ app.whenReady().then(async () => {
   };
   const run = (source) => win.webContents.executeJavaScript(source, true);
   const capture = async (name) => { await sleep(400); fs.writeFileSync(path.join(dir, name + '.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG()); };
-  const center = (selector) => run(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)return null;e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
+  const center = (selector) => run(`(()=>{const e=document.querySelector(${js(selector)});if(!e)return null;e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
   const mouse = async (selector, button = 'left') => {
     const p = await center(selector);
     if (!p) return false;
     await sleep(150);
-    const q = await run(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
+    const q = await run(`(()=>{const r=document.querySelector(${js(selector)}).getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
     for (const type of ['mouseDown', 'mouseUp']) win.webContents.sendInputEvent({ type, x: q.x, y: q.y, button, clickCount: 1 });
     if (button === 'right') win.webContents.sendInputEvent({ type: 'contextMenu', x: q.x, y: q.y });
     await sleep(200);

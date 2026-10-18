@@ -41,7 +41,11 @@ export function remoteImageEvidence(messages: ReadonlyArray<{ role: string; cont
 /** True when `url` appears verbatim (or HTML/JSON-escaped) in the evidence. */
 export function urlSeenIn(evidence: string, url: string, written = url): boolean {
   if (!evidence) return false;
-  const forms = new Set([written, url, written.replace(/&/g, '&amp;'), written.replace(/\//g, '\\/')]);
+  // How the URL looks inside the text a tool returned: as written, HTML-escaped
+  // in a page's markup, or JSON-escaped (every backslash and quote escaped by
+  // JSON.stringify first, then the optional `\/` some encoders use for slashes).
+  const json = JSON.stringify(written).slice(1, -1);
+  const forms = new Set([written, url, written.split('&').join('&amp;'), json, json.split('/').join('\\/')]);
   for (const form of forms) if (form && evidence.includes(form)) return true;
   return false;
 }
