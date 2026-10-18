@@ -8,11 +8,12 @@
  * line it prints to <out>/<scenario>.jsonl. It never reads credential files.
  *
  *   node scripts/claude-code-probe.mjs --out <dir>              # unauthenticated only
- *   ANTHROPIC_API_KEY=<test key> node scripts/claude-code-probe.mjs --out <dir> --auth
+ *   ANTHROPIC_API_KEY=<test key> node scripts/claude-code-probe.mjs --out <dir> --auth [--only a,b]
  *
  * Scenarios: version, auth status, a turn with no credentials, and with --auth
  * a plain turn, a two-turn session over one process, a resume by session id,
- * an interrupt mid-turn, and a tool call that needs permission.
+ * an interrupt by signal and by stream-json control message, steering with a
+ * second message mid-turn, and a tool call that needs permission.
  */
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -113,41 +114,93 @@ async function main() {
       await run('turn-no-credentials', STREAM, [userLine('Say hi.')], env, cwd, out);
       return;
     }
-    const first = await run('turn', STREAM, [userLine('Reply with the single word: ready')], env, cwd, out);
-    const init = first.lines.map((l) => JSON.parse(l)).find((e) => e.type === 'system' && e.subtype === 'init');
+    const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1].split(',') : null;
+    const wanted = (name) => !only || only.includes(name);
+    const LONG = 'Count slowly from 1 to 200, one number per line.';
+    const PARTIAL = [...STREAM, '--include-partial-messages'];
+    const firstDelta = (line) => line.includes('"text_delta"');
+    let init;
+
+    if (wanted('turn') || wanted('resume')) {
+      const first = await run('turn', STREAM, [userLine('Reply with the single word: ready')], env, cwd, out);
+      init = first.lines.map((l) => JSON.parse(l)).find((e) => e.type === 'system' && e.subtype === 'init');
+    }
 
     // Two turns over one process: the second line is written after the first result.
-    let sent = 1;
-    await run('two-turns', STREAM, [userLine('Remember the number 7. Reply ok.')], env, cwd, out, {
-      onLine: (line, child) => {
-        if (JSON.parse(line).type !== 'result') return;
-        if (sent === 1) {
-          sent = 2;
-          child.stdin.write(userLine('What number did I ask you to remember?'));
-        } else child.stdin.end();
-      },
-    });
+    if (wanted('two-turns')) {
+      let sent = 1;
+      await run('two-turns', STREAM, [userLine('Remember the number 7. Reply ok.')], env, cwd, out, {
+        onLine: (line, child) => {
+          if (JSON.parse(line).type !== 'result') return;
+          if (sent === 1) {
+            sent = 2;
+            child.stdin.write(userLine('What number did I ask you to remember?'));
+          } else child.stdin.end();
+        },
+      });
+    }
 
-    if (init?.session_id) {
+    if (wanted('resume') && init?.session_id) {
       await run('resume', [...STREAM, '--resume', init.session_id], [userLine('What single word did you reply with before?')], env, cwd, out);
     }
 
-    // Interrupt: SIGINT once the first text arrives. The stream-json control
-    // message the SDK uses is not documented for the CLI, so this records the
-    // signal path; on Windows a kill is the only option.
-    let interrupted = false;
-    await run('interrupt', STREAM, [userLine('Count slowly from 1 to 200, one number per line.')], env, cwd, out, {
-      onLine: (line, child) => {
-        if (!interrupted && line.includes('"text"')) {
+    // Interrupt by signal once text starts streaming. On Windows the child is
+    // the cmd shim, so only a tree kill reaches Claude Code.
+    if (wanted('interrupt')) {
+      let interrupted = false;
+      await run('interrupt', PARTIAL, [userLine(LONG)], env, cwd, out, {
+        onLine: (line, child) => {
+          if (interrupted || !firstDelta(line)) return;
           interrupted = true;
-          child.kill(WIN ? undefined : 'SIGINT');
-        }
-      },
-      timeoutMs: 60_000,
-    });
+          if (WIN) execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+          else child.kill('SIGINT');
+        },
+        timeoutMs: 60_000,
+      });
+    }
+
+    // Interrupt over stdin with the control message the Agent SDK sends,
+    // which init's `interrupt_receipt_v1` capability suggests the CLI takes.
+    // The process should stay up and answer a follow-up turn.
+    if (wanted('interrupt-control')) {
+      let step = 0;
+      await run('interrupt-control', PARTIAL, [userLine(LONG)], env, cwd, out, {
+        onLine: (line, child) => {
+          if (step === 0 && firstDelta(line)) {
+            step = 1;
+            child.stdin.write(JSON.stringify({ type: 'control_request', request_id: 'probe-interrupt-1', request: { subtype: 'interrupt' } }) + '\n');
+          } else if (step === 1 && JSON.parse(line).type === 'result') {
+            step = 2;
+            child.stdin.write(userLine('Reply with the single word: still-here'));
+          } else if (step === 2 && JSON.parse(line).type === 'result') {
+            child.stdin.end();
+          }
+        },
+        timeoutMs: 90_000,
+      });
+    }
+
+    // Steering: a second user line while the first turn is still streaming.
+    if (wanted('steer')) {
+      let step = 0;
+      let results = 0;
+      await run('steer', [...PARTIAL, '--replay-user-messages'], [userLine(LONG)], env, cwd, out, {
+        onLine: (line, child) => {
+          if (step === 0 && firstDelta(line)) {
+            step = 1;
+            child.stdin.write(userLine('Stop counting. Instead reply with the single word: steered'));
+          } else if (JSON.parse(line).type === 'result' && ++results >= 2) {
+            child.stdin.end();
+          }
+        },
+        timeoutMs: 90_000,
+      });
+    }
 
     // A tool that needs permission, with nobody to answer: shows the deny path.
-    await run('permission-denied', [...STREAM, '--permission-prompts', 'none'], [userLine('Create a file named probe.txt containing hello.')], env, cwd, out);
+    if (wanted('permission-denied')) {
+      await run('permission-denied', [...STREAM, '--permission-prompts', 'none'], [userLine('Create a file named probe.txt containing hello.')], env, cwd, out);
+    }
   } finally {
     rmSync(configDir, { recursive: true, force: true });
     rmSync(cwd, { recursive: true, force: true });
