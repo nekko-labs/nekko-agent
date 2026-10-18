@@ -67,6 +67,12 @@ mac:
     - dmg
     - zip
   category: public.app-category.developer-tools
+  # The .app is what people see in Finder, Launchpad and the DMG's drag
+  # window, so it carries the real name with its space, as Mac apps do. The
+  # download files keep the spaceless name (artifactName). An install from
+  # before this keeps its NekkoAgent.app path on update: the updater installs
+  # the new bundle at the installed path, whatever the zip names it.
+  executableName: Nekko Agent
   artifactName: NekkoAgent-${version}-${arch}.${ext}
   # Developer ID signing + notarization. electron-builder signs when CSC_LINK
   # and CSC_KEY_PASSWORD are in the environment, and skips signing entirely
