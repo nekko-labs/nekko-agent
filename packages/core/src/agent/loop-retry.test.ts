@@ -32,6 +32,29 @@ function flakyProvider(failures: unknown[], rounds: ProviderChunk[][]): Provider
 
 const noTool = async () => ({ toolCallId: 'x', output: '' });
 
+/**
+ * Collect a run's events with the retry backoff on a fake clock. The loop still
+ * computes and reports its real delays (asserted below); only the waiting is
+ * skipped. Real setImmediate hops let the in-memory provider settle between
+ * timers without paying Windows' ~15 ms setTimeout granularity per retry.
+ */
+async function drain<T>(run: AsyncIterable<T>): Promise<T[]> {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    const events: T[] = [];
+    let finished = false;
+    const done = (async () => { for await (const e of run) events.push(e); })().finally(() => { finished = true; });
+    while (!finished) {
+      await new Promise((r) => setImmediate(r));
+      vi.runOnlyPendingTimers();
+    }
+    await done;
+    return events;
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
 describe('runAgent retries', () => {
   it('sends an overloaded call again, after a retry event, and keeps only the attempt that worked', async () => {
     const provider = flakyProvider(
@@ -40,7 +63,7 @@ describe('runAgent retries', () => {
     );
     const history: ChatMessage[] = [msg('user', 'hi')];
     const events = [];
-    for await (const e of runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool: noTool })) events.push(e);
+    events.push(...await drain(runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool: noTool })));
     expect(provider.calls).toBe(3);
     const retries = events.filter((e) => e.type === 'retry');
     expect(retries).toHaveLength(2);
@@ -55,7 +78,7 @@ describe('runAgent retries', () => {
     const provider = flakyProvider([new Error('anthropic 401: invalid x-api-key')], [[{ type: 'text', delta: 'never' }]]);
     const history: ChatMessage[] = [msg('user', 'hi')];
     const events = [];
-    for await (const e of runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool: noTool })) events.push(e);
+    events.push(...await drain(runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool: noTool })));
     expect(provider.calls).toBe(1);
     expect(events.some((e) => e.type === 'retry')).toBe(false);
     expect(events.at(-1)).toMatchObject({ type: 'error', message: 'anthropic 401: invalid x-api-key' });
@@ -67,7 +90,7 @@ describe('runAgent retries', () => {
     const provider = flakyProvider(failures, []);
     const history: ChatMessage[] = [msg('user', 'hi')];
     const events = [];
-    for await (const e of runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool: noTool })) events.push(e);
+    events.push(...await drain(runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool: noTool })));
     expect(provider.calls).toBe(5);
     expect(events.filter((e) => e.type === 'retry')).toHaveLength(4);
     expect(events.at(-1)).toMatchObject({ type: 'error', message: 'anthropic 529: overloaded' });
@@ -134,7 +157,7 @@ describe('Wi-Fi recovery', () => {
     };
     const history = [msg('user', 'go')];
     const events = [];
-    for await (const event of runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool, retryBaseDelayMs: 0 })) events.push(event);
+    events.push(...await drain(runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool, retryBaseDelayMs: 0 })));
     expect(calls).toBe(9);
     expect(executeTool).toHaveBeenCalledTimes(1);
     expect(events.filter((e) => e.type === 'retry')).toHaveLength(7);
@@ -159,7 +182,7 @@ describe('Wi-Fi recovery', () => {
     const provider = flakyProvider(Array.from({ length: 65 }, () => new TypeError('fetch failed')), []);
     const history = [msg('user', 'go')];
     const events = [];
-    for await (const e of runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool: noTool, retryBaseDelayMs: 0 })) events.push(e);
+    events.push(...await drain(runAgent({ sessionId: 's', provider, model: 'm', system: 'sys', history, executeTool: noTool, retryBaseDelayMs: 0 })));
     expect(provider.calls).toBe(65);
     expect(events.at(-1)).toMatchObject({ type: 'error', message: 'fetch failed' });
     expect(history.at(-1)).toMatchObject({ interrupted: true });

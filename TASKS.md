@@ -6,6 +6,17 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Native agent-browser default (2026-10-17, maintained patch in progress)
+
+Continuation: user authorized maintained inherited-stdio patch. Native is default without fallback. Initial unchanged baseline and alternating PW/native/PW/native fixture batches captured (40 cold + 40 warm per driver); exact latency regression / lower memory snapshots in docs/perf-history.md and reports/agent-browser/matched-benchmark.json. Native IPC security groups, relay negatives, full workspace typecheck/build, 1362 desktop tests, 956 host tests (1 skipped, explicit owned daemon), Rust browser/capture golden parity and expanded hidden Electron action/security smoke pass. Keyboard chord replacement and actual cancelled download verified. Unpacked Windows package native executable/license/pin hashes match source staging; unrelated daemon resource missing, no signed installer claim. Final v3 before/after 1359x872 media published with hash-verified downloads; parent actual-pixel signoff granted for the synthetic browser surface only, not the full packaged/native app. Remaining release gates: required CI/reviews and merge queue. Capture CI now builds/stages the pinned resource with a source-keyed Cargo cache and always retains locked source/patch verification. Explicit LF attributes and Git configuration remove Windows autocrlf dependence without relaxing exact patch checks. Residual limitations: other platforms/signing/live model, renderer performance helper remains independent Chrome/CDP (not a Playwright runtime driver).
+
+See [SPEC](SPEC.md#in-app-browser-automation-2026-10-10) and [feasibility evidence](reports/agent-browser/feasibility.md). Architectural target: native Rust agent-browser, Chrome engine, app-owned chat scope; never a user browser or an app-wide debugging port. Maintained patch is selected and implemented; unpatched upstream remains unsupported.
+
+- [x] Inspect exact npm `0.39.1` / source `1165952d74ceed98fdc2dd97190ad41f44dd0e24` and main `dac13bb87468fe9d74a040d862720f6cc17a9565`; reproduce unauthenticated Windows command acceptance with no browser launch; save executable hash and raw JSON. The owned daemon tree and scratch data were cleaned up.
+- [x] Supply private inherited native IPC or authenticate every command with a privately delivered capability. Existing Windows TCP accepts arbitrary clients; CDP relay auth and random ports do not fix command auth. Audit dashboard/stream entry points too.
+- [x] Capture unchanged baseline before runtime edits; implement chat-owned authenticated CDP relay and typed native action adapter with security/feature-parity tests. Preserve windows, partitions, approvals, screenshots/tabs/logs/waits and cleanup.
+- [x] Matched same-browser/viewport/theme synthetic alternating cold/warm benchmarks (at least 20 samples each where practical), raw data and exact perf-history numbers; full typecheck/build, relevant host/daemon suites and schema parity if changed.
+- [x] Publish matching hidden visual/interaction evidence and obtain parent actual-pixel signoff (2026-10-17): final v3 baseline/native actual pixels inspected via owned browser capture, 1359x872 rendered; heading, input/orange focus, submitted result, links, late text, right scrollbar and layout match. Acceptance covers the synthetic browser surface only, not the full packaged/native app. Preserve separate e2e-playwright work; other platforms, signed/full installer and live model remain residual verification limits.
 ## Test suite trim and consolidated end-to-end (added 2026-10-17)
 
 See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17.md).
@@ -14,7 +25,8 @@ See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17
 - [x] ✅ 2026-10-17 Playwright-Electron end-to-end suite with the sidebar and chat-finder journeys (see the section below).
 - [ ] Port the remaining wired and documented harnesses into journeys, then delete the triads.
 - [ ] Rewrite the 38 source-text tests (`readFileSync('ChatPane.tsx')` + `toContain`) as rendered assertions or journey steps.
-- [ ] Speed: fake timers in `core/loop-retry` and `host/hooks`, a shared git fixture in `chat-worktrees`, one root Vitest workspace, a shared CI build artifact.
+- [x] ✅ 2026-10-18 Speed: fake timers in `core/loop-retry` (6.00 to 0.01 s), a shorter hang in `host/hooks` (10.43 to 2.93 s; real spawns kept, so no fake timers there), a shared git fixture in `chat-worktrees` (12.38 to 9.16 s), builtin pass/fail steps in `workflows` (4.87 to 2.83 s). Median of 3, Windows; see `docs/perf-history.md`.
+- [ ] Speed: one root Vitest workspace, a shared CI build artifact.
 - [ ] Split `crates/nekkod/tests/daemon.rs` by domain with event waits instead of sleeps; promote 4 `itest-*.mjs` to a main-only job.
 
 ## Desktop end-to-end journeys, Playwright-Electron (added 2026-10-17)
@@ -1172,6 +1184,8 @@ Observation: the fixed per-reply step budget (`DEFAULT_MAX_STEPS`, was 80) was h
 - [ ] Stripe billing keys to enable live charges (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`, `CLOUD_PUBLIC_URL`); integration is built + tested, just unconfigured.
 
 ## Shipped
+
+- [x] **New agent window opens in one push; target-ring focus icon** (2026-10-18, [SPEC.md](SPEC.md#features)): `ChatPane` drops the welcome `fade-in` when `commandCenter`; `CommandCenterView.newChat` calls `putCachedSession` before `addCreatedSession` so the pane's first render has the session; `newAgentSetup.ts` decides which of `setSessionOptions`/`setSessionSupportingWorkspaces` a fresh chat needs (none for a plain agent). `ZenIcon` replaced by `TargetIcon` (r9 ring, r5 ring, r1.5 filled dot); title, label and shortcut unchanged. Tests: `newAgentSetup.test.ts`, `CommandWall.test.tsx`.
 
 - [x] **Change plan asks what to change** (2026-10-15, [SPEC.md](SPEC.md#features)): new `PlanChangePrompt.tsx` (`planChangeMessage` = `PLAN_CHANGE_REQUEST` + typed text). `ChatPane` holds `planChangeOpen`; `onChangePlan` opens it, rendered in `.agent-question-pin` on the `transcript` surface and as a `.composer-question` tab above the composer otherwise, hidden while an `ask_user` question is open. `sendPlanChange` steers via `steerChat` while `streamingRef` is set, else `send(text)`; failures toast. `appendPlanChangeRequest` (draft insertion) is gone. Tests: `PlanRail.test.tsx`. Evidence: `apps/desktop/scripts/change-plan-integration.cjs` (hidden isolated Electron, synthetic plan, records `sendChat`/`steerChat`; `NEKKO_TEST_REVISION` for the base).
 
