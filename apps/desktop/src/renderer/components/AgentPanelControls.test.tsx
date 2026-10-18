@@ -11,14 +11,17 @@ const layouts = readFileSync(new URL('./commandWallLayouts.css', import.meta.url
 const wall = readFileSync(new URL('./CommandWall.tsx', import.meta.url), 'utf8');
 
 describe('agent panel controls', () => {
-  it('are icon pills whose label is there to grow out on hover', () => {
+  it('are icon-only buttons that explain themselves in a hover tooltip instead of growing a label', () => {
     const html = renderToStaticMarkup(<AgentPanelControls show orientation="vertical" onToggle={noop} onOrientation={noop} />);
     expect(html).toContain('aria-label="Hide the agent panel"');
     expect(html).toContain('aria-label="Show agents in a row"');
-    expect(html.match(/agent-panel-pill-label/g)).toHaveLength(2);
-    // Label first, icon last: it grows out to the left of the icon.
-    expect(html.indexOf('Hide agents')).toBeLessThan(html.indexOf('<svg'));
-    expect(layouts).toMatch(/\.agent-panel-pill:hover \.agent-panel-pill-label[^{]*\{ max-width: 120px; opacity: 1; \}/);
+    expect(html).not.toContain('agent-panel-pill-label');
+    expect(html).toContain('data-hover-tip="Hide agents"');
+    expect(html).toContain('data-hover-tip="Show agents in a row"');
+    // No native title alongside the tooltip, and a fixed size that never grows.
+    expect(html).not.toContain('title=');
+    expect(layouts).toMatch(/\.agent-panel-pill \{[^}]*width: 28px;/);
+    expect(layouts).not.toContain('agent-panel-pill-label');
   });
   it('stack in a row panel and lie in a row in a column panel, and swap again when collapsed', () => {
     const stacked = (show: boolean, orientation: 'vertical' | 'horizontal') =>
@@ -59,7 +62,7 @@ describe('wall chrome fixes', () => {
     expect(styles).toContain('.wall-composer-side[data-edge="right"] { right: -14px; }');
     expect(styles).toContain('.wall-composer[data-dock^="bottom"] > .wall-composer-split { top: -14px; }');
   });
-  it('reserves Auto-arrange space so revealing it never shifts the controls beside it', () => {
+  it('reserves snap-to-grid space so revealing it never shifts the controls beside it', () => {
     expect(styles).not.toContain("[data-visible='true'] { width: 38px;");
     expect(styles).toMatch(/\.wall-auto-arrange \{[^}]*grid-template-columns: 1fr;[^}]*margin-left: 6px;[^}]*visibility: hidden;/);
     expect(styles).not.toMatch(/\.wall-auto-arrange[^{]*\{[^}]*grid-template-columns: 0fr/);

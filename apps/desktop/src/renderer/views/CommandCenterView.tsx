@@ -11,7 +11,8 @@ import { addCreatedSession, useStore } from '../store.js';
 import { putCachedSession } from '../sessionCache.js';
 import { newAgentSetup } from '../newAgentSetup.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { PhotoIcon, TerminalIcon, FocusLayoutIcon, BoltIcon, PanelIcon, WandIcon } from '../icons.js';
+import { PhotoIcon, TerminalIcon, FocusLayoutIcon, BoltIcon, MagnetIcon } from '../icons.js';
+import { HoverTip } from '../components/HoverTip.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -23,8 +24,9 @@ import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { MonitorsDock } from '../components/MonitorsDock.js';
 import { hasAppChrome } from '../chrome.js';
 
-import { allPanes, isSplit, type PaneKind } from '../layout.js';
+import type { PaneKind } from '../layout.js';
 import {
+  applySnap,
   DEFAULT_ASPECT,
   openWallPane,
   loadWallState,
@@ -33,10 +35,8 @@ import {
   readAgentPanel,
   wallAgents,
   saveWallState,
-  tileTree,
   toWallSetting,
   type CommandWallState,
-  type WallFilter,
 } from '../commandWall.js';
 
 const HOUR = 60 * 60_000;
@@ -107,7 +107,8 @@ export function CommandCenterView() {
   // by every new chat while auto-add is on.
   const storage = typeof localStorage === 'undefined' ? undefined : localStorage;
   const [wall, setWallState] = useState<CommandWallState>(() => loadWallState(storage, useStore.getState().settings?.commandWall));
-  const setWall = useCallback((update: (s: CommandWallState) => CommandWallState) => setWallState((s) => update(s)), []);
+  // Every change goes through snap: while it is on, the wall stays evenly spaced.
+  const setWall = useCallback((update: (s: CommandWallState) => CommandWallState) => setWallState((s) => applySnap(s, update(s))), []);
   const firstSave = useRef(true);
   // The wall waiting to reach the host. Leaving the page or closing the app
   // inside the settle delay used to drop it, and the next load preferred the
@@ -145,7 +146,7 @@ export function CommandCenterView() {
   // chat that already exists out of it.
   const [listsReady, setListsReady] = useState(false);
   useEffect(() => {
-    if (listsReady) setWallState((w) => reconcileWall(w, sessions, terminals, Date.now(), aspectRef.current));
+    if (listsReady) setWallState((w) => applySnap(w, reconcileWall(w, sessions, terminals, Date.now(), aspectRef.current)));
   }, [listsReady, sessions, terminals]);
 
   useEffect(() => {
@@ -308,7 +309,6 @@ export function CommandCenterView() {
   };
   /** A one-click add that failed says so, instead of silently opening nothing. */
   const reportAddFailure = (e: unknown) => useStore.getState().pushToast('error', `Could not add the window: ${e instanceof Error ? e.message : String(e)}`);
-  const autoArrange = () => setWall((w) => w.layout.mode === 'grid' ? { ...w, root: tileTree(allPanes(w.root), aspectRef.current) } : w);
 
   // The agent the composer speaks for: the window clicked last, or the first
   // on the wall. Ctrl+Tab / Ctrl+Shift+Tab walk the windows in reading order;
@@ -443,7 +443,7 @@ export function CommandCenterView() {
 
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-2 pb-1.5 pl-[3px] pr-px pt-1">
-      <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen}
+      <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);
           const add = kind === 'image' ? newChat({ kind: 'chat', chatType: 'image' }).then((id) => addFromToolbar('chat', id)) : addFromToolbar(kind);
@@ -512,16 +512,9 @@ export function CommandCenterView() {
 
 /* ---------- toolbar ---------- */
 
-const FILTERS: Array<{ key: WallFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'chat', label: 'Agents' },
-  { key: 'terminal', label: 'Terminals' },
-];
-
 export function WallToolbar({
   wall,
   setWall,
-  onAutoArrange,
   addOpen,
   setAddOpen,
   onAdd,
@@ -529,7 +522,6 @@ export function WallToolbar({
 }: {
   wall: CommandWallState;
   setWall: (update: (s: CommandWallState) => CommandWallState) => void;
-  onAutoArrange: () => void;
   addOpen: boolean;
   setAddOpen: React.Dispatch<React.SetStateAction<boolean>>;
   /** A new agent, image session or terminal window on the wall. */
@@ -537,8 +529,7 @@ export function WallToolbar({
   onPick?: (selection: AgentWindowSelection) => Promise<void>;
 }) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
-  const canArrange = wall.layout.mode === 'grid' && !!wall.root && isSplit(wall.root);
-  const panel = readAgentPanel(wall.agentPanel);
+  const snapOn = !!wall.snap;
   // In the desktop shell the controls share the title bar's row with the
   // Agents heading instead of costing a row of their own.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
@@ -585,29 +576,18 @@ export function WallToolbar({
               <button key={mode} type="button" title={`${LAYOUT_LABEL[mode]} (${layoutShortcutLabel(mode)})`} aria-pressed={wall.layout.mode === mode} onClick={() => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))}>{React.createElement(mode === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[mode]}</button>
             ))}
           </div>
+          {/* Snap to grid, only in Dynamic (the one free-form layout). Its
+              space stays reserved so revealing it never shifts the controls. */}
           <div className="wall-auto-arrange" data-visible={wall.layout.mode === 'grid'}>
-            <button type="button" className="btn btn-outline py-1 disabled:opacity-50" title="Auto-arrange: fit windows above the composer in even rows and columns" aria-label="Auto-arrange" aria-describedby={wall.layout.mode === 'grid' ? 'wall-auto-arrange-tip' : undefined} tabIndex={wall.layout.mode === 'grid' ? 0 : -1} onClick={onAutoArrange} disabled={!canArrange}>
-              <WandIcon className="h-4 w-4" />
-            </button>
-            <span id="wall-auto-arrange-tip" role="tooltip">Fit windows above the composer in even rows and columns.</span>
+            <HoverTip label={snapOn ? 'Snap to grid is on: windows stay evenly spaced' : 'Snap to grid: keep windows evenly spaced'}>
+              <button type="button" className="wall-snap-toggle" aria-label="Snap to grid" aria-pressed={snapOn}
+                tabIndex={wall.layout.mode === 'grid' ? 0 : -1} disabled={wall.layout.mode !== 'grid'}
+                onClick={() => setWall((w) => ({ ...w, snap: !w.snap }))}>
+                <MagnetIcon className="h-4 w-4" />
+              </button>
+            </HoverTip>
           </div>
         </div>
-        {/* Same frame as the layout segments beside it (plain 8px corners, not
-            the squircle `rounded-lg` gets), so the two groups match. */}
-        <div className="wall-filter-segments" role="tablist" aria-label="Show">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              role="tab"
-              aria-selected={wall.filter === f.key}
-              className={`rounded-md px-2.5 py-1 text-[12px] transition-colors ${wall.filter === f.key ? 'bg-surface-2 font-medium text-ink' : 'text-ink-faint hover:text-ink'}`}
-              onClick={() => setWall((w) => ({ ...w, filter: f.key }))}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <button type="button" className="btn btn-outline gap-1.5 py-1 text-[12px]" aria-pressed={wall.dock.show} onClick={() => setWall((w) => ({ ...w, dock: { ...w.dock, show: !w.dock.show } }))}><PanelIcon className="h-4 w-4" />Monitors</button>
       </div>
     </div>
   );
