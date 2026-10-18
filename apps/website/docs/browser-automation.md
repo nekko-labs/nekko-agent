@@ -4,7 +4,9 @@
 
 The desktop `browser` tool opens hidden, sandboxed Electron Chromium windows owned by the current chat, never your personal browser. Each chat has a separate in-memory session and up to eight tabs. Every browser action goes through Nekko's existing approval policy. Explicit visibility shows the owned window without activating it.
 
-Navigate HTTP(S), inspect, click/fill the first match, type, press keys/chords, wait for content, scroll, extract text/links, evaluate page JavaScript, screenshot, manage tabs and read logs. Approved screenshots go to the selected model. Evaluation runs in the page, not the app; pages can see text you enter.
+Navigate HTTP(S), inspect, click/fill the first match, type, press keys/chords, wait for content, scroll, extract text/links, evaluate page JavaScript, screenshot, manage tabs, read logs and take a snapshot.
+
+A **snapshot** lists what the agent can act on: the page's links, buttons, fields and other interactive elements, one per line, each with a short ref such as `@e3`. The agent can then click `@e3` or fill `@e5` instead of guessing a CSS selector or writing a script to find the field. Pass a CSS selector to snapshot only part of the page. Refs belong to the page as it was; after the page changes, the agent takes a new snapshot. Approved screenshots go to the selected model. Evaluation runs in the page, not the app; pages can see text you enter.
 
 Popups, downloads, JavaScript dialogs and device permissions are blocked. Local file navigation/uploads are blocked. Idle hidden sessions close after ten minutes. Requires a local desktop chat, not web/server/CLI or sandboxed execution.
 

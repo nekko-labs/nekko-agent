@@ -95,6 +95,21 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### Agent browser: snapshot and element refs (2026-10-18)
+Area: browser driver / agent context
+Result: mixed (half the bytes the model writes and no locating script; more to read unless scoped; no time effect)
+Conditions: same machine, build and fixture as the full-flow entry below, hidden-frame wake on, native driver. Three scripted strategies for locating the form, alternated sample by sample: `selectors` (evaluate a script listing controls, then CSS), `snapshot` (whole-page snapshot, then refs), `snapshot-scoped` (snapshot of `main`, then refs). 12 fresh processes, then 20 fresh-chat and 20 warm-session rounds per arm. Nearest-rank percentiles. Reply text excludes screenshot pixels; request is the JSON of the tool inputs.
+
+| Fresh chat, per flow | selectors | snapshot | snapshot-scoped |
+|---|---|---|---|
+| Tool calls / retries | 10 / 1 | 10 / 1 | 10 / 1 |
+| Reply text p50 | 6889 B | 11193 B | 6935 B |
+| Request p50 | 986 B | 462 B | 512 B |
+| Locate step p50 / p95 | 2.79 / 3.24 ms | 21.1 / 21.89 ms | 22.03 / 32.43 ms |
+| Whole flow p50 / p95 | 465.22 / 475.69 ms | 424.18 / 466 ms | 435.32 / 489.66 ms |
+
+Warm session, whole flow p50 / p95: 378.32 / 394.93, 357.1 / 399.45 and 348.48 / 414.72 ms. Why: a snapshot replaces a DOM-listing script the model would otherwise write, but a whole-page one lists every link (2,584 bytes once the form is there, against 559 for the evaluate); scoped to `main` it is 435 bytes. The snapshot takes about 20 ms against about 3, absorbed by the fixture's form API wait, so the flow-time differences are not an effect. Not measured: pages without ids or with custom controls, where refs should matter most; a live model choosing actions. Source: this PR, [report](../reports/agent-browser/snapshot-refs.md), [raw data](../reports/agent-browser/snapshot-refs.json).
+
 ### Agent browser: full-flow benchmark, startup phases, hidden-window frame wake (2026-10-18)
 Area: perf harness / browser driver
 Result: improvement (and a new measurement)

@@ -67,6 +67,29 @@ describe('Playwright page actions', () => {
     expect(page.evaluate).toHaveBeenCalledWith('answer()');
   });
 
+  it('snapshots interactive elements with refs, and says when there are none or no native driver', async () => {
+    const { page, asPage } = fakePage();
+    await expect(runPageAction(asPage, { action: 'snapshot' })).rejects.toThrow('native in-app browser');
+    const snapshot = vi.fn(async (scope?: string) => scope === '#empty' ? { tree: '(no interactive elements)', refs: 0 } : { tree: '- textbox "Email" [ref=e1]\n- button "Subscribe" [ref=e2]', refs: 2 });
+    Object.assign(page, { snapshot });
+    const out = await runPageAction(asPage, { action: 'snapshot' });
+    expect(out).toBe('Title\n- textbox "Email" [ref=e1]\n- button "Subscribe" [ref=e2]\nUse a ref such as @e1 as the selector for click, fill, type, press, wait or extract. Refs expire when the page changes.');
+    await runPageAction(asPage, { action: 'snapshot', selector: 'form' });
+    expect(snapshot).toHaveBeenLastCalledWith('form');
+    expect(await runPageAction(asPage, { action: 'snapshot', selector: '#empty' })).toContain('No interactive elements in #empty');
+    snapshot.mockResolvedValueOnce({ tree: 'x'.repeat(PAGE_TEXT_LIMIT + 50), refs: 900 });
+    const long = await runPageAction(asPage, { action: 'snapshot' });
+    expect(long).toContain('...(truncated; pass a selector');
+    expect(long.length).toBeLessThan(PAGE_TEXT_LIMIT + 300);
+  });
+
+  it('passes refs through as selectors', async () => {
+    const { page, asPage } = fakePage();
+    await runPageAction(asPage, { action: 'fill', selector: '@e1', value: 'a@b.c' });
+    await runPageAction(asPage, { action: 'click', selector: '@e2' });
+    expect(page.locator.mock.calls.map((c: unknown[]) => c[0])).toEqual(['@e1', '@e2']);
+  });
+
   it('caps evaluate output and summarizes logs by kind', () => {
     expect(formatEvaluated('x'.repeat(PAGE_TEXT_LIMIT + 10))).toContain('...(truncated)');
     expect(formatEvaluated(undefined)).toBe('undefined');

@@ -116,6 +116,13 @@ export async function runPageAction(page: Page, input: Record<string, unknown>, 
       const text = await page.locator(selector).first().innerText({ timeout: ACTION_TIMEOUT_MS });
       return text.slice(0, PAGE_TEXT_LIMIT);
     }
+    case 'snapshot': {
+      if (!page.snapshot) throw new Error('snapshot needs the native in-app browser.');
+      const { tree, refs } = await mark('snapshot', () => page.snapshot!(selector));
+      if (!refs) return `${await page.title()}\nNo interactive elements${selector ? ` in ${selector}` : ''}. Use inspect or extract for the text, or wait and take a new snapshot.`;
+      const body = tree.length > PAGE_TEXT_LIMIT ? `${tree.slice(0, PAGE_TEXT_LIMIT)}\n...(truncated; pass a selector to snapshot part of the page)` : tree;
+      return `${await page.title()}\n${body}\nUse a ref such as @e1 as the selector for click, fill, type, press, wait or extract. Refs expire when the page changes.`;
+    }
     case 'evaluate':
       // A string is evaluated as an expression in the page's main world. The
       // page is a sandboxed renderer with no Node or app access.
