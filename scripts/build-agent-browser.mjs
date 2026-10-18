@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, cpSync, rmSync, readFileSync, copyFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -18,7 +18,14 @@ if (!existsSync(upstream)) {
 }
 if (git(['rev-parse', 'HEAD'], upstream) !== pin.revision || git(['status', '--porcelain', '--untracked-files=all'], upstream)) throw new Error('Upstream checkout must be clean at the pinned revision');
 if (git(['remote', 'get-url', 'origin'], upstream).replace(/\.git$/, '') !== pin.repository.replace(/\.git$/, '')) throw new Error('Unexpected source remote');
-if (!existsSync(source)) git(['clone', '--no-hardlinks', upstream, source]);
+// A restored target-only cache can create the directory without a checkout.
+// Clone separately, then overlay source while preserving cached build products.
+if (!existsSync(join(source, '.git'))) {
+  const checkout = mkdtempSync(join(dirname(source), 'agent-browser-checkout-'));
+  git(['clone', '--no-hardlinks', upstream, checkout]);
+  cpSync(checkout, source, { recursive: true });
+  rmSync(checkout, { recursive: true, force: true });
+}
 if (git(['rev-parse', 'HEAD'], source) !== pin.revision) throw new Error('Unexpected build checkout revision');
 // Never reset a dirty checkout. A repeated build accepts only our exact maintained patch.
 const patch = join(vendor, 'stdio.patch');
