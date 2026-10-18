@@ -296,6 +296,10 @@ export const IpcChannels = {
   networkVisibilityStop: 'networkVisibility:stop',
 
   appInfo: 'app:info',
+  // The Claude policy nekkod enforces, and why a feature is off (claude-policy.ts).
+  claudePolicy: 'claude:policy',
+  claudeCapability: 'claude:capability',
+  claudePlanUsage: 'claude:planUsage',
   mcpStatus: 'mcp:status',
   mcpHypergate: 'mcp:hypergate',
   mcpHypergateConnect: 'mcp:hypergate:connect',
@@ -876,6 +880,12 @@ export interface NekkoApi {
 
   /** Running version + edition. */
   getAppInfo(): Promise<AppInfo>;
+  /** The Claude policy nekkod enforces (shipped table, signed override, dev preview). */
+  getClaudePolicy(): Promise<import('./claude-policy.js').ClaudePolicyStatus>;
+  /** One provider's row for a Claude capability, with the reason line when it is off. */
+  getClaudeCapability(providerId: string, capability: import('./claude-policy.js').ClaudeCapability): Promise<import('./claude-policy.js').ClaudeCapabilityStatus>;
+  /** Plan usage for a Claude provider: none today; example data in the dev-only preview. */
+  getClaudePlanUsage(providerId: string): Promise<import('./claude-policy.js').ClaudePlanUsageStatus>;
   /** Connect configured MCP servers and return their status + tools. */
   getMcpStatus(): Promise<import('./mcp.js').McpServerStatus[]>;
   /** Probe for a local Hypergate daemon (`hypergated`) and return its gateway info. */

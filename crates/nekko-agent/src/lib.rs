@@ -16,6 +16,7 @@
 //! the agent loop port will.
 
 pub mod claude;
+pub mod claude_policy;
 pub mod http;
 /// The JavaScript rules the providers follow, shared with the other ports.
 pub use nekko_js as js;

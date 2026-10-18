@@ -556,6 +556,12 @@ export interface SendOptions {
    * untrusted text.
    */
   noTools?: boolean;
+  /**
+   * Started by automation, not a person (a scheduled task, a workflow or goal
+   * step, an agent watch, auto-continue). A Claude Code turn needs the
+   * `unattended_runs` policy row for its auth (claude-policy.ts).
+   */
+  unattended?: boolean;
 }
 
 /**

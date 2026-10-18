@@ -442,6 +442,11 @@ async fn admit(
     let Some(provider) = provider.filter(|p| nekko_js::truthy(p.get("enabled"))) else {
         return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
+    // A scheduled task, workflow, goal step, watch or auto-continue on Claude
+    // Code needs `unattended_runs` for its auth (claude_policy.rs).
+    if let Err(refusal) = ctx.claude_policy.gate_turn(&provider, &opts) {
+        return ended(ctx, &session_id, refusal.message).await;
+    }
     let Some(mut session) = session else { return ended(ctx, &session_id, "Session not found.").await };
     if sandbox && let Some(refusal) = nekko_turn::variants::sandbox_admission_refusal(&session, &opts) {
         return ended(ctx, &session_id, refusal).await;
