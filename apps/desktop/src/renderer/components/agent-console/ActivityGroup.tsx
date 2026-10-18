@@ -6,7 +6,7 @@ import { ChatIcon, ThoughtIcon, ToolStepIcon } from '../../icons.js';
 import { Markdown } from '../Markdown.js';
 import type { Activity } from './transcript.js';
 import { stepKey } from './transcript.js';
-import { SubagentCue, SubagentModelChip, subagentSummary, SubagentHeadline } from './SubagentCue.js';
+import { SubagentCue, SubagentModelChip, subagentSummary, SubagentHeadline, SubagentOpenButton } from './SubagentCue.js';
 import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
 import { parseWatchCall, thenSummary } from '../../agentWatches.js';
 import { useRowState } from './rowState.js';
@@ -45,28 +45,31 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
         : 'Thought it through');
   return (
     <div className={`${streaming ? 'fade-in ' : ''}mt-1 font-mono text-[12px]`}>
-      <button
-        className="flex w-full items-center gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
-        {agents.length ? <SubagentCue /> : watchOnly ? <WatchIcon /> : <ToolStepIcon className="h-3 w-3 shrink-0 text-accent" />}
-        {streaming && <LeadDots />}
-        <span className="min-w-0 truncate font-medium text-ink-soft">{agents.length ? <SubagentHeadline call={agents[agents.length - 1].call} result={agents[agents.length - 1].result} /> : watchOnly ? watchCallHeadline(lastWatch.call, lastWatch.result) : summary}</span>
-        {!streaming && toolCount > 0 && agents.length === 0 && !watchOnly && (
-          <span className="min-w-0 truncate text-ink-faint">
-            · {Array.from(new Set(tools.map((t) => t.call.name))).join(', ')}
-          </span>
-        )}
-        {agents.length > 0 && <SubagentModelChip call={agents[agents.length - 1].call} />}
-        {agents.length > 0 && !(agents.length === 1 && items.length === 1) && <span className="min-w-0 truncate text-accent" title={agents.map(({ call }) => subagentSummary(call)).join(', ')}>· {agents.length} subagent{agents.length === 1 ? '' : 's'}</span>}
-        {watchOnly && <WatchClockChip call={lastWatch.call} result={lastWatch.result} />}
-        {!open && tools.map(({ call }) => {
-          const since = toolQuietSince(toolActivity, call.id);
-          return since === undefined ? null : <ToolProgressChip key={call.id} since={since} />;
-        })}
-      </button>
+      <div className="flex min-w-0 items-center gap-1">
+        <button
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
+          {agents.length ? <SubagentCue /> : watchOnly ? <WatchIcon /> : <ToolStepIcon className="h-3 w-3 shrink-0 text-accent" />}
+          {streaming && <LeadDots />}
+          <span className="min-w-0 truncate font-medium text-ink-soft">{agents.length ? <SubagentHeadline call={agents[agents.length - 1].call} result={agents[agents.length - 1].result} /> : watchOnly ? watchCallHeadline(lastWatch.call, lastWatch.result) : summary}</span>
+          {!streaming && toolCount > 0 && agents.length === 0 && !watchOnly && (
+            <span className="min-w-0 truncate text-ink-faint">
+              · {Array.from(new Set(tools.map((t) => t.call.name))).join(', ')}
+            </span>
+          )}
+          {agents.length > 0 && <SubagentModelChip call={agents[agents.length - 1].call} />}
+          {agents.length > 0 && !(agents.length === 1 && items.length === 1) && <span className="min-w-0 truncate text-accent" title={agents.map(({ call }) => subagentSummary(call)).join(', ')}>· {agents.length} subagent{agents.length === 1 ? '' : 's'}</span>}
+          {watchOnly && <WatchClockChip call={lastWatch.call} result={lastWatch.result} />}
+          {!open && tools.map(({ call }) => {
+            const since = toolQuietSince(toolActivity, call.id);
+            return since === undefined ? null : <ToolProgressChip key={call.id} since={since} />;
+          })}
+        </button>
+        {agents.length === 1 && <SubagentOpenButton call={agents[0].call} />}
+      </div>
       {!open && watchOnly && <WatchThen text={thenSummary(parseWatchCall(lastWatch.call).prompt)} className="pl-[38px]" />}
       {open && (
         <ol className={`mt-0.5 ${agents.length || watchOnly ? '' : 'ml-[7px] border-l border-line pl-2.5'}`}>
@@ -122,21 +125,24 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
 
   return (
     <li className="list-none">
-      <button
-        className="flex w-full items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        <span className="w-4 shrink-0 text-right text-[10px] tabular-nums opacity-60">{index}</span>
-        <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
-        <span className="self-center">{icon}</span>
-        {live && <LeadDots />}
-        {label && <span className={`shrink-0 font-medium ${live ? 'text-accent' : 'text-ink-soft'}`}>{label}</span>}
-        {headline && <span className="min-w-0 truncate" title={headline}>{kind === 'agent' && item.kind === 'tool' ? <SubagentHeadline call={item.call} result={item.result} /> : kind === 'watch' ? headline : `· ${headline}`}</span>}
-        {kind === 'agent' && item.kind === 'tool' && <span className="self-center"><SubagentModelChip call={item.call} /></span>}
-        {kind === 'watch' && item.kind === 'tool' && <span className="self-center"><WatchClockChip call={item.call} result={item.result} /></span>}
-        {quietSince !== undefined && <ToolProgressChip since={quietSince} />}
-      </button>
+      <div className="flex min-w-0 items-center gap-1">
+        <button
+          className="flex min-w-0 flex-1 items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          <span className="w-4 shrink-0 text-right text-[10px] tabular-nums opacity-60">{index}</span>
+          <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
+          <span className="self-center">{icon}</span>
+          {live && <LeadDots />}
+          {label && <span className={`shrink-0 font-medium ${live ? 'text-accent' : 'text-ink-soft'}`}>{label}</span>}
+          {headline && <span className="min-w-0 truncate" title={headline}>{kind === 'agent' && item.kind === 'tool' ? <SubagentHeadline call={item.call} result={item.result} /> : kind === 'watch' ? headline : `· ${headline}`}</span>}
+          {kind === 'agent' && item.kind === 'tool' && <span className="self-center"><SubagentModelChip call={item.call} /></span>}
+          {kind === 'watch' && item.kind === 'tool' && <span className="self-center"><WatchClockChip call={item.call} result={item.result} /></span>}
+          {quietSince !== undefined && <ToolProgressChip since={quietSince} />}
+        </button>
+        {kind === 'agent' && item.kind === 'tool' && <SubagentOpenButton call={item.call} />}
+      </div>
       {then && <WatchThen text={then} className="pl-[60px]" />}
       {open && (
         kind === 'agent' && item.kind === 'tool' ? (

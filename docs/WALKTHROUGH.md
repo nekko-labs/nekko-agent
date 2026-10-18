@@ -50,8 +50,10 @@ model servers are first-class, not an afterthought.
 - **Auto-discover local** probes `localhost:11434` (Ollama), `:1234` (LM Studio),
   and `:8000` (vLLM). Anything running is added with one click.
 - Connected local servers and cloud providers are grouped, and the groups sit side
-  by side when the window has room. A group keeps its cards together; only its
-  leftover cards share a line with another group, otherwise they wrap to the next line.
+  by side when the window has room. The provider groups use the full window width,
+  and each sits in a container with a faint border and tint in its colour (green
+  for local, blue for cloud). A group is never split: when it has more cards than
+  fit on a line, they wrap inside its own container.
 - **Add provider** lets you configure a server manually, or add a cloud provider -
   Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint (just paste the
   base URL + key).
@@ -61,6 +63,8 @@ model servers are first-class, not an afterthought.
   down per model and per provider.
 
 > Tip: set a default provider + model in Settings so new chats start ready to go.
+
+> Can't find a setting? Click the search icon at the right of the **Appearance** heading in Settings and type a word such as "prompt". A second after you stop typing (or straight away when you press Enter) the page scrolls to the first match and highlights it. Use the up/down arrows (or the arrow keys) to step through the rest, and the X or Esc to close the search.
 
 ### Example: connect an LM Studio server
 
@@ -85,14 +89,18 @@ Choosing a model in a chat or in **Add window** remembers that model and its pro
 
 A successfully changed **Permissions** mode (Ask, Guardrails or YOLO) becomes the default for new chats. **Effort** applies across chats, and the saved **Execution** mode is reused through the existing setup flow. **Incognito** and **Offline** are different: they apply only to the chat where you enable them and are never turned on globally for new windows.
 
-The same **Mode** menu has a third column, **Work mode**: *Default*, *Better review*, *Design* and *Best output*. Picking one changes how the agent works in that chat and brings the matching skills with it (for example Better review applies `/review`, `/security-review` and `/review-council`), so you don't have to remember or type them; hover a work mode to see which skills it applies. The button then reads, for example, *Worktree - YOLO - Better review*. A work mode applies to that chat only, costs more tokens and time than Default, and never changes Permissions, tools, Offline or Incognito.
+The **Mode** button opens the Mode panel. Saved modes run down its left side; the settings sit in three columns: **Environment** (run on your machine or in a Sandbox, and whether edits go to a separate worktree), **Model** (effort), **Privacy** (Incognito, internet access, folders, approvals, tools and MCP servers) and **Approach** (skills). Every setting has a line underneath saying what it does. **Tools**, **MCP servers** and **Skills** open a list out the panel's side.
+
+Click a saved mode to apply all of its settings to the chat at once. Change anything afterwards and the panel offers **Revert** or **Update** for that mode, or **Save mode** to keep the combination under a new name. Click the star beside a mode to start every new chat in it; click it again to go back to your last-used defaults. You start with four modes: *Everyday*, *Deep work*, *Private* and *Untrusted repo*. A mode never includes your folders, and applying one that runs in a Sandbox opens the Sandbox setup first.
+
+Under **Approach**, **Skills** holds the work modes: *Default*, *Better review*, *Design* and *Best output*. Picking one changes how the agent works in that chat and brings the matching skills with it (for example Better review applies `/review`, `/security-review` and `/review-council`), so you don't have to remember or type them. A work mode applies to that chat only, costs more tokens and time than Default, and never changes Permissions, tools, Offline or Incognito. Rows marked *Coming soon* (model router, connectors, system prompt, memory) are not available yet.
 
 
 A successfully completed reply should not retain a stale **Reply interrupted** warning. When the final transcript records successful completion, that terminal record takes precedence over missing older tool bookkeeping. Explicit interruption markers, provider failures, and intentional stops remain visible; the app does not rewrite your transcript to dismiss them.
 
 The left navigation panel curves into its tails about 10px beyond the icon rows, with matching curves at both ends. Opening a wall window reveals the incoming window and slides existing windows aside, without a separate corner-resize animation. Reduced motion disables the wall transitions.
 
-On the Agents wall, the agent, image, and terminal icons with small bottom-right **+** indicators create new windows. A subtle divider separates them from the Focused, Dynamic, and Grid view modes. Inside a window header, the larger accent-colored **Focus** icon sits immediately beside Minimize and opens that window in Focused view. Minimize removes only the wall window, keeping the chat in the Agent panel. The left navigation keeps its position and tint, with broad curved wings above and below the destinations.
+On the Agents wall, the agent, image, and terminal icons with small bottom-right **+** indicators create new windows. A subtle divider separates them from the **Focused** and **Dynamic** view modes. Dynamic uses a lightning bolt icon. For an even **Grid**, open **Settings > Command Center**, choose Grid under Wall layout, and set Grid rows and Grid columns (1 to 6 each). These dimensions are remembered when switching layouts. The existing **Ctrl/Cmd+Shift+1**, **2**, and **3** shortcuts still select Focused, Dynamic, and Grid respectively; saved Grid layouts reopen unchanged. In Focused view, **New agent** fades straight into the new chat's prompt; once you send your first message, the composer expands into the full chat. The Focused window's border is a quiet tint rather than a bright outline. The right-hand dock is headed **Monitors**. Inside a window header, the larger accent-colored **Focus** icon sits immediately beside Minimize and opens that window in Focused view. Minimize removes only the wall window, keeping the chat in the Agent panel. The left navigation keeps its position and tint, with broad curved wings above and below the destinations.
 
 The **Chat** tab is the heart of the app. There are no separate "chat", "cowork",
 and "code" modes, it's one thread. Ask a question, or hand off a task and let
@@ -148,9 +156,13 @@ Utilization shows a Claude subscription account once when provider entries share
 
 These 2026-10-13 changes are implemented and unit/fixture interaction tested. Matching captures exist, but image/motion inspection remains pending; earlier walkthrough pictures are not visual proof of this batch.
 
+### Find a chat
+
+The magnifier beside **+** at the top of the Agents panel opens a chat finder. It starts with your latest chats, newest first, each with how long ago it was used (days up to 30, then months). Type to filter by title, first prompt or latest reply; the search runs once you pause typing, or straight away with Enter or the Nekko button. Click a chat (or press Enter) to open it. **X** or Esc closes the finder. Incognito chats are never listed.
+
 ### Complete, minimize, and delete
 
-Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts target the window you are using, not every chat. The **X** in a chat window's top-right corner (and on its card) is **Complete**: it closes the window and keeps the chat under its group's **Show completed** control in the left Agent panel for 60 days, where you can read or restore it. It never deletes; **Delete** is a separate trash action. Agents you have not touched for a month are completed for you the same way; change or turn this off under Settings → **Complete idle agents after** (1 week, 2 weeks, 1 month, 3 months or Never). Pinned, running, waiting and sub-agent chats are never completed automatically. **Minimize** removes only the board window: the item remains in the Agent panel, and a terminal keeps running. Terminals do not have completed history; **Close** ends their process.
+Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts target the window you are using, not every chat. The **X** in a chat window's top-right corner (and on its card) is **Complete**: it closes the window and keeps the chat under its group's **Show completed** control in the left Agent panel for 60 days, where you can read or restore it. Right-click a completed chat there for **Restore chat** or **Delete forever** without opening it. Completing never deletes; **Delete** is a separate trash action. Agents you have not touched for a month are completed for you the same way; change or turn this off under Settings → **Complete idle agents after** (1 week, 2 weeks, 1 month, 3 months or Never). Pinned, running, waiting and sub-agent chats are never completed automatically. **Minimize** removes only the board window: the item remains in the Agent panel, and a terminal keeps running. Terminals do not have completed history; **Close** ends their process.
 
 Settings has **Show tips**, enabled by default. Your first successful completion highlights Show completed with a dismissible explanation. On a narrow screen, the existing agent list drawer opens automatically to reveal Show completed without taking focus. If you close it, the highlighted Agents button lets you return to the destination. Opening or closing the drawer does not dismiss the tip. Turning tips off does not disable deletion warnings. The in-app delete dialog offers **Skip future deletion confirmations**; only choose it if you want permanent deletions without another prompt. Re-enable **Confirm deletions** in Settings at any time. General chats no longer display a redundant missing-project label.
 
@@ -377,7 +389,7 @@ Drag a project group header in the agent panel onto another group to place it be
 
 Changes is the leftmost header control. When the agent edits files it uses a muted background without an outer glow and shows added/deleted line totals plus the changed-file count. Click it to review the diff. Zen focuses that window; a small divider separates this action from the Files, Browser and Logs panel buttons. The activity icon is at the top left before the numbered agent icon.
 
-**Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
+**Agent Monitor** opens the plan, sub-agents and queued prompts rail. Its control-panel button has a visible label and shows only while the rail is minimized; the conversation starts below it so it never covers your first message. With the rail open, the minimize button at the far right of its header puts it away again. The old header context button is removed; use Ctrl/Cmd+\ or the command palette's Toggle context panel command instead.
 
 ## Reports and artifacts in chat
 
@@ -390,3 +402,7 @@ The desktop navigation rail stays 52px wide at rest. Hover a destination or Tab 
 The **Artifacts** tab on the left rail collects what agents made across all your chats: documents, web pages, designs, diagrams, images, data and office files, grouped by kind. Pick one to preview it, **Open file** to hand it to its usual app, or **Open chat** to see the chat it came from on the Agents wall in Focused view. Source code the agent edits is not listed.
 
 At the top of **Agent Monitor**, expand **Artifacts** to see the session’s linked documents. It starts collapsed and always displays a count, including 0. A newly discovered artifact path expands just this section and highlights it with an accent border/background and a visible, screen-reader-announced **New artifact** status for ten seconds. Another new path restarts that deadline, including when one path replaces another without changing the count. The whole monitor never opens automatically. Initial history, switching chats and history loaded after a missing session do not trigger the highlight. Repeated links and previously seen paths do not retrigger it. You can collapse the section during the highlight; it stays collapsed until another new path arrives. When the highlight expires, the section keeps its current open or closed state. Non-image documents are not read until you open them; image cards load automatically when rendered. Host previews remain unavailable in Sandbox.
+
+### Plan step status icons
+
+In Agent Monitor, each active plan step has a static **Working** glyph and tooltip. Multiple steps can be working at once, even between streamed replies. If a reply was explicitly interrupted and no turn is running, active entries show pause bars labeled **Paused** until work resumes. Completed steps show a check, pending steps a hollow circle, and skipped steps a slashed circle with a struck-through title.

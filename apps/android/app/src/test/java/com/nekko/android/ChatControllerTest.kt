@@ -120,6 +120,23 @@ class ChatControllerTest {
     }
 
     @Test
+    fun `photos go with the prompt and the bubble shows them`() = runTest {
+        val caller = FakeCaller { c -> if (c.channel == Channels.CHAT_SEND) CompletableDeferred<JsonElement>().await() else JsonNull }
+        val chat = controller(caller)
+        val img = "data:image/jpeg;base64,AAAA"
+
+        chat.send("what is this", images = listOf(img, img))
+        runCurrent()
+
+        assertEquals(listOf(img, img), (chat.state.value.turn.blocks.single() as Block.User).thumbs)
+        val opts = caller.calls.single().args.single().jsonObject
+        assertEquals(listOf(img, img), opts["images"]!!.jsonArray.map { it.jsonPrimitive.content })
+
+        chat.send("", images = listOf(img))
+        assertEquals("""{"text":"","images":["$img"]}""", caller.calls.last().args[1].toString())
+    }
+
+    @Test
     fun `a skill sent while running is queued as a skill`() = runTest {
         val caller = FakeCaller { c -> if (c.channel == Channels.CHAT_SEND) CompletableDeferred<JsonElement>().await() else JsonNull }
         val chat = controller(caller)

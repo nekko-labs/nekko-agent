@@ -2,85 +2,74 @@ export interface RailGeometryInput {
   railHeight: number;
   groupTop: number;
   groupHeight: number;
-  /** Width of the expanded panel, tail included. */
+  /** Width of the expanded rail. */
   bodyWidth?: number;
-  /** Width of the collapsed (icon-only) panel. */
+  /** Width of the rail beside the icon rows at rest. */
   restWidth?: number;
 }
 
-type Pt = [number, number];
-
-/** Corner radius for every bend of the outline. */
-export const RAIL_CORNER = 16;
-/** Clear space between the icon rows and the start of either shoulder. */
+/** Width of the hairline the rail starts and ends as. */
+export const RAIL_TIP = 3;
+/** Gap between the rail's top (or bottom) and the hairline's end. */
+export const RAIL_TIP_INSET = 4;
+/** Clear space between the icon rows and the end of each swoop. */
 export const RAIL_ROW_CLEARANCE = 10;
+/** Corner radius of the open column. */
+export const RAIL_OPEN_RADIUS = 20;
+/** Shortest the lower swoop may be; it otherwise matches the upper one. */
+export const RAIL_MIN_LOWER_SWOOP = 120;
+/** How long each swoop stays thin before it swells (0.5 = a plain S). */
+const SWOOP = 0.62;
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
+const finite = (n: number, fallback: number) => (Number.isFinite(n) ? n : fallback);
 
 /**
- * One outline as an SVG path: each tail ends in a concave curve that sweeps
- * into x=0, and every bend between is rounded. Rest and open outlines share
- * the same command sequence, so CSS can interpolate `d` between them.
+ * One closed outline against the wall (x = 0): a rounded end at the top,
+ * a swoop from `tip` out to `body`, a straight run beside the rows, a
+ * matching swoop back to `tip`, a hairline on down, and a rounded end.
+ * Rest and open use the same commands, so CSS can interpolate `d`.
  */
-function outline(tip: number, mid: Pt[], bottom: number, radius: number): string {
-  const upper = mid;
-  const lower = [...mid].reverse().map(([x, y]): Pt => [x, bottom + tip - y]);
-  const first = upper[0];
-  const last = lower[lower.length - 1];
-  const cmd: string[] = [`M0,${r1(tip)}`];
-  // Concave tip: bows toward the left edge, so the tail flares into the wall.
-  // The concave sweep stops short of the far edge, which then rounds down.
-  const er = Math.min(radius, first[0] / 2);
-  cmd.push(`Q0,${r1(first[1])} ${r1(first[0] - er)},${r1(first[1])}`);
-  cmd.push(`Q${r1(first[0])},${r1(first[1])} ${r1(first[0])},${r1(first[1] + er)}`);
-  const corners = [...upper, ...lower];
-  for (let i = 1; i < corners.length - 1; i++) {
-    const [px, py] = corners[i - 1];
-    const [x, y] = corners[i];
-    const [nx, ny] = corners[i + 1];
-    const inLen = Math.hypot(x - px, y - py);
-    const outLen = Math.hypot(nx - x, ny - y);
-    const r = Math.min(radius, inLen / 2, outLen / 2);
-    const a: Pt = inLen ? [x - ((x - px) / inLen) * r, y - ((y - py) / inLen) * r] : [x, y];
-    const b: Pt = outLen ? [x + ((nx - x) / outLen) * r, y + ((ny - y) / outLen) * r] : [x, y];
-    cmd.push(`L${r1(a[0])},${r1(a[1])}`, `Q${r1(x)},${r1(y)} ${r1(b[0])},${r1(b[1])}`);
-  }
-  cmd.push(`L${r1(last[0])},${r1(last[1] - er)}`);
-  cmd.push(`Q${r1(last[0])},${r1(last[1])} ${r1(last[0] - er)},${r1(last[1])}`);
-  cmd.push(`Q0,${r1(last[1])} 0,${r1(bottom)}`);
-  cmd.push('Z');
-  return cmd.join(' ');
+function outline(y0: number, y1: number, swellTop: number, swellBottom: number, tip: number, body: number, corner: number): string {
+  const a = y0 + corner;
+  const b = y1 - corner;
+  const upLen = Math.max(0, swellTop - a);
+  // The rows sit high, so the lower swoop mirrors the upper one, then a hairline runs on.
+  const downLen = Math.min(Math.max(0, b - swellBottom), Math.max(upLen, RAIL_MIN_LOWER_SWOOP));
+  const up = upLen * SWOOP;
+  const down = downLen * SWOOP;
+  const tail = swellBottom + downLen;
+  return [
+    `M0,${r1(y0)}`,
+    `L${r1(tip - corner)},${r1(y0)}`,
+    `Q${r1(tip)},${r1(y0)} ${r1(tip)},${r1(a)}`,
+    `C${r1(tip)},${r1(a + up)} ${r1(body)},${r1(swellTop - up)} ${r1(body)},${r1(swellTop)}`,
+    `L${r1(body)},${r1(swellBottom)}`,
+    `C${r1(body)},${r1(swellBottom + down)} ${r1(tip)},${r1(tail - down)} ${r1(tip)},${r1(tail)}`,
+    `L${r1(tip)},${r1(b)}`,
+    `Q${r1(tip)},${r1(y1)} ${r1(tip - corner)},${r1(y1)}`,
+    `L0,${r1(y1)}`,
+    'Z',
+  ].join(' ');
 }
 
-/** Coordinates are rail-local. Only the decoration grows; the menu never moves.
- * Both shoulders start beyond the icon rows and narrow into matching tails.
- * The menu stays fixed while the expanded body and its tails widen together. */
+/** Coordinates are rail-local; the menu never moves, only the outline does.
+ * At rest the outline is a hairline near the top of the rail that swoops out
+ * to the icon column and back. Open, every point moves to the same x, so the
+ * whole rail becomes one even column. */
 export function railGeometry({ railHeight, groupTop, groupHeight, bodyWidth = 198, restWidth = 52 }: RailGeometryInput) {
-  const height = Math.max(0, Number.isFinite(railHeight) ? railHeight : 0);
-  const top = Math.min(height, Math.max(0, Number.isFinite(groupTop) ? groupTop : 0));
-  const bottom = Math.min(height, top + Math.max(0, Number.isFinite(groupHeight) ? groupHeight : 0));
-  const width = Math.max(0, Number.isFinite(bodyWidth) ? bodyWidth : 198);
-  const rest = Math.min(width, Math.max(0, Number.isFinite(restWidth) ? restWidth : 52));
-  const extension = Math.max(0, Math.min(top, height - bottom) - 2);
-  // Short windows compress the vertical segments without moving the menu.
-  const scale = Math.min(1, extension / 240);
-  const clearance = Math.min(RAIL_ROW_CLEARANCE, extension / 4);
-  const shoulder = 56 * scale;
-  const concave = 28 * scale;
-  const tipY = top - extension;
-  const endY = top + bottom - tipY;
-  // Mirror the body-to-tail shoulder above and below the destination rows.
-  const station = (w: number, b: number): Pt[] => [
-    [w, tipY + concave],
-    [w, top - clearance - shoulder],
-    [b, top - clearance],
-    [b, top + (bottom - top) / 2],
-  ];
-  const restPts = station(rest / 2, rest);
-  const openPts = station(rest, width);
-  const radius = RAIL_CORNER;
-  const restPath = outline(tipY, restPts, endY, radius);
-  const openPath = outline(tipY, openPts, endY, radius);
-  const mirror = (pts: Pt[]) => [...pts, ...[...pts].reverse().map(([x, y]): Pt => [x, endY + tipY - y])];
-  return { width, height, top, bottom, extension, rest: mirror(restPts), open: mirror(openPts), restPath, openPath };
+  const height = Math.max(0, finite(railHeight, 0));
+  const top = Math.min(height, Math.max(0, finite(groupTop, 0)));
+  const bottom = Math.min(height, top + Math.max(0, finite(groupHeight, 0)));
+  const width = Math.max(0, finite(bodyWidth, 198));
+  const rest = Math.min(width, Math.max(RAIL_TIP, finite(restWidth, 52)));
+  const y0 = Math.min(RAIL_TIP_INSET, top);
+  const y1 = Math.max(bottom, height - RAIL_TIP_INSET);
+  const swellTop = Math.max(y0, top - RAIL_ROW_CLEARANCE);
+  const swellBottom = Math.min(y1, bottom + RAIL_ROW_CLEARANCE);
+  const radius = Math.max(0, Math.min(RAIL_OPEN_RADIUS, (swellTop - y0) / 2, (y1 - swellBottom) / 2, width / 2));
+  const tipCorner = Math.min(RAIL_TIP, radius);
+  const restPath = outline(y0, y1, swellTop, swellBottom, RAIL_TIP, rest, tipCorner);
+  const openPath = outline(y0, y1, swellTop, swellBottom, width, width, radius);
+  return { width, height, top, bottom, y0, y1, swellTop, swellBottom, restPath, openPath };
 }

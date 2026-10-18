@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
@@ -21,6 +22,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
@@ -76,7 +78,9 @@ class LiveRelayTest {
             // The keyboard covers the Pair button on a small screen; a user closes it first.
             hideKeyboard(scenario)
             shot("1-pair")
-            tap(hasText("Pair"))
+            // The button moves while the keyboard slides away (imePadding), so a
+            // touch at its old centre can miss; click it through its semantics.
+            click(hasText("Pair"))
 
             waitFor(hasText("New chat"), 30_000)
             shot("2-chats")
@@ -89,6 +93,12 @@ class LiveRelayTest {
             send("Say hello")
             waitFor(hasText("Hello from your computer."), 30_000)
             shot("4-reply")
+
+            // A Markdown reply: heading, lists, a code block with its Copy button, a link.
+            send("show me markdown")
+            waitFor(hasContentDescription("Copy code"), 30_000)
+            waitFor(hasText("Build steps"))
+            shot("4b-markdown")
 
             send("please approve a cleanup")
             waitFor(hasText("Deny"), 30_000)
@@ -147,8 +157,23 @@ class LiveRelayTest {
         compose.onAllNodes(matcher, useUnmergedTree = true).onFirst().performClick()
     }
 
+    private fun click(matcher: SemanticsMatcher) {
+        // The merged node: a Button carries its label's text and the click.
+        val button = matcher and hasClickAction()
+        compose.waitUntil(10_000) { compose.onAllNodes(button).fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodes(button).onFirst().performSemanticsAction(SemanticsActions.OnClick)
+    }
+
     private fun hideKeyboard(scenario: ActivityScenario<MainActivity>) {
         scenario.onActivity { a -> WindowCompat.getInsetsController(a.window, a.window.decorView).hide(WindowInsetsCompat.Type.ime()) }
+        // Wait for the keyboard to be gone, not just asked to go.
+        compose.waitUntil(5_000) {
+            var open = true
+            scenario.onActivity { a ->
+                open = ViewCompat.getRootWindowInsets(a.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+            }
+            !open
+        }
         compose.waitForIdle()
     }
 

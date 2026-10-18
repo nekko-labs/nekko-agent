@@ -1,10 +1,18 @@
 name: Auto-merge
 
-# Turns on GitHub's native auto-merge for every non-draft PR, so it merges
-# itself once required checks pass, then makes sure the merge actually releases.
+# Turns on GitHub's native auto-merge for every ready PR into main. With the
+# merge queue required on main, that adds the PR to the queue once its PR-tier
+# checks pass; the queue runs the queue tier and merges. Then it makes sure the
+# merge actually releases.
 #
-# Requires "Allow auto-merge" enabled in repo settings and required status
-# checks on the target branch (otherwise a mergeable PR merges immediately).
+# Only PRs based on main: a stacked layer targets the branch below it, and
+# auto-merging it would fold it into that branch rather than queue it. Stacks
+# are queued with `gh stack merge`.
+#
+# No merge method on purpose. With a method (`--squash`), `gh pr merge --auto`
+# arms GitHub's classic auto-merge, which waits outside the queue forever on a
+# branch that requires one (#751 and #755 sat green and never queued). Without
+# one, gh enqueues the PR, and the queue's own setting (squash) merges it.
 #
 # Why this also dispatches version-release: a merge performed with
 # GITHUB_TOKEN never starts a workflow run, so the `push` trigger on
@@ -30,17 +38,66 @@ permissions:
 
 jobs:
   auto-merge:
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.base.ref == 'main' }}
     runs-on: ubuntu-latest
-    # Long enough to outlast CI on a slow day, short enough that a PR left open
-    # for review does not hold a runner all afternoon.
-    timeout-minutes: 35
+    # Long enough to outlast the PR tier plus a queue run on a slow day, short
+    # enough that a PR left open for review does not hold a runner all afternoon.
+    timeout-minutes: 45
     steps:
-      - name: Enable auto-merge (squash)
-        run: gh pr merge --auto --squash "$PR_URL"
+      - name: Queue the PR
+        run: gh pr merge --auto "$PR_URL"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
+
+      # Armed on `opened`, before any check has run, `--auto` on a queue-required
+      # branch records an auto-merge request that GitHub does not always turn
+      # into a queue entry when `gate` goes green (#756 sat 25 minutes like
+      # that). So wait for `gate` here and enqueue explicitly once it passes;
+      # an enqueue of a PR already in the queue is a no-op.
+      #
+      # The enqueue uses the repo's GitHub App, not GITHUB_TOKEN: a merge group
+      # created by GITHUB_TOKEN starts no `merge_group` workflow runs (the same
+      # recursion guard as bot pushes), so `gate` never reports and the entry
+      # times out (#756's first group had zero runs). The App is installed only
+      # on this repository (see runtime-updates.yml).
+      - name: Create repository-scoped App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.RUNTIME_UPDATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RUNTIME_UPDATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Enqueue once gate passes
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_ID: ${{ github.event.pull_request.node_id }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          for _ in $(seq 1 60); do
+            pr=$(gh pr view "$PR_URL" --json state,isDraft,headRefOid,statusCheckRollup)
+            state=$(jq -r .state <<<"$pr")
+            [ "$state" = OPEN ] || { echo "PR is $state."; exit 0; }
+            if [ "$(jq -r .isDraft <<<"$pr")" = true ]; then echo 'Back in draft; not queueing.'; exit 0; fi
+            gate=$(jq -r '[.statusCheckRollup[] | select(.name == "gate")] | last | .conclusion // ""' <<<"$pr")
+            case "$gate" in
+              SUCCESS)
+                head=$(jq -r .headRefOid <<<"$pr")
+                gh api graphql -f query='mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{state position}}}' \
+                  -f id="$PR_ID" -f head="$head" || echo '::warning::Enqueue failed; auto-merge stays armed.'
+                exit 0
+                ;;
+              FAILURE|CANCELLED|TIMED_OUT)
+                echo "gate is $gate; the author re-queues after a fix (push re-runs gate, then gh pr merge --auto)."
+                exit 0
+                ;;
+            esac
+            sleep 20
+          done
+          echo '::warning::gate did not finish within 20 minutes; auto-merge stays armed.'
 
       # Dispatched for every merge, not just version bumps: version-release is
       # idempotent (it stops when the version is already tagged), so a merge
@@ -48,7 +105,7 @@ jobs:
       # does releases within seconds instead of waiting for the next tick.
       - name: Release the merge
         run: |
-          for _ in $(seq 1 90); do
+          for _ in $(seq 1 120); do
             state=$(gh pr view "$PR_URL" --json state -q .state 2>/dev/null || echo UNKNOWN)
             case "$state" in
               MERGED)
@@ -66,6 +123,9 @@ jobs:
                 done
 
                 gh workflow run version-release.yml --repo "$GH_REPO" --ref main
+                # No CI dispatch here: the merge queue tested this exact group on
+                # top of main before merging it, and the 6-hourly full run covers
+                # macOS (ci.yml).
                 echo "Merged. Dispatched version-release for $PR_URL"
                 exit 0
                 ;;
@@ -76,7 +136,7 @@ jobs:
             esac
             sleep 20
           done
-          echo "::warning::$PR_URL had not merged after 30 minutes, so no release was dispatched. The */15 schedule on version-release.yml remains the backstop."
+          echo "::warning::$PR_URL had not merged after 40 minutes, so no release was dispatched. The */15 schedule on version-release.yml remains the backstop."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}

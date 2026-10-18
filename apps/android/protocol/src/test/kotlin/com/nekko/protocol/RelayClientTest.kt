@@ -95,7 +95,7 @@ class RelayClientTest {
 
     private fun CoroutineScope.launchSoon(block: () -> Unit) = async { delay(5); block() }
 
-    private fun client(relay: FakeRelay, pair: String? = null, id: String = "dev-1") = RelayClient(
+    private fun client(relay: FakeRelay, pair: String? = null, id: String = "dev-1", transport: WsTransport = relay) = RelayClient(
         RelayConfig(
             relayUrl = "wss://relay.test/", room = "abcd1234", key = "k&ey", keyBytes = key,
             deviceId = id, deviceName = "Pixel", pairCode = pair,
@@ -103,7 +103,7 @@ class RelayClientTest {
             // waits for these to expire, so they only bound how long a real failure takes.
             handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
         ),
-        relay, scope,
+        transport, scope,
     )
 
     private suspend fun RelayClient.await(state: RelayState) = withTimeout(10_000) { status.first { it.state == state } }
@@ -141,6 +141,28 @@ class RelayClientTest {
         assertEquals("ok:sessions:summaries", r.await().jsonPrimitive.content)
         assertEquals(1, relay.requests.size)
         assertEquals(0, relay.requests.single()["args"]!!.jsonArray.size)
+        c.close()
+    }
+
+    @Test fun `a socket that opens before open() returns still says hello`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        // Like OkHttp on a fast network: onOpen on another thread while open() is still returning.
+        val early = object : WsTransport {
+            override fun open(url: String, listener: WsListener): WsConnection {
+                val c = relay.open(url, object : WsListener {
+                    override fun onOpen() {}
+                    override fun onMessage(text: String) = listener.onMessage(text)
+                    override fun onClosed(code: Int, reason: String) = listener.onClosed(code, reason)
+                })
+                Thread { listener.onOpen() }.start()
+                Thread.sleep(50) // the callback is already waiting when open() returns
+                return c
+            }
+        }
+        val c = client(relay, transport = early)
+        c.connect()
+        assertEquals("ok:app:info", c.call(Channels.APP_INFO).jsonPrimitive.content)
+        assertEquals(1, relay.hellos.size)
         c.close()
     }
 

@@ -579,9 +579,10 @@ async function measureMemory({ appUrl, mock, api, ids }) {
 
   // ---- GPU layers: every visible wall window working at once.
   await cdp.send('Emulation.setDeviceMetricsOverride', { ...CFG.viewport, deviceScaleFactor: CFG.memory.scale, mobile: false });
-  // Ctrl+Shift+3 is the 3 x 2 Grid; the Grid button itself opens a size picker.
+  // Ctrl+Shift+3 is the 3 x 2 Grid. Grid has no toolbar button (it lives in
+  // Settings since #741), so wait on the wall's own layout attribute.
   await cdp.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit3', key: '#', ctrlKey: true, shiftKey: true, bubbles: true }))`);
-  await app.waitFor(`[...document.querySelectorAll('.wall-layout-segments button')].some(b => b.textContent.trim() === 'Grid' && b.getAttribute('aria-pressed') === 'true')`, 'the Grid wall layout', 5000);
+  await app.waitFor(`document.querySelector('[data-wall-layout]')?.dataset.wallLayout === 'fixed'`, 'the Grid wall layout', 5000);
   const working = ids.slice(0, CFG.memory.working);
   const before = mock.state.streamsStarted;
   for (const id of working) {
@@ -737,7 +738,7 @@ async function main() {
   cleanups.push(() => rmSync(dataDir, { recursive: true, force: true }));
   log(`scratch data dir ${dataDir}`);
 
-  const server = spawn(process.execPath, [join(APP_ROOT, 'apps/server/dist/index.js')], {
+  const server = spawn(process.execPath, [join(APP_ROOT, 'apps/web-app-server/dist/index.js')], {
     cwd: APP_ROOT,
     env: { ...process.env, NEKKO_DATA_DIR: dataDir, NEKKO_PORT: String(CFG.appPort), NEKKO_HOST: '127.0.0.1' },
     stdio: ['ignore', 'pipe', 'pipe'],

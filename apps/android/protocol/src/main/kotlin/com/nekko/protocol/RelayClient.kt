@@ -22,6 +22,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.net.URLEncoder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -238,10 +240,16 @@ class RelayClient(
         }
         setStatus(RelayStatus(RelayState.CONNECTING))
         lateinit var self: WsConnection
+        // The transport may call back (onOpen on its own thread) before open() has
+        // returned. Without this wait the socket wasn't current yet, the HELLO was
+        // skipped, and the call failed after the handshake timeout.
+        // Bounded, so a transport that calls back inside open() on the same thread can't hang.
+        val opened = CountDownLatch(1)
+        fun ready() = opened.await(OPEN_WAIT_MS, TimeUnit.MILLISECONDS)
         val listener = object : WsListener {
-            override fun onOpen() { if (isCurrent(self)) hello() }
-            override fun onMessage(text: String) { if (isCurrent(self)) onRaw(text) }
-            override fun onClosed(code: Int, reason: String) = onSocketClosed(self, code, reason)
+            override fun onOpen() { if (ready() && isCurrent(self)) hello() }
+            override fun onMessage(text: String) { if (ready() && isCurrent(self)) onRaw(text) }
+            override fun onClosed(code: Int, reason: String) { if (ready()) onSocketClosed(self, code, reason) }
         }
         val c = try {
             transport.open(url, listener)
@@ -250,9 +258,13 @@ class RelayClient(
             return
         }
         self = c
-        synchronized(lock) {
-            if (stopped) { runCatching { c.close(1000, "closed by app") }; return }
-            conn = c
+        try {
+            synchronized(lock) {
+                if (stopped) { runCatching { c.close(1000, "closed by app") }; return }
+                conn = c
+            }
+        } finally {
+            opened.countDown()
         }
     }
 
@@ -387,3 +399,6 @@ class RelayClient(
 
     private fun enc(s: String) = URLEncoder.encode(s, Charsets.UTF_8)
 }
+
+/** How long a socket callback waits for [RelayClient] to finish opening that socket. */
+private const val OPEN_WAIT_MS = 5_000L

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ToolCall } from '@nekko-agent/shared';
-import { SubagentCue, SubagentModelChip, useSubagentSummary } from './SubagentCue.js';
+import { SubagentCue, SubagentModelChip, useSubagentSummary, SubagentOpenButton } from './SubagentCue.js';
 import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
 import { parseWatchCall, thenSummary } from '../../agentWatches.js';
 
@@ -18,18 +18,21 @@ export function ToolCard({ call }: { call: ToolCall }) {
   const then = isWatch && parseWatchCall(call).action === 'create' ? thenSummary(parseWatchCall(call).prompt) : '';
   return (
     <div className="mt-1 font-mono text-[12px]">
-      <button
-        className="flex w-full items-center gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-      >
-        <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
-        {isSpawn && <SubagentCue />}
-        {isWatch && <WatchIcon />}
-        <span className="min-w-0 truncate font-medium" title={headline || undefined}>{headline || <>Used <span className="font-mono text-ink-soft">{call.name}</span> tool</>}</span>
-        {isSpawn && <SubagentModelChip call={call} />}
-        {isWatch && <WatchClockChip call={call} />}
-      </button>
+      <div className="flex min-w-0 items-center gap-1">
+        <button
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+        >
+          <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
+          {isSpawn && <SubagentCue />}
+          {isWatch && <WatchIcon />}
+          <span className="min-w-0 truncate font-medium" title={headline || undefined}>{headline || <>Used <span className="font-mono text-ink-soft">{call.name}</span> tool</>}</span>
+          {isSpawn && <SubagentModelChip call={call} />}
+          {isWatch && <WatchClockChip call={call} />}
+        </button>
+        {isSpawn && <SubagentOpenButton call={call} />}
+      </div>
       {then && <WatchThen text={then} className="pl-[38px]" />}
       {open && (isWatch
         ? <div className="ml-[18px]"><WatchDetail call={call} /></div>

@@ -74,6 +74,10 @@ class ConnectionTest {
     fun `keep-alive line counts chats`() {
         assertEquals("1 chat running on Mac", KeepAlive.line(1, "Mac"))
         assertEquals("3 chats running on Mac", KeepAlive.line(3, "Mac"))
+        // The Live Update chip has room for a few characters only.
+        assertEquals("Running", KeepAlive.chip(1))
+        assertEquals("3 running", KeepAlive.chip(3))
+        assertEquals(KeepAlive.Status("1 chat running on Mac", "Running"), KeepAlive.status(1, "Mac"))
     }
 
     @Test
@@ -91,6 +95,15 @@ class ConnectionTest {
         assertEquals(Notices.CHANNEL_REPLIES, Notices.channelOf(PhoneEvent.FAILED))
         assertEquals("Question waiting", EventNotice.of("s1", PhoneEvent.NEEDS_INPUT, null, "Mac", false).title)
         assertEquals("Reply failed", EventNotice.of("s1", PhoneEvent.FAILED, null, "Mac", false).title)
+    }
+
+    @Test
+    fun `only an approval with its call offers deny`() {
+        assertTrue(EventNotice.of("s1", PhoneEvent.APPROVAL, "Fix", "Mac", hideContent = true, callId = "call_1").canDeny)
+        assertFalse(EventNotice.of("s1", PhoneEvent.APPROVAL, "Fix", "Mac", hideContent = false).canDeny)
+        val question = EventNotice.of("s1", PhoneEvent.NEEDS_INPUT, "Fix", "Mac", hideContent = false, callId = "call_1")
+        assertFalse(question.canDeny)
+        assertEquals(null, question.callId)
     }
 
     @Test

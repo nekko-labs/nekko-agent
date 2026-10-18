@@ -19,6 +19,7 @@ on:
         default: fp16 fp32
   # A change to the runtime or this workflow checks the English model only (about 2.5 GB).
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - .github/workflows/decision-models.yml
       - crates/nekko-decide/**
@@ -34,12 +35,11 @@ jobs:
   golden:
     strategy:
       fail-fast: false
+      # CoreML (macOS) on a PR only with the `ci:macos` label; by hand otherwise.
+      # The list is computed: an `include` row that matches nothing is added.
+      # (Both branches are non-empty: `cond && '' || x` is always x.)
       matrix:
-        include:
-          - os: macos-14
-            ep: coreml
-          - os: ubuntu-latest
-            ep: cpu
+        include: ${{ fromJSON((github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) && '[{"os":"ubuntu-latest","ep":"cpu"}]' || '[{"os":"macos-14","ep":"coreml"},{"os":"ubuntu-latest","ep":"cpu"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     steps:

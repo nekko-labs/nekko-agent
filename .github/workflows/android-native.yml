@@ -128,3 +128,46 @@ jobs:
           path: apps/android/evidence/**
           if-no-files-found: warn
 
+
+  # AN-27: on an Android 16 QPR1 system, the running-chat notification
+  # qualifies as a Live Update (the main emulator job runs API 34, which has no
+  # such thing). Manual only for now: on the API 36 image no notification is
+  # promotable, and on hosted runners the API 36.1 image boots but leaves user 0
+  # locked, so the app can't start (TASKS AN-27). Run it by hand from Actions.
+  live-update:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.2" "build-tools;36.0.0"
+      - name: Build the app and its tests
+        working-directory: apps/android
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --console=plain
+      # Live Updates arrived in Android 16 QPR1 (API 36.1); on the API 36 image
+      # no notification counts as promotable.
+      - name: Live Update check on an API 36.1 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: '36.1'
+          ram-size: 4096M
+          disk-size: 6000M
+          emulator-boot-timeout: 900
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: apps/android/scripts/live-update-check.sh

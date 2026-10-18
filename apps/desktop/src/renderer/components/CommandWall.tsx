@@ -37,7 +37,7 @@ import { FilePane } from './FilePane.js';
 import { ExplorerPane } from './ExplorerPane.js';
 import { WorkingSubagents } from './WorkingSubagents.js';
 import { NumberedAgentIcon } from './NumberedChatIcon.js';
-import { ZenIcon } from '../icons.js';
+import { TargetIcon } from '../icons.js';
 import { StatusIcon, agentStatusOfLane, type AgentStatus } from './WorkspaceCard.js';
 import { BrowserPane } from './BrowserPane.js';
 import { DiffPane } from './DiffPane.js';
@@ -479,6 +479,16 @@ export function CommandWall({
   // to one is a visibility flip; the rest park as transcripts.
   const warm = useRef<readonly string[]>([]);
   if (state.layout.mode === 'focus' && state.hero) warm.current = warmFront(warm.current, state.hero);
+  // A pane added after the first render is new: in Focus it fades in as the
+  // hero. Panes present at mount (a restored wall) never animate.
+  const seenPanes = useRef<Set<string> | null>(null);
+  const enteringPane = useRef<string | null>(null);
+  {
+    const ids = allPanes(state.root).map((p) => p.id);
+    if (state.layout.mode !== 'focus') enteringPane.current = null;
+    else if (seenPanes.current) for (const id of ids) if (!seenPanes.current.has(id)) enteringPane.current = id;
+    seenPanes.current = new Set(ids);
+  }
   // Leaving Focus, the parked windows jump to their places instead of sliding
   // there from under the hero: a dozen full-size windows animating down at
   // once rastered every one of them whole (hundreds of MB of tiles, kept).
@@ -597,7 +607,9 @@ export function CommandWall({
     const logsOpen = logsPane?.id === pane.id && !logsClosing && !logsOverlay;
     const subagents = session ? childrenOf.get(session.id) : undefined;
     const snap = snapping && pane.id !== snapHero;
+    const entering = enteringPane.current === pane.id;
     const deps = [
+      entering,
       pane, title, session, terminal, project?.name, projects.length > 1, status?.label, status?.live, needsYou, agentStatus,
       flashing, selected, n, box?.x, box?.y, box?.width, box?.height, parked, hero, focusedChat, folded, showCompanions,
       inDeck, fullSurface, density, logsOpen, snap, workspaces, dragging, state.layout.mode, state.root, subagents, running, pending,
@@ -612,6 +624,8 @@ export function CommandWall({
         data-wall-snap={snap || undefined}
         data-wall-deck={inDeck || undefined}
         data-wall-hero={hero || undefined}
+        data-wall-entering={(entering && state.layout.mode === 'focus' && hero) || undefined}
+        onAnimationEnd={entering ? (e) => { if (e.animationName === 'focus-new-agent-in' && enteringPane.current === pane.id) enteringPane.current = null; } : undefined}
         data-wall-pane={pane.id}
         data-grid-cell={`${pane.kind}:${pane.refId}`}
         data-wall-selected={selected || undefined}
@@ -644,7 +658,7 @@ export function CommandWall({
           onAddWindow={() => live.current.setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
           onSplit={(dir, kind) => { void live.current.addWindow(kind, { paneId: pane.id, dir }); }}
           onClose={() => live.current.update((root) => removePane(root, pane.id))}
-          focusAction={openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><ZenIcon className="h-5 w-5" /></button>}
+          focusAction={openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><TargetIcon className="h-5 w-5" /></button>}
           onMinimize={() => live.current.update((root) => removePane(root, pane.id))}
           onFocus={() => { if (pane.kind === 'chat') live.current.onSelect(pane.refId); }}
           onDragStart={() => setDragging(pane.id)}

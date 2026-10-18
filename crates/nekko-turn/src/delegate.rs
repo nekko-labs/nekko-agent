@@ -20,7 +20,7 @@ fn patterns() -> &'static (Option<JsRegex>, Option<JsRegex>) {
             )
             .ok(),
             JsRegex::new(
-                r"engine (?:stopped driving|could not be reached)|stopped sending|stream ended unexpectedly|network error|ECONNRESET|ETIMEDOUT|fetch failed|terminated|\b(?:408|429|500|502|503|504|529)\b",
+                r"engine (?:stopped driving|could not be reached)|stopped sending|stream ended unexpectedly|\b(?:408|429|500|502|503|504|529)\b",
                 "i",
             )
             .ok(),
@@ -29,7 +29,8 @@ fn patterns() -> &'static (Option<JsRegex>, Option<JsRegex>) {
 }
 
 /// `canResumeChildFailure(message)`: a transient failure is resumed once; a
-/// stop, an auth or permission problem or a missing model never is.
+/// stop, an auth or permission problem or a missing model never is, and nor is
+/// a dropped network, which the child's loop already retried for half an hour.
 pub fn can_resume_child_failure(message: &str) -> bool {
     let (never, transient) = patterns();
     if never.as_ref().is_none_or(|r| r.test(message)) {

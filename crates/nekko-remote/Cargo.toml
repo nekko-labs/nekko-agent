@@ -13,6 +13,8 @@ aes-gcm = "0.10"
 base64 = "0.22"
 futures-util.workspace = true
 getrandom.workspace = true
+# Thumbnails of a chat's photos for a phone (the same decoder nekko-agent uses).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 nekko-js = { path = "../nekko-js" }
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 # Numbers must parse to the exact double JavaScript has, or a re-sealed frame differs.

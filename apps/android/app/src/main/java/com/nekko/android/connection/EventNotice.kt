@@ -14,7 +14,12 @@ data class EventNotice(
     val event: PhoneEvent,
     val title: String,
     val text: String,
+    /** The waiting tool call, for an approval: the notification's Deny answers it. */
+    val callId: String? = null,
 ) {
+    /** Only an approval offers Deny; Allow needs the command in view, so it stays in the chat. */
+    val canDeny: Boolean get() = event == PhoneEvent.APPROVAL && !callId.isNullOrEmpty()
+
     /** Approval and question wait on the user: their own, louder channel. */
     val needsYou: Boolean get() = event == PhoneEvent.APPROVAL || event == PhoneEvent.NEEDS_INPUT
 
@@ -27,7 +32,14 @@ data class EventNotice(
          * title and computer. With the app lock on, [hideContent] keeps even the
          * title off the lock screen and the shade.
          */
-        fun of(sessionId: String, event: PhoneEvent, chatTitle: String?, computer: String, hideContent: Boolean): EventNotice {
+        fun of(
+            sessionId: String,
+            event: PhoneEvent,
+            chatTitle: String?,
+            computer: String,
+            hideContent: Boolean,
+            callId: String? = null,
+        ): EventNotice {
             val title = when (event) {
                 PhoneEvent.FINISHED -> "Reply ready"
                 PhoneEvent.FAILED -> "Reply failed"
@@ -40,7 +52,7 @@ data class EventNotice(
                 chat != null -> "$chat · $computer"
                 else -> "A chat on $computer"
             }
-            return EventNotice(sessionId, event, title, text)
+            return EventNotice(sessionId, event, title, text, callId.takeIf { event == PhoneEvent.APPROVAL })
         }
     }
 }

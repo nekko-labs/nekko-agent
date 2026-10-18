@@ -1,6 +1,6 @@
 import { confirmDeletion } from '../components/DeleteConfirmation.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
 import { AUTO_MODEL_ID, archiveDaysLeft, archiveDeletesAt, parsePrUrl } from '@nekko-agent/shared';
@@ -22,7 +22,8 @@ import { PaneFrame } from '../components/PaneFrame.js';
 import { Divider } from '../components/Divider.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { StatusIcon, WorkspaceCard, type AgentStatus } from '../components/WorkspaceCard.js';
-import { CheckIcon, ChatIcon, PhotoIcon, TerminalIcon, PlusIcon, FileIcon, FolderIcon, ExternalIcon, PanelIcon, ShieldIcon, PanelLeftIcon, PanelSwapIcon, SlidersIcon } from '../icons.js';
+import { ChatFinder } from '../components/ChatFinder.js';
+import { CheckIcon, ChatIcon, PhotoIcon, TerminalIcon, PlusIcon, SearchIcon, FileIcon, FolderIcon, ExternalIcon, PanelIcon, ShieldIcon, PanelLeftIcon, PanelSwapIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../completionExit.js';
@@ -325,6 +326,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   const [selected, setSelected] = useState<string[]>([]);
   const anchor = useRef<string | null>(null);
   const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
+  const [doneMenu, setDoneMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const selectRow = (e: React.MouseEvent, id: string) => {
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) { setSelected([]); anchor.current = id; return false; }
     e.preventDefault(); e.stopPropagation();
@@ -427,6 +429,9 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   const newMenuPopRef = useRef<HTMLDivElement>(null);
   const newMenuButtonRef = useRef<HTMLButtonElement>(null);
   const newMenuTimer = useRef<number>(0);
+  const [finderOpen, setFinderOpen] = useState(false);
+  const finderButtonRef = useRef<HTMLButtonElement>(null);
+  const closeFinder = useCallback(() => setFinderOpen(false), []);
   // The menu renders in a portal at the document root, positioned under the +.
   // The panel clips its overflow and the wall's windows stack above it, so a
   // menu drawn inside the panel was cut off or hidden behind them.
@@ -736,6 +741,25 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
             <SlidersIcon className="h-4 w-4" />
           </button>}
           <button
+            ref={finderButtonRef}
+            className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${finderOpen ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
+            title="Search chats"
+            aria-label="Search chats"
+            aria-haspopup="dialog"
+            aria-expanded={finderOpen}
+            data-chat-finder-toggle
+            onClick={() => { closeNewMenu(); setFinderOpen((o) => !o); }}
+          >
+            <SearchIcon className="h-4 w-4" />
+          </button>
+          {finderOpen && (
+            <ChatFinder
+              anchorRef={finderButtonRef}
+              onClose={closeFinder}
+              onOpen={(id) => { if (sidebarOnly) onOpenChat?.(id); else openChatPane(id); setMobileNav(false); }}
+            />
+          )}
+          <button
             ref={newMenuButtonRef}
             className={`agent-panel-plus btn btn-ghost px-1.5 py-1 ${newMenuOpen ? 'is-open' : ''}`}
             title="New agent with a terminal"
@@ -950,6 +974,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                           now={now}
                           isActive={sidebarOnly ? selectedId === s.id : archiveOpen && archivedViewId === s.id}
                           onOpen={() => { if (sidebarOnly) onOpenChat?.(s.id); else openChatPane(s.id); setMobileNav(false); }}
+                          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setDoneMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
                         />
                       ))}
                     </div>
@@ -987,6 +1012,16 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
           <ContextAction disabled={menu.ids.every(id => statuses.has(id))} onClick={() => void runAction('continue',menu.ids)}>Continue{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction onClick={() => void runAction('delete',menu.ids)}>Delete permanently</ContextAction>
         </>}
+      </ContextMenu>}
+      {/* A completed chat's menu: the reader's two ways out, without opening it.
+          Delete still asks first, as it does from the reader. */}
+      {doneMenu && <ContextMenu x={doneMenu.x} y={doneMenu.y} onClose={() => setDoneMenu(null)}>
+        <ContextAction onClick={() => { const id = doneMenu.id; setDoneMenu(null); void useStore.getState().restoreChat(id); }}>
+          Restore chat
+        </ContextAction>
+        <ContextAction onClick={() => { const id = doneMenu.id; setDoneMenu(null); void useStore.getState().deleteChatForever(id); }}>
+          <span className="text-(--danger)">Delete forever</span>
+        </ContextAction>
       </ContextMenu>}
       {sidebarOnly && mobileNav && <div className="absolute inset-0 z-20 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} />}
       {/* A row of cards needs no drawer on a narrow screen: it is already out of the way. */}
@@ -1105,15 +1140,16 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
  * by when it was completed. Opening it reads it in the middle, read-only.
  */
 function CompletedRow({
-  session: s, now, isActive, onOpen,
+  session: s, now, isActive, onOpen, onContextMenu,
 }: {
-  session: SessionSummary; now: number; isActive: boolean; onOpen: () => void;
+  session: SessionSummary; now: number; isActive: boolean; onOpen: () => void; onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const at = s.archivedAt as number;
   const days = archiveDaysLeft(at, now);
   return (
     <button
       onClick={onOpen}
+      onContextMenu={onContextMenu}
       data-completed-row={s.id}
       className={`flex w-full items-center gap-1.5 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
       title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nDeleted on ${new Date(archiveDeletesAt(at)).toLocaleDateString()} unless restored (${days} day${days === 1 ? '' : 's'} left)`}

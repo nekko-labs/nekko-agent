@@ -101,6 +101,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 
 ### Using Nekko Agent
 
+- [Browser automation](https://nekkoagent.com/docs/browser-automation.md): Chat-owned browser actions, security boundaries and native driver migration status.
 - [Running models locally](https://nekkoagent.com/docs/local-models.md): Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM).
 - [Subscription sign-in](https://nekkoagent.com/docs/subscriptions.md): Use your Claude or ChatGPT subscription instead of a metered API key.
 - [Usage limits and prices](https://nekkoagent.com/docs/usage-limits.md): Where the usage numbers and price estimates come from, and what they mean.

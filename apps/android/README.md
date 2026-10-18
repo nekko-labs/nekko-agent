@@ -41,7 +41,11 @@ reference until this app reaches parity.
   mode (YOLO allowed after a confirmation), the long-press action (Complete or
   Delete) and delete confirmation; a long-press on a chat runs that action.
 
-- **Dictation:** a microphone in the message box; the text goes in the box and
+- **The + menu:** left of the message box, Send on the right. **Dictate**,
+  **Image from files** (system photo picker, no storage permission) and **Take
+  photo** (the camera app, no camera permission). Up to 4 photos, scaled to
+  1600 px JPEG in memory, go with the next message as `images`.
+- **Dictation:** **+ → Dictate**; the text goes in the box and
   you press Send. Whisper on the computer (encrypted, up to 30 s) when its Nekko
   Voice is on, else the phone's recognizer; *Settings → Dictation*.
 
@@ -51,7 +55,7 @@ reference until this app reaches parity.
   itself; the phone only ever sees names and descriptions. No `/goal`.
 
 **Not yet:** models on the phone, push notifications, Markdown rendering,
-attachments, Play Store release. See `TASKS.md` → *Native Android app*.
+files other than photos, thumbnails of sent photos, Play Store release. See `TASKS.md` → *Native Android app*.
 
 ## Layout
 
@@ -126,7 +130,7 @@ cd apps/android && NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegra
    link and a one-time code):
    ```sh
    NEKKO_RELAY_PORT=4400 NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 node apps/relay/dist/index.js
-   NEKKO_RELAY_URL=ws://127.0.0.1:4400 NEKKO_ROOM=<16 hex> NEKKO_PAIR_KEY=<32 hex> node apps/server/dist/index.js
+   NEKKO_RELAY_URL=ws://127.0.0.1:4400 NEKKO_ROOM=<16 hex> NEKKO_PAIR_KEY=<32 hex> node apps/web-app-server/dist/index.js
    ```
    Or use the desktop app's **Settings → Remote access** with the managed relay.
 2. Install the debug APK: `adb install -r app/build/outputs/apk/debug/app-debug.apk`.

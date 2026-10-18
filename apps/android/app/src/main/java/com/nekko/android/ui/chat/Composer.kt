@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,20 +56,32 @@ import androidx.compose.material3.IconButton
 import androidx.compose.ui.text.font.FontWeight
 import com.nekko.android.chat.SkillMenu
 import com.nekko.protocol.SkillSummary
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import com.nekko.android.chat.PhotoTray
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Prompt box. While a run is going, sending queues the prompt on the computer
- * and an empty box turns Send into Stop. Typing `/` offers the computer's
- * skills; a picked skill shows as a chip and the box becomes its input.
+ * Prompt box: **+** on the left (dictation, an image from files, a photo from
+ * the camera), the text, and Send on the right. While a run is going, sending
+ * queues the prompt on the computer and an empty box turns Send into Stop.
+ * Typing `/` offers the computer's skills; a picked skill shows as a chip and
+ * the box becomes its input. Photos show as thumbnails above the box.
  */
 @Composable
 fun Composer(
     running: Boolean,
     blocked: String?,
     queued: List<String>,
-    onSend: suspend (String, SkillSummary?) -> Unit,
+    onSend: suspend (String, SkillSummary?, List<String>) -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
     /** Pre-filled once (text shared from another app); the user still presses Send. */
@@ -80,6 +93,8 @@ fun Composer(
     /** Text to add after what's typed ("Ask about this" in Changes); [onInserted] once it's in. */
     insert: String? = null,
     onInserted: () -> Unit = {},
+    /** Photos from files or the camera (the **+** menu); null leaves them out. */
+    attach: AttachUi? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -90,8 +105,13 @@ fun Composer(
     var skillName by rememberSaveable { mutableStateOf<String?>(null) }
     val skill = skillName?.let { n -> skills.firstOrNull { it.name == n } }
     val menu = if (skill == null) SkillMenu.query(text)?.let { SkillMenu.match(skills, it) }.orEmpty() else emptyList()
-    val canSend = (text.isNotBlank() || skill != null) && blocked == null && !sending
-    val showStop = running && text.isBlank()
+    val photos = attach?.state?.photos.orEmpty()
+    val addingPhotos = attach?.state?.busy == true
+    val hasContent = text.isNotBlank() || skill != null || photos.isNotEmpty()
+    // Send waits for photos still being read, so none are left behind.
+    val canSend = hasContent && blocked == null && !sending && !addingPhotos
+    val showStop = running && !hasContent && !addingPhotos
+    var plusOpen by remember { mutableStateOf(false) }
     LaunchedEffect(insert) {
         if (insert != null) {
             text += (if (text.isEmpty() || text.endsWith("\n")) "" else "\n\n") + insert
@@ -108,18 +128,20 @@ fun Composer(
         if (canSend) {
             // `/name rest` typed out in full runs that skill too, as on the desktop.
             val (armed, value) = skill?.let { it to text.trim() } ?: SkillMenu.typed(text, skills) ?: (null to text.trim())
+            val sentPhotos = attach?.take?.invoke().orEmpty()
             sending = true
             text = ""
             skillName = null
             error = null
             scope.launch {
                 try {
-                    onSend(value, armed)
+                    onSend(value, armed, sentPhotos.map { it.dataUrl })
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     text = value // keep what they typed if it didn't go
                     skillName = armed?.name
+                    attach?.restore?.invoke(sentPhotos)
                     error = e.message ?: "Couldn’t send that."
                 } finally {
                     sending = false
@@ -162,7 +184,8 @@ fun Composer(
                 error = null
             }
             skill?.let { SkillChip(it) { skillName = null } }
-            val note = blocked ?: error ?: mic?.error
+            if (attach != null && (photos.isNotEmpty() || addingPhotos)) PhotoStrip(photos, attach.state.adding, attach.onRemove)
+            val note = blocked ?: error ?: mic?.error ?: attach?.state?.error
             if (note != null) {
                 Text(
                     note,
@@ -177,10 +200,27 @@ fun Composer(
                     .clip(RoundedCornerShape(16.dp))
                     .background(p.surface)
                     .border(1.dp, p.line, RoundedCornerShape(16.dp))
-                    .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                    .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                val recording = mic?.state is MicState.Recording
+                val transcribing = mic?.state is MicState.Transcribing
+                if (mic != null && (recording || transcribing)) {
+                    // Dictating: + becomes the way to finish (■), as the mic button was.
+                    MicButton(mic, onText = dictated)
+                } else if (mic != null || attach != null) {
+                    Box {
+                        PlusButton(open = plusOpen) { plusOpen = true }
+                        PlusMenu(
+                            open = plusOpen,
+                            onDismiss = { plusOpen = false },
+                            onDictate = mic?.let { m -> { plusOpen = false; m.onTap(dictated) } },
+                            attach = attach,
+                            onPicked = { plusOpen = false; attach?.clearError?.invoke() },
+                        )
+                    }
+                }
                 BasicTextField(
                     value = text,
                     onValueChange = {
@@ -193,7 +233,7 @@ fun Composer(
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 48.dp)
-                        .padding(vertical = 12.dp)
+                        .padding(start = if (mic != null || attach != null) 0.dp else 8.dp, top = 12.dp, bottom = 12.dp)
                         .semantics { contentDescription = "Message" },
                     decorationBox = { inner ->
                         if (text.isEmpty()) {
@@ -201,17 +241,19 @@ fun Composer(
                                 when {
                                     skill != null -> "Add details for /${skill.name} (optional)"
                                     running -> "Queue a follow-up…"
-                                    skills.isNotEmpty() -> "Message your computer, / for skills"
+                                    skills.isNotEmpty() -> "Message, / for skills"
                                     else -> "Message your computer"
                                 },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = p.inkFaint,
+                                // One line, so the empty box is as tall as one with a line typed.
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         inner()
                     },
                 )
-                if (mic != null) MicButton(mic, onText = dictated)
                 FilledIconButton(
                     onClick = { if (showStop) onStop() else send() },
                     enabled = showStop || canSend,
@@ -284,6 +326,124 @@ private fun SkillChip(skill: SkillSummary, onClear: () -> Unit) {
         Text("/${skill.name}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = p.ink)
         IconButton(onClick = onClear, modifier = Modifier.size(36.dp)) {
             Icon(Icons.Filled.Close, contentDescription = "Remove skill /${skill.name}", tint = p.inkSoft, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+/** Photos from the phone as the composer sees them; the chat screen builds it from the chat's [PhotoTray]. */
+class AttachUi(
+    val state: PhotoTray.State<ImageBitmap>,
+    /** Opens the system photo picker (files and gallery; no storage permission). */
+    val onPickFiles: () -> Unit,
+    /** Opens the camera app for one shot; null when the phone has no camera app. */
+    val onTakePhoto: (() -> Unit)?,
+    val onRemove: (Long) -> Unit,
+    val take: () -> List<PhotoTray.Photo<ImageBitmap>>,
+    val restore: (List<PhotoTray.Photo<ImageBitmap>>) -> Unit,
+    val clearError: () -> Unit,
+)
+
+@Composable
+private fun PlusButton(open: Boolean, onClick: () -> Unit) {
+    val p = Nekko.palette
+    FilledIconButton(
+        onClick = onClick,
+        shape = CircleShape,
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = if (open) p.accentSoft else p.surface2,
+            contentColor = if (open) p.accent else p.inkSoft,
+        ),
+        modifier = Modifier.size(48.dp),
+    ) {
+        Icon(Icons.Filled.Add, contentDescription = "Add")
+    }
+}
+
+/** The **+** menu: dictation, an image from the phone's files, a photo from the camera. */
+@Composable
+private fun PlusMenu(
+    open: Boolean,
+    onDismiss: () -> Unit,
+    onDictate: (() -> Unit)?,
+    attach: AttachUi?,
+    onPicked: () -> Unit,
+) {
+    val p = Nekko.palette
+    val full = attach != null && attach.state.room == 0
+    DropdownMenu(
+        expanded = open,
+        onDismissRequest = onDismiss,
+        containerColor = p.surface,
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        if (onDictate != null) {
+            DropdownMenuItem(
+                text = { Text("Dictate", color = p.ink) },
+                leadingIcon = { Icon(Icons.Filled.Mic, contentDescription = null, tint = p.inkSoft) },
+                onClick = onDictate,
+            )
+        }
+        if (attach != null) {
+            val hint: @Composable (() -> Unit)? = if (full) {
+                { Text("${PhotoTray.MAX_PHOTOS} max", style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
+            } else null
+            DropdownMenuItem(
+                text = { Text("Image from files", color = if (full) p.inkFaint else p.ink) },
+                leadingIcon = { Icon(Icons.Filled.AttachFile, contentDescription = null, tint = if (full) p.inkFaint else p.inkSoft) },
+                trailingIcon = hint,
+                enabled = !full,
+                onClick = { onPicked(); attach.onPickFiles() },
+            )
+            attach.onTakePhoto?.let { take ->
+                DropdownMenuItem(
+                    text = { Text("Take photo", color = if (full) p.inkFaint else p.ink) },
+                    leadingIcon = { Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = if (full) p.inkFaint else p.inkSoft) },
+                    enabled = !full,
+                    onClick = { onPicked(); take() },
+                )
+            }
+        }
+    }
+}
+
+/** Thumbnails of the photos going with the next message; ✕ takes one out. */
+@Composable
+private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, onRemove: (Long) -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        photos.forEachIndexed { i, photo ->
+            Box(Modifier.size(64.dp)) {
+                Image(
+                    photo.preview,
+                    contentDescription = "Photo ${i + 1}",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, p.line, RoundedCornerShape(10.dp)),
+                )
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable { onRemove(photo.id) }
+                        .semantics { contentDescription = "Remove photo ${i + 1}" },
+                    contentAlignment = Alignment.TopEnd,
+                ) {
+                    Box(Modifier.padding(3.dp).size(20.dp).clip(CircleShape).background(p.ink.copy(alpha = 0.72f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Close, contentDescription = null, tint = p.paper, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        }
+        repeat(adding) {
+            Box(
+                Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(p.surface2).semantics { contentDescription = "Adding photo" },
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }

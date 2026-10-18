@@ -249,6 +249,10 @@ export interface AppSettings {
   language?: string;
   /** Default tool-execution policy for new chats. */
   defaultChatMode?: import('./chat.js').ChatMode;
+  /** Named bundles of chat settings for the Mode panel. Unset = `STARTER_MODES`. */
+  savedModes?: import('./saved-modes.js').SavedMode[];
+  /** The saved mode new chats start in. Unset = new chats keep the last-used defaults. */
+  defaultSavedModeId?: string;
   /** Contextual UI tips are enabled by default. */
   showTips?: boolean;
   completionTipSeen?: boolean;

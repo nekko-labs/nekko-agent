@@ -1,21 +1,26 @@
 name: Native iOS
+# macOS-only. Runs every 6 hours on main and with the `ci:macos` label on a PR,
+# not on every iOS change: the Team plan's 5 macOS runners are shared by every
+# workflow (see ci.yml).
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'apps/ios/**'
       - 'apps/relay/src/**'
       - 'packages/shared/src/phone-access.ts'
       - '.github/workflows/ios-native.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'apps/ios/**'
-      - '.github/workflows/ios-native.yml'
+  schedule:
+    - cron: '37 */6 * * *'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ios-native-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 jobs:
   protocol-and-build:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
     runs-on: macos-14
     timeout-minutes: 50
     steps:
@@ -52,12 +57,12 @@ jobs:
         run: xcodegen generate
       - name: Validate plists
         run: |
-          plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements apps/ios/Widgets/NekkoWidgets.entitlements apps/ios/Share/Info.plist apps/ios/Share/NekkoShare.entitlements apps/ios/App/PrivacyInfo.xcprivacy
+          plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements apps/ios/Widgets/NekkoWidgets.entitlements apps/ios/Share/Info.plist apps/ios/Share/NekkoShare.entitlements apps/ios/App/PrivacyInfo.xcprivacy apps/ios/Watch/PrivacyInfo.xcprivacy apps/ios/Watch/NekkoWatch.entitlements apps/ios/WatchWidgets/Info.plist apps/ios/WatchWidgets/NekkoWatchWidgets.entitlements apps/ios/WatchWidgets/PrivacyInfo.xcprivacy
       - name: Build unsigned iOS Simulator app
         working-directory: apps/ios
         run: >-
           xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative
-          -configuration Debug -sdk iphonesimulator
+          -configuration Debug
           -destination 'generic/platform=iOS Simulator'
           -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build
       - name: Verify bundle (launch screen, widget and share extensions, URL schemes, icon, privacy manifest)
@@ -66,6 +71,14 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchStoryboardName' $APP/Info.plist)" = LaunchScreen
           test -d $APP/LaunchScreen.storyboardc
           test -d $APP/PlugIns/NekkoWidgets.appex
+          # The Apple Watch glance ships inside the iPhone app, built for the watch simulator.
+          test -d $APP/Watch/NekkoWatch.app
+          test "$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' $APP/Watch/NekkoWatch.app/Info.plist)" = com.nekko.native.ios
+          test -f $APP/Watch/NekkoWatch.app/PrivacyInfo.xcprivacy
+          # Its watch face complication, a WidgetKit extension inside the watch app.
+          W=$APP/Watch/NekkoWatch.app/PlugIns/NekkoWatchWidgets.appex
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' $W/Info.plist)" = com.apple.widgetkit-extension
+          test -f $W/PrivacyInfo.xcprivacy
           # Share to Nekko: a share-services extension that takes text and one web link.
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' $APP/PlugIns/NekkoShare.appex/Info.plist)" = com.apple.share-services
           /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationSupportsText' $APP/PlugIns/NekkoShare.appex/Info.plist | grep -q true

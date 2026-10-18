@@ -2,8 +2,8 @@
 //! (`stream_with_retry`), as the TS loop does in `streamWithRetry`.
 
 use nekko_loop::{
-    Cancel, ChatRequest, Chunk, ChunkStream, ModelClient, RunOptions, ToolRunner, is_transient_error, retry_delay,
-    run_agent,
+    Cancel, ChatRequest, Chunk, ChunkStream, MAX_NETWORK_STREAM_ATTEMPTS, ModelClient, RunOptions, ToolRunner,
+    is_network_error, is_transient_error, retry_delay, run_agent,
 };
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -151,4 +151,53 @@ async fn stop_does_not_sit_out_a_backoff() {
     assert!(started.elapsed() < Duration::from_secs(5), "waited {:?}", started.elapsed());
     assert_eq!(events.last().unwrap()["type"], "error");
     assert_eq!(events.last().unwrap()["message"], json!("Stopped"));
+}
+
+#[test]
+fn tells_a_dropped_network_from_a_provider_that_answered() {
+    for m in [
+        "fetch failed",
+        "getaddrinfo ENOTFOUND api.anthropic.com",
+        "connect ENETUNREACH 10.0.0.1:443",
+        "error sending request for url (https://api.openai.com/v1/chat/completions)",
+        "dns error: failed to lookup address information",
+        "terminated",
+    ] {
+        assert!(is_network_error(m), "{m}");
+        assert!(is_transient_error(m), "{m}");
+    }
+    for m in [
+        "anthropic 529: overloaded",
+        "Model request failed (HTTP 503)",
+        "The model stopped sending after 300 s of silence.",
+        "This operation was aborted",
+        "anthropic 401: invalid x-api-key",
+    ] {
+        assert!(!is_network_error(m), "{m}");
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn keeps_retrying_a_dropped_network_past_the_usual_five() {
+    let client = Flaky { failures: Mutex::new(vec!["fetch failed".into(); 8]), calls: Mutex::new(0) };
+    let mut history = vec![json!({ "id": "u1", "role": "user", "content": "hi", "createdAt": 1 })];
+    let mut events = Vec::new();
+    run_agent(opts(&mut history, Cancel::default()), &client, &NoTools, &mut |e, _| events.push(e)).await;
+    assert_eq!(*client.calls.lock().unwrap(), 9);
+    let retries: Vec<&Value> = events.iter().filter(|e| e["type"] == "retry").collect();
+    assert_eq!(retries.len(), 8);
+    assert_eq!(retries[0]["maxAttempts"], json!(MAX_NETWORK_STREAM_ATTEMPTS));
+    assert_eq!(events.last().unwrap()["type"], "done");
+    assert_eq!(history.last().unwrap()["content"], json!("Hello"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn gives_up_on_the_network_after_the_long_window() {
+    let client = Flaky { failures: Mutex::new(vec!["fetch failed".into(); 70]), calls: Mutex::new(0) };
+    let mut history = vec![json!({ "id": "u1", "role": "user", "content": "hi", "createdAt": 1 })];
+    let mut events = Vec::new();
+    run_agent(opts(&mut history, Cancel::default()), &client, &NoTools, &mut |e, _| events.push(e)).await;
+    assert_eq!(*client.calls.lock().unwrap(), MAX_NETWORK_STREAM_ATTEMPTS as usize);
+    assert_eq!(events.last().unwrap()["type"], "error");
+    assert_eq!(history.last().unwrap()["interrupted"], json!(true));
 }
