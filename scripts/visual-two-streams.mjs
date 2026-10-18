@@ -37,7 +37,7 @@ const { dir: data, ids } = seedDataDir({ mockPort, chats: [6, 6, 6, 6, 6, 6] });
 cleanups.push(() => rmSync(data, { recursive: true, force: true }));
 const server = spawn(process.execPath, [join(APP, 'apps/web-app-server/dist/index.js')], {
   cwd: APP,
-  env: { ...process.env, NEKKO_DATA_DIR: data, NEKKO_PORT: String(appPort), NEKKO_HOST: '127.0.0.1', NEKKO_DAEMON: 'nekkod' },
+  env: { ...process.env, NEKKO_DATA_DIR: data, NEKKO_PORT: String(appPort), NEKKO_HOST: '127.0.0.1' },
   stdio: ['ignore', 'pipe', 'pipe'],
   windowsHide: true,
 });

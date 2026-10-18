@@ -20,7 +20,7 @@ type Context = () => { windowHidden: boolean; visibleSessionId: string | null; v
 function setup(context: Context = () => ({ windowHidden: true, visibleSessionId: null })) {
   vi.useFakeTimers();
   let enabled: boolean | undefined;
-  const endpoint = vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:123', token: 'a b', mode: 'backend' });
+  const endpoint = vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:123', token: 'a b' });
   const call = vi.fn(async (channel: string) => channel === IpcChannels.settingsGet ? { desktopNotifications: enabled } : { title: 'Parser' });
   const sockets: Socket[] = [];
   const urls: string[] = [];
@@ -65,7 +65,7 @@ describe('main desktop notifications', () => {
     s.endpoint.mockRejectedValueOnce(new Error('stopped'));
     s.sockets[0].onerror?.(); s.sockets[0].onclose?.();
     await vi.advanceTimersByTimeAsync(250);
-    s.endpoint.mockResolvedValue({ url: 'http://127.0.0.1:456', token: 'new', mode: 'daemon' });
+    s.endpoint.mockResolvedValue({ url: 'http://127.0.0.1:456', token: 'new' });
     await vi.advanceTimersByTimeAsync(500);
     expect(s.urls[1]).toBe('ws://127.0.0.1:456/api/ws?sessions=&token=new');
     expect(s.endpoint).toHaveBeenCalledTimes(3);

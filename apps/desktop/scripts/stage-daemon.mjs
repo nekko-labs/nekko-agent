@@ -1,9 +1,10 @@
 // Build the engine daemon (nekkod) in release mode and stage it where
 // electron-builder packs it (resources/bin -> <app>/resources/bin).
 //
-// `--optional` is for local runs (`npm run local`): without cargo it warns and
-// exits 0, and the app runs the TS backend directly. Packaging never passes
-// it, so an installer can never ship without its daemon by accident.
+// The app has no engine without nekkod, so a missing cargo always fails.
+// `--local` is for local runs (`npm run local`): a Visual C++ runtime that
+// cannot be copied beside the daemon only warns, since this machine already
+// has one. Packaging never passes it.
 //
 // `--dev` is for `npm run dev`: it builds the `dev-daemon` profile (no LTO,
 // incremental) and stages nothing, because a development app runs the newest
@@ -15,7 +16,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { copyVcRuntime } from '../../../scripts/vc-runtime.mjs';
 
-const optional = process.argv.includes('--optional');
+const local = process.argv.includes('--local');
 const dev = process.argv.includes('--dev');
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../../..');
@@ -26,12 +27,7 @@ const exe = process.platform === 'win32' ? 'nekkod.exe' : 'nekkod';
 const candidates = ['cargo', join(homedir(), '.cargo', 'bin', process.platform === 'win32' ? 'cargo.exe' : 'cargo')];
 const cargo = candidates.find((candidate) => spawnSync(candidate, ['--version'], { stdio: 'ignore' }).status === 0);
 if (!cargo) {
-  const msg = 'cargo not found: install Rust (https://rustup.rs) to build the engine daemon';
-  if (optional) {
-    console.warn(`${msg}; the app will run the TS backend without it.`);
-    process.exit(0);
-  }
-  console.error(msg);
+  console.error('cargo not found: install Rust (https://rustup.rs) to build the engine daemon');
   process.exit(1);
 }
 
@@ -74,7 +70,7 @@ if (process.platform === 'win32') {
   try {
     copyVcRuntime(dest);
   } catch (e) {
-    if (!optional) {
+    if (!local) {
       console.error(e.message);
       process.exit(1);
     }

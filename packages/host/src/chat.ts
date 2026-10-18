@@ -913,7 +913,7 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   const allowSpawn = getStrategy(orchestration.strategy).allowsSpawn;
   let decideWith: import('@nekko-agent/shared').DecisionProvider | null = null;
   // A daemon that drives the turn and runs its MCP servers syncs them itself (`turn:mcp`).
-  const daemon = process.env.NEKKO_AGENT_LOOP === 'ts' ? undefined : daemonCall();
+  const daemon = daemonCall();
   const daemonMcp = !sandbox && !!daemon && (await daemonRunsTurns(daemon)) && (await daemonOwns(daemon, DAEMON_MCP));
   if (!offline) {
     if (!sandbox && !daemonMcp && settings.mcpServers?.some((s) => s.enabled)) await syncMcp(settings.mcpServers);
@@ -945,10 +945,9 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
     saveTurnSession(session);
   };
 
-  // Under the engine daemon the whole turn is the daemon's (daemon-turn.ts).
-  // NEKKO_AGENT_LOOP=ts keeps every turn in this process (a kill switch), and
-  // a sandbox turn always stays here with the container router.
-  const daemon = process.env.NEKKO_AGENT_LOOP === 'ts' ? undefined : daemonCall();
+  // Under the engine daemon the whole turn is the daemon's (daemon-turn.ts);
+  // a sandbox turn it hands back stays here with the container router.
+  const daemon = daemonCall();
   if (!sandbox && daemon && (await daemonRunsTurns(daemon))) {
     const ran = await sendChatViaDaemon(daemon, { ...admitted, opts, send, allowBrowserControl, queued });
     if (ran) return;
@@ -1564,7 +1563,7 @@ export function indexSnippetsForAdmission(workspaceIds: string[], text: string):
 async function prepareQueuedTurn(chain: TurnChain, payload: { opts: SendOptions; queued: { index: number; item: QueuedPrompt } }): Promise<{ spec: TurnSpec } | { ended: true } | { inProcess: true }> {
   const admitted = await admitTurn(payload.opts, chain.send, chain.allowBrowserControl, chain.abort);
   if (!admitted) return { ended: true };
-  if (admitted.sandbox || process.env.NEKKO_AGENT_LOOP === 'ts') return { inProcess: true };
+  if (admitted.sandbox) return { inProcess: true };
   const { spec, hostTurn } = await buildDaemonTurn({ ...admitted, opts: payload.opts, send: chain.send, allowBrowserControl: chain.allowBrowserControl, queued: payload.queued });
   registerTurn(spec.turnId, hostTurn, chain);
   return { spec };

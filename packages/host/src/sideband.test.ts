@@ -26,7 +26,6 @@ describe('completeText', () => {
     recordUsage.mockReset();
     linked = true;
     promptCaching = true;
-    delete process.env.NEKKO_AGENT_LOOP;
   });
 
   it('asks the daemon when it serves provider:complete', async () => {
@@ -133,9 +132,6 @@ describe('completeText', () => {
       yield { type: 'text', delta: 'it' };
     });
     linked = false;
-    expect(await completeText(provider, request)).toBe('Fix it');
-    linked = true;
-    process.env.NEKKO_AGENT_LOOP = 'ts';
     expect(await completeText(provider, request)).toBe('Fix it');
     expect(daemon).not.toHaveBeenCalled();
     expect(chat.mock.calls[0][0]).toMatchObject({ model: 'm', purpose: 'title', signal: expect.any(AbortSignal) });

@@ -22,7 +22,7 @@ import type {
 import { AGENT_REPLAY, IpcChannels, IpcEvents } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
-import { BOTH_EVENTS, MAIN_EVENTS, routeToMain } from './routing.js';
+import { MAIN_EVENTS } from './routing.js';
 import {
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
@@ -30,24 +30,20 @@ import {
   type WindowChromeBridge,
 } from '../windowChrome.js';
 
-// Where each call goes: the engine's socket, main only for the native
-// channels when no daemon runs (see `routing.ts`).
+// Every call goes to the engine's socket (see `routing.ts`).
 const engine = createEngineSocket((operation) => ipcRenderer.invoke(ENGINE_ENDPOINT_CHANNEL, operation));
 
-const inv = async (channel: string, ...args: unknown[]): Promise<any> =>
-  (await routeToMain(channel, () => engine.mode()))
-    ? ipcRenderer.invoke(channel, ...args)
-    : engine.call(channel, args);
+const inv = (channel: string, ...args: unknown[]): Promise<any> => engine.call(channel, args);
 
-/** `ipcRenderer.on`/`removeListener`, routed the same way as `inv`. */
+/** Events: main's few from `ipcRenderer`, the rest from the engine. */
 const bus = {
   on: (channel: string, listener: Listener) => {
-    if (MAIN_EVENTS.has(channel) || BOTH_EVENTS.has(channel)) ipcRenderer.on(channel, listener);
-    if (!MAIN_EVENTS.has(channel)) engine.on(channel, listener);
+    if (MAIN_EVENTS.has(channel)) ipcRenderer.on(channel, listener);
+    else engine.on(channel, listener);
   },
   removeListener: (channel: string, listener: Listener) => {
-    if (MAIN_EVENTS.has(channel) || BOTH_EVENTS.has(channel)) ipcRenderer.removeListener(channel, listener);
-    if (!MAIN_EVENTS.has(channel)) engine.off(channel, listener);
+    if (MAIN_EVENTS.has(channel)) ipcRenderer.removeListener(channel, listener);
+    else engine.off(channel, listener);
   },
 };
 

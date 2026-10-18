@@ -170,7 +170,7 @@ interface DaemonMcp {
 let remote: DaemonMcp | null = null;
 
 async function mcpDaemon() {
-  const daemon = process.env.NEKKO_AGENT_LOOP === 'ts' ? undefined : daemonCall();
+  const daemon = daemonCall();
   return daemon && (await daemonOwns(daemon, 'mcp:sync')) ? daemon : undefined;
 }
 
