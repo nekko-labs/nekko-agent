@@ -146,7 +146,7 @@ export function ContextGauge({
   );
 }
 
-const EFFORT_LABEL: Record<EffortLevel, string> = {
+export const EFFORT_LABEL: Record<EffortLevel, string> = {
   low: 'Low',
   medium: 'Medium',
   normal: 'Normal',
@@ -155,28 +155,41 @@ const EFFORT_LABEL: Record<EffortLevel, string> = {
   max: 'Max',
 };
 
-/** Model-specific effort rungs on a compact slider beside the model picker. */
-export function EffortSlider({ modelId, onChanged }: { modelId?: string; onChanged?: () => void }) {
-  const saved = useStore((s) => s.settings?.effort) ?? 'normal';
+/**
+ * The slider's stops for a model, lowest first, and which one the saved
+ * setting sits on.
+ *
+ * The model's default takes its own rung's place rather than a stop of its
+ * own at the far left: "Default · Medium" sitting left of Low read as the
+ * bottom of the scale, so Opus 5.5 looked like it had no Low at all.
+ */
+export function effortRungs(saved: EffortLevel, modelId: string | undefined): { options: EffortLevel[]; index: number; shown: string } {
   const levels = modelEffortLevels(modelId);
   const native = usesNativeEffort(modelId);
   const fallback = modelDefaultEffort(modelId);
-  // What this model will actually be sent, which is what the button shows: a
+  // What this model will actually be sent, which is what the slider shows: a
   // saved `xhigh` on a temperature model runs as `high`, and says so.
   const effective = effectiveEffort(saved, modelId);
+  const atDefault = native && effective === fallback;
+  const options: EffortLevel[] = native ? levels.map((l) => (l === fallback ? 'normal' : l)) : levels;
+  const index = Math.max(0, options.indexOf(atDefault ? 'normal' : effective));
+  return { options, index, shown: atDefault ? `Default · ${EFFORT_LABEL[fallback]}` : EFFORT_LABEL[effective] };
+}
+
+/** Model-specific effort rungs on a compact slider beside the model picker. */
+export function EffortSlider({ modelId, onChanged }: { modelId?: string; onChanged?: () => void }) {
+  const saved = useStore((s) => s.settings?.effort) ?? 'normal';
   const pick = (level: EffortLevel) => {
     if (level === saved) return;
     onChanged?.();
     void window.nekko.updateSettings({ effort: level }).then(() => useStore.getState().refreshSettings());
   };
 
-  const options: EffortLevel[] = native ? ['normal', ...levels] : levels;
-  const index = native && saved === 'normal' ? 0 : Math.max(0, options.indexOf(effective));
+  const { options, index, shown } = effortRungs(saved, modelId);
   // 0..1 up the rungs: it drives the glow's size and arms the top rung's
   // speed lines.
-  const level = options.length > 1 ? Math.max(0, index) / (options.length - 1) : 0;
+  const level = options.length > 1 ? index / (options.length - 1) : 0;
   const atMax = options.length > 1 && index === options.length - 1;
-  const shown = native && saved === 'normal' ? `Default · ${EFFORT_LABEL[fallback]}` : EFFORT_LABEL[effective];
   return (
     <div className="effort-slider flex shrink-0 items-center gap-1 rounded-r-lg border border-l-0 border-line px-2 py-1 text-[11px]" title="Reasoning effort (applies to all chats)">
       <label htmlFor="composer-effort" className="text-ink-faint">Effort</label>

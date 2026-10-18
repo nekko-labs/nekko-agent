@@ -301,14 +301,52 @@ impl OpenAiCompatProvider {
                 let input = js::to_number(m.pointer("/pricing/prompt"));
                 let output = js::to_number(m.pointer("/pricing/completion"));
                 let priced = openrouter && input.is_finite() && output.is_finite();
-                // OpenRouter supplies a display name ("OpenAI: GPT-5"); everyone
-                // else only has the id.
+                // A display name only from the servers that send a meaningful
+                // one (`serverNamesModels`): OpenRouter's "OpenAI: GPT-5" and
+                // the local engines' friendly model names.
                 let name = match m.get("name") {
-                    n if openrouter && js::truthy(n) => n.map(js::display).unwrap_or_default(),
+                    n if server_names_models(&self.config.kind) && js::truthy(n) => {
+                        n.map(js::display).unwrap_or_default()
+                    }
                     _ => id.clone(),
                 };
-                let context = js::coalesce(m.get("context_length"), m.pointer("/top_provider/context_length"));
+                let context = js::coalesce(
+                    js::coalesce(m.get("context_length"), m.pointer("/top_provider/context_length")),
+                    m.get("max_context_length"),
+                );
                 let tools = openrouter && supports_tools(m.get("supported_parameters"));
+                // The Nekko engine sends the file path and the folder it lives
+                // in, so pickers lead with the name and group by location.
+                let mut details = Map::new();
+                if tools {
+                    details.insert("tools".into(), json!("yes"));
+                }
+                // What the model takes as input (OpenRouter's catalog, the
+                // Nekko engine's projector check), for the composer and turn.
+                let inputs: Vec<String> = m
+                    .pointer("/architecture/input_modalities")
+                    .or_else(|| m.get("input_modalities"))
+                    .and_then(Value::as_array)
+                    .map(|a| a.iter().map(js::display).collect())
+                    .unwrap_or_default();
+                if !inputs.is_empty() {
+                    details.insert("inputModalities".into(), json!(inputs.join(",")));
+                }
+                for key in ["path", "location"] {
+                    if let Some(Value::String(s)) = m.get(key) {
+                        details.insert(key.into(), json!(s));
+                    }
+                }
+                let loaded = if self.config.kind == ProviderKind::Vllm {
+                    // vLLM serves exactly the model(s) it was launched with.
+                    Some(true)
+                } else {
+                    match m.get("state").and_then(Value::as_str) {
+                        Some("loaded") => Some(true),
+                        Some("not-loaded") => Some(false),
+                        _ => None,
+                    }
+                };
                 ModelInfo {
                     id,
                     provider_id: self.config.id.clone(),
@@ -316,9 +354,8 @@ impl OpenAiCompatProvider {
                     context_length: context.and_then(Value::as_u64),
                     input_price_per_m: priced.then_some(input * 1e6),
                     output_price_per_m: priced.then_some(output * 1e6),
-                    details: tools.then(|| Map::from_iter([("tools".to_string(), json!("yes"))])),
-                    // vLLM serves exactly the model(s) it was launched with.
-                    loaded: (self.config.kind == ProviderKind::Vllm).then_some(true),
+                    details: (!details.is_empty()).then_some(details),
+                    loaded,
                     ..Default::default()
                 }
             })
@@ -358,6 +395,19 @@ impl OpenAiCompatProvider {
                 .collect(),
         )
     }
+}
+
+/// `serverNamesModels` (openai-compat.ts): kinds whose `/models` rows carry a
+/// display name worth showing.
+fn server_names_models(kind: &ProviderKind) -> bool {
+    matches!(
+        kind,
+        ProviderKind::Openrouter
+            | ProviderKind::Llamacpp
+            | ProviderKind::OpenaiCompat
+            | ProviderKind::Lmstudio
+            | ProviderKind::Vllm
+    )
 }
 
 /// The body field that carries the effort rung for this provider and model.

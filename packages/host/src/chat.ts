@@ -22,7 +22,7 @@ import {
   repairInterruptedHistory,
   INTERRUPTED_NOTE,
 } from '@nekko-agent/core';
-import { reportExperiment, reportArtifact, updateRunPlan, runPlanForSession } from './training.js';
+import { trainingTool } from './training.js';
 import { getSettings } from './store.js';
 import { DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
 import { chatWorkspaces, prepareChatWorktrees, runWorktreeSetup } from './chat-worktrees.js';
@@ -54,13 +54,15 @@ import { buildSpec } from './spec.js';
 import { syncMcp, mcpToolSpecs, isMcpTool, callMcpTool, DAEMON_MCP } from './mcp.js';
 import { daemonCall } from './engine/daemon.js';
 import { daemonOwns } from './daemon-caps.js';
-import { adoptTurn, answerInDaemon, chainOf, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
+import { adoptTurn, answerInDaemon, chainOf, approvalViaDaemon, approveInDaemon, daemonAccountsTurns, daemonPendingInput, daemonRunsTurns, daemonTurnFor, hostTurnEvents, mergePending, newTurnId, registerTurn, runTurnViaDaemon, setTurnPreparer, steerDaemonTurn } from './daemon-turn.js';
 import type { HostTurn, TurnChain, TurnSpec } from './daemon-turn.js';
 import { applyTurnInput, cleanFill, cleanTitle, fillPrompt, hostToolApproval, sendOptionsForQueuedItem, suggestPrompt, titlePrompt, turnSystemPrompt, turnTools } from './turn-plan.js';
+import { sandboxAdmissionRefusal } from './turn-variants.js';
 import { killSessionProcesses } from './processes.js';
 import { DAEMON_HOOKS, hasToolHooks, postToolHooks, preToolHooks, turnEndHooks } from './hooks.js';
 import { completeText } from './sideband.js';
 import { createHostProvider as createProvider, promptCachingForHost } from './prompt-caching.js';
+import { contextWindowFor, imageInputFor, knownContextWindow } from './context-window.js';
 import { appendAgentTerminal, finishAgentTerminal } from './terminal.js';
 
 /** The chat's index snippets, from the engine daemon when it holds the index. */
@@ -467,8 +469,8 @@ async function collectConnectorSnippets(
   return Array.isArray(settled) ? settled.flat() : [];
 }
 
-/** Context window for the headroom bar, from the model id (see guessContextWindow). */
-const modelContextWindow = guessContextWindow;
+/** Context window for the headroom bar: the loaded window a turn last found, else the id's guess. */
+const modelContextWindow = (session: Session | null | undefined) => knownContextWindow(session?.providerId, session?.modelId);
 
 /** Build the context bundle for the Context Inspector preview (no model call). */
 export async function previewContext(sessionId: string, attachedPaths: string[]): Promise<ContextBundle> {
@@ -498,7 +500,7 @@ export async function previewContext(sessionId: string, attachedPaths: string[])
     // replayed to the model too, and on a long run they are most of the window.
     history: sinceCompaction(session?.messages ?? []),
     systemText,
-    contextWindow: modelContextWindow(session?.modelId),
+    contextWindow: modelContextWindow(session),
     excluded: new Set(session?.contextPrefs?.excluded ?? []),
     pinned: new Set(session?.contextPrefs?.pinned ?? []),
   });
@@ -607,7 +609,7 @@ async function prepareSubAgent(
     throw new Error('Sub-agent depth limit reached, handle this part of the task directly instead of delegating further.');
   }
   if (parent.incognito) throw new Error('Delegation is unavailable in incognito chats because child sessions are persisted. Handle this task in the current chat.');
-  if (parent.offline) throw new Error('Offline chats cannot call tools, including sub-agents.');
+  if (parent.offline) throw new Error('Offline chats cannot start sub-agents.');
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Sub-agent input must be an object.');
   const inp = input as Record<string, unknown>;
   const { task, title } = inp;
@@ -728,14 +730,14 @@ async function runHostTool(ctx: HostToolContext, call: ToolCall): Promise<ToolRe
   }
   if (call.name === 'report_experiment' && session.trainingRunId) {
     try {
-      return { toolCallId: call.id, output: reportExperiment(opts.sessionId, call.input as Record<string, unknown>) };
+      return { toolCallId: call.id, output: (await trainingTool(opts.sessionId, call.name, call.input as Record<string, unknown>)).output };
     } catch (e) {
       return { toolCallId: call.id, output: `Failed to record: ${(e as Error).message}`, isError: true };
     }
   }
   if (call.name === 'report_artifact' && session.trainingRunId) {
     try {
-      return { toolCallId: call.id, output: reportArtifact(opts.sessionId, call.input as Record<string, unknown>) };
+      return { toolCallId: call.id, output: (await trainingTool(opts.sessionId, call.name, call.input as Record<string, unknown>)).output };
     } catch (e) {
       return { toolCallId: call.id, output: `Failed to record the artifact: ${(e as Error).message}`, isError: true };
     }
@@ -747,10 +749,14 @@ async function runHostTool(ctx: HostToolContext, call: ToolCall): Promise<ToolRe
       // the plan rail can render it too); ordinary chats write
       // session.agentPlan directly. Either way the rail needs a session_meta
       // poke to re-read.
-      const output = session.trainingRunId
-        ? updateRunPlan(opts.sessionId, input)
-        : updateSessionPlan(session, input);
-      if (session.trainingRunId) session.agentPlan = runPlanForSession(opts.sessionId);
+      let output: string;
+      if (session.trainingRunId) {
+        const run = await trainingTool(opts.sessionId, 'update_plan', input);
+        output = run.output;
+        session.agentPlan = run.plan;
+      } else {
+        output = updateSessionPlan(session, input);
+      }
       persist();
       send({ type: 'session_meta', sessionId: opts.sessionId });
       return { toolCallId: call.id, output };
@@ -848,8 +854,9 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   }
 
   const sandbox = getExecutionMode(session) === 'sandbox';
-  if (sandbox && (!session.sandbox || session.chatType === 'image' || opts.skill)) {
-    send({ type: 'error', sessionId: session.id, message: 'Sandbox requires explicit setup and supports text chat without host skills only.' }); return null;
+  const sandboxRefusal = sandbox ? sandboxAdmissionRefusal(session, opts) : null;
+  if (sandboxRefusal) {
+    send({ type: 'error', sessionId: session.id, message: sandboxRefusal }); return null;
   }
   if (!sandbox && getExecutionMode(session) === 'worktree' && !session.incognito && !session.offline) {
     let created: ReturnType<typeof prepareChatWorktrees>;
@@ -898,8 +905,9 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   }
   const abort = chainAbort ?? new AbortController();
   abortControllers.set(opts.sessionId, abort);
-  // Offline disables tool calls entirely; otherwise combine builtins + connected
-  // MCP tools, then drop any the user turned off for this chat.
+  // Offline keeps the local tools and drops the online ones (turnTools);
+  // otherwise combine builtins + connected MCP tools, then drop any the user
+  // turned off for this chat.
   // Orchestration: the strategy decides whether sub-agents are even offered.
   const orchestration = settings.orchestration ?? DEFAULT_ORCHESTRATION;
   const allowSpawn = getStrategy(orchestration.strategy).allowsSpawn;
@@ -977,6 +985,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
     worktreeNotices: Object.values(session.gitWorktrees ?? {}).map((w) => w.notice),
     contextBlock,
     platform: process.platform,
+    workMode: session.workMode,
   });
 
   if (abort.signal.aborted) {
@@ -1008,6 +1017,12 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
     send({ type: 'error', sessionId: opts.sessionId, message: (e as Error).message });
     return;
   }
+  // The window the model was actually loaded with, so the loop can keep a long
+  // run inside it (fit.ts) rather than assume the id's nominal size.
+  const contextWindow = await contextWindowFor(provider, opts.modelId, () => createProvider(resolvedProvider).listModels());
+  // A model that cannot see is sent a note in place of each picture, so one
+  // attachment does not fail this chat's every later turn.
+  const imageInput = await imageInputFor(provider, opts.modelId, () => createProvider(resolvedProvider).listModels());
   let attempts = 0;
   let eventsSeen = false;
   let lastError: Error | undefined;
@@ -1099,6 +1114,8 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
         maxOutputTokens: isLocalProvider(provider.kind) ? clampMaxOutputTokens(settings.maxOutputTokens) : undefined,
         think: session.thinking,
         maxHistoryTurns: opts.maxHistoryTurns,
+        contextWindow,
+        imageInput,
         resume: opts.resume,
         pullSteering: () => steering.get(opts.sessionId)?.splice(0) ?? [],
         signal: abort.signal,
@@ -1336,6 +1353,10 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
       statsEffort: effectiveEffort(settings.effort, opts.modelId),
       maxOutputTokens: isLocalProvider(provider.kind) ? clampMaxOutputTokens(settings.maxOutputTokens) : undefined,
       promptCaching: promptCachingForHost(),
+      // The loaded window, for the daemon's loop to keep the run inside (fit.rs).
+      contextWindow: await contextWindowFor(provider, opts.modelId, () => createProvider(resolvedProvider ?? provider).listModels()),
+      // False for a model known not to take pictures: the loop sends a note instead (nekko-loop history.rs).
+      imageInput: await imageInputFor(provider, opts.modelId, () => createProvider(resolvedProvider ?? provider).listModels()),
       ...(resolvedProvider ? { provider: config(resolvedProvider) } : {}),
       ...(providerError !== undefined ? { providerError } : {}),
       headers: provider.kind === 'anthropic' && provider.auth === 'subscription' && !!provider.tokenKey,
@@ -1347,6 +1368,9 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
         tokenKey: provider.tokenKey,
         incognito,
       },
+      // What this host still reads of the turn's events (daemon-turn.ts
+      // `hostTurnEvents`); left out, the daemon sends every one.
+      ...(hostTurnEvents(daemonAccounts) ? { hostEvents: hostTurnEvents(daemonAccounts) } : {}),
     },
   };
   return { spec, hostTurn: hostTurnFor(t, turnId, resolvedProvider, daemonAccounts) };
@@ -1368,7 +1392,8 @@ function hostTurnFor(t: DaemonTurnInput, turnId: string, resolvedProvider: Provi
   // change on it travels back to the daemon, which owns the transcript.
   const snapshot: Session = structuredClone(session);
   const hostTools: HostToolContext = {
-    opts, session: snapshot, mode: t.mode, tools: t.tools, settings, toolSettings: t.toolSettings, defaultCwd, sandbox: false,
+    // A sandbox chat's call, should one ever reach this host, still goes to its container.
+    opts, session: snapshot, mode: t.mode, tools: t.tools, settings, toolSettings: t.toolSettings, defaultCwd, sandbox: t.sandbox,
     allowBrowserControl: t.allowBrowserControl, allowSpawn: t.allowSpawn, decideWith: t.decideWith,
     signal: abort.signal, send, persist: () => {}, requestApproval,
     askUser: async () => ASK_CANCELLED,
@@ -1438,7 +1463,8 @@ function hostTurnFor(t: DaemonTurnInput, turnId: string, resolvedProvider: Provi
       if (summary.lost) send({ type: 'error', sessionId: opts.sessionId, message: summary.lost });
       const aborted = abort.signal.aborted || summary.aborted === true;
       afterTurnHooks({
-        opts, sandbox: false, incognito, offline, workspaces: t.workspaces,
+        // A sandbox turn runs no host TurnEnd hooks and builds no linked spec.
+        opts, sandbox: t.sandbox, incognito, offline, workspaces: t.workspaces,
         session: getSession(opts.sessionId) ?? session, resolvedProvider,
         stop: aborted ? 'stopped' : summary.lost ? 'error' : summary.stop ?? 'complete',
         error: summary.lost,
@@ -1497,9 +1523,11 @@ export async function adoptAdmittedTurn(
   if (payload.chained && !joined) return;
   const abort = joined?.abort ?? new AbortController();
   if (!joined) abortControllers.set(session.id, abort);
-  const tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl: payload.allowBrowserControl, mcpTools: offline ? [] : mcpToolSpecs(), decide: !!payload.decideWith });
+  const sandbox = getExecutionMode(session) === 'sandbox';
+  let tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl: payload.allowBrowserControl, mcpTools: offline || sandbox ? [] : mcpToolSpecs(), decide: !!payload.decideWith });
+  if (sandbox) tools = tools.filter((t) => SANDBOX_TOOLS.has(t.name));
   const t: DaemonTurnInput = {
-    settings, provider, session, sandbox: false, workspaces: payload.workspaces,
+    settings, provider, session, sandbox, workspaces: payload.workspaces,
     toolSettings: { ...settings, workspaces: payload.workspaces }, mode: payload.mode, offline, incognito: !!session.incognito,
     abort, allowSpawn: getStrategy(orchestration.strategy).allowsSpawn, decideWith: payload.decideWith, tools,
     connectorSnippets: [], indexSnippets: [], daemonMcp: true,

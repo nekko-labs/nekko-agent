@@ -135,7 +135,12 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
   );
 }
 
-export function PrActionDock({ sessionId, prs, urls }: { sessionId: string; prs: PrInfo[]; urls: string[] }) {
+/**
+ * Opens upward from the chat's footer divider: the toggle sits on the divider
+ * and the cards stack above it. `floating` closes it into a standalone card
+ * where there is no divider below (the wall composer).
+ */
+export function PrActionDock({ sessionId, prs, urls, floating = false }: { sessionId: string; prs: PrInfo[]; urls: string[]; floating?: boolean }) {
   const storageKey = 'nekko.pr-dismissed.' + sessionId;
   const load = () => {
     try { const value = JSON.parse(localStorage.getItem(storageKey) ?? '[]'); return new Set<string>(Array.isArray(value) ? value.filter((x) => typeof x === 'string') : []); }
@@ -177,13 +182,7 @@ export function PrActionDock({ sessionId, prs, urls }: { sessionId: string; prs:
     });
     setClosing((previous) => { const next = new Set(previous); next.delete(url); return next; });
   };
-  return <section aria-label="Pending pull requests" className="pr-action-deck" data-expanded={expanded}>
-    <button className="pr-deck-toggle" aria-expanded={expanded} aria-controls={'pr-deck-' + sessionId} onClick={() => setExpansion({ key: statusKey, value: !expanded })}>
-      <BranchIcon className="h-3.5 w-3.5 shrink-0" />
-      <span>{tracked.length} pull request{tracked.length === 1 ? '' : 's'}</span>
-      <span className="ml-auto text-ink-faint">{active.length ? expanded ? 'Tuck away' : 'Show actions' : tracked.every((url) => byUrl.get(url)?.state === 'merged') ? 'Merged' : 'Resolved'}</span>
-      <span aria-hidden className="pr-deck-chevron">⌃</span>
-    </button>
+  return <section aria-label="Pending pull requests" className="pr-action-deck" data-expanded={expanded} data-floating={floating}>
     <div className="pr-deck-reveal" id={'pr-deck-' + sessionId} inert={!expanded}>
       <div className="pr-deck-clip"><div className="pr-deck-list">
         {active.map((url) => <div key={url} className="pr-deck-slot" data-closing={closing.has(url)} onAnimationEnd={(event) => { if (event.target === event.currentTarget && event.animationName === 'pr-deck-retract') finishDismiss(url); }}>
@@ -191,6 +190,12 @@ export function PrActionDock({ sessionId, prs, urls }: { sessionId: string; prs:
         </div>)}
       </div></div>
     </div>
+    <button className="pr-deck-toggle" aria-expanded={expanded} aria-controls={'pr-deck-' + sessionId} onClick={() => setExpansion({ key: statusKey, value: !expanded })}>
+      <BranchIcon className="h-3.5 w-3.5 shrink-0" />
+      <span>{tracked.length} pull request{tracked.length === 1 ? '' : 's'}</span>
+      <span className="ml-auto text-ink-faint">{active.length ? expanded ? 'Tuck away' : 'Show actions' : tracked.every((url) => byUrl.get(url)?.state === 'merged') ? 'Merged' : 'Resolved'}</span>
+      <span aria-hidden className="pr-deck-chevron">⌃</span>
+    </button>
   </section>;
 }
 

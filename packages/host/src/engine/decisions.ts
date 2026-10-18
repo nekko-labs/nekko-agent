@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+import { createReadStream } from 'fs';
 import { readdir, rm, stat } from 'fs/promises';
 import { join, resolve, sep } from 'path';
 import type {
@@ -26,14 +28,21 @@ import type { EngineDaemon } from './daemon.js';
  */
 
 /**
- * Where a hosted export would be fetched from, pinned so a re-export upstream
- * never swaps the weights under a user. Null today: the only public export
- * (tozp/laya-onnx) is traced at a fixed length, answers 36 of 86 reference
- * questions correctly, and its fp16 file crashes ONNX Runtime's CPU provider
- * (see docs/decision-models.md). Until a correct one is hosted (PF32), Laya
- * runs from an export folder the user adds.
+ * Where the exports are fetched from: a release of this repository that is
+ * never the latest one (the app's updater reads `releases/latest`), holding
+ * ONNX exports of the three Laya checkpoints made and checked by
+ * scripts/decision-models/ (see docs/decision-models.md). Every file is pinned
+ * by size and SHA-256 below, so a replaced asset is refused, never loaded.
+ * The engine daemon's port (crates/nekkod/src/decisions.rs) fetches from the
+ * same place, held to this by `decisions.golden.test.ts`.
  */
-const LAYA_ONNX = null as { repo: string; revision: string } | null;
+export const DECISION_RELEASE_URL = 'https://github.com/nekko-labs/nekko-agent/releases/download/decision-models-v1';
+
+const RELEASE = 'nekko-agent decision-models-v1';
+
+/** A checkpoint's tokenizer and configs, as `stage-release.py` printed them. */
+const shared = (id: string, files: Array<[file: string, bytes: number, sha256: string]>) =>
+  files.map(([file, bytes, sha256]) => ({ file, asset: `${id}.${file}`, bytes, sha256 }));
 
 export const DECISION_CATALOG: DecisionCatalogEntry[] = [
   {
@@ -41,24 +50,71 @@ export const DECISION_CATALOG: DecisionCatalogEntry[] = [
     name: 'Laya (English)',
     publisher: 'Convai Innovations',
     license: 'Apache-2.0',
-    ...(LAYA_ONNX
-      ? { source: `${LAYA_ONNX.repo}@${LAYA_ONNX.revision.slice(0, 7)}` }
-      : { unavailable: 'No correct ONNX export of Laya is hosted yet, so it cannot be downloaded here. Export it with the recipe in docs/decision-models.md and add the folder below.' }),
+    source: `${RELEASE}, from convaiinnovations/laya@55cf4c4`,
     description:
       'A 395M ModernBERT decision model. Routes, scores and answers yes/no questions about a text or JSON state, with calibrated probabilities, in one pass. 512-token context.',
     variants: [
-      { precision: 'fp16', file: 'model_fp16.onnx', bytes: 843_685_645, recommended: true },
-      { precision: 'int8', file: 'model_int8.onnx', bytes: 424_348_081 },
-      { precision: 'fp32', file: 'model.onnx', bytes: 1_685_917_998 },
+      { precision: 'fp16', file: 'model_fp16.onnx', asset: 'laya-en.model_fp16.onnx', bytes: 845_901_452, sha256: 'f5adb828cd42bb265da6397c3693256f3c3fd34038a783becb8fb3831f21f03e', recommended: true },
+      { precision: 'int8', file: 'model_int8.onnx', asset: 'laya-en.model_int8.onnx', bytes: 612_313_098, sha256: '57556a82d0384335b43831c48921fa8269d7788e06463779b11eda45d1675a58' },
+      { precision: 'fp32', file: 'model.onnx', asset: 'laya-en.model.onnx', bytes: 1_688_502_312, sha256: '7fd5d50d5354397ed7aa162cef85254270544812569faa37c19db249d268f360' },
     ],
-    shared: [
-      { file: 'tokenizer.json', bytes: 3_583_228 },
-      { file: 'tokenizer_config.json', bytes: 308 },
-      { file: 'rl_agent_config.json', bytes: 745 },
-      { file: 'config.json', bytes: 2_083 },
+    shared: shared('laya-en', [
+      ['tokenizer.json', 3_583_228, '6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30'],
+      ['tokenizer_config.json', 308, '50044de60daaa73df97d262e15a40d4faf0160e7d742df64b377877a1320dd12'],
+      ['rl_agent_config.json', 745, 'ae287b56bbcf5f8c4f4541ae9dfd00c914c4c48b940b8398c3058af37ba92bbd'],
+      ['config.json', 2_083, 'bf3ab80598fdccf414855a2ce80f22859e4492d06ca8a62ddd1cfb63972f8979'],
+    ]),
+  },
+  {
+    id: 'laya-multilingual',
+    name: 'Laya (multilingual)',
+    publisher: 'Convai Innovations',
+    license: 'Apache-2.0',
+    source: `${RELEASE}, from convaiinnovations/laya-multilingual@e4e9ddf`,
+    description:
+      'A 322M mmBERT decision model for text in 100+ languages, about twice as fast as the English one. Less accurate on English text. 1,024-token context.',
+    // No int8: its 256k-token embedding stays fp32, so the int8 file is larger than fp16 and less accurate.
+    variants: [
+      { precision: 'fp16', file: 'model_fp16.onnx', asset: 'laya-multilingual.model_fp16.onnx', bytes: 646_462_359, sha256: 'd5b9c4cff507b3370ab19c4dcd6302bd529bca8e9adaede6d48e95a2364e6d42', recommended: true },
+      { precision: 'fp32', file: 'model.onnx', asset: 'laya-multilingual.model.onnx', bytes: 1_290_294_801, sha256: '6f5a928fe6ab7f9b34fa57b8a29683fbdd13e604cf75b7a0d483bf98760b665e' },
     ],
+    shared: shared('laya-multilingual', [
+      ['tokenizer.json', 34_363_188, '609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f'],
+      ['tokenizer_config.json', 502, '424b69444bf7b5809dc2cd2e36d0bd71b8055124dd24274d6db3c655d38205e7'],
+      ['rl_agent_config.json', 472, '25061739243b617ad88d1219ba6f8a9c86c5881ca28df024fa2d9b3b2fcc30c6'],
+      ['config.json', 1_938, '83f6916d13ef0f556ac461f28308dc2bffa7ebeadee8ec9e2db5812020ea5bb4'],
+    ]),
+  },
+  {
+    id: 'laya-typed-decisions',
+    name: 'Laya (typed decisions)',
+    publisher: 'Convai Innovations',
+    license: 'Apache-2.0',
+    source: `${RELEASE}, from convaiinnovations/laya-typed-decisions@1a793eb`,
+    description:
+      'The English model fine-tuned on four workflows: invoice processing, security incidents, customer service and agent traces. Much more accurate there, untested elsewhere. 1,024-token context.',
+    variants: [
+      { precision: 'fp16', file: 'model_fp16.onnx', asset: 'laya-typed-decisions.model_fp16.onnx', bytes: 845_901_452, sha256: '49dfd4f9b0988a921ab387ce136079a00975e682272433832d118070fc2fc729', recommended: true },
+      { precision: 'int8', file: 'model_int8.onnx', asset: 'laya-typed-decisions.model_int8.onnx', bytes: 612_313_098, sha256: 'dda81996ba157117d7174cdc82295480c66066e605b3a5314b7faa3fad64279a' },
+      { precision: 'fp32', file: 'model.onnx', asset: 'laya-typed-decisions.model.onnx', bytes: 1_688_502_312, sha256: 'c2254b2fa7f90ca6534296ac96ac3d72eb7261e13f4242997db44d7a8d9cf1d3' },
+    ],
+    shared: shared('laya-typed-decisions', [
+      ['tokenizer.json', 3_583_228, '6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30'],
+      ['tokenizer_config.json', 337, '08d4cf3ac4dca381759441b85b91a6d40e688471dcd33d15d6649eb0a9a854d1'],
+      ['rl_agent_config.json', 847, 'ebf0cd524d92342a6be5e48e9fca3d7c2babfb5a56ccd79d2171ef5d8c7f7be8'],
+      ['config.json', 2_084, '5268d24ad3b77c8151de5dcb0762ba4391619aad9ab0bda33e36fb083cfeae6d'],
+    ]),
   },
 ];
+
+/** The bytes are the published file's: its size, then its SHA-256, streamed. Null when they are. */
+export async function checkDecisionFile(path: string, f: { file: string; bytes: number; sha256?: string }): Promise<string | null> {
+  if ((await fileSize(path)) !== f.bytes) return `${f.file} is not the published size.`;
+  if (!f.sha256) return null;
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
+  return hash.digest('hex') === f.sha256 ? null : `${f.file} is not the published file (checksum mismatch).`;
+}
 
 const TYPESAFE_URL = 'https://api.typesafe.ai/v1';
 const MODEL_FILES: Record<DecisionPrecision, string[]> = {
@@ -94,6 +150,8 @@ export interface DecisionsDeps {
   folders?: () => string[];
   saveFolders?: (dirs: string[]) => void;
   fetch?: typeof fetch;
+  /** Where the catalog's files are fetched from (`DECISION_RELEASE_URL`; tests use a local server). */
+  releaseUrl?: () => string;
   /** Where a downloaded DirectML.dll goes (Windows); without it none is fetched. */
   directmlDir?: () => string;
   platform?: NodeJS.Platform;
@@ -154,26 +212,37 @@ export function createDecisions(deps: DecisionsDeps) {
     return out;
   }
 
-  /** Fetch one precision of a catalog model, plus its tokenizer and config. */
+  /**
+   * Fetch one precision of a catalog model, plus its tokenizer and config,
+   * through the download queue as one group. Each file is checked against its
+   * published size and SHA-256 before it is renamed into place; a file already
+   * on disk at the published size is kept.
+   */
   async function download(catalogId: string, precision: DecisionPrecision = 'fp16'): Promise<{ ok: boolean; message: string }> {
     const entry = DECISION_CATALOG.find((c) => c.id === catalogId);
     const variant = entry?.variants.find((v) => v.precision === precision);
     if (!entry || !variant) return { ok: false, message: 'That decision model is not in the catalog.' };
-    if (!LAYA_ONNX) return { ok: false, message: entry.unavailable ?? 'That decision model cannot be downloaded yet.' };
+    if (entry.unavailable) return { ok: false, message: entry.unavailable };
     const dir = dirOf(entry.id);
+    const base = deps.releaseUrl?.() ?? DECISION_RELEASE_URL;
     let queued = 0;
     let bytes = 0;
     for (const f of [...entry.shared, variant]) {
       const dest = join(dir, f.file);
       if ((await fileSize(dest)) === f.bytes) continue;
       void deps.downloads.start({
-        id: `decision:${entry.id}:${f.file}`,
+        // Four segments: `finishedModelJobs` follows up three-segment `model:` ids as
+        // chat models (turning the model server's autoStart on), which these are not.
+        id: `decision:${entry.id}:${f === variant ? precision : 'shared'}:${f.file}`,
         kind: 'model',
         label: `${entry.name} · ${f.file}`,
         target: entry.id,
-        url: `https://huggingface.co/${LAYA_ONNX.repo}/resolve/${LAYA_ONNX.revision}/${f.file}?download=true`,
+        url: `${base}/${f.asset ?? f.file}`,
         dest,
-        verify: async (part) => ((await fileSize(part)) === f.bytes ? null : `${f.file} is not the published size.`),
+        group: `decision:${entry.id}:${precision}`,
+        groupLabel: `${entry.name} · ${precision}`,
+        file: f.file,
+        verify: (part) => checkDecisionFile(part, f),
       });
       queued += 1;
       bytes += f.bytes;

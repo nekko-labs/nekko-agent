@@ -22,14 +22,17 @@
 //!
 //! It runs `fetch_url`, the browser and window capture (`nekko-web`, the
 //! in-app browser through the desktop app's bridge) and the background-process
-//! tools (`nekko-tools`) and `agent_watch` (watches.rs) itself, and calls back for what has not moved:
-//! `turn:tool` (delegation targets, training reports, and MCP,
-//! sub-agents or `decide` for a host that keeps them), `turn:hook` (tool
+//! tools (`nekko-tools`), `agent_watch` (watches.rs) and a training or goal
+//! run's `report_experiment`, `report_artifact` and `update_plan`
+//! (nekko-automation `training`) itself, and calls back for what has not moved:
+//! `turn:tool` (delegation targets, and MCP, sub-agents, `decide` or the run
+//! tools for a host that keeps them), `turn:hook` (tool
 //! hooks, for a host that keeps them; given `facts.hookRules` they run here),
 //! `turn:headers` (Anthropic subscription rate
-//! limits), `loop:log` (the agent terminal); and it sends the host every
-//! event (`turn:event`, deltas batched) for the phone relay and usage and
-//! reply accounting, then `turn:end`.
+//! limits), `loop:log` (the agent terminal); and it sends the host the events
+//! it asks for (`turn:event`, deltas batched; `facts.hostEvents`, every one
+//! when the host does not say, which a TS phone relay, messaging bridge or
+//! accounting needs), then `turn:end`.
 //!
 //! After a turn (step 4) the daemon starts the chat's generated title and
 //! runs its next queued prompt: the host admits that prompt (`turn:prepare`)
@@ -300,6 +303,12 @@ pub struct Turns {
     pub browsers: Arc<nekko_web::browser::Browsers>,
     /// `agent_watch` and its scheduler (watches.rs), with a data directory.
     pub watches: Option<Arc<crate::watches::Watches>>,
+    /// Training and goal runs (nekko-automation `training`), with a data
+    /// directory: a run chat's `report_experiment`, `report_artifact` and
+    /// `update_plan` are handled here.
+    pub training: Option<Arc<nekko_automation::Training>>,
+    /// Sandbox chats' containers (sandbox.rs): a sandbox turn's tools run there.
+    pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
     /// How each queued turn the daemon started as the next of a chain ends,
@@ -340,6 +349,8 @@ impl Turns {
             bridge: None,
             browsers: nekko_web::browser::Browsers::new(),
             watches: None,
+            training: None,
+            sandboxes: None,
             running: Mutex::default(),
             pending: Pending::default(),
             chained: Mutex::default(),
@@ -368,6 +379,18 @@ impl Turns {
     /// `agent_watch` runs here (watches.rs).
     pub fn with_watches(mut self, watches: Option<Arc<crate::watches::Watches>>) -> Self {
         self.watches = watches;
+        self
+    }
+
+    /// A run chat's tools run here (nekko-automation `training`).
+    pub fn with_training(mut self, training: Option<Arc<nekko_automation::Training>>) -> Self {
+        self.training = training;
+        self
+    }
+
+    /// Sandbox turns run their tools in the daemon's containers (sandbox.rs).
+    pub fn with_sandboxes(mut self, sandboxes: Option<Arc<crate::sandbox::Sandboxes>>) -> Self {
+        self.sandboxes = sandboxes;
         self
     }
 
@@ -633,7 +656,8 @@ impl Turns {
         // The host's copy of every event, in order and batched; the UI never
         // waits on it. Drained before `turn:end`.
         let (host_tx, host_rx) = mpsc::unbounded_channel::<HostMsg>();
-        let host_task = tokio::spawn(forward_to_host(host_rx, backend.clone(), shared.turn_id.clone()));
+        let wanted = host_events(&spec["facts"]);
+        let host_task = tokio::spawn(forward_to_host(host_rx, backend.clone(), shared.turn_id.clone(), wanted));
         let summary = self.run_turn(backend, &hub, store, spec, &shared, rx, &host_tx).await;
         drop(host_tx);
         let _ = host_task.await;
@@ -670,16 +694,20 @@ impl Turns {
         let Some(loaded) = tokio::task::spawn_blocking(move || st.get(&s_id)).await.ok().flatten() else {
             return early("Session not found.");
         };
-        // Sandbox turns stay with the host's container router.
-        if str_at(&loaded, "executionMode") == Some("sandbox") {
+        // A sandbox chat runs its tools in the daemon's container for it (a
+        // spec that says `facts.sandbox`); a host that did not say so keeps it.
+        let sandbox = str_at(&loaded, "executionMode") == Some("sandbox");
+        if sandbox && (facts.get("sandbox") != Some(&Value::Bool(true)) || self.sandboxes.is_none()) {
             return early("chat:turn is unsupported for sandbox sessions; use the host container router");
         }
         let incognito = js::truthy(loaded.get("incognito"));
 
         // MCP: a host that hands over the server list (`turn:mcp`) leaves the
         // sync and the calls to this daemon; an older one sends the tool specs.
-        let own_mcp = facts.get("mcpServers").filter(|s| s.is_array()).cloned();
+        // A sandbox chat has none.
+        let own_mcp = facts.get("mcpServers").filter(|s| s.is_array() && !sandbox).cloned();
         let mcp_tools = match &own_mcp {
+            _ if sandbox => json!([]),
             Some(configs) if !js::truthy(loaded.get("offline")) => {
                 let any = configs.as_array().is_some_and(|a| a.iter().any(|c| c.get("enabled") == Some(&json!(true))));
                 if any { self.mcp.sync(configs).await["specs"].clone() } else { self.mcp.snapshot()["specs"].clone() }
@@ -694,12 +722,24 @@ impl Turns {
             "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
             "allowBrowserControl": spec.get("allowBrowserControl").cloned().unwrap_or(json!(false)),
             "mcpTools": mcp_tools,
-            "decide": facts.get("decide").cloned().unwrap_or(json!(false)),
+            "decide": !sandbox && facts.get("decide") == Some(&Value::Bool(true)),
         });
-        let tools = turn::turn_tools(&tool_input);
-        let workspaces: Vec<Value> = facts.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default();
+        let mut tools = turn::turn_tools(&tool_input);
+        // A sandbox turn: only the container's tools, the copied folders as
+        // `folder-N`, and no host context (attachments, guidelines, memory,
+        // connectors, the index), as `admitTurn` and `sendChat` compose it.
+        if sandbox {
+            tools.retain(|t| turn::variants::SANDBOX_TOOLS.contains(&turn::catalog::name(t)));
+        }
+        let workspaces: Vec<Value> = if sandbox {
+            turn::variants::sandbox_workspaces(&loaded)
+        } else {
+            facts.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default()
+        };
         let data_dir = self.data_dir.clone().or_else(|| store.dir().parent().map(PathBuf::from));
-        let block = {
+        let block = if sandbox {
+            nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput::default()))
+        } else {
             let (loaded, opts, facts, workspaces) = (loaded.clone(), opts.clone(), facts.clone(), workspaces.clone());
             tokio::task::spawn_blocking(move || context_block(&loaded, &opts, &facts, &workspaces, data_dir.as_deref()))
                 .await
@@ -719,11 +759,12 @@ impl Turns {
             "workspaces": workspaces,
             "tools": tools,
             "settings": settings,
-            "sandbox": false,
+            "sandbox": sandbox,
             "executionMode": execution_mode,
             "worktreeNotices": notices,
             "contextBlock": block,
             "platform": facts.get("platform").cloned().unwrap_or(json!(std::env::consts::OS)),
+            "workMode": loaded.get("workMode").cloned().unwrap_or(Value::Null),
         }));
 
         if shared.cancel.is_cancelled() {
@@ -832,10 +873,15 @@ impl Turns {
             .map(str::to_string)
             .or_else(|| shared.default_mode.clone())
             .unwrap_or_else(|| "guardrails".into());
-        let hooks = facts.get("hooks") == Some(&Value::Bool(true));
-        let native =
-            if hooks { None } else { native_context(self, shared, backend, settings, &workspaces, &mode, &session_id) };
+        // A sandbox turn runs no hooks and no host tool: everything goes to its container.
+        let hooks = !sandbox && facts.get("hooks") == Some(&Value::Bool(true));
+        let native = if hooks || sandbox {
+            None
+        } else {
+            native_context(self, shared, backend, settings, &workspaces, &mode, &session_id)
+        };
         let runner = TurnTools {
+            sandbox: sandbox.then(|| self.sandboxes.clone()).flatten(),
             // The decision runner the host picked; the local one is this daemon's.
             decide: (facts.get("decideWith").and_then(Value::as_str) == Some("local")).then(|| self.decide.clone()),
             hub: hub.clone(),
@@ -851,7 +897,7 @@ impl Turns {
             names,
             native,
             hooks,
-            hook_rules: facts.get("hookRules").filter(|r| r.is_array()).map(nekko_tools::hooks::rules),
+            hook_rules: facts.get("hookRules").filter(|r| r.is_array() && !sandbox).map(nekko_tools::hooks::rules),
             hook_cwd: workspaces.first().and_then(|w| str_at(w, "path")).map(str::to_string).unwrap_or_else(|| {
                 std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
             }),
@@ -877,7 +923,9 @@ impl Turns {
             think: lock(&session).get("thinking").and_then(Value::as_bool),
             prompt_caching: Some(facts.get("promptCaching").and_then(Value::as_bool).unwrap_or(true)),
             max_history_turns: opts.get("maxHistoryTurns").and_then(Value::as_f64),
+            context_window: facts.get("contextWindow").and_then(Value::as_f64).filter(|w| *w > 0.0),
             max_output_tokens: facts.get("maxOutputTokens").and_then(Value::as_u64),
+            image_input: facts.get("imageInput").and_then(Value::as_bool),
             resume: opts.get("resume") == Some(&json!(true)),
             cancel: shared.cancel.clone(),
             steering: shared.steering.clone(),
@@ -1183,9 +1231,28 @@ fn coalesce(batch: Vec<Value>) -> Vec<Value> {
     out
 }
 
+/// What a host with no TS relay, messaging or accounting asks for.
+pub const HOST_END_EVENTS: [&str; 2] = ["done", "error"];
+
+/// The event types the host asked for (`facts.hostEvents`), or `None` for
+/// every one: a host whose phone relay, messaging bridge or accounting still
+/// runs in TS reads the whole turn, one that only follows how turns end
+/// (agent watches, auto-continue) asks for `done` and `error`.
+fn host_events(facts: &Value) -> Option<HashSet<String>> {
+    facts
+        .get("hostEvents")?
+        .as_array()
+        .map(|kinds| kinds.iter().filter_map(Value::as_str).map(str::to_string).collect())
+}
+
 /// The host's copy of the turn's events, in order, deltas batched. The UI
 /// never waits on this: it has each event already.
-async fn forward_to_host(mut rx: mpsc::UnboundedReceiver<HostMsg>, backend: Arc<Backend>, turn_id: String) {
+async fn forward_to_host(
+    mut rx: mpsc::UnboundedReceiver<HostMsg>,
+    backend: Arc<Backend>,
+    turn_id: String,
+    wanted: Option<HashSet<String>>,
+) {
     let mut deltas: Vec<Value> = Vec::new();
     let send = |payload: Value| {
         let (backend, turn_id) = (backend.clone(), turn_id.clone());
@@ -1206,6 +1273,9 @@ async fn forward_to_host(mut rx: mpsc::UnboundedReceiver<HostMsg>, backend: Arc<
             }
         };
         let Some(msg) = next else { break };
+        if wanted.as_ref().is_some_and(|w| !str_at(&msg.event, "type").is_some_and(|t| w.contains(t))) {
+            continue;
+        }
         if is_delta(&msg.event) {
             deltas.push(msg.event);
             continue;
@@ -1311,6 +1381,8 @@ fn native_context(
 
 /// A turn's tool calls: where each runs, with hooks around them.
 struct TurnTools {
+    /// A sandbox chat's containers: every call runs there, after its approval.
+    sandbox: Option<Arc<crate::sandbox::Sandboxes>>,
     /// The `decide` tool runs here when the host picked the local model.
     decide: Option<Arc<DecideService>>,
     hub: Hub,
@@ -1437,6 +1509,9 @@ impl TurnTools {
     }
 
     async fn inner(&self, call: &Value) -> Result<Value, String> {
+        if let Some(sandboxes) = &self.sandbox {
+            return Ok(self.sandbox_tool(sandboxes, call).await);
+        }
         let id = str_at(call, "id").unwrap_or_default();
         let name = str_at(call, "name").unwrap_or_default();
         let input = call.get("input").cloned().unwrap_or(json!({}));
@@ -1449,6 +1524,12 @@ impl TurnTools {
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
             _ => {}
+        }
+        if self.training
+            && let Some(runs) = self.turns.training.clone()
+            && matches!(name, "report_experiment" | "report_artifact" | "update_plan")
+        {
+            return Ok(self.run_tool(&runs, id, name, input).await);
         }
         if name == "decide"
             && let Some(service) = &self.decide
@@ -1505,6 +1586,36 @@ impl TurnTools {
         Ok(reply.get("result").cloned().unwrap_or_else(|| error(id, "The host returned no result.")))
     }
 
+    /// A run chat's `report_experiment`, `report_artifact` or `update_plan`
+    /// (chat.ts `runHostTool`): recorded on the run, the plan mirrored onto
+    /// the chat so its plan rail shows it.
+    async fn run_tool(&self, runs: &Arc<nekko_automation::Training>, id: &str, name: &str, input: Value) -> Value {
+        let (runs, sid, tool) = (runs.clone(), self.shared.session_id.clone(), name.to_string());
+        let out = tokio::task::spawn_blocking(move || runs.tool(&sid, &tool, &input))
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+        let failed = match name {
+            "report_experiment" => "Failed to record",
+            "report_artifact" => "Failed to record the artifact",
+            _ => "Failed to update the plan",
+        };
+        let out = match out {
+            Ok(out) => out,
+            Err(e) => return error(id, format!("{failed}: {e}")),
+        };
+        if name == "update_plan" {
+            if let Some(obj) = lock(&self.session).as_object_mut() {
+                match out.get("plan").filter(|p| !p.is_null()) {
+                    Some(plan) => obj.insert("agentPlan".into(), plan.clone()),
+                    None => obj.remove("agentPlan"),
+                };
+            }
+            persist(&self.store, &self.session, self.incognito).await;
+            self.meta();
+        }
+        result(id, out.get("output").map(js::display).unwrap_or_default())
+    }
+
     /// `agent_watch` (chat.ts `runHostTool`): not in incognito, goal-run or
     /// offline chats; arming one asks first in ask mode or the ask-everything
     /// sandbox.
@@ -1539,6 +1650,54 @@ impl TurnTools {
 
     /// `fetch_url` (tools.ts): reading a page is as safe as reading a file,
     /// so only ask mode or the ask-everything sandbox asks.
+    /// A sandbox chat's call (`executeSandboxTool`): anything but the
+    /// container's tools is refused without asking; each call asks first (the
+    /// live yolo policy aside), then runs in the chat's container, and the
+    /// chat's Stop stops the container.
+    async fn sandbox_tool(&self, sandboxes: &Arc<crate::sandbox::Sandboxes>, call: &Value) -> Value {
+        let id = str_at(call, "id").unwrap_or_default();
+        let name = str_at(call, "name").unwrap_or_default();
+        let (reason, severity) = match turn::variants::sandbox_tool_check(name) {
+            Ok(r) => r,
+            Err(e) => return error(id, e),
+        };
+        if self.shared.cancel.is_cancelled() {
+            return error(id, "Sandbox execution cancelled");
+        }
+        if !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await {
+            return error(id, "Sandbox action not approved");
+        }
+        if self.shared.cancel.is_cancelled() {
+            return error(id, "Sandbox execution cancelled");
+        }
+        let session_id = self.shared.session_id.clone();
+        let (store, sid) = (self.store.clone(), session_id.clone());
+        let stored = tokio::task::spawn_blocking(move || store.get(&sid)).await.ok().flatten();
+        let settings = match &self.turns.settings {
+            Some(s) => {
+                let s = s.clone();
+                tokio::task::spawn_blocking(move || s.get()).await.unwrap_or(Value::Null)
+            }
+            None => Value::Null,
+        };
+        let run = sandboxes.run_tool(stored.ok_or_else(|| "Sandbox session required".to_string()), &settings, call);
+        tokio::pin!(run);
+        tokio::select! {
+            out = &mut run => return out,
+            _ = self.shared.cancel.cancelled() => {}
+        }
+        // Stopped: stop the container (`sandbox:abort`), and keep at it until the
+        // call has registered its signal and given up, so its runtime is not
+        // left marked busy.
+        loop {
+            sandboxes.abort(&session_id);
+            tokio::select! {
+                _ = &mut run => return error(id, "Sandbox execution cancelled"),
+                _ = tokio::time::sleep(Duration::from_millis(50)) => {}
+            }
+        }
+    }
+
     async fn fetch_url(&self, call: &Value) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
         let input = call.get("input").cloned().unwrap_or(Value::Null);

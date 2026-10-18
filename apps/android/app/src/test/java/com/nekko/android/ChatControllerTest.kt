@@ -17,6 +17,7 @@ import com.nekko.protocol.RelayException
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.Severity
+import com.nekko.protocol.SkillSummary
 import com.nekko.protocol.ToolCall
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -100,6 +101,75 @@ class ChatControllerTest {
         assertEquals("hello", opts["text"]!!.jsonPrimitive.content)
         // send() returned without waiting for the turn to end.
         assertFalse(turnEnd.isCompleted)
+    }
+
+    @Test
+    fun `a skill turn sends the skill and shows it as the computer will save it`() = runTest {
+        val turnEnd = CompletableDeferred<JsonElement>()
+        val caller = FakeCaller { c -> if (c.channel == Channels.CHAT_SEND) turnEnd.await() else JsonNull }
+        val chat = controller(caller)
+
+        chat.send("this file", SkillSummary("review", "", "", "builtin"))
+        runCurrent()
+
+        assertEquals("/review this file", (chat.state.value.turn.blocks.single() as Block.User).text)
+        val opts = caller.calls.single().args.single().jsonObject
+        assertEquals("this file", opts["text"]!!.jsonPrimitive.content)
+        assertEquals("review", opts["skill"]!!.jsonObject["name"]!!.jsonPrimitive.content)
+        assertEquals("this file", opts["skill"]!!.jsonObject["input"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `photos go with the prompt and the bubble shows them`() = runTest {
+        val caller = FakeCaller { c -> if (c.channel == Channels.CHAT_SEND) CompletableDeferred<JsonElement>().await() else JsonNull }
+        val chat = controller(caller)
+        val img = "data:image/jpeg;base64,AAAA"
+
+        chat.send("what is this", images = listOf(img, img))
+        runCurrent()
+
+        assertEquals(listOf(img, img), (chat.state.value.turn.blocks.single() as Block.User).thumbs)
+        val opts = caller.calls.single().args.single().jsonObject
+        assertEquals(listOf(img, img), opts["images"]!!.jsonArray.map { it.jsonPrimitive.content })
+
+        chat.send("", images = listOf(img))
+        assertEquals("""{"text":"","images":["$img"]}""", caller.calls.last().args[1].toString())
+    }
+
+    @Test
+    fun `a skill sent while running is queued as a skill`() = runTest {
+        val caller = FakeCaller { c -> if (c.channel == Channels.CHAT_SEND) CompletableDeferred<JsonElement>().await() else JsonNull }
+        val chat = controller(caller)
+        chat.send("first")
+        runCurrent()
+        chat.send("", SkillSummary("plan", "", "", "builtin"))
+
+        val q = caller.calls.last()
+        assertEquals(Channels.CHAT_QUEUE, q.channel)
+        assertEquals("""{"text":"","skill":{"name":"plan","input":""}}""", q.args[1].toString())
+    }
+
+    @Test
+    fun `reload reads the computer's skills and keeps them when a later read fails`() = runTest {
+        var fail = false
+        val caller = FakeCaller { c ->
+            when (c.channel) {
+                Channels.SESSION_GET -> session()
+                Channels.SKILLS_RUNNABLE -> if (fail) throw RelayException("unknown channel") else buildJsonArray {
+                    add(buildJsonObject { put("name", "review"); put("description", "Review"); put("category", "Code quality"); put("source", "builtin") })
+                }
+                else -> JsonNull
+            }
+        }
+        val chat = controller(caller)
+        chat.reload()
+        runCurrent()
+        assertEquals(listOf("review"), ChatController.project(chat.state.value, online).skills.map { it.name })
+
+        fail = true
+        chat.reload()
+        runCurrent()
+        assertEquals(listOf("review"), chat.state.value.skills.map { it.name })
     }
 
     @Test

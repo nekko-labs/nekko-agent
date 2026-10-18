@@ -89,25 +89,25 @@ export const ONBOARDING_VERSION = 1;
 
 export type WallLayoutMode = 'grid' | 'focus' | 'fixed';
 export interface WallLayout { mode: WallLayoutMode; cols: number; rows: number }
-export type WallDockSide = 'right' | 'left' | 'top' | 'bottom';
-export type WallDockPanel = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware';
-export interface WallDock {
-  side: WallDockSide;
+export type MonitorsSide = 'right' | 'left' | 'top' | 'bottom';
+export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware';
+export interface MonitorsDock {
+  side: MonitorsSide;
   show: boolean;
-  panels: Record<WallDockPanel, boolean>;
-  /** Saved reading order; older settings omit it and use the default order. */
-  panelOrder?: WallDockPanel[];
-  /** Independent minimization state for each dock panel. */
-  minimized: Record<WallDockPanel, boolean>;
+  monitors: Record<MonitorKey, boolean>;
+  /** Saved reading order; older settings omit it (or call it panelOrder) and use the default order. */
+  monitorOrder?: MonitorKey[];
+  /** Independent minimization state for each monitor. */
+  minimized: Record<MonitorKey, boolean>;
 }
 export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2 };
-export const DEFAULT_WALL_DOCK: WallDock = {
+export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
   side: 'right', show: true,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13
-  // (sanitizeWallDock drops it from saved docks).
-  panelOrder: ['hardware', 'utilization', 'budget', 'automations', 'insights'],
+  // (sanitizeMonitorsDock drops it from saved docks).
+  monitorOrder: ['hardware', 'utilization', 'budget', 'automations', 'insights'],
   minimized: { hardware: false, utilization: false, budget: false, automations: false, insights: false },
-  panels: { hardware: true, utilization: true, budget: true, automations: true, insights: false },
+  monitors: { hardware: true, utilization: true, budget: true, automations: true, insights: false },
 };
 
 /** Advisory USD budget only, not an enforced spending limit. Invalid/unset means no budget. */
@@ -122,7 +122,7 @@ export interface CommandWallSetting {
   /** The Agents tab's panel of agent cards: shown or closed, a column or a row. */
   agentPanel?: { show: boolean; orientation: 'vertical' | 'horizontal' };
   layout?: WallLayout;
-  dock?: WallDock;
+  dock?: MonitorsDock;
   hero?: string | null;
   /** Fold companions for each session ID; never fold the chat itself. */
   folded?: Record<string, boolean>;
@@ -203,7 +203,11 @@ export interface AppSettings {
   aboutUser?: string;
   /** New chats isolate Git checkouts by default; existing chats are unchanged. */
   defaultExecutionMode?: import('./chat.js').ExecutionMode;
-  gitManagement?: { mode?: 'worktree' | 'shared'; baseline?: 'head' | 'local-changes' };
+  /**
+   * `removeMerged` (on unless false): a chat worktree whose branch's PR has
+   * merged is removed in the background when it is clean and its chat is idle.
+   */
+  gitManagement?: { mode?: 'worktree' | 'shared'; baseline?: 'head' | 'local-changes'; removeMerged?: boolean };
   theme: ThemeMode;
   navOrder?: string[];
   accent: string;
@@ -222,6 +226,11 @@ export interface AppSettings {
   defaultModelId?: string;
   /** Show the mascot. */
   mascotEnabled: boolean;
+  /** Desktop close button defaults to keeping work alive in the tray. */
+  desktopCloseBehavior?: 'tray' | 'shutdown';
+  trayCloseHintSeen?: boolean;
+  /** A two-second tray mascot farewell, enabled by default. */
+  trayFarewellEnabled?: boolean;
   /** How hard the model works per turn (an effort rung or a temperature). */
   effort?: EffortLevel;
   /** Cloud comparison for unpriced local models; unset uses the default, empty opts out. */
@@ -240,12 +249,27 @@ export interface AppSettings {
   language?: string;
   /** Default tool-execution policy for new chats. */
   defaultChatMode?: import('./chat.js').ChatMode;
+  /** Named bundles of chat settings for the Mode panel. Unset = `STARTER_MODES`. */
+  savedModes?: import('./saved-modes.js').SavedMode[];
+  /** The saved mode new chats start in. Unset = new chats keep the last-used defaults. */
+  defaultSavedModeId?: string;
   /** Contextual UI tips are enabled by default. */
   showTips?: boolean;
   completionTipSeen?: boolean;
   skipDeleteConfirmation?: boolean;
+  /**
+   * Let paired phones see a read-only diff of the files the agent changed in a
+   * chat (Settings → Remote access). Off unless set. Phones can never accept,
+   * revert or edit changes, read other files or open terminals.
+   */
+  phoneChanges?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';
+  /**
+   * Complete agents untouched for this many days (7, 14, 30, 90), or 0 for
+   * never. Undefined means the default, 30 (`AUTO_COMPLETE_DEFAULT_DAYS`).
+   */
+  autoCompleteAfterDays?: number;
   /** Path to the shell new terminals launch by default (undefined = auto-detect). */
   defaultShellPath?: string;
   /** How terminals draw. Undefined means the default (`xterm`). */

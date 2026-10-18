@@ -1,0 +1,2 @@
+# These bytes are compared against the exact maintained native source patch.
+/vendor/agent-browser/* text eol=lf

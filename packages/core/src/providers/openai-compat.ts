@@ -1,5 +1,6 @@
 import { cacheUsage, geminiCachePrefix, geminiExplicitCacheModel, type CacheCapableProviderConfig } from './prompt-caching.js';
 import { withToolImages } from './tool-images.js';
+import { hasUserMedia, videoParts } from './media.js';
 import type { ModelInfo, ProviderConfig, ToolCall } from '@nekko-agent/shared';
 import { effectiveEffort } from '@nekko-agent/shared';
 import type { Provider, ChatRequest, ProviderChunk, ToolSpec } from './types.js';
@@ -66,6 +67,10 @@ export class OpenAICompatProvider implements Provider {
         top_provider?: { context_length?: number };
         pricing?: { prompt?: string; completion?: string };
         supported_parameters?: string[];
+        /** OpenRouter: what the model takes as input (`text`, `image`, `video`, `audio`, `file`). */
+        architecture?: { input_modalities?: string[] };
+        /** The Nekko engine: `['text']`, or `['text', 'image']` when the projector is there. */
+        input_modalities?: string[];
         /** The Nekko engine's extras: where the file lives and its load state. */
         max_context_length?: number;
         path?: string;
@@ -78,8 +83,13 @@ export class OpenAICompatProvider implements Provider {
       const input = Number(m.pricing?.prompt);
       const output = Number(m.pricing?.completion);
       const priced = openrouter && Number.isFinite(input) && Number.isFinite(output);
+      // OpenRouter nests the list under `architecture`; the Nekko engine sends it flat.
+      const listed = m.architecture?.input_modalities ?? m.input_modalities;
+      const inputs = Array.isArray(listed) ? listed.map(String) : [];
       const details: Record<string, string> = {
         ...(openrouter && m.supported_parameters?.includes('tools') ? { tools: 'yes' } : {}),
+        // The composer reads this to enable Photo / Video for the picked model.
+        ...(inputs.length ? { inputModalities: inputs.join(',') } : {}),
         // The Nekko engine sends the file path and the folder it lives in, so
         // pickers can lead with the name and group by where the model lives.
         ...(typeof m.path === 'string' ? { path: m.path } : {}),
@@ -317,10 +327,11 @@ export class OpenAICompatProvider implements Provider {
       } else {
         out.push({
           role: m.role,
-          content: m.role === 'user' && m.images?.length
+          content: hasUserMedia(m)
             ? [
                 { type: 'text', text: m.content },
-                ...m.images.map((url) => ({ type: 'image_url', image_url: { url } })),
+                ...(m.images ?? []).map((url) => ({ type: 'image_url', image_url: { url } })),
+                ...videoParts(m),
               ]
             : m.content,
         });

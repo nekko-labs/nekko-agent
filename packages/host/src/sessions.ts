@@ -3,7 +3,7 @@ import { readFile, readdir, stat } from 'fs/promises';
 import { randomBytes } from 'crypto';
 import { join } from 'path';
 import type { QueuePayload, QueuedPrompt, Session, SessionSummary } from '@nekko-agent/shared';
-import { archiveExpired, queueItemsEqual, summarizeSession, getExecutionMode } from '@nekko-agent/shared';
+import { archiveExpired, queueItemsEqual, summarizeSession, getExecutionMode, defaultSavedMode, sessionPatchForMode } from '@nekko-agent/shared';
 import { dataDir, getSettings } from './store.js';
 import { deleteAgentLog } from './agent-log.js';
 
@@ -120,7 +120,7 @@ function writeAtomic(file: string, text: string): void {
  * The UI changes these while a turn is running, through the engine daemon or
  * this host; a turn's save must not put back the values it read at its start.
  */
-const USER_FIELDS = ['pinned', 'tags', 'order', 'mode', 'disabledTools', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'sandbox', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'thinking', 'chatType', 'imageParams', 'workspaceId', 'supportingWorkspaceIds', 'attachedPaths', 'specLinked', 'queue', 'archivedAt'] as const;
+const USER_FIELDS = ['pinned', 'tags', 'order', 'mode', 'disabledTools', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'sandbox', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'workMode', 'thinking', 'chatType', 'imageParams', 'workspaceId', 'supportingWorkspaceIds', 'attachedPaths', 'specLinked', 'queue', 'archivedAt'] as const;
 
 /**
  * Save a chat a running turn has held in memory, keeping whatever the user
@@ -293,12 +293,12 @@ export function clearSessions(scope: 'today' | 'month' | 'all'): number {
 }
 
 /** The fields `setSessionOptions` may change (crates/nekko-store/src/write.rs keeps the same list). */
-const OPTION_KEYS = ['title', 'pinned', 'tags', 'order', 'mode', 'disabledTools', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'thinking', 'providerId', 'modelId', 'plan', 'chatType', 'imageParams', 'archivedAt'] as const;
+const OPTION_KEYS = ['title', 'pinned', 'tags', 'order', 'mode', 'disabledTools', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'workMode', 'thinking', 'providerId', 'modelId', 'plan', 'chatType', 'imageParams', 'archivedAt'] as const;
 
 /** Patch per-chat options (title, pin, mode, disabled tools, offline, incognito, brain, archive). */
 export function setSessionOptions(
   id: string,
-  patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
+  patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
 ): Session | null {
   const s = getSession(id);
   if (!s) return null;
@@ -328,9 +328,12 @@ export function queuePrompt(id: string, input: string | QueuePayload): Session |
   const payload: QueuePayload = typeof input === 'string' ? { text: input } : input;
   const text = payload.text.trim();
   const images = payload.images?.filter(Boolean) ?? [];
+  const videos = payload.videos?.filter(Boolean) ?? [];
   const skill = payload.skill;
-  if (!s || (!text && images.length === 0 && !skill)) return s;
-  const item: QueuedPrompt = images.length || skill ? { text, ...(images.length ? { images } : {}), ...(skill ? { skill } : {}) } : text;
+  if (!s || (!text && images.length === 0 && videos.length === 0 && !skill)) return s;
+  const item: QueuedPrompt = images.length || videos.length || skill
+    ? { text, ...(images.length ? { images } : {}), ...(videos.length ? { videos } : {}), ...(skill ? { skill } : {}) }
+    : text;
   s.queue = [...(s.queue ?? []), item];
   saveSession(s);
   return s;
@@ -364,6 +367,12 @@ export function createSession(workspaceId?: string, parentSessionId?: string, su
     createdAt: now,
     updatedAt: now,
   };
+  // A top-level chat starts in the user's default saved mode, when they set one.
+  const start = parentSessionId ? undefined : defaultSavedMode(getSettings());
+  if (start) {
+    Object.assign(s, sessionPatchForMode(start.options));
+    if (s.executionMode === 'sandbox') s.mode = 'ask';
+  }
   saveSession(s);
   return s;
 }

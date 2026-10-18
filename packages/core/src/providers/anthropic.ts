@@ -1,5 +1,7 @@
 import { anthropicCachePrefix, tokenCount } from './prompt-caching.js';
 import { withToolImages } from './tool-images.js';
+import { withVideoNote } from './media.js';
+import { normalizeAnthropicImages } from './anthropic-images.js';
 import type { ModelAvailability, ModelInfo, ProviderConfig, ToolCall } from '@nekko-agent/shared';
 import { claudeContextWindow, claudeMaxOutputTokens, effectiveEffort, modelEffortLevels, parseClaudeModel } from '@nekko-agent/shared';
 import type { Provider, ChatRequest, ProviderChunk } from './types.js';
@@ -316,6 +318,7 @@ export class AnthropicProvider implements Provider {
         : shape === 'temperature'
           ? { temperature: req.temperature ?? 0.7 }
           : {};
+    const messages = await normalizeAnthropicImages(this.toAnthropicMessages(req));
     const send = (shape: SamplingShape) =>
       fetch(`${this.config.baseUrl}/v1/messages`, {
         method: 'POST',
@@ -329,7 +332,7 @@ export class AnthropicProvider implements Provider {
           stream: true,
           ...knob(shape),
           system: this.systemParam(req.system),
-          messages: this.toAnthropicMessages(req),
+          messages,
           tools: req.tools?.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })),
         }, req.promptCaching)),
         signal: req.signal,
@@ -468,7 +471,7 @@ export class AnthropicProvider implements Provider {
           role: m.role,
           content: m.role === 'user' && m.images?.length
             ? [
-                { type: 'text', text: m.content },
+                { type: 'text', text: withVideoNote(m) },
                 ...m.images.map((url) => {
                   const match = url.match(/^data:([^;]+);base64,(.+)$/);
                   return {
@@ -481,7 +484,7 @@ export class AnthropicProvider implements Provider {
                   };
                 }),
               ]
-            : m.content,
+            : m.role === 'user' ? withVideoNote(m) : m.content,
         });
       }
     }

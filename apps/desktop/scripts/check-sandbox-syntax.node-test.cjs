@@ -23,3 +23,9 @@ test('tracked subagent launchers and sandboxes parse', () => {
     assert.doesNotThrow(() => checkSandboxSyntax(path.join(__dirname, file)));
   }
 });
+
+test('repository action launcher and sandbox parse without launching Electron', () => {
+  for (const file of ['agent-sidebar-integration.cjs', 'repo-actions-sandbox.cjs', '../e2e/electron-main.cjs']) {
+    assert.doesNotThrow(() => checkSandboxSyntax(path.join(__dirname, file)));
+  }
+});

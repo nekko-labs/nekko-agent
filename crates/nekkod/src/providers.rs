@@ -2,7 +2,7 @@
 //! settings.json, local server discovery, connection tests, model lists and
 //! LM Studio's `lms` probe.
 //!
-//! `providers:list/save/remove/discover/probe/test/testConfig`, `models:list`
+//! `providers:list/save/remove/discover/probe/test/testConfig`, `models:list/listStatus`
 //! and `lms:probe`, ported from the TS host (host.ts, `discoverLocalProviders`,
 //! lms.ts). The provider list is a setting, so writes go through
 //! `crate::settings::update` and the host hears of them. A provider signed in
@@ -25,6 +25,7 @@ pub const CHANNELS: &[&str] = &[
     "providers:test",
     "providers:testConfig",
     "models:list",
+    "models:listStatus",
     "lms:probe",
 ];
 
@@ -94,6 +95,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         }
         "providers:testConfig" => Ok(test(ctx, &arg(0)).await),
         "models:list" => Ok(list_models(ctx, &id(0)).await),
+        "models:listStatus" => Ok(list_models_status(ctx, &id(0)).await),
         "lms:probe" => {
             let Some(p) = find(&providers(ctx).await, &id(0)).cloned() else {
                 return Ok(json!({ "available": false }));
@@ -196,17 +198,136 @@ async fn test(ctx: &Ctx, config: &Value) -> Value {
 
 /// `listModels(providerId)`: the provider's models, `[]` on any failure.
 pub async fn list_models(ctx: &Ctx, id: &str) -> Value {
+    list_models_status(ctx, id).await.get("models").cloned().unwrap_or(json!([]))
+}
+
+/// `listModelsStatus(providerId)`: `{ models, error? }`, where `error` says why
+/// the list failed. A disabled or unknown provider is `{ models: [] }`.
+pub async fn list_models_status(ctx: &Ctx, id: &str) -> Value {
     use nekko_agent::Provider;
     // Checked before resolving, so a disabled subscription is not refreshed either.
-    if find(&providers(ctx).await, id).is_some_and(|p| !is_enabled(p)) {
-        return json!([]);
+    if find(&providers(ctx).await, id).is_none_or(|p| !is_enabled(p)) {
+        return json!({ "models": [] });
     }
-    let Ok(config) = resolve_provider(ctx, id).await else { return json!([]) };
-    let Ok(provider) = build(&config) else { return json!([]) };
-    match provider.list_models().await {
-        Ok(models) => serde_json::to_value(models).unwrap_or(json!([])),
-        Err(_) => json!([]),
+
+    let listed = match resolve_provider(ctx, id).await.and_then(|c| build(&c)) {
+        Ok(provider) => provider.list_models().await.map_err(|e| e.to_string()),
+        Err(e) => Err(e),
+    };
+    match listed {
+        Ok(models) => json!({ "models": serde_json::to_value(models).unwrap_or(json!([])) }),
+        Err(e) => json!({ "models": [], "error": e }),
     }
+}
+
+/// How long a provider's reported windows are trusted (`CACHE_MS`, context-window.ts).
+const WINDOW_CACHE: Duration = Duration::from_secs(60);
+const WINDOW_LOOKUP: Duration = Duration::from_millis(2500);
+
+/// Per provider: when it was asked, each model's window, and each model's
+/// listed input modalities (`details.inputModalities`, comma-joined).
+type WindowCache = Mutex<Vec<(String, Instant, Vec<(String, u64)>, Vec<(String, String)>)>>;
+fn window_cache() -> &'static WindowCache {
+    static CACHE: std::sync::OnceLock<WindowCache> = std::sync::OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// Ollama's loaded context per model (`/api/ps`).
+async fn ollama_loaded(base_url: &str) -> Vec<(String, u64)> {
+    let root = base_url.trim_end_matches('/').trim_end_matches("/v1").trim_end_matches('/');
+    let client = reqwest::Client::builder().no_proxy().timeout(WINDOW_LOOKUP).build().unwrap_or_default();
+    let Ok(res) = client.get(format!("{root}/api/ps")).send().await else { return Vec::new() };
+    let Ok(body) = res.json::<Value>().await else { return Vec::new() };
+    let mut out = Vec::new();
+    for m in body.get("models").and_then(Value::as_array).into_iter().flatten() {
+        let Some(ctx) = m.get("context_length").and_then(Value::as_u64).filter(|c| *c > 0) else { continue };
+        for key in ["name", "model"] {
+            if let Some(id) = m.get(key).and_then(Value::as_str) {
+                out.push((id.to_string(), ctx));
+            }
+        }
+    }
+    out
+}
+
+/// `contextWindowFor` (context-window.ts): the window `model_id` was loaded
+/// with on this provider when the server reports one, else the id guess.
+/// Never blocks a turn for long, and never fails it.
+pub async fn context_window_for(ctx: &Ctx, provider: &Value, model_id: &str) -> u64 {
+    let guess = crate::context::guess_context_window(Some(model_id));
+    let Some((windows, _)) = listing(ctx, provider).await else { return guess };
+    windows.iter().rev().find(|(m, _)| m == model_id).map(|(_, w)| *w).unwrap_or(guess)
+}
+
+/// `imageInputFor` (context-window.ts), from the listing's evidence: false only
+/// when the provider lists this model's inputs and images are not among them
+/// (the engine's model without a projector, a text-only OpenRouter model).
+/// Anything unlisted stays true, as an unknown model does in the composer.
+pub async fn image_input_for(ctx: &Ctx, provider: &Value, model_id: &str) -> bool {
+    let Some((_, inputs)) = listing(ctx, provider).await else { return true };
+    match inputs.iter().rev().find(|(m, _)| m == model_id) {
+        Some((_, list)) => list.split(',').any(|m| m.trim().eq_ignore_ascii_case("image")),
+        None => true,
+    }
+}
+
+/// The provider's cached model listing (windows, input modalities), asked
+/// for at most once a minute; `None` for providers whose list is not asked.
+async fn listing(ctx: &Ctx, provider: &Value) -> Option<(Vec<(String, u64)>, Vec<(String, String)>)> {
+    let kind = provider.get("kind").and_then(Value::as_str).unwrap_or("");
+    let asks = matches!(kind, "ollama" | "lmstudio" | "vllm" | "llamacpp" | "engine" | "openai-compat" | "openrouter");
+    let id = provider.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+    if !asks || id.is_empty() {
+        return None;
+    }
+    let cached = {
+        let cache = window_cache().lock().unwrap_or_else(|e| e.into_inner());
+        cache
+            .iter()
+            .find(|(p, at, _, _)| *p == id && at.elapsed() < WINDOW_CACHE)
+            .map(|(_, _, w, i)| (w.clone(), i.clone()))
+    };
+    if cached.is_some() {
+        return cached;
+    }
+    let models = match tokio::time::timeout(WINDOW_LOOKUP, list_models(ctx, &id)).await {
+        Ok(Value::Array(models)) => models,
+        _ => Vec::new(),
+    };
+    let mut windows: Vec<(String, u64)> = models
+        .iter()
+        .filter_map(|m| {
+            let ctx = m.get("contextLength").and_then(Value::as_u64).filter(|c| *c > 0)?;
+            Some((m.get("id")?.as_str()?.to_string(), ctx))
+        })
+        .collect();
+    let inputs: Vec<(String, String)> = models
+        .iter()
+        .filter_map(|m| {
+            let list = m.pointer("/details/inputModalities")?.as_str()?;
+            Some((m.get("id")?.as_str()?.to_string(), list.to_string()))
+        })
+        .collect();
+    if kind == "ollama" {
+        windows.extend(ollama_loaded(provider.get("baseUrl").and_then(Value::as_str).unwrap_or("")).await);
+    }
+    let mut cache = window_cache().lock().unwrap_or_else(|e| e.into_inner());
+    cache.retain(|(p, _, _, _)| *p != id);
+    cache.push((id, Instant::now(), windows.clone(), inputs.clone()));
+    Some((windows, inputs))
+}
+
+/// `knownContextWindow` (context-window.ts): the window a turn last found for
+/// `model_id` on this provider, without asking anyone; else the id's guess.
+pub fn known_context_window(provider: &Value, model_id: &str) -> u64 {
+    let guess = crate::context::guess_context_window(Some(model_id));
+    let id = provider.get("id").and_then(Value::as_str).unwrap_or("");
+    let cache = window_cache().lock().unwrap_or_else(|e| e.into_inner());
+    cache
+        .iter()
+        .find(|(p, _, _, _)| p == id)
+        .and_then(|(_, _, w, _)| w.iter().rev().find(|(m, _)| m == model_id).map(|(_, w)| *w))
+        .unwrap_or(guess)
 }
 
 /// `discoverLocalProviders()`: each well-known server that answers, IPv4

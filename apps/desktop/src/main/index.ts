@@ -4,18 +4,19 @@ import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, notificati
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 // Only the data-root helpers: the host itself runs in the engine process, and
 // importing the package root would load all of it (node-pty included) here.
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/host/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
-import { registerIpc } from './ipc.js';
+import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
 import { checkForUpdates } from './update.js';
 import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
 import { EngineProcess } from './engine-process.js';
 import { createDesktopTray } from './tray.js';
+import { createTrayCompanion } from './trayCompanion.js';
 import { startAgentBrowser } from './agentBrowser.js';
 import { registerArtifactPreview } from './artifactPreview.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
@@ -25,12 +26,15 @@ const applicationWindows = new Set<number>();
 
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
 let quitting = false;
+let mainWindow: BrowserWindow | null = null;
+let trayCompanion: ReturnType<typeof createTrayCompanion> | undefined;
 let stopNotifications: (() => void) | undefined;
 let nativeNotifications: ReturnType<typeof createNativeNotificationPoster> | undefined;
 const notificationSessions = new Map<number, string | null>();
 
 function showWindow(): void {
-  const win = BrowserWindow.getAllWindows()[0];
+  trayCompanion?.dismiss();
+  const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   if (!win) { createWindow(); return; }
   if (win.isMinimized()) win.restore();
   win.show();
@@ -99,7 +103,8 @@ function linkFromArgv(argv: string[]): string | null {
  * the result.
  */
 function deliverLink(url: string): void {
-  const win = BrowserWindow.getAllWindows()[0];
+  trayCompanion?.dismiss();
+  const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   if (!win || win.webContents.isLoading()) {
     pendingLink = url;
     if (!win) createWindow();
@@ -109,6 +114,36 @@ function deliverLink(url: string): void {
   win.show();
   win.focus();
   win.webContents.send(IpcEvents.deepLink, url);
+}
+
+/**
+ * macOS keeps the system menu bar. Electron's default app menu is kept for
+ * everything else, but its "Nekko Agent" menu gains Settings… (⌘,) and its
+ * About item opens the in-app About page instead of the stock panel.
+ */
+function installMacAppMenu(): void {
+  const send = (url: string) => () => deliverLink(url);
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: app.name,
+      submenu: [
+        { label: `About ${app.name}`, click: send('nekko-agent://about') },
+        { type: 'separator' },
+        { label: 'Settings…', accelerator: 'Cmd+,', click: send('nekko-agent://settings') },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ]));
 }
 
 function resolveWindowIcon(): string | undefined {
@@ -121,6 +156,7 @@ function resolveWindowIcon(): string | undefined {
 }
 
 function createWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) { showWindow(); return; }
   // A first launch is sized to the screen before the window exists, so it
   // appears at that size rather than visibly growing into it.
   const bounds = loadWindowBounds() ?? initialWindowBounds(screen.getPrimaryDisplay().workArea);
@@ -152,6 +188,8 @@ function createWindow(): void {
     },
   });
 
+  mainWindow = win;
+  win.once('closed', () => { if (mainWindow === win) mainWindow = null; });
   win.on('ready-to-show', () => win.show());
   const closeIntent = createCloseIntent();
   if (process.platform === 'win32') {
@@ -166,8 +204,7 @@ function createWindow(): void {
     // `nekko-agent migrate` and installers do): quit for real, through the
     // clean engine shutdown, rather than hide into the tray.
     if (external) { app.quit(); return; }
-    saveWindowBounds(win.getBounds());
-    win.hide();
+    void trayCompanion?.closeWindow(() => { saveWindowBounds(win.getBounds()); win.hide(); });
   });
 
   // A link that arrived before the page could listen (a cold launch from
@@ -310,7 +347,7 @@ function claimSingleInstance(): boolean {
     }
     // Launched again without a link: the user asked for Nekko Agent, so show the
     // window they already have rather than doing nothing at all.
-    const win = BrowserWindow.getAllWindows()[0];
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
     if (win) {
       if (win.isMinimized()) win.restore();
       win.show();
@@ -342,6 +379,7 @@ app.whenReady().then(async () => {
   // it lives in the system bar rather than in the window, and ⌘Q/⌘H/⌘W come
   // from it.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
+  else installMacAppMenu();
 
   // Where user data lives is decided here, before the engine starts, because a
   // move from an older profile needs a native dialog and the user's answer.
@@ -376,7 +414,10 @@ app.whenReady().then(async () => {
   // The engine runs in its own processes (see engine-process.ts); the window
   // only needs to know where it listens.
   const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
-  const agentBrowser = await startAgentBrowser();
+  // The bridge also carries what nekkod asks of the window shell: the app
+  // window's handle for owning its dialogs, dialogs it cannot draw (macOS),
+  // and quitting so an update can install.
+  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog, shell: shellBridge(() => app.quit()) });
   app.once('will-quit', () => agentBrowser.close());
   engine = new EngineProcess({
     browserBridge: { url: agentBrowser.url, token: agentBrowser.token },
@@ -387,6 +428,8 @@ app.whenReady().then(async () => {
       userData: app.getPath('userData'),
       version: app.getVersion(),
       resourcesPath: app.isPackaged ? process.resourcesPath : undefined,
+      exePath: process.execPath,
+      pid: process.pid,
     },
     // A packaged page is a file:// document: fetch reports its origin as
     // `null`, a WebSocket handshake as `file://`.
@@ -407,7 +450,7 @@ app.whenReady().then(async () => {
     if (!trustedNotificationReporter(applicationWindows.has(event.sender.id), event.senderFrame, event.sender.mainFrame)) return;
     notificationSessions.set(event.sender.id, visibleNotificationSession(report));
   });
-  registerIpc(engine, dataDir);
+  registerIpc(engine);
   setWindowStateDir(dataDir);
   registerTitleBarOverlaySync();
   // A link that launched the app is already on this process's command line
@@ -425,6 +468,18 @@ app.whenReady().then(async () => {
       quit: () => app.quit(),
       onError: message => dialog.showErrorBox('Nekko Agent', message),
     });
+    const service = engine;
+    trayCompanion = createTrayCompanion({
+      tray: desktopTray.tray,
+      // A stopped service must not prevent hiding or shutting down the UI.
+      settings: async () => service.running
+        ? service.call<AppSettings>(IpcChannels.settingsGet)
+        : JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8')) as AppSettings,
+      update: patch => service.call(IpcChannels.settingsUpdate, patch),
+      serviceRunning: () => service.running,
+      quit: () => app.quit(),
+      onError: message => dialog.showErrorBox('Nekko Agent', message),
+    });
   }
 
   // Under `npm run dev`, hand the launcher what it needs for its banner.
@@ -433,8 +488,13 @@ app.whenReady().then(async () => {
     .catch(() => reportDevReady({ version: app.getVersion(), api: null, dataDir }));
 
   // Auto-check for updates a few seconds after launch, if the user opted in.
-  void engine.call<AppSettings>('settings:get').then((settings) => {
-    if (settings?.autoUpdate) setTimeout(() => { void checkForUpdates(); }, 4000);
+  // nekkod does this itself (crates/nekkod/src/native.rs); only the no-daemon
+  // path still needs main to.
+  const started = engine;
+  void started.endpoint().then(async (e) => {
+    if (e.mode === 'daemon') return;
+    const settings = await started.call<AppSettings>('settings:get');
+    if (settings?.updates?.app ?? settings?.autoUpdate) setTimeout(() => { void checkForUpdates(); }, 4000);
   }).catch(() => {});
 
   app.on('activate', () => {
@@ -454,6 +514,7 @@ app.on('window-all-closed', () => {
 // not serving and stops model servers it started), then quits for real.
 app.on('before-quit', (event) => {
   quitting = true;
+  trayCompanion?.dispose();
   stopNotifications?.();
   stopNotifications = undefined;
   nativeNotifications?.dispose();

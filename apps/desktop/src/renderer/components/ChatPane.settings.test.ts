@@ -28,3 +28,20 @@ describe('chatPaneSettings', () => {
     expect(chatPaneSettings(null)).toBeNull();
   });
 });
+
+import { initialChatBrain } from './ChatPane.settings.js';
+import { AUTO_MODEL_ID } from '@nekko-agent/shared';
+import type { Session } from '@nekko-agent/shared';
+describe('initial chat brain', () => {
+  const state = { settings: { defaultProviderId: 'saved', defaultModelId: 'exact' } as AppSettings, activeProviderId: 'first', activeModelId: 'wrong', providers: [{ id: 'first' }] };
+  it('uses the saved pair even when a startup fallback is active', () => {
+    expect(initialChatBrain(null, state)).toEqual({ providerId: 'saved', modelId: 'exact' });
+  });
+  it('does not combine a session provider with a different default model', () => {
+    expect(initialChatBrain({ providerId: 'own' } as Session, state)).toEqual({ providerId: 'own', modelId: null });
+  });
+  it('preserves existing session choices including Auto', () => {
+    expect(initialChatBrain({ providerId: 'own', modelId: 'mine' } as Session, state)).toEqual({ providerId: 'own', modelId: 'mine' });
+    expect(initialChatBrain({ providerId: 'own', autoModel: true } as Session, state).modelId).toBe(AUTO_MODEL_ID);
+  });
+});

@@ -46,6 +46,10 @@ export const SendIcon = (p: P) => (
   <S {...p}><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></S>
 );
 export const PlusIcon = (p: P) => (<S {...p}><path d="M12 5v14M5 12h14" /></S>);
+export const SearchIcon = (p: P) => (<S {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.4-4.4" /></S>);
+export const CalendarIcon = (p: P) => (<S {...p}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></S>);
+export const ChevronUpIcon = (p: P) => (<S {...p}><path d="m6 15 6-6 6 6" /></S>);
+export const ChevronDownIcon = (p: P) => (<S {...p}><path d="m6 9 6 6 6-6" /></S>);
 export const TrashIcon = (p: P) => (<S {...p}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></S>);
 export const ShieldIcon = (p: P) => (<S {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></S>);
 /** A frame with its panel down the left side: show or hide a left side panel. */
@@ -81,6 +85,7 @@ export const BranchIcon = (p: P) => (<S {...p}><circle cx="6" cy="6" r="2.4" /><
 export const WorktreeIcon = (p: P) => (<S {...p}><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h4.5A1.5 1.5 0 0 1 17 8.5V10" /><rect x="7" y="12" width="14" height="8" rx="1.5" /><path d="M5 5v9.5a1.5 1.5 0 0 0 1.5 1.5H7" /></S>);
 export const CloseIcon = (p: P) => (<S {...p}><path d="M18 6 6 18M6 6l12 12" /></S>);
 export const ArchiveIcon = (p: P) => (<S {...p}><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></S>);
+export const BinocularsIcon = (p: P) => (<S {...p}><circle cx="6.5" cy="15.5" r="3.5" /><circle cx="17.5" cy="15.5" r="3.5" /><path d="M10 15.5h4M3 15.5 5 6.5a1.5 1.5 0 0 1 3 0v5.5M21 15.5l-2-9a1.5 1.5 0 0 0-3 0v5.5M8 9h8" /></S>);
 export const RobotIcon = (p: P) => (<S {...p}><rect x="4" y="8" width="16" height="11" rx="2" /><path d="M12 8V4M9 13h.01M15 13h.01M2 13h2M20 13h2" /></S>);
 export const WandIcon = (p: P) => (<S {...p}><path d="m15 4 1 2 2 1-2 1-1 2-1-2-2-1 2-1zM6 13l1.5 3L11 17.5 7.5 19 6 22l-1.5-3L1 17.5 4.5 16zM20 14l.8 1.6L22.5 16l-1.7.4L20 18l-.8-1.6L17.5 16l1.7-.4z" /></S>);
 export const BoltIcon = (p: P) => (<S {...p}><path d="M13 2 4 14h6l-1 8 9-12h-6z" /></S>);
@@ -119,3 +124,29 @@ export const SleepIcon = (p: P) => (<S {...p}><path d="M4 9h6l-6 8h6M14 5h5l-5 6
 /** Two arrows squeezing inward onto a line: a transcript being compacted. */
 export const CompactIcon = (p: P) => (<S {...p}><path d="M12 3v6m0 0-3-3m3 3 3-3M12 21v-6m0 0-3 3m3-3 3 3M4 12h16" /></S>);
 export const ChevronIcon = (p: P) => (<S {...p}><path d="m9 6 6 6-6 6" /></S>);
+
+/** A target ring (two rings and a centre dot) for focusing one agent window. */
+export const TargetIcon = (p: P) => <S {...p}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></S>;
+/** Configure: three vertical sliders, each knob at a different height. */
+export const SlidersIcon = (p: P) => <S {...p}><path d="M6 4v4m0 4v8M12 4v10m0 4v2M18 4v1m0 4v11" /><circle cx="6" cy="10" r="2" /><circle cx="12" cy="16" r="2" /><circle cx="18" cy="7" r="2" /></S>;
+export const ControlPanelIcon = (p: P) => <S {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 6v3m0 4v5m8-12v7m0 4v1M6 9h4m4 4h4" /><circle cx="8" cy="11" r="2" /><circle cx="16" cy="15" r="2" /></S>;
+
+/* Mode panel glyphs: one per setting and per option, so the panel scans by shape. */
+export const LaptopIcon = (p: P) => (<S {...p}><rect x="4" y="4.5" width="16" height="11" rx="1.5" /><path d="M2 19.5h20" /></S>);
+export const CubeIcon = (p: P) => (<S {...p}><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7zM3.5 7 12 11.5 20.5 7M12 11.5v10" /></S>);
+export const HandIcon = (p: P) => (<S {...p}><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5M14 10.5V5.5a1.5 1.5 0 0 1 3 0V13c0 4.2-2.7 7.5-6.7 7.5-2.4 0-3.9-1.2-5-3L3.4 14.4a1.5 1.5 0 0 1 2.4-1.8L8 15" /></S>);
+export const ShieldCheckIcon = (p: P) => (<S {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m8.8 12 2.2 2.2 4.2-4.4" /></S>);
+export const RouteIcon = (p: P) => (<S {...p}><circle cx="5.5" cy="18.5" r="2" /><circle cx="18.5" cy="5.5" r="2" /><path d="M7.5 18.5h7a3 3 0 0 0 0-6h-5a3 3 0 0 1 0-6h7" /></S>);
+export const GaugeIcon = (p: P) => (<S {...p}><path d="M3.5 17a8.5 8.5 0 1 1 17 0" /><path d="m12 17 4-5.5" /></S>);
+export const CompassIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></S>);
+export const CapIcon = (p: P) => (<S {...p}><path d="M2 9 12 4.5 22 9l-10 4.5zM6 10.8v4.7c1.8 1.5 3.8 2.2 6 2.2s4.2-.7 6-2.2v-4.7M22 9v6" /></S>);
+export const LockIcon = (p: P) => (<S {...p}><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></S>);
+export const DialIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="m12 12 4.5-4.5" /></S>);
+export const SparkleIcon = (p: P) => (<S {...p}><path d="M11 3c.6 4.6 2.2 6.8 6.5 7.5-4.3.7-5.9 2.9-6.5 7.5-.6-4.6-2.2-6.8-6.5-7.5C8.8 9.8 10.4 7.6 11 3z" /><path d="M19 15.5v5M16.5 18h5" /></S>);
+export const DocTextIcon = (p: P) => (<S {...p}><path d="M14 2.5H6.5a1.5 1.5 0 0 0-1.5 1.5v16a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V7.5z" /><path d="M14 2.5v5h5M8.5 12h7M8.5 15.5h7M8.5 8.5h3" /></S>);
+/** Four rising bars with the first `level` filled: reasoning effort at a glance. */
+export const EffortBarsIcon = ({ level, className }: P & { level: number }) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={1.4}>
+    {[0, 1, 2, 3].map((i) => <rect key={i} x={3.5 + i * 4.6} y={16 - i * 3.6} width={3} height={4.5 + i * 3.6} rx={0.8} fill={i < level ? 'currentColor' : 'none'} />)}
+  </svg>
+);

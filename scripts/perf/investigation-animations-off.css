@@ -1,0 +1,2 @@
+/* Diagnostic ablation only, not a proposed product change or budget run. */
+*, *::before, *::after { animation: none !important; transition: none !important; }

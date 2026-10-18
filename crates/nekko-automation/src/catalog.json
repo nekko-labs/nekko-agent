@@ -85,6 +85,26 @@
   {
    "kind": "gdrive",
    "label": "Google Drive"
+  },
+  {
+   "kind": "trello",
+   "label": "Trello"
+  },
+  {
+   "kind": "asana",
+   "label": "Asana"
+  },
+  {
+   "kind": "todoist",
+   "label": "Todoist"
+  },
+  {
+   "kind": "clickup",
+   "label": "ClickUp"
+  },
+  {
+   "kind": "tasksfile",
+   "label": "Tasks file"
   }
  ]
 }

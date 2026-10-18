@@ -17,8 +17,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.QrCode2
@@ -34,22 +36,33 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.ui.components.ConnectionBanner
+import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
@@ -57,7 +70,9 @@ import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.util.ago
 import com.nekko.android.util.plainText
 import com.nekko.protocol.Activity
+import com.nekko.protocol.ChatGroup
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.PcSettings
 import com.nekko.protocol.SessionSummary
 import kotlinx.coroutines.launch
 
@@ -76,6 +91,83 @@ fun ChatsScreen(
     val scope = rememberCoroutineScope()
     var pulling by remember { mutableStateOf(false) }
     val active = s.active
+    // Long-press on a chat: the computer's own action (Complete or Delete) for it.
+    var pressed by remember { mutableStateOf<SessionSummary?>(null) }
+    var confirmDelete by remember { mutableStateOf<SessionSummary?>(null) }
+    var actionError by remember { mutableStateOf<String?>(null) }
+    // Long-press on a completed chat: Restore it, or delete it for good.
+    var pressedDone by remember { mutableStateOf<SessionSummary?>(null) }
+    // Folded groups and groups showing their completed chats; kept while a chat is open.
+    var collapsed by rememberSaveable { mutableStateOf(setOf<String>()) }
+    var showCompleted by rememberSaveable { mutableStateOf(setOf<String>()) }
+    val groups = remember(s.summaries, s.workspaces) { ChatGroup.of(s.summaries, s.workspaces) }
+    val restore: (SessionSummary) -> Unit = { chat ->
+        actionError = null
+        scope.launch {
+            try {
+                repo.restoreChat(chat.id)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                actionError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t restore that chat."
+            }
+        }
+    }
+    val run: (SessionSummary, Boolean) -> Unit = { chat, delete ->
+        actionError = null
+        scope.launch {
+            try {
+                if (delete) repo.deleteChat(chat.id) else repo.completeChat(chat.id)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                actionError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t change that chat."
+            }
+        }
+    }
+    pressed?.let { chat ->
+        val delete = s.pcSettings.effectiveAction == PcSettings.ChatAction.DELETE
+        ChatActionDialog(
+            title = plainText(chat.title).ifEmpty { "New chat" },
+            delete = delete,
+            computer = active?.name ?: "your computer",
+            onDismiss = { pressed = null },
+            onConfirm = {
+                pressed = null
+                if (delete && s.pcSettings.confirmDelete) confirmDelete = chat else run(chat, delete)
+            },
+        )
+    }
+    pressedDone?.let { chat ->
+        AlertDialog(
+            onDismissRequest = { pressedDone = null },
+            title = { Text(plainText(chat.title).ifEmpty { "New chat" }, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+            text = { Text("Completed on ${active?.name ?: "your computer"}. Restore it to the active chats, or delete it for good.") },
+            confirmButton = {
+                TextButton(onClick = { pressedDone = null; restore(chat) }) { Text("Restore", color = p.accent) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        pressedDone = null
+                        if (s.pcSettings.confirmDelete) confirmDelete = chat else run(chat, true)
+                    }) { Text("Delete", color = p.danger) }
+                    TextButton(onClick = { pressedDone = null }) { Text("Cancel") }
+                }
+            },
+        )
+    }
+    confirmDelete?.let { chat ->
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            title = { Text("Delete this chat?") },
+            text = { Text("“${plainText(chat.title).ifEmpty { "New chat" }}” will be deleted from ${active?.name ?: "your computer"} for good. This can’t be undone.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = null; run(chat, true) }) { Text("Delete", color = p.danger) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } },
+        )
+    }
 
     Scaffold(
         containerColor = p.paper,
@@ -123,7 +215,18 @@ fun ChatsScreen(
             ) {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                     item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers) }
+                    s.savedListAt?.let { at ->
+                        item(key = "saved-list") {
+                            Text(
+                                savedListNote(at, active.name),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = p.inkSoft,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
                     item(key = "header") { SectionHeader("On ${active.name}") }
+                    actionError?.let { msg -> item(key = "action-error") { Notice(msg, Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) } }
                     if (s.summaries.isEmpty()) {
                         item(key = "empty") {
                             Text(
@@ -138,8 +241,42 @@ fun ChatsScreen(
                             )
                         }
                     }
-                    items(s.summaries, key = { it.id }) { summary ->
-                        ChatRow(summary, s.activity[summary.id]) { onOpenChat(summary.id) }
+                    // The desktop's agent sidebar: General, then each folder; active
+                    // chats first, completed ones folded away under Show completed.
+                    groups.forEach { g ->
+                        val open = g.key !in collapsed
+                        val showDone = g.key in showCompleted
+                        item(key = "group:${g.key}") {
+                            GroupHeader(g.name, open, g.active.size) {
+                                collapsed = if (open) collapsed + g.key else collapsed - g.key
+                            }
+                        }
+                        if (!open) return@forEach
+                        if (g.active.isEmpty()) {
+                            item(key = "none:${g.key}") {
+                                Text(
+                                    "No active agents",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = p.inkFaint,
+                                    modifier = Modifier.padding(start = 40.dp, end = 16.dp, top = 2.dp, bottom = 6.dp),
+                                )
+                            }
+                        }
+                        items(g.active, key = { it.id }) { summary ->
+                            ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
+                        }
+                        if (g.completed.isNotEmpty()) {
+                            item(key = "done-toggle:${g.key}") {
+                                CompletedToggle(showDone, g.completed.size) {
+                                    showCompleted = if (showDone) showCompleted - g.key else showCompleted + g.key
+                                }
+                            }
+                            if (showDone) {
+                                items(g.completed, key = { it.id }) { summary ->
+                                    CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -147,14 +284,36 @@ fun ChatsScreen(
     }
 }
 
+/** What a long-press offers: the one action the computer is set to (Settings → On <computer>). */
 @Composable
-private fun ChatRow(s: SessionSummary, activity: Activity?, onClick: () -> Unit) {
+private fun ChatActionDialog(title: String, delete: Boolean, computer: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val p = Nekko.palette
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            Text(
+                if (delete) "Delete it from $computer. You can change this action in Settings."
+                else "Move it to Completed on $computer. Nothing is deleted; you can change this action in Settings.",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(if (delete) "Delete" else "Complete", color = if (delete) p.danger else p.accent)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onClick)
+            .combinedClickable(role = Role.Button, onLongClickLabel = "Chat actions", onLongClick = onLongClick, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -185,6 +344,101 @@ private fun ChatRow(s: SessionSummary, activity: Activity?, onClick: () -> Unit)
                 null -> Unit
             }
         }
+    }
+}
+
+/** A group's title row (General or a folder): tap to fold it, like the desktop sidebar. */
+@Composable
+private fun GroupHeader(name: String, open: Boolean, activeCount: Int, onToggle: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClickLabel = if (open) "Collapse $name" else "Expand $name", onClick = onToggle)
+            .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+            .padding(start = 12.dp, end = 16.dp, top = 14.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = p.inkFaint,
+            modifier = Modifier.size(18.dp).rotate(if (open) 90f else 0f),
+        )
+        Text(
+            name.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = p.inkFaint,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.6.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (!open && activeCount > 0) {
+            Text(
+                "$activeCount",
+                style = MaterialTheme.typography.labelSmall,
+                color = p.inkFaint,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(p.surface2).padding(horizontal = 6.dp, vertical = 1.dp),
+            )
+        }
+    }
+}
+
+/** "Show completed (N)" / "Hide completed" under a group's active chats. */
+@Composable
+private fun CompletedToggle(open: Boolean, count: Int, onToggle: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onToggle)
+            .padding(start = 40.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = p.inkFaint,
+            modifier = Modifier.size(14.dp).rotate(if (open) 90f else 0f),
+        )
+        Text(
+            if (open) "Hide completed" else "Show completed ($count)",
+            style = MaterialTheme.typography.bodySmall,
+            color = p.inkFaint,
+        )
+    }
+}
+
+/**
+ * A completed chat: struck through and muted behind a check, dated by when it
+ * was completed, as the desktop's Show completed list draws it. Tap reads it;
+ * long-press offers Restore or Delete.
+ */
+@Composable
+private fun CompletedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .combinedClickable(role = Role.Button, onLongClickLabel = "Restore or delete", onLongClick = onLongClick, onClick = onClick)
+            .padding(start = 40.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Icons.Filled.Check, contentDescription = "Completed", tint = p.success, modifier = Modifier.size(14.dp))
+        Text(
+            plainText(s.title).ifEmpty { "New chat" },
+            style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.LineThrough),
+            color = p.inkFaint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(ago(s.archivedAt ?: s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
     }
 }
 
@@ -227,4 +481,14 @@ private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(80.dp))
     }
+}
+
+/** The line above a saved chat list: when it was saved, and that it isn't live. */
+internal fun savedListNote(savedAt: Long, computer: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
+    val at = java.time.Instant.ofEpochMilli(savedAt).atZone(zone)
+    val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val time = at.toLocalTime().format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
+    val whenText = if (at.toLocalDate() == today) time
+    else at.toLocalDate().format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)) + ", " + time
+    return "Saved list from $whenText. It updates when $computer answers."
 }

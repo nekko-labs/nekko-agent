@@ -4,6 +4,7 @@ import { resourceQueue } from './resource-queue.js';
 import { EventEmitter } from 'events';
 import { basename, resolve } from 'path';
 import type {
+  AgentEvent,
   AppSettings,
   AskAnswer,
   PendingInput,
@@ -89,7 +90,7 @@ import type {
   ModelFolderReport,
   SkillDef,
 } from '@nekko-agent/shared';
-import { appearanceOf, AUTO_MODEL_ID, touchesAppearance, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, queueItemPayload, SKILLS, sameFolderPath } from '@nekko-agent/shared';
+import { appearanceOf, touchesAppearance, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, runnableSkills, SKILLS, sameFolderPath } from '@nekko-agent/shared';
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
@@ -114,12 +115,12 @@ import * as sessions from './sessions.js';
 import * as memory from './memory.js';
 import { usageSummary, clearUsage } from './usage.js';
 import { indexWorkspace, getIndexStatus, searchWorkspace, listIndexedFiles } from './workspace.js';
-import { readFile, writeFile, listDir } from './files.js';
+import { readFile, writeFile, listDir, importAttachment } from './files.js';
 import { getGitStatus } from './git.js';
 import { listChanges, acceptChange, acceptAllChanges, notifyChanges, setChangeNotifier } from './changes.js';
-import { listSessionPrs, getPrDiff, prAction, fetchPrInfo } from './pr.js';
+import { listSessionPrs, getPrDiff, prAction, fetchPrInfo, branchPrHead } from './pr.js';
 import { continuePrStack, linkPrStack } from './pr-stacks.js';
-import { configureAgentWatches, nextAgentWatchAt } from './agent-watches.js';
+import { configureAgentWatches, listAgentWatchViews, nextAgentWatchAt } from './agent-watches.js';
 import { listComments, addComment, resolveComment } from './comments.js';
 import {
   getDesignBoard,
@@ -156,6 +157,7 @@ import {
   setTrainingSender,
   setTrainingNotifier,
   startTrainingScheduler,
+  DAEMON_TRAINING,
 } from './training.js';
 import {
   listWorkflowRuns,
@@ -174,12 +176,15 @@ import {
   reconcileWorkflowRuns,
   WebhookUnauthorizedError,
 } from './workflows.js';
-import { listChatWorktrees, removeChatWorktree } from './chat-worktrees.js';
+import { listChatWorktrees, removeChatWorktree, removeMergedChatWorktrees } from './chat-worktrees.js';
 import { adoptAdmittedTurn, connectorSnippetsFor, indexSnippetsForAdmission, isChatRunning, reconcileInterruptedChats, setDecisionRunner, sendChat, abortChat, steerChat, suggestReplies, fillPromptPart, getPendingInput, getHostPendingInput, getRunningSessionIds, resolveApproval, answerQuestion, previewContext, setContextPrefs } from './chat.js';
 import { abortImageTurn, generateImageTurn, sessionImages } from './image-chat.js';
 import { daemonOwns as daemonServes, loopLog } from './daemon-caps.js';
 import { setTurnNotifier, turnCallback } from './daemon-turn.js';
-import { compactSession, cancelSessionCompaction, isSessionCompacting, setCompactionSender } from './compaction.js';
+import { compactSession, cancelSessionCompaction, isSessionCompacting, observeCompaction, setCompactionSender } from './compaction.js';
+import { interruptQueuedPlan, queuedIndexValid } from './turn-variants.js';
+import { startAutoContinue } from './auto-continue.js';
+import { knownContextWindow } from './context-window.js';
 import { initLimits, clearLimits, readLimits, readLimitsProblem, notifyFromDaemon as notifyLimits } from './limits.js';
 import { startWorkflowListeners } from './listeners.js';
 import {
@@ -196,10 +201,10 @@ import {
 } from './oauth.js';
 import { buildSpec, buildSpecDoc, readSpecDocs, setSpecMethodology, toggleSpecTask, specPathForSession } from './spec.js';
 import { createRemoteService, DAEMON_REMOTE } from './remote.js';
-import { createMessagingService } from './messaging/service.js';
+import { createMessagingService, DAEMON_MESSAGING, type MessagingService } from './messaging/service.js';
 import { detectAgentTools, installSubagent, refreshSubagent, subagentSnippet } from './integrations.js';
 import { getGpuStats, getGpuStatsFresh } from './gpu.js';
-import { startUpdateChecks } from './update-checks.js';
+import { DAEMON_UPDATE_CHECKS, startUpdateChecks } from './update-checks.js';
 import { detectGpuAdapters } from './gpu-adapters.js';
 import { getSystemStats } from './system.js';
 import { stopLocalServer } from './servers.js';
@@ -247,6 +252,7 @@ export interface Host {
   testProviderConfig(cfg: ProviderConfig): Promise<{ ok: boolean; message: string }>;
 
   listModels(providerId: string): Promise<ModelInfo[]>;
+  listModelsStatus(providerId: string): Promise<{ models: ModelInfo[]; error?: string }>;
   pullModel(providerId: string, model: string): Promise<{ ok: boolean; message: string }>;
   loadModel(providerId: string, model: string): Promise<{ ok: boolean; message?: string }>;
   unloadModel(providerId: string, model: string): Promise<{ ok: boolean; message?: string }>;
@@ -359,6 +365,7 @@ export interface Host {
 
   listSessions(): Session[];
   nextAgentWatchAt(sessionId: string): number | null;
+  listAgentWatches(sessionId: string): import('@nekko-agent/shared').AgentWatchView[];
   /** Every chat without its transcript, from a cache that re-reads only changed files. */
   listSessionSummaries(): Promise<SessionSummary[]>;
   configureSandbox(sessionId: string, image: string): Promise<import('@nekko-agent/shared').SandboxStatus>;
@@ -426,7 +433,7 @@ export interface Host {
   specPath(sessionId: string): string | null;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
   ): Session | null;
   truncateSession(id: string, messageId: string): Session | null;
   clearSessions(scope: 'today' | 'month' | 'all'): number;
@@ -457,6 +464,8 @@ export interface Host {
   readFile(path: string): FileContent;
   writeFile(path: string, content: string): void;
   listDir(path: string): DirEntry[];
+  /** Save pasted bytes under the data dir as an attachable file; returns its path. */
+  importAttachment(sessionId: string, name: string, dataUrl: string): string;
 
   /** Files the agent changed this session (for diff/approve). */
   listChanges(sessionId: string): Promise<FileChange[]>;
@@ -491,6 +500,8 @@ export interface Host {
   /** Skills marketplace installs. */
   listInstalledSkills(): InstalledSkillRecord[];
   listExternalSkills(): SkillDef[];
+  /** Every skill a chat can run by name, with its template (`skills:runnable`). */
+  listRunnableSkills(): import('@nekko-agent/shared').RunnableSkill[];
   skillTargets(): InstallTargetInfo[];
   installSkill(
     skillId: string,
@@ -515,14 +526,14 @@ export interface Host {
   runTaskNow(id: string): Promise<void>;
 
   /** Training/goal runs: the data-scientist agent + experiment-tree engine. */
-  listTrainingRuns(): TrainingRun[];
-  createTrainingRun(input: NewTrainingRun): TrainingRun;
-  updateTrainingRun(id: string, patch: Partial<TrainingRun>): TrainingRun[];
-  deleteTrainingRun(id: string): TrainingRun[];
-  startTrainingRun(id: string): TrainingRun[];
-  pauseTrainingRun(id: string): TrainingRun[];
-  stopTrainingRun(id: string): TrainingRun[];
-  addTrainingHint(id: string, text: string): TrainingRun[];
+  listTrainingRuns(): Promise<TrainingRun[]>;
+  createTrainingRun(input: NewTrainingRun): Promise<TrainingRun>;
+  updateTrainingRun(id: string, patch: Partial<TrainingRun>): Promise<TrainingRun[]>;
+  deleteTrainingRun(id: string): Promise<TrainingRun[]>;
+  startTrainingRun(id: string): Promise<TrainingRun[]>;
+  pauseTrainingRun(id: string): Promise<TrainingRun[]>;
+  stopTrainingRun(id: string): Promise<TrainingRun[]>;
+  addTrainingHint(id: string, text: string): Promise<TrainingRun[]>;
 
   listWorkflows(): Promise<WorkflowsSnapshot>;
   createWorkflow(input: NewWorkflow): Promise<Workflow>;
@@ -577,7 +588,7 @@ export interface Host {
   remote: import('./remote.js').RemoteService;
 
   /** Inbound messaging channels (Telegram bot, …): live per-channel state. */
-  messagingStatus(): import('@nekko-agent/shared').MessagingStatus;
+  messagingStatus(): import('@nekko-agent/shared').MessagingStatus | Promise<import('@nekko-agent/shared').MessagingStatus>;
 
   beginOAuth(provider: OAuthProvider): Promise<OAuthSessionInfo>;
   finishOAuth(sessionId: string, pasted: string): Promise<OAuthStatus>;
@@ -631,6 +642,13 @@ export function createHost(opts: {
     const call = daemonCall();
     if (call && daemonOwns('voice')) void call('voice:stop').catch(() => undefined);
   };
+  /** Skills imported from other tools' SKILL.md folders, minus Nekko's own exports and taken names. */
+  const externalSkills = () =>
+    discoverExternalSkills({
+      projectRoots: getSettings().workspaces.map((w) => w.path),
+      exclude: readInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
+      reserved: [...SKILLS, ...listInstalledSkillDefs()].map((s) => s.name),
+    });
   const events = new EventEmitter();
   const activeChats = new Map<string, Promise<void>>();
   const interrupting = new Set<string>();
@@ -656,6 +674,30 @@ export function createHost(opts: {
   // What the daemon says after a turn it drove has ended (its generated title).
   setTurnNotifier((e) => events.emit('agentEvent', e));
   setCompactionSender((e) => events.emit('agentEvent', e));
+  // A daemon that runs compactions tells this host through `turn:notify`.
+  events.on('agentEvent', observeCompaction);
+  // A chat that runs out of context is compacted and carried on, not parked on
+  // a Retry banner; one that finishes near the window is compacted ahead of
+  // its next turn even with no chat pane open (auto-continue.ts).
+  startAutoContinue({
+    onEvent: (fn) => {
+      const listener = (e: AgentEvent) => { if (!(e as { relayOnly?: boolean }).relayOnly) fn(e); };
+      events.on('agentEvent', listener);
+      return () => events.off('agentEvent', listener);
+    },
+    getSession: (id) => sessions.getSession(id),
+    isRunning: (id) => isChatRunning(id) || isSessionCompacting(id),
+    contextWindow: knownContextWindow,
+    compact: (id) => compactSession(id),
+    send: async (s, text) => {
+      if (interrupting.has(s.id) || isChatRunning(s.id)) return;
+      const run = sendChat({ sessionId: s.id, providerId: s.providerId!, modelId: s.modelId!, text }, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl);
+      activeChats.set(s.id, run);
+      void run.finally(() => { if (activeChats.get(s.id) === run) activeChats.delete(s.id); }).catch(() => {});
+      await run;
+    },
+    notify: (e) => events.emit('agentEvent', e),
+  });
   setDecisionRunner({
     available: async () => {
       const s = await engine.decisions.status();
@@ -687,9 +729,10 @@ export function createHost(opts: {
   });
   // Training/goal runs: agent events ride the shared bus; run changes get their
   // own event. Resume any runs that were mid-flight when the host went down.
+  // A daemon that owns training (crates/nekko-automation) resumes and drives them.
   setTrainingSender((e) => events.emit('agentEvent', e));
   setTrainingNotifier((runs) => events.emit('trainingUpdated', runs));
-  startTrainingScheduler();
+  unlessDaemonOwns(DAEMON_TRAINING, startTrainingScheduler);
   // Workflows: a run's agent steps stream on the shared bus, definition and run
   // changes get their own event. Any run the last shutdown interrupted is
   // written off before the scheduler starts, so it can't look stuck forever.
@@ -715,6 +758,22 @@ export function createHost(opts: {
     startWorkflowScheduler();
     startWorkflowListeners();
   });
+  // A chat's worktree is removed once its branch's PR has merged (Settings >
+  // Git management, on by default). Clean, idle checkouts only; see
+  // removeMergedChatWorktrees. First pass a minute after launch, then hourly.
+  {
+    let sweeping = false;
+    const sweep = async () => {
+      if (sweeping) return;
+      sweeping = true;
+      try {
+        const removed = await removeMergedChatWorktrees(getSettings(), chatOwner, branchPrHead);
+        for (const r of removed) console.log(`[worktrees] removed ${r.root} (${r.branch}): its PR merged`);
+      } catch { /* retried on the next pass */ } finally { sweeping = false; }
+    };
+    setTimeout(() => void sweep(), 60_000).unref?.();
+    setInterval(() => void sweep(), 60 * 60_000).unref?.();
+  }
 
   const findProvider = (id: string) => getSettings().providers.find((p) => p.id === id);
   /** A provider switched off on the Models page is never contacted or launched. */
@@ -797,11 +856,14 @@ export function createHost(opts: {
 
   // Periodic catalog refreshes (Settings → Updates): provider model lists and
   // the skills shelf, each on its own toggle. The `host.listModels` call inside
-  // the service is deferred past construction.
+  // the service is deferred past construction. A daemon that owns them
+  // (crates/nekkod/src/small_services.rs) runs them instead, so the UI hears
+  // one change, not two.
   const updateChecks = startUpdateChecks({
     settings: getSettings,
     listModels: (id) => host.listModels(id),
     emit: (channel, payload) => events.emit(channel, payload),
+    scheduled: !daemonOwns(DAEMON_UPDATE_CHECKS),
   });
 
   // A paired phone follows the desktop's theme: tell it (through the relay)
@@ -810,6 +872,8 @@ export function createHost(opts: {
     if (touchesAppearance(patch)) events.emit('appearanceUpdated', appearanceOf(getSettings()));
   };
 
+  // Set once the host exists (the bridge drives it); null when the daemon owns messaging.
+  let messaging: MessagingService | null = null;
   const host: Host = {
     events,
     dataDir,
@@ -820,7 +884,7 @@ export function createHost(opts: {
       const next = saveSettings(patch);
       announceAppearance(patch);
       if (patch.voice !== undefined) stopVoice();
-      if (patch.messaging !== undefined) messaging.update(next.messaging);
+      if (patch.messaging !== undefined) messaging?.update(next.messaging);
       return next;
     },
 
@@ -863,14 +927,17 @@ export function createHost(opts: {
       }
     },
 
-    listModels: async (providerId) => {
+    listModels: async (providerId) => (await host.listModelsStatus(providerId)).models,
+
+    listModelsStatus: async (providerId) => {
       const p = findProvider(providerId);
-      if (!p || p.enabled === false) return [];
+      if (!p || p.enabled === false) return { models: [] };
+
       try {
         const resolved = await resolveSubscriptionProvider(p);
-        return await createProvider(resolved).listModels();
-      } catch {
-        return [];
+        return { models: await createProvider(resolved).listModels() };
+      } catch (e) {
+        return { models: [], error: (e as Error).message };
       }
     },
     pullModel: async (providerId, model) => {
@@ -963,7 +1030,7 @@ export function createHost(opts: {
       // What updateSettings does after a save, for a save the daemon made.
       if (patch && typeof patch === 'object') {
         if (patch.voice !== undefined) stopVoice();
-        if (patch.messaging !== undefined) messaging.update(getSettings().messaging);
+        if (patch.messaging !== undefined) messaging?.update(getSettings().messaging);
       }
     },
     indexProgressRelay: (status) => events.emit('indexProgress', { ...status, relayOnly: true }),
@@ -1015,6 +1082,7 @@ export function createHost(opts: {
 
     listSessions: sessions.listSessions,
     nextAgentWatchAt: (id) => nextAgentWatchAt(id),
+    listAgentWatches: (id) => listAgentWatchViews(id),
     listSessionSummaries: sessions.listSessionSummaries,
     configureSandbox: (id, image) => { if (isChatRunning(id) || activeChats.has(id)) throw new Error('Wait for the current reply to finish before sandbox setup.'); return configureSandbox(id, image); },
     cleanupSandbox: (id, identity) => { if (isChatRunning(id) || activeChats.has(id)) throw new Error('Wait for the current reply to finish before sandbox cleanup.'); return cleanupSandbox(id, identity); },
@@ -1072,6 +1140,9 @@ export function createHost(opts: {
     listTools: () => [...BUILTIN_TOOLS.map((t) => ({ name: t.name, description: t.description })), ...mcpToolList()],
     sendChat: (o) => {
       if (interrupting.has(o.sessionId)) throw new Error('A queued prompt is already starting.');
+      if (activeChats.has(o.sessionId) || isChatRunning(o.sessionId)) {
+        throw new Error('This chat is already running. Queue the follow-up or interrupt the current reply first.');
+      }
       if (isSessionCompacting(o.sessionId)) {
         events.emit('agentEvent', { type: 'error', sessionId: o.sessionId, message: 'This chat is being compacted. Wait or move to a new chat.' });
         return Promise.resolve();
@@ -1100,15 +1171,11 @@ export function createHost(opts: {
     interruptQueuedPrompt: async (sessionId, index, brain) => {
       const session = sessions.getSession(sessionId);
       if (!session) throw new Error('Session not found.');
-      if (!Number.isSafeInteger(index) || index < 0 || index >= (session.queue?.length ?? 0)) throw new Error('Queued prompt not found.');
+      if (!queuedIndexValid(session, index)) throw new Error('Queued prompt not found.');
       if (interrupting.has(sessionId)) throw new Error('A queued prompt is already starting.');
       if (isSessionCompacting(sessionId)) throw new Error('This chat is being compacted.');
-      const providerId = brain?.providerId ?? session.providerId ?? getSettings().defaultProviderId;
-      const modelId = brain?.modelId ?? session.modelId ?? getSettings().defaultModelId;
-      if (!providerId || !modelId || modelId === AUTO_MODEL_ID) throw new Error('Choose a provider and model before starting the queued prompt.');
-      const item = session.queue![index];
-      const payload = queueItemPayload(item);
-      const text = payload.text;
+      const plan = interruptQueuedPlan(session, index, brain, getSettings());
+      if ('error' in plan) throw new Error(plan.error);
       interrupting.add(sessionId);
       try {
         const active = activeChats.get(sessionId);
@@ -1119,7 +1186,7 @@ export function createHost(opts: {
           throw new Error('Image turn is still stopping. Try again when it finishes.');
         }
         if (isSessionCompacting(sessionId)) throw new Error('This chat is being compacted.');
-        await sendChat({ sessionId, providerId, modelId, text, ...(payload.images?.length ? { images: payload.images } : {}), ...(payload.skill ? { skill: payload.skill } : {}) }, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl, { index, item });
+        await sendChat(plan.opts, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl, { index, item: plan.item });
       } finally {
         interrupting.delete(sessionId);
       }
@@ -1206,6 +1273,7 @@ export function createHost(opts: {
     readFile,
     writeFile,
     listDir,
+    importAttachment: (sessionId, name, dataUrl) => importAttachment(dataDir(), sessionId, name, dataUrl),
     listChanges,
     acceptChange,
     acceptAllChanges,
@@ -1225,12 +1293,8 @@ export function createHost(opts: {
     resolveDesignNote,
     generateDesign,
     listInstalledSkills,
-    listExternalSkills: () =>
-      discoverExternalSkills({
-        projectRoots: getSettings().workspaces.map((w) => w.path),
-        exclude: readInstalledSkills().flatMap((r) => (r.path ? [r.path] : [])),
-        reserved: [...SKILLS, ...listInstalledSkillDefs()].map((s) => s.name),
-      }),
+    listExternalSkills: externalSkills,
+    listRunnableSkills: () => runnableSkills(SKILLS, listInstalledSkillDefs(), externalSkills()),
     skillTargets,
     installSkill,
     uninstallSkill,
@@ -1248,14 +1312,15 @@ export function createHost(opts: {
     deleteTask: (id) => viaDaemon('tasks', 'task:delete', [id], () => deleteTask(id)),
     runTaskNow: (id) => viaDaemon('tasks', 'task:runNow', [id], () => runTaskNow(id)),
 
-    listTrainingRuns,
-    createTrainingRun,
-    updateTrainingRun,
-    deleteTrainingRun,
-    startTrainingRun,
-    pauseTrainingRun,
-    stopTrainingRun,
-    addTrainingHint,
+    // The daemon runs training and goal runs when it owns them (crates/nekko-automation).
+    listTrainingRuns: () => viaDaemon(DAEMON_TRAINING, 'training:list', [], listTrainingRuns),
+    createTrainingRun: (input) => viaDaemon(DAEMON_TRAINING, 'training:create', [input], () => createTrainingRun(input)),
+    updateTrainingRun: (id, patch) => viaDaemon(DAEMON_TRAINING, 'training:update', [id, patch], () => updateTrainingRun(id, patch)),
+    deleteTrainingRun: (id) => viaDaemon(DAEMON_TRAINING, 'training:delete', [id], () => deleteTrainingRun(id)),
+    startTrainingRun: (id) => viaDaemon(DAEMON_TRAINING, 'training:start', [id], () => startTrainingRun(id)),
+    pauseTrainingRun: (id) => viaDaemon(DAEMON_TRAINING, 'training:pause', [id], () => pauseTrainingRun(id)),
+    stopTrainingRun: (id) => viaDaemon(DAEMON_TRAINING, 'training:stop', [id], () => stopTrainingRun(id)),
+    addTrainingHint: (id, text) => viaDaemon(DAEMON_TRAINING, 'training:hint', [id, text], () => addTrainingHint(id, text)),
 
     // The daemon runs workflows when it owns them (crates/nekko-automation).
     listWorkflows: () => viaDaemon('workflows', 'workflows:list', [], workflowsSnapshot),
@@ -1320,7 +1385,7 @@ export function createHost(opts: {
     renameRemoteDevice: (deviceId, name) => host.remote.rename(deviceId, name),
     rotateRemoteSecret: () => host.remote.rotate(),
 
-    messagingStatus: () => messaging.status(),
+    messagingStatus: () => (messaging ? messaging.status() : viaDaemon(DAEMON_MESSAGING, 'messaging:status', [], () => ({}))),
 
     beginOAuth,
     finishOAuth,
@@ -1375,8 +1440,10 @@ export function createHost(opts: {
     if (!daemonOwns(DAEMON_REMOTE)) host.remote.startIfEnabled();
   }
   // Messaging channels likewise drive the host; configured adapters come up
-  // with the process and reconfigure through updateSettings above.
-  const messaging = createMessagingService(host);
-  messaging.update(getSettings().messaging);
+  // with the process and reconfigure through updateSettings above. A daemon
+  // that owns them (crates/nekkod/src/messaging.rs) runs the bridge and its
+  // state file instead: one poller per bot token, or Telegram answers 409.
+  messaging = daemonOwns(DAEMON_MESSAGING) ? null : createMessagingService(host);
+  messaging?.update(getSettings().messaging);
   return host;
 }

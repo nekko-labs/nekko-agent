@@ -13,6 +13,7 @@ export { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDat
 export { cleanup as cleanupLegacy, consolidate as consolidateLegacy, describeItem as describeLegacyItem, detectLegacy, summarize as summarizeLegacy, legacyEnv, type CleanupReport, type ConsolidateReport, type LegacyEnv, type LegacyItem } from './legacy-profiles.js';
 export { findRunningApp, listProcesses, startApp, stopApp, type ProcInfo, type RunningApp } from './app-control.js';
 export { listAgentTerminals, useTerminalDaemon } from './terminal.js';
-export { useEngineDaemon } from './engine/daemon.js';
+export { isDaemonCopy } from './daemon-caps.js';
+export { daemonLink, useEngineDaemon } from './engine/daemon.js';
 export { reviewRepository, parseRepositoryVerdict, type RepositoryReviewer, type RepositoryReviewInput, type RepositoryReviewVerdict } from './repository-review.js';
 export { flushAgentLogs } from './agent-log.js';

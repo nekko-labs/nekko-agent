@@ -50,6 +50,49 @@ pub struct Config {
     /// Where GitHub's API is (`https://api.github.com`), for the runtime
     /// installers; tests point it at a loopback server.
     pub github_api_url: Option<String>,
+    /// Where the decision models' release assets are (the `decision-models-v1`
+    /// release's download URL); tests point it at a loopback server.
+    pub decision_models_url: Option<String>,
+    /// The app's version for `app:info` (the desktop app's); absent, the
+    /// web edition's `NEKKO_VERSION`, else `0.0.0`.
+    pub app_version: Option<String>,
+    /// `desktop` or `web` for `app:info`; absent means `web`.
+    pub edition: Option<String>,
+    /// Where Telegram's Bot API is (`https://api.telegram.org`), for the
+    /// messaging bridge; tests point it at a loopback fake. Without it,
+    /// `NEKKO_TELEGRAM_API_URL` (a self-hosted Bot API server, or the web
+    /// edition's live checks, whose server writes this config itself).
+    pub telegram_api_url: Option<String>,
+    /// The desktop app around the daemon, for the channels Electron main
+    /// used to answer (native.rs): dialogs, opening paths, the microphone,
+    /// the updater. Absent (the web edition, Docker), they are not served.
+    pub native: Option<NativeConfig>,
+}
+
+/// What the daemon needs to know about the desktop app it serves.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeConfig {
+    /// A packaged app updates itself; a development checkout does not.
+    #[serde(default)]
+    pub is_packaged: bool,
+    /// The app's executable (`process.execPath`), relaunched after an update.
+    #[serde(default)]
+    pub exe_path: String,
+    /// Electron's `process.resourcesPath`: `app-update.yml`, `elevate.exe`, `package-type`.
+    pub resources_path: Option<String>,
+    /// Linux: `$APPIMAGE`, the AppImage the app runs from.
+    pub app_image: Option<String>,
+    /// Electron main's pid, which an update waits for before replacing files.
+    pub app_pid: Option<u32>,
+    /// A generic update feed (`<url>/latest.yml`) in place of `app-update.yml`'s
+    /// (tests and sandboxes; also turns updates on in an unpackaged app).
+    pub update_feed_url: Option<String>,
+    /// Where downloads are kept; absent, electron-updater's cache folder.
+    pub update_cache_dir: Option<String>,
+    /// `bridge` has Electron main draw the dialogs (macOS always does; tests
+    /// use it so no real dialog opens). Absent, the daemon draws them.
+    pub dialogs: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

@@ -1,0 +1,141 @@
+{
+ "channels": [
+  "app:info",
+  "changes:list",
+  "chat:abort",
+  "chat:answer",
+  "chat:pending",
+  "chat:queue",
+  "chat:send",
+  "models:list",
+  "providers:list",
+  "session:create",
+  "session:delete",
+  "session:get",
+  "session:setOptions",
+  "sessions:summaries",
+  "settings:get",
+  "settings:update",
+  "skills:runnable",
+  "tool:approve",
+  "voice:status",
+  "voice:transcribe",
+  "workspace:list"
+ ],
+ "alwaysDenied": {
+  "channels": [
+   "attachment:import",
+   "changes:accept",
+   "changes:acceptAll",
+   "connector:connect",
+   "connector:disconnect",
+   "data:wipe",
+   "dir:list",
+   "file:read",
+   "file:write",
+   "providers:importCliAuth",
+   "providers:remove",
+   "providers:save",
+   "settings:reset",
+   "voice:cancel",
+   "voice:install",
+   "voice:permission",
+   "voice:uninstall",
+   "workspace:addByPath",
+   "workspace:remove"
+  ],
+  "prefixes": [
+   "dialog:",
+   "mcp:",
+   "oauth:",
+   "remote:",
+   "shell:",
+   "terminal:",
+   "terminals:",
+   "update:"
+  ],
+  "except": [
+   "remote:status"
+  ]
+ },
+ "settingsKeys": [
+  "chatPaneAction",
+  "defaultChatMode",
+  "skipDeleteConfirmation",
+  "voice.enabled",
+  "voice.language"
+ ],
+ "settingsView": [
+  "accent",
+  "accent2",
+  "chatPaneAction",
+  "defaultChatMode",
+  "defaultModelId",
+  "defaultProviderId",
+  "favoriteModels",
+  "phoneChanges",
+  "skipDeleteConfirmation",
+  "theme",
+  "themePreset",
+  "voice.enabled",
+  "voice.language"
+ ],
+ "providerView": [
+  "enabled",
+  "id",
+  "kind",
+  "label"
+ ],
+ "skillView": [
+  "category",
+  "description",
+  "name",
+  "source"
+ ],
+ "queueKeys": [
+  "images",
+  "skill",
+  "text"
+ ],
+ "sessionOptionKeys": [
+  "archivedAt",
+  "mode",
+  "modelId",
+  "pinned",
+  "providerId",
+  "tags",
+  "thinking",
+  "title"
+ ],
+ "chatSendKeys": [
+  "images",
+  "modelId",
+  "providerId",
+  "regenerate",
+  "resume",
+  "sessionId",
+  "skill",
+  "text"
+ ],
+ "chatModes": [
+  "ask",
+  "guardrails",
+  "yolo"
+ ],
+ "sessionView": {
+  "messages": 300,
+  "textChars": 4000,
+  "images": 40,
+  "thumbSide": 384,
+  "thumbChars": 98304
+ },
+ "changesView": {
+  "files": 50,
+  "linesPerFile": 400,
+  "bytesPerFile": 65536,
+  "totalBytes": 524288,
+  "context": 3,
+  "diffCells": 4000000
+ },
+ "maxFrameBytes": 9437184
+}

@@ -762,8 +762,45 @@
   "maxDepth": 2,
   "maxParallel": 4
  },
- "agentWatchInstructions": "When work must wait for PR checks or another background task, register agent_watch before ending the turn. State its id and wake condition; do not claim to be watching unless registration succeeded. Use a deadline so waiting cannot silently last forever. On wake, verify current status and re-arm if necessary. Do not register automatic continuations when waiting for a user decision, missing permission, credentials, or visual evidence that requires human action.",
+ "agentWatchInstructions": "Do not wait on PR checks to verify: run tests, visual checks and evidence while CI runs, and use the wait to finish remaining work (docs, spec, evidence, cleanup, the next independent task). When something still depends on a check or another background task, register agent_watch before ending the turn. State its id and wake condition; do not claim to be watching unless registration succeeded. Use a deadline so waiting cannot silently last forever. On wake, verify current status and re-arm if necessary. Do not register automatic continuations when waiting for a user decision, missing permission, credentials, or visual evidence that requires human action.",
  "sandboxInstructions": "Sandbox: only folder-N copied paths are accessible. All tool actions require approval. No host controls, networking, MCP, delegation or host fallback.",
  "askCancelled": "The user did not answer. Do not ask again: pick the most reasonable option, say which one you picked and why, and carry on.",
- "askUnattended": "Nobody answered within the unattended time limit. Do not ask again: choose the most reasonable, least destructive option yourself, state the assumption plainly in your reply, and carry on."
+ "askUnattended": "Nobody answered within the unattended time limit. Do not ask again: choose the most reasonable, least destructive option yourself, state the assumption plainly in your reply, and carry on.",
+ "toolCategories": {
+  "read_file": "files",
+  "write_file": "files",
+  "edit_file": "files",
+  "glob": "files",
+  "grep": "files",
+  "list_dir": "files",
+  "bash": "shell",
+  "start_process": "shell",
+  "read_process": "shell",
+  "kill_process": "shell",
+  "fetch_url": "online",
+  "browser": "online",
+  "capture": "desktop",
+  "delegation_targets": "agent",
+  "spawn_agent": "agent",
+  "agent_watch": "agent",
+  "update_plan": "agent",
+  "set_chat_title": "agent",
+  "complete_session": "agent",
+  "ask_user": "agent",
+  "decide": "agent",
+  "report_experiment": "agent",
+  "report_artifact": "agent"
+ },
+ "offlineBlockedTools": [
+  "delegation_targets",
+  "spawn_agent",
+  "agent_watch",
+  "decide"
+ ],
+ "workModePrompts": {
+  "default": "",
+  "better-review": "Work mode: Better review (chosen by the user for this chat). It shapes how you work; it does not change permissions, tools or guardrails.\nWhen the user asks for a review (code, a diff, a PR, a document), review in separate passes: correctness and edge cases, security, tests, then simplicity.\nEvery finding cites the exact file and line (or section) and says why it matters. A finding you cannot point to is not reported.\nBefore reporting, verify each finding against the actual code; drop anything you could not confirm. When spawn_agent is available, have a separate reviewer check the findings, preferably on a different model of the same provider.\nReport findings ranked by severity, then say what you did not check.\nSkills this mode applies automatically (the user does not need to invoke them):\n- review: Review the current changes for correctness bugs, edge cases, and possible improvements.\n- security-review: Do a focused security review of the current changes: look for injection, auth, secret-handling, and unsafe-input issues.\n- review-council: Review the working diff with a council of three parallel reviewer agents, each with one lens: (1) correctness bugs and edge cases, (2) security (injection, auth, secrets, unsafe input), (3) simplification and reuse. Spawn them with spawn_agent, give each the diff, then merge their findings into a single report ranked by severity, dropping duplicates. Verify each finding against the code before reporting it.",
+  "design": "Work mode: Design (chosen by the user for this chat). It shapes how you work; it does not change permissions, tools or guardrails.\nFor visual or interface work: build a self-contained prototype first (HTML/CSS/SVG in nekko-designs/ unless the project has a convention), then look at the result before calling it done.\nWhen you can capture or screenshot it, do so and critique what you actually see: hierarchy, spacing, contrast, alignment, states, narrow and wide widths, light and dark themes.\nRevise at least once based on that critique, and say what changed between rounds. Never claim a visual result you did not inspect.\nSkills this mode applies automatically (the user does not need to invoke them):\n- a11y-audit: Sweep the UI components for accessibility problems: interactive elements without accessible names, missing alt text, keyboard traps or unreachable controls, missing focus styles, and color pairs likely to fail WCAG AA contrast. Report findings grouped by severity, each with the file, the problem, and a concrete fix.",
+  "best-output": "Work mode: Best output (chosen by the user for this chat). It shapes how you work; it does not change permissions, tools or guardrails.\nBefore the final answer: make a short plan, write a draft, critique the draft against the request (missing parts, errors, weak spots, unverified claims), then revise.\nFor work that can be checked (code, data, facts), check it with the tools available instead of judging by reading. When spawn_agent is available and the task is substantial, ask a separate critic for the review.\nDeliver only the revised result, and state any remaining uncertainty plainly.\nSkills this mode applies automatically (the user does not need to invoke them):\n- plan: Create a detailed, step-by-step implementation plan for:\n\n"
+ }
 }

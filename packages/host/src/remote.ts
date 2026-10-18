@@ -5,6 +5,7 @@ import {
   newPairingCode,
   newRoomCode,
   newRoomSecret,
+  relayUrlProblem,
   verifyHello,
   type PairingGrant,
   type RemoteDevice,
@@ -125,6 +126,9 @@ export function createRemoteService(host: Host): RemoteService {
 
   return {
     enable(relayUrl) {
+      // Plain ws:// to the open internet is refused here as on every phone (PH1).
+      const problem = relayUrlProblem(relayUrl);
+      if (problem) throw new Error(problem);
       const prev = load();
       const cfg = save({
         ...prev,
@@ -137,6 +141,8 @@ export function createRemoteService(host: Host): RemoteService {
       return statusOf(cfg);
     },
     attach({ relayUrl, room, secret }) {
+      const problem = relayUrlProblem(relayUrl);
+      if (problem) throw new Error(problem);
       const cfg = save({ ...load(), enabled: true, relayUrl, room, secret });
       connect(cfg);
       return statusOf(cfg);

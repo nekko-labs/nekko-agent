@@ -1,0 +1,8 @@
+version: 0.8.0
+files:
+  - url: AgentNekko-0.8.0-x64.exe
+    sha512: GjfLwFIm0DZVQZ5KWfQez095+NMS9QG3j6uLPIwVoCyUi2f6e7pxPhEATaN6rnFyFj73lDJVmNi5YluD02GZnw==
+    size: 132037777
+path: AgentNekko-0.8.0-x64.exe
+sha512: GjfLwFIm0DZVQZ5KWfQez095+NMS9QG3j6uLPIwVoCyUi2f6e7pxPhEATaN6rnFyFj73lDJVmNi5YluD02GZnw==
+releaseDate: '2026-10-03T13:35:28.423Z'

@@ -3,4 +3,9 @@
     <color name="paper">#FFFBFBFD</color>
     <color name="ic_launcher_background">#FF101714</color>
     <color name="ic_launcher_mark">#FF8B7DFF</color>
+    <!-- The Home Screen widget, in the app's AA palette (ui/theme/Theme.kt). -->
+    <color name="widget_surface">#FFFFFFFF</color>
+    <color name="widget_ink">#FF17171D</color>
+    <color name="widget_ink_soft">#FF52525E</color>
+    <color name="widget_online">#FF1E7A4A</color>
 </resources>

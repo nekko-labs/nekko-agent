@@ -56,7 +56,10 @@ state, so moving one moves the other, and either can be saved as that model's de
 computer, an API key, allowed browser origins, how many models may be resident, the idle
 timeout, load-on-demand, start-with-the-app, and the models folder. The defaults are
 loopback-only with no key, which is safe; binding to the network is a deliberate act and
-the app says what it means next to the setting.
+the app says what it means next to the setting. **A network bind requires a key**: the
+engine refuses to listen on your network with the key empty, and picking **This computer
+and my network** with no key set fills one in for you (a key you already typed is kept).
+Send it as a Bearer token from the apps you point at the engine.
 
 Because the engine holds the file, it reads the GGUF header directly, so the projection
 below is **exact** for its own models where it has to report parts of itself as unknown
@@ -100,6 +103,15 @@ everything fixed by the launch command, and it is Linux plus NVIDIA plus Python 
 practice. Nekko Agent detects it, shows its live `/metrics`, and can stop it, but never
 starts it: instead the fit drawer renders the exact `vllm serve` command for you to run.
 Nothing that could not be verified against real hardware ships as a working button.
+
+### When a card lists no models
+
+A card whose model list fails says why instead of "No models found." A server that does not
+answer reads *"Ollama didn't answer at http://localhost:11434. Is it running?"*; any other
+failure shows the provider's own message, such as a 401 from a refused key, unless the
+connection test above it already says why. **Retry**
+re-tests the connection and asks for the list again. A card with more than eight models
+gets a filter box.
 
 ## Reading the fit bar
 
@@ -182,6 +194,50 @@ thing holding port 11434 might be a service you depend on.
 
 LM Studio is the exception that needs no such warning, since it has a real shutdown
 command rather than a process to kill.
+
+## Long tasks on a small context window
+
+A local model is often loaded with an 8k or 32k context, and an agent fills that in a few
+steps: one large file read or one noisy build log is most of it. Nekko Agent keeps the work
+going rather than stopping when the window fills:
+
+- **It uses the window the model was loaded with**, not the model's advertised maximum.
+  LM Studio and the Nekko engine report it in their model list, and Ollama reports it for a
+  loaded model. For anything that reports nothing, it falls back to a guess from the name.
+- **Older tool output is left out of the request** once the conversation nears 80% of that
+  window. The oldest large results (file reads, command output) are replaced, in what is sent,
+  by a one-line note saying how much was there; the chat itself keeps everything, and the model
+  can simply run the tool again if it needs that output back.
+- **If the server still says the prompt is too long**, the request is sent once more with all
+  of the older tool output left out.
+- **If that is not enough, the chat compacts and carries on by itself.** The older part of the
+  conversation is summarized, and the agent is asked to continue from the summary. This happens
+  at most twice in a row before the chat waits for you, so a model that cannot make progress
+  does not loop.
+
+Giving the model more room is still the best fix. Raise its context when you load it (the
+Models page shows what that costs in memory), and `OLLAMA_KV_CACHE_TYPE=q8_0` roughly halves
+the memory a longer context needs.
+
+## Pictures and models that cannot see
+
+Only a vision model with its projector file (`mmproj-*.gguf`) beside it can look at a
+picture. The Nekko engine tells the app which of its models have one, so for a text-only
+model such as Qwen3 4B the composer greys out **Photo / Video** and says why.
+
+A picture can still end up in a text-only chat: you attached it while a vision model was
+picked and then switched, or you used a server the app cannot classify. Such a server
+rejects every request that carries an image, and the image stays in the conversation, so
+before this guard the chat failed on every later message too. Now, when the model is known
+not to take images, each picture is sent as a one-line note ("1 image attachment omitted:
+this model does not accept image input") and the chat keeps working. The picture stays in
+the chat itself, so switching back to a vision model sends it again.
+
+A server that does not say what its models take still receives the pictures. If such a
+model refuses them, click **Delete last message** in the failure notice (or **Delete** on
+the message itself). That removes the message with the picture and anything after it, and
+the chat answers again. You can then ask again without the picture, or switch to a model
+with vision input.
 
 ## What is not here yet
 

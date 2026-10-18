@@ -30,6 +30,44 @@ Only record numbers that were actually measured, quoted exactly from their
 source. If a PR was performance-motivated but measured nothing, list it under
 [Unmeasured](#unmeasured) instead of guessing.
 
+This is the canonical, cumulative Markdown source for future performance articles;
+update an entry when final CI results arrive, not just when a PR is opened. Include
+PR/commit links, hardware and workload, exact samples, what changed, what did not
+improve, and the remaining question. Keep microbenchmarks, CPU-profile samples,
+profiled diagnostics and full product gates separate. Do not infer causality from
+single sequential runs or compare different machines as a time-series speedup.
+Link durable reports where possible: CI artifacts can expire, so retain the key
+numbers and conditions here even when raw traces are linked elsewhere.
+
+## Native browser migration baseline (#752, 2026-10-17)
+
+Area: perf harness / browser driver. Result: regression in initial sequential driver comparison, not yet an alternated causal measurement.
+Conditions: Windows x64, unchanged revision `4fc3cc5c`, Playwright 1.63.0, Electron 44.7.0 / Chromium 152.0.7977.130, isolated hidden synthetic fixture, 1100x760 outer DIP, 20 fresh-chat navigation samples and 20 existing-page inspect samples. Nearest-rank percentiles.
+
+| Metric (ms) | Before | After |
+|---|---|---|
+| Fresh chat navigation p50 | 71.4239 | 93.61859999999979 |
+| Fresh chat navigation p95 | 89.70190000000002 | 103.96899999999994 |
+| Warm inspect p50 | 0.916899999999714 | 1.1934000000001106 |
+| Warm inspect p95 | 1.1640999999999622 | 1.3894000000000233 |
+
+Source: [raw samples and Electron process memory](../reports/agent-browser/playwright-baseline.json). Cold means new driver/renderer, not new Electron process or flushed caches. The [experimental native v2 candidate](../reports/agent-browser/native-candidate-v2.json) passed the smoke suite but measured higher latency in both workloads. These sequential batches are not a causal speedup/regression estimate; no performance win is claimed. Screenshot was 1359x873 device pixels at OS scaling, viewport height 698 DIP. Candidate must match these conditions; native-child memory is not included in Electron metrics and needs separate collection.
+
+### Matched alternating driver benchmark (2026-10-17)
+
+Raw [four batches and exact memory snapshots](../reports/agent-browser/matched-benchmark.json), order PW/native/PW/native, 20 cold + 20 warm per batch (40 samples per driver/workload), same common fixture bundle, Electron 44.7.0 / Chromium 152.0.7977.130, 1100x760 DIP outer and 1359x873 screenshots, light theme. Runtime native `7ff28b02`, harness-only explicit driver switch/memory probe. Nearest-rank percentiles:
+
+| Metric | Playwright before | Native after | Result |
+|---|---:|---:|---|
+| Cold chat navigation p50 ms | 66.36300000000006 | 93.87869999999998 | Slower native |
+| Cold chat navigation p95 ms | 74.38070000000016 | 102.51769999999999 | Slower native |
+| Warm inspect p50 ms | 1.006199999999808 | 1.1442999999999302 | Slightly slower native |
+| Warm inspect p95 ms | 1.4304999999999382 | 1.4756999999999607 | Near-null tail; no win |
+| Total working set bytes, batch 1 | 513273856 | 471531520 | Lower native snapshot |
+| Total working set bytes, batch 2 | 515989504 | 471937024 | Lower native snapshot |
+
+Memory totals include all Electron process metrics plus the native child (14,360,576 / 14,323,712 working-set bytes, 4,759,552 / 4,718,592 private bytes), exclude the PowerShell measurement process, and are one snapshot per warm batch—not unique committed memory or a long-run distribution. The common fixture bundle includes the baseline helper for both; production native main excludes Playwright. Two alternating batches are not randomized per-sample causal evidence. Cold is fresh chat driver/renderer, not whole-app startup; warm sub-ms deltas can be scheduler noise. Both drivers passed the same expanded actions/security fixture; screenshots await parent actual-pixel inspection. This is a latency/memory trade-off, not an across-the-board speedup.
+
 ## Themes
 
 Threads worth an article, with the entries that tell each story:
@@ -48,8 +86,147 @@ Threads worth an article, with the entries that tell each story:
 - **Local inference.** #152 (we were reporting half the real tok/s), #196, #218,
   #222.
 - **Developer loop.** #342, #490, #503.
+- **A faster helper is not automatically a faster frame.** #544's streaming
+  investigation, #594's baseline failure, #595's bounded excerpt scan (~6x
+  microbenchmark improvement and fewer CPU samples, but no whole-frame win),
+  and #597's independent status fix. This is an article thread about finding
+  real avoidable work without mistaking it for resolution of the user-facing
+  performance problem.
 
 ## 2026-10
+
+### Slowest TypeScript unit tests made faster without losing assertions (2026-10-18)
+Area: dev build
+Result: improvement (server.test.ts: no effect, left alone)
+Conditions: Windows, local, Node 24.1.0, Vitest 5.0.3, Git 2.51.0.windows.2. Per file: `npx vitest run <file> --reporter=json` from its package dir, 3 runs each, median of the file's start-to-end time from the JSON report. Whole package: one run each of `npx vitest run` in `packages/host` and `packages/core`, span from the JSON report. Base `origin/main` 75e8b29a vs this branch, same machine, back to back.
+
+| File (median of 3, s) | Before | After |
+|---|---|---|
+| host `chat-worktrees.test.ts` | 12.38 | 9.16 |
+| host `hooks.test.ts` | 10.43 | 2.93 |
+| core `agent/loop-retry.test.ts` | 6.00 | 0.01 |
+| host `workflows.test.ts` | 4.87 | 2.83 |
+| host `engine/server.test.ts` (unchanged) | 10.47 | 10.50 |
+| `packages/host` whole suite, 1 run | 19.2 | 15.9 |
+| `packages/core` whole suite, 1 run | 7.2 | 5.1 |
+
+Why: `loop-retry` waited out real 0.5 to 2 s backoffs; it now runs them on a fake `setTimeout` and still asserts the delays the loop reports. The hung hook slept 10 s against a 1 s limit; on Windows killing `cmd.exe` leaves the `node` grandchild holding the pipes, so the test lasted the full sleep. It now sleeps 2.5 s (the 1 s limit is the product's minimum and is unchanged). `chat-worktrees` builds one committed repository per file and copies it per test, turns off auto maintenance (44 `git maintenance run --auto` processes, 3.2 s in a trace2 profile), and commits in the merged-PR test's six worktrees in parallel. Workflow pass/fail steps are `exit 0`/`exit 1` instead of a `node -e` start. Under the full parallel host run, the merged-PR worktree test took 5548 ms (timed out at 5 s) before and 4721 ms after, so it keeps a 15 s timeout. `server.test.ts` is dominated by product constants (400 ms health poll, 800 ms progress sampling, a stub that listens after 2 s); changing them needs a product seam, so it is unchanged. Remaining question: the merged-PR test is still about 70 git processes, mostly in product code (`worktree add`, `status`). Source: this PR.
+
+### CI gates recalibrated from 115 runner reports; #544 closed (2026-10-17)
+Area: perf harness
+Result: measurement fix
+Conditions: GitHub `ubuntu-latest` (AMD EPYC 7763, 4 threads), Chrome 155, `--attempts 3 --no-gpu`; the 115 `perf-report` artifacts still retained from 2026-10-15 to 17, almost all from PRs that did not touch the renderer
+
+45 of the 115 reports failed after three attempts: warm switch 44 times, streaming frame work 23, cold-switch frame 18. Composer keypress never failed but came within 1 ms of its gate. A gate that fails 40% of healthy runs blocks unrelated PRs and tells their authors nothing, so each gate moved to the worst best-of-three p95 seen on these builds plus about 10% (Philip's call).
+
+| Metric (best-of-3 p95, ms) | Median | p90 | Max | Gate before | Gate after |
+|---|---|---|---|---|---|
+| Composer keypress | 18.8 | 21.2 | 24.0 | 25 | 27 |
+| Terminal keypress | 6.1 | 6.8 | 7.9 | 20.8 | 20.8 |
+| Streaming frame work | 9.4 | 10.9 | 12.7 | 10.4 | 14 |
+| Warm switch | 19.3 | 24.1 | 27.1 | 20.8 | 30 |
+| Cold-switch frame | 24.4 | 26.4 | 30.7 | 26 | 33 |
+| Cold-switch history | 24.4 | 26.4 | 30.7 | 250 | 250 |
+
+Replayed against the same reports: 45 failures become 0, and runs needing a second attempt drop from 81 to 6. Product targets (8.3 ms, 4 ms, 100 ms) are unchanged; this moves the regression tripwire, not the goal. The streaming-frame hotspot work in #594/#595 stays open as a product problem, not a CI one. The job now runs in the merge queue for changes it can measure, so a regression stops before `main` rather than on every PR. Source: this PR; numbers from `scripts/perf/budgets.mjs`'s comment.
+
+### Chat scroll bounce under reduced motion (2026-10-16)
+Area: renderer
+Result: improvement (scroll correctness; frame times unchanged within noise)
+Conditions: Windows, local, hidden off-screen Electron window 1100x720, synthetic 120-turn chat (about 56,000 px tall), 60 wheel notches up then 140 down at 16 ms, positions sampled once per rendered frame; `prefers-reduced-motion: reduce` emulated via CDP. Base `main` 8137d54a vs this branch, one run each, dark / light.
+
+| Metric (reduced motion) | Before | After |
+|---|---|---|
+| Frames where visible content moved against the wheel, up pass | 33 / 32 | 0 / 0 |
+| Pixels moved against the wheel, up pass | 5534 / 5596 | 0 / 0 |
+| Frames where visible content moved against the wheel, down pass | 30 / 29 | 0 / 0 |
+| Distance left to the bottom after scrolling down | 245 px / 245 px | 1 px / 1 px |
+| Frame p95, up pass | 8.4 ms / 4.3 ms | 4.3 ms / 4.3 ms |
+
+With reduced motion off, both builds measured 0 backward frames and reached the bottom (1 px). Why: the global reduce-motion rule set `transition-duration: 0.01ms` on `*`, which transitioned every property including the transcript's spacer padding; it is now `0s`. Source: the PR that adds `apps/desktop/scripts/transcript-scroll-integration.cjs`.
+
+### #597 Completion-status fix: continuing baseline frame investigation (2026-10-16)
+Area: renderer
+Result: no performance improvement established (correctness fix, baseline diagnostic failure)
+Conditions: same CI runner for the paired three-second profiled diagnostics, Linux / AMD EPYC 9V74 (4 threads), Chrome 155.0.8059.39, no GPU, 1440x1000, 1,000-message chat, 300 tokens/s. These short diagnostic measurements are not interchangeable with the six-second unprofiled gate.
+
+| Metric | Before (unchanged base) | After (#597 diagnostic) |
+|---|---|---|
+| Streaming frame p95, profiled diagnostic | 14.0 ms | 11.8 ms |
+
+Full head gate best p95 was **11.3 ms** across **12.2 / 11.3 / 12.1 ms** attempts, still above **10.4 ms**; all other speed/memory rows and non-performance CI checks passed. This is not evidence that status reconciliation speeds up streaming: one sequential pair, instrumentation and runner variation prevent that attribution. The change fixes contradictory Done/interrupted notices, not the frame-cost root cause. No budget changed; #544 remains open.
+
+Sources: [PR #597](https://github.com/nekko-labs/nekko-agent/pull/597), merge `8be677fa`, [CI run](https://github.com/nekko-labs/nekko-agent/actions/runs/38835173427), [reports/traces artifact](https://github.com/nekko-labs/nekko-agent/actions/runs/38835173427/artifacts/12019456830), [#544 follow-up](https://github.com/nekko-labs/nekko-agent/issues/544#issuecomment-6206132883).
+
+### #595 Bound streaming activity excerpt scans (2026-10-16)
+Area: renderer
+Result: mixed (excerpt microbenchmark improvement, no whole-frame improvement established)
+Conditions: Windows, Ryzen 9 9950X3D, Node 24.1.0; microbenchmark 100,000 long-text calls per lap after warmup, five laps. Browser: headless Chrome 153.0.8010.12, TS host, no GPU, 1440x1000, 1,000-message chat, 300 tokens/s, isolated production web builds of base d9c2f11a and optimized source. One unprofiled six-second trace and one profiled three-second diagnostic per build.
+
+| Metric | Before | After |
+|---|---|---|
+| Excerpt benchmark, ms per 100,000 calls (five laps) | 557.13 / 567.28 / 560.85 / 552.2 / 583.76 | 106.51 / 97.79 / 94.12 / 93.13 / 93.37 |
+| Streaming frame p95, six seconds | 5.2 ms (305 frames) | 5.6 ms (329 frames) |
+| Streaming frame p95, three seconds with CPU profiling | 6.3 ms (148 frames) | 6.5 ms (152 frames) |
+
+Why: scan only enough normalized text for the excerpt plus lookahead, instead of normalizing the entire 2,000-character tail per text event. Outputs match the previous algorithm in 10,000 seeded differential cases. Saved CI profiles from #594 show compactSentence as the top named application self-time, but this local frame comparison does not establish a frame win. No budget changed; #544 remains open. Source: `scripts/bench-compact-sentence.mjs`, local `.shots/perf-head`, `.shots/profile-head`, and matching `stream-activity-base` reports/traces. This behavior-preserving refactor has no visual change and does not change SPEC requirements.
+
+Final Linux CI follow-up: AMD EPYC 9V74 (4 threads), Chrome 155.0.8059.39, no GPU, same-runner base/head three-second profiled streaming diagnostics, 1440x1000, 1,000-message chat, 300 tokens/s. Base is unchanged `d9c2f11a`; PR head is `6f908f34`, merged as `a8e64e88`.
+
+| Metric | Before (base diagnostic) | After (head diagnostic) |
+|---|---|---|
+| Streaming frame p95 | 13.8 ms | 13.9 ms |
+| compactSentence CPU self-time samples | 106 | 15 |
+
+The named helper's sampled cost fell, consistent with the microbenchmark, but the frame result is effectively unchanged and both diagnostics fail **10.4 ms**. CPU sample counts are not elapsed milliseconds or a controlled total-CPU percentage. Full six-second head gate best p95 was **12.0 ms** across **12.1 / 12.0 / 13.2 ms** attempts; all other speed/memory rows and non-performance checks passed. There is no matching unprofiled full-gate base result in this run, so do not subtract its full result from either profiled diagnostic. The excerpt optimization landed; the frame-budget problem did not close.
+
+Sources: [PR #595](https://github.com/nekko-labs/nekko-agent/pull/595), [CI run](https://github.com/nekko-labs/nekko-agent/actions/runs/38833610415), [matched reports/profiles artifact](https://github.com/nekko-labs/nekko-agent/actions/runs/38833610415/artifacts/12018727601), [#544 results](https://github.com/nekko-labs/nekko-agent/issues/544#issuecomment-6205949101). Local benchmark reproduction: `node scripts/bench-compact-sentence.mjs`. Next: attribute the remaining script/render/style/layout/paint cost in the saved frame traces, then verify any further candidate under the unchanged gate.
+
+### #594 Streaming baseline failure identifies an excerpt hotspot (2026-10-15)
+Area: renderer investigation
+Result: baseline diagnostic failure; optimization candidate identified, no runtime improvement claimed
+Conditions: same Linux runner/browser for matched three-second profiled diagnostics, AMD EPYC 7763 (4 threads), Chrome 155.0.8059.39, no GPU, 1440x1000, 1,000-message chat, 300 tokens/s. Unchanged base `7c71ff25`; head diagnostic `6b9cf5e3`.
+
+| Metric | Before (base diagnostic) | After (head diagnostic) |
+|---|---|---|
+| Streaming frame p95 | 11.50 ms | 12.19 ms |
+
+Full head best p95 was **10.6 ms** across **10.6 / 12.0 / 10.8 ms** attempts, over the unchanged **10.4 ms** limit. All other speed/memory rows passed. The baseline diagnostic also failed; this does not establish zero incremental impact from #594 or provide an unprofiled full-gate base comparison. Both saved CPU profiles identified `compactSentence` as the largest named application self-time hotspot, motivating #595. #594 itself changed nav wings and creation/Focus controls, not that helper. Keep the independent UI work distinct from the later optimization.
+
+Sources: [PR #594](https://github.com/nekko-labs/nekko-agent/pull/594), merge `d9c2f11a`, [CI run](https://github.com/nekko-labs/nekko-agent/actions/runs/38780176028), [reports/traces artifact](https://github.com/nekko-labs/nekko-agent/actions/runs/38780176028/artifacts/11995992713), [#544 investigation](https://github.com/nekko-labs/nekko-agent/issues/544#issuecomment-6198906006).
+
+### CI gates for streaming frame and cold-switch frame raised ~4% (2026-10-15)
+Area: perf harness
+Result: measurement fix (budget decision, no code speed change)
+Conditions: GitHub `perf` job (Ubuntu, 4 vCPU, no GPU), the runs quoted below
+
+| Metric | Before | After |
+|---|---|---|
+| Streaming frame-work CI gate (p95) | 10 ms | 10.4 ms |
+| Cold-switch frame CI gate (p95) | 25 ms | 26 ms |
+
+Why: Philip's decision. The streaming row failed on unchanged `main` at random: run 38710979506 (1dfe0e60) measured p50 7.6 / p95 10.1 / max 11.8 ms over 175 frames, while run 38706570615 (a88c1f9b) passed (#544 lists more). The cold-switch row: PR #578's run 38719225639 measured p95 per attempt 26.3 / 25.4 / 25.7 ms, while main runs 38704916823 and 38710979506 measured 23.1 / 23.5 / 23.2 and 22.7 / 22.8 / 23.4 ms. So the new gate admits #578's change without resolving whether it slows a cold switch by 2-3 ms; that comparison is still open on #578. Product targets (4 ms, 8.3 ms) are unchanged. Source: this PR.
+
+### CI cache and stale-run optimization (2026-10-15)
+Area: CI build. Result: baseline measured; post-change savings unverified.
+Conditions: GitHub-hosted runners, one successful CI run [38608506782](https://github.com/nekko-labs/nekko-agent/actions/runs/38608506782), step timestamps from the Jobs API.
+
+Baseline: required Linux build job 220 s, uncached debug daemon build 86 s; perf job 388 s, release daemon build 89 s, speed contract 250 s; Windows daemon job 450 s, cargo tests 232 s. These are observations from one run, not controlled before/after measurements.
+
+Changes: cache the required debug Rust build; cancel superseded PR runs only; give the app and relay Docker builds distinct BuildKit cache scopes. Keep every test, platform and performance budget unchanged. npm caching and current Action major versions are already present. Cache-miss versus warm-cache timing and actual runner-minute savings remain to be measured after hosted runs. No visual or application behavior change.
+
+
+### Android reconnect on network change (2026-10-14)
+Area: mobile app
+Result: improvement
+Conditions: headless Android emulator (Pixel_10_Pro AVD, API 37.2) on an Apple Silicon Mac, debug sandbox build, local relay on the host, airplane mode toggled with `cmd connectivity airplane-mode`, time from airplane-off until the app's banner read "online" polled through uiautomator (adds ~0.5–1 s to every reading).
+
+| Metric | Before | After |
+|---|---|---|
+| Back online after 8 s offline (3 runs) | 6.3 s, 6.3 s, 6.3 s | 4.1 s, 4.2 s, 4.2 s |
+| Back online after 40 s offline | 21.5 s, 26.6 s | 4.4 s, 4.6 s, 4.7 s |
+
+Why: a default-network callback now redials as soon as a network is back, instead of waiting out the client's exponential backoff (up to 30 s). Source: the Android background-connection PR.
 
 ### #514 Current-main gate and checkout attribution repair (2026-10-13)
 Area: renderer, perf harness. Result: failed gate remains unresolved; measurement provenance fix, no measured runtime improvement.
@@ -680,9 +857,12 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- **Native agent-browser default feasibility (2026-10-17).** Candidate `agent-browser@0.39.1` (native Rust, Chrome), Nekko base `2f81bfc0`, Windows / Node `v24.1.0`. Migration blocked before runtime edits: the native command daemon accepts unauthenticated loopback JSON outside Nekko's approval bridge. Two diagnostic clients received `success: true` for `session_info` without credentials; these are security probes, not performance samples. No browser was launched. **Before: not measured. After: not measured.** No latency, memory, warm/cold distribution or speedup is established. Playwright remains explicitly required. [Exact provenance, raw outputs, reproduction and matched benchmark acceptance criteria](../reports/agent-browser/feasibility.md). Next: secure native command IPC, then collect at least 20 interleaved cold/warm samples with the same browser revision, viewport, theme and synthetic fixture before claiming any effect.
+
 Performance-motivated changes with no recorded numbers. Measure them if they
 are ever revisited.
 
+- fix/wire-parity-ci-cache (2026-10-15) pin `Swatinem/rust-cache` in the required `build` job to the v2.9.2 commit: no behavior change to the cache itself, so no number was taken; the two `build` runs after #555 (38690470032, 38691683502) both started from an empty `ci-build` cache (`No cache found`) at 234 s and 230 s, against 187 s and 220 s uncached before it, so the warm-hit saving is still unmeasured.
 - #476 (2026-10-12) runtime control plane into nekkod: "No latency numbers".
 - #463 (2026-10-12) voice into nekkod (PF14).
 - #293 (2026-10-04) idle limits and retries: configuration only.
@@ -714,3 +894,10 @@ PR #516 follow-up: run 38378954525 attempt 2 passed Ubuntu daemon tests but stre
 PR #516 padding candidate (a6c8d43f), run 38385871207, Linux EPYC7763/Chrome154: full-head streaming p95 **10.20 ms**, attempts **10.20 / 11.11 / 10.95 ms** (198 frames, p50 7.84 ms). Matched profiled 3-second streaming diagnostics: head p95 **11.54 ms**, base **13.02 ms** (93/96 frames, p50 9.05/9.01 ms). Both fail the unchanged 10 ms gate. CPU profiles are dominated by unattributed/native program time (987.761/990.768 ms); named/anonymous JS self time is99.475/103.749 ms. These diagnostics do not establish causality or a fix. Add --dump-trace to existing head/base diagnostics because CPU profiles alone cannot attribute style/layout/paint; --timeline did not save a streaming trace. No budgets changed.
 
 PR #516 trace follow-up, CI38388615665: profiled head/base streaming p95 11.6/12.4 ms,93/95frames,3seconds300tok/s, Intel Xeon Platinum8573C/Linux/Chrome154. Saved traces show document-root non-partial layout with1203 objects on both. Head/base trace duration sums: Paint152.724/151.262 ms, UpdateLayoutTree116.003/118.212 ms, Layout77.419/76.672 ms. Nested trace sums are not disjoint CPU totals. Shared baseline rendering work confirmed; invalidation cause and corrective optimization remain unverified. Gate unchanged.
+
+### Explicit wall vacancy marker (2026-10-14)
+Area: renderer. Result: removed observed unnecessary selector invalidation; overall performance inconclusive.
+Conditions: Ryzen9 9950X3D32threads,Windows,HeadlessChrome151.0.7922.34,release nekkod,1000-message chat,300tok/s,6seconds,no GPU. Current-main a4d0039b plus experimental build. Unprofiled disabled/enabled transcript size-layout containment p95 5.9/6.5ms (342/321frames); rejected. Disable beam attribution probe4.9ms,ring paint containment5.7ms,transcript layer promotion5.1ms: single runs,not retained,not demonstrated optimizations.
+Matched invalidation-tracked base/explicit vacancy-marker p95 6.8/6.1ms (341/357frames),p50 4.5/4.4ms,max19.5/20.2ms. Affected-by-:has invalidations134/0. Instrumentation adds overhead; single samples do not prove Linux-gate improvement. Marker replaces the exact empty-wall descendant selectors while retaining state semantics. No containment or beam change retained. Saved reports/traces .shots/stream-containment/{invalidation,explicit-empty}; expected static appearance unchanged,20matching Electron capture pairs byte-identical. Full gate pending.
+
+Full local candidate gate (same hardware/browser/release daemon,no GPU): all budgets pass. Composer p95 7.8ms,terminal18.9ms,streaming5.4ms347frames,warm8.0ms,cold10.9ms. Layer ratio0.15x,tile memory206.61MB,heap slope0.06MB/lap,DOM/listener slopes0.00. This build predates the latest unrelated main visual refinements; final Linux CI remains the release criterion.

@@ -14,17 +14,28 @@ const workspacePackages = ['@nekko-agent/core', '@nekko-agent/host', '@nekko-age
 export default defineConfig({
   main: {
     build: {
-      externalizeDeps: { exclude: workspacePackages },
+      // Keep ws bundled as before; native optional helpers remain external below.
+      externalizeDeps: { exclude: [...workspacePackages, 'ws'] },
       rollupOptions: {
         // electron-updater is CJS with node-only internals, and @lydell/node-pty
         // ships a native .node binary, require both at runtime from node_modules
         // (electron-builder packs production deps + auto-unpacks .node from asar)
         // instead of bundling them.
-        external: ['electron-updater', '@lydell/node-pty'],
+        // bufferutil and utf-8-validate are `ws`'s optional native helpers, which it
+        // loads in a try/catch. Bundled, the missing module became an empty stub
+        // and the relay (out/main/relay.js) crashed on the first masked frame;
+        // left external, the require throws and ws uses its JS fallback.
+        external: ['electron-updater', '@lydell/node-pty', 'bufferutil', 'utf-8-validate'],
         // `backend` is the engine's TS half, run by nekkod under
         // ELECTRON_RUN_AS_NODE (see src/backend/index.ts). It must never
         // import `electron`.
-        input: { index: resolve(__dirname, 'src/main/index.ts'), backend: resolve(__dirname, 'src/backend/index.ts') },
+        // `relay` is apps/relay, bundled for "Relay on this computer"; the
+        // backend starts it the same way nekkod starts the backend.
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          backend: resolve(__dirname, 'src/backend/index.ts'),
+          relay: resolve(__dirname, 'src/backend/relay-main.ts'),
+        },
       },
     },
   },

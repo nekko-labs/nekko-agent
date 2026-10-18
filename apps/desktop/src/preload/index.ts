@@ -1,5 +1,5 @@
 import { NOTIFICATION_VISIBILITY_CHANNEL } from '../notificationVisibility.js';
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { PREVIEW_CHANNEL } from '../previewPolicy.js';
 if (process.isMainFrame) contextBridge.exposeInMainWorld('nekkoPreview', { open: (source: string) => ipcRenderer.invoke(PREVIEW_CHANNEL, source) });
 import type {
@@ -12,15 +12,17 @@ import type {
   ProviderConfig,
   SendOptions,
   AgentEvent,
+  AgentReplay,
   IndexStatus,
   UpdateInfo,
   TerminalEvent,
   OAuthStatus,
   SubscriptionLimits,
 } from '@nekko-agent/shared';
-import { IpcChannels, IpcEvents } from '@nekko-agent/shared';
+import { AGENT_REPLAY, IpcChannels, IpcEvents } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
+import { BOTH_EVENTS, MAIN_EVENTS, routeToMain } from './routing.js';
 import {
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
@@ -28,35 +30,25 @@ import {
   type WindowChromeBridge,
 } from '../windowChrome.js';
 
-/**
- * Where each call goes. The Electron main process answers only what needs
- * Electron (native dialogs, the OS shell, the app version, the updater);
- * everything else goes straight to the engine over its socket, never through
- * main (see `engine-socket.ts`).
- */
-const SHELL_CHANNELS = new Set<string>([
-  IpcChannels.voicePermission,
-  IpcChannels.dialogOpenFiles,
-  IpcChannels.openPath,
-  IpcChannels.appInfo,
-  IpcChannels.updateCheck,
-  IpcChannels.updateDownload,
-  IpcChannels.updateInstall,
-  IpcChannels.sessionSetOptions,
-]);
-const SHELL_EVENTS = new Set<string>([IpcEvents.updateEvent, IpcEvents.deepLink]);
-
+// Where each call goes: the engine's socket, main only for the native
+// channels when no daemon runs (see `routing.ts`).
 const engine = createEngineSocket((operation) => ipcRenderer.invoke(ENGINE_ENDPOINT_CHANNEL, operation));
 
-const inv = (channel: string, ...args: unknown[]): Promise<any> =>
-  SHELL_CHANNELS.has(channel) ? ipcRenderer.invoke(channel, ...args) : engine.call(channel, args);
+const inv = async (channel: string, ...args: unknown[]): Promise<any> =>
+  (await routeToMain(channel, () => engine.mode()))
+    ? ipcRenderer.invoke(channel, ...args)
+    : engine.call(channel, args);
 
 /** `ipcRenderer.on`/`removeListener`, routed the same way as `inv`. */
 const bus = {
-  on: (channel: string, listener: Listener) =>
-    SHELL_EVENTS.has(channel) ? ipcRenderer.on(channel, listener) : engine.on(channel, listener),
-  removeListener: (channel: string, listener: Listener) =>
-    SHELL_EVENTS.has(channel) ? ipcRenderer.removeListener(channel, listener) : engine.off(channel, listener),
+  on: (channel: string, listener: Listener) => {
+    if (MAIN_EVENTS.has(channel) || BOTH_EVENTS.has(channel)) ipcRenderer.on(channel, listener);
+    if (!MAIN_EVENTS.has(channel)) engine.on(channel, listener);
+  },
+  removeListener: (channel: string, listener: Listener) => {
+    if (MAIN_EVENTS.has(channel) || BOTH_EVENTS.has(channel)) ipcRenderer.removeListener(channel, listener);
+    if (!MAIN_EVENTS.has(channel)) engine.off(channel, listener);
+  },
 };
 
 const api: NekkoApi = {
@@ -72,6 +64,7 @@ const api: NekkoApi = {
   testProviderConfig: (cfg) => inv(IpcChannels.providersTestConfig, cfg),
 
   listModels: (providerId) => inv(IpcChannels.modelsList, providerId),
+  listModelsStatus: (providerId) => inv(IpcChannels.modelsListStatus, providerId),
   pullModel: (providerId, model) => inv(IpcChannels.modelPull, providerId, model),
   loadModel: (providerId, model) => inv(IpcChannels.modelLoad, providerId, model),
   unloadModel: (providerId, model) => inv(IpcChannels.modelUnload, providerId, model),
@@ -136,6 +129,7 @@ const api: NekkoApi = {
 
   listSessions: () => inv(IpcChannels.sessionsList),
   nextAgentWatchAt: (sessionId) => inv(IpcChannels.sessionNextWatch, sessionId),
+  listAgentWatches: (sessionId) => inv(IpcChannels.sessionWatches, sessionId),
   listSessionSummaries: () => inv(IpcChannels.sessionsSummaries),
   createSession: (workspaceId) => inv(IpcChannels.sessionCreate, workspaceId),
   getSession: (id) => inv(IpcChannels.sessionGet, id),
@@ -199,6 +193,10 @@ const api: NekkoApi = {
   listTools: () => inv(IpcChannels.toolsList),
 
   openFilesDialog: () => inv(IpcChannels.dialogOpenFiles),
+  // Electron hides File.path from the sandboxed renderer; webUtils is the
+  // sanctioned way to learn where a dropped or pasted file lives on disk.
+  pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
+  importAttachment: (sessionId, name, dataUrl) => inv(IpcChannels.attachmentImport, sessionId, name, dataUrl),
   openPath: (path) => inv(IpcChannels.openPath, path),
 
   listMemory: (scope: MemoryScope, workspaceId) => inv(IpcChannels.memoryList, scope, workspaceId),
@@ -206,10 +204,10 @@ const api: NekkoApi = {
   deleteMemory: (id) => inv(IpcChannels.memoryDelete, id),
 
   listWorkspaces: () => inv(IpcChannels.workspaceList),
-  // The picker is native (main); adding the folder is the engine's.
-  pickFolder: () => ipcRenderer.invoke(PICK_FOLDER_CHANNEL),
+  // The picker is native (the daemon's, owned by this window); adding the folder is the engine's.
+  pickFolder: () => inv(PICK_FOLDER_CHANNEL),
   addWorkspace: async () => {
-    const path: string | null = await ipcRenderer.invoke(PICK_FOLDER_CHANNEL);
+    const path: string | null = await inv(PICK_FOLDER_CHANNEL);
     return path ? inv(IpcChannels.workspaceAddByPath, path) : inv(IpcChannels.workspaceList);
   },
   addWorkspaceByPath: (path) => inv(IpcChannels.workspaceAddByPath, path),
@@ -324,6 +322,12 @@ const api: NekkoApi = {
   revokeRemoteDevice: (deviceId) => inv(IpcChannels.remoteRevoke, deviceId),
   renameRemoteDevice: (deviceId, name) => inv(IpcChannels.remoteRename, deviceId, name),
   rotateRemoteSecret: () => inv(IpcChannels.remoteRotate),
+  localRelayStatus: () => inv(IpcChannels.localRelayStatus),
+  localRelayStart: () => inv(IpcChannels.localRelayStart),
+  localRelayStop: () => inv(IpcChannels.localRelayStop),
+  networkVisibilityStatus: () => inv(IpcChannels.networkVisibilityStatus),
+  networkVisibilityStart: () => inv(IpcChannels.networkVisibilityStart),
+  networkVisibilityStop: () => inv(IpcChannels.networkVisibilityStop),
 
   getAppInfo: () => inv(IpcChannels.appInfo),
   getMcpStatus: () => inv(IpcChannels.mcpStatus),
@@ -339,6 +343,12 @@ const api: NekkoApi = {
     const listener = (_: unknown, e: AgentEvent) => cb(e);
     bus.on(IpcEvents.agentEvent, listener);
     return () => bus.removeListener(IpcEvents.agentEvent, listener);
+  },
+  subscribeAgentEvents: (sessionIds) => engine.subscribe(sessionIds),
+  onAgentReplay: (cb) => {
+    const listener = (_: unknown, r: AgentReplay) => cb(r);
+    bus.on(AGENT_REPLAY, listener);
+    return () => bus.removeListener(AGENT_REPLAY, listener);
   },
   onOAuthStatus: (cb: (s: OAuthStatus) => void) => {
     const listener = (_: unknown, s: OAuthStatus) => cb(s);

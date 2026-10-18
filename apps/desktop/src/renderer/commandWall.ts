@@ -1,5 +1,5 @@
-import type { CommandWallSetting, PendingInput, SessionSummary, TerminalInfo, WallLayout, WallDock, WallDockPanel } from '@nekko-agent/shared';
-import { DEFAULT_WALL_LAYOUT, DEFAULT_WALL_DOCK, BLOCKED_META, isArchived, sessionLane } from '@nekko-agent/shared';
+import type { CommandWallSetting, PendingInput, SessionSummary, TerminalInfo, WallLayout, MonitorsDock, MonitorKey } from '@nekko-agent/shared';
+import { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK, BLOCKED_META, isArchived, sessionLane } from '@nekko-agent/shared';
 import {
   allPanes,
   canSplit,
@@ -32,13 +32,13 @@ import {
 
 export type WallFilter = 'all' | 'chat' | 'terminal';
 
-/** Only chats and shells belong in the wall tree; dashboard panels live in the dock. */
+/** Only chats and shells belong in the wall tree; dashboard monitors live in the Monitors dock. */
 export type WallKind = 'chat' | 'terminal';
 export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal'];
 
-export type { WallLayout, WallLayoutMode, WallDock, WallDockSide, WallDockPanel } from '@nekko-agent/shared';
-export { DEFAULT_WALL_LAYOUT, DEFAULT_WALL_DOCK };
-export const DOCK_PANELS: Array<{ key: WallDockPanel; label: string; blurb: string }> = [
+export type { WallLayout, WallLayoutMode, MonitorsDock, MonitorsSide, MonitorKey } from '@nekko-agent/shared';
+export { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK };
+export const MONITORS: Array<{ key: MonitorKey; label: string; blurb: string }> = [
   { key: 'hardware', label: 'Hardware', blurb: 'Local resource monitors' },
   { key: 'utilization', label: 'Utilization', blurb: 'Tokens and model usage' },
   { key: 'budget', label: 'Budget', blurb: 'Monthly spend against your advisory budget' },
@@ -99,7 +99,7 @@ export function composerMaxWidth(panel: HTMLElement | null): number {
 
 export interface CommandWallState {
   layout: WallLayout;
-  dock: WallDock;
+  dock: MonitorsDock;
   hero: string | null;
   /** Companion visibility keyed by session ID; does not fold whole chats. */
   folded: Record<string, boolean>;
@@ -145,7 +145,7 @@ export const DEFAULT_INSIGHTS: InsightsPrefs = {
 
 export const DEFAULT_WALL_STATE: CommandWallState = {
   layout: DEFAULT_WALL_LAYOUT,
-  dock: DEFAULT_WALL_DOCK,
+  dock: DEFAULT_MONITORS_DOCK,
   hero: null,
   folded: {},
   root: null,
@@ -301,6 +301,19 @@ export function addPane(root: WbNode | null, pane: WbPane, aspect = DEFAULT_ASPE
   return root;
 }
 
+/**
+ * Open a window from the toolbar or sidebar: add it when the wall lacks it,
+ * make a chat (or anything, in Focus) the hero, and show it past the filter.
+ * Returns the same state when nothing changed, so reselecting a chat neither
+ * re-renders the wall nor saves it again.
+ */
+export function openWallPane(state: CommandWallState, kind: PaneKind, refId: string, aspect = DEFAULT_ASPECT): CommandWallState {
+  const root = hasPane(state.root, kind, refId) ? state.root : addPane(state.root, wallPane(kind, refId), aspect);
+  const hero = kind === 'chat' || state.layout.mode === 'focus' ? refId : state.hero;
+  const filter = state.filter === 'all' || state.filter === kind ? state.filter : 'all';
+  return root === state.root && hero === state.hero && filter === state.filter ? state : { ...state, root, hero, filter };
+}
+
 export function addPanes(root: WbNode | null, panes: WbPane[], aspect = DEFAULT_ASPECT): WbNode | null {
   return panes.reduce<WbNode | null>((tree, p) => addPane(tree, p, aspect), root);
 }
@@ -321,7 +334,7 @@ function wallChat(s: SessionSummary): boolean {
 
 /**
  * What a wall that has never been used starts with: the chats touched in the
- * last day (newest first) and the shells still running, tiled without dock panels. The watermark is set so only chats created
+ * last day (newest first) and the shells still running, tiled without monitors. The watermark is set so only chats created
  * from now on are added automatically.
  */
 export function seedWall(state: CommandWallState, sessions: SessionSummary[], terminals: TerminalInfo[], now: number, aspect = DEFAULT_ASPECT): CommandWallState {
@@ -375,7 +388,7 @@ function idSeq(id: string): number {
 }
 
 /** A saved node, checked field by field; anything malformed drops out (a split left with one child collapses into it). */
-function sanitize(node: unknown, reserve: (id: string) => void, dock: WallDock): WbNode | null {
+function sanitize(node: unknown, reserve: (id: string) => void, dock: MonitorsDock): WbNode | null {
   if (!node || typeof node !== 'object') return null;
   const n = node as Partial<WbPane> & Partial<WbSplit>;
   if (typeof n.id !== 'string') return null;
@@ -397,7 +410,7 @@ function sanitize(node: unknown, reserve: (id: string) => void, dock: WallDock):
     return { id: n.id, dir: n.dir, children, sizes: sizes.map((s) => s / sum) };
   }
   if (n.kind === 'automations' || n.kind === 'insights') {
-    dock.panels[n.kind] = true;
+    dock.monitors[n.kind] = true;
     return null;
   }
   if (!WALL_KINDS.includes(n.kind as WallKind) || typeof n.refId !== 'string') return null;
@@ -420,16 +433,16 @@ export function sanitizeWallLayout(raw: unknown): WallLayout {
   };
 }
 
-/** Keep saved entries once, then append missing panels so none are lost on migration. */
-export function normalizeDockPanelOrder(raw: unknown): WallDockPanel[] {
-  const keys = DOCK_PANELS.map(p => p.key);
-  const saved = Array.isArray(raw) ? raw.filter((key): key is WallDockPanel => keys.includes(key)) : [];
+/** Keep saved entries once, then append missing monitors so none are lost on migration. */
+export function normalizeMonitorOrder(raw: unknown): MonitorKey[] {
+  const keys = MONITORS.map(p => p.key);
+  const saved = Array.isArray(raw) ? raw.filter((key): key is MonitorKey => keys.includes(key)) : [];
   return [...new Set([...saved, ...keys])];
 }
 
-/** Move to a target's slot; hidden and minimized panels remain in the full order. */
-export function reorderDockPanel(raw: unknown, key: WallDockPanel, target: WallDockPanel): WallDockPanel[] {
-  const order = normalizeDockPanelOrder(raw);
+/** Move to a target's slot; hidden and minimized monitors remain in the full order. */
+export function reorderMonitor(raw: unknown, key: MonitorKey, target: MonitorKey): MonitorKey[] {
+  const order = normalizeMonitorOrder(raw);
   const from = order.indexOf(key);
   const to = order.indexOf(target);
   if (from < 0 || to < 0 || from === to) return order;
@@ -439,33 +452,34 @@ export function reorderDockPanel(raw: unknown, key: WallDockPanel, target: WallD
 }
 
 /**
- * Drop a panel just before or after an anchor panel (where a drag's landing
- * zone sat); hidden and minimized panels keep their places in the full order.
+ * Drop a monitor just before or after an anchor monitor (where a drag's landing
+ * zone sat); hidden and minimized monitors keep their places in the full order.
  */
-export function placeDockPanel(raw: unknown, key: WallDockPanel, anchor: WallDockPanel, where: 'before' | 'after'): WallDockPanel[] {
-  const order = normalizeDockPanelOrder(raw);
+export function placeMonitor(raw: unknown, key: MonitorKey, anchor: MonitorKey, where: 'before' | 'after'): MonitorKey[] {
+  const order = normalizeMonitorOrder(raw);
   if (key === anchor) return order;
   order.splice(order.indexOf(key), 1);
   order.splice(order.indexOf(anchor) + (where === 'after' ? 1 : 0), 0, key);
   return order;
 }
 
-export function sanitizeWallDock(raw: unknown): WallDock {
+export function sanitizeMonitorsDock(raw: unknown): MonitorsDock {
   const value = record(raw);
-  const panels = record(value.panels);
-  const out = { ...DEFAULT_WALL_DOCK.panels };
-  const minimized = { ...DEFAULT_WALL_DOCK.minimized };
+  // Monitors were "panels" until 2026-10; older settings keep those names.
+  const enabled = record(value.monitors ?? value.panels);
+  const out = { ...DEFAULT_MONITORS_DOCK.monitors };
+  const minimized = { ...DEFAULT_MONITORS_DOCK.minimized };
   const savedMinimized = record(value.minimized);
-  for (const key of Object.keys(out) as WallDockPanel[]) {
-    if (typeof panels[key] === 'boolean') out[key] = panels[key];
+  for (const key of Object.keys(out) as MonitorKey[]) {
+    if (typeof enabled[key] === 'boolean') out[key] = enabled[key];
     if (typeof savedMinimized[key] === 'boolean') minimized[key] = savedMinimized[key];
   }
   return {
     side: value.side === 'left' || value.side === 'top' || value.side === 'bottom' ? value.side : 'right',
     show: typeof value.show === 'boolean' ? value.show : true,
     minimized,
-    panelOrder: normalizeDockPanelOrder(value.panelOrder),
-    panels: out,
+    monitorOrder: normalizeMonitorOrder(value.monitorOrder ?? value.panelOrder),
+    monitors: out,
   };
 }
 
@@ -486,7 +500,7 @@ function readPanels(raw: unknown): InsightsPrefs {
 
 /**
  * The grid this wall replaced kept a flat list of cells; the first run after
- * the change tiles them so nobody's wall starts over; its panels move to the dock.
+ * the change tiles them so nobody's wall starts over; its panels move to the Monitors dock.
  */
 export function migrateGridState(saved: unknown): CommandWallState | null {
   if (!saved || typeof saved !== 'object') return null;
@@ -495,9 +509,9 @@ export function migrateGridState(saved: unknown): CommandWallState | null {
     ? g.cells.filter((c): c is { kind: 'chat' | 'terminal'; refId: string } => !!c && typeof c === 'object' && ((c as { kind?: unknown }).kind === 'chat' || (c as { kind?: unknown }).kind === 'terminal') && typeof (c as { refId?: unknown }).refId === 'string')
     : [];
   const root = tileTree(cells.map((c) => wallPane(c.kind, c.refId)));
-  const dock = sanitizeWallDock(undefined);
-  dock.panels.automations = g.insights?.show !== false;
-  dock.panels.insights = g.insights?.show !== false;
+  const dock = sanitizeMonitorsDock(undefined);
+  dock.monitors.automations = g.insights?.show !== false;
+  dock.monitors.insights = g.insights?.show !== false;
   return {
     ...DEFAULT_WALL_STATE,
     layout: sanitizeWallLayout(undefined),
@@ -528,7 +542,7 @@ export function loadWallState(storage: Pick<Storage, 'getItem'> | undefined, set
       return DEFAULT_WALL_STATE;
     }
     const saved = record(JSON.parse(raw));
-    const dock = sanitizeWallDock(saved.dock);
+    const dock = sanitizeMonitorsDock(saved.dock);
     let maxSeq = 0;
     const root = sanitize(saved.root, (id) => { maxSeq = Math.max(maxSeq, idSeq(id)); }, dock);
     reserveIdSeq(maxSeq);

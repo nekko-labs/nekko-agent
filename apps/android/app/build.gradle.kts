@@ -21,6 +21,8 @@ android {
     }
 
     buildFeatures {
+        // BuildConfig.DEBUG: the relay hint knows debug builds allow ws://localhost (adb reverse).
+        buildConfig = true
         compose = true
     }
 
@@ -59,6 +61,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.gms.code.scanner)
+    // App lock: the system fingerprint / face / screen-lock prompt. BiometricPrompt needs a FragmentActivity.
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment.ktx)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -73,4 +78,5 @@ dependencies {
 
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.espresso.core)
 }

@@ -277,7 +277,10 @@ describe('delegation discovery and defaults', () => {
     delegate({ task: 'child task' });
     const { session } = await run();
     expect(children(session)[0]).toMatchObject({ providerId: 'local', modelId: 'local-exact' });
-    expect(listings).toEqual(['local']);
+    // The default is validated against its own provider only; the child's turn
+    // may list that provider again to learn the loaded context window.
+    expect(listings.length).toBeGreaterThan(0);
+    expect(new Set(listings)).toEqual(new Set(['local']));
   });
 
   it('rejects a stale default without creating a child or trying another provider', async () => {
@@ -674,7 +677,7 @@ describe('offline routing', () => {
     expect(getSession(session.id)?.messages).toEqual([]);
   });
 
-  it.each(['http://127.0.0.1:1234/v1', 'https://localhost:1234/v1', 'http://[::1]:1234/v1'])('allows local offline chat at %s without tools or hidden spec calls', async (baseUrl) => {
+  it.each(['http://127.0.0.1:1234/v1', 'https://localhost:1234/v1', 'http://[::1]:1234/v1'])('allows local offline chat at %s with local tools only and no hidden spec calls', async (baseUrl) => {
     providers[1].baseUrl = baseUrl;
     saveSettings({ providers });
     const session = createSession();
@@ -684,13 +687,17 @@ describe('offline routing', () => {
     const { events } = await run(session, 'local', 'local-exact');
     expect(events.some((e) => e.type === 'done')).toBe(true);
     expect(requests).toHaveLength(1);
-    expect(requests[0].request.tools).toEqual([]);
+    const offered = (requests[0].request.tools ?? []).map((t: { name: string }) => t.name);
+    // Local tools stay; anything that reaches a network is gone.
+    expect(offered).toEqual(expect.arrayContaining(['read_file', 'write_file', 'grep', 'bash']));
+    for (const online of ['fetch_url', 'browser', 'spawn_agent', 'delegation_targets', 'agent_watch', 'decide']) expect(offered).not.toContain(online);
+    expect(offered.some((n: string) => n.startsWith('mcp__'))).toBe(false);
     expect(buildSpec).not.toHaveBeenCalled();
     expect(connectorFetch).not.toHaveBeenCalled();
     expect(syncMcp).not.toHaveBeenCalled();
   });
 
-  it('blocks tool execution and delegation in offline chat even if a model emits a call', async () => {
+  it('blocks delegation in offline chat even if a model emits the call', async () => {
     const session = createSession();
     session.offline = true;
     saveSession(session);
@@ -700,7 +707,7 @@ describe('offline routing', () => {
     expect(children(session)).toEqual([]);
     expect(listings).toEqual([]);
     expect(requests.map((r) => r.providerId)).toEqual(['local', 'local']);
-    expect(requests.every((r) => r.request.tools?.length === 0)).toBe(true);
+    expect(requests.every((r) => !(r.request.tools ?? []).some((t: { name: string }) => t.name === 'spawn_agent'))).toBe(true);
   });
 
   it('rejects disabled providers for ordinary chat before model calls', async () => {

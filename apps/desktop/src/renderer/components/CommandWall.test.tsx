@@ -15,7 +15,7 @@ vi.mock('./ExplorerPane.js', () => ({ ExplorerPane: ({ paneId }: { paneId: strin
 vi.mock('./BrowserPane.js', () => ({ BrowserPane: ({ url }: { url: string }) => <div data-browser={url} /> }));
 vi.mock('./DiffPane.js', () => ({ DiffPane: ({ sessionId }: { sessionId: string }) => <div data-diff={sessionId} /> }));
 vi.mock('./PaneFrame.js', () => ({
-  PaneFrame: ({ title, children }: { title: string; children: React.ReactNode }) => <section data-title={title}>{children}</section>,
+  PaneFrame: ({ title, children, focusAction }: { title: string; children: React.ReactNode; focusAction?: React.ReactNode }) => <section data-title={title}>{focusAction}{children}</section>,
   PaneActions: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 import { CommandWall, boardEdgePreview, commandWallGeometry, companionTree, resizeCompanionSplit, sameDeps, WARM_COMPOSERS, warmFront, workspaceCompanions } from './CommandWall.js';
@@ -222,7 +222,11 @@ describe('workspace companions and stable bodies', () => {
     fixture.workspaces = [workspace];
     try {
       const html = renderToStaticMarkup(wall(state({ folded: { 'chat-a': true }, filter: 'chat' })));
-      expect(html).toContain('aria-label="Expand companions for Chat (4)"');
+      expect(html).not.toContain('Expand companions');
+    expect(html).toContain('title="Zen: focus this window (Ctrl+Shift+1)"');
+      // The focus action wears the target ring: outer ring, inner ring, centre dot.
+      const focus = html.slice(html.indexOf('agent-zen-action'));
+      expect(focus.slice(0, focus.indexOf('</button>'))).toMatch(/<circle cx="12" cy="12" r="9"><\/circle><circle cx="12" cy="12" r="5"><\/circle><circle cx="12" cy="12" r="1.5" fill="currentColor"><\/circle>/);
       expect(html).not.toContain('Collapse Chat');
       expect(html).not.toContain('command-wall-folded');
       expect(html).toContain('draft:chat-a');
@@ -235,7 +239,7 @@ describe('workspace companions and stable bodies', () => {
       expect(html).not.toContain('command-wall-add-rail');
       expect(html).not.toContain('aria-label="Add window"');
       expect(html).toContain('aria-label="Focus Chat"');
-      expect(html).toContain('aria-label="Open Chat in the Agent tab"');
+      expect(html).not.toContain('aria-label="Open Chat in the Agent tab"');
     } finally { fixture.workspaces = []; }
   });
 
@@ -248,7 +252,10 @@ describe('workspace companions and stable bodies', () => {
     expect(source).toContain("surface={fullSurface ? 'full' : 'transcript'}");
     expect(source).toContain('useStore.getState().closePane(companion.id)');
     expect(source).not.toContain('inert={folded');
-    expect(css).toContain('transition: left 260ms ease');
+    expect(css).toContain('transition: left var(--wall-push-ms) var(--wall-push-ease)');
+    expect(css).not.toContain('width var(--wall-push-ms)');
+    expect(css).not.toContain('height var(--wall-push-ms)');
+    expect(css).toContain('--wall-push-ms: 280ms; --wall-push-ease: cubic-bezier(.22, 1, .36, 1);');
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
     expect(css).toContain('.command-wall-window, .command-wall-add { transition: none; }');
     expect(source).toContain("matches ? 'auto' : 'smooth'");
@@ -294,9 +301,9 @@ it('leaves shared composer sizing to CSS and reveals only focused carets', () =>
 });
 
 describe('Command Center header spacing', () => {
-  it('keeps a compact top inset without changing gutters or toolbar wrapping', () => {
+  it('keeps compact insets beside the rail and window edges without changing toolbar wrapping', () => {
     const source = readFileSync(new URL('../views/CommandCenterView.tsx', import.meta.url), 'utf8');
-    expect(source).toContain('gap-3 px-4 pb-4 pt-1 xl:px-6');
+    expect(source).toContain('gap-2 pb-1.5 pl-[3px] pr-px pt-1');
     expect(source).toContain('flex flex-wrap items-center gap-x-4 gap-y-2');
     expect(source).not.toContain('pb-4 pt-5');
   });

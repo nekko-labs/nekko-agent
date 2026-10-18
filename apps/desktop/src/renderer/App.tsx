@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { navOrder, moveNav } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
 import { startLiveRuns } from './liveRuns.js';
+import { startAgentSubscription } from './agentSubscription.js';
 import { startDesktopNotifications } from './notifications.js';
 import { startCompactionStatus } from './compactionStatus.js';
 import { useT } from './i18n.js';
@@ -11,7 +12,10 @@ import { hasAppChrome } from './chrome.js';
 import { TitleBar } from './components/TitleBar.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { BrandMark } from './components/BrandMark.js';
+import { RailBackdrop } from './components/RailBackdrop.js';
+import { AboutNekko } from './components/AboutNekko.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
+import { PixelWaveBackground } from './components/PixelWaveBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
 import { Mascot, NekkoAvatar } from './components/Mascot.js';
@@ -23,6 +27,7 @@ import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
 import { WorkspacesView } from './views/WorkspacesView.js';
 import { DesignBoardView } from './views/DesignBoardView.js';
+import { ArtifactsView } from './views/ArtifactsView.js';
 import { SkillsView } from './views/SkillsView.js';
 import { TrainingView } from './views/TrainingView.js';
 import { WorkflowsView } from './views/WorkflowsView.js';
@@ -34,6 +39,7 @@ import { MemoryView } from './views/MemoryView.js';
 import { SettingsView } from './views/SettingsView.js';
 import { OnboardingView } from './views/OnboardingView.js';
 import {
+  ArtifactsColorIcon,
   CommandHudIcon,
   SkillsColorIcon,
   TrainingColorIcon,
@@ -53,6 +59,7 @@ const AgentCatIcon = (_p: { className?: string }) => <NekkoAvatar size={22} stat
 const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string }) => React.JSX.Element }> = [
   { view: 'command', labelKey: 'nav.command', Icon: AgentCatIcon },
   { view: 'chat', labelKey: 'nav.chat', Icon: CommandHudIcon },
+  { view: 'artifacts', labelKey: 'nav.artifacts', Icon: ArtifactsColorIcon },
   { view: 'skills', labelKey: 'nav.skills', Icon: SkillsColorIcon },
   { view: 'training', labelKey: 'nav.training', Icon: TrainingColorIcon },
   { view: 'workflows', labelKey: 'nav.workflows', Icon: WorkflowsColorIcon },
@@ -90,6 +97,7 @@ export function App() {
   const [dropNav, setDropNav] = useState<View | null>(null);
   const order = navOrder(NAV.map(n => n.view), settings?.navOrder);
   const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings));
+  const activeNavIndex = visibleNav.findIndex(n => n.view === view);
   const reorder = async (from: View, to: View) => {
     const previous = settings;
     const nextOrder = moveNav(order, from, to);
@@ -109,6 +117,9 @@ export function App() {
   // pane is a view of this; without it, switching workspaces unmounted the only
   // listener and the run's output went nowhere until the next event arrived.
   useEffect(() => startLiveRuns(), []);
+  // Take only the streams of the chats this window shows (agentSubscription.ts);
+  // every chat's start, waits and end still arrive for the sidebar and board.
+  useEffect(() => startAgentSubscription({ list: () => useStore.getState().sessions, watch: (fn) => useStore.subscribe(fn) }), []);
   useEffect(() => startCompactionStatus(), []);
   // An OS notification when a chat you are not looking at finishes or needs you.
   useEffect(() => startDesktopNotifications(), []);
@@ -130,6 +141,19 @@ export function App() {
     return () => window.clearInterval(t);
   }, []);
 
+  // Agents idle past Settings → Complete idle agents after (a month unless
+  // changed) are completed: the same reversible archive the window's X does.
+  // Waits for settings and the chat list so the user's choice is the one used.
+  const sweepReady = useStore((s) => s.settingsLoaded && !!s.settings && s.sessions.length > 0);
+  const autoCompleteSetting = useStore((s) => s.settings?.autoCompleteAfterDays);
+  useEffect(() => {
+    if (!sweepReady) return;
+    const sweep = () => void useStore.getState().autoCompleteIdle().catch(() => { /* retried next sweep */ });
+    sweep();
+    const t = window.setInterval(sweep, 6 * 60 * 60 * 1000);
+    return () => window.clearInterval(t);
+  }, [sweepReady, autoCompleteSetting]);
+
   // A background catalog check (Settings → Updates) can land a new provider
   // model list mid-session: re-list so pickers show it immediately.
   useEffect(
@@ -138,8 +162,8 @@ export function App() {
   );
 
   useEffect(() => {
-    refreshSettings();
-    refreshProviders();
+    // Restore the saved provider/model before catalog loading chooses a fallback.
+    void refreshSettings().then(() => refreshProviders());
     refreshSessions();
     refreshTerminals();
     useStore.getState().refreshSkills();
@@ -226,9 +250,13 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col" style={{ background: 'var(--paper)' }}>
+    <div className="flex h-full w-full flex-col" style={{ background: settings?.themePreset === 'lilac' || settings?.themePreset === 'lavender' ? 'transparent' : 'var(--paper)' }}>
+      {/* With the Lilac / Lavender pixel field on, the shell stays see-through so
+          the dots (drawn behind it) show in the space around the panels; the
+          body still paints --paper beneath them. */}
       {/* The window's own title bar, in the desktop shell only. */}
       <ErrorBoundary label="Title bar"><TitleBar /></ErrorBoundary>
+      <ErrorBoundary label="About"><AboutNekko /></ErrorBoundary>
 
       {!settingsLoaded ? (
         <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
@@ -240,8 +268,19 @@ export function App() {
             {/* Left rail: icon-only at rest, expands over the content on hover to
             reveal each destination's label. Hidden on phones (hover is useless on
             touch), where the bottom tab bar below takes over. */}
-        <nav className="relative z-40 hidden w-16 shrink-0 md:block">
-          <div className="rail absolute inset-y-0 left-0 flex flex-col gap-1 overflow-hidden bg-paper px-2.5 py-4">
+        <nav className="pointer-events-none relative z-40 hidden w-[52px] shrink-0 md:block">
+          <div className="rail absolute inset-y-0 left-0 flex flex-col py-4">
+            <div className="rail-space-before" aria-hidden="true" />
+            <div className="rail-group">
+             <RailBackdrop />
+            <div className="rail-destinations">
+            {/* One tile slides to the active row. Where the brand row heads the
+                list (no title bar), it starts below that 36px row and its 12px margin. */}
+            <span
+              className="rail-indicator"
+              aria-hidden="true"
+              style={{ '--i': Math.max(0, activeNavIndex), '--rail-head': hasAppChrome ? undefined : 'calc(48px + var(--rail-gap))', opacity: activeNavIndex < 0 ? 0 : 1 } as React.CSSProperties}
+            />
             {/* The brand mark heads the rail. The wordmark joins it only where
                 there is no title bar to carry it (web and phone builds), so the
                 name is never shown twice. */}
@@ -249,14 +288,14 @@ export function App() {
               <span className="grid h-8 w-8 shrink-0 place-items-center text-ink"><BrandMark size={24} title={hasAppChrome ? undefined : 'Nekko Agent'} /></span>
               {!hasAppChrome && <span className="rail-label text-[15px] font-semibold tracking-tight">Nekko Agent</span>}
             </div>}
-            {visibleNav.map(({ view: v, labelKey, Icon }) => (
+            {visibleNav.map(({ view: v, labelKey, Icon }, navIndex) => (
               <button
                 key={v}
                 className={`nav-item ${view === v ? 'active' : ''}`}
                 aria-label={t(labelKey)}
                 draggable
                 title={`${t(labelKey)}. Drag to reorder, or use Alt+Up / Alt+Down.`}
-                style={dropNav === v ? { boxShadow: 'inset 0 2px var(--accent)' } : draggedNav === v ? { opacity: 0.5 } : undefined}
+                style={{ ...({ '--n': navIndex } as React.CSSProperties), ...(dropNav === v ? { boxShadow: 'inset 0 2px var(--accent)' } : draggedNav === v ? { opacity: 0.5 } : {}) }}
                 onDragStart={e => { e.dataTransfer.setData('text/plain', v); e.dataTransfer.effectAllowed = 'move'; setDraggedNav(v); }}
                 onDragOver={e => { if (draggedNav) { e.preventDefault(); setDropNav(v); } }}
                 onDrop={e => { e.preventDefault(); if (draggedNav) void reorder(draggedNav, v); setDraggedNav(null); setDropNav(null); }}
@@ -270,10 +309,13 @@ export function App() {
                 }}
                 onClick={() => setView(v)}
               >
-                <span className="grid h-11 w-11 shrink-0 place-items-center"><Icon /></span>
+                <span className="grid h-10 w-10 shrink-0 place-items-center"><Icon /></span>
                 <span className="rail-label text-[13px] font-medium">{t(labelKey)}</span>
               </button>
             ))}
+            </div>
+            </div>
+            <div className="rail-space-after" aria-hidden="true" />
           </div>
         </nav>
 
@@ -291,6 +333,7 @@ export function App() {
           <ErrorBoundary key={view} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
           {view === 'chat' && <WorkspacesView />}
+          {view === 'artifacts' && <ArtifactsView />}
           {view === 'skills' && <SkillsView />}
           {view === 'training' && <TrainingView />}
           {view === 'workflows' && <WorkflowsView />}
@@ -337,6 +380,7 @@ export function App() {
       {/* Global overlays stay mounted even while settings load, so deep links,
           toasts, and update banners keep working on any settings failure. */}
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
+      {(settings?.themePreset === 'lilac' || settings?.themePreset === 'lavender') && <PixelWaveBackground variant={settings?.themePreset === 'lavender' ? 'lavender' : 'lilac'} />}
       <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>
       {view !== 'command' && <ErrorBoundary label="Resource monitor"><ResourceHud /></ErrorBoundary>}

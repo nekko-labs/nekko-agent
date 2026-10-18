@@ -17,6 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@nekko-agent/shared": "*"
+    "@nekko-agent/shared": "*",
+    "jimp": "^1.6.1"
   }
 }

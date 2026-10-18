@@ -123,6 +123,7 @@ fn the_relay_agent_sends_the_same_frames() {
         }
     };
     let responses = g["responses"].as_object().unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
     let mut calls = Vec::new();
     let steps = g["steps"].as_array().unwrap();
     assert!(steps.len() > 25);
@@ -152,14 +153,24 @@ fn the_relay_agent_sends_the_same_frames() {
                 match out {
                     Out::Send(f) => sent.push(f),
                     Out::Dispatch { cid, id, channel, args } => {
-                        if responses.contains_key(&channel) {
-                            calls.push(json!({ "channel": channel, "args": args }));
-                        }
-                        let result = match responses.get(&channel) {
-                            Some(r) if r.get("error").is_some() => Err(s(&r["error"]).to_string()),
-                            Some(r) => Ok(r.get("result").cloned().unwrap_or(Value::Null)),
-                            None => Err(format!("Unknown channel: {channel}")),
-                        };
+                        // As the daemon runs it: through the phone gate, then the host.
+                        let seen = Arc::new(Mutex::new(Vec::new()));
+                        let (record, responses) = (seen.clone(), responses.clone());
+                        let host: nekko_remote::Dispatcher = Arc::new(move |channel: String, args: Value| {
+                            let result = match responses.get(&channel) {
+                                Some(r) => {
+                                    record.lock().unwrap().push(json!({ "channel": channel, "args": args }));
+                                    match r.get("error") {
+                                        Some(e) => Err(s(e).to_string()),
+                                        None => Ok(r.get("result").cloned().unwrap_or(Value::Null)),
+                                    }
+                                }
+                                None => Err(format!("Unknown channel: {channel}")),
+                            };
+                            Box::pin(std::future::ready(result))
+                        });
+                        let result = rt.block_on(nekko_remote::phone::gate(host)(channel, args));
+                        calls.extend(seen.lock().unwrap().drain(..));
                         sent.push(core.reply(&cid, id, result));
                     }
                 }
@@ -244,7 +255,7 @@ fn remote_json_and_replies_match_across_operations() {
             }
             "hello" => svc.verify(&args[0]),
             "pair" => svc.pair(),
-            other => svc.route(&format!("remote:{other}"), args).unwrap(),
+            other => svc.route(&format!("remote:{other}"), args).unwrap_or_else(|e| json!({ "error": e })),
         };
         same(&result, &op["result"], &format!("op {i} {name} result"));
         if name != "file" {
@@ -253,5 +264,87 @@ fn remote_json_and_replies_match_across_operations() {
         }
         let want_kicked: Vec<&str> = op["kicked"].as_array().unwrap().iter().map(s).collect();
         assert_eq!(*kicked.lock().unwrap(), want_kicked, "op {i} kicked");
+    }
+}
+
+#[test]
+fn the_phone_gate_decides_as_the_ts_does() {
+    // phone-access.json and phone.json are both written from
+    // packages/shared/src/phone-access.ts by the TS golden test.
+    let g = golden("phone.json");
+    let settings = g["settings"].clone();
+    let skills = g["skills"].clone();
+    let sessions = g["sessions"].clone();
+    let changes = g["changes"].clone();
+    let cases = g["cases"].as_array().unwrap();
+    assert!(cases.len() >= 30);
+    let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+    for case in cases {
+        let calls: Arc<Mutex<Vec<Value>>> = Arc::default();
+        let (seen, settings, skills, sessions, changes) =
+            (calls.clone(), settings.clone(), skills.clone(), sessions.clone(), changes.clone());
+        let host: nekko_remote::Dispatcher = Arc::new(move |channel: String, args: Value| {
+            seen.lock().unwrap().push(json!([channel, args]));
+            let out = match channel.as_str() {
+                "session:get" => sessions.get(args[0].as_str().unwrap_or("")).cloned().unwrap_or(Value::Null),
+                "changes:list" => changes.get(args[0].as_str().unwrap_or("")).cloned().unwrap_or(json!([])),
+                "providers:list" => settings["providers"].clone(),
+                "skills:runnable" => skills.clone(),
+                c if c.starts_with("settings:") => settings.clone(),
+                c => json!({ "ok": c }),
+            };
+            Box::pin(std::future::ready(Ok(out)))
+        });
+        let gated = nekko_remote::phone::gate(host);
+        let channel = s(&case["channel"]).to_string();
+        let got = rt.block_on(gated(channel.clone(), case["args"].clone()));
+        let what = format!("{channel} {}", case["args"]);
+        match case.get("error") {
+            Some(e) => assert_eq!(got.as_ref().unwrap_err(), s(e), "{what}"),
+            None => same(got.as_ref().unwrap(), &case["result"], &what),
+        }
+        same(&json!(*calls.lock().unwrap()), &case["calls"], &format!("{what}: host calls"));
+    }
+}
+
+#[test]
+fn a_reply_too_large_for_the_relay_becomes_an_error() {
+    // relay.ts does the same: the relay drops frames over its limit without a word.
+    // Nothing here is compared byte for byte, so fresh random IVs as in real use.
+    let key = e2e::derive_key("00112233445566778899aabbccddeeff", "room-1");
+    let mut core = AgentCore::new(key.clone(), Box::new(e2e::random_iv));
+    let hello = json!({ "type": "hello", "deviceId": "p1" });
+    let data = json!({ "enc": e2e::seal_with_iv(&key, &hello, e2e::random_iv()) }).to_string();
+    let verify = |_: &Value| json!({ "type": "welcome", "device": { "id": "p1" } });
+    let relay = json!({ "type": "c", "cid": "c1", "data": data }).to_string();
+    core.on_relay(&relay, &verify);
+    let open_reply = |frame: &str| -> Value {
+        let f: Value = serde_json::from_str(frame).unwrap();
+        let d: Value = serde_json::from_str(s(&f["data"])).unwrap();
+        e2e::open(&key, s(&d["enc"])).unwrap()
+    };
+    // Small: the result as is.
+    let small = open_reply(&core.reply("c1", Some(json!(1)), Ok(json!({ "ok": true }))));
+    assert_eq!(small, json!({ "type": "res", "id": 1, "result": { "ok": true } }));
+    // ~9.6 MB of JSON: sealed and base64'd it is over the phone limit.
+    let big = Value::Array((0..1200).map(|i| json!({ "id": format!("s{i}"), "title": "x".repeat(8000) })).collect());
+    let reply = open_reply(&core.reply("c1", Some(json!(2)), Ok(big)));
+    assert_eq!(reply["id"], json!(2));
+    assert!(reply.get("result").is_none());
+    let e = s(&reply["error"]);
+    assert!(e.starts_with("This reply is too large to send to a phone ("), "{e}");
+    assert!(e.ends_with(" MB). Open it on the computer."), "{e}");
+}
+
+#[test]
+fn the_relay_route_rule_matches_the_ts() {
+    for case in golden("relay-route.json").as_array().unwrap() {
+        let url = s(&case["url"]);
+        assert_eq!(nekko_remote::route::relay_route(url).as_str(), s(&case["route"]), "route of {url:?}");
+        assert_eq!(
+            nekko_remote::route::relay_url_problem(url).as_deref(),
+            case["problem"].as_str(),
+            "problem with {url:?}"
+        );
     }
 }

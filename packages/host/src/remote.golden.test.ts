@@ -3,10 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, expect, it, vi } from 'vitest';
+import { phoneThumbnail } from '@nekko-agent/core';
 import {
   IpcChannels,
   IpcEvents,
   PAIRING_TTL_MS,
+  callFromPhone,
   defaultDeviceName,
   deriveKey,
   newPairingCode,
@@ -14,6 +16,7 @@ import {
   newRoomSecret,
   normalizePlatform,
   open,
+  phoneAccessPolicy,
   seal,
   verifyHello,
   type RemoteHelloReply,
@@ -27,7 +30,10 @@ import {
  * - the HELLO rules (`verifyHello`) and the random material (codes, rooms, secrets);
  * - the remote service's `remote.json` and replies across a run of operations;
  * - the relay agent's frames: what it sends the relay for a scripted run of
- *   relay frames, sealed client frames and host events.
+ *   relay frames, sealed client frames and host events;
+ * - the phone access policy (`phone-access.json`, from
+ *   packages/shared/src/phone-access.ts) and how it decides a set of phone
+ *   requests (`phone.json`).
  *
  * The phone apps (Expo, iOS, Android) and apps/relay speak this protocol, so
  * any drift here breaks every paired device. Fails if the file is stale;
@@ -133,6 +139,11 @@ it('seals, opens and derives keys as WebCrypto does', async () => {
     { type: 'hello', deviceId: 'new', pair: 'ABCD2345', name: 12, platform: 3 },
     { type: 'hello', deviceId: 'new', pair: '' },
     { type: 'hello', deviceId: 'new', pair: 'ABCD2345', platform: null },
+    // A revoked device pairing again: with the live code it is re-admitted as new.
+    { type: 'hello', deviceId: 'dev-2', pair: 'ABCD2345' },
+    { type: 'hello', deviceId: 'dev-2', pair: 'ABCD2345', name: 'A55 di Davide', platform: 'android' },
+    { type: 'hello', deviceId: 'dev-2', pair: 'WRONG' },
+    { type: 'hello', deviceId: 'dev-2', pair: '' },
   ];
   const verdicts = [];
   for (const hello of hellos) {
@@ -178,6 +189,153 @@ it('lists the channels a paired phone may call', async () => {
   expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(served.sort());
 });
 
+it('writes the phone access policy the daemon enforces', () => {
+  // The Rust gate (crates/nekko-remote/src/phone.rs) reads these lists; the
+  // TS constants in packages/shared/src/phone-access.ts are the source.
+  check(join(crate, 'src', 'phone-access.json'), phoneAccessPolicy());
+  const served = new Set<string>(JSON.parse(readFileSync(join(crate, 'src', 'channels.json'), 'utf8')));
+  for (const c of phoneAccessPolicy().channels) expect(served.has(c), c).toBe(true);
+});
+
+it('decides phone requests the way the daemon must', async () => {
+  // Each case: what the phone sent, what reached the host and what the phone got back.
+  const settings = {
+    theme: 'dark', accent: '#6d5efc', themePreset: 'nebula', defaultProviderId: 'p1', defaultModelId: 'm1',
+    favoriteModels: ['p1::m1'], defaultChatMode: 'ask', chatPaneAction: 'complete', sandboxMode: 'workspace',
+    providers: [{ id: 'p1', kind: 'openai', label: 'GPT', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
+    guardrails: [{ id: 'g' }], hooks: [{ id: 'h', command: 'curl' }], hfToken: 'hf_secret', aboutUser: 'me',
+    voice: { enabled: true, language: 'en', modelPath: '/m.bin', sensitivity: 50 },
+    // The computer lets phones see changes (the refusal when off is in phone-changes.test.ts).
+    phoneChanges: true,
+  };
+  const requests: Array<[string, unknown]> = [
+    ['data:wipe', []],
+    ['settings:reset', []],
+    ['remote:rotate', []],
+    ['remote:status', []],
+    ['terminal:create', [{}]],
+    ['file:write', ['/etc/hosts', 'x']],
+    ['workspace:addByPath', ['/']],
+    ['voice:install', []],
+    ['mcp:hypergate:connect', [1]],
+    ['tasks:list', []],
+    ['turn:pending', []],
+    ['sessions:summaries', []],
+    ['session:get', ['s1', { deep: [1] }]],
+    ['session:delete', ['s1']],
+    ['voice:transcribe', [[0, 1, 2]]],
+    ['settings:get', []],
+    ['settings:get', 'not a list'],
+    ['providers:list', []],
+    ['settings:update', [{ chatPaneAction: 'delete', skipDeleteConfirmation: true }]],
+    ['settings:update', [{ defaultChatMode: 'guardrails' }]],
+    ['settings:update', [{ defaultChatMode: 'yolo' }]],
+    ['settings:update', [{ defaultChatMode: 'turbo' }]],
+    ['settings:update', [{ chatPaneAction: 'delete', sandboxMode: 'off' }]],
+    ['settings:update', [{ voice: { language: 'it' } }]],
+    ['settings:update', [{ voice: { enabled: false, modelPath: '/evil' } }]],
+    ['settings:update', [{ voice: { language: 'x y' } }]],
+    ['settings:update', [{ voice: null }]],
+    ['settings:update', [null]],
+    ['settings:update', []],
+    ['session:setOptions', ['s1', { providerId: 'p1', modelId: 'm1' }]],
+    ['session:setOptions', ['s1', { archivedAt: 5 }]],
+    ['session:setOptions', ['s1', { mode: 'yolo' }]],
+    ['session:setOptions', ['s1', { mode: 'guardrails', disabledTools: [] }]],
+    ['session:setOptions', ['s1']],
+    ['chat:send', [{ sessionId: 's1', providerId: 'p1', modelId: 'm1', text: 'hi' }]],
+    ['chat:send', [{ sessionId: 's1', text: 'hi', attachedPaths: ['/etc/passwd'] }]],
+    ['skills:runnable', []],
+    ['chat:send', [{ sessionId: 's1', providerId: 'p1', modelId: 'm1', text: 'x', skill: { name: 'review', input: ' this ' } }]],
+    ['chat:send', [{ sessionId: 's1', text: '', skill: { name: 'tidy' } }]],
+    ['chat:send', [{ sessionId: 's1', text: 'x', skill: { name: 'goal', input: 'x' } }]],
+    ['chat:send', [{ sessionId: 's1', text: 'x', skill: 'review' }]],
+    ['chat:send', [{ sessionId: 's1', text: 'x', skill: { name: 'review', input: 3 } }]],
+    ['chat:send', [{ sessionId: 's1', text: 'x', skill: { name: 'review', template: 't' } }]],
+    ['chat:queue', ['s1', 'plain']],
+    ['chat:queue', ['s1', { text: '', skill: { name: 'review', input: 'later' } }]],
+    ['chat:queue', ['s1', { text: 'x', attachedPaths: ['/etc'] }]],
+    ['chat:queue', ['s1', 7]],
+  ];
+  // What the computer can run: the phone sees names, never templates or folders.
+  const skills = [
+    { name: 'review', description: 'Review the code', category: 'Code quality', source: 'builtin', template: 'Review carefully.\n' },
+    { name: 'tidy', description: 'Tidy up', category: 'Imported', source: 'claude', template: 'Use the "tidy" skill. Files in /Users/me/.claude/skills/tidy.' },
+  ];
+  // session:get as a phone receives it: newest messages, tool images dropped,
+  // long tool text cut (PHONE_SESSION_VIEW). Sizes straddle every limit.
+  const view = phoneAccessPolicy().sessionView;
+  const big = (c: string, n: number) => c.repeat(n);
+  const sessions: Record<string, unknown> = {
+    small: { id: 'small', title: 'Hi', messages: [{ id: 'm1', role: 'user', content: 'hi' }] },
+    long: {
+      id: 'long',
+      messages: Array.from({ length: view.messages + 3 }, (_, i) => ({ id: `m${i}`, role: i % 2 ? 'assistant' : 'user', content: `t${i}` })),
+    },
+    heavy: {
+      id: 'heavy',
+      messages: [
+        { id: 'a', role: 'assistant', content: '', toolCalls: [
+          { id: 'c1', name: 'write_file', input: { path: 'x', content: big('w', view.textChars + 7), n: 3 } },
+          { id: 'c2', name: 'bash', input: { command: 'ls' } },
+          { id: 'c3', name: 'raw', input: big('r', view.textChars + 1) },
+          { id: 'c4', name: 'none' },
+        ] },
+        { id: 't1', role: 'tool', content: '', toolResult: { toolCallId: 'c1', output: big('o', view.textChars + 50), images: [{ data: 'AAAA' }, { data: 'BBBB' }] } },
+        { id: 't2', role: 'tool', content: '', toolResult: { toolCallId: 'c2', output: 'ok', images: [] } },
+        { id: 't3', role: 'tool', content: '', toolResult: { toolCallId: 'c3', output: big('z', view.textChars - 1) + '😀tail' } },
+        { id: 't4', role: 'tool', content: '', toolResult: { toolCallId: 'c4', output: big('é', view.textChars) } },
+      ],
+    },
+  };
+  // A user's photos: none of these is a readable image, so both editions'
+  // thumbnailers send '' for each and keep the count.
+  sessions.photos = {
+    id: 'photos',
+    messages: [
+      { id: 'u1', role: 'user', content: 'look', images: ['data:image/jpeg;base64,' + big('A', view.thumbChars), 'data:image/jpeg;base64,QQ==', 5] },
+      { id: 'u2', role: 'user', content: 'and', images: [] },
+    ],
+  };
+  for (const id of Object.keys(sessions)) requests.push(['session:get', [id]]);
+  // changes:list as a phone receives it (phoneChangesView): diffs, secrets hidden, limits.
+  const cv = phoneAccessPolicy().changesView;
+  const changes: Record<string, unknown> = {
+    edits: [
+      { path: '/Users/me/work/app/src/main.ts', original: 'a\nb\nc\nd\ne\nf\ng\nh\ni\n', current: 'a\nb\nc\nd\nE\nf\ng\nh\ni\nj\n' },
+      { path: 'C:\\code\\app\\new.txt', original: '', current: 'one\ntwo' },
+      { path: '/w/same.txt', original: 'z', current: 'z' },
+      { path: '/w/.env', original: 'KEY=1\n', current: 'KEY=2\n' },
+      { path: '/w/blob.bin', original: 'a\u0000', current: 'b\u0000' },
+      { path: '/w/emoji.md', original: 'héllo 😀\n', current: 'héllo 🐱\n' },
+      { path: '/w/scatter.txt', original: Array.from({ length: 20 }, (_, i) => `l${i}`).join('\n'), current: Array.from({ length: 20 }, (_, i) => (i === 1 ? 'X' : i === 18 ? 'Y' : `l${i}`)).join('\n') },
+    ],
+    big: [{ path: '/w/big.txt', original: '', current: Array.from({ length: cv.linesPerFile + 1 }, (_, i) => `n${i}`).join('\n') }],
+    many: Array.from({ length: cv.files + 2 }, (_, i) => ({ path: `/w/f${i}.txt`, original: '', current: 'x' })),
+    empty: [],
+  };
+  for (const id of Object.keys(changes)) requests.push(['changes:list', [id]]);
+  requests.push(['changes:list', []], ['changes:list', [7]], ['changes:accept', ['edits', '/w/a']], ['file:read', ['/etc/passwd']], ['dir:list', ['/']]);
+  const cases = [];
+  for (const [channel, args] of requests) {
+    const calls: unknown[] = [];
+    const dispatch = (ch: string, a: unknown[]) => {
+      calls.push([ch, a]);
+      if (ch === 'skills:runnable') return skills;
+      if (ch === 'session:get') return sessions[String(a[0])] ?? null;
+      if (ch === 'changes:list') return changes[String(a[0])] ?? [];
+      return ch.startsWith('settings:') || ch === 'providers:list' ? (ch === 'providers:list' ? settings.providers : settings) : { ok: ch };
+    };
+    // The thumbnailer relay.ts uses, so both editions read the same photos.
+    const outcome = await callFromPhone(dispatch, channel, Array.isArray(args) ? args : [], phoneThumbnail).then(
+      (result) => ({ result }),
+      (e: Error) => ({ error: e.message }),
+    );
+    cases.push({ channel, args, calls, ...outcome });
+  }
+  check(join(crate, 'tests', 'golden', 'phone.json'), { settings, skills, sessions, changes, cases });
+});
+
 /** A relay socket the agent dials, recording what it sends. */
 class FakeSocket {
   static last: FakeSocket | null = null;
@@ -207,10 +365,11 @@ it('runs the relay agent protocol frame for frame', async () => {
     const key = await deriveKey(SECRET, ROOM);
     // The host the phone reaches: a few channels with fixed answers.
     const responses: Record<string, { result?: unknown; error?: string }> = {
+      [IpcChannels.sessionsSummaries]: { result: [{ id: 's1', title: 'Nightly', updatedAt: 1.5 }] },
       [IpcChannels.tasksList]: { result: [{ id: 't1', title: 'Nightly', nextRunAt: 1.5 }] },
-      [IpcChannels.remoteStatus]: { result: { enabled: true, devices: [] } },
       [IpcChannels.settingsGet]: { error: 'settings are broken' },
-      [IpcChannels.taskRunNow]: { result: undefined },
+      [IpcChannels.chatAbort]: { result: undefined },
+      [IpcChannels.providersList]: { result: [{ id: 'p1', kind: 'openai', label: 'GPT', baseUrl: 'https://x', apiKey: 'sk-secret', enabled: true }] },
       [IpcChannels.sessionGet]: { result: { id: 's1', title: 'ünï 🐱', messages: [{ role: 'user', content: 'a b' }] } },
     };
     const calls: Array<{ channel: string; args: unknown[] }> = [];
@@ -223,10 +382,11 @@ it('runs the relay agent protocol frame for frame', async () => {
     };
     const host = {
       events,
+      listSessionSummaries: answer(IpcChannels.sessionsSummaries),
       listTasks: answer(IpcChannels.tasksList),
-      remoteStatus: answer(IpcChannels.remoteStatus),
       getSettings: answer(IpcChannels.settingsGet),
-      runTaskNow: answer(IpcChannels.taskRunNow),
+      abortChat: answer(IpcChannels.chatAbort),
+      listProviders: answer(IpcChannels.providersList),
       getSession: answer(IpcChannels.sessionGet),
     };
     const verify = (hello: unknown): RemoteHelloReply => {
@@ -250,15 +410,20 @@ it('runs the relay agent protocol frame for frame', async () => {
       | { kick: string };
     const script: Step[] = [
       { relay: { type: 'client-open', cid: 'c1' } },
-      { client: 'c1', value: { type: 'req', id: 1, channel: IpcChannels.tasksList, args: [] } },
+      { client: 'c1', value: { type: 'req', id: 1, channel: IpcChannels.sessionsSummaries, args: [] } },
       { client: 'c1', value: { type: 'hello', deviceId: 'stranger' } },
       { relay: { type: 'client-open', cid: 'c2' } },
       { client: 'c2', value: { type: 'hello', deviceId: 'phone-1', name: 'P' } },
-      { client: 'c2', value: { type: 'req', id: 2, channel: IpcChannels.tasksList, args: [] } },
+      { client: 'c2', value: { type: 'req', id: 2, channel: IpcChannels.sessionsSummaries, args: [] } },
       { client: 'c2', value: { type: 'req', id: 3, channel: IpcChannels.settingsGet } },
-      { client: 'c2', value: { type: 'req', id: 4, channel: IpcChannels.taskRunNow, args: ['t1'] } },
+      { client: 'c2', value: { type: 'req', id: 4, channel: IpcChannels.chatAbort, args: ['s1'] } },
       { client: 'c2', value: { type: 'req', id: 'five', channel: IpcChannels.sessionGet, args: ['s1', { deep: [1, 2] }] } },
       { client: 'c2', value: { type: 'req', id: 6, channel: 'no:such', args: [] } },
+      // Served by the host, but not to a phone: refused before the host sees it.
+      { client: 'c2', value: { type: 'req', id: 61, channel: IpcChannels.tasksList, args: [] } },
+      { client: 'c2', value: { type: 'req', id: 62, channel: IpcChannels.dataWipe, args: [] } },
+      // Provider records reach a phone without their keys; a non-list `args` counts as none.
+      { client: 'c2', value: { type: 'req', id: 63, channel: IpcChannels.providersList, args: 'not a list' } },
       { client: 'c2', value: { type: 'pong' } },
       { client: 'c2', data: 'not json' },
       { client: 'c2', data: '{"plain":true}' },
@@ -269,7 +434,18 @@ it('runs the relay agent protocol frame for frame', async () => {
       // A frame on a connection the relay never announced still counts.
       { client: 'c9', value: { type: 'hello', deviceId: 'phone-2' } },
       { event: IpcEvents.agentEvent, payload: { type: 'text', sessionId: 's1', delta: 'hi 🐱' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'tool_call', sessionId: 's1', call: { id: 'tc1', name: 'bash', input: { command: 'ls' } } } },
+      { event: IpcEvents.agentEvent, payload: { type: 'tool_approval_required', sessionId: 's1', call: { id: 'tc1', name: 'bash', input: { command: 'rm -rf x' } }, reason: 'Deletes files', severity: 'high' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'tool_result', sessionId: 's1', result: { toolCallId: 'tc1', output: 'denied' } } },
+      { event: IpcEvents.agentEvent, payload: { type: 'question', sessionId: 's1', request: { callId: 'q1', questions: [] } } },
+      { event: IpcEvents.agentEvent, payload: { type: 'question_resolved', sessionId: 's1', callId: 'q1' } },
       { event: IpcEvents.agentEvent, payload: { type: 'done', sessionId: 's1', usage: { inputTokens: 3, outputTokens: 0.5 } } },
+      { event: IpcEvents.agentEvent, payload: { type: 'reasoning', sessionId: 's2', delta: 'hm' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'tool_approval_required', sessionId: 's2', call: { id: 'tc2', name: 'write_file', input: {} }, severity: 'odd' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'error', sessionId: 's2', message: 'rate limited' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'text', sessionId: 's3', delta: 'x' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'error', sessionId: 's3', message: 'Stopped' } },
+      { event: IpcEvents.agentEvent, payload: { type: 'done', sessionId: 's4' } },
       { event: IpcEvents.terminalEvent, payload: { type: 'data', terminalId: 'term_1', data: '\u001b[31mred\u001b[0m' } },
       { event: IpcEvents.changesUpdated, payload: { sessionId: 's1' } },
       { event: IpcEvents.tasksUpdated, payload: [{ id: 't1' }] },
@@ -281,7 +457,7 @@ it('runs the relay agent protocol frame for frame', async () => {
       { kick: 'phone-2' },
       { relay: { type: 'client-close', cid: 'c2' } },
       { event: IpcEvents.agentEvent, payload: { type: 'text', sessionId: 's1', delta: 'after close' } },
-      { client: 'c2', value: { type: 'req', id: 7, channel: IpcChannels.tasksList, args: [] } },
+      { client: 'c2', value: { type: 'req', id: 7, channel: IpcChannels.sessionsSummaries, args: [] } },
       { kick: 'phone-1' },
     ];
 
@@ -386,6 +562,12 @@ it('keeps remote.json and its replies across a run of operations', async () => {
       { op: 'hello', args: [{ type: 'hello', deviceId: 'phone-3', pair: '@code' }], at: NOW + PAIRING_TTL_MS + 1 },
       { op: 'revoke', args: ['phone-2'] },
       { op: 'hello', args: [{ type: 'hello', deviceId: 'phone-2' }] },
+      // The revoked phone pairs again with a fresh code: re-admitted, the code is spent.
+      { op: 'pair' },
+      { op: 'hello', args: [{ type: 'hello', deviceId: 'phone-2', name: 'Pixel again', platform: 'android', pair: '@code' }] },
+      { op: 'hello', args: [{ type: 'hello', deviceId: 'phone-2' }] },
+      { op: 'hello', args: [{ type: 'hello', deviceId: 'phone-4', pair: '@code' }] },
+      { op: 'revoke', args: ['phone-2'] },
       { op: 'revoke', args: ['nobody'] },
       { op: 'status' },
       { op: 'disable' },
@@ -400,7 +582,9 @@ it('keeps remote.json and its replies across a run of operations', async () => {
       { op: 'rename', args: ['d', 'New'] },
       { op: 'file', file: 'not json' },
       { op: 'status' },
-      { op: 'enable', args: ['ws://y'] },
+      { op: 'enable', args: ['wss://y'] },
+      // Plain ws:// to the open internet: refused, remote.json untouched (PH1).
+      { op: 'enable', args: ['ws://relay.example.com'] },
       { op: 'file', file: '{"enabled":true}' },
       { op: 'status' },
       { op: 'devices' },
@@ -429,7 +613,11 @@ it('keeps remote.json and its replies across a run of operations', async () => {
           break;
         }
         default:
-          result = (remote as unknown as Record<string, (...a: unknown[]) => unknown>)[step.op](...args);
+          try {
+            result = (remote as unknown as Record<string, (...a: unknown[]) => unknown>)[step.op](...args);
+          } catch (e) {
+            result = { error: (e as Error).message };
+          }
       }
       out.push({ op: step.op, args, now: Date.now(), result: result ?? null, file: read(), kicked: [...kicked] });
     }
@@ -440,3 +628,18 @@ it('keeps remote.json and its replies across a run of operations', async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+it('writes the relay route cases the daemon must agree with', async () => {
+  // The transport rule (PH1): crates/nekko-remote/src/route.rs reads these and
+  // must name the same route and refuse the same URLs with the same words.
+  const { relayRoute, relayUrlProblem } = await import('@nekko-agent/shared');
+  const urls = [
+    'wss://nekko-agent-relay.fly.dev', 'ws://my-mac.tail1234.ts.net:4400', 'ws://100.101.102.103:4400', 'ws://100.128.0.1',
+    'ws://[fd7a:115c:a1e0::1]:4400', 'ws://192.168.1.20:4400', 'ws://10.0.0.5', 'ws://172.16.0.1', 'ws://172.32.0.1',
+    'ws://169.254.3.4', 'ws://studio.local:4400', 'ws://[fe80::1]:4400', 'ws://localhost:4400', 'ws://127.0.0.1:4400',
+    'ws://[::1]:4400', 'ws://ts.net.example.com', 'ws://relay.example.com', 'WS://8.8.8.8:4400', 'wss://u:p@Relay.Example.com:443/relay?x=1',
+    'ws://host/path@not-userinfo', '  ws://h  ', '', 'https://relay.example.com', 'ws://', 'ws://y',
+  ];
+  check(join(crate, 'tests', 'golden', 'relay-route.json'), urls.map((url) => ({ url, route: relayRoute(url), problem: relayUrlProblem(url) ?? null })));
+});
+

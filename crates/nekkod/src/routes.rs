@@ -59,6 +59,44 @@ pub struct Ctx {
     pub installs: Option<Arc<crate::installs::Installs>>,
     /// The model server's policy (`engine:status`...), with the installers.
     pub server: Option<Arc<crate::model_server::Server>>,
+    /// Chats being compacted (`chat:compact`), the daemon's when it admits turns.
+    pub compactions: Arc<crate::compaction::Compactions>,
+    /// Image-generation turns (`chat:generateImage`), with the model server.
+    pub image_turns: Arc<crate::image_turns::ImageTurns>,
+    /// What `app:info` reports, and the desktop bridge `workspace:add` opens the picker through.
+    pub app: Arc<AppCtx>,
+    /// The catalog refresh checks (`updates:check`) and their scheduler.
+    pub update_checks: Arc<crate::small_services::UpdateChecks>,
+    /// The messaging bridges (`messaging:status`), with a data directory.
+    pub messaging: Option<Arc<crate::messaging::Messaging>>,
+    /// What Electron main used to answer (dialogs, shell, microphone, updater), for the desktop app.
+    pub native: Option<Arc<crate::native::Native>>,
+}
+
+/// The app around the daemon: its facts and the desktop bridge.
+#[derive(Default)]
+pub struct AppCtx {
+    pub facts: crate::small_services::AppFacts,
+    /// `(url, token)` of Electron main's bridge (`config.browserBridge`).
+    pub bridge: Option<(String, String)>,
+    /// Where the decision models' release is (`config.decisionModelsUrl`); absent, the pinned one.
+    pub decision_models_url: Option<String>,
+}
+
+/// The small services (small_services.rs) are the daemon's with a data
+/// directory, the settings and the sessions.
+fn owns_small_services(ctx: &Ctx) -> bool {
+    ctx.sessions.is_some() && ctx.settings.is_some()
+}
+
+/// `chat:compact` and `chat:cancelCompaction` are the daemon's when it admits turns.
+fn owns_compaction(ctx: &Ctx) -> bool {
+    ctx.sessions.is_some() && ctx.settings.is_some() && ctx.admission.as_ref().is_some_and(|a| !a.ts_loop)
+}
+
+/// `chat:generateImage` is the daemon's when it runs the model server and admits turns.
+fn owns_image_turns(ctx: &Ctx) -> bool {
+    ctx.server.is_some() && owns_compaction(ctx)
 }
 
 /// Terminals whose ids start with this are the TS host's read-only agent
@@ -214,15 +252,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         }
         // Stop the daemon's turn at once, then the host's part of stopping
         // (its own turns, image turns, the chat's dev servers).
-        "chat:abort" => {
-            if let Some(admission) = &ctx.admission {
-                admission.abort(str_arg(&args, 0).unwrap_or_default());
-            }
-            ctx.turns.abort_session(str_arg(&args, 0).unwrap_or_default());
-            // A dev server the agent started belongs to the work it was doing.
-            ctx.turns.processes.kill_session(str_arg(&args, 0).unwrap_or_default());
-            ctx.backend.call(channel, Value::Array(args)).await
-        }
+        "chat:abort" => stop_chat(ctx, str_arg(&args, 0).unwrap_or_default()).await,
         "changes:list" => {
             let (changes, id) = (ctx.changes.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
             let list =
@@ -285,6 +315,13 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "chat:send" if ctx.admission.is_some() => {
             crate::admission::send(ctx, ctx.admission.as_ref().expect("checked"), args).await
         }
+        "chat:interruptQueued" if ctx.admission.is_some() => {
+            crate::admission::interrupt_queued(ctx, ctx.admission.as_ref().expect("checked"), args).await
+        }
+        c if crate::compaction::CHANNELS.contains(&c) && owns_compaction(ctx) => {
+            ctx.compactions.clone().route(ctx, c, &args).await
+        }
+        "chat:generateImage" if owns_image_turns(ctx) => ctx.image_turns.generate(ctx, arg(&args, 0)).await,
         c if crate::worktrees::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
             crate::worktrees::route(ctx, c, &args).await
         }
@@ -322,6 +359,15 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "session:nextWatch" if ctx.turns.watches.is_some() => {
             Ok(ctx.turns.watches.as_ref().expect("checked").next_wake_at(str_arg(&args, 0).unwrap_or_default()))
         }
+        "session:watches" if ctx.turns.watches.is_some() => {
+            Ok(ctx.turns.watches.as_ref().expect("checked").views(str_arg(&args, 0).unwrap_or_default()))
+        }
+        c if crate::native::CHANNELS.contains(&c) && ctx.native.is_some() => {
+            ctx.native.clone().expect("checked").route(ctx, c, &args).await
+        }
+        c if crate::small_services::CHANNELS.contains(&c) && owns_small_services(ctx) => {
+            crate::small_services::route(ctx, c, &args).await
+        }
         c if crate::sandbox::CHANNELS.contains(&c) && ctx.sandboxes.is_some() => {
             ctx.sandboxes.clone().expect("checked").route(ctx, c, &args).await
         }
@@ -339,10 +385,18 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::automation::WORKFLOW_CHANNELS.contains(&c) && ctx.automation.owns_workflows() => {
             ctx.automation.route(c, &args).await
         }
+        c if (crate::automation::TRAINING_CHANNELS.contains(&c) || c == crate::automation::TRAINING_TOOL)
+            && ctx.automation.owns_training() =>
+        {
+            ctx.automation.route(c, &args).await
+        }
         c if crate::connectors::CHANNELS.contains(&c) && crate::connectors::owned(ctx) => {
             crate::connectors::route(ctx, c, &args).await
         }
         c if crate::remote::CHANNELS.contains(&c) && ctx.remote.enabled() => ctx.remote.route(c, &args).await,
+        c if crate::messaging::CHANNELS.contains(&c) && ctx.messaging.is_some() => {
+            ctx.messaging.as_ref().expect("checked").route(c)
+        }
         c if crate::runtimes::CHANNELS.contains(&c) && ctx.runtimes.is_some() => match &ctx.runtimes {
             Some(rt) => crate::runtimes::route(ctx, rt, c, &args).await,
             None => ctx.backend.call(c, Value::Array(args)).await,
@@ -365,8 +419,20 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
     }
 }
 
-/// Merge the host's pending input with the daemon's, the daemon's winning
-/// field by field (`mergePending` in daemon-turn.ts).
+/// `chat:abort`: stop the daemon's turn at once (and its image turn and its
+/// admission), then the host's part of stopping (its own turns, the chat's
+/// dev servers).
+pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
+    if let Some(admission) = &ctx.admission {
+        admission.abort(session_id);
+    }
+    ctx.image_turns.abort(session_id);
+    ctx.turns.abort_session(session_id);
+    // A dev server the agent started belongs to the work it was doing.
+    ctx.turns.processes.kill_session(session_id);
+    ctx.backend.call("chat:abort", json!([session_id])).await
+}
+
 /// The chats with a turn running, the host's and the daemon's.
 pub async fn running_chats(ctx: &Ctx) -> Vec<String> {
     let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:running", json!([]))).await;
@@ -374,7 +440,7 @@ pub async fn running_chats(ctx: &Ctx) -> Vec<String> {
         Ok(Ok(Value::Array(a))) => a.into_iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
         _ => Vec::new(),
     };
-    for id in ctx.turns.running_sessions() {
+    for id in ctx.turns.running_sessions().into_iter().chain(ctx.image_turns.running_sessions()) {
         if !ids.contains(&id) {
             ids.push(id);
         }
@@ -382,6 +448,8 @@ pub async fn running_chats(ctx: &Ctx) -> Vec<String> {
     ids
 }
 
+/// Merge the host's pending input with the daemon's, the daemon's winning
+/// field by field (`mergePending` in daemon-turn.ts).
 fn merge_pending(host: Value, daemon: Value) -> Value {
     let mut out = host.as_object().cloned().unwrap_or_default();
     for (id, p) in daemon.as_object().cloned().unwrap_or_default() {
@@ -457,6 +525,12 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     if crate::side::owned(ctx) {
         all.extend_from_slice(crate::side::CHANNELS);
     }
+    if owns_compaction(ctx) {
+        all.extend_from_slice(crate::compaction::CHANNELS);
+    }
+    if owns_image_turns(ctx) {
+        all.extend_from_slice(crate::image_turns::CHANNELS);
+    }
     if ctx.settings.is_some() && ctx.sessions.is_some() {
         all.extend_from_slice(crate::context::CHANNELS);
     }
@@ -467,6 +541,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     if ctx.remote.enabled() {
         all.extend_from_slice(crate::remote::CHANNELS);
     }
+    if ctx.messaging.is_some() {
+        all.extend_from_slice(crate::messaging::CHANNELS);
+    }
     all.extend_from_slice(crate::machine::CHANNELS);
     if ctx.resource_queue.is_some() {
         all.extend_from_slice(crate::resource_queue::CHANNELS);
@@ -474,8 +551,18 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     if ctx.automation.owns_workflows() {
         all.extend_from_slice(crate::automation::WORKFLOW_CHANNELS);
     }
+    if ctx.automation.owns_training() {
+        all.extend_from_slice(crate::automation::TRAINING_CHANNELS);
+        all.push(crate::automation::TRAINING_TOOL);
+    }
     if ctx.turns.watches.is_some() {
         all.extend_from_slice(crate::watches::CHANNELS);
+    }
+    if owns_small_services(ctx) {
+        all.extend_from_slice(crate::small_services::CHANNELS);
+    }
+    if ctx.native.is_some() {
+        all.extend_from_slice(crate::native::CHANNELS);
     }
     if ctx.runtimes.is_some() {
         all.extend_from_slice(crate::runtimes::CHANNELS);

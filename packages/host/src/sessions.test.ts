@@ -135,3 +135,36 @@ describe('saveTurnSession', () => {
     expect(getSession(s.id)!.title).toBe('From the prompt');
   });
 });
+
+// New windows use app preferences, not privacy flags from the current chat.
+import { saveSettings, getSettings } from './store.js';
+describe('new session defaults', () => {
+  it('uses saved execution defaults and never inherits incognito or offline', () => {
+    saveSettings({ defaultProviderId: 'saved', defaultModelId: 'exact', defaultChatMode: 'ask', effort: 'high', defaultExecutionMode: 'unified', gitManagement: { mode: 'shared' } });
+    const existing = createSession();
+    setSessionOptions(existing.id, { incognito: true, offline: true, mode: 'yolo' });
+    const next = createSession();
+    expect(next).toMatchObject({ executionMode: 'unified', gitIsolation: false });
+    expect(next.incognito).toBeUndefined();
+    expect(next.offline).toBeUndefined();
+    // Model, mode and effort remain effective app defaults until explicitly set.
+    expect(next.providerId ?? getSettings().defaultProviderId).toBe('saved');
+    expect(next.modelId ?? getSettings().defaultModelId).toBe('exact');
+    expect(next.mode ?? getSettings().defaultChatMode).toBe('ask');
+    expect(getSettings().effort).toBe('high');
+  });
+});
+
+describe('default saved mode', () => {
+  it('starts a new top-level chat in it, and leaves sub-agents and unset defaults alone', async () => {
+    const { saveSettings } = await import('./store.js');
+    expect(createSession()).not.toHaveProperty('incognito');
+    saveSettings({ defaultSavedModeId: 'private' });
+    const chat = createSession();
+    expect(chat).toMatchObject({ incognito: true, mode: 'ask', executionMode: 'worktree', gitIsolation: true, workMode: 'default', disabledTools: [] });
+    expect(getSession(chat.id)).toMatchObject({ incognito: true });
+    expect(createSession(undefined, chat.id)).not.toHaveProperty('incognito');
+    saveSettings({ defaultSavedModeId: 'untrusted-repo' });
+    expect(createSession()).toMatchObject({ executionMode: 'sandbox', mode: 'ask' });
+  });
+});

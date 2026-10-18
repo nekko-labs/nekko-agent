@@ -29,12 +29,12 @@ To stop a dev run, press **Enter** or **q** (or Ctrl+C) in its terminal. The app
 
 ## Publishing the `npx nekko-agent` package
 
-`npm run bundle:web` produces a self-contained package in `apps/server/cli-dist/`
+`npm run bundle:web` produces a self-contained package in `apps/web-app-server/cli-dist/`
 (server + engine bundled by esbuild, plus the built `web/` UI). To release it:
 
 ```bash
 npm run bundle:web
-cd apps/server/cli-dist && npm publish
+cd apps/web-app-server/cli-dist && npm publish
 ```
 
 After that, anyone can run the web edition with `npx nekko-agent`.
@@ -50,6 +50,7 @@ npm run typecheck   # every TypeScript workspace
 ```
 
 - Add tests in `packages/core` for new engine behavior (providers, guardrails, agent loop, context).
+- Desktop UI flows: add a step to a journey in `apps/desktop/e2e/` (`npm run test:e2e -w @nekko-agent/desktop`, hidden windows only; see its README) rather than a new one-off script.
 - Match the surrounding code style; keep changes focused.
 - For provider changes, you can verify against a real local server:
   `node scripts/itest-local.mjs http://your-host:port your-model-id`
@@ -61,6 +62,8 @@ The docs at [nekkoagent.com/docs](https://nekkoagent.com/docs) are rendered from
 ```bash
 npm run docs
 ```
+
+To look at the result before it ships, `npm run website` serves the site on [http://127.0.0.1:8080](http://127.0.0.1:8080) (set `PORT` to change it), with the same clean URLs as production.
 
 If you forget, the **Docs site** workflow regenerates the pages on your pull request and pushes them to its branch. It only commits when something actually changed.
 

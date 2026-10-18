@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDisplayName</key><string>Nekko Native</string>
+    <key>CFBundleDisplayName</key><string>Nekko Agent</string>
     <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
@@ -11,10 +11,50 @@
     <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSRequiresIPhoneOS</key><true/>
     <key>UILaunchStoryboardName</key><string>LaunchScreen</string>
+    <key>UIApplicationSceneManifest</key>
+    <dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
     <key>UISupportedInterfaceOrientations</key>
     <array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationPortraitUpsideDown</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
-    <key>NSLocalNetworkUsageDescription</key><string>Connect to a local HTTPS host only when you explicitly choose Connect.</string>
+    <key>UIApplicationShortcutItems</key>
+    <array>
+        <dict>
+            <key>UIApplicationShortcutItemType</key><string>com.nekko.native.ios.new-chat</string>
+            <key>UIApplicationShortcutItemTitle</key><string>New chat</string>
+            <key>UIApplicationShortcutItemIconType</key><string>UIApplicationShortcutIconTypeCompose</string>
+        </dict>
+    </array>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key><string>com.nekko.pair</string>
+            <key>CFBundleURLSchemes</key><array><string>nekko-agent-pair</string><string>nekko-agent</string></array>
+        </dict>
+    </array>
+    <key>NSSupportsLiveActivities</key><true/>
+    <key>UIBackgroundModes</key><array><string>remote-notification</string></array>
+    <key>NSCameraUsageDescription</key><string>Scan the pairing code your computer shows in Settings → Remote access.</string>
+    <key>NSFaceIDUsageDescription</key><string>Unlock Nekko Agent, which can run tools on your computer.</string>
+    <key>NSMicrophoneUsageDescription</key><string>Dictate a message. The recording is turned into text and then deleted.</string>
+    <key>NSSpeechRecognitionUsageDescription</key><string>Turn your dictation into text when your computer can’t.</string>
+    <key>NSLocalNetworkUsageDescription</key><string>Reach the relay on your computer over your local network or Tailscale, and list computers on this Wi-Fi when you tap Look on this network.</string>
+    <key>NSBonjourServices</key><array><string>_nekko-agent._tcp</string></array>
+    <!-- ATS: TLS everywhere except toward private networks, where plain ws:// to a
+         relay is allowed because the hop is already private (Tailscale's WireGuard
+         or the LAN) and every frame is end-to-end encrypted anyway. Public ws:// is
+         refused before it is dialed (RelayRoute.problem). -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key><true/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>ts.net</key>
+            <dict>
+                <key>NSIncludesSubdomains</key><true/>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key><true/>
+            </dict>
+        </dict>
+    </dict>
 </dict>
 </plist>

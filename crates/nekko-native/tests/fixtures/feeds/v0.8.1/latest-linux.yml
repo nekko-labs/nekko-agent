@@ -1,0 +1,12 @@
+version: 0.8.1
+files:
+  - url: NekkoAgent-0.8.1-x86_64.AppImage
+    sha512: wayrX3UOEJR+f/6ERUU6DSLrPOWfewEJ/apoPL++IVNuTpkUoERdGpWnRw8ejzbZfYRKefB7qrXHPICDZ/Z04w==
+    size: 202722008
+    blockMapSize: 211692
+  - url: NekkoAgent-0.8.1-amd64.deb
+    sha512: 7LuG40WH7Ej1lyom8op0hA3/KHMJGsmGo6Hq74s0y+QD7tLnFOz78URZMpwxk2/x0+Ln5S5FXiv+PZxTi0oJPw==
+    size: 157371272
+path: NekkoAgent-0.8.1-x86_64.AppImage
+sha512: wayrX3UOEJR+f/6ERUU6DSLrPOWfewEJ/apoPL++IVNuTpkUoERdGpWnRw8ejzbZfYRKefB7qrXHPICDZ/Z04w==
+releaseDate: '2026-10-12T16:05:38.434Z'

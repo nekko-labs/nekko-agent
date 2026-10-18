@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 import type { ModelInfo } from '@nekko-agent/shared';
 
 vi.hoisted(() => {
@@ -46,5 +47,43 @@ describe('default model persistence', () => {
     await slow;
     expect(useStore.getState().models).toEqual([sol]);
     expect(useStore.getState().activeModelId).toBe(sol.id);
+  });
+});
+
+describe('window model choices', () => {
+  it('persists the explicit pair without changing another pane or active catalog', async () => {
+    useStore.getState().rememberModel('local', AUTO_MODEL_ID);
+    await vi.waitFor(() => expect(window.nekko.updateSettings).toHaveBeenCalled());
+    expect(window.nekko.updateSettings).toHaveBeenCalledExactlyOnceWith({ defaultProviderId: 'local', defaultModelId: AUTO_MODEL_ID });
+    expect(useStore.getState().activeProviderId).toBe('chatgpt');
+    expect(useStore.getState().activeModelId).toBe(sol.id);
+    expect(useStore.getState().models).toEqual([sol]);
+  });
+  it('reports failed default saves and keeps the last saved settings', async () => {
+    vi.mocked(window.nekko.updateSettings).mockRejectedValue(new Error('save failed'));
+    useStore.getState().rememberModel('local', 'exact');
+    await vi.waitFor(() => expect(useStore.getState().toasts).toHaveLength(1));
+    expect(useStore.getState().settings).toBeNull();
+  });
+  it('does not save an incomplete pair', () => {
+    useStore.getState().rememberModel('', sol.id);
+    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe('startup default restoration', () => {
+  it('loads the saved provider catalog after settings, not the first listed provider', async () => {
+    useStore.setState({ activeProviderId: null, activeModelId: null, models: [] });
+    window.nekko.getSettings = vi.fn().mockResolvedValue({ defaultProviderId: 'chatgpt', defaultModelId: sol.id, workspaces: [] });
+    window.nekko.listProviders = vi.fn().mockResolvedValue([{ id: 'first' }, { id: 'chatgpt' }]);
+    vi.mocked(window.nekko.listModels).mockResolvedValue([sol]);
+    const applyTheme = useStore.getState().applyTheme;
+    useStore.setState({ applyTheme: vi.fn() });
+    try {
+      await useStore.getState().refreshSettings().then(() => useStore.getState().refreshProviders());
+    } finally { useStore.setState({ applyTheme }); }
+    expect(window.nekko.listModels).toHaveBeenCalledExactlyOnceWith('chatgpt');
+    expect(useStore.getState().activeModelId).toBe(sol.id);
+    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
   });
 });

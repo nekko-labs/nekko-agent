@@ -48,15 +48,25 @@ let patchCounter = 0;
  * returns how many gaps were filled.
  */
 export function repairInterruptedHistory(history: ChatMessage[]): number {
-  const answered = new Set<string>();
-  for (const m of history) {
-    if (m.role === 'tool' && m.toolResult) answered.add(m.toolResult.toolCallId);
-  }
-
   let filled = 0;
   for (let i = 0; i < history.length; i++) {
     const msg = history[i];
     if (msg.role !== 'assistant' || !msg.toolCalls?.length) continue;
+    const requested = new Set(msg.toolCalls.map((c) => c.id));
+    let end = i + 1;
+    while (history[end]?.role === 'tool') end++;
+    const immediate = new Set(history.slice(i + 1, end).map((m) => m.toolResult?.toolCallId));
+    if (msg.toolCalls.every((c) => immediate.has(c.id))) continue;
+    // A follow-up can have landed while a tool was finishing. Keep its real
+    // output, but move it before intervening user/assistant messages so the
+    // provider sees a single immediately following result batch.
+    for (let j = end; j < history.length; j++) {
+      const result = history[j];
+      if (result.role !== 'tool' || !result.toolResult || !requested.has(result.toolResult.toolCallId)) continue;
+      history.splice(j, 1);
+      history.splice(end++, 0, result);
+    }
+    const answered = new Set(history.slice(i + 1, end).map((m) => m.toolResult?.toolCallId));
     const missing = msg.toolCalls.filter((c) => !answered.has(c.id));
     if (missing.length === 0) continue;
 

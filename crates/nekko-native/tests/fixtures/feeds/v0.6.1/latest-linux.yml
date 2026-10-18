@@ -1,0 +1,12 @@
+version: 0.6.1
+files:
+  - url: Kotrain-0.6.1-x86_64.AppImage
+    sha512: ztFA9poWOGsuTeReT0lcIq32DplaR9WcKoa+lQ/9EEZ+gUiUoFY9mGb6vqr5GBAJAww2cJ+2N6VGb5ZCMv+ayQ==
+    size: 131443392
+    blockMapSize: 137940
+  - url: Kotrain-0.6.1-amd64.deb
+    sha512: Ey4A+dSVOkpW/gSmxhZ/ibxL7EIKrPTURIzorNETDQAKtcxA8PurDGZaggchGMwCiokWPxvX9hcdI4yhDhcUpw==
+    size: 102414696
+path: Kotrain-0.6.1-x86_64.AppImage
+sha512: ztFA9poWOGsuTeReT0lcIq32DplaR9WcKoa+lQ/9EEZ+gUiUoFY9mGb6vqr5GBAJAww2cJ+2N6VGb5ZCMv+ayQ==
+releaseDate: '2026-08-28T07:37:48.574Z'

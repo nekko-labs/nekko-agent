@@ -42,7 +42,7 @@ export interface EngineOptions {
   browserBridge?: { url: string; token: string };
   dataDir: string;
   /** Plain facts about the app the backend needs (see `backend/index.ts`). */
-  app: { isPackaged: boolean; appPath: string; userData: string; version: string; resourcesPath?: string };
+  app: { isPackaged: boolean; appPath: string; userData: string; version: string; resourcesPath?: string; exePath?: string; pid?: number };
   /** Page origins allowed to open sockets: the packaged `null` and, in dev, the renderer server. */
   origins: string[];
   /** Where the Electron main bundle lives (`out/main`), next to `backend.js`. */
@@ -82,6 +82,27 @@ export function findDaemon(opts: Pick<EngineOptions, 'app'>): string | null {
   // Newest first; on a tie, release (listed first) stays ahead.
   builds.sort((a, b) => b.mtime - a.mtime);
   return builds[0]?.p ?? null;
+}
+
+/**
+ * What nekkod needs to answer the channels main used to (dialogs, the OS
+ * shell, the microphone, the updater: crates/nekkod/src/native.rs).
+ * `NEKKO_UPDATE_FEED_URL` points the updater at a generic feed instead of
+ * `app-update.yml` (a sandbox's loopback feed), `NEKKO_UPDATE_CACHE_DIR` keeps
+ * its downloads elsewhere, and `NEKKO_NATIVE_DIALOGS=bridge` has main draw
+ * the dialogs.
+ */
+export function nativeConfig(app: EngineOptions['app'], env: NodeJS.ProcessEnv = process.env): Record<string, unknown> {
+  return {
+    isPackaged: app.isPackaged,
+    exePath: app.exePath ?? process.execPath,
+    ...(app.resourcesPath ? { resourcesPath: app.resourcesPath } : {}),
+    ...(env.APPIMAGE ? { appImage: env.APPIMAGE } : {}),
+    appPid: app.pid ?? process.pid,
+    ...(env.NEKKO_UPDATE_FEED_URL ? { updateFeedUrl: env.NEKKO_UPDATE_FEED_URL } : {}),
+    ...(env.NEKKO_UPDATE_CACHE_DIR ? { updateCacheDir: env.NEKKO_UPDATE_CACHE_DIR } : {}),
+    ...(env.NEKKO_NATIVE_DIALOGS ? { dialogs: env.NEKKO_NATIVE_DIALOGS } : {}),
+  };
 }
 
 export class EngineProcess {
@@ -144,7 +165,8 @@ export class EngineProcess {
       marker = DAEMON_READY;
       // The daemon runs the browser and capture tools itself and reaches the
       // in-app browser through the same bridge (in its config, not its env).
-      const config = { token: this.token, allowedOrigins: this.opts.origins, backend, dataDir: this.opts.dataDir, allowBrowserControl: true, ...(this.opts.browserBridge ? { browserBridge: this.opts.browserBridge } : {}) };
+      // `appVersion` and `edition` answer `app:info`, which the daemon serves.
+      const config = { token: this.token, allowedOrigins: this.opts.origins, backend, dataDir: this.opts.dataDir, allowBrowserControl: true, appVersion: this.opts.app.version, edition: 'desktop', native: nativeConfig(this.opts.app), ...(this.opts.browserBridge ? { browserBridge: this.opts.browserBridge } : {}) };
       child = spawn(daemon, [], {
         env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) },
         stdio: ['pipe', 'pipe', 'inherit'],

@@ -1,10 +1,13 @@
+import { chatArtifacts } from '../chatArtifacts.js';
+import { MonitorArtifacts } from './MonitorArtifacts.js';
+import { MonitorTasks } from './MonitorTasks.js';
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { QueuedPrompt, Session } from '@nekko-agent/shared';
-import { DEFAULT_ORCHESTRATION, getStrategy, planProgress, queueItemPayload } from '@nekko-agent/shared';
+import { DEFAULT_ORCHESTRATION, getStrategy, lastReplyInterrupted, planProgress, queueItemPayload } from '@nekko-agent/shared';
 import { useLiveRunsVersion, getLiveRun, runningSessionIds } from '../liveRuns.js';
 import { childActivity, activitySentence } from '../subagentActivity.js';
 import { useStore } from '../store.js';
-import { CheckIcon, ChatIcon, ListIcon, PencilIcon, RobotIcon } from '../icons.js';
+import { CheckIcon, ChatIcon, ControlPanelIcon, MinimizeIcon, PencilIcon, RobotIcon } from '../icons.js';
 
 /** The agent's published plan, active delegates and queued follow-ups. */
 function queueLabel(item: QueuedPrompt): string {
@@ -15,17 +18,16 @@ function queueLabel(item: QueuedPrompt): string {
   return bits.join(' · ');
 }
 
+/** Leads the message a plan change sends (see PlanChangePrompt). */
 export const PLAN_CHANGE_REQUEST = 'Please revise the current agent plan. I would like to change the approach as follows:\n';
 
-export function appendPlanChangeRequest(draft: string): string {
-  return draft.trim() ? `${draft}\n\n${PLAN_CHANGE_REQUEST}` : PLAN_CHANGE_REQUEST;
-}
-
-export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
+export function PlanRail({ sessionId, session, streaming, onChangePlan, onMinimize }: {
   sessionId: string;
   session: Session | null;
   streaming: boolean;
-  /** Opens an editable follow-up, never mutates or submits the plan directly. */
+  /** Closes the panel; the floating Agent Monitor button then reopens it. */
+  onMinimize?: () => void;
+  /** Pops up the plan-change prompt; nothing is sent until the user types and sends. */
   onChangePlan?: () => void;
 }) {
   const sessions = useStore((s) => s.sessions);
@@ -46,16 +48,30 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
   const activeChildren = children;
   const agentPlan = session?.agentPlan;
   const progress = planProgress(agentPlan);
+  // An active plan entry is not tied to token streaming. Only an explicit
+  // interruption pauses it; a resumed live run takes precedence over history.
+  const planPaused = !streaming && !getLiveRun(sessionId) && !session?.activeRun && lastReplyInterrupted(session?.messages ?? []);
   const queued = session?.queue ?? [];
+  const settings = useStore(s => s.settings);
+  const basePath = session?.workspaceId ? session.gitWorktrees?.[session.workspaceId]?.path ?? settings?.workspaces.find(w => w.id === session.workspaceId)?.path : undefined;
+  const artifacts = useMemo(() => {
+    const unique = new Map();
+    for (const message of session?.messages ?? []) if (message.role === 'assistant') for (const artifact of chatArtifacts(message.content, basePath)) unique.set(artifact.path.toLowerCase(), artifact);
+    return [...unique.values()];
+  }, [session?.messages, basePath]);
 
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden border-l border-line" style={{ background: 'transparent' }} aria-label="Plan and sub-agents">
       <header className="flex shrink-0 items-center gap-1.5 border-b border-line px-3 py-2">
-        <ListIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
-        {/* The chat area's floating plan toggle opens and closes this panel. */}
-        <span className="min-w-0 flex-1 truncate pr-8 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">This prompt</span>
+        <ControlPanelIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Agent Monitor</span>
+        {/* Minimizing hides the panel and brings back the chat area's floating
+            Agent Monitor button, which reopens it. */}
+        {onMinimize && <button type="button" className="-mr-1 grid h-5 w-5 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink" data-plan-minimize onClick={onMinimize} title="Minimize Agent Monitor" aria-label="Minimize Agent Monitor"><MinimizeIcon className="h-3.5 w-3.5" /></button>}
       </header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
+        <MonitorArtifacts key={sessionId} sessionId={sessionId} artifacts={artifacts} hydrated={!!session && session.id === sessionId && Array.isArray(session.messages)} />
+        <MonitorTasks sessionId={sessionId} />
         <section>
           <div className="mb-1.5 flex items-center gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Sub-agents</span>
@@ -83,9 +99,14 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
             <ol className="space-y-0.5">
               {agentPlan.map((step) => (
                 <li key={step.id} className="group flex items-start gap-1.5 rounded-lg px-1 py-0.5">
-                  <span className="mt-[5px] shrink-0">
+                  <span className="mt-[3px] grid h-3 w-3 shrink-0 place-items-center" role="img" aria-label={step.status === 'active' ? (planPaused ? 'Paused' : 'Working') : step.status === 'done' ? 'Done' : step.status === 'skipped' ? 'Skipped' : 'Pending'} title={step.status === 'active' ? (planPaused ? 'Paused' : 'Working') : step.status === 'done' ? 'Done' : step.status === 'skipped' ? 'Skipped' : 'Pending'}>
                     {step.status === 'done' ? <CheckIcon className="h-3 w-3 text-success" /> :
-                      <span className="block h-2.5 w-2.5 rounded-full border" style={{ borderColor: step.status === 'active' ? 'var(--accent)' : 'var(--ink-faint)', background: step.status === 'active' ? 'var(--accent)' : 'transparent' }} />}
+                      <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: step.status === 'active' ? 'var(--accent)' : 'var(--ink-faint)' }}>
+                        {step.status === 'active' ? (planPaused ? <path d="M8 5v14M16 5v14" /> : <path d="M12 3v3m6.36-.36-2.12 2.12M21 12h-3m.36 6.36-2.12-2.12M12 21v-3m-6.36.36 2.12-2.12M3 12h3m-.36-6.36 2.12 2.12" />) : <>
+                          <circle cx="12" cy="12" r="8" />
+                          {step.status === 'skipped' && <path d="M6 18 18 6" />}
+                        </>}
+                      </svg>}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className={`block break-words text-[12px] leading-snug ${step.status === 'skipped' ? 'text-ink-faint line-through' : 'text-ink-soft'}`}>{step.title}</span>
@@ -95,7 +116,7 @@ export function PlanRail({ sessionId, session, streaming, onChangePlan }: {
               ))}
             </ol>
           ) : <p className="px-0.5 text-[11px] leading-snug text-ink-faint">{streaming ? 'Waiting for the agent to publish its plan.' : 'The agent’s plan will appear here when it starts work.'}</p>}
-          {!!agentPlan?.length && <button type="button" className="mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-ink-soft hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={!onChangePlan} onClick={onChangePlan} title="Describe a plan adjustment in the composer before sending"><PencilIcon className="h-3 w-3" />Change plan</button>}
+          {!!agentPlan?.length && <button type="button" className="mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-ink-soft hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50" disabled={!onChangePlan} onClick={onChangePlan} title="Tell the agent what to change about its plan"><PencilIcon className="h-3 w-3" />Change plan</button>}
         </section>
         {queued.length > 0 && <section>
           <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">After this · {queued.length}</div>

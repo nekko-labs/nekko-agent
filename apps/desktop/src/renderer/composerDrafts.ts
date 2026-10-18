@@ -22,6 +22,8 @@ export interface ComposerDraft {
   text: string;
   /** Pending image attachments, as data URLs (same shape the composer holds). */
   images: string[];
+  /** Pending video attachments, as data URLs. Large, so the first thing evicted. */
+  videos: string[];
   savedAt: number;
 }
 
@@ -39,6 +41,7 @@ function readAll(): DraftMap {
       out[id] = {
         text: d.text,
         images: Array.isArray(d.images) ? d.images.filter((i): i is string => typeof i === 'string') : [],
+        videos: Array.isArray(d.videos) ? d.videos.filter((i): i is string => typeof i === 'string') : [],
         savedAt: typeof d.savedAt === 'number' ? d.savedAt : 0,
       };
     }
@@ -70,6 +73,12 @@ function writeAll(map: DraftMap, keepId: string): void {
     const others = Object.entries(map)
       .filter(([id]) => id !== keepId)
       .sort((a, b) => a[1].savedAt - b[1].savedAt);
+    // Videos first, anywhere: they dwarf everything else in the map.
+    const withVideos = Object.entries(map).find(([, d]) => d.videos.length > 0);
+    if (withVideos) {
+      map[withVideos[0]] = { ...withVideos[1], videos: [] };
+      continue;
+    }
     const withImages = others.find(([, d]) => d.images.length > 0);
     if (withImages) {
       const [id, d] = withImages;
@@ -102,8 +111,9 @@ export function loadDraft(sessionId: string): ComposerDraft | null {
 }
 
 /** Park a draft. An empty one (no text, no images) clears the entry instead. */
-export function saveDraft(sessionId: string, draft: { text: string; images: string[] }): void {
-  const empty = !draft.text.trim() && draft.images.length === 0;
+export function saveDraft(sessionId: string, draft: { text: string; images: string[]; videos?: string[] }): void {
+  const videos = draft.videos ?? [];
+  const empty = !draft.text.trim() && draft.images.length === 0 && videos.length === 0;
   const map = readAll();
   if (empty) {
     if (!(sessionId in map)) return;
@@ -115,16 +125,24 @@ export function saveDraft(sessionId: string, draft: { text: string; images: stri
       current &&
       current.text === draft.text &&
       current.images.length === draft.images.length &&
-      current.images.every((image, i) => image === draft.images[i])
+      current.images.every((image, i) => image === draft.images[i]) &&
+      current.videos.length === videos.length &&
+      current.videos.every((video, i) => video === videos[i])
     ) {
       return;
     }
-    map[sessionId] = { text: draft.text, images: [...draft.images], savedAt: Date.now() };
+    map[sessionId] = { text: draft.text, images: [...draft.images], videos: [...videos], savedAt: Date.now() };
   }
   writeAll(map, sessionId);
 }
 
 /** Forget a chat's draft (it was sent, queued, or the chat is gone). */
 export function clearDraft(sessionId: string): void {
-  saveDraft(sessionId, { text: '', images: [] });
+  saveDraft(sessionId, { text: '', images: [], videos: [] });
+}
+
+/** Keep the mounted attachment array when the restored draft holds the same images, so a switch does not re-render them. */
+export function restoredDraftImages(current: string[], restored?: string[]): string[] {
+  if (!restored) return current.length === 0 ? current : [];
+  return current.length === restored.length && current.every((image, i) => image === restored[i]) ? current : restored;
 }

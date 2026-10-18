@@ -175,7 +175,11 @@ fn builder_for(ep: Ep, plan: Plan) -> ort::Result<SessionBuilder> {
                 .error_on_failure()])?
         }
         #[cfg(feature = "cuda")]
-        Ep::Cuda => b.with_execution_providers([ort::ep::CUDA::default().build().error_on_failure()])?,
+        // ONNX Runtime runs fp32 MatMuls in TF32 on CUDA unless told not to, which moved golden
+        // probabilities by up to 0.004 (fp32 is held to 1e-3); fp16 sessions are unaffected.
+        Ep::Cuda => {
+            b.with_execution_providers([ort::ep::CUDA::default().with_tf32(false).build().error_on_failure()])?
+        }
         #[allow(unreachable_patterns)]
         other => return Err(ort::Error::new(format!("{} is not built into this runtime", other.name()))),
     })

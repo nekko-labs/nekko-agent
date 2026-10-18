@@ -69,6 +69,8 @@ describe('OpenAICompatProvider decode timing', () => {
   });
 
   it('reports decode time for a response that only calls a tool', async () => {
+    // Measure decode clock semantics, not when an eager stream is consumed.
+    vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValue(1_015);
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       pacedResponse([
         { line: 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"bash","arguments":"{}"}}]}}]}\n\n' },
@@ -81,7 +83,7 @@ describe('OpenAICompatProvider decode timing', () => {
     for await (const c of new OpenAICompatProvider(cfg).chat({ model: 'm', messages: [] })) {
       if (c.type === 'usage') outputMs = c.outputMs;
     }
-    expect(outputMs).toBeGreaterThanOrEqual(10);
+    expect(outputMs).toBe(15);
   });
 
   it('omits the timing when the model generated nothing', async () => {

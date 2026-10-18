@@ -12,6 +12,12 @@ The host-side OAuth service runs the sign-in flow:
 
 The host keeps the actual access and refresh tokens in `tokens.json` inside the data directory. At chat time, the host resolves a fresh access token and injects it into the request. The renderer only ever sees a sanitized status object: connected, account id, token key, and expiry. It never sees or stores the token itself.
 
+## More than one account
+
+You can sign in more than one plan from the same vendor, for example a personal Claude plan and a work one. Each gets its own provider, its own token and its own usage limits. To tell them apart, the app shows the email each one is signed in as next to its name, as in `Anthropic (Claude) · you@example.com`, in the model picker, the Utilization panel and the Capacity list.
+
+The email comes from the sign-in itself (Claude's sign-in response, or the ChatGPT `id_token`), stays in `tokens.json` next to the token, and is not part of a settings export. A plan signed in before this was added shows no email until you sign it in again. API keys, OpenRouter and tokens pasted from `claude setup-token` carry no email, so they show just the provider name.
+
 ## Caveats
 
 Both OAuth clients are the same first-party clients used by the vendors' own CLI tools. Anthropic and OpenAI consumer terms are written around their own apps, so using a subscription token with a third-party app like Nekko Agent is off-label. The flows may stop working at any time if the vendor rotates a client id, changes a scope, or blocks the client.

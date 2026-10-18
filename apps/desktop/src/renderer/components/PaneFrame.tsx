@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Direction, DropTarget, PaneKind, WbPane } from '../layout.js';
-import { CheckIcon, CloseIcon, TrashIcon, MinimizeIcon } from '../icons.js';
+import { CloseIcon, TrashIcon, MinimizeIcon } from '../icons.js';
 import { useStore } from '../store.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { confirmDeletion } from './DeleteConfirmation.js';
@@ -128,6 +128,7 @@ export function PaneFrame({
   onAddWindow,
   onClose,
   onMinimize,
+  focusAction,
   onFocus,
   onDragStart,
   onDragEnd,
@@ -165,6 +166,8 @@ export function PaneFrame({
   onClose: () => void;
   /** Remove only the wall window, without completing or deleting its chat. */
   onMinimize?: () => void;
+  /** Wall Focus action immediately beside Minimize. */
+  focusAction?: React.ReactNode;
   onFocus: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -260,6 +263,7 @@ export function PaneFrame({
             rather than the frame's and the pane's stacked on each other. */}
         <div ref={setActionSlot} className="flex shrink-0 items-center gap-0.5" />
         {!hideSplit && <SplitCompass kind={pane.kind} canSplit={canSplit} onSplit={onSplit} onOpen={onAddWindow} addable={addable} />}
+        {focusAction}
         {onMinimize && <button
           type="button"
           className="rounded-sm p-1 text-ink-faint hover:text-ink"
@@ -275,7 +279,8 @@ export function PaneFrame({
           aria-label={`${action === 'complete' ? 'Complete' : action === 'delete' ? 'Delete' : 'Close'} ${title}`}
           onClick={action === 'complete' ? complete : action === 'delete' || pane.kind === 'terminal' ? deleteWindow : onClose}
         >
-          {action === 'complete' ? <CheckIcon className="h-3 w-3" /> : action === 'delete' ? <TrashIcon className="h-3 w-3" /> : <CloseIcon className="h-3 w-3" />}
+          {/* An X reads as "close" to everyone; for a chat it completes (kept, restorable), never deletes. */}
+          {action === 'delete' ? <TrashIcon className="h-3 w-3" /> : <CloseIcon className="h-3 w-3" />}
         </button>
       </div>
 

@@ -13,16 +13,30 @@
  * runner had the composer keypress and the cold-switch frame at 21-23 ms on
  * every attempt of every run, 100-110% of a 2.5x gate, while the same build
  * measured 8 ms and 12 ms on a desktop, so those two sit at 3x (25 ms); the
- * rest keep 2.5x. `--strict`
+ * rest keep 2.5x. On 2026-10-15 Philip raised two gates by about 4%: the
+ * streaming frame from 10 to 10.4 ms (main flapped at a p95 of 10.1-10.4 ms,
+ * #544) and the cold-switch frame from 25 to 26 ms (#578 measured 25.4-26.3
+ * ms there, main 22.7-23.5 ms).
+ *
+ * Recalibrated 2026-10-17 (Philip: "update it to a reasonable number"), closing
+ * #544. 45 of 115 CI reports (2026-10-15 to 17, mostly unrelated PRs) failed
+ * after three attempts: warm switch 44 times, streaming frame 23, cold-switch
+ * frame 18; composer keypress never failed but sat at up to 24 of 25 ms. The
+ * best-of-three p95 on those healthy builds ran to warm 27.1, streaming 12.7,
+ * cold frame 30.7 and composer 24.0 ms, so each gate is now that maximum plus
+ * about 10%: 30, 14, 33 and 27 ms. Replayed against the same 115 reports: 0
+ * fail, 6 need a second attempt. The gates catch a regression of roughly a
+ * third over today's median; trends below that are docs/perf-history.md's job.
+ * The product targets are unchanged. `--strict`
  * (`npm run perf:strict`) judges against the targets themselves, for runs on
  * real hardware.
  */
 export const BUDGETS = [
-  { id: 'composer_keypress', label: 'Keypress to paint, chat composer, 1,000-message chat, reply streaming', target: 8.3, ci: 25 },
+  { id: 'composer_keypress', label: 'Keypress to paint, chat composer, 1,000-message chat, reply streaming', target: 8.3, ci: 27 },
   { id: 'terminal_keypress', label: 'Keypress to paint, terminal', target: 8.3, ci: 20.8 },
-  { id: 'stream_frame_work', label: 'Main-thread work per frame while a reply streams at 300 tokens/s', target: 4, ci: 10 },
-  { id: 'warm_switch', label: 'Switch to a warm chat, to paint', target: 8.3, ci: 20.8 },
-  { id: 'cold_switch_frame', label: 'Switch to a cold chat, frame painted', target: 8.3, ci: 25 },
+  { id: 'stream_frame_work', label: 'Main-thread work per frame while a reply streams at 300 tokens/s', target: 4, ci: 14 },
+  { id: 'warm_switch', label: 'Switch to a warm chat, to paint', target: 8.3, ci: 30 },
+  { id: 'cold_switch_frame', label: 'Switch to a cold chat, frame painted', target: 8.3, ci: 33 },
   { id: 'cold_switch_history', label: 'Switch to a cold chat, newest screenful of history painted', target: 100, ci: 250 },
 ];
 

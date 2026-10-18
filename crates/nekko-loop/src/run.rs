@@ -10,7 +10,10 @@
 //! responses the TS test replays. Events and the transcript it appends are the
 //! TS shapes (`AgentEvent`, `ChatMessage`), as JSON.
 
-use crate::history::{as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history};
+use crate::fit::{ELIDE_ALL, apply_elision, elidable, elision_for, is_context_overflow};
+use crate::history::{
+    as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history, without_images,
+};
 use crate::progress::{LOOP_WRAP_UP_PROMPT, LoopDetector, loop_note, loop_nudge};
 use crate::resume::{INTERRUPTED_NOTE, RESUME_PROMPT, repair_interrupted_history};
 use crate::runaway::{RUNAWAY_NOTE, RunawayGuard};
@@ -137,7 +140,13 @@ pub struct RunOptions<'a> {
     /// None enables caching; Some(false) explicitly disables request caching.
     pub prompt_caching: Option<bool>,
     pub max_history_turns: Option<f64>,
+    /// The model's context window in tokens (`contextWindow`): older tool
+    /// outputs are elided from what is sent once the prompt nears it (fit.rs).
+    pub context_window: Option<f64>,
     pub max_output_tokens: Option<u64>,
+    /// `imageInput`: `Some(false)` when the model is known not to take
+    /// pictures, which are then sent as a note instead (`without_images`).
+    pub image_input: Option<bool>,
     pub resume: bool,
     pub cancel: Cancel,
     /// Messages the user sent while the reply runs (`loop:steer`). Drained at
@@ -198,6 +207,10 @@ fn trim_runaway(s: &str) -> String {
 /// (`MAX_STREAM_ATTEMPTS` in providers/errors.ts).
 pub const MAX_STREAM_ATTEMPTS: u32 = 5;
 
+/// Attempts when the network itself failed: about half an hour of waits at
+/// the 30 s cap (`MAX_NETWORK_STREAM_ATTEMPTS` in providers/errors.ts).
+pub const MAX_NETWORK_STREAM_ATTEMPTS: u32 = 65;
+
 /// Statuses a second attempt usually gets past; 529 is Anthropic's "overloaded".
 const TRANSIENT_STATUSES: &[u16] = &[408, 409, 425, 429, 500, 502, 503, 504, 529];
 
@@ -209,6 +222,9 @@ pub fn is_transient_error(message: &str) -> bool {
     let lower = message.to_ascii_lowercase();
     if lower.contains("abort") {
         return false;
+    }
+    if is_network_error(message) {
+        return true;
     }
     let mut digits = String::new();
     for ch in message.chars().chain(std::iter::once(' ')) {
@@ -252,6 +268,45 @@ pub fn is_transient_error(message: &str) -> bool {
         "error sending request",
         "error decoding response body",
         "stopped sending",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+}
+
+/// Whether the connection itself failed (DNS, an unreachable network, a
+/// dropped socket) rather than a provider that answered
+/// (`isNetworkProviderError`). These get `MAX_NETWORK_STREAM_ATTEMPTS`.
+pub fn is_network_error(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("abort") || lower.contains("stopped sending") {
+        return false;
+    }
+    [
+        "econnreset",
+        "econnrefused",
+        "etimedout",
+        "epipe",
+        "eai_again",
+        "enotfound",
+        "enetunreach",
+        "ehostunreach",
+        "enetdown",
+        "und_err_socket",
+        "und_err_connect_timeout",
+        "socket hang up",
+        "fetch failed",
+        "terminated",
+        "network error",
+        "premature close",
+        // reqwest and the OS, as the daemon's client reports them.
+        "error sending request",
+        "connection reset",
+        "connection refused",
+        "connection closed",
+        "broken pipe",
+        "dns error",
+        "network is unreachable",
+        "no route to host",
     ]
     .iter()
     .any(|needle| lower.contains(needle))
@@ -301,6 +356,12 @@ struct Loop<'o, 'a, C, T, E> {
     client: &'o C,
     tools: &'o T,
     emit: &'o mut E,
+    /// Oldest bulky tool outputs this run elides from what it sends (`elided`).
+    elided: usize,
+    /// A context-overflow error has had its one squeeze retry (`squeezed`).
+    squeezed: bool,
+    /// Elidable tool outputs in the last request (`sentEligible`).
+    sent_eligible: usize,
 }
 
 impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '_, C, T, E> {
@@ -322,14 +383,22 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
         // Only a compacted transcript is copied; most are sent as they are.
         let compacted = latest_compaction_index(self.opts.history).map(|_| from_latest_compaction(self.opts.history));
         let sent: &[Value] = compacted.as_deref().unwrap_or(self.opts.history);
-        let mut messages: Vec<Value> =
-            window_history(sent, self.opts.max_history_turns).iter().map(as_seen_by_chat_model).collect();
+        let blind = self.opts.image_input == Some(false);
+        let mut messages: Vec<Value> = window_history(sent, self.opts.max_history_turns)
+            .iter()
+            .map(as_seen_by_chat_model)
+            .map(|m| if blind { without_images(&m) } else { m })
+            .collect();
         messages.extend(extra);
+        let tools = if send_tools { self.opts.tools.clone() } else { Vec::new() };
+        self.elided = elision_for(&self.opts.system, &tools, &messages, self.opts.context_window, self.elided);
+        self.sent_eligible = elidable(&messages).len();
+        let messages = apply_elision(messages, self.elided);
         let req = ChatRequest {
             model: self.opts.model.clone(),
             messages,
             system: self.opts.system.clone(),
-            tools: if send_tools { self.opts.tools.clone() } else { Vec::new() },
+            tools,
             temperature: self.opts.temperature,
             effort: self.opts.effort.clone(),
             think: self.opts.think,
@@ -419,7 +488,31 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             match self.stream(turn, extra.clone(), send_tools).await {
                 Ok(()) => return Ok(()),
                 Err(e) => {
-                    if self.opts.cancel.is_cancelled() || attempt >= MAX_STREAM_ATTEMPTS || !is_transient_error(&e) {
+                    // The prompt no longer fits: send it once more with every
+                    // older tool output elided before giving up on the reply.
+                    if !self.opts.cancel.is_cancelled()
+                        && !self.squeezed
+                        && is_context_overflow(&e)
+                        && self.elided < self.sent_eligible
+                    {
+                        self.squeezed = true;
+                        self.elided = ELIDE_ALL;
+                        *turn = before;
+                        self.event(
+                            "retry",
+                            json!({
+                                "attempt": attempt,
+                                "maxAttempts": MAX_STREAM_ATTEMPTS,
+                                "delayMs": 0,
+                                "reason": "The conversation no longer fits the context window: retrying with older tool output left out",
+                            }),
+                        );
+                        attempt = 1;
+                        continue;
+                    }
+                    let max_attempts =
+                        if is_network_error(&e) { MAX_NETWORK_STREAM_ATTEMPTS } else { MAX_STREAM_ATTEMPTS };
+                    if self.opts.cancel.is_cancelled() || attempt >= max_attempts || !is_transient_error(&e) {
                         return Err(e);
                     }
                     *turn = before;
@@ -428,7 +521,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                         "retry",
                         json!({
                             "attempt": attempt,
-                            "maxAttempts": MAX_STREAM_ATTEMPTS,
+                            "maxAttempts": max_attempts,
                             "delayMs": delay.as_millis() as u64,
                             "reason": e,
                         }),
@@ -475,11 +568,12 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
 
     async fn run(&mut self) {
         let mut resume_extra = Vec::new();
-        if self.opts.resume {
-            repair_interrupted_history(self.opts.history);
-            if self.opts.history.last().and_then(|m| m.get("role")).and_then(Value::as_str) == Some("assistant") {
-                resume_extra.push(user_nudge(RESUME_PROMPT));
-            }
+        // A normal follow-up after Stop needs the same valid history as Resume.
+        repair_interrupted_history(self.opts.history);
+        if self.opts.resume
+            && self.opts.history.last().and_then(|m| m.get("role")).and_then(Value::as_str) == Some("assistant")
+        {
+            resume_extra.push(user_nudge(RESUME_PROMPT));
         }
         let nudge = user_nudge(EMPTY_NUDGE);
         // Loop detection (progress.rs): the first trip nudges, the second wraps up.
@@ -629,7 +723,7 @@ pub async fn run_agent<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) 
     tools: &T,
     emit: &mut E,
 ) {
-    Loop { opts: &mut opts, client, tools, emit }.run().await;
+    Loop { opts: &mut opts, client, tools, emit, elided: 0, squeezed: false, sent_eligible: 0 }.run().await;
 }
 
 #[cfg(test)]

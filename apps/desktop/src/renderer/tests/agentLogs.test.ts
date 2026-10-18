@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, expect, it } from 'vitest';
-import { layoutWithLogsDrawer, logsDrawerWidth, overlayLogsDrawer, useWallLogs, type Rect } from '../wallLogs.js';
+import { LOGS_DRAWER_INSET, layoutWithLogsDrawer, logsDrawerWidth, overlayLogsDrawer, useWallLogs, type Rect } from '../wallLogs.js';
 
 const source = readFileSync(new URL('../components/ChatPane.tsx', import.meta.url), 'utf8');
 const wall = readFileSync(new URL('../components/CommandWall.tsx', import.meta.url), 'utf8');
@@ -34,7 +34,19 @@ it('looks joined to its window and animates out and back in', () => {
   expect(css).toContain('@keyframes agent-logs-drawer-out');
   expect(css).toContain('@keyframes agent-logs-drawer-in');
   expect(css).toContain('.agent-logs-drawer[data-closing]');
-  expect(css).toContain('.command-wall-window[data-wall-logs-open] > .panel');
+  // The window keeps its rounded corners; concave fillets flow its edge into the drawer.
+  expect(css).not.toContain('.command-wall-window[data-wall-logs-open] > .panel');
+  expect(css).toMatch(/\.agent-logs-drawer:not\(\[data-overlay\]\)::before \{[^}]*radial-gradient\(circle at 100% 1px/);
+  expect(css).toMatch(/\.agent-logs-drawer:not\(\[data-overlay\]\)::after \{[^}]*radial-gradient\(circle at 100% calc\(100% - 1px\)/);
+  // The fillets cover the drawer's own border row too, or it runs on straight under each arc.
+  expect(css).toMatch(/\.agent-logs-drawer:not\(\[data-overlay\]\)::after \{[^}]*height: calc\(var\(--logs-fillet\) \+ 1px\)/);
+  expect(css).toContain('--logs-fillet: 12px;');
+});
+
+it('is a quarter wider than the original 32% / 340-560px drawer', () => {
+  expect(logsDrawerWidth(1000)).toBe(425);
+  expect(logsDrawerWidth(1500)).toBe(600);
+  expect(logsDrawerWidth(3000)).toBe(700);
 });
 
 it('toggles one drawer at a time and keeps it mounted while it closes', () => {
@@ -54,10 +66,10 @@ const two = (): Map<string, Rect> => new Map([
   ['right', { x: 1004, y: 0, width: 996, height: 1000 }],
 ]);
 
-it('hangs the drawer off the right edge at 96% height and pushes the window beside it', () => {
+it('hangs the drawer off the right edge, inset past the corners, and pushes the window beside it', () => {
   const { panes, drawer } = layoutWithLogsDrawer(two(), 'left', 2000);
   const w = logsDrawerWidth(2000);
-  expect(drawer).toEqual({ x: 996, y: 20, width: w, height: 960 });
+  expect(drawer).toEqual({ x: 996, y: LOGS_DRAWER_INSET, width: w, height: 1000 - 2 * LOGS_DRAWER_INSET });
   expect(panes.get('left')).toEqual(two().get('left'));
   const right = panes.get('right')!;
   // The 8px gap between them stays, scaled with the squeeze.
@@ -87,15 +99,15 @@ it('keeps three windows in a row on the wall, narrowing the drawer before pushin
   expect(c.x + c.width).toBeLessThanOrEqual(1570 + 1e-6);
   expect(panes.get('b')!.width).toBeGreaterThanOrEqual(240 - 1e-6);
   expect(drawer!.width).toBeGreaterThanOrEqual(280);
-  expect(drawer!.height).toBe(672);
+  expect(drawer!.height).toBe(700 - 2 * LOGS_DRAWER_INSET);
 });
 
 it('still opens on a one-column wall, over the window instead of beside it', () => {
-  const col = new Map<string, Rect>([['a', { x: 0, y: 0, width: 600, height: 400 }]]);
+  const col = new Map<string, Rect>([['a', { x: 0, y: 0, width: 800, height: 400 }]]);
   const { panes, drawer, overlay } = overlayLogsDrawer(col, 'a');
   expect(overlay).toBe(true);
   expect(panes.get('a')).toEqual(col.get('a'));
-  expect(drawer).toEqual({ x: 28, y: 8, width: 560, height: 384 });
+  expect(drawer).toEqual({ x: 88, y: 8, width: 700, height: 384 });
   // The wall picks the overlay below NARROW_WIDTH rather than closing the drawer.
   expect(wall).toContain('overlayLogsDrawer(geometry.panes, logsPane.id)');
 });

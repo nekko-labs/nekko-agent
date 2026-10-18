@@ -50,9 +50,16 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.nekko.android.data.ComputersRepository
+import com.nekko.android.lock.LocalAppLock
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Pairing
+import com.nekko.android.ui.components.Tone
+import com.nekko.android.ui.components.Notice
+import com.nekko.android.BuildConfig
+import com.nekko.protocol.RelayHint
+import com.nekko.protocol.Tailnet
+import com.nekko.android.connection.TailnetStatus
 import com.nekko.protocol.PairingLink
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -74,6 +81,7 @@ fun PairScreen(
 ) {
     val p = Nekko.palette
     val context = LocalContext.current
+    val appLock = LocalAppLock.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var text by rememberSaveable { mutableStateOf("") }
@@ -120,7 +128,10 @@ fun PairScreen(
             .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
             .enableAutoZoom()
             .build()
+        // The scanner is another app's screen: coming back from it is not a new visit.
+        appLock?.expectReturn()
         GmsBarcodeScanning.getClient(context, options).startScan()
+            .addOnCompleteListener { appLock?.returned() }
             .addOnSuccessListener { code ->
                 val raw = code.rawValue.orEmpty()
                 text = raw
@@ -184,6 +195,13 @@ fun PairScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = p.inkSoft,
                     )
+                    // Say now if this relay can't work from a phone, rather than spinning after pairing.
+                    RelayHint.problem(offer.relayUrl, BuildConfig.DEBUG)?.let { problem ->
+                        Notice(RelayHint.message(problem, "your computer"), Tone.DANGER)
+                    } ?: Tailnet.hint(offer.relayUrl, TailnetStatus.phoneOnTailnet(), "your computer")?.let { line ->
+                        // Tailscale first: pairing over the tailnet needs it on here too.
+                        Notice(line, Tone.WARNING)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = { proposed = null },
@@ -243,6 +261,7 @@ fun PairScreen(
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         ) { Text("Pair") }
                     }
+                    NearbyCard()
                 }
             }
             error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = p.danger) }

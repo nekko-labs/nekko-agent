@@ -105,7 +105,8 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
       // Narration is written out in full as part of the conversation, and it
       // splits the run in two: what led up to it, and what it went on to do.
       if (m.content.trim() && !isFinalAnswer) say(m, i);
-      m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, ...(c.name === 'spawn_agent' && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
+      // Delegations and watches show their outcome on the step itself.
+      m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, ...((c.name === 'spawn_agent' || c.name === 'agent_watch') && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
       if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: m }); }
     } else {
       flush();
@@ -114,6 +115,24 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
   });
   flush();
   return blocks;
+}
+
+/**
+ * The transcript to draw while its newest turn is still being written by the
+ * live run: everything up to and including the prompt that started it.
+ *
+ * The daemon checkpoints the chat after every tool result and the pane
+ * re-reads it, so mid-turn the persisted copy already holds the turn's
+ * narration and tool calls. The live run (liveRuns.ts) holds the same blocks
+ * and draws them under the transcript, so drawing both showed the reply twice:
+ * once as a settled bubble with a Done row, once streaming below it. The
+ * persisted tail comes back as soon as the live run is released.
+ */
+export function transcriptBeforeLiveTurn(messages: ChatMessage[]): ChatMessage[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') return i === messages.length - 1 ? messages : messages.slice(0, i + 1);
+  }
+  return messages;
 }
 
 /** A PR card's own vertical margin, which used to set the gap after it. */

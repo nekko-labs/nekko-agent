@@ -2,7 +2,7 @@ import { confirmDeletion } from './components/DeleteConfirmation.js';
 import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
 import type { AppSettings, Session, SessionSummary, ProviderConfig, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
-import { DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
 import { syncTitleBarOverlay } from './chrome.js';
 import { putCachedSession } from './sessionCache.js';
@@ -28,7 +28,7 @@ import {
 
 export type { Direction, PaneKind, WbNode, WbPane } from './layout.js';
 
-export type View = 'command' | 'chat' | 'models' | 'modelserver' | 'connectors' | 'memory' | 'settings' | 'design' | 'skills' | 'training' | 'workflows';
+export type View = 'command' | 'chat' | 'artifacts' | 'models' | 'modelserver' | 'connectors' | 'memory' | 'settings' | 'design' | 'skills' | 'training' | 'workflows';
 
 /**
  * Nav destinations that live behind a Settings → Experimental toggle. The flag
@@ -270,7 +270,7 @@ interface UiState {
   pushToast: (kind: Toast['kind'], message: string) => void;
   dismissToast: (id: string) => void;
   setPaletteOpen: (open: boolean) => void;
-  newChat: () => Promise<void>;
+  newChat: (workspaceId?: string) => Promise<void>;
   /** A new Image chat on this image model, starting from its family's tuned steps and CFG. */
   newImageChat: (modelId: string, defaults?: { steps: number; cfgScale: number }) => Promise<void>;
   setMascotMood: (m: MascotMood) => void;
@@ -284,6 +284,7 @@ interface UiState {
   /** Re-list a provider's models after a background catalog refresh. */
   reloadModels: (providerId: string) => Promise<void>;
   selectModel: (id: string) => void;
+  rememberModel: (providerId: string, modelId: string) => void;
   toggleContextPanel: () => void;
   togglePlanRail: (sessionId: string) => void;
   applyTheme: () => void;
@@ -293,7 +294,7 @@ interface UiState {
   newTerminalWorkspace: (workspaceId?: string, shell?: string) => Promise<void>;
   openChatPane: (sessionId: string) => void;
   openTerminalPane: (terminalId: string) => void;
-  openFilePane: (path: string) => void;
+  openFilePane: (path: string, sessionId?: string) => void;
   openBrowserPane: (url?: string) => void;
   /** Open (or focus) the Hypergate manager as a tab in this window. */
   openHypergatePane: () => void;
@@ -328,6 +329,11 @@ interface UiState {
   archiveWorkspace: (id: string) => Promise<void>;
   /** Archive one chat by id (and close any workspace showing it). */
   archiveChat: (sessionId: string) => Promise<void>;
+  /**
+   * Complete agents idle past Settings → Complete idle agents after (default
+   * a month). Returns how many it completed. Quiet: one toast for the batch.
+   */
+  autoCompleteIdle: (now?: number) => Promise<number>;
   /** Bring an archived chat back to the workspace list and open it. */
   restoreChat: (sessionId: string) => Promise<void>;
   /** Delete an archived chat for good. */
@@ -339,11 +345,23 @@ interface UiState {
   archivedViewId: string | null;
   setArchivedView: (sessionId: string | null) => void;
   /**
+   * A chat the Agents wall should show in its Focused layout the next time it
+   * mounts (the Artifacts tab's "Open chat"). Consumed once by the wall.
+   */
+  focusRequest: string | null;
+  /** Go to the Agents wall with this chat as the Focused window. */
+  focusChatOnWall: (sessionId: string) => void;
+  /**
    * Text and images to drop into a chat's composer when it next mounts (Copy
    * to composer, Split to a new chat). Consumed once by that chat's pane.
    */
   composerSeed: { sessionId: string; text: string; images: string[] } | null;
   seedComposer: (sessionId: string, text: string, images: string[]) => void;
+  /**
+   * Text a chat's Find-in-chat bar opens with the next time that chat shows
+   * its transcript (Search chats opening a message match). Consumed once.
+   */
+  findSeed: { sessionId: string; query: string } | null;
   /**
    * Start a new chat holding this chat's conversation up to (not including)
    * `beforeMessageId`, with that message's text and images waiting in its
@@ -580,7 +598,11 @@ export const useStore = create<UiState>((set, get) => ({
   composerInbox: null,
   archiveOpen: false,
   archivedViewId: null,
+  focusRequest: null,
   composerSeed: null,
+  findSeed: null,
+
+  focusChatOnWall: (sessionId) => set({ focusRequest: sessionId, view: 'command' }),
 
   setActiveProject: (id) => {
     try { localStorage.setItem(LAST_FOLDER_KEY, JSON.stringify(id)); } catch { /* private mode */ }
@@ -602,13 +624,13 @@ export const useStore = create<UiState>((set, get) => ({
       if (p === r || (p && r && p.x === r.x && p.y === r.y && p.w === r.w && p.h === r.h)) return s;
       return { monitorDockRect: r };
     }),
-  newChat: async () => {
+  newChat: async (workspaceId) => {
     await get().refreshProviders();
     if (needsProviderSetup(get().providers, get().activeModelId ?? get().models[0]?.id)) {
       get().setView('models');
       return;
     }
-    const s = await window.nekko.createSession(defaultChatFolder(get()));
+    const s = await window.nekko.createSession(workspaceId ?? defaultChatFolder(get()));
     // The host already returned the full record: seed before opening the pane
     // so its first frame has the session and brain, without a round-trip.
     putCachedSession(s);
@@ -768,7 +790,14 @@ export const useStore = create<UiState>((set, get) => ({
     set({ activeModelId: id });
     const defaultProviderId = get().activeProviderId;
     if (!defaultProviderId) return;
-    void window.nekko.updateSettings({ defaultProviderId, defaultModelId: id })
+    get().rememberModel(defaultProviderId, id);
+  },
+
+  // Explicit choices only: catalog loading, Auto resolution and privacy toggles
+  // must not rewrite the next window's model. Always save the provider/model pair.
+  rememberModel: (defaultProviderId, defaultModelId) => {
+    if (!defaultProviderId) return;
+    void window.nekko.updateSettings({ defaultProviderId, defaultModelId })
       .then((settings) => set({ settings }))
       .catch((e) => get().pushToast('error', String(e)));
   },
@@ -877,8 +906,27 @@ export const useStore = create<UiState>((set, get) => ({
     });
   },
 
-  openFilePane: (path) => {
+  openFilePane: (path, sessionId) => {
     set((s) => {
+      if (sessionId !== undefined) {
+        // A file opened from a chat belongs there, even when another chat has
+        // the same file open or a different workspace is currently selected.
+        let state = s;
+        let chat = locatePane(state.workspaces, 'chat', sessionId);
+        if (!chat) {
+          state = { ...s, ...addWorkspace(s, { id: newPaneId(), kind: 'chat', refId: sessionId }) };
+          chat = locatePane(state.workspaces, 'chat', sessionId);
+        }
+        if (!chat) return {};
+        const workspaceId = chat.workspaceId;
+        state = { ...state, activeWorkspaceId: workspaceId, activeSessionId: sessionId };
+        const workspace = state.workspaces.find((w) => w.id === workspaceId)!;
+        const file = findPaneByRef(workspace.root, 'file', path);
+        const opened = file
+          ? focusPane(state, workspace.id, file.id)
+          : openInActive(state, { id: newPaneId(), kind: 'file', refId: path });
+        return { ...opened, activeSessionId: sessionId };
+      }
       const hit = locatePane(s.workspaces, 'file', path);
       if (hit) return focusPane(s, hit.workspaceId, hit.paneId);
       return openInActive(s, { id: newPaneId(), kind: 'file', refId: path });
@@ -1098,6 +1146,47 @@ export const useStore = create<UiState>((set, get) => ({
       get().pushToast('error', `Could not complete the chat: ${(e as Error).message}`);
     }
     await get().refreshSessions();
+  },
+
+  autoCompleteIdle: async (now = Date.now()) => {
+    const days = autoCompleteDays(get().settings?.autoCompleteAfterDays);
+    if (!days) return 0;
+    const [running, pending] = await Promise.all([
+      window.nekko.runningSessions().catch(() => null),
+      window.nekko.pendingInput().catch(() => null),
+    ]);
+    // Without knowing what is running, completing anything could stop live work.
+    if (!running || !pending) return 0;
+    const busy = new Set([...running, ...Object.keys(pending)]);
+    const ids = agentsToAutoComplete(get().sessions, days, now, (id) => busy.has(id));
+    const done: string[] = [];
+    for (const id of ids) {
+      try {
+        const saved = await window.nekko.setSessionOptions(id, { archivedAt: now });
+        if (saved && isArchived(saved)) done.push(id);
+      } catch { /* left for the next sweep */ }
+    }
+    if (!done.length) return 0;
+    const gone = new Set(done);
+    set((s) => {
+      const workspaces = s.workspaces
+        .filter((w) => !(w.anchor.kind === 'chat' && gone.has(w.anchor.refId)))
+        .map((w) => {
+          let root = w.root;
+          for (const id of gone) { const pane = root && findPaneByRef(root, 'chat', id); if (pane) root = removePane(root, pane.id); }
+          return root === w.root ? w : { ...w, root, activePaneId: root ? allPanes(root)[0]?.id ?? null : null };
+        })
+        .filter((w) => w.root !== null);
+      return {
+        workspaces,
+        activeWorkspaceId: workspaces.some((w) => w.id === s.activeWorkspaceId) ? s.activeWorkspaceId : workspaces[workspaces.length - 1]?.id ?? null,
+        activeSessionId: s.activeSessionId && gone.has(s.activeSessionId) ? null : s.activeSessionId,
+      };
+    });
+    const label = AUTO_COMPLETE_CHOICES.find((c) => c.days === days)?.label ?? `${days} days`;
+    get().pushToast('info', `Completed ${done.length} agent${done.length === 1 ? '' : 's'} idle for over ${label}. Find ${done.length === 1 ? 'it' : 'them'} under Show completed.`);
+    await get().refreshSessions();
+    return done.length;
   },
 
   archiveWorkspace: async (id) => {

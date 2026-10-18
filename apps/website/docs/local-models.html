@@ -47,7 +47,7 @@
       </nav>
     </header>
     <div class="shell">
-      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models" aria-current="page">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/browser-automation">Browser automation</a></li><li><a href="/docs/local-models" aria-current="page">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
       <main id="content">
         <article class="prose" id="top">
           <p class="kicker">Using Nekko Agent</p>
@@ -104,7 +104,10 @@ state, so moving one moves the other, and either can be saved as that model&#39;
 computer, an API key, allowed browser origins, how many models may be resident, the idle
 timeout, load-on-demand, start-with-the-app, and the models folder. The defaults are
 loopback-only with no key, which is safe; binding to the network is a deliberate act and
-the app says what it means next to the setting.</p>
+the app says what it means next to the setting. <strong>A network bind requires a key</strong>: the
+engine refuses to listen on your network with the key empty, and picking <strong>This computer
+and my network</strong> with no key set fills one in for you (a key you already typed is kept).
+Send it as a Bearer token from the apps you point at the engine.</p>
 <p>Because the engine holds the file, it reads the GGUF header directly, so the projection
 below is <strong>exact</strong> for its own models where it has to report parts of itself as unknown
 for somebody else&#39;s.</p>
@@ -215,6 +218,13 @@ everything fixed by the launch command, and it is Linux plus NVIDIA plus Python 
 practice. Nekko Agent detects it, shows its live <code>/metrics</code>, and can stop it, but never
 starts it: instead the fit drawer renders the exact <code>vllm serve</code> command for you to run.
 Nothing that could not be verified against real hardware ships as a working button.</p>
+<h3 id="when-a-card-lists-no-models"><a class="anchor" href="#when-a-card-lists-no-models" aria-hidden="true" tabindex="-1">#</a>When a card lists no models</h3>
+<p>A card whose model list fails says why instead of &quot;No models found.&quot; A server that does not
+answer reads <em>&quot;Ollama didn&#39;t answer at <a href="http://localhost:11434" rel="noopener">http://localhost:11434</a>. Is it running?&quot;</em>; any other
+failure shows the provider&#39;s own message, such as a 401 from a refused key, unless the
+connection test above it already says why. <strong>Retry</strong>
+re-tests the connection and asks for the list again. A card with more than eight models
+gets a filter box.</p>
 <h2 id="reading-the-fit-bar"><a class="anchor" href="#reading-the-fit-bar" aria-hidden="true" tabindex="-1">#</a>Reading the fit bar</h2>
 <p>The bar stacks what the model needs against what the device has free:</p>
 <ul>
@@ -298,6 +308,44 @@ else&#39;s process: stopping that one asks first and names what it would end, be
 thing holding port 11434 might be a service you depend on.</p>
 <p>LM Studio is the exception that needs no such warning, since it has a real shutdown
 command rather than a process to kill.</p>
+<h2 id="long-tasks-on-a-small-context-window"><a class="anchor" href="#long-tasks-on-a-small-context-window" aria-hidden="true" tabindex="-1">#</a>Long tasks on a small context window</h2>
+<p>A local model is often loaded with an 8k or 32k context, and an agent fills that in a few
+steps: one large file read or one noisy build log is most of it. Nekko Agent keeps the work
+going rather than stopping when the window fills:</p>
+<ul>
+<li><strong>It uses the window the model was loaded with</strong>, not the model&#39;s advertised maximum.
+LM Studio and the Nekko engine report it in their model list, and Ollama reports it for a
+loaded model. For anything that reports nothing, it falls back to a guess from the name.</li>
+<li><strong>Older tool output is left out of the request</strong> once the conversation nears 80% of that
+window. The oldest large results (file reads, command output) are replaced, in what is sent,
+by a one-line note saying how much was there; the chat itself keeps everything, and the model
+can simply run the tool again if it needs that output back.</li>
+<li><strong>If the server still says the prompt is too long</strong>, the request is sent once more with all
+of the older tool output left out.</li>
+<li><strong>If that is not enough, the chat compacts and carries on by itself.</strong> The older part of the
+conversation is summarized, and the agent is asked to continue from the summary. This happens
+at most twice in a row before the chat waits for you, so a model that cannot make progress
+does not loop.</li>
+</ul>
+<p>Giving the model more room is still the best fix. Raise its context when you load it (the
+Models page shows what that costs in memory), and <code>OLLAMA_KV_CACHE_TYPE=q8_0</code> roughly halves
+the memory a longer context needs.</p>
+<h2 id="pictures-and-models-that-cannot-see"><a class="anchor" href="#pictures-and-models-that-cannot-see" aria-hidden="true" tabindex="-1">#</a>Pictures and models that cannot see</h2>
+<p>Only a vision model with its projector file (<code>mmproj-*.gguf</code>) beside it can look at a
+picture. The Nekko engine tells the app which of its models have one, so for a text-only
+model such as Qwen3 4B the composer greys out <strong>Photo / Video</strong> and says why.</p>
+<p>A picture can still end up in a text-only chat: you attached it while a vision model was
+picked and then switched, or you used a server the app cannot classify. Such a server
+rejects every request that carries an image, and the image stays in the conversation, so
+before this guard the chat failed on every later message too. Now, when the model is known
+not to take images, each picture is sent as a one-line note (&quot;1 image attachment omitted:
+this model does not accept image input&quot;) and the chat keeps working. The picture stays in
+the chat itself, so switching back to a vision model sends it again.</p>
+<p>A server that does not say what its models take still receives the pictures. If such a
+model refuses them, click <strong>Delete last message</strong> in the failure notice (or <strong>Delete</strong> on
+the message itself). That removes the message with the picture and anything after it, and
+the chat answers again. You can then ask again without the picture, or switch to a model
+with vision input.</p>
 <h2 id="what-is-not-here-yet"><a class="anchor" href="#what-is-not-here-yet" aria-hidden="true" tabindex="-1">#</a>What is not here yet</h2>
 <p>Browsing and downloading models from inside the app, and a bundled inference engine so a
 fresh install can run a model with nothing else present, are both planned as separate
@@ -305,11 +353,11 @@ pieces of work. Today Nekko Agent manages the runtimes you already have.</p>
 
           <footer class="page-foot">
             <a class="edit" href="https://github.com/nekko-labs/nekko-agent/edit/main/docs/local-models.md" rel="noopener">Edit this page on GitHub</a>
-            <div class="pager"><a class="prev" href="/docs/walkthrough"><span>Previous</span>Walkthrough</a><a class="next" href="/docs/subscriptions"><span>Next</span>Subscription sign-in</a></div>
+            <div class="pager"><a class="prev" href="/docs/browser-automation"><span>Previous</span>Browser automation</a><a class="next" href="/docs/subscriptions"><span>Next</span>Subscription sign-in</a></div>
           </footer>
         </article>
       </main>
-      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Running models locally</a></li><li class="d2"><a href="#the-nekko-engine">The Nekko engine</a></li><li class="d2"><a href="#servers-you-already-run">Servers you already run</a></li><li class="d3"><a href="#what-each-one-can-do">What each one can do</a></li><li class="d2"><a href="#reading-the-fit-bar">Reading the fit bar</a></li><li class="d2"><a href="#the-verdicts">The verdicts</a></li><li class="d2"><a href="#why-a-model-spills-to-the-cpu">Why a model spills to the CPU</a></li><li class="d2"><a href="#apple-silicon">Apple Silicon</a></li><li class="d2"><a href="#multiple-gpus">Multiple GPUs</a></li><li class="d2"><a href="#settings-that-need-a-restart">Settings that need a restart</a></li><li class="d2"><a href="#stopping-a-server">Stopping a server</a></li><li class="d2"><a href="#what-is-not-here-yet">What is not here yet</a></li></ul></nav></aside>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Running models locally</a></li><li class="d2"><a href="#the-nekko-engine">The Nekko engine</a></li><li class="d2"><a href="#servers-you-already-run">Servers you already run</a></li><li class="d3"><a href="#what-each-one-can-do">What each one can do</a></li><li class="d3"><a href="#when-a-card-lists-no-models">When a card lists no models</a></li><li class="d2"><a href="#reading-the-fit-bar">Reading the fit bar</a></li><li class="d2"><a href="#the-verdicts">The verdicts</a></li><li class="d2"><a href="#why-a-model-spills-to-the-cpu">Why a model spills to the CPU</a></li><li class="d2"><a href="#apple-silicon">Apple Silicon</a></li><li class="d2"><a href="#multiple-gpus">Multiple GPUs</a></li><li class="d2"><a href="#settings-that-need-a-restart">Settings that need a restart</a></li><li class="d2"><a href="#stopping-a-server">Stopping a server</a></li><li class="d2"><a href="#long-tasks-on-a-small-context-window">Long tasks on a small context window</a></li><li class="d2"><a href="#pictures-and-models-that-cannot-see">Pictures and models that cannot see</a></li><li class="d2"><a href="#what-is-not-here-yet">What is not here yet</a></li></ul></nav></aside>
     </div>
     <dialog class="search-dialog" aria-label="Search the docs">
       <form method="dialog" class="search-box">
@@ -319,5 +367,6 @@ pieces of work. Today Nekko Agent manages the runtimes you already have.</p>
       <ul class="results" role="listbox" aria-label="Results"></ul>
     </dialog>
     <script src="/docs.js?v=docs-1" defer></script>
+    <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

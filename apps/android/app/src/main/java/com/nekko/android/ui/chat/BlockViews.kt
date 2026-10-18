@@ -59,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
+import com.nekko.protocol.Transcript
 import com.nekko.protocol.ToolStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -84,13 +85,15 @@ private fun UserBubble(b: Block.User) {
                 .background(p.userBubble)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            Text(b.text, style = MaterialTheme.typography.bodyLarge, color = p.userInk, modifier = Modifier.copyOnLongPress(b.text))
-            if (b.images > 0) {
+            if (b.thumbs.isNotEmpty()) {
+                PromptPhotos(b.thumbs, tint = p.userInk.copy(alpha = 0.7f), tile = p.userInk.copy(alpha = 0.12f))
+            }
+            if (b.text.isNotEmpty()) {
                 Text(
-                    if (b.images == 1) "1 image" else "${b.images} images",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = p.userInk.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 4.dp),
+                    b.text,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = p.userInk,
+                    modifier = Modifier.padding(top = if (b.thumbs.isNotEmpty()) 8.dp else 0.dp).copyOnLongPress(b.text),
                 )
             }
         }
@@ -141,7 +144,7 @@ private fun Reply(b: Block.Assistant) {
             }
         }
         if (b.text.isNotEmpty()) {
-            Text(b.text, style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.copyOnLongPress(b.text))
+            MarkdownText(b.text, color = p.ink, modifier = Modifier.fillMaxWidth().copyOnLongPress(b.text))
         } else if (b.streaming && reasoning.isNullOrEmpty()) {
             CircularProgressIndicator(
                 color = p.accent,
@@ -222,13 +225,24 @@ private fun ToolRow(b: Block.Tool) {
             }
         }
         if (open && hasOutput) {
+            // What the phone doesn't show (cut output, left-out images) goes under the
+            // 40 lines, so it's visible however long the output is.
+            val (body, notes) = Transcript.splitNotes(b.output.orEmpty())
             SelectionContainer {
                 Text(
-                    b.output.orEmpty(),
+                    body,
                     style = Nekko.mono,
                     color = p.inkSoft,
                     maxLines = 40,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = if (notes.isEmpty()) 12.dp else 4.dp),
+                )
+            }
+            if (notes.isNotEmpty()) {
+                Text(
+                    notes.joinToString("\n"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = p.inkFaint,
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
                 )
             }

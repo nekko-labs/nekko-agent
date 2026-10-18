@@ -5,7 +5,7 @@ import { useStore, type Workspace } from '../store.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
 import {
-  CheckIcon, BranchIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
+  BranchIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
   WarningIcon, WorktreeIcon,
 } from '../icons.js';
 import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
@@ -173,6 +173,7 @@ function WorkspaceCardImpl({
   now,
   projects,
   subAgentCount = 0,
+  showMetadata = true,
   onOpen,
   onClose,
 }: {
@@ -188,6 +189,8 @@ function WorkspaceCardImpl({
   projects: WorkspaceFolder[];
   /** How many sub-agents this chat has spawned. */
   subAgentCount?: number;
+  /** The lines under the title; off, the card is its title row alone. */
+  showMetadata?: boolean;
   onOpen: () => void;
   onClose: () => void | Promise<void>;
 }) {
@@ -212,9 +215,9 @@ function WorkspaceCardImpl({
   // long run actually hits, and it is per chat, where a plan's usage limit is
   // per account and has its own Capacity panel.
   const modelInfo = session?.modelId ? knownModels.find((m) => m.id === session.modelId) : undefined;
-  const ctxUsed = status === 'working' && liveCtxEstimate != null
-    ? liveCtxEstimate
-    : session?.transcriptTokens ?? 0;
+  // An open chat publishes the composer gauge's own total (see ChatPane), so
+  // the two readouts agree; a closed chat falls back to the transcript estimate.
+  const ctxUsed = liveCtxEstimate ?? session?.transcriptTokens ?? 0;
   const ctxWindow = modelInfo?.contextLength ?? guessContextWindow(session?.modelId);
   const ctxPct = ctxWindow > 0 ? (ctxUsed / ctxWindow) * 100 : 0;
 
@@ -286,13 +289,15 @@ function WorkspaceCardImpl({
             });
           }}
         >
-          {isChat ? <CheckIcon className="h-3.5 w-3.5" /> : <CloseIcon className="h-3 w-3" />}
+          <CloseIcon className={isChat ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
+
         </button>
       </div>
 
       {/* Line 2: what is running it: "source / model", then how full the
           context window is. Source first because it answers "whose quota is
           this spending" before "which model", and the two read as one fact. */}
+      {showMetadata && <>
       <div className="mt-0.5 flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
         <Fact
           grow
@@ -384,6 +389,7 @@ function WorkspaceCardImpl({
           {windows > 1 && <span className="shrink-0">{windows} windows</span>}
         </div>
       )}
+      </>}
     </div>
   );
 }

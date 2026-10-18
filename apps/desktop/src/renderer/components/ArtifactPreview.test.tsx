@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 vi.hoisted(function () { Object.assign(globalThis, { window: {}, localStorage: { getItem: function () { return null; } } }); });
-import { ArtifactPreview, isolatedDocument, MermaidDiagram } from './ArtifactPreview.js';
+import { ArtifactPreview, diagramDocument, isolatedDocument, MermaidDiagram, ZoomFrame } from './ArtifactPreview.js';
 import { Markdown } from './Markdown.js';
 
 describe('artifact previews', () => {
@@ -23,9 +23,22 @@ describe('artifact previews', () => {
     expect(renderToStaticMarkup(<MermaidDiagram code="graph TD; A-->B" />)).toContain('Mermaid source');
     expect(renderToStaticMarkup(<Markdown text={'```mermaid\ngraph TD; A-->B\n```'} />)).toContain('Rendering diagram');
   });
+  it('keeps every diagram frame scriptless and zooms the frame from outside', () => {
+    const doc = diagramDocument('<svg/>');
+    expect(doc).not.toContain('<script');
+    expect(doc).toContain("connect-src 'none'");
+    expect(doc.indexOf('Content-Security-Policy')).toBeLessThan(doc.indexOf('<svg'));
+    const frame = renderToStaticMarkup(<ZoomFrame srcDoc={doc} title="t" />);
+    expect(frame).toContain('sandbox=""');
+    expect(frame).toContain('pointer-events:none');
+    expect(frame).toContain('scale(1)');
+    // The full-window overlay is not mounted until the user asks for it.
+    expect(renderToStaticMarkup(<MermaidDiagram code="graph TD; A-->B" />)).not.toContain('data-mermaid-fullscreen');
+  });
   it('does not read or fetch an image during message rendering', () => {
     const html = renderToStaticMarkup(<Markdown text="![Evidence](/project/shot.png)" />);
-    expect(html).toContain('Load image');
+    expect(html).toContain('Loading image…');
+    expect(html).toContain('Open source');
     expect(html).not.toContain('<img');
     expect(html).not.toContain('src=');
   });

@@ -17,6 +17,7 @@
  * --attempts <n> measure again (up to n runs) when a budget is missed, judging each
  *                budget on its best attempt; every attempt's p95 is reported
  * --report-only  write the report but exit 0 even when a budget is missed
+ * --invalidation include streaming style/layout invalidation events (diagnostic overhead)
  * --dump-trace   also write the streaming trace (large) to the output directory
  * --only <part>  run just 'latency' (keypress, switching), 'frames' (streaming) or
  *                'memory' (GPU tile memory and leaks, see measureMemory)
@@ -214,7 +215,7 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
     // Setup selects the exact grouped card on Agents; Chat no longer owns this list.
     await waitFor("!!document.querySelector('button[data-sidebar-group]')", 'the Agents sidebar');
     // Cards only select a window in Dynamic/Grid; measure the full-size chat in Focus.
-    await cdp.evaluate(`(() => { const b = [...document.querySelectorAll('.wall-layout-segments button')].find(b => b.textContent.trim() === 'Focus'); if (b && b.getAttribute('aria-pressed') !== 'true') b.click(); return true; })()`);
+    await cdp.evaluate(`(() => { const b = [...document.querySelectorAll('.wall-layout-segments button')].find(b => b.textContent.trim() === 'Focused'); if (b && b.getAttribute('aria-pressed') !== 'true') b.click(); return true; })()`);
     await showAllCards();
     await cdp.call((title) => [...document.querySelectorAll('div[role="button"]')].find(card => card.getAttribute('title')?.includes(title))?.click(), title);
     // Setup is not a measured sidebar switch. Let the virtual transcript settle
@@ -345,7 +346,10 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
     const a = await shown();
     await sleep(400);
     const b = await shown();
-    if (!(b > a)) throw new Error(`the reply is not streaming onto the screen (${a} -> ${b} chars)`);
+    if (!(b > a)) {
+      writeFileSync(join(OUT, 'stream-growth-failure.json'), JSON.stringify(await cdp.evaluate(`(() => ({ panels: [...document.querySelectorAll('.panel')].map(p => ({ visible: p.checkVisibility(), composer: !!p.querySelector('textarea, .composer [contenteditable]')?.checkVisibility(), replies: [...p.querySelectorAll('.msg-ai')].map(e => ({ length: e.textContent.length, tail: e.textContent.slice(-100), visible: e.checkVisibility() })), scrollers: [...p.querySelectorAll('.overflow-y-auto')].map(e => ({ top: e.scrollTop, height: e.scrollHeight, client: e.clientHeight })) })) }))()`), null, 2));
+      throw new Error(`the reply is not streaming onto the screen (${a} -> ${b} chars)`);
+    }
   };
 
   return { cdp, browser, close, waitFor, clickEl, openChat, switchTo, startStream, framePump };
@@ -490,6 +494,17 @@ async function measureFrames({ appUrl, mock, api, bigChat }) {
   // The latency phase left a reply of its own at the end of this chat.
   await paced.openChat(0, '');
   await paced.startStream(mock);
+  if (flag('scheduling')) {
+    const categories = await paced.cdp.send('Tracing.getCategories');
+    const targets = await paced.cdp.call(() => {
+      const inspect = (selector) => [...document.querySelectorAll(selector)].map(el => {
+        const s = getComputedStyle(el), r = el.getBoundingClientRect();
+        return { tag: el.tagName, animation: s.animationName, transition: s.transitionProperty, duration: s.transitionDuration, visible: r.width > 0 && r.height > 0 };
+      });
+      return { context: inspect('.context-bar > [aria-hidden]'), rocket: inspect('.status-rocket, .status-rocket svg, .status-rocket .rocket-flame, .status-rocket .rocket-streak') };
+    });
+    writeFileSync(join(OUT, 'diagnostic-targets.json'), JSON.stringify({ categories, targets }, null, 2));
+  }
   const traceEvents = [];
   const offData = paced.cdp.on('Tracing.dataCollected', (p) => { for (const e of p.value) traceEvents.push(e); });
   const traced = new Promise((r) => { const off = paced.cdp.on('Tracing.tracingComplete', () => { off(); r(); }); });
@@ -497,7 +512,7 @@ async function measureFrames({ appUrl, mock, api, bigChat }) {
     transferMode: 'ReportEvents',
     traceConfig: {
       recordMode: 'recordContinuously',
-      includedCategories: ['toplevel', 'devtools.timeline', 'disabled-by-default-devtools.timeline.frame', '__metadata'],
+      includedCategories: ['toplevel', 'devtools.timeline', 'disabled-by-default-devtools.timeline.frame', '__metadata', ...(flag('scheduling') ? ['cc', 'viz', 'gpu', 'benchmark', 'disabled-by-default-cc.debug.scheduler'] : []), ...(flag('invalidation') ? ['disabled-by-default-devtools.timeline.invalidationTracking'] : [])],
     },
   });
   if (flag('profile')) await startProfile(paced.cdp);
@@ -564,9 +579,10 @@ async function measureMemory({ appUrl, mock, api, ids }) {
 
   // ---- GPU layers: every visible wall window working at once.
   await cdp.send('Emulation.setDeviceMetricsOverride', { ...CFG.viewport, deviceScaleFactor: CFG.memory.scale, mobile: false });
-  // Ctrl+Shift+3 is the 3 x 2 Grid; the Grid button itself opens a size picker.
+  // Ctrl+Shift+3 is the 3 x 2 Grid. Grid has no toolbar button (it lives in
+  // Settings since #741), so wait on the wall's own layout attribute.
   await cdp.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit3', key: '#', ctrlKey: true, shiftKey: true, bubbles: true }))`);
-  await app.waitFor(`[...document.querySelectorAll('.wall-layout-segments button')].some(b => b.textContent.trim() === 'Grid' && b.getAttribute('aria-pressed') === 'true')`, 'the Grid wall layout', 5000);
+  await app.waitFor(`document.querySelector('[data-wall-layout]')?.dataset.wallLayout === 'fixed'`, 'the Grid wall layout', 5000);
   const working = ids.slice(0, CFG.memory.working);
   const before = mock.state.streamsStarted;
   for (const id of working) {
@@ -722,7 +738,7 @@ async function main() {
   cleanups.push(() => rmSync(dataDir, { recursive: true, force: true }));
   log(`scratch data dir ${dataDir}`);
 
-  const server = spawn(process.execPath, [join(APP_ROOT, 'apps/server/dist/index.js')], {
+  const server = spawn(process.execPath, [join(APP_ROOT, 'apps/web-app-server/dist/index.js')], {
     cwd: APP_ROOT,
     env: { ...process.env, NEKKO_DATA_DIR: dataDir, NEKKO_PORT: String(CFG.appPort), NEKKO_HOST: '127.0.0.1' },
     stdio: ['ignore', 'pipe', 'pipe'],

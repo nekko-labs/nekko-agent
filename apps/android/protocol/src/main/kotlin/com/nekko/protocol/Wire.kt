@@ -25,12 +25,19 @@ import kotlinx.serialization.json.put
  */
 object Channels {
     const val SETTINGS_GET = "settings:get"
+    /** Only the phone-settable keys (the computer's PHONE_SETTINGS_KEYS); anything else is refused. */
+    const val SETTINGS_UPDATE = "settings:update"
     const val PROVIDERS_LIST = "providers:list"
     const val MODELS_LIST = "models:list"
     const val SESSIONS_SUMMARIES = "sessions:summaries"
     const val SESSION_CREATE = "session:create"
     const val SESSION_GET = "session:get"
     const val SESSION_SET_OPTIONS = "session:setOptions"
+    const val SESSION_DELETE = "session:delete"
+    /** The computer's Nekko Voice: installed? (A phone may read it, never install or remove it.) */
+    const val VOICE_STATUS = "voice:status"
+    /** A mono 16 kHz 16-bit PCM WAV as a JSON array of byte values → the text. */
+    const val VOICE_TRANSCRIBE = "voice:transcribe"
     const val CHAT_SEND = "chat:send"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
@@ -39,11 +46,15 @@ object Channels {
     const val TOOL_APPROVE = "tool:approve"
     const val WORKSPACE_LIST = "workspace:list"
     const val APP_INFO = "app:info"
+    /** The skills a chat on the computer can run: names and descriptions only, never templates. */
+    const val SKILLS_RUNNABLE = "skills:runnable"
+    /** What the agent changed in a chat, as a capped read-only diff ([PhoneChanges]); refused unless the computer allows it. */
+    const val CHANGES_LIST = "changes:list"
 
     val ALL = listOf(
-        SETTINGS_GET, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
+        SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
-        WORKSPACE_LIST, APP_INFO,
+        WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST,
     )
 }
 
@@ -83,7 +94,18 @@ data class ToolCall(val id: String, val name: String, val input: JsonObject) {
     }
 }
 
-data class ToolResult(val toolCallId: String, val output: String, val isError: Boolean) {
+/**
+ * A tool's result. [outputChars] is the original length when the computer cut
+ * the output for the phone (`truncated`), [omittedImages] the screenshots it
+ * left out (see PHONE_SESSION_VIEW in packages/shared/src/phone-access.ts).
+ */
+data class ToolResult(
+    val toolCallId: String,
+    val output: String,
+    val isError: Boolean,
+    val outputChars: Int? = null,
+    val omittedImages: Int = 0,
+) {
     companion object {
         fun from(e: JsonElement?): ToolResult? {
             val o = e.obj() ?: return null
@@ -92,7 +114,13 @@ data class ToolResult(val toolCallId: String, val output: String, val isError: B
                 null, JsonNull -> ""
                 else -> v.toString()
             }
-            return ToolResult(o.str("toolCallId") ?: return null, output, o.bool("isError"))
+            return ToolResult(
+                o.str("toolCallId") ?: return null,
+                output,
+                o.bool("isError"),
+                outputChars = o.long("outputChars")?.toInt()?.takeIf { o.bool("truncated") && it > output.length },
+                omittedImages = o.long("omittedImages")?.toInt()?.coerceAtLeast(0) ?: 0,
+            )
         }
     }
 }
@@ -103,12 +131,15 @@ data class ChatMessage(
     val content: String,
     val reasoning: String? = null,
     val createdAt: Long? = null,
-    val imageCount: Int = 0,
+    /** The message's photos as the computer sent them to the phone: small JPEG data URLs, `""` for one not sent. */
+    val images: List<String> = emptyList(),
     val skill: Pair<String, String>? = null,
     val toolCalls: List<ToolCall> = emptyList(),
     val toolResult: ToolResult? = null,
     val interrupted: Boolean = false,
 ) {
+    val imageCount: Int get() = images.size
+
     companion object {
         fun from(e: JsonElement?): ChatMessage? {
             val o = e.obj() ?: return null
@@ -119,7 +150,7 @@ data class ChatMessage(
                 content = o.str("content") ?: "",
                 reasoning = o.str("reasoning"),
                 createdAt = o.long("createdAt"),
-                imageCount = o["images"].arr()?.size ?: 0,
+                images = o["images"].arr()?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: "" } ?: emptyList(),
                 skill = skill,
                 toolCalls = o["toolCalls"].arr()?.mapNotNull { ToolCall.from(it) } ?: emptyList(),
                 toolResult = ToolResult.from(o["toolResult"]),
@@ -136,6 +167,8 @@ data class Session(
     val modelId: String?,
     val workspaceId: String?,
     val messages: List<ChatMessage>,
+    /** Older messages the computer kept back from the phone (only the newest are sent). */
+    val omittedMessages: Int = 0,
     val queue: List<String>,
     val updatedAt: Long,
 ) {
@@ -149,6 +182,7 @@ data class Session(
                 modelId = o.str("modelId"),
                 workspaceId = o.str("workspaceId"),
                 messages = o["messages"].arr()?.mapNotNull { ChatMessage.from(it) } ?: emptyList(),
+                omittedMessages = o.long("omittedMessages")?.toInt()?.coerceAtLeast(0) ?: 0,
                 // Queue entries may be plain strings or {text, images, skill}; the phone shows text.
                 queue = o["queue"].arr()?.mapNotNull { q ->
                     (q as? JsonPrimitive)?.contentOrNull ?: q.obj()?.str("text")
@@ -171,13 +205,20 @@ data class SessionSummary(
     val taskId: String?,
     val trainingRunId: String?,
     val providerId: String? = null,
+    /** The project folder the chat belongs to (`workspace:list` id); null for General. */
+    val workspaceId: String? = null,
+    /** When the chat was completed (the desktop's archive); null while it is active. */
+    val archivedAt: Long? = null,
+    /** Manual position from the desktop sidebar's drag order; null when never dragged. */
+    val order: Double? = null,
 ) {
-    /** Real, top-level, unarchived chats: what the phone's list shows. */
-    val isVisible: Boolean get() = !archived && parentSessionId == null && taskId == null && trainingRunId == null
+    /** Real, top-level chats, active or completed: what the phone's list shows. */
+    val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
 
     companion object {
         fun from(e: JsonElement?): SessionSummary? {
             val o = e.obj() ?: return null
+            val archivedAt = o.long("archivedAt")?.takeIf { it != 0L }
             return SessionSummary(
                 id = o.str("id") ?: return null,
                 title = o.str("title") ?: "",
@@ -185,16 +226,64 @@ data class SessionSummary(
                 modelId = o.str("modelId"),
                 lastReplyText = o.str("lastReplyText"),
                 firstUserText = o.str("firstUserText"),
-                archived = o.isSet("archivedAt") && o.long("archivedAt") != 0L,
+                archived = archivedAt != null,
                 parentSessionId = o.str("parentSessionId"),
                 taskId = o.str("taskId"),
                 trainingRunId = o.str("trainingRunId"),
                 providerId = o.str("providerId"),
+                workspaceId = o.str("workspaceId"),
+                archivedAt = archivedAt,
+                order = o.dbl("order"),
             )
         }
 
+        /** Every top-level chat, completed ones included, newest first. */
         fun visible(list: JsonElement?): List<SessionSummary> =
             list.arr()?.mapNotNull { from(it) }?.filter { it.isVisible }?.sortedByDescending { it.updatedAt } ?: emptyList()
+    }
+}
+
+/**
+ * One group of the chat list, as the desktop's agent sidebar draws it
+ * (apps/desktop/src/renderer/views/WorkspacesView.tsx): General for chats in
+ * no known folder, then one per project folder in the computer's order.
+ */
+data class ChatGroup(
+    /** [GENERAL] or the folder's id. */
+    val key: String,
+    val name: String,
+    /** Active chats: dragged ones in their manual order first, then most recent. */
+    val active: List<SessionSummary>,
+    /** Completed chats, most recently completed first. */
+    val completed: List<SessionSummary>,
+) {
+    companion object {
+        const val GENERAL = "__none"
+
+        /**
+         * Split [chats] into the desktop's groups. General comes first and is
+         * left out when it has nothing in it; a folder is listed even when empty,
+         * as the desktop lists it ("No active agents").
+         */
+        fun of(chats: List<SessionSummary>, folders: List<WorkspaceFolder>): List<ChatGroup> {
+            val known = folders.map { it.id }.toSet()
+            val byGroup = chats.groupBy { s -> s.workspaceId?.takeIf { it in known } ?: GENERAL }
+            fun group(key: String, name: String): ChatGroup {
+                val all = byGroup[key].orEmpty()
+                val active = all.filter { !it.archived }.sortedWith(
+                    compareBy<SessionSummary> { it.order == null }
+                        .thenBy { it.order ?: 0.0 }
+                        .thenByDescending { it.updatedAt },
+                )
+                val completed = all.filter { it.archived }.sortedByDescending { it.archivedAt ?: 0L }
+                return ChatGroup(key, name, active, completed)
+            }
+            val general = group(GENERAL, "General")
+            return buildList {
+                if (general.active.isNotEmpty() || general.completed.isNotEmpty()) add(general)
+                folders.forEach { add(group(it.id, it.name)) }
+            }
+        }
     }
 }
 
@@ -223,6 +312,181 @@ data class RemoteDefaults(
         }
     }
 }
+
+/**
+ * The computer's settings a phone may see and change (`settings:update` takes
+ * exactly these keys from a phone; see packages/shared/src/phone-access.ts).
+ * Each is null until the computer has answered.
+ */
+data class PcSettings(
+    /** Tool policy for new chats: `ask`, `guardrails` or `yolo` (shared/chat.ts ChatMode). */
+    val defaultChatMode: ChatMode? = null,
+    /** The chat's main action: complete (archive) or delete. Unset on the computer means complete. */
+    val chatPaneAction: ChatAction? = null,
+    /** True when the computer deletes chats without asking first. Unset means it asks. */
+    val skipDeleteConfirmation: Boolean? = null,
+    /** False until the computer has answered `settings:get` (or `settings:update`) on this connection. */
+    val known: Boolean = false,
+    /** Nekko Voice switched on in the computer's Settings (`voice.enabled`). Read only here. */
+    val voiceEnabled: Boolean = false,
+    /** The computer lets phones read a chat's changes (`phoneChanges`). Set on the computer only. */
+    val phoneChanges: Boolean = false,
+) {
+    enum class ChatMode(val wire: String) {
+        ASK("ask"), GUARDRAILS("guardrails"), YOLO("yolo");
+
+        companion object {
+            fun of(s: String?) = entries.firstOrNull { it.wire == s }
+        }
+    }
+
+    enum class ChatAction(val wire: String) {
+        COMPLETE("complete"), DELETE("delete");
+
+        companion object {
+            fun of(s: String?) = entries.firstOrNull { it.wire == s }
+        }
+    }
+
+    /** What the computer actually does when a key is unset (shared/settings.ts defaults). */
+    val effectiveMode: ChatMode get() = defaultChatMode ?: ChatMode.GUARDRAILS
+    val effectiveAction: ChatAction get() = chatPaneAction ?: ChatAction.COMPLETE
+    val confirmDelete: Boolean get() = skipDeleteConfirmation != true
+
+    companion object {
+        fun from(e: JsonElement?): PcSettings {
+            val o = e.obj() ?: return PcSettings()
+            return PcSettings(
+                known = true,
+                defaultChatMode = ChatMode.of(o.str("defaultChatMode")),
+                chatPaneAction = ChatAction.of(o.str("chatPaneAction")),
+                skipDeleteConfirmation = (o["skipDeleteConfirmation"] as? JsonPrimitive)?.booleanOrNull,
+                voiceEnabled = o["voice"].obj()?.bool("enabled") == true,
+                phoneChanges = o.bool("phoneChanges"),
+            )
+        }
+
+        /** The `settings:update` patch for one change: never more than the phone-settable keys. */
+        fun patch(mode: ChatMode? = null, action: ChatAction? = null, skipConfirm: Boolean? = null) = buildJsonObject {
+            mode?.let { put("defaultChatMode", it.wire) }
+            action?.let { put("chatPaneAction", it.wire) }
+            skipConfirm?.let { put("skipDeleteConfirmation", it) }
+        }
+    }
+}
+
+/**
+ * One chat's changes as the computer shows them to a phone (`phoneChangesView`,
+ * packages/shared/src/phone-changes.ts): paths cut to their last two parts,
+ * secret files counted but never shown, big files summarised.
+ */
+data class PhoneChanges(val files: List<File>, val omittedFiles: Int = 0) {
+    enum class Kind { SAME, REMOVED, ADDED }
+
+    /** [number] is the line in the new file, or in the old one for a removed line. */
+    data class Line(val kind: Kind, val text: String, val number: Int)
+
+    data class Hunk(val oldStart: Int, val newStart: Int, val lines: List<Line>) {
+        companion object {
+            /** Lines as the computer sent them (`' '`, `'-'` or `'+'` first), numbered from the starts. */
+            fun of(oldStart: Int, newStart: Int, raw: List<String>): Hunk {
+                var o = oldStart
+                var n = newStart
+                val lines = raw.map { r ->
+                    val text = r.drop(1)
+                    when (r.firstOrNull()) {
+                        '-' -> Line(Kind.REMOVED, text, o++)
+                        '+' -> Line(Kind.ADDED, text, n++)
+                        else -> Line(Kind.SAME, text, n).also { o++; n++ }
+                    }
+                }
+                return Hunk(oldStart, newStart, lines)
+            }
+        }
+    }
+
+    sealed interface Shown {
+        data object Diff : Shown
+        data object Hidden : Shown
+        data object Binary : Shown
+        data class TooLarge(val lines: Int) : Shown
+    }
+
+    data class File(
+        val path: String,
+        val added: Boolean,
+        val linesAdded: Int,
+        val linesRemoved: Int,
+        val hunks: List<Hunk>,
+        val shown: Shown,
+    )
+
+    val linesAdded: Int get() = files.sumOf { it.linesAdded }
+    val linesRemoved: Int get() = files.sumOf { it.linesRemoved }
+
+    companion object {
+        /** Changed lines quoted at most, so a big hunk stays a short message. */
+        const val QUOTE_LINES = 12
+
+        /** What "Ask about this change" puts in the message box: the hunk's changed lines as a diff. Never sent on its own. */
+        fun quote(file: File, hunk: Hunk): String {
+            val changed = hunk.lines.filter { it.kind != Kind.SAME }
+            val lo = changed.minOfOrNull { it.number }
+            val hi = changed.maxOfOrNull { it.number }
+            val range = when { lo == null -> ""; lo == hi -> " line $lo"; else -> " lines $lo–$hi" }
+            val body = changed.take(QUOTE_LINES).map { (if (it.kind == Kind.ADDED) "+" else "-") + it.text } +
+                (if (changed.size > QUOTE_LINES) listOf("… ${changed.size - QUOTE_LINES} more") else emptyList())
+            return "About `${file.path}`$range:\n```diff\n${body.joinToString("\n")}\n```\n\n"
+        }
+
+        /** The same for a whole file. */
+        fun quote(file: File): String =
+            "About `${file.path}` (${if (file.added) "new, " else ""}+${file.linesAdded} −${file.linesRemoved}):\n\n"
+
+        fun from(e: JsonElement?): PhoneChanges {
+            val o = e.obj() ?: return PhoneChanges(emptyList())
+            val files = o["files"].arr()?.mapNotNull { el ->
+                val f = el.obj() ?: return@mapNotNull null
+                val path = f.str("path") ?: return@mapNotNull null
+                val shown = when {
+                    f.bool("hidden") -> Shown.Hidden
+                    f.bool("binary") -> Shown.Binary
+                    f.bool("tooLarge") -> Shown.TooLarge((f.long("lines") ?: 0).toInt())
+                    else -> Shown.Diff
+                }
+                val hunks = if (shown != Shown.Diff) emptyList() else f["hunks"].arr()?.mapNotNull { h ->
+                    val ho = h.obj() ?: return@mapNotNull null
+                    val os = ho.long("oldStart") ?: return@mapNotNull null
+                    val ns = ho.long("newStart") ?: return@mapNotNull null
+                    val raw = ho["lines"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList()
+                    Hunk.of(os.toInt(), ns.toInt(), raw)
+                } ?: emptyList()
+                File(
+                    path = path,
+                    added = f.str("status") == "added",
+                    linesAdded = (f.long("added") ?: 0).toInt(),
+                    linesRemoved = (f.long("removed") ?: 0).toInt(),
+                    hunks = hunks,
+                    shown = shown,
+                )
+            } ?: emptyList()
+            return PhoneChanges(files, (o.long("omittedFiles") ?: 0).toInt())
+        }
+    }
+}
+
+/** The part of `voice:status` the phone needs: is Whisper on the computer installed. */
+data class VoiceInstall(val installed: Boolean, val installing: Boolean) {
+    companion object {
+        fun from(e: JsonElement?): VoiceInstall {
+            val o = e.obj() ?: return VoiceInstall(installed = false, installing = false)
+            return VoiceInstall(o.bool("installed"), o.bool("installing"))
+        }
+    }
+}
+
+/** `voice:transcribe`'s one argument: the WAV bytes as numbers 0..255, as the desktop sends them. */
+fun wavArg(wav: ByteArray): JsonArray = JsonArray(wav.map { JsonPrimitive(it.toInt() and 0xFF) })
 
 /**
  * The desktop's look, as `appearanceOf` (packages/shared/src/themes.ts) builds
@@ -388,10 +652,59 @@ sealed interface AgentEvent {
     }
 }
 
-/** `chat:send` argument (SendOptions). Only the fields the phone uses. */
-fun sendOptions(sessionId: String, providerId: String, modelId: String, text: String): JsonObject = buildJsonObject {
+/**
+ * A skill the computer can run, as `skills:runnable` gives it to a phone. The
+ * computer keeps the instructions: a skill turn sends just the name and the
+ * user's input, and the computer expands it the way the desktop does.
+ */
+data class SkillSummary(
+    val name: String,
+    val description: String,
+    val category: String,
+    /** `builtin`, `marketplace`, or the tool it was imported from (`claude`, `codex`, `gemini`, `agents`). */
+    val source: String,
+) {
+    companion object {
+        fun from(e: JsonElement?): SkillSummary? {
+            val o = e.obj() ?: return null
+            val name = o.str("name")?.takeIf { it.isNotBlank() } ?: return null
+            return SkillSummary(name, o.str("description") ?: "", o.str("category") ?: "", o.str("source") ?: "")
+        }
+
+        fun list(e: JsonElement?): List<SkillSummary> = e.arr()?.mapNotNull { from(it) } ?: emptyList()
+    }
+}
+
+/** `{ name, input }`: which skill a turn runs and the user's own text after `/name`. */
+fun skillCall(name: String, input: String): JsonObject = buildJsonObject {
+    put("name", name)
+    put("input", input)
+}
+
+/**
+ * `chat:send` argument (SendOptions). Only the fields the phone uses.
+ * [images] are `data:image/jpeg;base64,…` URLs, as the iPhone app sends them.
+ */
+fun sendOptions(
+    sessionId: String,
+    providerId: String,
+    modelId: String,
+    text: String,
+    skill: SkillSummary? = null,
+    images: List<String> = emptyList(),
+): JsonObject = buildJsonObject {
     put("sessionId", sessionId)
     put("providerId", providerId)
     put("modelId", modelId)
     put("text", text)
+    if (skill != null) put("skill", skillCall(skill.name, text))
+    if (images.isNotEmpty()) put("images", JsonArray(images.map(::JsonPrimitive)))
 }
+
+/** `chat:queue` prompt: plain text, or `{ text, skill, images }` (the computer expands a skill). */
+fun queuePrompt(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()): JsonElement =
+    if (skill == null && images.isEmpty()) JsonPrimitive(text) else buildJsonObject {
+        put("text", text)
+        if (skill != null) put("skill", skillCall(skill.name, text))
+        if (images.isNotEmpty()) put("images", JsonArray(images.map(::JsonPrimitive)))
+    }

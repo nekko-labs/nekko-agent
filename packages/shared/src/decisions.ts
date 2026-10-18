@@ -46,14 +46,23 @@ export interface DecisionCatalogEntry {
   name: string;
   publisher: string;
   license: string;
-  /** `repo@revision` the files are pinned to; absent while no correct export is hosted. */
+  /** Where the files come from: the release they are pinned to and the checkpoint they were exported from. */
   source?: string;
   /** Why it cannot be downloaded in the app yet, when it cannot. */
   unavailable?: string;
   description: string;
-  variants: Array<{ precision: DecisionPrecision; file: string; bytes: number; recommended?: boolean }>;
+  variants: Array<DecisionFile & { precision: DecisionPrecision; recommended?: boolean }>;
   /** Tokenizer and config every variant needs. */
-  shared: Array<{ file: string; bytes: number }>;
+  shared: DecisionFile[];
+}
+
+/** One file of a catalog model: saved as `file`, fetched as `asset`, checked against `bytes` and `sha256`. */
+export interface DecisionFile {
+  file: string;
+  bytes: number;
+  /** The release asset's name, when it differs from `file` (assets of one release share a folder). */
+  asset?: string;
+  sha256?: string;
 }
 
 export interface InstalledDecisionModel {

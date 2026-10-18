@@ -37,20 +37,28 @@ export const useWallLogs = create<WallLogsState>((set, get) => ({
 
 export interface Rect { x: number; y: number; width: number; height: number }
 
-/** The drawer's share of the target window's height. */
+/** The overlay drawer's share of its window's height (one-column walls). */
 export const LOGS_DRAWER_HEIGHT = 0.96;
+/**
+ * How far the side drawer sits in from its window's top and bottom: the
+ * window's corner radius (14px) plus the concave fillet (12px, styles.css
+ * `--logs-fillet`) that flows the window's edge into the drawer. Smaller, and
+ * the fillet would run into the window's rounded corner.
+ */
+export const LOGS_DRAWER_INSET = 26;
 const MIN_DRAWER = 280;
 const MIN_CHAT = 320;
 /** The narrowest a window beside the drawer is squeezed to. */
 const MIN_SIDE = 240;
 
+/** 40% of the wall, 425 to 700px: a quarter larger than the original 32% (340 to 560px). */
 export function logsDrawerWidth(stageWidth: number): number {
-  return Math.round(Math.max(340, Math.min(560, stageWidth * 0.32)));
+  return Math.round(Math.max(425, Math.min(700, stageWidth * 0.4)));
 }
 
 /**
  * Lay the wall out around an open log drawer. The drawer hangs off the target
- * window's right edge at 96% of its height, vertically centred. Windows to the
+ * window's right edge, LOGS_DRAWER_INSET in from its top and bottom. Windows to the
  * right that share its rows slide right by the drawer's width, squeezed into
  * what is left of the stage when they can stay usable; the target narrows
  * when it is the rightmost window and nothing else can give way. Pure: the
@@ -81,7 +89,9 @@ export function layoutWithLogsDrawer(
     // off the wall. Only when even that cannot fit do they slide right whole.
     const region = stageWidth - right;
     const minScale = Math.max(...beside.map(([, r]) => MIN_SIDE / Math.max(1, r.width)));
-    width = Math.round(Math.max(MIN_DRAWER, Math.min(width, region * (1 - minScale))));
+    // Floor, not round: rounding up past region * (1 - minScale) leaves the
+    // squeeze a hair under minScale and pushes the neighbours off the wall.
+    width = Math.floor(Math.max(MIN_DRAWER, Math.min(width, region * (1 - minScale))));
     const squeeze = region > width ? (region - width) / region : 0;
     const usable = squeeze >= minScale - 1e-9;
     for (const [id, r] of beside) {
@@ -91,8 +101,8 @@ export function layoutWithLogsDrawer(
     }
   }
   next.set(targetId, { ...t, width: targetWidth });
-  const h = Math.round(t.height * LOGS_DRAWER_HEIGHT);
-  return { panes: next, drawer: { x: t.x + targetWidth, y: t.y + Math.round((t.height - h) / 2), width, height: h } };
+  const inset = Math.min(LOGS_DRAWER_INSET, Math.floor(t.height / 4));
+  return { panes: next, drawer: { x: t.x + targetWidth, y: t.y + inset, width, height: Math.max(1, t.height - inset * 2) } };
 }
 
 /**
@@ -106,7 +116,7 @@ export function overlayLogsDrawer(
   const t = panes.get(targetId);
   if (!t) return { panes, drawer: null, overlay: true };
   const inset = 12;
-  const width = Math.max(1, Math.min(560, t.width - inset * 2));
+  const width = Math.max(1, Math.min(700, t.width - inset * 2));
   const h = Math.max(1, Math.round(t.height * LOGS_DRAWER_HEIGHT));
   return { panes, drawer: { x: t.x + t.width - inset - width, y: t.y + Math.round((t.height - h) / 2), width, height: h }, overlay: true };
 }

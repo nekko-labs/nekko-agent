@@ -334,7 +334,7 @@ export const SKILLS: SkillDef[] = [
     id: 'pr',
     name: 'pr',
     description: 'Open a pull request for the current branch',
-    template: 'Push the current branch and open a pull request. Follow the repository\'s PR conventions (if any) and include an explicit **Unfinished work / release blockers** section listing incomplete scope, known bugs, unsupported platforms, missing tests or visual evidence, and verification limitations.',
+    template: 'Push the current branch and open a pull request. Follow the repository\'s PR conventions (if any) and include an explicit **Unfinished work / release blockers** section listing incomplete scope, known bugs, unsupported platforms, missing tests or visual evidence, and verification limitations. Then see it through: wait for checks, fix what this change broke, and when nothing blocks it mark the PR ready and merge it the way the repository lands work. Residual notes in Unfinished work are not a reason to leave it in draft; only a real release blocker is, and name it if you stop.',
     category: 'Delivery',
     tools: ['git push', 'gh pr create'],
     workflow: wf(
@@ -344,14 +344,18 @@ export const SKILLS: SkillDef[] = [
         { id: 'desc', kind: 'agent', label: 'Write description', detail: 'Summary + unfinished work section' },
         { id: 'review', kind: 'agent', label: 'Review PR', detail: 'Check conventions + visual evidence' },
         { id: 'create', kind: 'tool', label: 'gh pr create' },
-        { id: 'out', kind: 'output', label: 'PR opened' },
+        { id: 'checks', kind: 'tool', label: 'Wait for checks', detail: 'Fix what this change broke' },
+        { id: 'ready', kind: 'tool', label: 'gh pr ready + merge', detail: 'Unless a named release blocker' },
+        { id: 'out', kind: 'output', label: 'PR merged' },
       ],
       [
         { from: 't', to: 'push' },
         { from: 'push', to: 'desc' },
         { from: 'desc', to: 'review' },
         { from: 'review', to: 'create' },
-        { from: 'create', to: 'out' },
+        { from: 'create', to: 'checks' },
+        { from: 'checks', to: 'ready' },
+        { from: 'ready', to: 'out' },
       ],
     ),
   },
@@ -369,6 +373,45 @@ export function matchSkills(query: string, extra: SkillDef[] = []): SkillDef[] {
   return all.filter((s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)).sort(
     (a, b) => Number(!!b.highlighted) - Number(!!a.highlighted),
   );
+}
+
+/** Where a runnable skill comes from: built in, the marketplace, or another agent tool's folder. */
+export type RunnableSkillSource = 'builtin' | 'marketplace' | ExternalSkillTool;
+
+/** A skill a chat can run by name (`skills:runnable`), with the template the computer expands. */
+export interface RunnableSkill {
+  name: string;
+  description: string;
+  category: SkillCategory;
+  source: RunnableSkillSource;
+  template: string;
+}
+
+/**
+ * Every skill a chat on this computer can run by name, in the `/` menu's
+ * order of precedence: built-ins first, then marketplace installs, then skills
+ * imported from other tools; the first of a name wins. `goal` skills are left
+ * out: they start a background task, not a chat turn.
+ */
+export function runnableSkills(builtin: SkillDef[], market: SkillDef[], external: SkillDef[]): RunnableSkill[] {
+  const out: RunnableSkill[] = [];
+  const seen = new Set<string>();
+  const add = (list: SkillDef[], source: (s: SkillDef) => RunnableSkillSource) => {
+    for (const s of list) {
+      if (s.kind === 'goal' || seen.has(s.name)) continue;
+      seen.add(s.name);
+      out.push({ name: s.name, description: s.description, category: s.category, source: source(s), template: s.template });
+    }
+  };
+  add(builtin, () => 'builtin');
+  add(market, () => 'marketplace');
+  add(external, (s) => s.origin?.tool ?? 'agents');
+  return out;
+}
+
+/** The text a skill turn sends: its template, then the user's input (as the desktop composer joins them). */
+export function skillTurnText(template: string, input: string): string {
+  return [template.trimEnd(), input.trim()].filter(Boolean).join('\n\n');
 }
 
 export const SKILL_CATEGORIES: SkillCategory[] = [

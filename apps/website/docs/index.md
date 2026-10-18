@@ -121,4 +121,12 @@ The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet
 
 ### Create an agent, media session or terminal
 
-Hover over the sidebar **+** to choose **Agent**, **Media gen** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Media gen opens an image session; video generation is not available.
+Hover anywhere on the left navigation panel to open it and see each destination's name. On macOS, **Nekko Agent → Settings…** (⌘,) opens Settings and **About Nekko Agent** shows the About page.
+
+Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Videos** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Create or Edit Photos and Videos opens an image session; video generation is not available.
+
+### Approvals and delegated work
+
+When a tool needs permission, its approval card appears in the chat window, not the separate wall composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
+
+For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the Agent Monitor subagent list instead; the row does not guess which chat to open.

@@ -17,6 +17,7 @@ type Dict = Record<string, string>;
 const en: Dict = {
   'nav.command': 'Agents',
   'nav.chat': 'Chat',
+  'nav.artifacts': 'Artifacts',
   'nav.design': 'Design',
   'nav.skills': 'Skills',
   'nav.training': 'Training',

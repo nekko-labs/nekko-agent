@@ -28,10 +28,20 @@ import com.nekko.android.data.ComputersState
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.DenyReason
 import com.nekko.protocol.Pairing
+import com.nekko.protocol.RelayHint
+import com.nekko.protocol.Tailnet
+import com.nekko.android.connection.TailnetStatus
+import androidx.compose.runtime.remember
+import com.nekko.android.BuildConfig
 import com.nekko.protocol.RelayState
 
+/**
+ * What a refused phone should do. REVOKED names the steps on the computer: a
+ * fresh QR re-admits a removed phone; a computer from before that change only
+ * lets it back after Rotate secret, so that is the fallback.
+ */
 fun deniedCopy(reason: DenyReason?): String = when (reason) {
-    DenyReason.REVOKED -> "This phone was removed on your computer. Pair it again."
+    DenyReason.REVOKED -> "This phone was removed on your computer. There: Settings → Remote access → Pair a device, then scan the new QR here. If it still refuses, use Rotate secret there first."
     DenyReason.BAD_CODE -> "That pairing code expired or was already used. Scan a fresh QR."
     DenyReason.UNKNOWN_DEVICE -> "Your computer doesn’t know this phone yet. Scan a pairing QR."
     DenyReason.KICKED -> "Your computer disconnected this phone. Pair it again."
@@ -45,9 +55,17 @@ fun ConnectionBanner(s: ComputersState, onPair: () -> Unit, onComputers: () -> U
     val active = s.active ?: return
     val p = Nekko.palette
     val denied = s.denied != null || s.conn == RelayState.DENIED
+    // An address the phone can never reach: say why instead of "Connecting…" forever.
+    val hint = RelayHint.problem(active.relayUrl, BuildConfig.DEBUG)
+    // A tailnet relay with Tailscale off on this phone: say so (re-read on each state change).
+    val tailnetHint = remember(s.conn, active.relayUrl) {
+        if (s.conn == RelayState.ONLINE) null else Tailnet.hint(active.relayUrl, TailnetStatus.phoneOnTailnet(), active.name)
+    }
     val (tone, line) = when {
         denied -> Tone.DANGER to deniedCopy(s.denied)
         s.conn == RelayState.ONLINE -> Tone.SUCCESS to "${active.name} is online"
+        hint != null -> Tone.DANGER to RelayHint.message(hint, active.name)
+        tailnetHint != null -> Tone.WARNING to tailnetHint
         s.conn == RelayState.OFFLINE -> Tone.WARNING to "${active.name} is offline. Open Nekko Agent on it."
         else -> Tone.WARNING to "Connecting to ${active.name}…"
     }
@@ -68,7 +86,7 @@ fun ConnectionBanner(s: ComputersState, onPair: () -> Unit, onComputers: () -> U
     ) {
         Dot(tone)
         Column(Modifier.weight(1f)) {
-            Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null || denied) 5 else 2, overflow = TextOverflow.Ellipsis)
             if (s.conn == RelayState.ONLINE && !denied) {
                 Text(
                     "End-to-end encrypted via ${Pairing.relayHost(active.relayUrl)}",

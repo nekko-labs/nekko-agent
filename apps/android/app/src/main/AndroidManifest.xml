@@ -5,6 +5,30 @@
     <!-- INTERNET only: the Google code scanner runs its own camera UI inside Play
          services, so this app never asks for the CAMERA permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Reconnect to the relay as soon as the phone changes network. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Local notifications when a chat on the computer finishes or needs you (asked from Settings). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- KeepAliveService: stays connected only while a chat on the computer is running. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 16 Live Updates: lets the running-chat notification show as a status-bar
+         chip. A normal (install-time) permission; the user can still turn it off. -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <!-- Dictation: asked the first time the composer's microphone is tapped. Audio stays in memory. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Settings → Vibration: a short buzz when the agent needs you (install-time, no prompt). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Android 14+: know a screenshot was taken, so the app lock's privacy cover does not
+         hide the app behind the screenshot toolbar (install-time, no prompt). -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
+
+    <!-- Android 11+: see the phone's speech recognizer (the "This phone" dictation engine). -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         android:name=".NekkoApp"
@@ -30,6 +54,10 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
+            <!-- Long-press the launcher icon: New chat (res/xml/shortcuts.xml). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -47,6 +75,62 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nekko-agent" />
             </intent-filter>
+            <!-- Share sheet: text or a link from another app pre-fills a new chat (never sent by itself). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
+
+        <!-- Composer → + → Take photo: the camera app writes one shot into the app's cache
+             (camera_photos.xml); it is read into memory and deleted at once. No CAMERA permission. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/camera_photos" />
+        </provider>
+
+        <!-- remoteMessaging: carries the conversation between the user's computer and this
+             phone; no runtime permission and, unlike dataSync, no daily time limit. -->
+        <service
+            android:name=".connection.KeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
+
+        <!-- Quick Settings tile: the widget's counts, redrawn on request only (ACTIVE_TILE). -->
+        <service
+            android:name=".widget.StatusTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_status"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
+        <!-- The approval notification's Deny (connection/DenyReceiver.kt). -->
+        <receiver
+            android:name=".connection.DenyReceiver"
+            android:exported="false" />
+        <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
+        <receiver
+            android:name=".widget.StatusWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/status_widget_info" />
+        </receiver>
     </application>
 </manifest>

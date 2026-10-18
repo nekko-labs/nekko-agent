@@ -70,6 +70,12 @@ describe('PR milestones and composer actions', () => {
     expect(markup).toContain('justify-end gap-0');
     expect(markup).toContain('</p></div><div class="flex max-w-[55%]');
   });
+  it('opens upward: cards render above the toggle that sits on the footer divider', () => {
+    const markup = renderToStaticMarkup(<PrActionDock sessionId="s" prs={[pr]} urls={[url]} />);
+    expect(markup.indexOf('data-pr-actions=')).toBeLessThan(markup.indexOf('class="pr-deck-toggle"'));
+    expect(markup).toContain('data-floating="false"');
+    expect(renderToStaticMarkup(<PrActionDock sessionId="s" prs={[pr]} urls={[url]} floating />)).toContain('data-floating="true"');
+  });
   it.each(['merged', 'closed'] as const)('automatically collapses a %s PR in the dock', (state) => {
     const markup = renderToStaticMarkup(<PrActionDock sessionId="s" prs={[{ ...pr, state }]} urls={[url]} />);
     expect(markup).toContain('aria-expanded="false"');

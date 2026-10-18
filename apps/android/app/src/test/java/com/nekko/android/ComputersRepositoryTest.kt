@@ -1,5 +1,6 @@
 package com.nekko.android
 
+import com.nekko.android.data.ChatListCache
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.DEFAULT_COMPUTER_NAME
 import com.nekko.android.data.osName
@@ -10,6 +11,7 @@ import com.nekko.protocol.E2E
 import com.nekko.protocol.Events
 import com.nekko.protocol.PairingLink
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.SavedChatList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -43,9 +45,12 @@ class ComputersRepositoryTest {
     private val link = PairingLink("wss://relay.example.dev", room, key, pair = "ABC123")
     private val derived = ByteArray(32) { it.toByte() }
 
+    private val forgotten = mutableListOf<String>()
+
     private fun TestScope.repo(store: FakeStore = FakeStore(), remotes: FakeRemotes = FakeRemotes()): ComputersRepository {
         var n = 0
         return ComputersRepository(
+            onForget = { forgotten += it },
             store = store,
             remotes = remotes,
             scope = backgroundScope,
@@ -58,6 +63,105 @@ class ComputersRepositoryTest {
 
     private fun secretOf(store: FakeStore, id: String) =
         Json.parseToJsonElement(store.map.getValue(ComputersRepository.secretKey(id))).jsonObject
+
+    private class MemoryLists : ChatListCache {
+        val lists = mutableMapOf<String, SavedChatList>()
+        override fun load(computerId: String) = lists[computerId]
+        override fun save(computerId: String, list: SavedChatList) { lists[computerId] = list }
+        override fun remove(computerId: String) { lists.remove(computerId) }
+    }
+
+    private val listAnswers = FakeRemotes { c ->
+        when (c.channel) {
+            Channels.SESSIONS_SUMMARIES -> Json.parseToJsonElement(
+                """[{"id":"s1","title":"Fix it","updatedAt":5,"lastReplyText":"secret reply"},{"id":"sub","title":"x","updatedAt":9,"parentSessionId":"s1"}]""",
+            )
+            Channels.WORKSPACE_LIST -> Json.parseToJsonElement("""[{"id":"w","name":"App"}]""")
+            else -> FakeRemotes.defaultAnswer(c)
+        }
+    }
+
+    @Test
+    fun `the saved list shows until the computer answers and never keeps content`() = runTest {
+        val store = FakeStore()
+        val lists = MemoryLists()
+        val repo = repo(store, listAnswers)
+        repo.chatListCache = lists
+        val id = repo.pair(link)
+        runCurrent()
+        assertNull("nothing saved before the computer answers", lists.lists[id])
+        listAnswers.last.goOnline()
+        runCurrent()
+        val saved = lists.lists.getValue(id)
+        assertEquals(listOf("s1"), saved.summaries.map { it.id })
+        assertEquals(listOf("App"), saved.folders.map { it.name })
+        assertFalse(saved.json().toString().contains("secret"))
+        assertNull(repo.state.value.savedListAt)
+
+        // Next launch, the computer unreachable: the saved list, marked as saved.
+        val again = repo(store, FakeRemotes())
+        again.chatListCache = lists
+        again.load()
+        runCurrent()
+        assertEquals(listOf("Fix it"), again.state.value.summaries.map { it.title })
+        assertEquals(listOf("w"), again.state.value.workspaces.map { it.id })
+        assertEquals(1_000L, again.state.value.savedListAt)
+
+        again.forget(id)
+        runCurrent()
+        assertNull("forgetting a computer drops its list", lists.lists[id])
+    }
+
+    @Test
+    fun `nothing is kept until the setting is turned on`() = runTest {
+        val repo = repo(remotes = listAnswers)
+        val id = repo.pair(link)
+        runCurrent()
+        listAnswers.last.goOnline()
+        runCurrent()
+        val lists = MemoryLists()
+        assertTrue(lists.lists.isEmpty())
+        repo.chatListCache = lists
+        assertEquals("turned on while online: the list as it is now", listOf("s1"), lists.lists[id]?.summaries?.map { it.id })
+        repo.chatListCache = null
+        assertNull(repo.state.value.savedListAt)
+    }
+
+    @Test
+    fun `the saved list's note says when and that it is not live`() {
+        val zone = java.time.ZoneOffset.UTC
+        val now = 1_800_000_000_000L
+        val today = com.nekko.android.ui.screens.savedListNote(now - 600_000, "Mac", now, zone)
+        assertTrue(today, today.startsWith("Saved list from ") && today.endsWith("It updates when Mac answers."))
+        val older = com.nekko.android.ui.screens.savedListNote(now - 3 * 86_400_000L, "Mac", now, zone)
+        assertTrue("an older list also names the day", older.length > today.length)
+    }
+
+    @Test
+    fun `the connection log follows the active computer and holds no secrets`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        val a = repo.pair(link)
+        runCurrent()
+        remotes.last.status.value = com.nekko.protocol.RelayStatus(RelayState.CONNECTING, "handshake timed out")
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        val states = repo.connectionLog.value.map { it.state }
+        assertEquals(RelayState.CONNECTING, states.first())
+        assertEquals(RelayState.ONLINE, states.last())
+        assertTrue(repo.connectionLog.value.any { it.detail == "handshake timed out" })
+        val text = repo.connectionLogText()
+        assertTrue(text, text.startsWith("Relay: relay.example.dev (internet)"))
+        assertFalse(text.contains(room) || text.contains(key) || text.contains("ABC123"))
+
+        repo.connect(a)
+        runCurrent()
+        assertTrue("reconnecting the same computer keeps its history", repo.connectionLog.value.size > states.size)
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key))
+        runCurrent()
+        assertEquals("another computer starts its own", listOf(RelayState.CONNECTING), repo.connectionLog.value.map { it.state }.distinct())
+    }
 
     @Test
     fun `pairing stores the secret, connects, and drops the pair code once welcomed`() = runTest {
@@ -259,6 +363,37 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `load connects to the phone's default computer when it is still paired`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val first = repo(store, remotes)
+        val a = first.pair(link)
+        val b = first.pair(link.copy(relayUrl = "wss://other.example.dev"))
+        runCurrent()
+        assertEquals(b, first.state.value.activeId) // the last one paired is the last used
+        val second = repo(store, remotes)
+        second.load(preferredId = a)
+        runCurrent()
+        assertEquals(a, second.state.value.activeId)
+        val third = repo(store, remotes)
+        third.load(preferredId = "gone")
+        runCurrent()
+        assertEquals(a, third.state.value.activeId) // an unknown default falls back to the last used
+        val fourth = repo(store, remotes)
+        fourth.load()
+        runCurrent()
+        assertEquals(a, fourth.state.value.activeId) // no default: as before
+    }
+
+    @Test
+    fun `forgetting a computer tells the phone's other settings`() = runTest {
+        val r = repo()
+        r.pair(link)
+        r.forget("id-1")
+        assertEquals(listOf("id-1"), forgotten)
+    }
+
+    @Test
     fun `loadModels caches per provider`() = runTest {
         val remotes = FakeRemotes { c ->
             if (c.channel == Channels.MODELS_LIST) {
@@ -313,6 +448,76 @@ class ComputersRepositoryTest {
         val again = repo.loadAllModels(force = true)
         assertEquals(listOf("opus"), again[1].models?.map { it.id })
         assertNull(again[1].error)
+    }
+
+    @Test
+    fun `the computer's phone-settable settings are read, changed, and the reply is what shows`() = runTest {
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.SETTINGS_GET -> buildJsonObject { put("defaultChatMode", "ask"); put("chatPaneAction", "complete") }
+                // The computer answers with its reduced view after saving.
+                Channels.SETTINGS_UPDATE -> buildJsonObject { put("defaultChatMode", "yolo"); put("chatPaneAction", "complete") }
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.ASK, repo.state.value.pcSettings.defaultChatMode)
+        repo.updatePcSettings(com.nekko.protocol.PcSettings.patch(mode = com.nekko.protocol.PcSettings.ChatMode.YOLO))
+        val sent = remotes.last.calls.last { it.channel == Channels.SETTINGS_UPDATE }
+        assertEquals("""{"defaultChatMode":"yolo"}""", sent.args.single().toString())
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.YOLO, repo.state.value.pcSettings.defaultChatMode)
+    }
+
+    @Test
+    fun `complete archives and keeps the chat as completed, restore brings it back, delete removes it`() = runTest {
+        val remotes = FakeRemotes { c ->
+            if (c.channel == Channels.SESSIONS_SUMMARIES) buildJsonArray {
+                add(buildJsonObject { put("id", "s1"); put("title", "One"); put("updatedAt", 5) })
+                add(buildJsonObject { put("id", "s2"); put("title", "Two"); put("updatedAt", 6); put("archivedAt", 7) })
+            } else FakeRemotes.defaultAnswer(c)
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        // Completed chats come down with the active ones.
+        assertEquals(listOf("s2", "s1"), repo.state.value.summaries.map { it.id })
+        assertTrue(repo.state.value.summaries.first { it.id == "s2" }.archived)
+
+        repo.completeChat("s1")
+        val complete = remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }
+        assertEquals("\"s1\"", complete.args[0].toString())
+        assertEquals("""{"archivedAt":1000}""", complete.args[1].toString())
+        val s1 = repo.state.value.summaries.first { it.id == "s1" }
+        assertTrue(s1.archived)
+        assertEquals(1000L, s1.archivedAt)
+
+        repo.restoreChat("s2")
+        val restore = remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }
+        assertEquals("\"s2\"", restore.args[0].toString())
+        assertEquals("""{"archivedAt":null}""", restore.args[1].toString())
+        assertFalse(repo.state.value.summaries.first { it.id == "s2" }.archived)
+
+        repo.deleteChat("s2")
+        assertEquals("\"s2\"", remotes.last.calls.last { it.channel == Channels.SESSION_DELETE }.args.single().toString())
+        assertEquals(listOf("s1"), repo.state.value.summaries.map { it.id })
+    }
+
+    @Test
+    fun `coming back to the app re-reads the chat list`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        val before = remotes.last.channels().count { it == Channels.SESSIONS_SUMMARIES }
+        repo.nudge()
+        advanceTimeBy(601)
+        runCurrent()
+        assertEquals(before + 1, remotes.last.channels().count { it == Channels.SESSIONS_SUMMARIES })
     }
 
     @Test

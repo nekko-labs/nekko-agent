@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { DEFAULT_GUARDRAILS, promptCachingEnabled } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, promptCachingEnabled } from '@nekko-agent/shared';
 import type { AppSettings, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
@@ -16,6 +16,9 @@ import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
 import { hasAppChrome } from '../chrome.js';
 import { ServiceLoadState } from '../components/ServiceLoadState.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
+import { SettingsSearch } from '../components/SettingsSearch.js';
+import { WallLayoutSettings } from './WallLayoutSettings.js';
+import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
   { value: 'workspace-jail', label: 'Workspace jail', desc: 'File access is confined to your added folders.' },
@@ -36,6 +39,7 @@ export function SettingsView() {
   const { applyTheme, onboardingOpen, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
   const prevOnboardingOpen = useRef(onboardingOpen);
+  const pageRef = useRef<HTMLDivElement>(null);
   const reload = useCallback(() => refreshSettings(false), [refreshSettings]);
 
   useEffect(() => { void reload(); }, [reload]);
@@ -73,18 +77,15 @@ export function SettingsView() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div ref={pageRef} className="mx-auto max-w-3xl px-8 py-8">
         {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
 
         {/* Appearance */}
         <section className="card mt-6 p-5">
-          <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2></div>
+          <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2><SettingsSearch root={pageRef} /></div>
           <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
-          <div className="mt-2 flex min-h-[40px] items-center justify-between">
-            <span className="text-[13px]">{tr('settings.mascot')}</span>
-            <Toggle on={settings.mascotEnabled} onChange={(v) => update({ mascotEnabled: v })} />
-          </div>
+
           <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
             <div className="min-w-0">
               <span className="text-[13px]">{tr('settings.language')}</span>
@@ -104,7 +105,7 @@ export function SettingsView() {
           <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
             <div className="min-w-0">
               <label htmlFor="chat-pane-action" className="text-[13px]">Chat pane top-right action</label>
-              <p className="text-[11px] text-ink-faint">Complete keeps chats under Completed for 60 days. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
+              <p className="text-[11px] text-ink-faint">The X completes a chat and keeps it under Completed for 60 days. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
             </div>
             <select
               id="chat-pane-action"
@@ -114,6 +115,22 @@ export function SettingsView() {
             >
               <option value="complete">Complete (default)</option>
               <option value="delete">Delete</option>
+            </select>
+          </div>
+          <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
+            <div className="min-w-0">
+              <label htmlFor="auto-complete-after" className="text-[13px]">Complete idle agents after</label>
+              <p className="text-[11px] text-ink-faint">Agents with no activity for this long are completed, like pressing their X. Pinned, running, waiting and sub-agent chats are skipped. Restore any from Show completed.</p>
+            </div>
+            <select
+              id="auto-complete-after"
+              className="input max-w-[180px] py-1.5"
+              value={autoCompleteDays(settings.autoCompleteAfterDays)}
+              onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}
+            >
+              {AUTO_COMPLETE_CHOICES.map((c) => (
+                <option key={c.days} value={c.days}>{c.label}{c.days === AUTO_COMPLETE_DEFAULT_DAYS ? ' (default)' : ''}</option>
+              ))}
             </select>
           </div>
           <div className="mt-2 flex min-h-[40px] items-center justify-between">
@@ -135,8 +152,11 @@ export function SettingsView() {
           </div>
         </section>
 
+        <DesktopBehaviorSection settings={settings} update={update} />
+        <FunSection settings={settings} update={update} />
         <section className="card mt-5 p-5">
           <h2 className="font-semibold">Command Center</h2>
+          <WallLayoutSettings settings={settings} update={update} />
           <label className="mt-3 flex items-center justify-between gap-3 text-[13px]">Auto-add new agents
             <input type="checkbox" checked={loadWallState(localStorage, settings.commandWall).autoAdd} onChange={async (e) => {
               const wall = { ...loadWallState(localStorage, settings.commandWall), autoAdd: e.target.checked };
@@ -808,7 +828,12 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
   const refresh = useCallback(() => {
     window.nekko.listChatWorktrees().then(setWorktrees).catch((e) => { setWorktrees([]); setMessage(String((e as Error).message ?? e)); });
   }, []);
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+    // The host removes merged worktrees in the background; re-read while this is open.
+    const t = window.setInterval(refresh, 60_000);
+    return () => window.clearInterval(t);
+  }, [refresh]);
   const remove = async (w: ChatWorktreeInfo) => {
     setBusy(w.root);
     setMessage(null);
@@ -848,6 +873,13 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
         </select>
       </label>
       <p className="mt-2 text-[11px] text-ink-faint">Committed HEAD excludes local edits and shows a notice at startup. Copying local edits includes tracked changes only, not untracked files, secrets, or build artifacts.</p>
+      <label className="mt-3 flex items-center justify-between gap-3 text-[13px]">
+        <span>
+          Remove worktrees after their PR merges
+          <span className="mt-0.5 block text-[11px] text-ink-faint">Checked hourly. A worktree with uncommitted or untracked files, or whose chat is running, is kept. Continuing the chat later restores its checkout.</span>
+        </span>
+        <input type="checkbox" className="h-4 w-4 shrink-0" checked={settings.gitManagement?.removeMerged !== false} onChange={(e) => update({ gitManagement: { ...settings.gitManagement, removeMerged: e.target.checked } })} />
+      </label>
 
       {settings.workspaces.length > 0 && (
         <div className="mt-4 border-t border-line pt-3">

@@ -1,11 +1,15 @@
 import type { AgentEvent, ChatMessage, EffortLevel, ToolCall, ToolResult } from '@nekko-agent/shared';
-import { COMPACTION_PREAMBLE, latestCompactionIndex } from '@nekko-agent/shared';
+import { COMPACTION_PREAMBLE, isContextOverflowError, latestCompactionIndex } from '@nekko-agent/shared';
+import { ELIDE_ALL, applyElision, elidable, elisionFor } from './fit.js';
 import type { Provider, ToolSpec } from '../providers/types.js';
 import { BUILTIN_TOOLS } from './tools.js';
 import { RUNAWAY_NOTE, createRunawayGuard } from './runaway.js';
 import { INTERRUPTED_NOTE, RESUME_PROMPT, repairInterruptedHistory } from './resume.js';
 import { LOOP_WRAP_UP_PROMPT, createLoopDetector, loopNote, loopNudge } from './progress.js';
-import { MAX_STREAM_ATTEMPTS, ProviderHttpError, isTransientProviderError, retryDelayMs } from '../providers/errors.js';
+import { MAX_NETWORK_STREAM_ATTEMPTS, MAX_STREAM_ATTEMPTS, ProviderHttpError, isNetworkProviderError, isTransientProviderError, retryDelayMs } from '../providers/errors.js';
+import { withoutImages } from '../providers/media.js';
+
+export { withoutImages };
 
 /** Wait, or stop waiting the moment the run is aborted. */
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -51,8 +55,21 @@ export interface RunAgentOptions {
    * loops so they don't replay an ever-growing transcript every turn.
    */
   maxHistoryTurns?: number;
+  /**
+   * The model's context window in tokens. When set, older tool outputs are
+   * elided from what is sent once the prompt nears it (fit.ts), so a long run
+   * on a small local model keeps going instead of overflowing.
+   */
+  contextWindow?: number;
   /** Hard cap on tokens one provider response may generate (see MAX_OUTPUT_TOKENS_DEFAULT). */
   maxOutputTokens?: number;
+  /**
+   * False when the model is known not to take images (a local model with no
+   * projector, a catalog that lists text only). Pictures in the history are
+   * then replaced with a note on the way out, so one attachment cannot leave
+   * every later turn failing. Absent or true sends them as before.
+   */
+  imageInput?: boolean;
   /**
    * Continue a run that stopped part-way rather than starting the turn over.
    * `history` is repaired first (see resume.ts) and the model is told to build on
@@ -177,6 +194,13 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
   const tools = opts.tools ?? BUILTIN_TOOLS;
   let route = { provider: opts.provider, model: opts.model, onHeaders: opts.onHeaders, maxOutputTokens: opts.maxOutputTokens };
   let switched = false;
+  // How many of the oldest bulky tool outputs this run elides from what it
+  // sends (fit.ts). Only grows, so consecutive requests share their prefix.
+  let elided = 0;
+  // A context-overflow error gets one retry with everything eligible elided.
+  let squeezed = false;
+  /** Elidable tool outputs in the last request: whether a squeeze could still help. */
+  let sentEligible = 0;
 
   // Stream one provider response, yielding its events and accumulating the
   // result into `turn`. `extraMessages` are appended to the sent history only
@@ -198,10 +222,16 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
       else opts.signal.addEventListener('abort', onAbort, { once: true });
     }
 
+    const seen = windowHistory(fromLatestCompaction(opts.history), opts.maxHistoryTurns).map(asSeenByChatModel);
+    const full = [...(opts.imageInput === false ? seen.map(withoutImages) : seen), ...extraMessages];
+    elided = elisionFor(opts.system, sendTools, full, opts.contextWindow, elided);
+    sentEligible = elidable(full).length;
+    const messages = applyElision(full, elided);
+
     try {
       for await (const chunk of route.provider.chat({
         model: route.model,
-        messages: [...windowHistory(fromLatestCompaction(opts.history), opts.maxHistoryTurns).map(asSeenByChatModel), ...extraMessages],
+        messages,
         system: opts.system,
         tools: sendTools,
         temperature: opts.temperature,
@@ -284,8 +314,19 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
         yield* stream(turn, extraMessages, sendTools);
         return;
       } catch (e) {
+        // The prompt no longer fits: send it once more with every older tool
+        // output elided before giving up on the reply.
+        if (!opts.signal?.aborted && !squeezed && isContextOverflowError(e) && elided < sentEligible) {
+          squeezed = true;
+          elided = ELIDE_ALL;
+          Object.assign(turn, before, { calls: [...before.calls] });
+          yield { type: 'retry', sessionId: opts.sessionId, attempt, maxAttempts: MAX_STREAM_ATTEMPTS, delayMs: 0, reason: 'The conversation no longer fits the context window: retrying with older tool output left out' };
+          attempt = 0;
+          continue;
+        }
         if (opts.signal?.aborted || !isTransientProviderError(e)) throw e;
-        if (attempt >= MAX_STREAM_ATTEMPTS) {
+        const maxAttempts = isNetworkProviderError(e) ? MAX_NETWORK_STREAM_ATTEMPTS : MAX_STREAM_ATTEMPTS;
+        if (attempt >= maxAttempts) {
           if (switched || !opts.failover) throw e;
           const replacement = await opts.failover(e);
           if (!replacement || opts.signal?.aborted || replacement.provider.config.id === route.provider.config.id) throw e;
@@ -305,7 +346,7 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
           type: 'retry',
           sessionId: opts.sessionId,
           attempt,
-          maxAttempts: MAX_STREAM_ATTEMPTS,
+          maxAttempts,
           delayMs,
           reason: (e as Error).message,
         };
@@ -348,11 +389,10 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
   // model one transient turn to push against when the last thing in it is its own
   // cut-off reply (a transcript ending on a tool result already has its opening).
   let resumeExtra: ChatMessage[] = [];
-  if (opts.resume) {
-    repairInterruptedHistory(opts.history);
-    if (opts.history[opts.history.length - 1]?.role === 'assistant') {
-      resumeExtra = [{ id: id('nudge'), role: 'user', content: RESUME_PROMPT, createdAt: Date.now() }];
-    }
+  // A normal follow-up after Stop needs the same valid history as Resume.
+  repairInterruptedHistory(opts.history);
+  if (opts.resume && opts.history[opts.history.length - 1]?.role === 'assistant') {
+    resumeExtra = [{ id: id('nudge'), role: 'user', content: RESUME_PROMPT, createdAt: Date.now() }];
   }
 
   // A transient nudge used to recover from an empty response (not persisted).

@@ -1,10 +1,12 @@
 //! Sandbox chats' containers, owned here (PF14): the `sandbox:*` channels and
 //! a sandbox chat's tool calls, ported from `packages/host/src/execution-router.ts`
 //! over `nekko-sandbox`. The daemon is the only owner of the containers, their
-//! manifests and their runtime state; the TS host's sandbox turn asks first
-//! and sends the call here (`sandbox:tool`), and its Stop arrives as
-//! `sandbox:abort`, which stops the container itself (a cancelled `docker
-//! exec` alone leaves its shell running).
+//! manifests and their runtime state. A sandbox turn the daemon drives
+//! (turns.rs) asks first and runs each call here itself ([`Sandboxes::run_tool`]),
+//! and its Stop stops the container ([`Sandboxes::abort`]); a turn the TS host
+//! still runs (`NEKKO_AGENT_LOOP=ts`) sends the call here (`sandbox:tool`) and
+//! its Stop as `sandbox:abort`. Stopping the container itself matters: a
+//! cancelled `docker exec` alone leaves its shell running.
 
 use crate::routes::Ctx;
 use nekko_js as js;
@@ -29,8 +31,6 @@ pub const CHANNELS: &[&str] = &[
     "sandbox:tool",
     "sandbox:abort",
 ];
-
-pub const SANDBOX_TOOLS: &[&str] = &["read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "bash"];
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -184,6 +184,12 @@ impl Sandboxes {
 
     /// `runtime(s)`: the chat's container handle, made once per identity.
     async fn runtime(&self, ctx: &Ctx, s: &Value) -> Result<Arc<Runtime>, String> {
+        let settings = crate::settings::current(ctx).await;
+        self.runtime_with(s, &settings)
+    }
+
+    /// `runtime(s)` with the settings at hand (the saved folders' paths).
+    fn runtime_with(&self, s: &Value, settings: &Value) -> Result<Arc<Runtime>, String> {
         let Some(sb) = s.get("sandbox").filter(|v| js::truthy(Some(v))) else {
             return Err("Configure a sandbox explicitly before sending. No host fallback is available.".into());
         };
@@ -197,7 +203,6 @@ impl Sandboxes {
         {
             return Err("Sandbox folder selection changed. Create a new sandbox chat.".into());
         }
-        let settings = crate::settings::current(ctx).await;
         let workspaces = settings.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default();
         let mut folders = Vec::new();
         for wid in sb["sourceWorkspaceIds"].as_array().cloned().unwrap_or_default() {
@@ -222,7 +227,12 @@ impl Sandboxes {
     }
 
     async fn ready(&self, ctx: &Ctx, s: &Value) -> Result<Arc<Runtime>, String> {
-        let r = self.runtime(ctx, s).await?;
+        let settings = crate::settings::current(ctx).await;
+        self.ready_with(s, &settings).await
+    }
+
+    async fn ready_with(&self, s: &Value, settings: &Value) -> Result<Arc<Runtime>, String> {
+        let r = self.runtime_with(s, settings)?;
         if let Some(e) = lock(&r.state).error.clone() {
             return Err(e);
         }
@@ -292,19 +302,29 @@ impl Sandboxes {
         Ok(json!({ "identity": r.identity, "diffId": digest, "changes": changes }))
     }
 
-    /// `executeSandboxTool` after the host's approval.
+    /// `executeSandboxTool` after the host's approval (`sandbox:tool`).
     async fn tool(&self, ctx: &Ctx, id: &str, call: &Value) -> Value {
+        let session = self.sandbox_session(ctx, id);
+        let settings = crate::settings::current(ctx).await;
+        self.run_tool(session, &settings, call).await
+    }
+
+    /// `executeSandboxTool` after the approval: the call in the chat's
+    /// container. `session` is the chat as stored (or why it is not a sandbox
+    /// chat); a daemon-driven sandbox turn calls this directly (turns.rs).
+    pub async fn run_tool(&self, session: Result<Value, String>, settings: &Value, call: &Value) -> Value {
         let call_id = call.get("id").cloned().unwrap_or(json!(""));
         let name = call.get("name").and_then(Value::as_str).unwrap_or_default();
         let failure = |output: String| json!({ "toolCallId": call_id, "output": output, "isError": true });
-        if !SANDBOX_TOOLS.contains(&name) {
-            return failure(format!(
-                "Unsupported sandbox tool: {name}. Host controls, network, connectors, MCP and delegation are denied. No host fallback."
-            ));
+        if let Err(e) = nekko_turn::variants::sandbox_tool_check(name) {
+            return failure(e);
         }
         let run = async {
-            let s = self.sandbox_session(ctx, id)?;
-            let r = self.runtime(ctx, &s).await?;
+            let s = session?;
+            if execution_mode(&s) != "sandbox" {
+                return Err("Sandbox session required".to_string());
+            }
+            let r = self.runtime_with(&s, settings)?;
             {
                 let mut st = lock(&r.state);
                 if st.active {
@@ -314,7 +334,7 @@ impl Sandboxes {
                 st.signal = Some(Cancel::new());
             }
             let outcome = async {
-                self.ready(ctx, &s).await?;
+                self.ready_with(&s, settings).await?;
                 if lock(&r.state).signal.as_ref().is_some_and(Cancel::is_cancelled) {
                     return Err("Sandbox execution cancelled".to_string());
                 }
@@ -336,7 +356,7 @@ impl Sandboxes {
     }
 
     /// The chat's Stop, during a sandbox tool call.
-    fn abort(&self, id: &str) -> bool {
+    pub fn abort(&self, id: &str) -> bool {
         let Some(r) = lock(&self.runtimes).get(id).cloned() else { return false };
         let signal = lock(&r.state).signal.clone();
         match signal {

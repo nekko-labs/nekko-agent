@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo, Socket } from 'node:net';
 import { URL } from 'node:url';
 import { IpcEvents } from '@nekko-agent/shared';
-import { createDispatcher, type Host } from '@nekko-agent/host';
+import { createDispatcher, isDaemonCopy, type Host } from '@nekko-agent/host';
 import { acceptKey, encodeFrame, FrameReader, OP_CLOSE, OP_PING, OP_PONG, OP_TEXT } from './ws.js';
 
 /**
@@ -11,7 +11,8 @@ import { acceptKey, encodeFrame, FrameReader, OP_CLOSE, OP_PING, OP_PONG, OP_TEX
  * the daemon is unavailable, see `main/engine-process.ts`).
  *
  * The same three routes the daemon serves, with the same shapes:
- * `POST /api/:channel`, `/api/events` (every host event) and `/api/ws`
+ * `POST /api/:channel`, `/api/events` (every host event; `?only=` one
+ * channel, `?forDaemon=1` none of the copies the daemon already has) and `/api/ws`
  * (requests, replies and events on one socket). A per-launch token guards all
  * of it, and it binds 127.0.0.1 only.
  */
@@ -24,7 +25,26 @@ export interface Wire {
   close(): void;
 }
 
-const BODY_LIMIT = 25 * 1024 * 1024;
+// The same limits as the daemon (crates/nekkod/src/wire.rs): the web edition's
+// public 25 MB for every call, and 64 MB for `chat:turn`, whose send options
+// carry the user's attached images inline.
+const CALL_BODY_LIMIT = 25 * 1024 * 1024;
+const TURN_BODY_LIMIT = 64 * 1024 * 1024;
+
+function bodyLimit(channel: string): number {
+  return channel === 'chat:turn' ? TURN_BODY_LIMIT : CALL_BODY_LIMIT;
+}
+
+/**
+ * A DNS-rebound page reaches us under its own host name; refuse it, as the
+ * daemon does. A missing Host header passes (HTTP/1.0 clients), the token
+ * still guards the call.
+ */
+function hostIsLoopback(host: string | undefined): boolean {
+  if (host === undefined) return true;
+  const name = host.replace(/:\d+$/, '');
+  return name === '127.0.0.1' || name === 'localhost' || name === '[::1]';
+}
 
 function tokenMatches(expected: string, got: string | undefined | null): boolean {
   if (!got) return false;
@@ -45,15 +65,26 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
-async function readBody(req: IncomingMessage): Promise<string | null> {
+/**
+ * The body, or `null` once it passes `limit`. Over the limit the rest is
+ * discarded as it arrives, so the 413 reaches the client without a reset
+ * (leaving the iterator early would destroy the request and the socket).
+ */
+async function readBody(req: IncomingMessage, limit: number): Promise<string | null> {
   const chunks: Buffer[] = [];
   let size = 0;
+  let over = false;
   for await (const chunk of req) {
+    if (over) continue;
     size += (chunk as Buffer).length;
-    if (size > BODY_LIMIT) return null;
+    if (size > limit) {
+      over = true;
+      chunks.length = 0;
+      continue;
+    }
     chunks.push(chunk as Buffer);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  return over ? null : Buffer.concat(chunks).toString('utf8');
 }
 
 /** Every host event name, keyed to the channel clients know it by. */
@@ -77,10 +108,11 @@ export function startWire(opts: {
   const server = createServer((req, res) => {
     void (async () => {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+      if (!hostIsLoopback(req.headers.host)) return sendJson(res, 403, { error: 'unauthorized' });
       if (!tokenMatches(token, bearerOf(req, url))) return sendJson(res, 401, { error: 'unauthorized' });
       const channel = url.pathname.startsWith('/api/') ? decodeURIComponent(url.pathname.slice(5)) : '';
       if (req.method !== 'POST' || !channel) return sendJson(res, 404, { error: 'not found' });
-      const raw = await readBody(req);
+      const raw = await readBody(req, bodyLimit(channel));
       if (raw === null) return sendJson(res, 413, { error: 'body too large' });
       let args: unknown[] = [];
       try {
@@ -113,7 +145,11 @@ export function startWire(opts: {
       socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
       return;
     }
-    if ((origin && !origins.includes(origin)) || !tokenMatches(token, bearerOf(req, url))) {
+    if ((origin && !origins.includes(origin)) || !hostIsLoopback(req.headers.host)) {
+      socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+      return;
+    }
+    if (!tokenMatches(token, bearerOf(req, url))) {
       socket.end('HTTP/1.1 401 Unauthorized\r\n\r\n');
       return;
     }
@@ -128,8 +164,13 @@ export function startWire(opts: {
       if (!socket.destroyed) socket.write(encodeFrame(Buffer.from(text, 'utf8'), OP_TEXT));
     };
     const only = url.searchParams.get('only');
+    // The daemon's own subscription: none of the copies it already has.
+    const forDaemon = url.searchParams.get('forDaemon') === '1';
     const unsubscribe = EVENTS.filter(([, channel]) => !only || channel === only).map(([name, channel]) => {
-      const listener = (payload: unknown) => send(JSON.stringify({ channel, payload }));
+      const listener = (payload: unknown) => {
+        if (forDaemon && isDaemonCopy(name, payload)) return;
+        send(JSON.stringify({ channel, payload }));
+      };
       host.events.on(name, listener);
       return () => host.events.off(name, listener);
     });

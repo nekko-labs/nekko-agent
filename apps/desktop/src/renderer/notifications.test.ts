@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '@nekko-agent/shared';
 
-const state = vi.hoisted(() => ({ view: 'chat', activeSessionId: 'a', setActiveSession: vi.fn(), setView: vi.fn() }));
+const state = vi.hoisted(() => ({ view: 'chat', activeSessionId: 'a', setActiveSession: vi.fn(), setView: vi.fn(), openChatPane: vi.fn() }));
 const storeSubscription = vi.hoisted(() => ({ subscribe: vi.fn((_listener: (next: any, previous: any) => void) => vi.fn()) }));
 vi.mock('./store.js', () => ({ useStore: { getState: () => state, subscribe: storeSubscription.subscribe } }));
 
@@ -66,6 +66,7 @@ describe('notification transport', () => {
     listener('nekko-agent://session/open?id=session-a');
     expect(state.setActiveSession).toHaveBeenCalledWith('session-a');
     expect(state.setView).toHaveBeenCalledWith('chat');
+    expect(state.openChatPane).toHaveBeenCalledWith('session-a');
     expect(notificationSessionId('nekko-agent://session/open?id=a%2Fb%20%3F')).toBe('a/b ?');
     for (const url of ['invalid', 'https://session/open?id=a', 'nekko-agent://chat/new', 'nekko-agent://session/open']) expect(notificationSessionId(url)).toBeNull();
   });

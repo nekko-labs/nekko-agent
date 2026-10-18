@@ -33,6 +33,9 @@ export function startDesktopNotifications(): () => void {
       const s = useStore.getState();
       s.setActiveSession(sessionId);
       s.setView('chat');
+      // Focus the session's workspace pane (or create one if it was closed);
+      // setActiveSession/setView alone never touch the workbench layout.
+      s.openChatPane(sessionId);
     });
     return () => { offStore(); offLink(); };
   }
@@ -60,6 +63,8 @@ export function startDesktopNotifications(): () => void {
         const s = useStore.getState();
         s.setActiveSession(notice.sessionId);
         s.setView('chat');
+        // Focus the session's workspace pane (or create one if it was closed).
+        s.openChatPane(notice.sessionId);
         n.close();
       };
       shown = [...shown.filter((x) => x !== n).slice(-7), n];

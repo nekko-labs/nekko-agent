@@ -72,7 +72,7 @@ try {
   const seeded = seedDataDir({ mockPort: 4591, chats: [10, 10] });
   const settingsFile = join(seeded.dir, 'settings.json');
   const settings = JSON.parse(readFileSync(settingsFile, 'utf8'));
-  settings.commandWall = { root: { id: 'native_split', dir: 'row', sizes: [.5, .5], children: seeded.ids.map(id => ({ id: 'pane_' + id, kind: 'chat', refId: id })) }, autoAdd: false, filter: 'all', layout: { mode: 'grid', cols: 2, rows: 1 }, dock: { side: 'right', show: false, panels: {}, minimized: {} }, folded: {}, composer: { side: 'bottom', align: 'center' }, insights: { panels: {} }, watermark: Date.now() };
+  settings.commandWall = { root: { id: 'native_split', dir: 'row', sizes: [.5, .5], children: seeded.ids.map(id => ({ id: 'pane_' + id, kind: 'chat', refId: id })) }, autoAdd: false, filter: 'all', layout: { mode: 'grid', cols: 2, rows: 1 }, dock: { side: 'right', show: false, monitors: {}, minimized: {} }, folded: {}, composer: { side: 'bottom', align: 'center' }, insights: { panels: {} }, watermark: Date.now() };
   writeFileSync(settingsFile, JSON.stringify(settings));
   const fullEntry = join(data, 'full-app'); mkdirSync(fullEntry);
   writeFileSync(join(fullEntry, 'package.json'), JSON.stringify({ name: 'nekko-agent-full-fixture', main: 'index.cjs' }));

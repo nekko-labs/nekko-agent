@@ -1,5 +1,5 @@
 import type { ChatMessage, ExecutionMode, OrchestrationSettings, ProviderConfig, QueuedPrompt, SendOptions, Session, WorkspaceFolder } from '@nekko-agent/shared';
-import { DEFAULT_ORCHESTRATION, DEFAULT_TURN_WRAPPER, getStrategy, orchestrationPromptHint, queueItemPayload } from '@nekko-agent/shared';
+import { DEFAULT_ORCHESTRATION, DEFAULT_TURN_WRAPPER, getStrategy, orchestrationPromptHint, queueItemPayload, toolAllowedOffline, workModePrompt, workModePrompts } from '@nekko-agent/shared';
 import {
   ASK_USER_TOOL,
   BUILTIN_TOOLS,
@@ -68,14 +68,17 @@ export function turnCanAsk(session: Pick<Session, 'parentSessionId' | 'taskId' |
 /** The tools a (non-sandbox) turn offers, in the order the model sees them. */
 export function turnTools(input: TurnToolInput): ToolSpec[] {
   const { session } = input;
-  if (input.offline) return [];
   const allowSpawn = getStrategy((input.orchestration ?? DEFAULT_ORCHESTRATION).strategy).allowsSpawn;
   const canAsk = turnCanAsk(session);
   const disabled = new Set(session.disabledTools ?? []);
   if (!allowSpawn || disabled.has('spawn_agent') || session.incognito) disabled.add('delegation_targets');
   if (!allowSpawn) disabled.add('spawn_agent');
   if (!input.allowBrowserControl || !canAsk) { disabled.add('browser'); disabled.add('capture'); }
-  const tools = [...BUILTIN_TOOLS, ...input.mcpTools, ...(!session.incognito && !session.trainingRunId ? [AGENT_WATCH_TOOL] : [])].filter((t) => !disabled.has(t.name));
+  const all = [...BUILTIN_TOOLS, ...input.mcpTools, ...(!session.incognito && !session.trainingRunId ? [AGENT_WATCH_TOOL] : [])].filter((t) => !disabled.has(t.name));
+  // Blocking the internet keeps the local tools (files, shell, desktop) and
+  // drops those that reach a network: fetch, the browser, MCP servers, and the
+  // agent tools that can route to a cloud provider.
+  const tools = input.offline ? all.filter((t) => toolAllowedOffline(t.name)) : all;
   // update_plan goes to every session: goal runs treat it as the execution
   // contract; ordinary chats publish it to the plan rail so the user sees the
   // plan the agent derived, not a re-listing of their own prompt.
@@ -87,7 +90,7 @@ export function turnTools(input: TurnToolInput): ToolSpec[] {
   if (session.trainingRunId) tools.push(REPORT_EXPERIMENT_TOOL, REPORT_ARTIFACT_TOOL);
   // Asking is only offered where somebody is there to answer.
   if (canAsk && !disabled.has(ASK_USER_TOOL.name)) tools.push(ASK_USER_TOOL);
-  if (input.decide && !disabled.has(DECIDE_TOOL.name)) tools.push(DECIDE_TOOL);
+  if (input.decide && !input.offline && !disabled.has(DECIDE_TOOL.name)) tools.push(DECIDE_TOOL);
   return tools;
 }
 
@@ -109,7 +112,7 @@ export function routingPrompt(providers: Array<Pick<ProviderConfig, 'id' | 'labe
   ].join('\n');
 }
 
-export const AGENT_WATCH_INSTRUCTIONS = 'When work must wait for PR checks or another background task, register agent_watch before ending the turn. State its id and wake condition; do not claim to be watching unless registration succeeded. Use a deadline so waiting cannot silently last forever. On wake, verify current status and re-arm if necessary. Do not register automatic continuations when waiting for a user decision, missing permission, credentials, or visual evidence that requires human action.';
+export const AGENT_WATCH_INSTRUCTIONS = 'Do not wait on PR checks to verify: run tests, visual checks and evidence while CI runs, and use the wait to finish remaining work (docs, spec, evidence, cleanup, the next independent task). When something still depends on a check or another background task, register agent_watch before ending the turn. State its id and wake condition; do not claim to be watching unless registration succeeded. Use a deadline so waiting cannot silently last forever. On wake, verify current status and re-arm if necessary. Do not register automatic continuations when waiting for a user decision, missing permission, credentials, or visual evidence that requires human action.';
 
 export const SANDBOX_INSTRUCTIONS = 'Sandbox: only folder-N copied paths are accessible. All tool actions require approval. No host controls, networking, MCP, delegation or host fallback.';
 
@@ -129,6 +132,8 @@ export interface TurnPromptInput {
   worktreeNotices: string[];
   contextBlock: string;
   platform: string;
+  /** The chat's work mode (see WORK_MODES); its text joins the instructions. */
+  workMode?: string;
 }
 
 /** The system prompt a turn sends. */
@@ -138,7 +143,7 @@ export function turnSystemPrompt(input: TurnPromptInput): string {
   return buildSystemPrompt({
     // The prompt reads only each folder's name and path.
     workspaces: input.workspaces as WorkspaceFolder[],
-    systemInstructions: [sandbox ? SANDBOX_INSTRUCTIONS : settings.systemInstructions, tools.some((t) => t.name === 'agent_watch') ? AGENT_WATCH_INSTRUCTIONS : ''].filter(Boolean).join('\n\n'),
+    systemInstructions: [sandbox ? SANDBOX_INSTRUCTIONS : settings.systemInstructions, tools.some((t) => t.name === 'agent_watch') ? AGENT_WATCH_INSTRUCTIONS : '', workModePrompt(input.workMode)].filter(Boolean).join('\n\n'),
     turnWrapper: sandbox ? DEFAULT_TURN_WRAPPER : settings.turnWrapper ?? DEFAULT_TURN_WRAPPER,
     aboutUser: sandbox ? undefined : settings.aboutUser,
     checkoutNotice: sandbox
@@ -171,7 +176,7 @@ export function applyTurnInput(session: Session, opts: SendOptions, now = Date.n
     ) {
       session.messages.pop();
     }
-  } else if (!opts.resume || opts.text.trim() || opts.images?.length) {
+  } else if (!opts.resume || opts.text.trim() || opts.images?.length || opts.videos?.length) {
     // Empty resume clicks add no synthetic user message, but explicit input is never discarded.
     const userMsg: ChatMessage = {
       id: `msg_${now.toString(36)}`,
@@ -179,6 +184,7 @@ export function applyTurnInput(session: Session, opts: SendOptions, now = Date.n
       content: opts.text,
       createdAt: now,
       ...(opts.images?.length ? { images: opts.images } : {}),
+      ...(opts.videos?.length ? { videos: opts.videos } : {}),
       ...(opts.skill ? { skill: opts.skill } : {}),
     };
     session.messages.push(userMsg);
@@ -294,5 +300,5 @@ export function hostToolApproval(name: string, mode: string | undefined, sandbox
 /** The send options that run a queued prompt next. */
 export function sendOptionsForQueuedItem(base: SendOptions, item: QueuedPrompt): SendOptions {
   const payload = queueItemPayload(item);
-  return { ...base, text: payload.text, images: payload.images, skill: payload.skill };
+  return { ...base, text: payload.text, images: payload.images, videos: payload.videos, skill: payload.skill };
 }

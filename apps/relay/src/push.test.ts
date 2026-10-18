@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateKeyPairSync, verify as cryptoVerify, createVerify } from 'node:crypto';
-import { makeApnsJwt, makeFcmAssertion } from './push.js';
+import { activityPayload, makeApnsJwt, makeFcmAssertion } from './push.js';
 
 const ecKeyP8 = () =>
   generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
@@ -51,5 +51,21 @@ describe('makeFcmAssertion', () => {
 
     const ok = createVerify('RSA-SHA256').update(`${h}.${p}`).verify(publicKey, Buffer.from(s, 'base64url'));
     expect(ok).toBe(true);
+  });
+});
+
+describe('activityPayload', () => {
+  it('builds content-free ActivityKit pushes', () => {
+    expect(activityPayload({ event: 'update', phase: 'approval', callId: 'tc1', severity: 'high' }, 100)).toEqual({
+      aps: {
+        timestamp: 100,
+        event: 'update',
+        'content-state': { phase: 'approval', step: '', steps: 0, callId: 'tc1', severity: 'high' },
+        alert: { title: 'Nekko Agent', body: 'A tool needs your approval.' },
+      },
+    });
+    expect(activityPayload({ event: 'end', phase: 'done' }, 100)).toEqual({
+      aps: { timestamp: 100, event: 'end', 'content-state': { phase: 'done', step: '', steps: 0 }, 'dismissal-date': 700 },
+    });
   });
 });

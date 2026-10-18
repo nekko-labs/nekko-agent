@@ -43,6 +43,18 @@ interface ApiReply<T> {
 /** Max body Telegram will accept in one message. */
 export const TELEGRAM_MESSAGE_LIMIT = 4096;
 
+/**
+ * The first 4096 UTF-16 units, stopping before a character the cut would
+ * split: half a surrogate pair is no character at all (`JSON.stringify` sends
+ * it as a lone `\ud83d` escape). The daemon's port cuts the same way
+ * (`nekko_js::slice16`), since a Rust string cannot hold half a character.
+ */
+export function cutForTelegram(text: string): string {
+  const cut = text.slice(0, TELEGRAM_MESSAGE_LIMIT);
+  const last = cut.charCodeAt(cut.length - 1);
+  return cut.length === TELEGRAM_MESSAGE_LIMIT && last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
 export class TelegramApi {
   constructor(
     private readonly token: string,
@@ -73,7 +85,7 @@ export class TelegramApi {
   sendMessage(chatId: number | string, text: string, keyboard?: InlineButton[][]): Promise<TelegramMessage> {
     return this.call('sendMessage', {
       chat_id: chatId,
-      text: text.slice(0, TELEGRAM_MESSAGE_LIMIT),
+      text: cutForTelegram(text),
       ...(keyboard?.length ? { reply_markup: { inline_keyboard: keyboard } } : {}),
     });
   }
@@ -81,7 +93,7 @@ export class TelegramApi {
   /** Edits are best-effort: a stale or unchanged body is a 400 we can ignore. */
   async editMessageText(chatId: number | string, messageId: number, text: string): Promise<void> {
     try {
-      await this.call('editMessageText', { chat_id: chatId, message_id: messageId, text: text.slice(0, TELEGRAM_MESSAGE_LIMIT) });
+      await this.call('editMessageText', { chat_id: chatId, message_id: messageId, text: cutForTelegram(text) });
     } catch {
       /* message deleted or identical content */
     }

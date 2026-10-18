@@ -1,5 +1,19 @@
 @import 'tailwindcss';
 
+/* Lilac / Lavender: the website's drifting pixel-dot field. It sits BEHIND
+   the app (z-index -1, above only the page background), so it shows in the
+   field around the floating panels while chat windows and every other panel,
+   which paint their own solid surface, cover it and keep text clear. Never
+   intercepts input. */
+.pixel-wave-background {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+}
+
 /* Faint seasonal decoration; never intercepts app input. */
 .autumn-background {
   position: fixed;
@@ -649,67 +663,163 @@
   color: var(--ink-faint);
 }
 
-@utility rail {
-  /* The collapsible left rail: 64px of icons at rest; hovering (or keyboard
-     focus inside) expands it over the content to reveal the labels. */
-  width: 64px;
-  transition:
-    width var(--dur-slow) var(--ease-out),
-    box-shadow var(--dur-slow) ease;
-  will-change: width;
-  &::after {
-    content: '';
-    position: absolute;
-    inset-block: 0;
-    right: 0;
-    width: 1px;
-    background: var(--line);
-    opacity: 0;
-    transition: opacity var(--dur-slow) ease;
-  }
-  &:hover {
-    width: 200px;
-    box-shadow: var(--shadow-md);
-  }
-  &:has(:focus-visible) {
-    width: 200px;
-    box-shadow: var(--shadow-md);
-  }
-  &:hover::after,
-  &:has(:focus-visible)::after {
-    opacity: 1;
-  }
-  &:hover .rail-label {
-    opacity: 1;
-    transform: none;
-    transition-delay: 0.05s;
-  }
-  &:has(:focus-visible) .rail-label {
-    opacity: 1;
-    transform: none;
-    transition-delay: 0.05s;
+/* Left rail: one SVG outline (components/RailBackdrop + railGeometry.ts). At
+   rest it is a hairline near the top of the window that swoops out to the icon
+   column and tapers back to a hairline below it. Opening moves every point to
+   the same x, so the whole rail becomes one even column. Both outlines share a
+   command list, so `d` interpolates between them. Plain (unlayered) rules, so
+   they win over the nav-item / active utilities inside the rail. */
+.rail {
+  --rail-w-rest: 52px;
+  --rail-w-open: 198px;
+  --rail-row: 40px;          /* one destination row (nav-item h-10) */
+  --rail-gap: 7px;           /* gap between rows */
+  --rail-ease: cubic-bezier(0.32, 0.72, 0, 1);   /* quick start, long soft settle */
+  --rail-slide: cubic-bezier(0.3, 1.25, 0.5, 1); /* the active tile: a hint of spring */
+  --rail-open-ms: 440ms;
+  --rail-close-ms: 320ms;
+  --rail-slide-ms: 420ms;
+  --rail-open-delay: 50ms;   /* hover intent: sweeping past never opens it */
+  --rail-close-delay: 120ms; /* and a brief slip out never snaps it shut */
+
+  width: var(--rail-w-rest);
+  padding-inline: 6px;
+  justify-content: flex-start;
+  isolation: isolate;
+  /* Only the button column and the painted outline receive input. */
+  pointer-events: none;
+  transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
+}
+.rail-space-before { flex: 1 1 0; }
+/* Spare space splits 1:4 above/below the destinations, so they sit high. On
+   short windows the spacers collapse and the destinations scroll instead. */
+.rail-space-after { flex: 4 1 0; }
+.rail-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+.rail-backdrop {
+  position: absolute;
+  left: -6px;                 /* x = 0 is the window wall */
+  width: var(--rail-w-open);
+  z-index: -1;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 0 transparent);
+  transition: filter var(--rail-close-ms) ease var(--rail-close-delay);
+  & path {
+    d: var(--rail-rest);
+    fill: color-mix(in srgb, var(--accent) 8%, var(--paper));
+    pointer-events: visiblePainted;  /* pointing at the shape keeps it open */
+    transition:
+      d var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay),
+      fill var(--rail-close-ms) ease var(--rail-close-delay);
   }
 }
 
-@utility rail-label {
-  opacity: 0;
-  transform: translateX(-8px);
+.rail-destinations {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  gap: var(--rail-gap);
+  min-height: 0;
+  /* Reach the wall so the active notch is not clipped by the scroller. */
+  margin-left: -6px;
+  padding-left: 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  pointer-events: auto;
+  scrollbar-width: thin;
+  & > .nav-item { flex-shrink: 0; }
+}
+
+/* One tile slides to the active row instead of each row painting its own. */
+.rail-indicator {
+  position: absolute;
+  top: var(--rail-head, 0px);
+  left: 6px;
+  right: 0;
+  height: var(--rail-row);
+  border-radius: 12px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  transform: translateY(calc(var(--i, 0) * (var(--rail-row) + var(--rail-gap))));
+  transition:
+    transform var(--rail-slide-ms) var(--rail-slide),
+    opacity 160ms ease;
+  /* The brand-gradient notch on the wall travels with it. */
+  &::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 50%;
+    width: 3px;
+    height: 18px;
+    border-radius: 0 3px 3px 0;
+    background: var(--brand-grad);
+    transform: translateY(-50%);
+  }
+}
+
+.rail .nav-item {
+  z-index: 1;
+  transition: color 140ms ease, background-color 140ms ease;
+  &:hover { color: var(--ink); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  &.active { color: var(--accent); background: transparent; }
+  &.active::before { content: none; }
+}
+
+.rail-label {
   white-space: nowrap;
   pointer-events: none;
+  opacity: 0;
+  transform: translateX(-6px);
+  filter: blur(2px);
   transition:
-    opacity 0.16s ease,
-    transform var(--dur-slow) var(--ease-out);
-  .rail:hover & {
-    opacity: 1;
-    transform: none;
-    transition-delay: 0.05s;
-  }
+    opacity 120ms ease var(--rail-close-delay),
+    transform 200ms var(--rail-ease) var(--rail-close-delay),
+    filter 120ms ease var(--rail-close-delay);
+}
 
-  .rail:has(:focus-visible) & {
+/* Open: hover, keyboard focus inside, or pinned with data-open. */
+.rail:is(:hover, :has(:focus-visible), [data-open]) {
+  width: var(--rail-w-open);
+  padding-right: 16px;
+  transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
+  & .rail-backdrop {
+    filter: drop-shadow(12px 0 24px color-mix(in srgb, var(--accent) 16%, transparent));
+    transition: filter var(--rail-open-ms) ease var(--rail-open-delay);
+  }
+  & .rail-backdrop path {
+    d: var(--rail-open);
+    fill: color-mix(in srgb, var(--accent) 6%, var(--surface));
+    transition:
+      d var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay),
+      fill var(--rail-open-ms) ease var(--rail-open-delay);
+  }
+  & .rail-label {
     opacity: 1;
     transform: none;
-    transition-delay: 0.05s;
+    filter: none;
+    /* Labels arrive as the edge passes them, top row first, 18ms apart. */
+    transition-duration: 220ms, 340ms, 220ms;
+    transition-delay: calc(var(--rail-open-delay) + 110ms + var(--n, 0) * 18ms);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail, .rail-backdrop, .rail-backdrop path, .rail-indicator, .rail-label,
+  .rail:is(:hover, :has(:focus-visible), [data-open]),
+  .rail:is(:hover, :has(:focus-visible), [data-open]) :is(.rail-backdrop, .rail-backdrop path, .rail-label) {
+    transition-duration: 0s;
+    transition-delay: 0s;
+  }
+  .rail-label { filter: none; transform: none; }
 }
 
 @utility titlebar {
@@ -718,8 +828,12 @@
      read as part of the page instead of as a frame around it. Its height is
      `TITLEBAR_HEIGHT` in src/windowChrome.ts — the main process gives the
      Window Controls Overlay the same number, and the two have to agree or the
-     buttons stop lining up with the wordmark. */
-  height: 38px;
+     buttons stop lining up with the wordmark. The strip itself is 46px, 8px
+     taller than that band; with the 12px top padding below, the mark and
+     heading keep the line they had in the old 58px strip (centred at 29px)
+     while the empty band under the toolbar shrinks. The trailing controls
+     stay in the top 38px (see below). */
+  height: 46px;
   flex: none;
   display: flex;
   align-items: center;
@@ -742,7 +856,10 @@
   /* macOS puts its traffic lights at the leading edge, inside our strip
      (`trafficLightPosition` in the main process centres them on this line), so
      the wordmark starts after them rather than underneath. */
-  padding-left: 78px;
+  padding-left: 92px;
+  /* Lift the mark and heading onto the traffic lights' line (centre 21px,
+     as in the old 58px strip with 16px). */
+  padding-bottom: 4px;
 }
 
 @utility titlebar-heading {
@@ -775,6 +892,26 @@
    Windows/Linux caption buttons unless the developer controls already do. */
 .titlebar:not(.titlebar-mac):not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 138px; }
 .titlebar-mac:not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 10px; }
+/* The strip is 46px with 12px top padding (mark and heading centred at 29px),
+   but the native caption buttons keep their 38px band (`TITLEBAR_HEIGHT`).
+   Hold the trailing controls in that band, pulling them back over the padding. */
+.titlebar:not(.titlebar-mac) { padding-top: 12px; }
+.titlebar:not(.titlebar-mac) #command-titlebar-slot,
+.titlebar:not(.titlebar-mac) .developer-server-controls { align-self: flex-start; height: 38px; margin-top: -12px; align-items: flex-end; }
+/* Inside that band every control centres on one line, so the labels (All,
+   Focus, Panels...) share a text line even though the pills differ in height. */
+.titlebar:not(.titlebar-mac) #command-titlebar-slot > .wall-toolbar-titlebar,
+.titlebar:not(.titlebar-mac) #command-titlebar-slot > .wall-toolbar-titlebar > div { align-items: center; }
+/* The caption buttons centre their glyphs in the 38px band, at 19px. Bottom
+   alignment above leaves the labels' letters (the cap-height midline, which
+   the icons share) at ~23.85px, so lift the row by the difference to centre
+   the text on the minimise icon, then 2.5px back down to match the native
+   glyph as rendered (checked by eye against the real caption buttons). */
+/* Offset by layout (position/top), not transform: a fractional transform let
+   Chromium rasterise the groups at different sub-pixel phases, so the
+   Focus/Dynamic/Grid and All/Agents/Terminals borders drew at different
+   weights. Layout offsets are pixel-snapped the same way for every group. */
+.titlebar:not(.titlebar-mac) #command-titlebar-slot > .wall-toolbar-titlebar { position: relative; top: -2.35px; }
 #command-titlebar-slot > .wall-toolbar-titlebar { flex: 1; min-width: 0; flex-wrap: nowrap; }
 #command-titlebar-slot .wall-fixed-picker { z-index: 60; }
 #command-titlebar-slot > .wall-toolbar-titlebar > div { flex-wrap: nowrap; }
@@ -1015,7 +1152,7 @@
 }
 
 @utility nav-item {
-  @apply relative flex h-11 w-full items-center rounded-xl text-ink-faint;
+  @apply relative flex h-10 w-full shrink-0 items-center rounded-xl text-ink-faint;
   transition:
     background 0.14s ease,
     color 0.14s ease;
@@ -1247,6 +1384,42 @@
     --merged-wash: rgba(147, 51, 234, 0.16);
   }
 
+  /* Lilac and Lavender: the marketing site's two looks (nekkoagent.com).
+     Lilac is its white version: lavender-white paper, white panels, the
+     logo's indigo-to-lavender gradient as the accent. Lavender is its
+     colourful version: the whole ground is the logo's #9D8CE6, text stays dark
+     ink and panels are frosted white, never a dark or black surface. Both
+     add the site's drifting pixel-dot field (PixelWaveBackground). */
+  [data-theme='light'][data-preset='lilac'] {
+    --paper: #fbfaff;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f1edff;
+    --ink: #17151f;
+    --ink-soft: #5d5970;
+    --ink-faint: #8f8aa3;
+    --line: #e6e1f5;
+  }
+
+  [data-theme='light'][data-preset='lavender'] {
+    /* Panels are the website's frosted card (white at 72% over the lavender),
+       an off-white that keeps Lavender apart from Lilac's pure white. */
+    --paper: #9d8ce6;
+    --win: #e9e4fa;
+    --surface: #e4dff8;
+    --surface-2: #d9d2f5;
+    --ink: #17151f;
+    --ink-soft: #2c2640;
+    --ink-faint: #4a4366;
+    --line: #c4b8ee;
+    /* On a lavender ground the merged-PR violet would vanish: lighten the
+       washes with white and take the label to the deepest violet. */
+    --merged-ink: #2e1065;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
   /* Belt-and-suspenders for the native <select> popup list. The OS draws that
      list, and it ignores the select's own color unless each option says its
      colors — so the rule covers every select, not only `.input` ones. */
@@ -1374,17 +1547,37 @@
 @media (prefers-reduced-motion: reduce) {
   .pixel-nekko, .pixel-nekko * { animation: none !important; }
 }
+/* Live reply status icons: a bobbing thought bubble, and terminal lines scrolling up. */
+.reply-thought-bubble { animation: reply-thought-bob 2.4s ease-in-out infinite; }
+.reply-thought-dot { animation: reply-thought-pulse 1.8s ease-in-out infinite; }
+.reply-terminal-lines { animation: reply-terminal-scroll 1.8s linear infinite; }
+@keyframes reply-thought-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+@keyframes reply-thought-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+@keyframes reply-terminal-scroll { from { transform: translateY(0); } to { transform: translateY(-15px); } }
+@media (prefers-reduced-motion: reduce) {
+  .reply-activity-icon, .reply-activity-icon * { animation: none !important; }
+}
 @keyframes dots {
   0% { content: ''; }
   25% { content: '.'; }
   50% { content: '..'; }
   75%, 100% { content: '...'; }
 }
+/* A fixed box that never shrinks in a flex row: the dots appear inside it, so
+   neither the dots nor the text beside them move as the third one lands. */
 .dots {
   display: inline-block;
-  width: 1.2em;
+  flex: none;
+  /* Three dots in the monospace transcript are 1.8em wide. */
+  width: 2em;
+  min-width: 2em;
+  overflow: hidden;
+  white-space: pre;
   text-align: left;
+  font-variant-numeric: tabular-nums;
 }
+/* Leading dots grow toward the text they announce. */
+.dots-lead { text-align: right; }
 .dots::after {
   content: '';
   animation: dots 1.4s steps(1, end) infinite;
@@ -1436,7 +1629,13 @@
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    /* 0s, not a tiny duration: transition-property defaults to `all`, so any
+       non-zero value here starts a transition on every changed property of
+       every element, layout included. The windowed transcript's spacer
+       padding then lagged a frame behind each row swap and the chat bounced
+       instead of reaching the bottom. A 0s transition is never started;
+       nothing in the renderer waits on transitionend. */
+    transition-duration: 0s !important;
     scroll-behavior: auto !important;
   }
 }
@@ -1457,6 +1656,48 @@
   color: var(--ink);
   line-height: 1.6;
 }
+
+/* Find in this chat (ChatSearchBar): a small bar floating at the top right of
+   the transcript, and the highlights it draws with the CSS Custom Highlight
+   API. Every match gets a soft warning wash; the current one is solid, so it
+   reads as "you are here" in both themes. */
+.chat-search {
+  position: absolute; top: 8px; right: 14px; z-index: 16;
+  display: flex; align-items: center; gap: 2px;
+  padding: 3px 4px 3px 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); box-shadow: var(--shadow-md);
+}
+.chat-search-input {
+  width: 180px; min-width: 0; border: 0; border-bottom: 1px solid var(--ink-faint); border-radius: 0;
+  padding: 2px 0; outline: none; background: transparent;
+  font-size: 12.5px; color: var(--ink);
+}
+.chat-search-input::placeholder { color: var(--ink-faint); }
+.chat-search-count { min-width: 64px; padding: 0 6px; text-align: right; font-size: 11.5px; color: var(--ink-faint); white-space: nowrap; }
+.chat-search-btn {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px;
+  color: var(--ink-soft); transition: background-color .12s ease, color .12s ease;
+}
+.chat-search-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.chat-search-btn:disabled { opacity: .4; cursor: default; }
+.chat-search-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* No focus ring or tint on the field: only a line under it shows where to type. */
+.chat-search-input, .chat-search-input:focus, .chat-search-input:focus-visible { outline: none; box-shadow: none; }
+::highlight(nekko-chat-search) { background-color: color-mix(in srgb, var(--highlight) 32%, transparent); color: inherit; }
+::highlight(nekko-chat-search-current) { background-color: var(--highlight); color: #1b1304; }
+/* Search within Settings (icon in the Appearance header + floating bar). */
+.settings-search-btn { display: inline-flex; align-items: center; justify-content: center; height: 28px; width: 28px; border-radius: 6px; color: var(--ink-faint); }
+.settings-search-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.settings-search-btn:disabled { opacity: .4; cursor: default; }
+.settings-search-pop .settings-search-btn { height: 24px; width: 24px; }
+.settings-search-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.settings-search-pop { position: fixed; z-index: 60; transform: translateY(-4px); display: flex; align-items: center; gap: 8px; width: 320px; padding: 6px 6px 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: 13px; color: var(--ink); }
+.settings-search-input, .settings-search-input:focus, .settings-search-input:focus-visible { outline: none; box-shadow: none; }
+::highlight(nekko-settings-search) { background-color: color-mix(in srgb, var(--highlight) 32%, transparent); color: inherit; }
+::highlight(nekko-settings-search-current) { background-color: var(--highlight); color: #1b1304; }
+/* Beside the open Agent Monitor toggle, the bar moves left of it. */
+.plan-rail-toggle ~ .chat-search { right: 150px; }
 
 /* One windowed transcript row (VirtualTranscript). It contains its children's
    margins, so its measured height is exactly the space it takes; the gap to
@@ -1654,13 +1895,13 @@
   animation-name: stardust-twinkle;
 }
 @keyframes stardust-drift {
-  0% { opacity: 0; transform: translate(var(--dust-x0), 0) scale(.4); }
-  20% { opacity: 1; transform: translate(calc(var(--dust-x0) + 4px), calc(var(--dust-y) * .3)) scale(1); }
+  0% { opacity: 0; transform: translate(var(--dust-x0), var(--dust-y0, 0px)) scale(.4); }
+  20% { opacity: 1; transform: translate(calc(var(--dust-x0) + var(--dust-step-x, 4px)), calc(var(--dust-y0, 0px) + (var(--dust-y) - var(--dust-y0, 0px)) * .3)) scale(1); }
   100% { opacity: 0; transform: translate(var(--dust-x), var(--dust-y)) scale(.3); }
 }
 @keyframes stardust-twinkle {
-  0% { opacity: 0; transform: translate(var(--dust-x0), 0) scale(.2) rotate(0deg); }
-  30% { opacity: 1; transform: translate(calc(var(--dust-x0) + 4px), calc(var(--dust-y) * .3)) scale(1) rotate(45deg); }
+  0% { opacity: 0; transform: translate(var(--dust-x0), var(--dust-y0, 0px)) scale(.2) rotate(0deg); }
+  30% { opacity: 1; transform: translate(calc(var(--dust-x0) + var(--dust-step-x, 4px)), calc(var(--dust-y0, 0px) + (var(--dust-y) - var(--dust-y0, 0px)) * .3)) scale(1) rotate(45deg); }
   100% { opacity: 0; transform: translate(var(--dust-x), var(--dust-y)) scale(.2) rotate(90deg); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1773,17 +2014,43 @@
 .composer-summary-meta { color: var(--ink-faint); font-weight: 400; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .pane-flash { animation: none; } }
 
-/* The PR deck rises from the footer divider, reserving space above controls. */
-.pr-action-deck { position: relative; width: 90%; margin: -7px auto 6px; padding: 0 8px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 10px 10px; background: var(--surface); box-shadow: 0 3px 14px rgb(0 0 0 / 6%); }
+/* The PR deck rises from the footer divider: a tab whose open bottom edge sits
+   on the strip's top border (the -1px margin covers that line), its toggle on
+   the divider and its cards growing upward. With no strip below (the wall
+   composer) it closes into a full rounded card. */
+.pr-action-deck { position: relative; z-index: 1; flex-shrink: 0; display: flex; flex-direction: column; width: 90%; margin: 6px auto -1px; padding: 0 8px; border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--surface); box-shadow: 0 -3px 14px rgb(0 0 0 / 6%); }
+.pr-action-deck[data-floating=true] { margin-bottom: 6px; border-bottom: 1px solid var(--line); border-radius: 10px; }
 .pr-deck-toggle { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 5px 3px; font-size: 11px; color: var(--ink-soft); border-radius: 8px; }
 .pr-deck-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .pr-deck-chevron { transition: transform 220ms ease; }
-.pr-action-deck[data-expanded=false] .pr-deck-chevron { transform: rotate(180deg); }
+.pr-action-deck[data-expanded=true] .pr-deck-chevron { transform: rotate(180deg); }
 .pr-deck-reveal { display: grid; grid-template-rows: 1fr; opacity: 1; transform: translateY(0); transition: grid-template-rows 240ms ease, opacity 180ms ease, transform 240ms ease; }
 .pr-action-deck[data-expanded=false] .pr-deck-reveal { grid-template-rows: 0fr; opacity: 0; transform: translateY(10px) scale(.98); }
 .pr-deck-clip { min-height: 0; overflow: hidden; }
-.pr-deck-list { max-height: 180px; overflow-y: auto; padding: 1px 0 2px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.pr-deck-list { max-height: 180px; overflow-y: auto; padding: 6px 0 1px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .pr-deck-card { background: var(--paper); }
+
+/* Response artifact cards (ChatArtifacts). A quieter cousin of the merged-PR
+   banner: the same left-to-right wash, but tinted from --accent so it follows
+   the theme, preset and any custom accent, and kept faint so a list of files
+   never reads as a celebration. Text stays --ink on a wash of at most ~12%. */
+.artifact-card {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, var(--surface)), var(--surface) 75%);
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+.artifact-card:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), color-mix(in srgb, var(--accent) 3%, var(--surface)) 75%);
+  box-shadow: var(--shadow-sm);
+}
+.artifact-card:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.artifact-card-chip {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: color-mix(in srgb, var(--accent) 55%, var(--ink));
+}
+.artifact-card-open { color: color-mix(in srgb, var(--accent) 40%, var(--ink-faint)); }
+.artifact-card:hover:not(:disabled) .artifact-card-open { color: var(--accent); }
 .pr-deck-slot { transform-origin: bottom center; animation: pr-deck-pop 240ms ease-out both; }
 .pr-deck-slot[data-closing=true] { pointer-events: none; animation: pr-deck-retract 220ms ease-in both; }
 @keyframes pr-deck-pop { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -1797,7 +2064,7 @@
   font-variant-numeric: tabular-nums; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
-.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 12px; }
+.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 6px; }
 .wall-workspace[data-dock-side='top'], .wall-workspace[data-dock-side='bottom'] { flex-direction: column; }
 .wall-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 0; overflow: hidden; }
 /* The board viewport yields to the composer; its tall stage scrolls internally. */
@@ -1836,9 +2103,36 @@
 .agent-logs-drawer[data-overlay] .agent-logs-drawer-inner { border-left: 1px solid var(--logs-ring); border-radius: var(--pane-radius, 12px); box-shadow: 0 18px 48px -18px rgb(0 0 0 / .55); }
 .agent-logs-drawer-head { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 500; }
 .agent-logs-drawer-body { position: relative; flex: 1; min-height: 0; }
-/* The window gives up its right-hand rounding where the drawer joins it. */
-.command-wall-window[data-wall-logs-open] > .panel { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.command-wall-window[data-wall-logs-open] > .panel::after { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* Beside its window, the drawer flows out of it: the window keeps its rounded
+   corners, the drawer starts LOGS_DRAWER_INSET (wallLogs.ts: corner radius +
+   fillet) in from its top and bottom, and a concave fillet above and below
+   curves the window's right edge into the drawer's top and bottom edges. The
+   box grows by the fillet on both ends (content-box padding) so the slide-out
+   clip-path reveals the fillets with the drawer instead of cutting them off. */
+.agent-logs-drawer:not([data-overlay]) {
+  --logs-fillet: 12px;
+  box-sizing: content-box;
+  margin-top: calc(-1 * var(--logs-fillet));
+  padding-block: var(--logs-fillet);
+}
+.agent-logs-drawer:not([data-overlay])::before,
+.agent-logs-drawer:not([data-overlay])::after {
+  content: ''; position: absolute; left: 0; z-index: 1; pointer-events: none;
+  /* One pixel taller than the fillet: the extra row lies over the drawer's own
+     top (or bottom) border, which otherwise runs on straight under the arc. */
+  width: var(--logs-fillet); height: calc(var(--logs-fillet) + 1px);
+}
+/* Fill everything in the corner square outside a circle centred on its far
+   corner, 1px in so the arc lands on the drawer's border row; the ring traces
+   the arc and meets the window and drawer borders. */
+.agent-logs-drawer:not([data-overlay])::before {
+  top: 0;
+  background: radial-gradient(circle at 100% 1px, transparent calc(var(--logs-fillet) - 1px), var(--logs-ring) calc(var(--logs-fillet) - 1px), var(--logs-ring) var(--logs-fillet), var(--win, var(--surface)) calc(var(--logs-fillet) + .5px));
+}
+.agent-logs-drawer:not([data-overlay])::after {
+  bottom: 0;
+  background: radial-gradient(circle at 100% calc(100% - 1px), transparent calc(var(--logs-fillet) - 1px), var(--logs-ring) calc(var(--logs-fillet) - 1px), var(--logs-ring) var(--logs-fillet), var(--win, var(--surface)) calc(var(--logs-fillet) + .5px));
+}
 @keyframes agent-logs-drawer-out {
   from { clip-path: inset(0 100% 0 0); opacity: .4; }
   to { clip-path: inset(0 0 0 0); opacity: 1; }
@@ -1863,6 +2157,9 @@
 .plan-rail-toggle.is-open { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .plan-rail-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .plan-rail-toggle-count { color: var(--ink-soft); }
+/* While the floating button shows, the transcript starts below it so the first
+   message never sits under it (8px offset + 28px button + breathing room). */
+div:has(> .plan-rail-toggle) > [data-transcript-scroll] { padding-top: 44px; }
 /* A question the agent asked, pinned at the top of its window: a warning-toned
    label you cannot miss, then the card. Capped so the transcript keeps a view;
    a long card scrolls inside the pin rather than pushing the history away. */
@@ -1912,17 +2209,34 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-layout-control { position: relative; display: inline-flex; align-items: center; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was
    narrower than the button once the title bar's own button padding applied,
-   so the wand spilled under the All/Agents/Terminals toggle beside it. */
-.wall-auto-arrange { position: relative; display: grid; grid-template-columns: 0fr; align-items: center; opacity: 0; visibility: hidden; transform: translateX(-18px) scale(.6); transition: grid-template-columns 240ms ease, opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
-.wall-auto-arrange[data-visible='true'] { grid-template-columns: 1fr; opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+   so the wand spilled under the All/Agents/Terminals toggle beside it.
+   Its slot is always reserved (hidden only by opacity/visibility), so picking
+   Dynamic fades it in place without shifting the filter and Panels beside it. */
+.wall-auto-arrange { position: relative; display: grid; grid-template-columns: 1fr; align-items: center; margin-left: 6px; opacity: 0; visibility: hidden; transform: scale(.6); transition: opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
+.wall-auto-arrange[data-visible='true'] { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .wall-auto-arrange > button { min-width: 0; overflow: hidden; }
-.wall-auto-arrange[data-visible='true'] { margin-left: 6px; }
+
 .wall-auto-arrange [role='tooltip'] { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; width: 230px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--win); color: var(--ink); font-size: 12px; pointer-events: none; opacity: 0; visibility: hidden; }
 .wall-auto-arrange[data-visible='true']:hover [role='tooltip'], .wall-auto-arrange[data-visible='true']:focus-within [role='tooltip'] { opacity: 1; visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .wall-auto-arrange { transition: none; transform: none; } }
-.command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-selected] > .panel { --panel-ring-color: var(--accent) !important; box-shadow: none; }
+/* Focused only: one window fills the board, so its selection ring is a quiet
+   hint (accent mixed well into the line colour), not a full-strength outline. */
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-selected] > .panel { --panel-ring-color: color-mix(in srgb, var(--accent) 28%, var(--line)) !important; box-shadow: none; }
+/* Focused: a new agent fades in as its prompt view. */
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-hero][data-wall-entering] > .panel { animation: focus-new-agent-in 320ms cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes focus-new-agent-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+/* Focused: after the first send, the centred composer expands into the full
+   chat. The window's chat body grows out of the composer's place. */
+[data-chat-expanding] > section { animation: composer-expand-in 420ms cubic-bezier(.22, 1, .36, 1) both; transform-origin: 50% 70%; }
+@keyframes composer-expand-in { from { opacity: .35; transform: scale(.92, .55); border-radius: 18px; } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-entering] > .panel, [data-chat-expanding] > section { animation: none; }
+}
 .command-wall-layout[data-wall-layout='focus'] .composer, .command-wall-layout[data-wall-layout='focus'] .composer:focus-within { box-shadow: none; }
-.wall-layout-segments { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
+/* The All/Agents/Terminals filter shares this frame exactly. It used to be
+   `rounded-lg`, which also picks up `corner-shape: squircle`, so its corners
+   looked squarer than the layout group's beside it. */
+.wall-layout-segments, .wall-filter-segments { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
 .wall-layout-segments button { padding: 4px 10px; border-radius: 6px; font-size: 12px; color: var(--ink-faint); }
 .wall-layout-segments button[aria-pressed='true'] { background: var(--surface-2); color: var(--ink); font-weight: 500; }
 .wall-fixed-picker { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
@@ -1934,7 +2248,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 @media (max-width: 767px) {
   .wall-workspace { flex-direction: column; overflow: hidden; }
   .wall-workspace > .wall-agent-workspace { flex: 1 1 0; min-height: 0; }
-  .wall-workspace > .wall-dock { flex: 0 0 auto; width: 100%; max-height: 240px; }
+  .wall-workspace > .monitors-dock { flex: 0 0 auto; width: 100%; max-height: 240px; }
 }
 /* The composer surface of a chat is as tall as its content; the message box keeps its own ceiling. */
 .wall-composer .composer-column { width: 100% !important; }
@@ -2014,7 +2328,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    reserves on the right: --wall-gutter, the 10px of ::-webkit-scrollbar), so a
    composer stretched to the limit lines up with the windows edge to edge, and
    a centred one is centred under them. */
-.wall-composer-row { --wall-gutter: 10px; position: relative; display: flex; align-items: stretch; gap: 20px; flex-shrink: 0; min-width: 0; padding-inline: 14px calc(14px + var(--wall-gutter)); }
+.wall-composer-row { --wall-gutter: 10px; position: relative; display: flex; align-items: stretch; gap: 20px; flex-shrink: 0; min-width: 0; padding-inline: 15px calc(15px + var(--wall-gutter)); }
 .wall-composer-row[data-dock$='-left'] { justify-content: flex-start; }
 .wall-composer-row[data-dock$='-center'] { justify-content: center; }
 .wall-composer-row[data-dock$='-right'] { justify-content: flex-end; }
@@ -2022,12 +2336,13 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Adding to the wall: a row of quiet icon buttons at the toolbar's right end
    (agent, terminal, then the selected agent's Changes, Browser and Files, then
    More), in place of the Add window button that used to sit by the composer. */
-.wall-add-bar { display: inline-flex; align-items: center; gap: 2px; }
+.wall-add-bar { display: inline-flex; align-items: center; gap: 10px; margin-right: 8px; padding-right: 20px; border-right: 1px solid var(--line); }
+/* In the accent, so the three ways to open a window stand out in the toolbar. */
 .wall-add-icon {
   display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px;
-  color: var(--ink-faint); transition: color 0.12s ease, background-color 0.12s ease;
+  color: var(--accent); transition: color 0.12s ease, background-color 0.12s ease;
 }
-.wall-add-icon:hover:not(:disabled), .wall-add-icon[aria-expanded='true'] { color: var(--ink); background: var(--surface-2); }
+.wall-add-icon:hover:not(:disabled), .wall-add-icon[aria-expanded='true'] { color: var(--accent); background: var(--accent-soft); }
 .wall-add-icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .wall-add-icon:disabled { opacity: 0.4; cursor: default; }
 /* The agent cat as a line icon like its neighbours: its dark fill and light
@@ -2039,6 +2354,38 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* The Agents panel's + : the primary action, in the accent and a size up. */
 .agent-panel-plus { color: var(--accent); }
 .agent-panel-plus:hover, .agent-panel-plus.is-open { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+/* Chat finder: a popup under the search button. Only opacity and transform
+   animate, so opening it never costs a layout pass. */
+.chat-finder { background: var(--paper); animation: chat-finder-in 0.12s ease-out; }
+@keyframes chat-finder-in { from { opacity: 0; transform: translateY(-4px); } }
+.chat-finder-input { border-bottom: 1px solid var(--line); }
+.chat-finder-input:focus { border-bottom-color: var(--accent); }
+.chat-finder-row.is-cursor { background: var(--surface-2); }
+/* The wait before a search, drawn as a line that fills while typing pauses. */
+.chat-finder-progress { height: 2px; margin: 0 6px; border-radius: 1px; background: var(--accent); transform: scaleX(0); transform-origin: left; opacity: 0; }
+.chat-finder-progress[data-active] { opacity: 0.7; animation: chat-finder-wait 1s linear forwards; }
+@keyframes chat-finder-wait { to { transform: scaleX(1); } }
+.chat-finder-tabs { scrollbar-width: none; }
+.chat-finder-chip { padding: 2px 9px; border-radius: 999px; font-size: 11.5px; color: var(--ink-faint); border: 1px solid var(--line); background: transparent; }
+.chat-finder-chip:hover { color: var(--ink); background: var(--surface-2); }
+.chat-finder-chip.is-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.chat-finder-tool { color: var(--ink-faint); }
+.chat-finder-tool:hover { color: var(--ink); background: var(--surface-2); }
+.chat-finder-tool.is-on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.chat-finder-badge { padding: 0 6px; border-radius: 999px; font-size: 10px; line-height: 16px; color: var(--ink-faint); background: var(--surface-2); }
+.chat-finder-calendar-wrap { border: 1px solid var(--line); background: var(--surface); }
+.chat-finder-day { border-radius: 6px; color: var(--ink); }
+.chat-finder-day:hover { background: var(--surface-2); }
+.chat-finder-day.is-future { color: var(--ink-faint); }
+.chat-finder-day[data-today] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent); }
+.chat-finder-day[data-in-range] { border-radius: 0; background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.chat-finder-day[data-edge] { border-radius: 6px; color: var(--paper); background: var(--accent); }
+.chat-finder-spinner { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line); border-top-color: var(--accent); animation: chat-finder-spin 0.8s linear infinite; }
+@keyframes chat-finder-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .chat-finder, .chat-finder-progress[data-active], .chat-finder-spinner { animation: none; }
+  .chat-finder-progress[data-active] { transform: scaleX(1); opacity: 0.4; }
+}
 
 /* Wall composer: the agent row is the composer's own first row; mode and
    incognito ride the bottom bar beside +, quiet until hovered. */
@@ -2054,3 +2401,167 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 }
 .wall-composer { container-type: inline-size; }
 
+
+/* Pending changes stay readable on a muted surface without an outer glow. */
+.agent-changes-pending { background: var(--surface-2); box-shadow: none; border-radius: 6px; }
+.agent-change-summary { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; animation: agent-changes-reveal .18s ease-out; }
+@keyframes agent-changes-reveal { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: translateX(0); } }
+.agent-action-separator { align-self: center; height: 14px; width: 1px; margin: 0 4px; background: var(--line); }
+@media (prefers-reduced-motion: reduce) { .agent-change-summary { animation: none; } }
+
+/* Changes leads; Zen is the action group, followed by panel openers. */
+[data-agent-companion="diff"] { order: -3; }
+/* Find in chat leads the header icons, just left of Changes. */
+[data-chat-search-toggle] { order: -4; }
+.agent-zen-action { color: var(--accent); background: var(--accent-soft); border-radius: 5px; padding: 3px; }
+.wall-add-icon { position: relative; }
+.wall-add-icon::after { content: '+'; position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: 10px; height: 10px; border-radius: 50%; background: var(--paper); color: var(--accent); font: 700 11px/1 sans-serif; pointer-events: none; }
+.agent-action-separator { order: -1; }
+.agent-change-summary .text-danger { color: var(--danger); }
+
+/* Pasted or attached media fades in quickly. Keys remount only new items,
+   so existing thumbnails never re-animate. */
+@keyframes composer-media-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.composer-media-in { animation: composer-media-in 0.16s var(--ease-out, ease-out) both; }
+@media (prefers-reduced-motion: reduce) { .composer-media-in { animation: none; } }
+
+/* About page: a hop when petted and a speech bubble that floats away. */
+.about-nekko-cat { cursor: pointer; transition: transform 0.15s var(--ease-out, ease-out); }
+.about-nekko-cat:active { transform: translateY(-4px) scale(1.04); }
+.about-nekko-purr {
+  position: absolute; left: 100%; top: 0; white-space: nowrap;
+  font-size: 11px; color: var(--accent); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+  animation: about-purr 1.4s var(--ease-out, ease-out) both;
+}
+@keyframes about-purr { 0% { opacity: 0; transform: translateY(4px); } 15% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { .about-nekko-purr { animation: none; } }
+
+/* Focus mode, new chat: one centered composer on a quiet page. The first send
+   drops data-clean-start and the window becomes the full chat. */
+[data-clean-start] .clean-start { align-items: center; padding: 0 24px 12vh; background: radial-gradient(60% 50% at 50% 42%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%); }
+[data-clean-start] .clean-start .composer-section { width: min(720px, 100%); padding: 0; }
+[data-clean-start] .clean-start .composer-column { width: 100% !important; }
+[data-clean-start] .clean-start .composer { border-radius: 18px; box-shadow: 0 12px 40px -18px color-mix(in srgb, var(--ink) 35%, transparent); }
+.clean-start-greeting { margin: 0 auto 18px; text-align: center; }
+.clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
+
+/*
+  Mode panel: saved modes down a rail, then Environment + Model, Privacy and
+  Approach columns. Settings read as rows (icon, title, one line of why, then
+  the control); value choices are tiles with an icon over the label.
+*/
+.mode-panel { display: flex; overflow: hidden; padding: 0; font-size: 12.5px; color: var(--ink); }
+.mode-panel svg { width: 15px; height: 15px; flex: none; }
+.mode-rail { width: 176px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: var(--surface-2); border-right: 1px solid var(--line); overflow-y: auto; }
+.mode-sec { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; padding: 0 10px; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); }
+.mode-sec svg { width: 12px; height: 12px; }
+.mode-rail .mode-sec { padding: 0 8px 4px; }
+.mode-rail-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 4px 6px 7px; border-radius: 9px; text-align: left; cursor: pointer; }
+.mode-rail-item:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.mode-rail-item[aria-checked="true"] { background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+.mode-rail-item:focus-visible, .mode-row-btn:focus-visible, .mode-tiles button:focus-visible, .mode-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mode-glyph { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); }
+.mode-rail-item[aria-checked="true"] .mode-glyph { background: var(--accent); border-color: transparent; color: #fff; }
+.mode-glyph svg { width: 14px; height: 14px; }
+.mode-rail-n { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.mode-rail-d { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 10px; color: var(--ink-faint); }
+.mode-star { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border-radius: 6px; color: var(--ink-faint); opacity: 0; }
+.mode-rail-item:hover .mode-star, .mode-rail-item[aria-checked="true"] .mode-star, .mode-star.is-on, .mode-star:focus-visible { opacity: 1; }
+.mode-star.is-on { color: var(--warning); }
+.mode-star:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.mode-star svg { width: 13px; height: 13px; }
+
+.mode-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mode-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.mode-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; }
+.mode-save { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mode-save .input { height: 28px; width: 160px; padding: 0 9px; border-radius: 8px; font-size: 12.5px; }
+.mode-save label { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ink-soft); }
+.mode-btn { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 500; color: var(--ink-soft); white-space: nowrap; }
+.mode-btn:hover { background: var(--surface-2); color: var(--ink); }
+.mode-btn.is-primary { background: var(--accent); color: #fff; }
+.mode-btn.is-primary:hover { filter: brightness(1.08); }
+.mode-dirty { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--warning); }
+.mode-dirty::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.mode-badge { padding: 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--ink-soft); font-size: 9.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.mode-badge.is-accent { background: var(--accent-soft); color: var(--accent); }
+
+.mode-scroll { min-height: 0; overflow-y: auto; }
+.mode-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mode-col { min-width: 0; padding: 12px 6px 8px; border-right: 1px solid var(--line); }
+.mode-col:last-child { border-right: 0; }
+.mode-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 7px 10px; border-radius: 9px; text-align: left; }
+.mode-row:hover { background: var(--surface-2); }
+.mode-row.is-disabled { opacity: .55; }
+.mode-row.is-disabled:hover { background: none; }
+.mode-row.is-stacked { flex-wrap: wrap; row-gap: 8px; }
+.mode-row.is-stacked > .min-w-0 { flex: 1 1 calc(100% - 30px); }
+.mode-row-btn { align-items: center; }
+.mode-row-btn.is-open { background: var(--accent-soft); }
+.mode-row-btn.is-open .mode-ic, .mode-row-btn.is-open .mode-chev { color: var(--accent); }
+.mode-ic { width: 16px; height: 18px; flex: none; display: grid; place-items: center; color: var(--ink-soft); }
+.mode-t { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--ink); }
+.mode-s { display: block; margin-top: 1px; font-size: 11.5px; line-height: 1.4; color: var(--ink-faint); }
+.mode-s a { color: var(--accent); text-decoration: none; }
+.mode-s a:hover { text-decoration: underline; }
+.mode-under { padding: 0 10px 6px 36px; margin-top: -2px; }
+.mode-meta { max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.mode-chev { width: 14px !important; height: 14px !important; color: var(--ink-faint); transition: transform .15s; }
+.mode-link { margin: 0 10px 4px 36px; font-size: 11.5px; color: var(--accent); }
+
+.mode-switch { position: relative; width: 34px; height: 20px; flex: none; margin-top: 1px; border-radius: 999px; background: color-mix(in srgb, var(--ink-faint) 40%, transparent); transition: background .15s; }
+.mode-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform .15s; }
+.mode-switch[aria-checked="true"] { background: var(--accent); }
+.mode-switch[aria-checked="true"]::after { transform: translateX(14px); }
+.mode-switch:disabled { cursor: not-allowed; opacity: .6; }
+
+.mode-tiles { display: flex; flex-basis: 100%; gap: 3px; padding: 3px; border-radius: 10px; background: var(--surface-2); }
+.mode-tiles button { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px 5px; border-radius: 7px; font-size: 11px; color: var(--ink-soft); }
+.mode-tiles button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mode-tiles button:hover { color: var(--ink); }
+.mode-tiles button[aria-checked="true"] { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: 0 1px 2px rgb(0 0 0 / .1); }
+.mode-tiles button[aria-checked="true"] svg { color: var(--accent); }
+
+.mode-folders { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.mode-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; height: 24px; padding: 0 4px 0 8px; border-radius: 7px; background: var(--surface-2); font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); }
+.mode-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mode-chip button { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 5px; color: var(--ink-faint); }
+.mode-chip button:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+.mode-chip.is-add { padding: 0 8px; border: 1px dashed var(--line); background: none; font-family: var(--font-sans); color: var(--ink-faint); }
+.mode-chip.is-add:hover { border-color: var(--accent); color: var(--accent); }
+
+.mode-fly { display: flex; flex-direction: column; padding: 10px 6px 6px; font-size: 12.5px; }
+.mode-fly-h { display: flex; align-items: center; gap: 7px; margin: 0; padding: 2px 10px 8px; font-size: 13.5px; font-weight: 600; }
+.mode-fly-h svg { width: 15px; height: 15px; }
+.mode-fly-body { display: flex; min-height: 0; flex-direction: column; overflow-y: auto; }
+.mode-inline-fly { margin: 2px 0 6px 18px; padding-left: 6px; border-left: 2px solid var(--accent-soft); }
+.mode-note { margin: 0 4px 6px; padding: 6px 8px; border-radius: 8px; background: var(--surface-2); font-size: 11px; color: var(--ink-faint); }
+.mode-group { margin: 4px 0 2px; padding: 0 10px; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); }
+.mode-opt { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 9px; text-align: left; }
+.mode-opt:hover { background: var(--surface-2); }
+.mode-opt[aria-checked="true"] { background: var(--accent-soft); }
+.mode-opt-ic { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 8px; background: var(--surface-2); color: var(--ink-soft); }
+.mode-opt[aria-checked="true"] .mode-opt-ic { background: var(--accent); color: #fff; }
+.mode-opt-ic svg { width: 15px; height: 15px; }
+.mode-path { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 10px; color: var(--ink-faint); }
+
+@media (max-width: 1040px) {
+  .mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mode-col:nth-child(2) { border-right: 0; }
+  .mode-col:last-child { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+}
+@media (max-width: 719px) {
+  .mode-panel { flex-direction: column; }
+  .mode-rail { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+  .mode-rail .mode-sec, .mode-rail-d, .mode-rail > .flex-1 { display: none; }
+  .mode-rail-item { width: auto; flex: none; }
+  .mode-grid { grid-template-columns: 1fr; }
+  .mode-col { border-right: 0; border-bottom: 1px solid var(--line); }
+  .mode-col:last-child { border-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .mode-switch, .mode-switch::after, .mode-chev { transition: none; } }

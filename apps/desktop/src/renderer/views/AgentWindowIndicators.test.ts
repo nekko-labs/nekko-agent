@@ -34,17 +34,21 @@ describe('agent window indicators', () => {
     expect(wall).toContain('data-wall-needs-you={needsYou || undefined}');
     expect(css).toMatch(/\.command-wall-window\[data-wall-needs-you\] > \.panel[\s\S]{0,200}--panel-ring-color: var\(--warning\) !important/);
   });
-  it('draws the status glyph in the footer corner, not the title strip', () => {
+  it('draws the activity glyph before the agent icon in the title strip', () => {
     expect(wall).toContain("status={agentStatus ?? 'idle'}");
     expect(wall).toContain('statusIndicator={session ? undefined');
-    expect(pane).toContain("data-agent-status><StatusIcon status={status === 'idle' ? undefined : status} /></span>");
+    expect(wall).toContain('<span data-agent-status><StatusIcon status={agentStatus} /></span><NumberedAgentIcon');
+    expect(pane).not.toContain('agent-footer-status');
   });
   it('replaces the Online label with an internet toggle and moves Tools and MCP to the footer', () => {
     expect(pane).not.toContain("{session?.offline ? 'Offline' : 'Online'}");
     expect(pane).toContain('<InternetToggle session={session}');
     expect(pane).toMatch(/data-agent-footer-controls>[\s\S]{0,200}<ToolsMenu[\s\S]{0,200}<McpMenu \/>/);
-    expect(controls).toContain('Click to block internet connectivity.');
+    expect(controls).toContain('Click to block internet connectivity (local tools keep working).');
     expect(controls).toContain('Click to allow internet connectivity.');
+    // Blocking the internet keeps local tools: the Tools menu stays usable.
+    expect(controls).not.toContain('disabled={offline}');
+    expect(controls).toContain('groupToolsByCategory(shown)');
     expect(pane).toMatch(/<ChatControls[\s\S]{0,140}toolsInWindow/);
     // A cloud model needs the internet: blocking stays local-only, as Offline was.
     expect(pane).toContain('<InternetToggle session={session} cloudModel={isCloudModel}');

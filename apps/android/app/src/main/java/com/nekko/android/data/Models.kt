@@ -6,6 +6,7 @@ import com.nekko.protocol.Appearance
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.PcSettings
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.SessionSummary
 import com.nekko.protocol.WorkspaceFolder
@@ -54,6 +55,8 @@ data class ComputersState(
     val summariesLoading: Boolean = false,
     val providers: List<PublicProvider> = emptyList(),
     val defaults: RemoteDefaults = RemoteDefaults(),
+    /** The computer's phone-settable settings (Settings → On <computer>); defaults until it answers. */
+    val pcSettings: PcSettings = PcSettings(),
     /** The connected computer's theme, for "Same as computer"; null until it has said. */
     val appearance: Appearance? = null,
     val models: Map<String, List<ModelInfo>> = emptyMap(),
@@ -63,6 +66,8 @@ data class ComputersState(
     /** Chats mid-run or waiting on an approval/answer, by session id. */
     val activity: Map<String, Activity> = emptyMap(),
     val lastError: String? = null,
+    /** When the list on screen is the phone's saved copy, when it was saved; null once the computer answers. */
+    val savedListAt: Long? = null,
 ) {
     val active: Computer? get() = computers.firstOrNull { it.id == activeId }
 }

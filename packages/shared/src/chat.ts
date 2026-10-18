@@ -17,6 +17,25 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+/**
+ * A durable `agent_watch` as the transcript shows it: what it watches, when it
+ * wakes and how that went. The continuation prompt is deliberately absent; the
+ * transcript already has it in the tool call that armed the watch.
+ */
+export interface AgentWatchView {
+  id: string;
+  kind: 'timer' | 'pr';
+  url?: string;
+  status: 'active' | 'done' | 'cancelled' | 'error';
+  /** Timer: when it wakes. PR: the latest it waits before waking anyway. */
+  deadlineAt: number;
+  nextPollAt: number;
+  /** A wake-up is due but the chat has not been continued yet (busy or failing). */
+  pending: boolean;
+  failures: number;
+  lastError?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: Role;
@@ -28,6 +47,12 @@ export interface ChatMessage {
    * image model on an assistant message in an image-generation chat.
    */
   images?: string[];
+  /**
+   * Video data URLs attached by the user. Only models with video input receive
+   * them; for every other model they are dropped from the request and a note
+   * stands in, so the model knows what it was not shown.
+   */
+  videos?: string[];
   /** How an assistant message's images were made, so they can be reproduced. */
   generated?: GeneratedImageMeta;
   /** Model chain-of-thought text, when the provider streams it. */
@@ -196,6 +221,12 @@ export interface Session {
   autoProviderSwitch?: boolean;
   /** Tool-execution policy for this chat. */
   mode?: ChatMode;
+  /**
+   * How the agent works in this chat (see WORK_MODES): Better review, Design,
+   * Best output. Separate from `mode`, the permission policy, which it never
+   * changes. Absent means the default.
+   */
+  workMode?: import('./work-modes.js').WorkModeId;
   /** Chat or image generation; absent means `multimodal`. */
   chatType?: ChatType;
   /** Settings for an image-generation chat. */
@@ -433,6 +464,9 @@ export function lastReplyInterrupted(history: ChatMessage[]): boolean {
   const turn = history.slice(turnStart + 1);
   const lastAssistant = [...turn].reverse().find((m) => m.role === 'assistant');
   if (lastAssistant?.interrupted) return true;
+  // An explicit successful terminal event is stronger than missing historical
+  // tool bookkeeping (for example, an earlier failed/retried tool step).
+  if (lastAssistant?.turnStats?.stop === 'complete') return false;
   const results = new Set(turn.flatMap((m) => m.toolResult ? [m.toolResult.toolCallId] : []));
   return turn.some((m) => m.role === 'assistant' && m.toolCalls?.some((call) => !results.has(call.id)));
 }
@@ -451,6 +485,8 @@ export interface QueuePayload {
   text: string;
   /** Image data URLs attached to this queued user turn. */
   images?: string[];
+  /** Video data URLs attached to this queued user turn. */
+  videos?: string[];
   /** Skill invoked for this queued user turn and the user's own input. */
   skill?: { name: string; input: string };
 }
@@ -477,6 +513,8 @@ export interface SendOptions {
   text: string;
   /** Image data URLs attached to this user turn. */
   images?: string[];
+  /** Video data URLs attached to this user turn. */
+  videos?: string[];
   /** Skill invoked for this user turn and the user's own input. */
   skill?: { name: string; input: string };
   /** File paths the user explicitly attached as context. */

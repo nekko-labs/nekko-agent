@@ -33,9 +33,7 @@ export function DecisionModels() {
   const [catalog, setCatalog] = useState<DecisionCatalogEntry[]>([]);
   const [installed, setInstalled] = useState<InstalledDecisionModel[]>([]);
   const [status, setStatus] = useState<DecisionStatus | null>(null);
-  const [precision, setPrecision] = useState<DecisionPrecision>('fp16');
   const [busy, setBusy] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
   const [key, setKey] = useState('');
   const [folder, setFolder] = useState('');
 
@@ -51,13 +49,6 @@ export function DecisionModels() {
     return m;
   };
   useEffect(() => { void refresh(); }, []);
-  useEffect(() => {
-    if (!downloading) return;
-    const t = setInterval(() => {
-      void refresh().then((m) => { if (m.some((x) => x.precisions.includes(precision))) setDownloading(false); });
-    }, 3000);
-    return () => clearInterval(t);
-  }, [downloading, precision]);
 
   const act = async (id: string, run: () => Promise<{ ok: boolean; message: string }>) => {
     setBusy(id);
@@ -76,90 +67,41 @@ export function DecisionModels() {
     if (key.trim()) await act('typesafe', () => window.nekko.decisionsCheckTypesafe());
   };
 
+  const folders = installed.filter((m) => m.external);
   return (
     <div className="space-y-5">
       <p className="text-[12px] text-ink-faint">
-        Decision models answer typed questions about a text or JSON state (pick one option, score on a scale, true or false) with calibrated probabilities, in one pass and without generating text. Agents use them for routing, triage and guardrails.
+        Decision models answer typed questions about a text or JSON state (pick one option, score on a scale, true or false) with calibrated probabilities, in one pass and without generating text. Agents use them for routing, triage and guardrails. One is loaded at a time.
       </p>
 
-      {catalog.map((entry) => {
-        const have = installed.find((m) => m.id === entry.id);
-        const folders = installed.filter((m) => m.external);
-        const loaded = status?.local.loaded && status.local.model === entry.id;
-        const variant = entry.variants.find((v) => v.precision === precision) ?? entry.variants[0];
-        const bytes = variant.bytes + entry.shared.reduce((n, f) => n + f.bytes, 0);
-        return (
-          <div key={entry.id} className="rounded-lg border border-line p-3 text-[12px]">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[13px] font-semibold">{entry.name}</span>
-              <span className="chip">{entry.license}</span>
-              <span className="text-ink-faint">{entry.publisher}{entry.source ? ` · ${entry.source}` : ''}</span>
-              {loaded && <span className="chip" style={{ color: 'var(--success)' }}>loaded</span>}
-            </div>
-            <p className="mt-1 text-ink-soft">{entry.description}</p>
-            {have && (
-              <p className="mt-1 text-ink-faint">
-                On disk: {have.precisions.join(', ')} · {formatBytes(have.sizeBytes)}
-                {loaded && status?.local.ep && ` · running ${status.local.precision} on ${status.local.ep}${status.local.loadMs ? `, loaded in ${(status.local.loadMs / 1000).toFixed(1)} s` : ''}`}
-              </p>
-            )}
-            {(!entry.unavailable || have) && <div className="mt-2 flex flex-wrap items-center gap-2">
-              <select className="input w-auto py-1 text-[12px]" aria-label="Precision" value={precision} onChange={(e) => setPrecision(e.target.value as DecisionPrecision)}>
-                {entry.variants.map((v) => (
-                  <option key={v.precision} value={v.precision}>{v.precision}{v.recommended ? ' (recommended)' : ''} · {formatBytes(v.bytes)}</option>
-                ))}
-              </select>
-              {!entry.unavailable && !have?.precisions.includes(precision) && (
-                <button
-                  className="btn btn-outline py-1 text-[12px]"
-                  disabled={busy !== null || downloading}
-                  onClick={() => void act(entry.id, () => window.nekko.decisionsDownload(entry.id, precision)).then((r) => { if (r.ok) setDownloading(true); })}
-                >
-                  {downloading ? 'Downloading…' : `Download ${formatBytes(bytes)}`}
-                </button>
-              )}
-              {have?.precisions.includes(precision) && status?.local.available && !loaded && (
-                <button className="btn btn-primary py-1 text-[12px]" disabled={busy !== null} onClick={() => void act(entry.id, () => window.nekko.decisionsLoad(entry.id, precision))}>
-                  {busy === entry.id ? 'Loading…' : 'Load'}
-                </button>
-              )}
-              {loaded && (
-                <button className="btn btn-outline py-1 text-[12px]" disabled={busy !== null} onClick={() => void act(entry.id, () => window.nekko.decisionsUnload())}>Unload</button>
-              )}
-              {have && (
-                <button
-                  className="btn btn-ghost py-1 text-[12px] text-ink-faint"
-                  disabled={busy !== null}
-                  onClick={() => { if (window.confirm(`Delete ${entry.name} from disk?`)) void act(entry.id, () => window.nekko.decisionsDelete(entry.id)); }}
-                >
-                  Delete
-                </button>
-              )}
-            </div>}
-            {entry.unavailable && !have && <p className="mt-2 text-ink-faint">{entry.unavailable}</p>}
-            {folders.map((m) => (
-              <FolderModel key={m.id} model={m} status={status} busy={busy} act={act} />
-            ))}
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <input
-                className="input min-w-0 flex-1 py-1 text-[12px]"
-                aria-label="Export folder"
-                placeholder="Add an export folder, e.g. C:\models\laya-en-onnx"
-                value={folder}
-                onChange={(e) => setFolder(e.target.value)}
-              />
-              <button
-                className="btn btn-outline py-1 text-[12px]"
-                disabled={!folder.trim() || busy !== null}
-                onClick={() => void act('folder', () => window.nekko.decisionsAddFolder(folder)).then((r) => { if (r.ok) setFolder(''); })}
-              >
-                Add folder
-              </button>
-            </div>
-            {status && !status.local.available && <p className="mt-2 text-ink-faint">{status.local.reason}</p>}
-          </div>
-        );
-      })}
+      {catalog.map((entry) => (
+        <CatalogCard key={entry.id} entry={entry} have={installed.find((m) => m.id === entry.id)} status={status} busy={busy} act={act} refresh={refresh} />
+      ))}
+
+      <div className="rounded-lg border border-line p-3 text-[12px]" data-decision-folders>
+        <div className="text-[13px] font-semibold">Your own exports</div>
+        <p className="mt-1 text-ink-soft">A folder with an ONNX export of a Laya checkpoint, its tokenizer.json and rl_agent_config.json, read where it is. docs/decision-models.md has the recipe.</p>
+        {folders.map((m) => (
+          <FolderModel key={m.id} model={m} status={status} busy={busy} act={act} />
+        ))}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            className="input min-w-0 flex-1 py-1 text-[12px]"
+            aria-label="Export folder"
+            placeholder="Add an export folder, e.g. C:\models\laya-en-onnx"
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
+          />
+          <button
+            className="btn btn-outline py-1 text-[12px]"
+            disabled={!folder.trim() || busy !== null}
+            onClick={() => void act('folder', () => window.nekko.decisionsAddFolder(folder)).then((r) => { if (r.ok) setFolder(''); })}
+          >
+            Add folder
+          </button>
+        </div>
+        {status && !status.local.available && <p className="mt-2 text-ink-faint">{status.local.reason}</p>}
+      </div>
 
       <div className="rounded-lg border border-line p-3 text-[12px]">
         <div className="flex flex-wrap items-center gap-2">
@@ -328,6 +270,81 @@ function FolderModel({ model, status, busy, act }: {
         {loaded && <button className="btn btn-outline py-1 text-[12px]" disabled={busy !== null} onClick={() => void act(model.id, () => window.nekko.decisionsUnload())}>Unload</button>}
         <button className="btn btn-ghost py-1 text-[12px] text-ink-faint" disabled={busy !== null} onClick={() => void act(model.id, () => window.nekko.decisionsDelete(model.id))}>Remove from list</button>
       </div>
+    </div>
+  );
+}
+
+/** One catalog model: its precisions, the download, and loading what is on disk. */
+export function CatalogCard({ entry, have, status, busy, act, refresh }: {
+  entry: DecisionCatalogEntry;
+  have?: InstalledDecisionModel;
+  status: DecisionStatus | null;
+  busy: string | null;
+  act: (id: string, run: () => Promise<{ ok: boolean; message: string }>) => Promise<{ ok: boolean; message: string }>;
+  refresh: () => Promise<InstalledDecisionModel[]>;
+}) {
+  const recommended = entry.variants.find((v) => v.recommended) ?? entry.variants[0];
+  const [precision, setPrecision] = useState<DecisionPrecision>(recommended.precision);
+  const [downloading, setDownloading] = useState(false);
+  useEffect(() => {
+    if (!downloading) return;
+    const t = setInterval(() => {
+      void refresh().then((m) => { if (m.some((x) => x.id === entry.id && x.precisions.includes(precision))) setDownloading(false); });
+    }, 3000);
+    return () => clearInterval(t);
+  }, [downloading, precision, entry.id]);
+  const loaded = status?.local.loaded && status.local.model === entry.id;
+  const variant = entry.variants.find((v) => v.precision === precision) ?? recommended;
+  const bytes = variant.bytes + entry.shared.reduce((n, f) => n + f.bytes, 0);
+  return (
+    <div className="rounded-lg border border-line p-3 text-[12px]" data-decision-model={entry.id}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-semibold">{entry.name}</span>
+        <span className="chip">{entry.license}</span>
+        <span className="text-ink-faint">{entry.publisher}{entry.source ? ` · ${entry.source}` : ''}</span>
+        {loaded && <span className="chip" style={{ color: 'var(--success)' }}>loaded</span>}
+      </div>
+      <p className="mt-1 text-ink-soft">{entry.description}</p>
+      {have && (
+        <p className="mt-1 text-ink-faint">
+          On disk: {have.precisions.join(', ')} · {formatBytes(have.sizeBytes)}
+          {loaded && status?.local.ep && ` · running ${status.local.precision} on ${status.local.ep}${status.local.loadMs ? `, loaded in ${(status.local.loadMs / 1000).toFixed(1)} s` : ''}`}
+        </p>
+      )}
+      {(!entry.unavailable || have) && <div className="mt-2 flex flex-wrap items-center gap-2">
+        <select className="input w-auto py-1 text-[12px]" aria-label={`${entry.name} precision`} value={precision} onChange={(e) => setPrecision(e.target.value as DecisionPrecision)}>
+          {entry.variants.map((v) => (
+            <option key={v.precision} value={v.precision}>{v.precision}{v.recommended ? ' (recommended)' : ''} · {formatBytes(v.bytes)}</option>
+          ))}
+        </select>
+        {!entry.unavailable && !have?.precisions.includes(precision) && (
+          <button
+            className="btn btn-outline py-1 text-[12px]"
+            disabled={busy !== null || downloading}
+            onClick={() => void act(entry.id, () => window.nekko.decisionsDownload(entry.id, precision)).then((r) => { if (r.ok) setDownloading(true); })}
+          >
+            {downloading ? 'Downloading…' : `Download ${formatBytes(bytes)}`}
+          </button>
+        )}
+        {have?.precisions.includes(precision) && status?.local.available && !loaded && (
+          <button className="btn btn-primary py-1 text-[12px]" disabled={busy !== null} onClick={() => void act(entry.id, () => window.nekko.decisionsLoad(entry.id, precision))}>
+            {busy === entry.id ? 'Loading…' : 'Load'}
+          </button>
+        )}
+        {loaded && (
+          <button className="btn btn-outline py-1 text-[12px]" disabled={busy !== null} onClick={() => void act(entry.id, () => window.nekko.decisionsUnload())}>Unload</button>
+        )}
+        {have && (
+          <button
+            className="btn btn-ghost py-1 text-[12px] text-ink-faint"
+            disabled={busy !== null}
+            onClick={() => { if (window.confirm(`Delete ${entry.name} from disk?`)) void act(entry.id, () => window.nekko.decisionsDelete(entry.id)); }}
+          >
+            Delete
+          </button>
+        )}
+      </div>}
+      {entry.unavailable && !have && <p className="mt-2 text-ink-faint">{entry.unavailable}</p>}
     </div>
   );
 }

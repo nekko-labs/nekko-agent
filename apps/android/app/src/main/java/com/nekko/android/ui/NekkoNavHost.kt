@@ -1,10 +1,13 @@
 package com.nekko.android.ui
 
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -14,9 +17,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nekko.android.DeepLink
+import com.nekko.android.share.ShareInbox
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
+import com.nekko.android.data.NewChatDefaults
+import com.nekko.android.voice.AndroidMic
+import com.nekko.android.voice.Dictation
 import com.nekko.android.data.PhonePrefs
+import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.data.ThemePrefs
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.ChatsScreen
@@ -46,6 +54,8 @@ fun NekkoNavHost(
     repo: ComputersRepository,
     themePrefs: ThemePrefs,
     phonePrefs: PhonePrefs,
+    shareInbox: ShareInbox,
+    haptics: AndroidHaptics? = null,
     incomingLink: StateFlow<DeepLink?>,
     onLinkHandled: () -> Unit,
     nav: NavHostController = rememberNavController(),
@@ -55,6 +65,8 @@ fun NekkoNavHost(
         when (val l = link) {
             is DeepLink.Pair -> nav.navigate(Routes.pair(l.raw)) { launchSingleTop = true }
             is DeepLink.Chat -> nav.navigate(Routes.chat(l.id)) { launchSingleTop = true }
+            // Over whatever is open; Back from New chat returns there.
+            DeepLink.Share, DeepLink.NewChat -> nav.navigate(Routes.NEW) { launchSingleTop = true }
             null -> return@LaunchedEffect
         }
         onLinkHandled()
@@ -73,16 +85,34 @@ fun NekkoNavHost(
         }
         composable(Routes.CHAT, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("id").orEmpty()
-            val vm = viewModel(key = "chat:$id") { ChatViewModel(id, repo) }
-            ChatScreen(vm = vm, onBack = { nav.popBackStack() })
+            val context = LocalContext.current
+            val vm = viewModel(key = "chat:$id") { ChatViewModel(id, repo, AndroidMic(context), phonePrefs) }
+            // Text shared into a chat that was just created; taken once, never sent by itself.
+            val draft = remember(id) { shareInbox.takeDraft(id) }
+            val dictationOn by phonePrefs.flow(Dictation.ENABLED).collectAsStateWithLifecycle()
+            ChatScreen(vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = { nav.popBackStack() })
         }
         composable(Routes.NEW) {
+            // The phone's default model for the active computer (Settings → New chats).
+            val defaults = remember(phonePrefs) { NewChatDefaults(phonePrefs) }
+            val c by repo.state.collectAsStateWithLifecycle()
+            val models by defaults.modelsFlow.collectAsStateWithLifecycle()
+            val phonePick = remember(models, c.activeId) { c.activeId?.let(defaults::model) }
+            // Text shared from another app (Share to Nekko), editable here, never sent by itself.
+            val shared by shareInbox.shared.collectAsStateWithLifecycle()
             NewChatScreen(
                 repo = repo,
-                onBack = { nav.popBackStack() },
+                phonePick = phonePick,
+                shared = shared,
+                onEditShared = shareInbox::edit,
+                onBack = {
+                    shareInbox.clear()
+                    nav.popBackStack()
+                },
                 onPair = { nav.navigate(Routes.pair()) },
                 onCreated = { id ->
-                    nav.navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } }
+                    shareInbox.handOff(id)
+                    nav.onMain { navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } } }
                 },
             )
         }
@@ -94,12 +124,12 @@ fun NekkoNavHost(
                 repo = repo,
                 initialLink = entry.arguments?.getString("link"),
                 onBack = { nav.popBackStack() },
-                onPaired = { nav.backToChats() },
+                onPaired = { nav.onMain { backToChats() } },
             )
         }
         composable(Routes.SETTINGS) {
             val deps = remember(nav) {
-                SettingsDeps(repo, themePrefs, phonePrefs, open = { route -> nav.navigate(route) { launchSingleTop = true } })
+                SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } })
             }
             SettingsScreen(deps = deps, onBack = { nav.popBackStack() })
         }
@@ -114,6 +144,18 @@ fun NekkoNavHost(
             )
         }
     }
+}
+
+/**
+ * Navigation must run on the main thread. These callbacks come at the end of
+ * suspend work (pairing, creating a chat), and a coroutine is not guaranteed to
+ * resume on the main thread: under Compose UI tests the effect dispatcher
+ * resumes wherever the last suspension finished, and navigating from there
+ * threw "Method setCurrentState must be called on the main thread"
+ * (the emulator journey, apps/android/scripts/emulator-journey.sh).
+ */
+private fun NavHostController.onMain(block: NavHostController.() -> Unit) {
+    if (Looper.myLooper() == Looper.getMainLooper()) block() else Handler(Looper.getMainLooper()).post { block() }
 }
 
 /** Back to the chat list, dropping whatever was stacked on top (pairing, settings). */

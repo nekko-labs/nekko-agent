@@ -10,6 +10,7 @@
 //! agent -> relay : { type:'kick', cid }           (relay closes that client)
 //! agent -> relay : { type:'notify', title, body } (content-free push trigger)
 //! agent -> relay : { type:'push-remove', deviceId }
+//! agent -> relay : { type:'activity', tag, phase, callId?, severity? } (content-free Live Activity update)
 //! ```
 //!
 //! A client's `data` is `{"enc": seal(frame)}`. Nothing is dispatched for a
@@ -18,6 +19,8 @@
 
 use crate::e2e::{self, Key};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 /// Where IVs come from: random in production, scripted in the golden tests.
 pub type IvSource = Box<dyn FnMut() -> [u8; 12] + Send>;
@@ -51,6 +54,8 @@ pub struct AgentCore {
     /// Live connections in the order the relay announced them: cid and the
     /// welcomed device, set only after a valid HELLO.
     conns: Vec<(String, Option<String>)>,
+    /// Each chat's last Live Activity phase (`activity_frame`).
+    phases: HashMap<String, &'static str>,
 }
 
 fn frame(v: Value) -> String {
@@ -59,7 +64,7 @@ fn frame(v: Value) -> String {
 
 impl AgentCore {
     pub fn new(key: Key, iv: IvSource) -> Self {
-        Self { key, iv, conns: Vec::new() }
+        Self { key, iv, conns: Vec::new(), phases: HashMap::new() }
     }
 
     fn seal(&mut self, value: &Value) -> String {
@@ -153,10 +158,16 @@ impl AgentCore {
         }
     }
 
-    /// The sealed reply to a dispatched request.
+    /// The sealed reply to a dispatched request. The relay silently drops a
+    /// frame over its limit, so a reply that seals larger than the phone limit
+    /// goes out as an error the phone can show at once (`reply` in relay.ts).
     pub fn reply(&mut self, cid: &str, id: Option<Value>, result: Result<Value, String>) -> String {
-        let res = res(id, result);
-        self.send_to(cid, &res)
+        let data = self.seal(&res(id.clone(), result));
+        if data.len() <= crate::phone::policy().max_frame_bytes {
+            return frame(json!({ "type": "d", "cid": cid, "data": data }));
+        }
+        let error = res(id, Err(crate::phone::frame_too_large(data.len())));
+        self.send_to(cid, &error)
     }
 
     /// A host event: the push ping when a run finished, then the event to
@@ -165,6 +176,10 @@ impl AgentCore {
         let mut out = Vec::new();
         if channel == "agent:event" && payload.get("type").and_then(Value::as_str) == Some("done") {
             out.push(frame(json!({ "type": "notify", "title": "Nekko finished", "body": "Your task is ready." })));
+        }
+        let activity = if channel == "agent:event" { self.activity_frame(payload) } else { None };
+        if let Some(a) = activity {
+            out.push(frame(a));
         }
         let welcomed: Vec<String> = self.conns.iter().filter(|(_, d)| d.is_some()).map(|(c, _)| c.clone()).collect();
         if welcomed.is_empty() {
@@ -175,6 +190,69 @@ impl AgentCore {
             out.push(frame(json!({ "type": "d", "cid": cid, "data": data })));
         }
         out
+    }
+
+    /// A content-free `activity` frame when a chat's phase changes, so the relay
+    /// can update a phone's Live Activity while iOS has suspended the app.
+    /// Exactly `activityFrame` in packages/host/src/relay.ts.
+    fn activity_frame(&mut self, e: &Value) -> Option<Value> {
+        let sid = e.get("sessionId")?.as_str()?.to_string();
+        let ty = e.get("type")?.as_str()?;
+        let prev = self.phases.get(&sid).copied();
+        let mut extra: Vec<(&str, Value)> = Vec::new();
+        let phase: &'static str = match ty {
+            "tool_approval_required" => {
+                let id = e.get("call")?.get("id")?.as_str()?;
+                extra.push(("callId", json!(id)));
+                let sev = match e.get("severity").and_then(Value::as_str) {
+                    Some("high") => "high",
+                    Some("medium") => "medium",
+                    _ => "low",
+                };
+                extra.push(("severity", json!(sev)));
+                "approval"
+            }
+            "question" => "question",
+            "tool_result" | "question_resolved" => {
+                if prev != Some("approval") && prev != Some("question") {
+                    return None;
+                }
+                "running"
+            }
+            "text" | "reasoning" | "tool_call" => {
+                if prev.is_some() {
+                    return None;
+                }
+                "running"
+            }
+            "done" => "done",
+            "error" => {
+                let stopped = e
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .map(|m| m.eq_ignore_ascii_case("stopped") || m.eq_ignore_ascii_case("aborted"))
+                    .unwrap_or(false);
+                if stopped { "done" } else { "failed" }
+            }
+            _ => return None,
+        };
+        if Some(phase) == prev && phase != "approval" {
+            return None;
+        }
+        if phase == "done" || phase == "failed" {
+            prev?;
+            self.phases.remove(&sid);
+        } else {
+            self.phases.insert(sid.clone(), phase);
+        }
+        let mut o = serde_json::Map::new();
+        o.insert("type".into(), json!("activity"));
+        o.insert("tag".into(), json!(activity_tag(&sid)));
+        o.insert("phase".into(), json!(phase));
+        for (k, v) in extra {
+            o.insert(k.into(), v);
+        }
+        Some(Value::Object(o))
     }
 
     /// Revocation: kick the device's live connections and drop its push token.
@@ -214,4 +292,11 @@ fn res(id: Option<Value>, result: Result<Value, String>) -> Value {
         Err(e) => m.insert("error".into(), json!(e)),
     };
     Value::Object(m)
+}
+
+/// The relay-visible tag of a chat's Live Activity: the first 32 hex digits of
+/// sha256("nekko-activity:" + session id). The phone computes the same.
+pub fn activity_tag(session_id: &str) -> String {
+    let d = Sha256::digest(format!("nekko-activity:{session_id}").as_bytes());
+    d.iter().take(16).map(|b| format!("{b:02x}")).collect()
 }

@@ -28,22 +28,24 @@ export function openAgentCompanion(sessionId: string, kind: CompanionKind, comma
  * Changes carries the count when there is one, so it doubles as the
  * "N changes" chip it replaces.
  */
-export function AgentCompanionButtons({ sessionId, changeCount, commandCenter, compact }: {
+export function AgentCompanionButtons({ sessionId, changeCount, added = 0, removed = 0, commandCenter, compact }: {
   sessionId: string;
   changeCount: number;
+  added?: number;
+  removed?: number;
   commandCenter: boolean;
   compact: boolean;
 }) {
   const open = useWallLogs((s) => commandCenter && s.sessionId === sessionId && !s.closing ? s.kind : null);
   return (
-    <span className="flex shrink-0 items-center" role="group" aria-label="Agent companions">
+    <span className="contents" role="group" aria-label="Agent companions">
       {KINDS.map(({ kind, label, title, Icon }) => {
         const count = kind === 'diff' && changeCount > 0 ? changeCount : 0;
         return (
           <button
             key={kind}
             type="button"
-            className={`btn btn-ghost shrink-0 gap-1 px-1.5 py-1 text-[11px] ${count || open === kind ? 'font-medium text-accent' : ''}`}
+            className={`btn btn-ghost shrink-0 gap-1 px-1.5 py-1 text-[11px] ${count || open === kind ? 'font-medium text-accent' : ''} ${count ? 'agent-changes-pending' : ''}`}
             aria-label={count ? `${label} (${count})` : label}
             title={count ? `${title} (${count} changed file${count === 1 ? '' : 's'})` : title}
             data-agent-companion={kind}
@@ -51,7 +53,7 @@ export function AgentCompanionButtons({ sessionId, changeCount, commandCenter, c
             onClick={() => openAgentCompanion(sessionId, kind, commandCenter)}
           >
             <Icon className="h-3.5 w-3.5" />
-            {count > 0 && !compact && <span>{count}</span>}
+            {count > 0 && <span className="agent-change-summary"><span className="text-success">+{added}</span><span className="text-danger">−{removed}</span><span>{count} file{count === 1 ? '' : 's'}</span></span>}
           </button>
         );
       })}

@@ -95,16 +95,18 @@ class RelayClientTest {
 
     private fun CoroutineScope.launchSoon(block: () -> Unit) = async { delay(5); block() }
 
-    private fun client(relay: FakeRelay, pair: String? = null, id: String = "dev-1") = RelayClient(
+    private fun client(relay: FakeRelay, pair: String? = null, id: String = "dev-1", transport: WsTransport = relay) = RelayClient(
         RelayConfig(
             relayUrl = "wss://relay.test/", room = "abcd1234", key = "k&ey", keyBytes = key,
             deviceId = id, deviceName = "Pixel", pairCode = pair,
-            handshakeTimeoutMs = 2_000, requestTimeoutMs = 2_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+            // Generous: the first test on a cold JVM also pays for crypto setup, and no test here
+            // waits for these to expire, so they only bound how long a real failure takes.
+            handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
         ),
-        relay, scope,
+        transport, scope,
     )
 
-    private suspend fun RelayClient.await(state: RelayState) = withTimeout(3_000) { status.first { it.state == state } }
+    private suspend fun RelayClient.await(state: RelayState) = withTimeout(10_000) { status.first { it.state == state } }
 
     @Test fun `enrolls with the one-time code, then never resends it`() = runBlocking {
         val relay = FakeRelay(code = "ABCD2345")
@@ -139,6 +141,28 @@ class RelayClientTest {
         assertEquals("ok:sessions:summaries", r.await().jsonPrimitive.content)
         assertEquals(1, relay.requests.size)
         assertEquals(0, relay.requests.single()["args"]!!.jsonArray.size)
+        c.close()
+    }
+
+    @Test fun `a socket that opens before open() returns still says hello`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        // Like OkHttp on a fast network: onOpen on another thread while open() is still returning.
+        val early = object : WsTransport {
+            override fun open(url: String, listener: WsListener): WsConnection {
+                val c = relay.open(url, object : WsListener {
+                    override fun onOpen() {}
+                    override fun onMessage(text: String) = listener.onMessage(text)
+                    override fun onClosed(code: Int, reason: String) = listener.onClosed(code, reason)
+                })
+                Thread { listener.onOpen() }.start()
+                Thread.sleep(50) // the callback is already waiting when open() returns
+                return c
+            }
+        }
+        val c = client(relay, transport = early)
+        c.connect()
+        assertEquals("ok:app:info", c.call(Channels.APP_INFO).jsonPrimitive.content)
+        assertEquals(1, relay.hellos.size)
         c.close()
     }
 
@@ -231,6 +255,63 @@ class RelayClientTest {
         assertEquals(1, relay.urls.size)
         assertEquals(2, relay.hellos.size)
         c.close()
+    }
+
+    @Test fun `reconnect drops a live socket and dials a fresh one`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.answer = { null } // never answer: the call must fail, not hang
+        val c = client(relay)
+        c.connect()
+        c.await(RelayState.ONLINE)
+        val old = relay.current!!
+        val inflight = async { runCatching { c.call(Channels.CHAT_PENDING) } }
+        delay(50)
+        c.reconnect()
+        assertTrue(inflight.await().exceptionOrNull() is RelayException)
+        assertTrue(!old.open)
+        c.await(RelayState.ONLINE)
+        assertEquals(2, relay.urls.size)
+        assertEquals(2, relay.hellos.size)
+        // The old socket's late close must not schedule another dial.
+        delay(150)
+        assertEquals(2, relay.urls.size)
+        c.close()
+    }
+
+    @Test fun `reconnect skips the backoff while the relay is unreachable`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.refuseNext = 1006 to "network down"
+        val c = RelayClient(
+            RelayConfig(
+                relayUrl = "wss://relay.test/", room = "abcd1234", key = "k", keyBytes = key, deviceId = "dev-1", deviceName = "Pixel",
+                handshakeTimeoutMs = 2_000, requestTimeoutMs = 2_000, retryBaseMs = 60_000, retryMaxMs = 60_000,
+            ),
+            relay, scope,
+        )
+        c.connect()
+        withTimeout(2_000) { c.status.first { it.state == RelayState.CONNECTING && it.detail == "network down" } }
+        c.reconnect() // without it the next try would be a minute away
+        c.await(RelayState.ONLINE)
+        assertEquals(2, relay.urls.size)
+        c.close()
+    }
+
+    @Test fun `reconnect does nothing once closed or denied`() = runBlocking {
+        val closed = FakeRelay(known = mutableSetOf("dev-1"))
+        val a = client(closed)
+        a.connect(); a.await(RelayState.ONLINE); a.close()
+        a.reconnect()
+        delay(100)
+        assertEquals(1, closed.urls.size)
+        assertEquals(RelayState.IDLE, a.state)
+
+        val stranger = FakeRelay()
+        val b = client(stranger)
+        b.connect(); b.await(RelayState.DENIED)
+        b.reconnect()
+        delay(100)
+        assertEquals(1, stranger.urls.size)
+        assertEquals(RelayState.DENIED, b.state)
     }
 
     @Test fun `close stops reconnecting and rejects new calls`() = runBlocking {

@@ -815,6 +815,18 @@ async fn providers_are_listed_saved_tested_and_asked_for_models_by_the_daemon() 
     let (_, models) = post(d.port, "models:list", json!(["p1"]), Some(TOKEN)).await;
     let ids: Vec<&str> = models.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect();
     assert_eq!(ids, ["m1", "m2"]);
+    let (_, status) = post(d.port, "models:listStatus", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(status["models"], models);
+    assert_eq!(status.get("error"), None);
+    let (_, missing) = post(d.port, "models:listStatus", json!(["nope"]), Some(TOKEN)).await;
+    assert_eq!(missing, json!({ "models": [] }));
+
+    // A key the server refuses: models:list stays [], listStatus says why.
+    post(d.port, "providers:save", json!([bad]), Some(TOKEN)).await;
+    let (_, empty) = post(d.port, "models:list", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(empty, json!([]));
+    let (_, failed) = post(d.port, "models:listStatus", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(failed, json!({ "models": [], "error": "listModels 401: bad key" }));
     let (_, none) = post(d.port, "lms:probe", json!(["p1"]), Some(TOKEN)).await;
     assert_eq!(none, json!({ "available": false }));
     let (_, removed) = post(d.port, "providers:remove", json!(["p1"]), Some(TOKEN)).await;
@@ -1129,6 +1141,194 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     let system = requests[0]["messages"][0]["content"].as_str().unwrap().to_string();
     assert!(system.contains("Always run the tests."), "{system}");
     assert!(system.contains("1: export const secret = 'pineapple';"), "{system}");
+}
+
+/// A model reply of `n` text chunks (`word0 word1 ...`), then a stop.
+fn slow_text(word: &str, n: usize) -> String {
+    let mut chunks: Vec<Value> = (0..n)
+        .map(|i| json!({ "choices": [{ "delta": { "content": format!("{word}{i} ") }, "finish_reason": null }] }))
+        .collect();
+    chunks.push(json!({ "choices": [{ "delta": {}, "finish_reason": "stop" }], "usage": { "prompt_tokens": 10, "completion_tokens": n } }));
+    sse(&chunks)
+}
+
+/// Everything a socket receives until both chats' `done`, as (channel, payload).
+async fn collect_until_done(socket: &mut Socket, sessions: &[&str]) -> Vec<(String, Value)> {
+    let mut seen = Vec::new();
+    let mut done = std::collections::HashSet::new();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while done.len() < sessions.len() {
+        let Some(frame) = next_json(socket, deadline.saturating_duration_since(Instant::now())).await else {
+            panic!("socket went quiet; done for {done:?}, saw {}", seen.len())
+        };
+        let Some(channel) = frame["channel"].as_str() else { continue };
+        let payload = frame["payload"].clone();
+        if channel == "agent:event" && payload["type"] == "done" {
+            done.insert(payload["sessionId"].as_str().unwrap_or_default().to_string());
+        }
+        seen.push((channel.to_string(), payload));
+    }
+    seen
+}
+
+/// The next frame about a chat or a request, past the backend's own chatter:
+/// the fake backend greets every socket every 100 ms with a session-less
+/// `hello-from-backend`, and a socket may hear `daemon:backend` when the
+/// backend comes up. Either can land between any two frames a test expects.
+async fn next_chat_frame(socket: &mut Socket) -> Value {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let f = next_json(socket, deadline.saturating_duration_since(Instant::now())).await.expect("a frame");
+        let hello = f["channel"] == "agent:event"
+            && f["payload"]["type"] == "hello-from-backend"
+            && f["payload"]["sessionId"].is_null();
+        if !hello && f["channel"] != "daemon:backend" {
+            return f;
+        }
+    }
+}
+
+fn streamed_text(frames: &[(String, Value)], session: &str) -> String {
+    let mut out = String::new();
+    for (channel, p) in frames {
+        if channel == "agent:replay" && p["sessionId"] == session {
+            for e in p["events"].as_array().unwrap() {
+                if e["type"] == "text" {
+                    out.push_str(e["delta"].as_str().unwrap());
+                }
+            }
+        } else if channel == "agent:event" && p["sessionId"] == session && p["type"] == "text" {
+            out.push_str(p["delta"].as_str().unwrap());
+        }
+    }
+    out
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_turns_end() {
+    let chat = |id: &str| json!({ "id": id, "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("subscribe", chat("s_one"));
+    std::fs::write(rig.data.join("sessions").join("s_two.json"), chat("s_two").to_string()).unwrap();
+    // Each reply is 40 chunks, so 40 text events per chat, interleaved.
+    let model = scripted_model(vec![slow_text("one", 40), slow_text("two", 40)]).await;
+    let port = rig.d.port;
+
+    // Socket A takes s_one's stream (daemon:subscribe), B s_two's (?sessions=),
+    // C every chat (no subscription, as before).
+    let mut a = ws(port, &format!("/api/ws?token={TOKEN}"), None).await.unwrap();
+    a.send(Message::Text(json!({ "id": 1, "channel": "daemon:subscribe", "args": [["s_one"]] }).to_string().into()))
+        .await
+        .unwrap();
+    // The backend's own chatter may land first (`next_chat_frame`). No chat's event may.
+    let ack = next_chat_frame(&mut a).await;
+    assert_eq!(
+        ack,
+        json!({ "id": 1, "result": true }),
+        "no turn is running yet, so no chat event comes before the answer"
+    );
+    let mut b = ws(port, &format!("/api/ws?sessions=s_two&token={TOKEN}"), None).await.unwrap();
+    let mut c = ws(port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
+
+    let mut one = turn_spec(&rig, &model, "turn_one", "s_one", json!({}));
+    let mut two = turn_spec(&rig, &model, "turn_two", "s_two", json!({}));
+    // As a host whose relay, messaging and accounting are the daemon's asks.
+    one["facts"]["hostEvents"] = json!(["done", "error"]);
+    two["facts"]["hostEvents"] = json!(["done", "error"]);
+    let (s1, _) = post(port, "chat:turn", json!([one]), Some(TOKEN)).await;
+    let (s2, _) = post(port, "chat:turn", json!([two]), Some(TOKEN)).await;
+    assert_eq!((s1, s2), (200, 200));
+
+    let (fa, fb, fc) = tokio::join!(
+        collect_until_done(&mut a, &["s_one", "s_two"]),
+        collect_until_done(&mut b, &["s_one", "s_two"]),
+        collect_until_done(&mut c, &["s_one", "s_two"]),
+    );
+    let words = |w: &str| (0..40).map(|i| format!("{w}{i} ")).collect::<String>();
+    // The model answers in the order the turns reach it, which the two posts
+    // above don't fix: each chat gets one of the two replies, whole.
+    let (c_one, c_two) = (streamed_text(&fc, "s_one"), streamed_text(&fc, "s_two"));
+    let mut got = [c_one.clone(), c_two.clone()];
+    got.sort();
+    assert_eq!(got, [words("one"), words("two")]);
+    // Every socket has its own chat's whole reply, once.
+    assert_eq!(streamed_text(&fa, "s_one"), c_one);
+    assert_eq!(streamed_text(&fb, "s_two"), c_two);
+    // Of the other chat a subscribed socket hears the turn start and end,
+    // and none of its stream after the first event.
+    let of = |frames: &[(String, Value)], s: &str| -> Vec<String> {
+        frames
+            .iter()
+            .filter(|(ch, p)| ch == "agent:event" && p["sessionId"] == s)
+            .map(|(_, p)| p["type"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let other_a = of(&fa, "s_two");
+    let other_b = of(&fb, "s_one");
+    assert!(other_a.first().is_some_and(|t| t != "done") && other_a.last().is_some_and(|t| t == "done"), "{other_a:?}");
+    assert!(other_a.len() <= 4, "a's view of s_two is a summary: {other_a:?}");
+    assert!(other_b.len() <= 4, "b's view of s_one is a summary: {other_b:?}");
+    let frames = |f: &[(String, Value)]| f.iter().filter(|(ch, _)| ch == "agent:event").count();
+    assert!(frames(&fa) * 3 < frames(&fc) * 2, "a {} frames vs c {}", frames(&fa), frames(&fc));
+    println!("agent frames per socket: subscribed a={} b={}, unsubscribed c={}", frames(&fa), frames(&fb), frames(&fc));
+
+    // The host asked only for how the turns end.
+    for turn in ["turn_one", "turn_two"] {
+        let (events, _) = turn_record(port, turn).await;
+        assert_eq!(event_types(&events), ["done"], "{turn}");
+    }
+
+    // A socket that starts showing a chat mid-turn is sent the turn so far.
+    let model2 = scripted_model(vec![
+        call_tool("c_wait", "ask_user", json!({ "questions": [{ "question": "Go?", "options": ["yes", "no"] }] })),
+        say_text("went"),
+    ])
+    .await;
+    let mut three = turn_spec(&rig, &model2, "turn_three", "s_one", json!({}));
+    three["facts"]["hostEvents"] = json!(["done", "error"]);
+    post(port, "chat:turn", json!([three]), Some(TOKEN)).await;
+    wait_pending(port, "s_one", "question", "c_wait").await;
+    // The question is pending before its event is published: wait until a
+    // socket that hears every chat has it, so the replay below holds it too.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let f = next_json(&mut c, Duration::from_secs(10)).await.expect("c is still open");
+            if f["channel"] == "agent:event"
+                && f["payload"]["sessionId"] == "s_one"
+                && f["payload"]["type"] == "question"
+            {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("the question event reached every chat's socket");
+    let mut late = ws(port, &format!("/api/ws?sessions=s_two&token={TOKEN}"), None).await.unwrap();
+    // Connected narrowed: told that s_one is running (its first event).
+    let first = next_chat_frame(&mut late).await;
+    assert_eq!(
+        (first["channel"].as_str(), first["payload"]["sessionId"].as_str()),
+        (Some("agent:event"), Some("s_one")),
+        "{first}"
+    );
+    late.send(Message::Text(
+        json!({ "id": 7, "channel": "daemon:subscribe", "args": [["s_one", "s_two"]] }).to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let replay = next_chat_frame(&mut late).await;
+    assert_eq!(replay["channel"], "agent:replay", "{replay}");
+    let types: Vec<&str> =
+        replay["payload"]["events"].as_array().unwrap().iter().map(|e| e["type"].as_str().unwrap()).collect();
+    assert!(types.contains(&"tool_call") && types.contains(&"question"), "{types:?}");
+    assert_eq!(next_chat_frame(&mut late).await, json!({ "id": 7, "result": true }));
+    post(port, "chat:answer", json!(["s_one", "c_wait", [{ "questionId": "q1", "labels": ["yes"] }]]), Some(TOKEN))
+        .await;
+    let rest = collect_until_done(&mut late, &["s_one"]).await;
+    assert!(
+        rest.iter().all(|(ch, p)| ch != "agent:event" || p["type"] != "question"),
+        "the question is not sent twice"
+    );
+    assert_eq!(streamed_text(&rest, "s_one"), "went");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -2035,6 +2235,165 @@ async fn a_scheduled_task_fires_when_it_is_due_not_a_tick_later() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
+/// The runs as the daemon wrote them.
+fn read_runs(data: &std::path::Path) -> Value {
+    std::fs::read_to_string(data.join("training.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or(json!([]))
+}
+
+/// A goal run end to end in the daemon: created (its chat made by the host and
+/// named here), started, its turns admitted and driven by the daemon, its plan,
+/// experiment and artifact recorded by the daemon's own tools with no
+/// `turn:tool`, finished on the done token, and `training:updated` published.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_runs_training_and_goal_runs_and_their_tools_itself() {
+    let rig = turn_rig("training", json!({ "id": "s_unused", "messages": [] }));
+    let model = scripted_model(vec![
+        call_tool(
+            "c_plan",
+            "update_plan",
+            json!({ "replace": true, "steps": [{ "title": "Write the parser", "status": "active" }, { "title": "Add tests" }] }),
+        ),
+        call_tool("c_exp", "report_experiment", json!({ "title": "Fast path", "status": "succeeded", "score": 0.9 })),
+        call_tool("c_art", "report_artifact", json!({ "path": "nekko-goal/csv/parser.ts", "kind": "code" })),
+        say_text("Planned and started."),
+        call_tool("c_done", "update_plan", json!({ "steps": [{ "id": "step_1", "status": "done", "note": "Parses" }, { "id": "step_2", "status": "done" }] })),
+        say_text("Everything is verified. \u{27e6}RUN_DONE\u{27e7}"),
+    ])
+    .await;
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let settings = json!({
+        "providers": [provider],
+        "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo", "defaultProviderId": "p1", "defaultModelId": "synthetic",
+    });
+    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    let mut events = ws(rig.d.port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
+
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in ["training:list", "training:create", "training:start", "training:hint", "training:tool"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned: {info}");
+    }
+    let input =
+        json!({ "kind": "goal", "name": "  CSV importer  ", "goal": "Ship the CSV importer", "workspaceId": "w1" });
+    let (status, run) = post(rig.d.port, "training:create", json!([input]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{run}");
+    assert_eq!(run["name"], "CSV importer");
+    assert_eq!(run["status"], "draft");
+    assert_eq!(run["sessionId"], "s_created");
+    let id = run["id"].as_str().unwrap().to_string();
+    let chat = saved_session(&rig, "s_created");
+    assert_eq!(chat["title"], "CSV importer");
+    assert_eq!(chat["trainingRunId"], id.as_str());
+    assert_eq!(chat["providerId"], "p1");
+
+    let (_, list) = post(rig.d.port, "training:hint", json!([id, "  Keep it small  "]), Some(TOKEN)).await;
+    assert_eq!(list[0]["hints"][0]["text"], "Keep it small");
+    let (_, list) = post(rig.d.port, "training:start", json!([id]), Some(TOKEN)).await;
+    assert_eq!(list[0]["status"], "running");
+    // Two turns (the second after the 4 s pause), then finished on the token.
+    wait_for("the run to complete", || read_runs(&rig.data)[0]["status"] == json!("completed")).await;
+    let run = read_runs(&rig.data)[0].clone();
+    assert_eq!(run["turns"], json!(2), "{run}");
+    assert_eq!(run["plan"][0]["status"], "done", "{run}");
+    assert_eq!(run["plan"][0]["note"], "Parses");
+    assert_eq!(run["experiments"][0]["id"], "exp_1");
+    assert_eq!(run["bestExperimentId"], "exp_1");
+    assert_eq!(run["artifacts"][0]["title"], "parser.ts");
+    assert!(run["hints"][0]["consumedAt"].is_number(), "{run}");
+    let log: Vec<String> = run["log"].as_array().unwrap().iter().map(|l| l["text"].as_str().unwrap().into()).collect();
+    assert!(log.contains(&"Plan created: 2 steps.".to_string()), "{log:?}");
+    assert!(log.contains(&"Run completed: Everything is verified.".to_string()), "{log:?}");
+
+    // The chat: the turns' transcript and the run's plan mirrored onto it.
+    let chat = saved_session(&rig, "s_created");
+    assert_eq!(chat["agentPlan"], run["plan"]);
+    let messages = chat["messages"].as_array().unwrap();
+    let tool_out = |id: &str| -> String {
+        let m = messages.iter().find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id).unwrap();
+        m["toolResult"]["output"].as_str().unwrap().to_string()
+    };
+    assert!(tool_out("c_plan").starts_with("Plan saved (0/2 done):"), "{}", tool_out("c_plan"));
+    assert_eq!(tool_out("c_exp"), "Recorded exp_1. It is the new leader at 0.9.");
+    assert_eq!(
+        tool_out("c_art"),
+        "Recorded artifact \"parser.ts\" at nekko-goal/csv/parser.ts. It now shows on the run's Artifacts card."
+    );
+    // The first turn's brief, with the hint folded in.
+    let first = messages.iter().find(|m| m["role"] == "user").unwrap()["content"].as_str().unwrap().to_string();
+    assert!(first.starts_with("You are Nekko Agent's goal agent."), "{first}");
+    assert!(
+        first.ends_with("USER GUIDANCE (fold these into your next experiments; acknowledge each):\n- Keep it small")
+    );
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(!calls.iter().any(|c| c[0] == "turn:tool" || c[0] == "chat:send"), "the host ran nothing: {calls:?}");
+    // Its history window went with the turn.
+    let requests = model.requests.lock().unwrap().clone();
+    assert!(requests.len() >= 6, "{}", requests.len());
+
+    let mut heard = false;
+    while let Some(frame) = next_json(&mut events, Duration::from_secs(2)).await {
+        if frame["channel"] == "training:updated" {
+            heard = true;
+            break;
+        }
+    }
+    assert!(heard, "training:updated was published");
+
+    // A turn the host runs sends its run tools here.
+    let (_, out) = post(
+        rig.d.port,
+        "training:tool",
+        json!(["s_created", "report_experiment", { "id": "exp_2", "status": "failed" }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(out["output"], "Recorded exp_2 (failed). Leader is exp_1 (Fast path) at 0.9.");
+    let (_, out) =
+        post(rig.d.port, "training:tool", json!(["s_created", "update_plan", { "steps": [null] }]), Some(TOKEN)).await;
+    assert_eq!(out["error"], "Cannot read properties of null (reading 'title')");
+
+    let (_, list) = post(rig.d.port, "training:stop", json!([id]), Some(TOKEN)).await;
+    assert_eq!(list[0]["status"], "completed", "a completed run stays completed");
+    let (_, list) = post(rig.d.port, "training:delete", json!([id]), Some(TOKEN)).await;
+    assert_eq!(list, json!([]));
+    assert_eq!(read_runs(&rig.data), json!([]));
+}
+
+/// A run that was mid-flight when the daemon stopped resumes when it starts.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_running_training_run_resumes_when_the_daemon_starts() {
+    let data = std::env::temp_dir().join(format!("nekkod-training-resume-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // No model anywhere: its resumed turn fails the run at once.
+    std::fs::write(data.join("sessions/s_run.json"), r#"{"id":"s_run","title":"Run","messages":[]}"#).unwrap();
+    std::fs::write(
+        data.join("training.json"),
+        r#"[{"id":"r1","kind":"training","name":"Old","goal":"g","status":"running","config":{},"sessionId":"s_run","experiments":[],"hints":[],"log":[],"createdAt":1,"updatedAt":1,"startedAt":1,"turns":3}]"#,
+    )
+    .unwrap();
+    let d = start_with(true, Some(&data));
+    wait_for("the resumed run", || read_runs(&data)[0]["status"] == json!("failed")).await;
+    let run = read_runs(&data)[0].clone();
+    let log: Vec<&str> = run["log"].as_array().unwrap().iter().map(|l| l["text"].as_str().unwrap()).collect();
+    assert_eq!(
+        log,
+        [
+            "Host restarted; run resumed automatically.",
+            "No model configured. Set a default provider/model in Models, then start the run again."
+        ]
+    );
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn serves_files_memory_and_comments_itself() {
     let data = std::env::temp_dir().join(format!("nekkod-workspace-{}", std::process::id()));
@@ -2445,16 +2804,42 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
     assert_eq!(saved["devices"][0]["id"], "phone-1");
 
-    // A daemon channel, a channel the host serves, and an internal callback a phone may not call.
-    agent.send(client("c1", json!({ "type": "req", "id": 2, "channel": "remote:devices", "args": [] }))).await.unwrap();
-    let (_, res) = next_agent_frame(&mut agent, &key).await;
-    assert_eq!(res.unwrap()["result"][0]["id"], "phone-1");
-    agent.send(client("c1", json!({ "type": "req", "id": 3, "channel": "training:list", "args": [] }))).await.unwrap();
-    let (_, res) = next_agent_frame(&mut agent, &key).await;
-    assert_eq!(res.unwrap()["result"], json!({ "echo": "training:list", "args": [] }));
-    agent.send(client("c1", json!({ "type": "req", "id": 4, "channel": "turn:pending", "args": [] }))).await.unwrap();
-    let (_, res) = next_agent_frame(&mut agent, &key).await;
-    assert_eq!(res.unwrap()["error"], "Unknown channel: turn:pending");
+    // What a phone may call is the computer's decision (nekko_remote::phone):
+    // a daemon channel it may not call, a channel the host serves that it may,
+    // a public channel off its list, and an internal callback.
+    let mut ask = async |id: u32, channel: &str, args: Value| {
+        agent.send(client("c1", json!({ "type": "req", "id": id, "channel": channel, "args": args }))).await.unwrap();
+        next_agent_frame(&mut agent, &key).await.1.unwrap()
+    };
+    let res = ask(2, "remote:devices", json!([])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): remote:devices");
+    // `app:info` is the daemon's own now (small_services.rs), not the host's echo.
+    let res = ask(3, "app:info", json!([])).await;
+    assert_eq!(res["result"]["edition"], "web", "{res}");
+    assert!(res["result"]["platform"].is_string(), "{res}");
+    // A channel the host serves.
+    let res = ask(31, "skills:runnable", json!([])).await;
+    assert_eq!(res["result"], json!([]), "{res}");
+    let res = ask(4, "training:list", json!([])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): training:list");
+    let res = ask(5, "turn:pending", json!([])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): turn:pending");
+    // Settings: the daemon's own, redacted for the phone, and only the phone's keys.
+    post(d.port, "settings:update", json!([{ "hfToken": "hf_secret", "defaultChatMode": "ask" }]), Some(TOKEN)).await;
+    let res = ask(6, "settings:get", json!([])).await;
+    assert_eq!(res["result"]["defaultChatMode"], "ask", "{res}");
+    assert!(!res.to_string().contains("hf_secret"), "{res}");
+    assert!(res["result"].get("providers").is_none(), "{res}");
+    let res = ask(7, "settings:update", json!([{ "defaultChatMode": "turbo" }])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (value-invalid): defaultChatMode");
+    let res = ask(8, "settings:update", json!([{ "chatPaneAction": "delete", "sandboxMode": "off" }])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (setting-denied): sandboxMode");
+    let res = ask(9, "settings:update", json!([{ "chatPaneAction": "delete" }])).await;
+    assert_eq!(res["result"]["chatPaneAction"], "delete", "{res}");
+    let (_, saved) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
+    assert_eq!(saved["defaultChatMode"], "ask", "the refused updates applied nothing");
+    assert_ne!(saved["sandboxMode"], "off");
+    assert_eq!(saved["hfToken"], "hf_secret");
 
     // The host's events reach the welcomed phone.
     let f = next_json(&mut agent, Duration::from_secs(20)).await.expect("a relayed event");
@@ -3307,8 +3692,19 @@ fn fake_llama() -> std::path::PathBuf {
     path
 }
 
+/// A port for a server the daemon binds later (the engine binds its port at
+/// the first load, seconds on). A port 0 picked would be free only until then:
+/// any `bind(0)` in the run (a daemon, a fake server, a model process) may be
+/// handed it meanwhile. So pick below every OS's ephemeral range (Linux starts
+/// at 32768, macOS and Windows at 49152), apart per test process, never twice.
 fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+    use std::sync::atomic::{AtomicU16, Ordering};
+    static NEXT: AtomicU16 = AtomicU16::new(0);
+    let base = 20_000 + (std::process::id() % 400) as u16 * 25;
+    (0..100)
+        .map(|_| base + NEXT.fetch_add(1, Ordering::Relaxed) % 25)
+        .find(|&port| std::net::TcpListener::bind(("127.0.0.1", port)).is_ok())
+        .expect("a free port below the ephemeral range")
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -3462,4 +3858,1425 @@ async fn runs_the_model_server_itself() {
     assert!(http.get(format!("http://127.0.0.1:{port}/v1/models")).send().await.is_err(), "the listener is closed");
     drop(d);
     std::fs::remove_dir_all(root).ok();
+}
+
+/* ------------------------------------------------- turn variants (PF14 A2) */
+
+/// A chat with three turns on the scripted provider, for compaction.
+fn compaction_chat(id: &str) -> Value {
+    let long = |s: &str| format!("{s} {}", "background detail ".repeat(30));
+    json!({
+        "id": id, "title": "Long chat", "workspaceId": "w1", "providerId": "p1", "modelId": "synthetic",
+        "messages": [
+            { "id": "u1", "role": "user", "content": long("First request:"), "createdAt": 1 },
+            { "id": "a1", "role": "assistant", "content": long("First answer:"), "createdAt": 2 },
+            { "id": "u2", "role": "user", "content": "Second request", "createdAt": 3 },
+            { "id": "a2", "role": "assistant", "content": "Second answer", "createdAt": 4 },
+            { "id": "u3", "role": "user", "content": "Third request", "createdAt": 5 },
+            { "id": "a3", "role": "assistant", "content": "Third answer", "createdAt": 6 },
+        ],
+        "createdAt": 1, "updatedAt": 1,
+    })
+}
+
+fn scripted_settings(rig: &TurnRig, model: &ScriptedModel) -> Value {
+    json!({
+        "providers": [{
+            "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+            "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+        }],
+        "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+    })
+}
+
+/// The `compaction` progress the host heard (`turn:notify`), in order.
+async fn compaction_progress(port: u16, session_id: &str) -> Vec<Value> {
+    let (_, calls) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
+    calls
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c[0] == "turn:notify" && c[1][0]["type"] == "compaction" && c[1][0]["sessionId"] == session_id)
+        .map(|c| c[1][0]["progress"].clone())
+        .collect()
+}
+
+async fn wait_progress(port: u16, session_id: &str, state: &str) -> Vec<Value> {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let all = compaction_progress(port, session_id).await;
+        if all.last().is_some_and(|p| p["state"] == state) {
+            return all;
+        }
+        assert!(Instant::now() < deadline, "compaction never reached {state}: {all:?}");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_compacts_a_chat_and_owns_its_state() {
+    let rig = turn_rig("compact", compaction_chat("s_compact"));
+    let model = scripted_model(vec![sse(&[json!({
+        "choices": [{ "delta": { "content": "  Summary of decisions and next steps.  " }, "finish_reason": "stop" }],
+        "usage": { "prompt_tokens": 200, "completion_tokens": 20 }
+    })])])
+    .await;
+    // A second provider for the new-chat case, so settings are written once.
+    let model2 = scripted_model(vec![say_text("A fresh summary.")]).await;
+    let mut settings = scripted_settings(&rig, &model);
+    settings["providers"].as_array_mut().unwrap().push(json!({
+        "id": "p2", "kind": "openai-compat", "label": "Second", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model2.port),
+    }));
+    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in ["chat:compact", "chat:cancelCompaction", "chat:interruptQueued"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
+    }
+    let original = saved_session(&rig, "s_compact")["messages"].clone();
+
+    // An omitted options argument can cross IPC as null.
+    let (status, landed) = post(rig.d.port, "chat:compact", json!(["s_compact", null]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{landed}");
+    assert_eq!(landed["id"], "s_compact");
+    let messages = saved_session(&rig, "s_compact")["messages"].as_array().unwrap().clone();
+    assert_eq!(messages.len(), 7, "nothing is deleted: the summary goes in after what it replaces");
+    assert_eq!(json!(messages[..2]), json!(original.as_array().unwrap()[..2]));
+    assert_eq!(messages[2]["role"], "assistant");
+    assert_eq!(messages[2]["content"], "Summary of decisions and next steps.");
+    assert_eq!(messages[2]["compaction"], json!({ "summarized": 2 }));
+    assert_eq!(messages[2]["createdAt"], 2);
+    assert!(messages[2]["id"].as_str().unwrap().starts_with("compact_"));
+    assert_eq!(json!(messages[3..]), json!(original.as_array().unwrap()[2..]));
+
+    // The summary call carried the ported prompt, and only what was summarized.
+    let requests = model.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 1);
+    let sent = requests[0]["messages"].to_string();
+    assert!(sent.contains("Summarize conversation history for the same assistant"), "{sent}");
+    assert!(sent.contains("Summarize this transcript segment:\\n\\nUSER: First request:"), "{sent}");
+    assert!(!sent.contains("Third request"), "the recent turns stay verbatim: {sent}");
+
+    // Progress from start to done, told to the host, and its usage in the log.
+    let progress = wait_progress(rig.d.port, "s_compact", "done").await;
+    assert_eq!(progress[0], json!({ "state": "running", "done": 0, "total": 0, "target": "here" }));
+    assert_eq!(progress.last().unwrap(), &json!({ "state": "done", "done": 1, "total": 1, "target": "here" }));
+    let usage = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap();
+    let line: Value = serde_json::from_str(usage.lines().next().unwrap()).unwrap();
+    assert_eq!((line["providerId"].clone(), line["inputTokens"].clone()), (json!("p1"), json!(200)));
+    assert_eq!(line["sessionId"], "s_compact");
+
+    // Nothing new since that summary: refused, the history kept.
+    let (status, again) = post(rig.d.port, "chat:compact", json!(["s_compact"]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "{again}");
+    assert_eq!(again["error"], "Nothing new to compact since the last summary.");
+
+    // To a new chat: this one is left as it was.
+    let mut fresh = compaction_chat("s_fresh");
+    fresh["providerId"] = json!("p2");
+    std::fs::write(rig.data.join("sessions/s_fresh.json"), fresh.to_string()).unwrap();
+    let before = saved_session(&rig, "s_fresh")["messages"].clone();
+    let (status, next) = post(rig.d.port, "chat:compact", json!(["s_fresh", { "newChat": true }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{next}");
+    let new_id = next["id"].as_str().unwrap().to_string();
+    assert_ne!(new_id, "s_fresh");
+    assert_eq!(next["title"], "Long chat (continued)");
+    assert_eq!(next["workspaceId"], "w1");
+    assert_eq!(next["messages"][0]["compaction"], json!({ "summarized": 2 }));
+    assert_eq!(saved_session(&rig, &new_id)["messages"], next["messages"]);
+    assert_eq!(saved_session(&rig, "s_fresh")["messages"], before);
+    let progress = wait_progress(rig.d.port, "s_fresh", "done").await;
+    assert_eq!(progress.last().unwrap()["newSessionId"], json!(new_id));
+    assert_eq!(progress.last().unwrap()["target"], "new");
+
+    // Refusals, with the host's words.
+    std::fs::write(
+        rig.data.join("sessions/s_secret.json"),
+        json!({ "id": "s_secret", "title": "x", "incognito": true, "providerId": "p1", "modelId": "m", "messages": [{ "id": "u", "role": "user", "content": "hi", "createdAt": 1 }], "createdAt": 1, "updatedAt": 1 }).to_string(),
+    )
+    .unwrap();
+    let (_, refused) = post(rig.d.port, "chat:compact", json!(["s_secret"]), Some(TOKEN)).await;
+    assert_eq!(refused["error"], "Incognito conversations cannot be compacted.");
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!calls.as_array().unwrap().iter().any(|c| c[0] == "chat:compact"), "the host compacted nothing");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cancelling_a_compaction_keeps_the_history_and_refuses_turns_meanwhile() {
+    let rig = turn_rig("compact-cancel", compaction_chat("s_cancel"));
+    let model = scripted_model(vec![HANG.into()]).await;
+    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    let original = saved_session(&rig, "s_cancel")["messages"].clone();
+    let port = rig.d.port;
+    let compacting = tokio::spawn(async move { post(port, "chat:compact", json!(["s_cancel"]), Some(TOKEN)).await });
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while model.requests.lock().unwrap().is_empty() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the summary call started");
+
+    // Admission reads the daemon's own compaction state.
+    let opts = json!({ "sessionId": "s_cancel", "providerId": "p1", "modelId": "synthetic", "text": "hello" });
+    let (status, _) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(
+        calls.as_array().unwrap().iter().any(|c| c[0] == "turn:notify"
+            && c[1][0]["type"] == "error"
+            && c[1][0]["message"] == "This chat is being compacted. Wait or move to a new chat."),
+        "{calls}"
+    );
+    let progress = compaction_progress(rig.d.port, "s_cancel").await;
+    assert_eq!(progress.last().unwrap()["state"], "running", "{progress:?}");
+
+    let started = Instant::now();
+    let (status, _) = post(rig.d.port, "chat:cancelCompaction", json!(["s_cancel"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (status, body) = compacting.await.unwrap();
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["error"], "Compaction cancelled.");
+    assert!(started.elapsed() < Duration::from_secs(5), "the held call was cut, not waited out");
+    let progress = wait_progress(rig.d.port, "s_cancel", "cancelled").await;
+    assert_eq!(progress.last().unwrap()["state"], "cancelled");
+    assert_eq!(saved_session(&rig, "s_cancel")["messages"], original);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn interrupting_starts_the_chosen_queued_prompt_and_keeps_the_others() {
+    let session = json!({
+        "id": "s_jump", "title": "Jump", "workspaceId": "w1", "providerId": "p1", "modelId": "synthetic",
+        "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("interrupt", session);
+    // The first reply hangs until stopped; the rest answer at once.
+    let model = scripted_model(vec![
+        HANG.into(),
+        say_text("selected answer"),
+        say_text("first answer"),
+        say_text("last answer"),
+    ])
+    .await;
+    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+
+    // Validation, before anything is stopped.
+    for bad in [json!(-1), json!(0), json!(1.5), json!("0")] {
+        let (status, body) = post(rig.d.port, "chat:interruptQueued", json!(["s_jump", bad]), Some(TOKEN)).await;
+        assert_eq!((status, body["error"].clone()), (400, json!("Queued prompt not found.")), "{bad}");
+    }
+
+    let port = rig.d.port;
+    let opts = json!({ "sessionId": "s_jump", "providerId": "p1", "modelId": "synthetic", "text": "old" });
+    let old = tokio::spawn(async move { post(port, "chat:send", json!([opts]), Some(TOKEN)).await });
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while model.requests.lock().unwrap().is_empty() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the first reply started");
+    for text in ["first", "selected", "last"] {
+        post(rig.d.port, "chat:queue", json!(["s_jump", text]), Some(TOKEN)).await;
+    }
+    let (_, refused) = post(
+        rig.d.port,
+        "chat:interruptQueued",
+        json!(["s_jump", 1, { "providerId": "p1", "modelId": "__auto__" }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(refused["error"], "Choose a provider and model before starting the queued prompt.");
+
+    let (status, body) = post(rig.d.port, "chat:interruptQueued", json!(["s_jump", 1]), Some(TOKEN)).await;
+    assert_eq!((status, body.clone()), (200, Value::Null), "{body}");
+    let (status, _) = old.await.unwrap();
+    assert_eq!(status, 200);
+    let saved = saved_session(&rig, "s_jump");
+    let users: Vec<&str> = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["role"] == "user")
+        .filter_map(|m| m["content"].as_str())
+        .collect();
+    // The stopped reply, then the selected prompt, then the rest of the queue in order.
+    assert_eq!(users, ["old", "selected", "first", "last"], "{saved}");
+    assert_eq!(saved["queue"], json!([]));
+    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(!calls.iter().any(|c| c[0] == "chat:interruptQueued"), "the host started nothing");
+    let adopts: Vec<&Value> = calls.iter().filter(|c| c[0] == "turn:adopt").collect();
+    assert_eq!(adopts.len(), 4, "{adopts:?}");
+    assert_eq!(adopts[1][1][0]["opts"]["text"], "selected");
+    assert_eq!(adopts[1][1][0]["chained"], false, "a new chain, which the host adopts as its own");
+}
+
+/// The stand-in `sd-server`, built beside this test if `cargo test` did not build examples.
+fn fake_sd() -> std::path::PathBuf {
+    let exe = format!("fake_sd_server{}", std::env::consts::EXE_SUFFIX);
+    let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    let path = deps.parent().unwrap().join("examples").join(exe);
+    if !path.is_file() {
+        let target = deps.parent().unwrap().parent().unwrap();
+        let ok = Command::new(env!("CARGO"))
+            .args(["build", "-p", "nekkod", "--example", "fake_sd_server"])
+            .env("CARGO_TARGET_DIR", target)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "the fake sd-server builds");
+    }
+    path
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_runs_an_image_turn_on_its_model_server() {
+    let root = std::env::temp_dir().join(format!("nekkod-image-turn-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // An image model the library reads as one (its architecture), and the stand-in runtime.
+    let model = data.join("models/image/acme_sd/tiny-sd.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("sd1", "Tiny SD")).unwrap();
+    let sd_dir = data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    std::fs::write(
+        sd_dir.join("engine.json"),
+        json!({ "buildId": "fake", "binPath": fake_sd(), "version": "fake" }).to_string(),
+    )
+    .unwrap();
+    let port = free_port();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": port, "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let session = json!({ "id": "s_img", "title": "New chat", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_img.json"), session.to_string()).unwrap();
+    let d = start_with_env(true, Some(&data), json!({}), &[]);
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("chat:generateImage")), "{info}");
+    let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
+    let row = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").cloned().expect("an image row");
+    let id = row["id"].as_str().unwrap().to_string();
+    let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), Some("null")).await.unwrap();
+
+    let params = json!({ "modelId": id, "width": 512, "height": 768, "steps": 20, "cfgScale": 4.5, "seed": 42 });
+    let opts = json!({ "sessionId": "s_img", "prompt": "  a calico cat  ", "params": params });
+    let (status, body) = post(d.port, "chat:generateImage", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, body.clone()), (200, Value::Null), "{body}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img.json")).unwrap()).unwrap();
+    assert_eq!(saved["title"], "a calico cat");
+    assert_eq!((saved["chatType"].clone(), saved["modelId"].clone()), (json!("image"), json!(id)));
+    assert_eq!(saved["imageParams"], params);
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0]["content"], "a calico cat");
+    let reply = &messages[1];
+    let image = reply["images"][0].as_str().unwrap_or_else(|| panic!("no image in the reply: {reply}"));
+    // The stand-in drew the request it was sent: the trimmed prompt with the
+    // steps, guidance and seed, and the size (`imageGenerationBody`).
+    let drawn = image.strip_prefix("data:image/png;base64,").unwrap();
+    let expected = "a calico cat\n<sd_cpp_extra_args>{\"sample_params\":{\"sample_steps\":20,\"guidance\":{\"txt_cfg\":4.5}},\"seed\":42}</sd_cpp_extra_args>|512x768";
+    assert_eq!(drawn, fake_base64(expected.as_bytes()), "{reply}");
+    assert_eq!(reply["generated"]["seed"], 42);
+    assert_eq!(reply["generated"]["modelId"], json!(id));
+
+    // The stages, then done: loading (the model was cold), generating.
+    let mut stages = Vec::new();
+    while let Some(ev) = next_json(&mut events, Duration::from_secs(2)).await {
+        let p = &ev["payload"];
+        if ev["channel"] == "agent:event" && p["sessionId"] == "s_img" {
+            stages.push(format!("{}:{}", p["type"].as_str().unwrap(), p["label"].as_str().unwrap_or("")));
+            if p["type"] == "done" {
+                break;
+            }
+        }
+    }
+    assert_eq!(
+        stages,
+        [
+            "image_status:Generating a 512×768 image",
+            "image_status:Loading the image model",
+            "image_status:Generating a 512×768 image",
+            "done:",
+        ],
+        "{stages:?}"
+    );
+
+    // A seed of -1 records the one used; a stop while it draws ends the turn as stopped.
+    let port2 = d.port;
+    let slow = json!({ "sessionId": "s_img", "prompt": "slow fox", "params": { "modelId": id, "width": 256, "height": 256, "steps": 1, "cfgScale": 1, "seed": -1 } });
+    let running = tokio::spawn(async move { post(port2, "chat:generateImage", json!([slow]), Some(TOKEN)).await });
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let (_, running) = post(port2, "chat:running", json!([]), Some(TOKEN)).await;
+            if running.as_array().is_some_and(|r| r.contains(&json!("s_img"))) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the image turn is listed as running");
+    let started = Instant::now();
+    post(d.port, "chat:abort", json!(["s_img"]), Some(TOKEN)).await;
+    let (status, _) = running.await.unwrap();
+    assert_eq!(status, 200);
+    assert!(started.elapsed() < Duration::from_secs(5));
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img.json")).unwrap()).unwrap();
+    let last = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!(
+        (last["content"].clone(), last["interrupted"].clone()),
+        (json!("Stopped before the image finished."), json!(true))
+    );
+    let seed = saved["imageParams"]["seed"].clone();
+    assert_eq!(seed, -1, "the chat keeps asking for a fresh seed");
+
+    // A missing prompt is refused with the host's words; the host ran none of it.
+    let (_, _) = post(
+        d.port,
+        "chat:generateImage",
+        json!([{ "sessionId": "s_img", "prompt": " ", "params": params }]),
+        Some(TOKEN),
+    )
+    .await;
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(
+        calls.iter().any(|c| c[0] == "turn:notify" && c[1][0]["message"] == "Describe the image you want first."),
+        "{calls:?}"
+    );
+    assert!(!calls.iter().any(|c| c[0] == "chat:generateImage"), "the host generated nothing");
+    post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+    drop(d);
+    std::fs::remove_dir_all(root).ok();
+}
+
+fn fake_base64(bytes: &[u8]) -> String {
+    const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+        let n = (b[0] as u32) << 16 | (b[1] as u32) << 8 | b[2] as u32;
+        for i in 0..4 {
+            out.push(if i <= chunk.len() { T[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
+}
+
+/* --------------------------------------------- sandbox turns (PF14 A2, 2/2) */
+
+/// The sandbox chat's turn is admitted and refused by the daemon itself; no
+/// Docker needed for these.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_admits_sandbox_chats_and_refuses_what_they_cannot_do() {
+    let session = json!({
+        "id": "s_boxed", "title": "Box", "workspaceId": "w1", "executionMode": "sandbox", "gitIsolation": false,
+        "mode": "ask", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("sandbox-admit", session);
+    let model = scripted_model(vec![say_text("unused")]).await;
+    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    // Not set up yet: refused with the host's words, nothing handed to the host.
+    let opts = json!({ "sessionId": "s_boxed", "providerId": "p1", "modelId": "synthetic", "text": "hello" });
+    let (status, _) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let refused = |c: &Value| {
+        c[0] == "turn:notify"
+            && c[1][0]["message"] == "Sandbox requires explicit setup and supports text chat without host skills only."
+    };
+    let port = rig.d.port;
+    let calls = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let (_, calls) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
+            if calls.as_array().unwrap().iter().any(refused) {
+                return calls;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("the refusal reached the host's listeners");
+    let calls = calls.as_array().unwrap();
+    assert!(!calls.iter().any(|c| c[0] == "chat:send"), "the daemon kept it");
+    assert!(model.requests.lock().unwrap().is_empty(), "no model call");
+}
+
+/// A sandbox chat's whole turn in the daemon against a real Docker engine
+/// (opt-in: `NEKKO_SANDBOX_TEST_IMAGE` names a locally installed,
+/// digest-pinned Linux image with python3): admitted here, its tools asked
+/// for and run in the container the daemon owns, a host tool refused without
+/// asking, the host folder untouched, and Stop during a command.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sandbox_chat_turn_runs_in_the_daemon_and_its_container() {
+    let Ok(image) = std::env::var("NEKKO_SANDBOX_TEST_IMAGE") else { return };
+    let session = json!({ "id": "s_boxturn", "title": "Box", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("sandbox-turn", session);
+    let model = scripted_model(vec![
+        call_tool("c1", "read_file", json!({ "path": "folder-0/app.ts" })),
+        call_tool("c2", "bash", json!({ "command": "printf hi > folder-0/new.txt; id -u" })),
+        call_tool("c3", "fetch_url", json!({ "url": "https://example.com" })),
+        say_text("done in the box"),
+        call_tool("c4", "bash", json!({ "command": "sleep 30" })),
+        say_text("(after stop)"),
+    ])
+    .await;
+    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    let (status, configured) = post(rig.d.port, "sandbox:configure", json!(["s_boxturn", image]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{configured}");
+    assert_eq!(configured["phase"], "ready", "{configured}");
+    let identity = configured["identity"].clone();
+
+    let checks = std::panic::AssertUnwindSafe(async {
+        let port = rig.d.port;
+        let opts =
+            json!({ "sessionId": "s_boxturn", "providerId": "p1", "modelId": "synthetic", "text": "look in the box" });
+        let send = tokio::spawn(async move { post(port, "chat:send", json!([opts]), Some(TOKEN)).await });
+        // Every container call asks first (a sandbox chat is in ask mode), here in the daemon.
+        for (call, reason, severity) in [
+            ("c1", "Sandbox read_file: access only the copied workspace", "low"),
+            ("c2", "Sandbox bash: access only the copied workspace", "high"),
+        ] {
+            let pending = wait_pending(port, "s_boxturn", "approval", call).await;
+            assert_eq!((pending["reason"].clone(), pending["severity"].clone()), (json!(reason), json!(severity)));
+            post(port, "tool:approve", json!(["s_boxturn", call, true]), Some(TOKEN)).await;
+        }
+        let (status, _) = send.await.unwrap();
+        assert_eq!(status, 200);
+        let saved = saved_session(&rig, "s_boxturn");
+        let results: Vec<Value> =
+            saved["messages"].as_array().unwrap().iter().filter_map(|m| m.get("toolResult").cloned()).collect();
+        assert!(results[0]["output"].as_str().unwrap().contains("pineapple"), "{results:?}");
+        let shell: Value = serde_json::from_str(results[1]["output"].as_str().unwrap()).unwrap();
+        assert_eq!(shell["stdout"].as_str().unwrap().trim(), "1000", "{results:?}");
+        assert_eq!(results[2]["isError"], true);
+        assert!(results[2]["output"].as_str().unwrap().contains("No host fallback"), "{results:?}");
+        assert_eq!(saved["messages"].as_array().unwrap().last().unwrap()["content"], "done in the box");
+        assert!(!rig.workspace.join("new.txt").exists(), "the host folder is untouched");
+        let (_, diff) = post(port, "sandbox:diff", json!(["s_boxturn"]), Some(TOKEN)).await;
+        assert_eq!(diff["changes"][0]["path"], "folder-0/new.txt", "{diff}");
+
+        // The model saw only the container's tools and folders, and no host context.
+        let requests = model.requests.lock().unwrap().clone();
+        let tools: Vec<String> = requests[0]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(tools, ["read_file", "write_file", "edit_file", "glob", "grep", "list_dir", "bash"]);
+        let system = requests[0]["messages"][0]["content"].as_str().unwrap().to_string();
+        assert!(system.contains("folder-0"), "{system}");
+        assert!(!system.contains(&*rig.workspace.to_string_lossy()), "no host path: {system}");
+        assert!(!system.contains("Always run the tests."), "no host guidelines: {system}");
+        assert!(system.contains("isolated container on copied folders"), "{system}");
+
+        // Stop during a command stops the container, at once.
+        let opts = json!({ "sessionId": "s_boxturn", "providerId": "p1", "modelId": "synthetic", "text": "wait" });
+        let send = tokio::spawn(async move { post(port, "chat:send", json!([opts]), Some(TOKEN)).await });
+        wait_pending(port, "s_boxturn", "approval", "c4").await;
+        post(port, "tool:approve", json!(["s_boxturn", "c4", true]), Some(TOKEN)).await;
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        let started = Instant::now();
+        post(port, "chat:abort", json!(["s_boxturn"]), Some(TOKEN)).await;
+        let (status, _) = send.await.unwrap();
+        assert_eq!(status, 200);
+        assert!(started.elapsed() < Duration::from_secs(10), "stopped in {:?}", started.elapsed());
+        let (_, status) = post(port, "sandbox:status", json!(["s_boxturn"]), Some(TOKEN)).await;
+        assert_eq!(
+            status["error"], "Sandbox stopped by cancellation. Create a new sandbox chat to resume.",
+            "{status}"
+        );
+
+        // Nothing went through the host's container route or its own turn.
+        let (_, calls) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
+        let calls = calls.as_array().unwrap();
+        assert!(!calls.iter().any(|c| c[0] == "chat:send" || c[0] == "turn:tool"), "{calls:?}");
+        let adopt = calls.iter().find(|c| c[0] == "turn:adopt").expect("the host was handed the turn");
+        assert_eq!(adopt[1][0]["mode"], "ask");
+        assert_eq!(adopt[1][0]["workspaces"][0]["path"], "folder-0");
+    });
+    let outcome = futures_util::FutureExt::catch_unwind(checks).await;
+    let (status, _) = post(rig.d.port, "sandbox:cleanup", json!(["s_boxturn", identity]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+fn git_in(dir: &std::path::Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "init.defaultBranch=main",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("git runs");
+    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// A loopback GitHub REST API with the pull and stack endpoints, recording what it was sent.
+async fn fake_github_stacks(pulls: Value) -> (u16, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
+    use axum::extract::{Path as AxPath, RawQuery};
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+    let (log_get, log_post) = (seen.clone(), seen.clone());
+    let app = axum::Router::new().route(
+        "/repos/{owner}/{repo}/{*rest}",
+        axum::routing::get(move |AxPath((o, r, rest)): AxPath<(String, String, String)>, RawQuery(q): RawQuery| {
+            let (log, pulls) = (log_get.clone(), pulls.clone());
+            async move {
+                let path = format!("repos/{o}/{r}/{rest}{}", q.map(|q| format!("?{q}")).unwrap_or_default());
+                log.lock().unwrap().push(json!(["GET", path]));
+                match pulls.get(&path) {
+                    Some(v) => (axum::http::StatusCode::OK, axum::Json(v.clone())),
+                    None => (axum::http::StatusCode::NOT_FOUND, axum::Json(json!({ "message": "Not Found" }))),
+                }
+            }
+        })
+        .post(move |AxPath((o, r, rest)): AxPath<(String, String, String)>, body: axum::Json<Value>| {
+            let log = log_post.clone();
+            async move {
+                log.lock().unwrap().push(json!(["POST", format!("repos/{o}/{r}/{rest}"), body.0]));
+                (axum::http::StatusCode::CREATED, axum::Json(json!({ "number": 3 })))
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = l.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    (port, seen)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn continues_and_links_pr_stacks_itself() {
+    let data = std::env::temp_dir().join(format!("nekkod-stacks-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    // The parent PR's repository on GitHub, and the user's clone of it.
+    let origin = data.join("origin.git");
+    let clone = data.join("clone");
+    std::fs::create_dir_all(&clone).unwrap();
+    git_in(&data, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+    git_in(&clone, &["init", "-q"]);
+    std::fs::write(clone.join("a.txt"), "a").unwrap();
+    git_in(&clone, &["add", "."]);
+    git_in(&clone, &["commit", "-q", "-m", "one"]);
+    git_in(&clone, &["checkout", "-q", "-b", "parent"]);
+    std::fs::write(clone.join("b.txt"), "b").unwrap();
+    git_in(&clone, &["add", "."]);
+    git_in(&clone, &["commit", "-q", "-m", "parent work"]);
+    let sha = git_in(&clone, &["rev-parse", "HEAD"]);
+    git_in(&clone, &["push", "-q", origin.to_str().unwrap(), "parent"]);
+    git_in(&clone, &["checkout", "-q", "main"]);
+    // A GitHub remote. Its fetch cannot be pointed at the bare repository
+    // without changing what `remote get-url` prints (an `insteadOf` rewrite
+    // applies to both), so the daemon's git may only use local transports:
+    // the fetch fails at once, never touching the network, and the follow-up
+    // half runs from a chat set up as continuing would have left it. The
+    // successful fetch is covered by the golden replay (tests/stacks.rs).
+    git_in(&clone, &["remote", "add", "origin", "https://github.com/owner/repo.git"]);
+
+    let pr = |n: u64, head: &str, base: &str, sha: &str| {
+        json!({
+            "number": n, "state": "open", "title": format!("PR {n}"),
+            "head": { "ref": head, "sha": sha, "repo": { "full_name": "owner/repo" } },
+            "base": { "ref": base, "repo": { "full_name": "owner/repo" } },
+        })
+    };
+    let (gh, seen) = fake_github_stacks(json!({
+        "repos/owner/repo/pulls/12": pr(12, "parent", "main", &sha),
+        "repos/owner/repo/pulls/13": pr(13, "nekko/child", "parent", &"b".repeat(40)),
+        "repos/owner/repo/stacks?pull_request=12": [],
+    }))
+    .await;
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let source = json!({ "id": "s_src", "title": "Source", "workspaceId": "w1", "executionMode": "worktree", "gitIsolation": true,
+        "providerId": "p", "modelId": "m", "mode": "ask", "disabledTools": ["browser"], "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_src.json"), source.to_string()).unwrap();
+    let d = start_with_env(
+        true,
+        Some(&data),
+        json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }),
+        &[
+            ("NEKKO_GH_PATH", Some("nekko-no-such-gh")),
+            ("GIT_ALLOW_PROTOCOL", Some("file")),
+            ("GIT_TERMINAL_PROMPT", Some("0")),
+        ],
+    );
+    let ws = json!([{ "id": "w1", "name": "clone", "path": clone, "addedAt": 1 }]);
+    post(d.port, "settings:update", json!([{ "workspaces": ws }]), Some(TOKEN)).await;
+
+    // Refusals come before any network or git work.
+    let (status, bad) =
+        post(d.port, "pr:continueStack", json!(["s_src", "https://gitlab.com/o/r/pull/1"]), Some(TOKEN)).await;
+    assert_eq!((status, bad), (400, json!({ "error": "Use a GitHub PR URL." })));
+
+    let url = "https://github.com/owner/repo/pull/12";
+    // The PR read, the remote matched in the real clone and the branch name
+    // checked; then the fetch, refused (local transports only): no chat made.
+    let (status, made) = post(d.port, "pr:continueStack", json!(["s_src", url]), Some(TOKEN)).await;
+    assert_eq!(
+        (status, made),
+        (
+            400,
+            json!({ "error": "Could not fetch the parent PR. Check Git authentication and repository access, then retry." })
+        )
+    );
+    assert!(seen.lock().unwrap().contains(&json!(["GET", "repos/owner/repo/pulls/12"])));
+    assert_eq!(std::fs::read_dir(data.join("sessions")).unwrap().count(), 1, "no follow-up chat");
+    let _ = (&origin, &sha);
+
+    // The dependent chat as continuing leaves it, once its worktree exists,
+    // links its PR as a new stack.
+    git_in(&clone, &["checkout", "-q", "-b", "nekko/child"]);
+    let id = "s_dep";
+    let dependent = json!({ "id": id, "title": "Follow-up to PR #12", "titleAuto": false, "workspaceId": "w1", "executionMode": "worktree",
+        "gitIsolation": true, "gitStackParent": { "workspaceId": "w1", "url": url, "branch": "parent", "sha": sha },
+        "gitWorktrees": { "w1": { "path": clone, "branch": "nekko/child" } }, "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join(format!("sessions/{id}.json")), dependent.to_string()).unwrap();
+    let (status, linked) =
+        post(d.port, "pr:linkStack", json!([id, "https://github.com/owner/repo/pull/13"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(linked["ok"], json!(true), "{linked}");
+    assert_eq!(linked["message"], "Linked as a GitHub PR stack.");
+    assert!(
+        seen.lock()
+            .unwrap()
+            .iter()
+            .any(|c| c == &json!(["POST", "repos/owner/repo/stacks", { "pull_requests": [12, 13] }])),
+        "{:?}",
+        seen.lock().unwrap()
+    );
+    // A failure is an answer, not an error.
+    let (status, refused) =
+        post(d.port, "pr:linkStack", json!(["s_src", "https://github.com/owner/repo/pull/13"]), Some(TOKEN)).await;
+    assert_eq!(
+        (status, refused),
+        (200, json!({ "ok": false, "message": "This chat was not started from a parent PR." }))
+    );
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in [
+        "pr:continueStack",
+        "pr:linkStack",
+        "data:wipe",
+        "app:info",
+        "updates:check",
+        "workspace:add",
+        "session:watches",
+    ] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} not owned");
+    }
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!calls.to_string().contains("continueStack"), "the host ran nothing: {calls}");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn wipes_the_data_it_owns_and_answers_the_small_services() {
+    let data = std::env::temp_dir().join(format!("nekkod-wipe-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    for (p, text) in [
+        ("sessions/s_a.json", json!({ "id": "s_a", "title": "A", "messages": [], "createdAt": 1, "updatedAt": 1 }).to_string()),
+        ("memory/m.md", "note".into()),
+        ("usage.jsonl", "{}\n".into()),
+        ("replies.jsonl", "{}\n".into()),
+        ("tokens.json", "{}".into()),
+        (
+            "agent-watches.json",
+            json!([{ "id": "w1", "sessionId": "s_a", "kind": "timer", "prompt": "secret", "nextPollAt": 4102444800000_u64, "intervalMs": 60000,
+                     "deadlineAt": 4102444800000_u64, "status": "active", "failures": 0 }])
+            .to_string(),
+        ),
+    ] {
+        std::fs::create_dir_all(data.join(p).parent().unwrap()).unwrap();
+        std::fs::write(data.join(p), text).unwrap();
+    }
+    let d = start_with_config(true, Some(&data), json!({ "appVersion": "9.8.7", "edition": "desktop" }));
+    post(d.port, "settings:update", json!([{ "theme": "light" }]), Some(TOKEN)).await;
+
+    // session:watches: what the transcript shows, never the prompt.
+    let (_, views) = post(d.port, "session:watches", json!(["s_a"]), Some(TOKEN)).await;
+    assert_eq!(
+        views,
+        json!([{ "id": "w1", "kind": "timer", "status": "active", "deadlineAt": 4102444800000_u64, "nextPollAt": 4102444800000_u64, "pending": false, "failures": 0 }])
+    );
+
+    let (_, info) = post(d.port, "app:info", json!([]), Some(TOKEN)).await;
+    assert_eq!(info["version"], "9.8.7");
+    assert_eq!(info["edition"], "desktop");
+    // No bridge here: headless, `workspace:add` lists the saved folders.
+    let (_, listed) = post(d.port, "workspace:add", json!([]), Some(TOKEN)).await;
+    assert_eq!(listed, json!([]));
+    let (status, _) = post(d.port, "updates:check", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+
+    let (status, next) = post(d.port, "data:wipe", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{next}");
+    assert_eq!(next["theme"], json!("system"), "the defaults come back");
+    assert!(!data.join("sessions/s_a.json").exists());
+    assert!(!data.join("memory/m.md").exists() && data.join("memory").is_dir());
+    assert!(!data.join("usage.jsonl").exists() && !data.join("replies.jsonl").exists());
+    assert!(data.join("tokens.json").exists(), "sign-ins are not part of a wipe");
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert_eq!(saved["theme"], json!("system"));
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(calls.iter().any(|c| c == &json!(["s_a"])), "the chat's command log went first: {calls:?}");
+    assert!(
+        calls.iter().any(|c| c[0] == "settings:changed" && c[1][1].is_null()),
+        "the host heard the reset: {calls:?}"
+    );
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn adds_a_folder_from_the_desktop_picker_through_the_bridge() {
+    let data = std::env::temp_dir().join(format!("nekkod-picker-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let picked = data.join("picked");
+    std::fs::create_dir_all(&picked).unwrap();
+    let answer = std::sync::Arc::new(std::sync::Mutex::new(json!({ "path": picked })));
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(Option<String>, Value)>::new()));
+    let (a, s) = (answer.clone(), seen.clone());
+    let app = axum::Router::new().route(
+        "/",
+        axum::routing::post(move |headers: axum::http::HeaderMap, body: axum::Json<Value>| {
+            let (a, s) = (a.clone(), s.clone());
+            async move {
+                let auth = headers.get("authorization").and_then(|v| v.to_str().ok()).map(str::to_string);
+                s.lock().unwrap().push((auth, body.0));
+                axum::Json(a.lock().unwrap().clone())
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let bridge = format!("http://127.0.0.1:{}/", l.local_addr().unwrap().port());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    let d =
+        start_with_config(true, Some(&data), json!({ "browserBridge": { "url": bridge, "token": "bridge-token" } }));
+
+    let (status, added) = post(d.port, "workspace:add", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{added}");
+    assert_eq!(added[0]["path"], json!(picked));
+    assert_eq!(added[0]["name"], "picked");
+    assert_eq!(seen.lock().unwrap()[0], (Some("Bearer bridge-token".into()), json!({ "tool": "pickFolder" })));
+    // Cancelled: the saved folders, unchanged.
+    *answer.lock().unwrap() = json!({ "path": null });
+    let (_, again) = post(d.port, "workspace:add", json!([]), Some(TOKEN)).await;
+    assert_eq!(again, added);
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// A loopback stand-in for Telegram's Bot API: records every call (method
+/// and body; the token is in the path), answers `getMe` and `sendMessage`,
+/// and holds `getUpdates` until the test queues updates (or 25 s pass, as
+/// Telegram's long poll does). Never a real bot or token.
+struct FakeTelegram {
+    port: u16,
+    calls: std::sync::Arc<std::sync::Mutex<Vec<(String, String, Value)>>>,
+    updates: tokio::sync::mpsc::UnboundedSender<Value>,
+    server: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for FakeTelegram {
+    fn drop(&mut self) {
+        self.server.abort();
+    }
+}
+
+impl FakeTelegram {
+    fn calls(&self, method: &str) -> Vec<Value> {
+        self.calls.lock().unwrap().iter().filter(|c| c.1 == method).map(|c| c.2.clone()).collect()
+    }
+
+    fn polls_since(&self, n: usize) -> usize {
+        self.calls.lock().unwrap().iter().filter(|c| c.1 == "getUpdates").count().saturating_sub(n)
+    }
+}
+
+async fn fake_telegram() -> FakeTelegram {
+    use axum::extract::Path;
+    use axum::routing::post as route_post;
+    let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (updates, rx) = tokio::sync::mpsc::unbounded_channel::<Value>();
+    let rx = std::sync::Arc::new(tokio::sync::Mutex::new(rx));
+    let next_id = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(500));
+    let seen = calls.clone();
+    let app = axum::Router::new().route(
+        "/{bot}/{method}",
+        route_post(move |Path((bot, method)): Path<(String, String)>, body: String| {
+            let (seen, rx, next_id) = (seen.clone(), rx.clone(), next_id.clone());
+            async move {
+                let body: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+                seen.lock().unwrap().push((bot.clone(), method.clone(), body.clone()));
+                let result = match method.as_str() {
+                    "getMe" => json!({ "id": 7, "is_bot": true, "username": "nekko_test_bot" }),
+                    "sendMessage" => {
+                        let id = next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        json!({ "message_id": id, "chat": { "id": body["chat_id"], "type": "private" } })
+                    }
+                    "getUpdates" => {
+                        let mut rx = rx.lock().await;
+                        match tokio::time::timeout(Duration::from_secs(25), rx.recv()).await {
+                            Ok(Some(batch)) => batch,
+                            _ => json!([]),
+                        }
+                    }
+                    _ => json!(true),
+                };
+                axum::Json(json!({ "ok": true, "result": result }))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    FakeTelegram { port, calls, updates, server }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_runs_the_telegram_bridge() {
+    let tg = fake_telegram().await;
+    let model = scripted_model(vec![say_text("Hello from the daemon")]).await;
+    let data = std::env::temp_dir().join(format!("nekkod-messaging-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // The chat this Telegram chat is already bound to: no worktree, so no git.
+    let session = json!({
+        "id": "s_tg", "title": "From Telegram", "executionMode": "local", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    std::fs::write(data.join("sessions/s_tg.json"), session.to_string()).unwrap();
+    std::fs::write(data.join("messaging-state.json"), r#"{"offset":40,"bindings":{"42":"s_tg"}}"#).unwrap();
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let settings = json!({
+        "providers": [provider], "defaultProviderId": "p1", "defaultModelId": "synthetic", "defaultChatMode": "yolo",
+        "messaging": { "telegram": { "enabled": true, "botToken": "123:TEST", "allowedChatIds": ["42"] } },
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with_config(true, Some(&data), json!({ "telegramApiUrl": format!("http://127.0.0.1:{}", tg.port) }));
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("messaging:status")), "{info}");
+    wait_for("the first long poll", || tg.polls_since(0) >= 1).await;
+    let first = &tg.calls("getUpdates")[0];
+    assert_eq!(first["offset"], 40, "the poll resumes from the saved offset");
+    assert_eq!(first["timeout"], 25);
+    assert!(tg.calls.lock().unwrap().iter().all(|c| c.0 == "bot123:TEST"), "every call uses the bot token");
+    let status = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let (_, s) = post(d.port, "messaging:status", json!([]), Some(TOKEN)).await;
+            if s["telegram"]["botUsername"].is_string() {
+                return s;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("getMe answered");
+    assert_eq!(status, json!({ "telegram": { "running": true, "botUsername": "nekko_test_bot", "boundChats": 1 } }));
+
+    // An unlisted chat is refused and starts nothing; the allowed one starts a turn.
+    tg.updates
+        .send(json!([
+            { "update_id": 41, "message": { "message_id": 1, "chat": { "id": 99, "type": "private" }, "text": "let me in" } },
+            { "update_id": 42, "message": { "message_id": 2, "chat": { "id": 42, "type": "private" }, "text": "  say hello  " } },
+        ]))
+        .unwrap();
+    wait_for("the refusal", || {
+        tg.calls("sendMessage")
+            .iter()
+            .any(|b| b["chat_id"] == "99" && b["text"].as_str().unwrap().contains("allowlist"))
+    })
+    .await;
+    // The streamed reply lands in one message: sent, then edited to the final text.
+    wait_for("the reply", || {
+        tg.calls("editMessageText").iter().any(|b| b["chat_id"] == "42" && b["text"] == "Hello from the daemon")
+            || tg.calls("sendMessage").iter().any(|b| b["chat_id"] == "42" && b["text"] == "Hello from the daemon")
+    })
+    .await;
+    let to_42: Vec<Value> = tg.calls("sendMessage").into_iter().filter(|b| b["chat_id"] == "42").collect();
+    assert_eq!(to_42.len(), 1, "one message for the whole reply: {to_42:?}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_tg.json")).unwrap()).unwrap();
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages.first().unwrap()["content"], "say hello");
+    assert_eq!(messages.last().unwrap()["content"], "Hello from the daemon");
+    // Admitted and driven by the daemon: the host was handed the turn, never asked to send it.
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    let calls = calls.as_array().unwrap();
+    assert!(calls.iter().any(|c| c[0] == "turn:adopt"), "{calls:?}");
+    assert!(!calls.iter().any(|c| c[0] == "chat:send"), "{calls:?}");
+    assert_eq!(model.requests.lock().unwrap()[0]["model"], "synthetic");
+    // The offset moved past both updates, and no session was made for chat 99.
+    wait_for("the offset saved", || {
+        std::fs::read_to_string(data.join("messaging-state.json")).is_ok_and(|t| t.contains("\"offset\": 43"))
+    })
+    .await;
+    let state: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("messaging-state.json")).unwrap()).unwrap();
+    assert_eq!(state["bindings"], json!({ "42": "s_tg" }));
+
+    // Disabling stops the poll at once and the status goes empty.
+    let polls = tg.polls_since(0);
+    let off =
+        json!({ "messaging": { "telegram": { "enabled": false, "botToken": "123:TEST", "allowedChatIds": ["42"] } } });
+    let (status, _) = post(d.port, "settings:update", json!([off]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let (_, s) = post(d.port, "messaging:status", json!([]), Some(TOKEN)).await;
+            if s == json!({}) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("the bridge stopped");
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(tg.polls_since(polls), 0, "no poll after disabling");
+    // A message sent meanwhile is not read.
+    tg.updates
+        .send(json!([{ "update_id": 43, "message": { "message_id": 3, "chat": { "id": 42, "type": "private" }, "text": "anyone?" } }]))
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(model.requests.lock().unwrap().len(), 1, "no turn while off");
+    // The backend never ran a bridge of its own.
+    assert!(!calls.iter().any(|c| c[0] == "messaging:status"));
+    drop(d);
+    std::fs::remove_dir_all(&data).ok();
+}
+
+/// Electron main's side of the bridge for the native channels: the app
+/// window's handle (none here), dialogs it draws when asked (recorded, with
+/// scripted answers), and quitting for an update.
+async fn fake_shell_bridge(answers: Value) -> (String, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+    let s = seen.clone();
+    let app = axum::Router::new().route(
+        "/",
+        axum::routing::post(move |headers: axum::http::HeaderMap, body: axum::Json<Value>| {
+            let (s, answers) = (s.clone(), answers.clone());
+            async move {
+                assert_eq!(headers.get("authorization").and_then(|v| v.to_str().ok()), Some("Bearer bridge-token"));
+                s.lock().unwrap().push(body.0.clone());
+                let reply = match body.0["tool"].as_str() {
+                    Some("nativeWindow") => json!({ "handle": null }),
+                    Some("dialog") => json!({ "result": answers[body.0["kind"].as_str().unwrap_or("")].clone() }),
+                    Some("quitForUpdate") => json!({ "ok": true }),
+                    _ => json!({ "error": "unknown" }),
+                };
+                axum::Json(reply)
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://127.0.0.1:{}/", l.local_addr().unwrap().port());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    (url, seen)
+}
+
+fn native_daemon(data: &std::path::Path, bridge: &str, native: Value) -> Daemon {
+    start_with_config(
+        true,
+        Some(data),
+        json!({ "appVersion": "0.8.1", "edition": "desktop", "browserBridge": { "url": bridge, "token": "bridge-token" }, "native": native }),
+    )
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn answers_the_channels_electron_main_used_to() {
+    let data = std::env::temp_dir().join(format!("nekkod-native-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let picked = data.join("picked");
+    std::fs::create_dir_all(&picked).unwrap();
+    let answers = json!({
+        "pickFolder": picked,
+        "openFiles": [data.join("a.txt"), data.join("b.txt")],
+        "saveFile": null,
+        "message": { "response": 1 },
+    });
+    let (bridge, seen) = fake_shell_bridge(answers).await;
+    // `dialogs: "bridge"`: main draws them, so no real dialog opens in a test.
+    let d = native_daemon(&data, &bridge, json!({ "isPackaged": false, "exePath": "x", "dialogs": "bridge" }));
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in [
+        "dialog:openFiles",
+        "dialog:pickFolder",
+        "shell:openPath",
+        "voice:permission",
+        "update:check",
+        "update:install",
+    ] {
+        assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} is the daemon's: {info}");
+    }
+    let (status, files) = post(d.port, "dialog:openFiles", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{files}");
+    assert_eq!(files.as_array().unwrap().len(), 2);
+    let (_, folder) = post(d.port, "dialog:pickFolder", json!([{ "title": "Pick" }]), Some(TOKEN)).await;
+    assert_eq!(folder, json!(picked));
+    let (_, saved) = post(d.port, "dialog:saveFile", json!([{ "defaultPath": "x.md" }]), Some(TOKEN)).await;
+    assert_eq!(saved, Value::Null);
+    let (_, answer) =
+        post(d.port, "dialog:message", json!([{ "message": "Sure?", "buttons": ["No", "Yes"] }]), Some(TOKEN)).await;
+    assert_eq!(answer, json!({ "response": 1 }));
+    let (status, _) = post(d.port, "dialog:message", json!([{ "buttons": ["a", "b", "c", "d"] }]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "four buttons are refused before any dialog");
+
+    // workspace:add now goes through the daemon's own picker (small_services::pick_folder).
+    let (status, added) = post(d.port, "workspace:add", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{added}");
+    assert_eq!(added[0]["path"], json!(picked));
+    let kinds: Vec<String> =
+        seen.lock().unwrap().iter().filter_map(|v| v["kind"].as_str().map(str::to_string)).collect();
+    assert_eq!(kinds, ["openFiles", "pickFolder", "saveFile", "message", "pickFolder"]);
+    assert!(seen.lock().unwrap().iter().all(|v| v["tool"] != "pickFolder"), "the old bridge picker is not used");
+
+    // The microphone: Electron's answer shape, one of its statuses.
+    let (_, mic) = post(d.port, "voice:permission", json!(["status"]), Some(TOKEN)).await;
+    assert!(
+        ["granted", "denied", "restricted", "not-determined", "unknown"].contains(&mic["status"].as_str().unwrap()),
+        "{mic}"
+    );
+    let (status, _) = post(d.port, "voice:permission", json!(["grant"]), Some(TOKEN)).await;
+    assert_eq!(status, 400);
+    // Opening an empty path does nothing and does not fail, as shell.openPath did.
+    let (status, _) = post(d.port, "shell:openPath", json!([""]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    // An unpackaged app without a feed does not update, with main's message.
+    let (_, state) = post(d.port, "update:check", json!([]), Some(TOKEN)).await;
+    assert_eq!(state["state"], "none");
+    assert_eq!(state["message"], "Updates are available in the installed app.");
+    let (status, _) = post(d.port, "update:install", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "nothing downloaded");
+    // None of it reached the TS backend.
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!calls.to_string().contains("dialog:") && !calls.to_string().contains("update:"), "{calls}");
+    drop(d);
+
+    // Without `native` (the web edition), nothing here is the daemon's.
+    let web = start_with(true, Some(&data));
+    let (_, info) = post(web.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(!info["owned"].as_array().unwrap().iter().any(|o| o == "update:check"));
+    drop(web);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+fn fake_installer() -> std::path::PathBuf {
+    let exe = format!("fake_installer{}", std::env::consts::EXE_SUFFIX);
+    let deps = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    let path = deps.parent().unwrap().join("examples").join(exe);
+    if !path.is_file() {
+        let target = deps.parent().unwrap().parent().unwrap();
+        let ok = Command::new(env!("CARGO"))
+            .args(["build", "-p", "nekkod", "--example", "fake_installer"])
+            .env("CARGO_TARGET_DIR", target)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "the stand-in installer builds");
+    }
+    path
+}
+
+/// A loopback release feed in electron-builder's layout: `latest*.yml` naming
+/// one file with its base64 SHA-512, the file itself, request log.
+async fn fake_feed(
+    version: &str,
+    file_name: &str,
+    bytes: Vec<u8>,
+    sha512: String,
+) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    let channel = if cfg!(windows) {
+        "latest.yml"
+    } else if cfg!(target_os = "macos") {
+        "latest-mac.yml"
+    } else {
+        "latest-linux.yml"
+    };
+    let yml = format!(
+        "version: {version}\nfiles:\n  - url: {file_name}\n    sha512: {sha512}\n    size: {}\npath: {file_name}\nsha512: {sha512}\nreleaseDate: '2026-10-17T00:00:00.000Z'\n",
+        bytes.len()
+    );
+    let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let (l2, name) = (log.clone(), file_name.to_string());
+    let bytes = std::sync::Arc::new(bytes);
+    let app = axum::Router::new().route(
+        "/feed/{file}",
+        axum::routing::get(move |axum::extract::Path(file): axum::extract::Path<String>| {
+            let (log, yml, name, bytes) = (l2.clone(), yml.clone(), name.clone(), bytes.clone());
+            async move {
+                log.lock().unwrap().push(file.clone());
+                if file == channel {
+                    (axum::http::StatusCode::OK, yml.into_bytes())
+                } else if file == name {
+                    (axum::http::StatusCode::OK, bytes.to_vec())
+                } else {
+                    (axum::http::StatusCode::NOT_FOUND, Vec::new())
+                }
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://127.0.0.1:{}/feed/", l.local_addr().unwrap().port());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    (url, log)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn updates_from_a_release_feed_with_checksums_and_events() {
+    let data = std::env::temp_dir().join(format!("nekkod-update-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    let installer = std::fs::read(fake_installer()).unwrap();
+    let sha = nekko_native::update::sha512_base64(&installer);
+    let ext = if cfg!(windows) {
+        "exe"
+    } else if cfg!(target_os = "macos") {
+        "zip"
+    } else {
+        "AppImage"
+    };
+    let name = format!("NekkoAgent-0.9.0-x64.{ext}");
+    let (feed, log) = fake_feed("0.9.0", &name, installer.clone(), sha.clone()).await;
+    let (bridge, seen) = fake_shell_bridge(json!({})).await;
+    let cache = data.join("cache");
+    let d = native_daemon(
+        &data,
+        &bridge,
+        json!({ "isPackaged": false, "exePath": "x", "updateFeedUrl": feed, "updateCacheDir": cache, "dialogs": "bridge" }),
+    );
+    // Only the updater's events (the fake backend sends one every 100 ms).
+    let mut events = ws(d.port, &format!("/api/events?token={TOKEN}&only=update:event"), Some("null")).await.unwrap();
+
+    let (_, state) = post(d.port, "update:check", json!([]), Some(TOKEN)).await;
+    assert_eq!(state["state"], "available", "{state}");
+    assert_eq!(state["version"], "0.9.0");
+    assert_eq!(state["currentVersion"], "0.8.1");
+    assert_eq!(state["edition"], "desktop");
+    let (_, state) = post(d.port, "update:download", json!([]), Some(TOKEN)).await;
+    assert_eq!(
+        state,
+        json!({ "state": "downloaded", "currentVersion": "0.8.1", "notesUrl": "https://github.com/nekko-labs/nekko-agent/releases/latest", "edition": "desktop", "version": "0.9.0", "percent": 100 })
+    );
+    let kept = cache.join("pending").join(&name);
+    assert_eq!(nekko_native::update::sha512_file(&kept).unwrap(), sha, "the download is kept, verified");
+
+    // The UI heard every step on `update:event`, the renderer's channel.
+    let mut states = Vec::new();
+    while let Some(ev) = next_json(&mut events, Duration::from_millis(500)).await {
+        if ev["channel"] == "update:event" {
+            states.push(ev["payload"]["state"].as_str().unwrap().to_string());
+        }
+    }
+    assert_eq!(states.first().map(String::as_str), Some("checking"));
+    assert!(states.iter().any(|s| s == "available") && states.iter().any(|s| s == "downloading"), "{states:?}");
+    assert_eq!(states.last().map(String::as_str), Some("downloaded"));
+
+    // A second download of the same file is not fetched again.
+    let fetched = log.lock().unwrap().iter().filter(|f| **f == name).count();
+    post(d.port, "update:check", json!([]), Some(TOKEN)).await;
+    post(d.port, "update:download", json!([]), Some(TOKEN)).await;
+    assert_eq!(log.lock().unwrap().iter().filter(|f| **f == name).count(), fetched);
+
+    // Windows: run the downloaded installer with electron-updater's silent
+    // update arguments, detached, then ask main to quit. Never a real installer.
+    if cfg!(windows) {
+        let (status, done) = post(d.port, "update:install", json!([]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{done}");
+        assert_eq!(done["plan"]["kind"], "run");
+        assert_eq!(done["plan"]["args"], json!(["--updated", "/S", "--force-run"]));
+        assert!(seen.lock().unwrap().iter().any(|v| v["tool"] == "quitForUpdate"), "main was asked to quit");
+        // The stand-in writes what it was started with beside itself.
+        let ran = kept.with_extension("ran.json");
+        wait_for("the stand-in installer to run", || ran.is_file()).await;
+        let got: Value = serde_json::from_str(&std::fs::read_to_string(&ran).unwrap()).unwrap();
+        assert_eq!(got["args"], json!(["--updated", "/S", "--force-run"]));
+    }
+    drop(d);
+
+    // A corrupted download is refused and not kept.
+    let _ = std::fs::remove_dir_all(&cache);
+    let (bad_feed, _) = fake_feed("0.9.0", &name, b"not the installer".to_vec(), sha.clone()).await;
+    let d = native_daemon(
+        &data,
+        &bridge,
+        json!({ "isPackaged": false, "exePath": "x", "updateFeedUrl": bad_feed, "updateCacheDir": cache, "dialogs": "bridge" }),
+    );
+    post(d.port, "update:check", json!([]), Some(TOKEN)).await;
+    let (_, state) = post(d.port, "update:download", json!([]), Some(TOKEN)).await;
+    assert_eq!(state["state"], "error");
+    assert!(state["message"].as_str().unwrap().starts_with("sha512 checksum mismatch, expected "), "{state}");
+    assert!(!cache.join("pending").join(&name).exists(), "a bad download is not kept");
+    let (status, _) = post(d.port, "update:install", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 400);
+    drop(d);
+
+    // Not newer: nothing offered.
+    let (same, _) = fake_feed("0.8.1", &name, installer, sha).await;
+    let d = native_daemon(
+        &data,
+        &bridge,
+        json!({ "isPackaged": false, "exePath": "x", "updateFeedUrl": same, "dialogs": "bridge" }),
+    );
+    let (_, state) = post(d.port, "update:check", json!([]), Some(TOKEN)).await;
+    assert_eq!(state["state"], "none", "{state}");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// A release of decision models on loopback: the English checkpoint's three small files as
+/// published (their real bytes, so their pinned SHA-256s hold), a stand-in for everything
+/// else, and counts of what was asked for. `tamper` serves a same-size `rl_agent_config.json`
+/// with other bytes.
+async fn fake_decision_release(tamper: bool) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    use axum::extract::Path;
+    use axum::routing::get;
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/laya-en");
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let log = seen.clone();
+    let app = axum::Router::new().route(
+        "/download/decision-models-v1/{asset}",
+        get(move |Path(asset): Path<String>| {
+            let (fixtures, log) = (fixtures.clone(), log.clone());
+            async move {
+                use axum::response::IntoResponse;
+                log.lock().unwrap().push(asset.clone());
+                let file = asset.strip_prefix("laya-en.").unwrap_or(&asset);
+                match std::fs::read(fixtures.join(file)) {
+                    Ok(mut bytes) => {
+                        if tamper && file == "rl_agent_config.json" {
+                            bytes[2] ^= 1;
+                        }
+                        bytes.into_response()
+                    }
+                    // The tokenizer and the weights: bytes that are not the published ones.
+                    Err(_) => b"not the published file".to_vec().into_response(),
+                }
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    (format!("http://127.0.0.1:{port}/download/decision-models-v1"), seen)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn downloads_a_decision_model_from_its_release_through_the_queue_and_checks_every_file() {
+    let root = std::env::temp_dir().join(format!("nekkod-decision-dl-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    let home = root.join("home");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), r#"{"engine":{"modelFolders":[]}}"#).unwrap();
+    let h = home.to_string_lossy().to_string();
+    let dir = data.join("models").join("decision").join("laya-en");
+
+    let (release, seen) = fake_decision_release(false).await;
+    let d = start_with_env(
+        true,
+        Some(&data),
+        json!({ "decisionModelsUrl": release }),
+        &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
+    );
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    assert!(info["owned"].as_array().unwrap().contains(&json!("decisions:download")));
+
+    let (status, started) = post(d.port, "decisions:download", json!(["laya-en", "fp16"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{started}");
+    assert_eq!(started, json!({ "ok": true, "message": "Downloading Laya (English) fp16 (0.85 GB)." }));
+    let settled = |j: &Value| ["done", "failed", "cancelled"].contains(&j["state"].as_str().unwrap_or_default());
+    // The three small files are the published ones: checked, and renamed into place.
+    for file in ["tokenizer_config.json", "rl_agent_config.json", "config.json"] {
+        let job = job_until(d.port, &format!("decision:laya-en:shared:{file}"), settled).await;
+        assert_eq!(job["state"], "done", "{job}");
+        assert_eq!(job["group"], "decision:laya-en:fp16");
+        assert_eq!(job["groupLabel"], "Laya (English) · fp16");
+        let want =
+            std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/laya-en").join(file));
+        assert_eq!(std::fs::read(dir.join(file)).ok(), want.ok(), "{file}");
+    }
+    // The others are not: refused before they are renamed, and nothing is left behind.
+    for (id, file) in [
+        ("decision:laya-en:shared:tokenizer.json", "tokenizer.json"),
+        ("decision:laya-en:fp16:model_fp16.onnx", "model_fp16.onnx"),
+    ] {
+        let job = job_until(d.port, id, settled).await;
+        assert_eq!(job["state"], "failed", "{job}");
+        assert_eq!(job["message"], format!("{file} is not the published size."), "{job}");
+        assert!(!dir.join(file).exists() && !dir.join(format!("{file}.part")).exists(), "{file} kept");
+    }
+    let mut asked = seen.lock().unwrap().clone();
+    asked.sort();
+    assert_eq!(
+        asked,
+        [
+            "laya-en.config.json",
+            "laya-en.model_fp16.onnx",
+            "laya-en.rl_agent_config.json",
+            "laya-en.tokenizer.json",
+            "laya-en.tokenizer_config.json"
+        ]
+    );
+    // An incomplete export is not a model yet.
+    let (_, models) = post(d.port, "decisions:models", json!([]), Some(TOKEN)).await;
+    assert_eq!(models, json!([]));
+    // Asked again, only what is missing is fetched.
+    seen.lock().unwrap().clear();
+    let (_, again) = post(d.port, "decisions:download", json!(["laya-en", "fp16"]), Some(TOKEN)).await;
+    assert_eq!(again["ok"], true, "{again}");
+    job_until(d.port, "decision:laya-en:fp16:model_fp16.onnx", settled).await;
+    job_until(d.port, "decision:laya-en:shared:tokenizer.json", settled).await;
+    let mut asked = seen.lock().unwrap().clone();
+    asked.sort();
+    assert_eq!(asked, ["laya-en.model_fp16.onnx", "laya-en.tokenizer.json"]);
+    // The decision files are not chat models: no autoStart, nothing in the library.
+    let settings: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert_ne!(settings["autoStart"], true, "{settings}");
+    drop(d);
+
+    // A file of the published size with other bytes is refused by its checksum.
+    let _ = std::fs::remove_dir_all(&dir);
+    let (tampered, _) = fake_decision_release(true).await;
+    let d = start_with_env(
+        true,
+        Some(&data),
+        json!({ "decisionModelsUrl": tampered }),
+        &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
+    );
+    post(d.port, "decisions:download", json!(["laya-en", "int8"]), Some(TOKEN)).await;
+    let job = job_until(d.port, "decision:laya-en:shared:rl_agent_config.json", settled).await;
+    assert_eq!(job["state"], "failed", "{job}");
+    assert_eq!(job["message"], "rl_agent_config.json is not the published file (checksum mismatch).");
+    assert!(!dir.join("rl_agent_config.json").exists());
+    let job = job_until(d.port, "decision:laya-en:shared:config.json", settled).await;
+    assert_eq!(job["state"], "done", "{job}");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&root);
 }

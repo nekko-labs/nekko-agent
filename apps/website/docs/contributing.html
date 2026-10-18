@@ -47,7 +47,7 @@
       </nav>
     </header>
     <div class="shell">
-      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing" aria-current="page">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/browser-automation">Browser automation</a></li><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing" aria-current="page">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
       <main id="content">
         <article class="prose" id="top">
           <p class="kicker">Contributing</p>
@@ -95,10 +95,10 @@ npm run dev          # build the Rust daemon and the app, then launch the deskto
 </tbody></table></div>
 <p><strong>Rule of thumb:</strong> business logic goes in <code>packages/core</code> (so it&#39;s testable without Electron); the desktop app wires it to the filesystem, shell, and UI.</p>
 <h2 id="publishing-the-npx-nekko-agent-package"><a class="anchor" href="#publishing-the-npx-nekko-agent-package" aria-hidden="true" tabindex="-1">#</a>Publishing the <code>npx nekko-agent</code> package</h2>
-<p><code>npm run bundle:web</code> produces a self-contained package in <code>apps/server/cli-dist/</code>
+<p><code>npm run bundle:web</code> produces a self-contained package in <code>apps/web-app-server/cli-dist/</code>
 (server + engine bundled by esbuild, plus the built <code>web/</code> UI). To release it:</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run bundle:web
-cd apps/server/cli-dist &amp;&amp; npm publish</code></pre></div>
+cd apps/web-app-server/cli-dist &amp;&amp; npm publish</code></pre></div>
 <p>After that, anyone can run the web edition with <code>npx nekko-agent</code>.</p>
 <h2 id="before-you-open-a-pr"><a class="anchor" href="#before-you-open-a-pr" aria-hidden="true" tabindex="-1">#</a>Before you open a PR</h2>
 <p>Keep the build green and the suite passing:</p>
@@ -107,6 +107,7 @@ npm test            # tests in every workspace
 npm run typecheck   # every TypeScript workspace</code></pre></div>
 <ul>
 <li>Add tests in <code>packages/core</code> for new engine behavior (providers, guardrails, agent loop, context).</li>
+<li>Desktop UI flows: add a step to a journey in <code>apps/desktop/e2e/</code> (<code>npm run test:e2e -w @nekko-agent/desktop</code>, hidden windows only; see its README) rather than a new one-off script.</li>
 <li>Match the surrounding code style; keep changes focused.</li>
 <li>For provider changes, you can verify against a real local server:
 <code>node scripts/itest-local.mjs http://your-host:port your-model-id</code></li>
@@ -114,6 +115,7 @@ npm run typecheck   # every TypeScript workspace</code></pre></div>
 <h2 id="documentation"><a class="anchor" href="#documentation" aria-hidden="true" tabindex="-1">#</a>Documentation</h2>
 <p>The docs at <a href="https://nekkoagent.com/docs">nekkoagent.com/docs</a> are rendered from Markdown in this repo. <code>docs/hub/nav.json</code> lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change. When a pull request changes what users see or do, update the page that describes it in the same PR.</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run docs</code></pre></div>
+<p>To look at the result before it ships, <code>npm run website</code> serves the site on <a href="http://127.0.0.1:8080" rel="noopener">http://127.0.0.1:8080</a> (set <code>PORT</code> to change it), with the same clean URLs as production.</p>
 <p>If you forget, the <strong>Docs site</strong> workflow regenerates the pages on your pull request and pushes them to its branch. It only commits when something actually changed.</p>
 <h2 id="commit-messages"><a class="anchor" href="#commit-messages" aria-hidden="true" tabindex="-1">#</a>Commit messages</h2>
 <p>Conventional commits (<code>feat:</code>, <code>fix:</code>, <code>docs:</code>, <code>refactor:</code>, <code>test:</code>, <code>chore:</code>).</p>
@@ -139,5 +141,6 @@ kind (Ollama / LM Studio / vLLM / cloud), the base URL shape, and the model id.<
       <ul class="results" role="listbox" aria-label="Results"></ul>
     </dialog>
     <script src="/docs.js?v=docs-1" defer></script>
+    <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

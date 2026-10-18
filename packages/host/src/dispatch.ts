@@ -77,6 +77,30 @@ export const DAEMON_SERVED = new Set<string>([
   IpcChannels.engineSettingsSave,
   IpcChannels.engineSetResidentTtl,
   IpcChannels.engineGenerateImage,
+  IpcChannels.trainingList,
+  IpcChannels.trainingCreate,
+  IpcChannels.trainingUpdate,
+  IpcChannels.trainingDelete,
+  IpcChannels.trainingStart,
+  IpcChannels.trainingPause,
+  IpcChannels.trainingStop,
+  IpcChannels.trainingHint,
+  // Turn variants (crates/nekkod/src/compaction.rs, image_turns.rs). Not
+  // `chat:interruptQueued`: like `chat:send`, the daemon hands a sandbox chat's
+  // back here.
+  IpcChannels.chatCompact,
+  IpcChannels.chatCancelCompaction,
+  IpcChannels.chatGenerateImage,
+  // The small services (crates/nekkod/src/small_services.rs, watches.rs).
+  IpcChannels.prContinueStack,
+  IpcChannels.prLinkStack,
+  IpcChannels.dataWipe,
+  IpcChannels.appInfo,
+  IpcChannels.updatesCheck,
+  IpcChannels.workspaceAdd,
+  IpcChannels.sessionWatches,
+  // The messaging bridges (crates/nekkod/src/messaging.rs).
+  IpcChannels.messagingStatus,
 ]);
 import { listInstalledSkillDefs } from './skills.js';
 import { watchResume, watchSnapshot } from './agent-watches.js';
@@ -88,7 +112,8 @@ import { watchResume, watchSnapshot } from './agent-watches.js';
  *
  * Note: `workspaceAdd` (the native folder picker) has no headless equivalent, so
  * transports that can't show a dialog (web) should call `workspaceAddByPath`
- * instead; here it degrades to listing current workspaces.
+ * instead; here it degrades to listing current workspaces. Under the engine
+ * daemon it is the daemon's, which asks Electron main for the picker.
  */
 export function createDispatcher(host: Host): (channel: string, args: any[]) => unknown {
   const C = IpcChannels;
@@ -105,6 +130,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.providersTestConfig]: ([cfg]) => host.testProviderConfig(cfg),
 
     [C.modelsList]: ([id]) => host.listModels(id),
+    [C.modelsListStatus]: ([id]) => host.listModelsStatus(id),
     [C.modelPull]: ([id, m]) => host.pullModel(id, m),
     [C.modelLoad]: ([id, m]) => host.loadModel(id, m),
     [C.modelUnload]: ([id, m]) => host.unloadModel(id, m),
@@ -214,6 +240,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
 
     [C.sessionsList]: () => host.listSessions(),
     [C.sessionNextWatch]: ([id]) => host.nextAgentWatchAt(id),
+    [C.sessionWatches]: ([id]) => host.listAgentWatches(id),
     [C.sessionsSummaries]: () => host.listSessionSummaries(),
     [C.sandboxConfigure]: ([id, image]) => host.configureSandbox(id, image),
     [C.sandboxCleanup]: ([id, identity]) => host.cleanupSandbox(id, identity),
@@ -293,6 +320,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.fileRead]: ([p]) => host.readFile(p),
     [C.fileWrite]: ([p, content]) => host.writeFile(p, content),
     [C.dirList]: ([p]) => host.listDir(p),
+    [C.attachmentImport]: ([sid, name, dataUrl]) => host.importAttachment(sid, name, dataUrl),
 
     [C.changesList]: ([sid]) => host.listChanges(sid),
     [C.changeAccept]: ([sid, p]) => host.acceptChange(sid, p),
@@ -318,6 +346,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
 
     [C.skillsInstalled]: () => host.listInstalledSkills(),
     [C.skillsExternal]: ()=> host.listExternalSkills(),
+    [C.skillsRunnable]: () => host.listRunnableSkills(),
     [C.skillsTargets]: () => host.skillTargets(),
     [C.skillInstall]: ([id, target, payload]) => host.installSkill(id, target, payload),
     [C.skillUninstall]: ([id, target]) => host.uninstallSkill(id, target),

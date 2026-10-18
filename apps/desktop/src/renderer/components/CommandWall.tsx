@@ -31,11 +31,13 @@ import {
   type CommandWallState,
 } from '../commandWall.js';
 import { useStore, type Workspace } from '../store.js';
+import { foldWindow, growWindow, mostOverlapping, outerSide, type Box } from '../wallMotion.js';
 import { ChatPane } from './ChatPane.js';
 import { FilePane } from './FilePane.js';
 import { ExplorerPane } from './ExplorerPane.js';
 import { WorkingSubagents } from './WorkingSubagents.js';
 import { NumberedAgentIcon } from './NumberedChatIcon.js';
+import { TargetIcon } from '../icons.js';
 import { StatusIcon, agentStatusOfLane, type AgentStatus } from './WorkspaceCard.js';
 import { BrowserPane } from './BrowserPane.js';
 import { DiffPane } from './DiffPane.js';
@@ -477,6 +479,16 @@ export function CommandWall({
   // to one is a visibility flip; the rest park as transcripts.
   const warm = useRef<readonly string[]>([]);
   if (state.layout.mode === 'focus' && state.hero) warm.current = warmFront(warm.current, state.hero);
+  // A pane added after the first render is new: in Focus it fades in as the
+  // hero. Panes present at mount (a restored wall) never animate.
+  const seenPanes = useRef<Set<string> | null>(null);
+  const enteringPane = useRef<string | null>(null);
+  {
+    const ids = allPanes(state.root).map((p) => p.id);
+    if (state.layout.mode !== 'focus') enteringPane.current = null;
+    else if (seenPanes.current) for (const id of ids) if (!seenPanes.current.has(id)) enteringPane.current = id;
+    seenPanes.current = new Set(ids);
+  }
   // Leaving Focus, the parked windows jump to their places instead of sliding
   // there from under the hero: a dozen full-size windows animating down at
   // once rastered every one of them whole (hundreds of MB of tiles, kept).
@@ -498,6 +510,44 @@ export function CommandWall({
     let id = requestAnimationFrame(() => { id = requestAnimationFrame(() => setUnparked(undefined)); });
     return () => { cancelAnimationFrame(id); setUnparked(undefined); };
   }, [state.layout.mode]);
+
+  // Opening and closing a window is one push (wallMotion.ts): the windows
+  // beside it slide on their transition while it opens out of, or folds into,
+  // its outer edge in step. Only for windows that joined or left the wall
+  // itself, never for a filter, a layout switch or the first paint.
+  const pushStageRef = useRef<HTMLDivElement>(null);
+  const leavingRef = useRef<HTMLDivElement>(null);
+  const lastPush = useRef<{ ids: Set<string>; boxes: ReadonlyMap<string, Box>; els: Map<string, HTMLElement>; mode: string } | null>(null);
+  useLayoutEffect(() => {
+    const stage = pushStageRef.current;
+    if (!stage) return;
+    const ids = new Set(allPanes(state.root).map((p) => p.id));
+    const els = new Map<string, HTMLElement>();
+    stage.querySelectorAll<HTMLElement>(':scope > [data-wall-pane]').forEach((el) => els.set(el.dataset.wallPane!, el));
+    const before = lastPush.current;
+    lastPush.current = size.width > 0 ? { ids, boxes: new Map(shownPanes), els, mode: state.layout.mode } : null;
+    if (!before || before.mode !== state.layout.mode || state.layout.mode === 'focus' || snapping) return;
+    for (const id of ids) {
+      if (before.ids.has(id)) continue;
+      const box = shownPanes.get(id);
+      const el = els.get(id);
+      if (!box || !el) continue;
+      // The window whose room it took was pushed away from it.
+      const from = mostOverlapping(box, [...before.boxes].filter(([other]) => ids.has(other)));
+      void growWindow(el, outerSide(box, from ? shownPanes.get(from) : undefined));
+    }
+    const layer = leavingRef.current;
+    if (!layer) return;
+    for (const id of before.ids) {
+      if (ids.has(id)) continue;
+      const box = before.boxes.get(id);
+      const el = before.els.get(id);
+      if (!box || !el) continue;
+      // The window that fills its room grows in from the other side.
+      const into = mostOverlapping(box, [...shownPanes].filter(([other]) => before.ids.has(other)));
+      foldWindow(el, layer, outerSide(box, into ? before.boxes.get(into) : undefined));
+    }
+  });
 
   const titleOf = (pane: WbPane): string => {
     if (pane.kind === 'chat') return sessionById.get(pane.refId)?.title ?? 'Chat';
@@ -557,7 +607,9 @@ export function CommandWall({
     const logsOpen = logsPane?.id === pane.id && !logsClosing && !logsOverlay;
     const subagents = session ? childrenOf.get(session.id) : undefined;
     const snap = snapping && pane.id !== snapHero;
+    const entering = enteringPane.current === pane.id;
     const deps = [
+      entering,
       pane, title, session, terminal, project?.name, projects.length > 1, status?.label, status?.live, needsYou, agentStatus,
       flashing, selected, n, box?.x, box?.y, box?.width, box?.height, parked, hero, focusedChat, folded, showCompanions,
       inDeck, fullSurface, density, logsOpen, snap, workspaces, dragging, state.layout.mode, state.root, subagents, running, pending,
@@ -572,6 +624,8 @@ export function CommandWall({
         data-wall-snap={snap || undefined}
         data-wall-deck={inDeck || undefined}
         data-wall-hero={hero || undefined}
+        data-wall-entering={(entering && state.layout.mode === 'focus' && hero) || undefined}
+        onAnimationEnd={entering ? (e) => { if (e.animationName === 'focus-new-agent-in' && enteringPane.current === pane.id) enteringPane.current = null; } : undefined}
         data-wall-pane={pane.id}
         data-grid-cell={`${pane.kind}:${pane.refId}`}
         data-wall-selected={selected || undefined}
@@ -584,9 +638,8 @@ export function CommandWall({
         <PaneFrame
           pane={pane}
           title={title}
-          icon={pane.kind === 'chat' ? <NumberedAgentIcon number={n} /> : iconOf(pane.kind)}
-          // A chat's status glyph (rocket, Zz, ?) sits in its footer's far
-          // bottom-right corner (ChatPane). A terminal keeps its strip dot.
+          icon={pane.kind === 'chat' ? <><span data-agent-status><StatusIcon status={agentStatus} /></span><NumberedAgentIcon number={n} /></> : iconOf(pane.kind)}
+          // Activity precedes the numbered agent icon; terminals keep their strip dot.
           statusIndicator={session ? undefined : status && <span role="img" aria-label={status.label} title={status.label} className="h-2 w-2 shrink-0 rounded-full" style={{ background: status.live ? 'var(--success)' : 'var(--ink-faint)' }} />}
           badge={
             <>
@@ -605,6 +658,7 @@ export function CommandWall({
           onAddWindow={() => live.current.setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
           onSplit={(dir, kind) => { void live.current.addWindow(kind, { paneId: pane.id, dir }); }}
           onClose={() => live.current.update((root) => removePane(root, pane.id))}
+          focusAction={openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><TargetIcon className="h-5 w-5" /></button>}
           onMinimize={() => live.current.update((root) => removePane(root, pane.id))}
           onFocus={() => { if (pane.kind === 'chat') live.current.onSelect(pane.refId); }}
           onDragStart={() => setDragging(pane.id)}
@@ -618,25 +672,11 @@ export function CommandWall({
           {/* What it is waiting on is said inside the window (ChatPane pins the
               question or approval at the top). A banner here sat under the
               absolutely positioned content and could not be seen. */}
-          {openable && (
-            <PaneActions>
-               {state.layout.mode !== 'focus' && <button className="command-wall-action" title="Switch to Focus mode (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><LayoutIcon className="h-3.5 w-3.5" /></button>}
-               {companions.length > 0 && <button className="command-wall-action" title={`${folded ? 'Expand' : 'Fold'} companions (${companions.length})`} aria-label={`${folded ? 'Expand' : 'Fold'} companions for ${title} (${companions.length})`} aria-expanded={showCompanions} onClick={() => live.current.setState((s) => ({ ...s, folded: { ...s.folded, [pane.refId]: !folded } }))}>⧉ {companions.length}</button>}
-              <button
-                className="rounded-sm p-1 text-ink-faint hover:text-ink"
-                title={`Open ${title}`}
-                aria-label={`Open ${title} in the Agent tab`}
-                onClick={() => (pane.kind === 'chat' ? live.current.onOpenChat(pane.refId) : live.current.onOpenTerminal(pane.refId))}
-              >
-                <ExternalIcon className="h-3 w-3" />
-              </button>
-            </PaneActions>
-          )}
           {deckCard && <button className="command-wall-card" onClick={() => live.current.focusWindow(pane)} aria-label={`Focus ${title}`}>{terminal ? <TerminalExcerpt terminalId={terminal.id} /> : <span>{session?.lastReplyText || 'No reply yet'}</span>}<small>{session ? `${session.modelId || 'Default model'} · ${session.transcriptTokens.toLocaleString()} context tokens` : status?.label}</small></button>}
           <div className="command-wall-content" inert={!box || deckCard} aria-hidden={!box || deckCard || undefined} data-companions-visible={showCompanions && companions.length > 0 || undefined} data-focus-chat={(focusedChat || parked) || undefined}>
 
             <div className="command-wall-primary">
-           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} status={agentStatus ?? 'idle'} selected={fullSurface ? undefined : selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
+           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat} status={agentStatus ?? 'idle'} selected={fullSurface ? undefined : selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : null}
            </div>
@@ -689,8 +729,10 @@ export function CommandWall({
   return (
     <div ref={wrapRef} className="command-wall-layout" data-command-wall="windows" data-wall-layout={state.layout.mode}>
       {companionNotice && <div className="command-wall-notice" role="status">A companion opened in a narrow window. <button onClick={() => { focusWindow(companionNotice); setCompanionNotice(null); }}>Focus {titleOf(companionNotice)}</button><button aria-label="Dismiss companion notice" onClick={() => setCompanionNotice(null)}>×</button></div>}
-      <div className="command-wall-stage" style={{ height: Math.max(geometry.height, addContent ? geometry.add.y + createHeight + 64 : 0), width: size.width }}>
-        <div className="command-wall-pane-stage" style={{ position: 'absolute', inset: 0, top: 0 }}>
+      <div className="command-wall-stage" data-wall-vacant={!addContent && !state.root || undefined} style={{ height: Math.max(geometry.height, addContent ? geometry.add.y + createHeight + 64 : 0), width: size.width }}>
+        <div ref={pushStageRef} className="command-wall-pane-stage" style={{ position: 'absolute', inset: 0, top: 0 }}>
+        {/* Closing windows fold away here, under the live ones; React never renders into it. */}
+        <div ref={leavingRef} className="command-wall-leaving" aria-hidden />
         {/* Grid's unfilled squares, drawn under the windows as quiet hatching. */}
         {state.layout.mode === 'fixed' && geometry.panes.size > 0 && geometry.empty.map((r, i) => (
           <div key={`empty-${i}`} className="command-wall-empty-cell" aria-hidden data-wall-empty-cell style={{ left: r.x, top: r.y, width: r.width, height: r.height }} />

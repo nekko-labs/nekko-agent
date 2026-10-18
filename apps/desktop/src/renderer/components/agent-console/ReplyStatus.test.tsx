@@ -1,7 +1,9 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ReplyStatus } from './ReplyStatus.js';
+import { emptyLiveActivity } from '@nekko-agent/shared';
+import { replyIconState, ReplyStatus } from './ReplyStatus.js';
 
 describe('reply measurements', () => {
   it('keeps zero output and elapsed time visible while waiting for generation', () => {
@@ -62,4 +64,46 @@ it('labels provisional streaming rates as estimates', () => {
   const html = renderToStaticMarkup(<ReplyStatus streaming status="Working" elapsed={2} tps={24} out={0} last={null} estimatedRate />);
   expect(html).toContain('~24');
   expect(html).toContain('Estimated tokens per second');
+});
+
+describe('reply status icon', () => {
+  it.each(['bash', 'functions.bash', 'start_process', 'read_process', 'kill_process'])('shows terminal work only while %s runs', (label) => {
+    const activity = emptyLiveActivity(0);
+    activity.steps.push({ id: 'tool', kind: 'tool', label, detail: '', at: 0, status: 'running' });
+    expect(replyIconState(activity)).toBe('terminal');
+    activity.steps[0].status = 'ok';
+    expect(replyIconState(activity)).toBe('thinking');
+  });
+
+  it('keeps Nekko for other tools, writing, and startup', () => {
+    expect(replyIconState(undefined)).toBe('idle');
+    const activity = emptyLiveActivity(0);
+    expect(replyIconState(activity)).toBe('idle');
+    activity.tail = 'Writing a reply';
+    expect(replyIconState(activity)).toBe('idle');
+    activity.thinking = 'Considering the next step';
+    expect(replyIconState(activity)).toBe('thinking');
+    activity.steps.push({ id: 'read', kind: 'tool', label: 'read_file', detail: '', at: 0, status: 'running' });
+    expect(replyIconState(activity)).toBe('idle');
+  });
+
+  it.each(['thinking', 'terminal'] as const)('renders the %s animation in the live row', (state) => {
+    const html = renderToStaticMarkup(<ReplyStatus streaming status="Working" elapsed={334} tps={0} out={3300} last={null} iconState={state} />);
+    expect(html).toContain(`data-reply-icon="${state}"`);
+    expect(html).toContain(state === 'thinking' ? 'reply-thought-bubble' : 'reply-terminal-lines');
+    expect(html).not.toContain('pixel-head');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain('334s');
+  });
+
+  it('defaults to the working Nekko', () => {
+    const html = renderToStaticMarkup(<ReplyStatus streaming status="Working" elapsed={1} tps={0} out={0} last={null} />);
+    expect(html).toContain('pixel-working');
+    expect(html).not.toContain('data-reply-icon');
+  });
+
+  it('stills the icons under reduced motion', () => {
+    const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+    expect(css).toContain('.reply-activity-icon, .reply-activity-icon * { animation: none !important; }');
+  });
 });

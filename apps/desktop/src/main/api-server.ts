@@ -13,7 +13,7 @@ import {
   type ApiServerSettings,
   type ApiServerStatus,
 } from '@nekko-agent/shared';
-import { createDispatcher, type Host } from '@nekko-agent/host';
+import { createDispatcher, daemonLink, type Host } from '@nekko-agent/host';
 
 /**
  * The desktop app, served to other programs.
@@ -161,6 +161,40 @@ function closeSockets(): void {
   sockets = new Set();
 }
 
+/**
+ * Every chat's agent events, as `{ channel, payload }` frames, until the
+ * returned stop is called.
+ *
+ * Under the engine daemon they come from the daemon (`/api/events?only=`),
+ * which publishes the turns it drives itself; this host's bus no longer
+ * carries those (it hears only how they end). Without one, from the bus.
+ */
+export function streamAgentEvents(host: Host, write: (frame: string) => void, link = daemonLink()): () => void {
+  if (!link) {
+    const forward = (payload: unknown) => write(JSON.stringify({ channel: IpcEvents.agentEvent, payload }));
+    host.events.on('agentEvent', forward);
+    return () => host.events.off('agentEvent', forward);
+  }
+  let stopped = false;
+  let ws: WebSocket | null = null;
+  const connect = () => {
+    if (stopped) return;
+    const url = `${link.url.replace(/^http/, 'ws')}/api/events?only=${encodeURIComponent(IpcEvents.agentEvent)}&token=${encodeURIComponent(link.token)}`;
+    const next = new WebSocket(url);
+    ws = next;
+    next.onmessage = (ev) => write(String(ev.data));
+    // An error is always followed by close, which reconnects.
+    next.onclose = () => {
+      if (ws === next && !stopped) setTimeout(connect, 500);
+    };
+  };
+  connect();
+  return () => {
+    stopped = true;
+    ws?.close();
+  };
+}
+
 function handleUpgrade(req: IncomingMessage, socket: Socket, settings: ApiServerSettings, host: Host): void {
   const url = new URL(req.url ?? '/', `http://localhost:${settings.port}`);
   const key = req.headers['sec-websocket-key'];
@@ -182,11 +216,10 @@ function handleUpgrade(req: IncomingMessage, socket: Socket, settings: ApiServer
   socket.setNoDelay(true);
   sockets.add(socket);
 
-  const forward = (payload: unknown) => {
-    if (socket.destroyed) return;
-    socket.write(encodeTextFrame(JSON.stringify({ channel: IpcEvents.agentEvent, payload })));
+  const write = (frame: string) => {
+    if (!socket.destroyed) socket.write(encodeTextFrame(frame));
   };
-  host.events.on('agentEvent', forward);
+  const stop = streamAgentEvents(host, write);
 
   let pending: Buffer = Buffer.alloc(0);
   socket.on('data', (chunk: Buffer) => {
@@ -197,7 +230,7 @@ function handleUpgrade(req: IncomingMessage, socket: Socket, settings: ApiServer
   });
 
   const done = () => {
-    host.events.off('agentEvent', forward);
+    stop();
     sockets.delete(socket);
   };
   socket.on('close', done);

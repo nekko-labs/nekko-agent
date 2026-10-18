@@ -14,7 +14,10 @@ use crate::js;
 use crate::sse::SseParser;
 use crate::stream::{ChunkStream, DecodeClock, Sink, Stop, spawn};
 use crate::types::*;
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde_json::{Map, Value, json};
+use std::collections::HashMap;
+use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -303,8 +306,33 @@ fn split_data_url(url: &str) -> Option<(&str, &str)> {
     Some((media, data))
 }
 
+/// Normalize only the outgoing copy, including evidence from old tool turns.
+/// Above 20 images Anthropic caps each edge at 2000px; 1568 also avoids its
+/// usual server-side downscale. Small images retain their original encoding.
+fn resized_image(url: &str) -> Option<String> {
+    let (media, data) = split_data_url(url)?;
+    if !matches!(media, "image/png" | "image/jpeg" | "image/gif" | "image/webp") {
+        return None;
+    }
+    let bytes = STANDARD.decode(data).ok()?;
+    let reader = image::ImageReader::new(Cursor::new(&bytes)).with_guessed_format().ok()?;
+    let (width, height) = reader.into_dimensions().ok()?;
+    if width <= 1568 && height <= 1568 {
+        return None;
+    }
+    // ImageReader applies its default allocation limits to untrusted input.
+    let image = image::ImageReader::new(Cursor::new(&bytes)).with_guessed_format().ok()?.decode().ok()?;
+    let resized = image.resize(1568, 1568, image::imageops::FilterType::Triangle);
+    let mut output = Cursor::new(Vec::new());
+    resized.write_to(&mut output, image::ImageFormat::Png).ok()?;
+    Some(format!("data:image/png;base64,{}", STANDARD.encode(output.into_inner())))
+}
+
 fn to_anthropic_messages(req: &ChatRequest) -> Vec<Value> {
     let mut out: Vec<Value> = Vec::new();
+    // A screenshot can appear more than once in history. Decode it once per
+    // request, without retaining a process-wide copy of sensitive image data.
+    let mut normalized_images: HashMap<String, Option<String>> = HashMap::new();
     // Two user turns in a row (tool results, then a message the user sent
     // while the tools ran) are one turn to the API.
     fn push(out: &mut Vec<Value>, msg: Value) {
@@ -349,6 +377,8 @@ fn to_anthropic_messages(req: &ChatRequest) -> Vec<Value> {
                 Some(images) => {
                     let mut parts = vec![json!({ "type": "text", "text": m.content })];
                     parts.extend(images.iter().map(|url| {
+                        let normalized = normalized_images.entry(url.clone()).or_insert_with(|| resized_image(url));
+                        let url = normalized.as_deref().unwrap_or(url);
                         let (media, data) = split_data_url(url).unwrap_or(("application/octet-stream", url));
                         json!({ "type": "image", "source": { "type": "base64", "media_type": media, "data": data } })
                     }));
@@ -361,6 +391,10 @@ fn to_anthropic_messages(req: &ChatRequest) -> Vec<Value> {
     }
     out
 }
+
+#[cfg(test)]
+#[path = "anthropic_image_tests.rs"]
+mod image_tests;
 
 /// How an event ends the stream early.
 enum End {

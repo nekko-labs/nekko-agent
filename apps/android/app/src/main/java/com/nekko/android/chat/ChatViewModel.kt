@@ -4,19 +4,57 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.ComputersState
+import com.nekko.android.data.PhonePrefs
+import com.nekko.android.voice.Dictation
+import com.nekko.android.voice.DictationController
+import com.nekko.android.voice.MicHardware
 import com.nekko.protocol.AskAnswer
+import com.nekko.protocol.Channels
+import com.nekko.protocol.PhoneChanges
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.SkillSummary
+import android.content.ContentResolver
+import android.net.Uri
+import androidx.compose.ui.graphics.ImageBitmap
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
 
 /** Android wrapper around [ChatController]: wires it to the repository's state and events. */
-class ChatViewModel(sessionId: String, private val repo: ComputersRepository) : ViewModel() {
+class ChatViewModel(
+    private val sessionId: String,
+    private val repo: ComputersRepository,
+    /** The phone's microphone and its settings; null keeps dictation off (tests, previews). */
+    mic: MicHardware? = null,
+    phonePrefs: PhonePrefs? = null,
+) : ViewModel() {
     private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) })
+
+    /** Dictation into this chat's message box (Settings → Dictation). */
+    val dictation: DictationController? = if (mic == null || phonePrefs == null) null else DictationController(
+        scope = viewModelScope,
+        caller = repo.caller,
+        hardware = mic,
+        settings = { phonePrefs.get(Dictation.ENGINE) to phonePrefs.get(Dictation.LANGUAGE) },
+        computer = {
+            val s = repo.state.value
+            DictationController.computerVoice(repo.caller, s.conn == RelayState.ONLINE, s.pcSettings.voiceEnabled)
+        },
+        computerName = { repo.state.value.active?.name ?: "your computer" },
+    )
+
+    override fun onCleared() {
+        dictation?.cancel()
+    }
 
     val ui: StateFlow<ChatUi> = combine(controller.state, repo.state.map(this::env).distinctUntilChanged()) { s, e ->
         ChatController.project(s, e)
@@ -32,7 +70,69 @@ class ChatViewModel(sessionId: String, private val repo: ComputersRepository) : 
         }
     }
 
-    suspend fun send(text: String) = controller.send(text)
+    /** When this chat was completed on the computer; null while it is active. */
+    val completedAt: StateFlow<Long?> = repo.state.map { s -> s.summaries.firstOrNull { it.id == sessionId }?.archivedAt }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.summaries.firstOrNull { it.id == sessionId }?.archivedAt)
+
+    /** Bring this completed chat back to the active list. */
+    suspend fun restore() = repo.restoreChat(sessionId)
+
+    /** Whether the computer lets phones see a chat's changes (`phoneChanges`, set on the computer). */
+    val changesAllowed: StateFlow<Boolean> = repo.state.map { it.pcSettings.phoneChanges }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.pcSettings.phoneChanges)
+
+    private val _insert = MutableStateFlow<String?>(null)
+    /** Text to add to the message box (a quoted line from Changes); the composer takes it once. */
+    val insert: StateFlow<String?> = _insert.asStateFlow()
+    fun quote(text: String) { _insert.value = text }
+    fun inserted() { _insert.value = null }
+
+    /** The Changes sheet's state: loading (null fields), loaded, or the reason it couldn't. */
+    data class ChangesLoad(val changes: PhoneChanges? = null, val error: String? = null)
+
+    private val _changes = MutableStateFlow(ChangesLoad())
+    val changes: StateFlow<ChangesLoad> = _changes.asStateFlow()
+
+    /** What the agent changed in this chat; the computer refuses unless it allows phones to see changes. */
+    fun loadChanges() {
+        _changes.update { it.copy(error = null) }
+        viewModelScope.launch {
+            _changes.value = try {
+                ChangesLoad(PhoneChanges.from(repo.caller.callWithTimeout(30_000, Channels.CHANGES_LIST, JsonPrimitive(sessionId))))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ChangesLoad(_changes.value.changes, e.message ?: "Couldn’t load changes.")
+            }
+        }
+    }
+
+    suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) = controller.send(text, skill, images)
+
+    /** Photos waiting in the message box; kept here so a rotation doesn't drop them. */
+    val photos = PhotoTray<ImageBitmap>()
+
+    /** Picked files or a camera shot → the tray, scaled and encoded off the main thread. */
+    fun addPhotos(resolver: ContentResolver, uris: List<Uri>, afterEach: (Uri) -> Unit = {}) {
+        if (uris.isEmpty()) return
+        val n = photos.begin(uris.size)
+        uris.drop(n).forEach(afterEach)
+        uris.take(n).forEach { uri ->
+            viewModelScope.launch {
+                try {
+                    val (url, preview) = ImageAttachments.encode(resolver, uri)
+                    photos.added(url, preview)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    photos.failed("Couldn’t read that image.")
+                } finally {
+                    afterEach(uri)
+                }
+            }
+        }
+    }
     fun stop() = controller.stop()
     suspend fun approve(ok: Boolean) = controller.approve(ok)
     suspend fun answer(answers: List<AskAnswer>) = controller.answer(answers)

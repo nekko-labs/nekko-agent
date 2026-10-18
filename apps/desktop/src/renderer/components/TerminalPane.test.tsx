@@ -17,7 +17,7 @@ vi.mock('./PaneFrame.js', () => ({ PaneActions: () => null, useInPaneFrame: () =
 vi.mock('@xterm/xterm', () => ({ Terminal: class {
   cols = 80; rows = 24; options = {};
   write = fixture.write; reset = fixture.reset; dispose = fixture.dispose;
-  open() {} focus() {} loadAddon() {}
+  open() {} focus() {} loadAddon() {} attachCustomKeyEventHandler() {} hasSelection() { return false; }
   onData() { return { dispose() {} }; }
   onResize() { return { dispose() {} }; }
 } }));

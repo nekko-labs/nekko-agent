@@ -1,15 +1,17 @@
 import { AgentWindowDropdown, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
 import { AgentSidebar } from './WorkspacesView.js';
 import { ChatPane } from '../components/ChatPane.js';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, AutomationTask, PendingInput, SessionSummary, UsageSummary } from '@nekko-agent/shared';
 import type { AgentType } from '@nekko-agent/shared';
 import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
+import { putCachedSession } from '../sessionCache.js';
+import { newAgentSetup } from '../newAgentSetup.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { GridIcon, PhotoIcon, TerminalIcon, FocusLayoutIcon, FixedLayoutIcon, PanelIcon, WandIcon } from '../icons.js';
+import { PhotoIcon, TerminalIcon, FocusLayoutIcon, BoltIcon, PanelIcon, WandIcon } from '../icons.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -18,14 +20,13 @@ import { agentStatusOfLane } from '../components/WorkspaceCard.js';
 import { BLOCKED_META, LANE_META, sessionLane } from '@nekko-agent/shared';
 import { type Vitals } from '../components/InsightsBox.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
-import { WallDock } from '../components/WallDock.js';
+import { MonitorsDock } from '../components/MonitorsDock.js';
 import { hasAppChrome } from '../chrome.js';
 
 import { allPanes, isSplit, type PaneKind } from '../layout.js';
 import {
   DEFAULT_ASPECT,
-  addPane,
-  hasPane,
+  openWallPane,
   loadWallState,
   nextAgent,
   reconcileWall,
@@ -34,7 +35,6 @@ import {
   saveWallState,
   tileTree,
   toWallSetting,
-  wallPane,
   type CommandWallState,
   type WallFilter,
 } from '../commandWall.js';
@@ -53,7 +53,7 @@ export function wallLayoutShortcut(e: Pick<KeyboardEvent, 'code' | 'key' | 'ctrl
  * Dynamic; the even rows and columns read as Grid. Saved values keep their
  * original keys so existing walls load unchanged.
  */
-export const LAYOUT_LABEL: Record<'focus' | 'grid' | 'fixed', string> = { focus: 'Focus', grid: 'Dynamic', fixed: 'Grid' };
+export const LAYOUT_LABEL: Record<'focus' | 'grid' | 'fixed', string> = { focus: 'Focused', grid: 'Dynamic', fixed: 'Grid' };
 
 function layoutShortcutLabel(mode: 'focus' | 'grid' | 'fixed') {
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -263,10 +263,16 @@ export function CommandCenterView() {
           if (!relocated) throw new Error('Could not configure the new agent working folder.');
           s = relocated;
         }
-        const updated = await window.nekko.setSessionOptions(s.id, { chatType: selection.chatType ?? 'multimodal', ...(selection.providerId ? { providerId: selection.providerId } : {}), ...(selection.modelId ? { modelId: selection.modelId, autoModel: selection.modelId === AUTO_MODEL_ID } : {}) });
-        if (!updated) throw new Error('Could not configure the new agent window.');
-        s = updated;
-        if (selection.workspaceIds) {
+        // Each call is a host round trip before the window can open, so skip
+        // the ones that would change nothing on a just-created chat.
+        const needs = newAgentSetup(s, selection);
+        const chatType = selection.chatType ?? 'multimodal';
+        if (needs.options) {
+          const updated = await window.nekko.setSessionOptions(s.id, { chatType, ...(selection.providerId ? { providerId: selection.providerId } : {}), ...(selection.modelId ? { modelId: selection.modelId, autoModel: selection.modelId === AUTO_MODEL_ID } : {}) });
+          if (!updated) throw new Error('Could not configure the new agent window.');
+          s = updated;
+        }
+        if (needs.supporting) {
           const configured = await window.nekko.setSessionSupportingWorkspaces(s.id, supportingFolders);
           if (!configured) throw new Error('Could not configure the new agent folders.');
           s = configured;
@@ -283,6 +289,9 @@ export function CommandCenterView() {
       }
     }
     unfinishedChat.current = null;
+    // The host returned the full record: cached, the window's first frame is
+    // the finished chat, not a placeholder swapped out mid-reveal.
+    putCachedSession(s);
     addCreatedSession(s);
     return s.id;
   };
@@ -294,7 +303,7 @@ export function CommandCenterView() {
   /** A window from the toolbar, with no side pointed at: beside the biggest window. */
   const addFromToolbar = async (kind: PaneKind, refId?: string) => {
     const ref = refId ?? (kind === 'chat' ? await newChat() : kind === 'terminal' ? await newTerminal() : kind);
-    setWall((w) => ({ ...w, root: hasPane(w.root, kind, ref) ? w.root : addPane(w.root, wallPane(kind, ref), aspectRef.current), ...(kind === 'chat' ? { hero: ref } : {}) }));
+    setWall((w) => openWallPane(w, kind, ref, aspectRef.current));
     if (kind === 'chat') setSelected(ref);
   };
   /** A one-click add that failed says so, instead of silently opening nothing. */
@@ -306,18 +315,40 @@ export function CommandCenterView() {
   // Ctrl+1…9 (or Alt+1…9) pick one by its number.
   const [addOpen, setAddOpen] = useState(false);
   const [completedId, setCompletedId] = useState<string | null>(null);
+  // The reader shows a completed chat only while it stays completed: restoring
+  // or deleting it (from its bar or the agent list's menu) closes the reader.
+  useEffect(() => {
+    if (completedId && listsReady && !sessions.some((s) => s.id === completedId && s.archivedAt)) setCompletedId(null);
+  }, [completedId, listsReady, sessions]);
   const [selected, setSelected] = useState<string | null>(() => wall.hero);
   const selectAgent = useCallback((id: string | null) => {
     setCompletedId(null);
     setSelected(id);
     setWall((w) => w.hero === id ? w : { ...w, hero: id });
   }, [setWall]);
+  // Another tab (Artifacts) asked to show a chat here, Focused. Waits for the
+  // lists so the chat is known; a completed chat opens read-only, as the
+  // agent panel opens one.
+  const focusRequest = useStore((s) => s.focusRequest);
+  useEffect(() => {
+    if (!focusRequest || !listsReady) return;
+    useStore.setState({ focusRequest: null });
+    const chat = sessions.find((s) => s.id === focusRequest);
+    if (!chat) { useStore.getState().pushToast('error', 'That chat no longer exists.'); return; }
+    if (chat.archivedAt) { setCompletedId(chat.id); return; }
+    setCompletedId(null);
+    setWall((w) => {
+      const opened = openWallPane(w, 'chat', chat.id, aspectRef.current);
+      return opened.layout.mode === 'focus' ? opened : { ...opened, layout: { ...opened.layout, mode: 'focus' } };
+    });
+    setSelected(chat.id);
+  }, [focusRequest, listsReady, sessions, setWall]);
   const agentsOnWall = useMemo(() => wallAgents(wall.root), [wall.root]);
   const panel = readAgentPanel(wall.agentPanel);
   useEffect(() => {
-    if (agentsOnWall.length === 0) { if (selected) selectAgent(null); return; }
-    if (!selected || !agentsOnWall.some((p) => p.refId === selected)) selectAgent(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
-  }, [agentsOnWall, selected, wall.hero, selectAgent]);
+    if (agentsOnWall.length === 0) { if (selected) setSelected(null); return; }
+    if (!selected || !agentsOnWall.some((p) => p.refId === selected)) setSelected(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
+  }, [agentsOnWall, selected, wall.hero]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (useStore.getState().view !== 'command' || document.visibilityState === 'hidden' || !viewRef.current?.getClientRects().length || e.defaultPrevented || e.repeat || e.isComposing) return;
@@ -368,9 +399,23 @@ export function CommandCenterView() {
     return { ...w, composer: next === undefined ? rest : { ...rest, width: next } };
   }), [setWall]);
   const composerDrag = useRef<{ y: number; height: number } | null>(null);
+  // The composer's natural (unsized) height, remembered whenever it is at its
+  // default so a drag can snap back to it.
+  const composerDefaultH = useRef<number | null>(null);
+  useLayoutEffect(() => { if (composerHeight === null && composerRef.current) composerDefaultH.current = composerRef.current.offsetHeight; });
+  // Two snap points while dragging: the default size and full size (the 70% cap).
+  const snapComposerHeight = (raw: number) => {
+    const available = composerRef.current?.closest('.wall-column')?.clientHeight ?? 700;
+    const max = available * .7;
+    const h = Math.max(120, Math.min(max, raw));
+    const def = composerDefaultH.current;
+    if (def !== null && Math.abs(h - def) <= 24) return null;
+    if (max - h <= 24) return max;
+    return h;
+  };
   const composerSplit = <div className="wall-composer-split" role="separator" tabIndex={0} aria-label="Resize composer versus wall" aria-orientation="horizontal" title="Drag to resize composer versus wall; double-click to reset"
     onPointerDown={(e) => { composerDrag.current = { y: e.clientY, height: composerRef.current?.offsetHeight ?? 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
-    onPointerMove={(e) => { const drag = composerDrag.current; if (!drag) return; const available = composerRef.current?.closest('.wall-column')?.clientHeight ?? 700; setComposerHeight(Math.max(120, Math.min(available * .7, drag.height + (e.clientY - drag.y) * (wall.composer.side === 'top' ? 1 : -1)))); }}
+    onPointerMove={(e) => { const drag = composerDrag.current; if (!drag) return; setComposerHeight(snapComposerHeight(drag.height + (e.clientY - drag.y) * (wall.composer.side === 'top' ? 1 : -1))); }}
     onPointerUp={() => { composerDrag.current = null; }} onPointerCancel={() => { composerDrag.current = null; }}
     onDoubleClick={() => setComposerHeight(null)}
     onKeyDown={(e) => { if (e.key === 'Home') { e.preventDefault(); setComposerHeight(null); } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const available = composerRef.current?.closest('.wall-column')?.clientHeight ?? 700; setComposerHeight(Math.max(120, Math.min(available * .7, (composerHeight ?? composerRef.current?.offsetHeight ?? 240) + (e.key === 'ArrowUp' ? 20 : -20) * (wall.composer.side === 'top' ? -1 : 1)))); } }} />;
@@ -397,7 +442,7 @@ export function CommandCenterView() {
   const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
 
   return (
-    <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-3 px-4 pb-4 pt-1 xl:px-6">
+    <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-2 pb-1.5 pl-[3px] pr-px pt-1">
       <WallToolbar wall={wall} setWall={setWall} onAutoArrange={autoArrange} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);
@@ -412,7 +457,7 @@ export function CommandCenterView() {
           setAddOpen(false);
         }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
-        <WallDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
+        <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
         <div className="wall-agent-workspace" data-tabs={panel.show && panel.orientation === 'horizontal' ? 'top' : 'left'}>
       {!panel.show && <div className="agent-panel-collapsed" data-orientation={panel.orientation}>
         <AgentPanelControls show={false} orientation={panel.orientation}
@@ -429,9 +474,8 @@ export function CommandCenterView() {
           setCompletedId(null);
           // Focus shows the chosen chat. Every other layout keeps its windows
           // and marks the chat's window active, adding one when it has none.
+          // One guarded wall update, so reselecting the active chat changes nothing.
           void addFromToolbar('chat', id);
-          selectAgent(id);
-          if (wall.layout.mode === 'focus') setWall((w) => ({ ...w, hero: id }));
         }
       }} onOpenTerminal={(id) => { setCompletedId(null); void addFromToolbar('terminal', id); }}
         orientation={panel.orientation}
@@ -493,17 +537,6 @@ export function WallToolbar({
   onPick?: (selection: AgentWindowSelection) => Promise<void>;
 }) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
-  const [fixedOpen, setFixedOpen] = useState(false);
-  const [hoverSize, setHoverSize] = useState({ rows: wall.layout.rows, cols: wall.layout.cols });
-  const fixedRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!fixedOpen) return;
-    const down = (e: MouseEvent) => { if (!fixedRef.current?.contains(e.target as Node)) setFixedOpen(false); };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setFixedOpen(false); };
-    window.addEventListener('mousedown', down);
-    window.addEventListener('keydown', key);
-    return () => { window.removeEventListener('mousedown', down); window.removeEventListener('keydown', key); };
-  }, [fixedOpen]);
   const canArrange = wall.layout.mode === 'grid' && !!wall.root && isSplit(wall.root);
   const panel = readAgentPanel(wall.agentPanel);
   // In the desktop shell the controls share the title bar's row with the
@@ -546,13 +579,10 @@ export function WallToolbar({
           <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" ref={addButtonRef} onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
-        <div className="wall-layout-control" ref={fixedRef}>
+        <div className="wall-layout-control">
           <div className="wall-layout-segments" role="group" aria-label="Wall layout">
-            {(['focus', 'grid', 'fixed'] as const).map((mode) => (
-              <button key={mode} type="button" title={`${LAYOUT_LABEL[mode]} (${layoutShortcutLabel(mode)})`} aria-pressed={wall.layout.mode === mode} aria-expanded={mode === 'fixed' ? fixedOpen : undefined} onClick={() => {
-                if (mode === 'fixed') { setHoverSize({ rows: wall.layout.rows, cols: wall.layout.cols }); setFixedOpen((open) => !open); }
-                else { setFixedOpen(false); setWall((w) => ({ ...w, layout: { ...w.layout, mode } })); }
-              }}>{React.createElement(mode === 'focus' ? FocusLayoutIcon : mode === 'grid' ? GridIcon : FixedLayoutIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[mode]}</button>
+            {(['focus', 'grid'] as const).map((mode) => (
+              <button key={mode} type="button" title={`${LAYOUT_LABEL[mode]} (${layoutShortcutLabel(mode)})`} aria-pressed={wall.layout.mode === mode} onClick={() => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))}>{React.createElement(mode === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[mode]}</button>
             ))}
           </div>
           <div className="wall-auto-arrange" data-visible={wall.layout.mode === 'grid'}>
@@ -561,19 +591,10 @@ export function WallToolbar({
             </button>
             <span id="wall-auto-arrange-tip" role="tooltip">Fit windows above the composer in even rows and columns.</span>
           </div>
-          {fixedOpen && <div className="wall-fixed-picker" role="dialog" aria-label="Grid size">
-            <p className="wall-fixed-shortcut">{layoutShortcutLabel('fixed')} · Grid view</p>
-            <p>{hoverSize.cols} columns × {hoverSize.rows} rows</p>
-            <div className="wall-fixed-cells" onMouseLeave={() => setHoverSize({ rows: wall.layout.rows, cols: wall.layout.cols })}>
-              {Array.from({ length: 36 }, (_, i) => {
-                const rows = Math.floor(i / 6) + 1;
-                const cols = i % 6 + 1;
-                return <button key={i} type="button" aria-label={`${cols} columns by ${rows} rows`} className={rows <= hoverSize.rows && cols <= hoverSize.cols ? 'is-preview' : ''} onMouseEnter={() => setHoverSize({ rows, cols })} onFocus={() => setHoverSize({ rows, cols })} onClick={() => { setWall((w) => ({ ...w, layout: { mode: 'fixed', rows, cols } })); setFixedOpen(false); }} />;
-              })}
-            </div>
-          </div>}
         </div>
-        <div className="inline-flex rounded-lg border border-line p-0.5" role="tablist" aria-label="Show">
+        {/* Same frame as the layout segments beside it (plain 8px corners, not
+            the squircle `rounded-lg` gets), so the two groups match. */}
+        <div className="wall-filter-segments" role="tablist" aria-label="Show">
           {FILTERS.map((f) => (
             <button
               key={f.key}
@@ -586,7 +607,7 @@ export function WallToolbar({
             </button>
           ))}
         </div>
-        <button type="button" className="btn btn-outline gap-1.5 py-1 text-[12px]" aria-pressed={wall.dock.show} onClick={() => setWall((w) => ({ ...w, dock: { ...w.dock, show: !w.dock.show } }))}><PanelIcon className="h-4 w-4" />Panels</button>
+        <button type="button" className="btn btn-outline gap-1.5 py-1 text-[12px]" aria-pressed={wall.dock.show} onClick={() => setWall((w) => ({ ...w, dock: { ...w.dock, show: !w.dock.show } }))}><PanelIcon className="h-4 w-4" />Monitors</button>
       </div>
     </div>
   );

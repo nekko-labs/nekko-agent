@@ -19,9 +19,9 @@ app.whenReady().then(async () => {
       win.setContentSize(width, 1000);
       await run(`integration.reset({dock:true});document.documentElement.dataset.theme='${theme}'`);
       await sleep(900);
-      await run("document.querySelector('.wall-dock__budget details').open=true");
+      await run("document.querySelector('.monitors-dock__budget details').open=true");
       await sleep(200);
-      const budget = await run("!!document.querySelector('.wall-dock__budget select')");
+      const budget = await run("!!document.querySelector('.monitors-dock__budget select')");
       report.checks.push({ width, theme, budget });
       if (!budget) throw Error(`Budget selector missing at ${width}px in ${theme}`);
       fs.writeFileSync(path.join(dir, `budget-${width}-${theme}.png`), (await win.capturePage(undefined, { stayHidden: true })).toPNG());

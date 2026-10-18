@@ -4,7 +4,7 @@ vi.mock('../components/AgentWindowPicker.js', () => ({ AgentWindowPicker: () => 
 vi.mock('../components/InsightsBox.js', () => ({}));
 vi.mock('../components/CommandWall.js', () => ({ CommandWall: () => null, TerminalExcerpt: () => null }));
 vi.mock('../components/WallComposer.js', () => ({ WallComposer: () => null }));
-vi.mock('../components/WallDock.js', () => ({ WallDock: () => null }));
+vi.mock('../components/MonitorsDock.js', () => ({ MonitorsDock: () => null }));
 vi.mock('../chrome.js', () => ({ hasAppChrome: false }));
 import React, { useState } from 'react';
 vi.mock('react', async (original) => {
@@ -16,7 +16,7 @@ import { DEFAULT_WALL_STATE } from '../commandWall.js';
 import { readFileSync } from 'node:fs';
 
 it.each(['focus', 'grid', 'fixed'] as const)('direct creation replaces More without changing the %s layout', (mode) => {
-  vi.mocked(useState).mockReturnValueOnce([false, vi.fn()]).mockReturnValueOnce([{ rows: 2, cols: 2 }, vi.fn()]).mockReturnValueOnce([null, vi.fn()]);
+  vi.mocked(useState).mockReturnValueOnce([null, vi.fn()]);
   const setWall = vi.fn(); const setAddOpen = vi.fn();
   const tree = WallToolbar({ wall: { ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode } }, setWall, setAddOpen, addOpen: false, onAutoArrange: vi.fn(), onAdd: vi.fn() });
   const elements: React.ReactElement<Record<string, any>>[] = [];

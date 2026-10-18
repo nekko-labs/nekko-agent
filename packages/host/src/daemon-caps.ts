@@ -21,6 +21,19 @@ export async function daemonOwns(call: Call, channel: string): Promise<boolean> 
   return (await owned).includes(channel);
 }
 
+/**
+ * Whether the engine daemon already has this host event: a copy made for this
+ * host's own listeners (`relayOnly`), or output of a terminal the daemon owns
+ * (mirrored from it; only the agent command logs are this host's). The
+ * daemon's `/api/events` subscription (`?forDaemon=1`) is sent neither, so
+ * it never reads its own events back.
+ */
+export function isDaemonCopy(name: string, payload: unknown): boolean {
+  const p = payload as { relayOnly?: unknown; terminalId?: unknown } | null;
+  if (p?.relayOnly === true) return true;
+  return name === 'terminalEvent' && typeof p?.terminalId === 'string' && !p.terminalId.startsWith('agent_');
+}
+
 /** How long a daemon turn may stay silent before this side checks the daemon still has it. */
 export const LIVENESS_INTERVAL_MS = 30_000;
 /** Consecutive failed liveness probes before the daemon counts as gone. */

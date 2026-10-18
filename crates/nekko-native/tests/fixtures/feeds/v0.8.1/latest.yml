@@ -1,0 +1,8 @@
+version: 0.8.1
+files:
+  - url: NekkoAgent-0.8.1-x64.exe
+    sha512: 8bFLrlPtQQ9v2rjAx6NwlEDUeLZd1eLV8dv5B92CO2rxWK9ZKsTsecfzV1bMslo9xFvYUySjFbIyLVmQ+MHcEQ==
+    size: 185773714
+path: NekkoAgent-0.8.1-x64.exe
+sha512: 8bFLrlPtQQ9v2rjAx6NwlEDUeLZd1eLV8dv5B92CO2rxWK9ZKsTsecfzV1bMslo9xFvYUySjFbIyLVmQ+MHcEQ==
+releaseDate: '2026-10-12T16:09:07.305Z'

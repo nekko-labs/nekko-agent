@@ -151,7 +151,7 @@ app.whenReady().then(async () => {
           const text = (el) => el ? el.textContent.replace(/\\s+/g, ' ').trim() : null;
           const wins = [...document.querySelectorAll('.command-wall-window')];
           return {
-            utilization: text(document.querySelector('.wall-dock__utilization')),
+            utilization: text(document.querySelector('.monitors-dock__utilization')),
             limitsProblem: document.querySelector('[data-limits-problem]')?.getAttribute('data-limits-problem') ?? null,
             tooltips: document.querySelectorAll('[role="tooltip"]').length,
             unavailableChips: document.querySelectorAll('[data-model-unavailable]').length,
@@ -205,7 +205,7 @@ app.whenReady().then(async () => {
         win.setContentSize(width, 900); await reset();
         await run(`document.documentElement.dataset.theme='${theme}'`);
         await capture(`controls-${theme}-${width}-dynamic`);
-        await click('Focus');
+        await click('Focused');
         await run("document.querySelector('.command-wall-window:not(.command-wall-deck-window) [contenteditable]')?.focus()");
         await capture(`controls-${theme}-${width}-focus`);
         await run("document.querySelector('[aria-label=\"Show agents in a row\"]')?.click()");
@@ -220,11 +220,11 @@ app.whenReady().then(async () => {
         }
       }
       if (process.env.NEKKO_VIEW_AFTER) {
-        win.setContentSize(1200, 900); await reset(); await click('Focus');
+        win.setContentSize(1200, 900); await reset(); await click('Focused');
         const frames = path.join(runDir, 'motion'); fs.mkdirSync(frames);
         for (let i = 0; i < 40; i++) {
           if (i === 5 || i === 23) await run("[...document.querySelectorAll('.wall-layout-segments button')].find(b=>b.textContent==='Dynamic').click()");
-          if (i === 15 || i === 33) await run("[...document.querySelectorAll('.wall-layout-segments button')].find(b=>b.textContent==='Focus').click()");
+          if (i === 15 || i === 33) await run("[...document.querySelectorAll('.wall-layout-segments button')].find(b=>b.textContent==='Focused').click()");
           fs.writeFileSync(path.join(frames, String(i).padStart(3, '0') + '.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG()); await sleep(60);
         }
         await click('Dynamic');
@@ -282,7 +282,7 @@ app.whenReady().then(async () => {
       for (const theme of ['light', 'dark']) for (const width of [1200, 400]) {
         win.setContentSize(width, 900); await reset();
         await run(`document.documentElement.dataset.theme='${theme}'`);
-        await click('Focus'); await sleep(400);
+        await click('Focused'); await sleep(400);
         await capture(`focus-${theme}-${width}-rest`);
         if (fixed) await check('heading precedes version', "(()=>{const h=document.querySelector('.titlebar h1'),v=document.querySelector('.titlebar .update-version');return !!h && !!v && !!(h.compareDocumentPosition(v)&Node.DOCUMENT_POSITION_FOLLOWING)})()");
         await run("document.querySelector('.command-wall-window:not([aria-hidden=true]) button[aria-label=\"Add a window beside this one\"]').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}))");
@@ -293,13 +293,13 @@ app.whenReady().then(async () => {
         if (fixed) await check('compass directions enabled', "[...document.querySelectorAll('[role=dialog][aria-label=\"Add a window\"] button[aria-disabled]')].every(b=>b.getAttribute('aria-disabled')==='false')");
         await capture(`focus-${theme}-${width}-compass`);
         await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
-        await click('Focus'); await sleep(300); await run("document.querySelector('[data-wall-add-button]').click()");await sleep(180); await sleep(500);
+        await click('Focused'); await sleep(300); await run("document.querySelector('[data-wall-add-button]').click()");await sleep(180); await sleep(500);
         if (await mode() !== (fixed ? 'grid' : 'focus')) throw Error('Wrong toolbar mode');
         await check('picker opens', "!!document.querySelector('.agent-window-picker')");
         await capture(`focus-${theme}-${width}-picker`);
         report.checks.push(`Focus add routes ${theme} ${width}`);
       }
-      win.setContentSize(1200,900); await reset(); await click('Focus'); await sleep(400);
+      win.setContentSize(1200,900); await reset(); await click('Focused'); await sleep(400);
       const frames=path.join(runDir,'motion');fs.mkdirSync(frames);
       for(let i=0;i<30;i++) {
         if(i===5)await run("document.querySelector('.command-wall-window:not([aria-hidden=true]) button[aria-label=\"Add a window beside this one\"]').click()");
@@ -425,25 +425,25 @@ app.whenReady().then(async () => {
         // (Windows does). The button must still be the thing under that point,
         // so nothing covers it; only then is it opened directly, and the menu
         // clipping check below stays strict either way.
-        if (!(await run("!!document.querySelector('[role=menuitemradio]')"))) {
-          const exposed = await run(`(() => { const b = document.querySelector('[data-wall-composer] button[title="Run freely; ask/deny per guardrail rules."]'); if (!b) return false; const r = b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)); })()`);
+        if (!(await run("!!document.querySelector('[data-mode-panel] [data-chat-mode]')"))) {
+          const exposed = await run(`(() => { const b = document.querySelector('[data-wall-composer] [data-chat-mode-button]'); if (!b) return false; const r = b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)); })()`);
           report.checks.push({ name: 'Grid mode button is uncovered ' + theme + ' ' + label, passed: exposed, note: 'synthetic press did not open the menu; opened by DOM click' });
           if (assertFixed && !exposed) throw Error('Grid mode button covered');
-          await run(`document.querySelector('[data-wall-composer] button[title="Run freely; ask/deny per guardrail rules."]').click()`); await sleep(180);
+          await run(`document.querySelector('[data-wall-composer] [data-chat-mode-button]').click()`); await sleep(180);
         }
         await capture(`grid-mode-${theme}-${label}`);
-        const reachable = await run("(()=>{const e=document.querySelector('[role=menuitemradio]');if(!e)return false;const r=e.getBoundingClientRect();return e.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))})()");
+        const reachable = await run("(()=>{const e=document.querySelector('[data-mode-panel] [data-chat-mode]');if(!e)return false;e.scrollIntoView({block:'nearest'});const r=e.getBoundingClientRect();return e.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))})()");
         report.checks.push({name:'Grid guardrails menu receives pointer '+theme+' '+label,passed:reachable});
         if(assertFixed && !reachable) throw Error('Grid mode menu clipped');
         if(reachable) {
           await hit('item');
           await check('mode saves owning session',"integration.calls.some(c=>c.method==='options'&&c.id==='existing'&&c.options.mode==='ask')");
-          if(assertFixed) await check('mode selection returns focus',"document.activeElement?.textContent.includes('Mode')");
+          if(assertFixed) await check('mode selection keeps focus in the panel',"!!document.activeElement?.closest('[data-mode-panel]')");
         }
-        await run("sessionStorage.removeItem('fixture-record')"); await clearEditor(); await reset(); if(width<720)win.setContentSize(width,1400); await click('Focus');
+        await run("sessionStorage.removeItem('fixture-record')"); await clearEditor(); await reset(); if(width<720)win.setContentSize(width,1400); await click('Focused');
         await run("document.querySelector('.composer-summary-chip')?.click()");
         if(width<720) {
-          await run("document.querySelector('button[title=\"Run freely; ask/deny per guardrail rules.\"]').focus()");
+          await run("document.querySelector('[data-chat-mode-button]').focus()");
           await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space',windowsVirtualKeyCode:32});
           await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent',{type:'keyUp',key:' ',code:'Space',windowsVirtualKeyCode:32});
           await sleep(180);
@@ -452,9 +452,8 @@ app.whenReady().then(async () => {
         if(assertFixed) {
           await hit('item');
           await check('Focus mode still saves',"integration.calls.some(c=>c.method==='options'&&c.id==='existing'&&c.options.mode==='ask')");
-          await hit('ask');
           await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
-          await check('Escape dismisses mode menu',"!document.querySelector('[aria-label=\"Chat mode\"]')");
+          await check('Escape dismisses mode panel',"!document.querySelector('[data-mode-panel]')");
         }
       }
       for (const kind of ['anthropic','llamacpp']) {
@@ -528,7 +527,8 @@ app.whenReady().then(async () => {
             await capture(`wall-solid-${theme}-${label}`);
             await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
           }
-          await click('Grid'); await capture(`wall-fixed-hint-${theme}-${label}`);
+          // Grid has no toolbar button since #741; Ctrl+Shift+3 selects it.
+          await run("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Digit3',key:'#',ctrlKey:true,shiftKey:true,bubbles:true}))"); await capture(`wall-fixed-hint-${theme}-${label}`);
           await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
         }
       }
@@ -610,7 +610,7 @@ app.whenReady().then(async () => {
         await run("document.querySelector('[aria-label=\"Close checkout notice\"]')?.click()");
         await run('integration.ask()'); await sleep(350); await run("document.querySelector('.composer-question')?.scrollIntoView({block:'nearest'})"); await capture(`question-${theme}-${label}`); await reset();
         await run("document.querySelector('.command-wall-window button[aria-haspopup=listbox]').click()"); await capture(`full-picker-${theme}-${label}`);
-        await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))"); await click('Focus'); await capture(`full-focus-${theme}-${label}`);
+        await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))"); await click('Focused'); await capture(`full-focus-${theme}-${label}`);
         await run("integration.route('workspace')"); await sleep(500);
         await run("(()=>{const b=document.querySelector('[title=\"New agent with a terminal\"]'); b.focus(); b.dispatchEvent(new FocusEvent('focusin',{bubbles:true}));})()"); await capture(`workspace-image-menu-${theme}-${label}`);
       }
@@ -648,7 +648,7 @@ app.whenReady().then(async () => {
     const motion = path.join(runDir, 'motion'); fs.mkdirSync(motion);
     for (let frame = 0; frame < 36; frame++) {
       if (frame === 4 || frame === 16) await run("document.querySelector('[aria-label=\"Resize composer versus wall\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true}))");
-      if (frame === 22) await click('Focus');
+      if (frame === 22) await click('Focused');
       if (frame === 29) await click('Dynamic');
       fs.writeFileSync(path.join(motion, `${String(frame).padStart(3, '0')}.png`), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());
       await sleep(100);
@@ -659,7 +659,7 @@ app.whenReady().then(async () => {
     if (current) {
       win.setContentSize(900,480); await reset();
       await check('short grid remains scrollable', "(()=>{const stage=document.querySelector('.command-wall-stage');return stage && stage.scrollHeight>0 && document.querySelector('[data-wall-composer] [contenteditable]').clientHeight>=36})()");
-      await click('Grid');
+      await run("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Digit3',key:'#',ctrlKey:true,shiftKey:true,bubbles:true}))"); await sleep(180);
       await check('short fixed layout retains accessible editor', "document.querySelector('[data-wall-composer] [contenteditable]').clientHeight>=36 && document.documentElement.scrollWidth<=innerWidth");
     }
     if (win.isFocused() || screen.getAllDisplays().some(d => { const b=win.getBounds(); return b.x < d.bounds.x+d.bounds.width && b.x+b.width > d.bounds.x && b.y < d.bounds.y+d.bounds.height && b.y+b.height > d.bounds.y; }) || report.errors.some(e => /Verification window/.test(e))) throw Error('Background verification visibility/focus invariant failed');

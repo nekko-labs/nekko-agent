@@ -59,6 +59,13 @@ interface PendingCallback {
   label?: string;
 }
 
+/**
+ * What the engine daemon puts in `NEKKOD_OWNS` when it runs the messaging
+ * bridges itself (crates/nekkod/src/messaging.rs): this host then never
+ * starts its own, since Telegram allows one long poll per bot token.
+ */
+export const DAEMON_MESSAGING = 'messaging';
+
 const STATE_FILE = 'messaging-state.json';
 /** Telegram caps edit throughput near one write per second per chat. */
 const EDIT_INTERVAL_MS = 1_500;
@@ -71,7 +78,8 @@ export interface MessagingService {
   stop(): void;
 }
 
-function loadState(): MessagingState {
+/** Exported for the parity golden (crates/nekko-messaging). */
+export function loadState(): MessagingState {
   try {
     const p = join(dataDir(), STATE_FILE);
     if (existsSync(p)) return { offset: 0, bindings: {}, ...JSON.parse(readFileSync(p, 'utf8')) };

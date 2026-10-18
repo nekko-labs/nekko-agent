@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { buildRelay } from './server.js';
-import type { PushSender } from './push.js';
+import type { ActivityPush, PushSender } from './push.js';
 
 /** Live-socket protocol tests: real Fastify WS server + Node's global WebSocket. */
 
@@ -129,6 +129,46 @@ describe('relay v2 routing', () => {
     await connect(url, { room: 'r4', role: 'client', key: 'k' });
     const second = await connect(url, { room: 'r4', role: 'client', key: 'k' });
     expect((await second.closed).code).toBe(1013);
+  });
+
+  it('updates and ends Live Activities by tag, even while the phone is connected', async () => {
+    const pushes: { token: string; push: ActivityPush; app?: string }[] = [];
+    const pushSender: PushSender = {
+      enabled: true,
+      send: async () => {},
+      sendActivity: async (token, push, app) => void pushes.push({ token, push, app }),
+    };
+    const { url, rooms } = await startRelay({ pushSender });
+    const agent = await connect(url, { room: 'r7', role: 'agent', key: 'k' });
+    const c = await connect(url, { room: 'r7', role: 'client', key: 'k' });
+    await c.next();
+    await agent.next();
+    const dev = '00000000-0000-4000-8000-000000000003';
+    const tag = 'a'.repeat(32);
+    c.send({ type: 'register-activity', deviceId: dev, tag, token: 'ab'.repeat(32), app: 'com.nekko.native.ios' });
+    // Malformed registrations are ignored.
+    c.send({ type: 'register-activity', deviceId: 'nope', tag, token: 'ab'.repeat(32) });
+    c.send({ type: 'register-activity', deviceId: dev, tag: 'short', token: 'ab'.repeat(32) });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(rooms.get('r7')!.activities.get(tag)!.size).toBe(1);
+
+    agent.send({ type: 'activity', tag, phase: 'approval', callId: 'tc1', severity: 'high' });
+    agent.send({ type: 'activity', tag: 'b'.repeat(32), phase: 'running' }); // nobody registered it
+    agent.send({ type: 'activity', tag, phase: 'bogus' });
+    agent.send({ type: 'activity', tag, phase: 'done' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes).toEqual([
+      { token: 'ab'.repeat(32), push: { event: 'update', phase: 'approval', callId: 'tc1', severity: 'high' }, app: 'com.nekko.native.ios' },
+      { token: 'ab'.repeat(32), push: { event: 'end', phase: 'done' }, app: 'com.nekko.native.ios' },
+    ]);
+    // Ended: the tag is forgotten and a late update pushes nothing.
+    expect(rooms.get('r7')!.activities.has(tag)).toBe(false);
+    agent.send({ type: 'activity', tag, phase: 'running' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.length).toBe(2);
+    // A client never relays an `activity` frame of its own to anyone but the agent.
+    c.send({ type: 'activity', tag, phase: 'done' });
+    expect((await agent.next()).type).toBe('c');
   });
 
   it('stores push tokens per device, pushes when offline, and removes on revoke', async () => {

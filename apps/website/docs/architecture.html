@@ -47,7 +47,7 @@
       </nav>
     </header>
     <div class="shell">
-      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture" aria-current="page">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/browser-automation">Browser automation</a></li><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture" aria-current="page">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
       <main id="content">
         <article class="prose" id="top">
           <p class="kicker">Contributing</p>
@@ -62,7 +62,7 @@
             |                                        |
             |  IPC                          HTTP + WebSocket
             v                                        v
-       apps/desktop main                      apps/server
+       apps/desktop main                  apps/web-app-server
             \                                        /
              \----------- nekkod (Rust) ------------/
                      engine daemon on loopback
@@ -105,7 +105,7 @@
 <td>The Electron app: <code>src/main</code> (Node), <code>src/preload</code> (the bridge) and <code>src/renderer</code> (React).</td>
 </tr>
 <tr>
-<td><code>apps/server</code></td>
+<td><code>apps/web-app-server</code></td>
 <td>The self-hosted web edition, also the <code>npx nekko-agent-web</code> package.</td>
 </tr>
 <tr>
@@ -162,5 +162,6 @@
       <ul class="results" role="listbox" aria-label="Results"></ul>
     </dialog>
     <script src="/docs.js?v=docs-1" defer></script>
+    <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

@@ -31,9 +31,7 @@ pub fn turn_can_ask(session: &Value) -> bool {
 /// is the TS `TurnToolInput`: `session`, `offline`, `orchestration`,
 /// `allowBrowserControl`, `mcpTools`, `decide`.
 pub fn turn_tools(input: &Value) -> Vec<Value> {
-    if truthy(input, "offline") {
-        return Vec::new();
-    }
+    let offline = truthy(input, "offline");
     let c = catalog();
     let session = input.get("session").unwrap_or(&Value::Null);
     let allow_spawn = allows_spawn(input.get("orchestration"));
@@ -58,8 +56,17 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     }
     let mcp = input.get("mcpTools").and_then(Value::as_array).cloned().unwrap_or_default();
     let watch = (!incognito && !training).then(|| c.agent_watch.clone());
-    let mut tools: Vec<Value> =
-        c.builtin.iter().cloned().chain(mcp).chain(watch).filter(|t| !disabled.contains(name(t))).collect();
+    // Blocking the internet keeps the local tools and drops those that reach a
+    // network (`toolAllowedOffline`, shared/tool-categories.ts).
+    let mut tools: Vec<Value> = c
+        .builtin
+        .iter()
+        .cloned()
+        .chain(mcp)
+        .chain(watch)
+        .filter(|t| !disabled.contains(name(t)))
+        .filter(|t| !offline || tool_allowed_offline(name(t)))
+        .collect();
     tools.push(c.update_plan.clone());
     if session.get("titleAuto") != Some(&Value::Bool(false)) && !parent {
         tools.push(c.set_chat_title.clone());
@@ -74,10 +81,23 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     if can_ask && !disabled.contains(name(&c.ask_user)) {
         tools.push(c.ask_user.clone());
     }
-    if truthy(input, "decide") && !disabled.contains(name(&c.decide)) {
+    if truthy(input, "decide") && !offline && !disabled.contains(name(&c.decide)) {
         tools.push(c.decide.clone());
     }
     tools
+}
+
+/// `toolAllowedOffline(name)`: not an online or MCP tool, and not an agent
+/// tool that can route to a cloud provider. The table is the catalog's copy of
+/// `TOOL_CATEGORY_OF` and `OFFLINE_BLOCKED_AGENT_TOOLS`.
+fn tool_allowed_offline(tool: &str) -> bool {
+    let c = catalog();
+    if tool.starts_with("mcp__") {
+        return false;
+    }
+    // Unclassified tools are refused offline, as in the TS.
+    let Some(category) = c.tool_categories.get(tool).and_then(Value::as_str) else { return false };
+    category != "online" && category != "mcp" && !c.offline_blocked.iter().any(|b| b == tool)
 }
 
 /// `value.replace(/https?:\/\/\S+/gi, '[redacted]')`.
@@ -168,7 +188,7 @@ fn orchestration_hint(o: &Value) -> String {
 
 /// `turnSystemPrompt(input)`. `input` is the TS `TurnPromptInput`:
 /// `workspaces`, `tools`, `settings`, `sandbox`, `executionMode`,
-/// `worktreeNotices`, `contextBlock`, `platform`.
+/// `worktreeNotices`, `contextBlock`, `platform`, `workMode`.
 pub fn turn_system_prompt(input: &Value) -> String {
     let c = catalog();
     let settings = input.get("settings").unwrap_or(&Value::Null);
@@ -191,7 +211,14 @@ pub fn turn_system_prompt(input: &Value) -> String {
     let str_of = |k: &str| settings.get(k).and_then(Value::as_str);
     let own = if sandbox { Some(c.sandbox_instructions.as_str()) } else { str_of("systemInstructions") };
     let watch = has("agent_watch").then_some(c.agent_watch_instructions.as_str());
-    let instructions = [own, watch].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n");
+    // `workModePrompt(input.workMode)`: an unknown or absent mode adds nothing.
+    let work_mode = input
+        .get("workMode")
+        .and_then(Value::as_str)
+        .and_then(|id| c.work_mode_prompts.get(id))
+        .and_then(Value::as_str);
+    let instructions =
+        [own, watch, work_mode].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n");
     let wrapper = if sandbox {
         c.default_turn_wrapper.as_str()
     } else {

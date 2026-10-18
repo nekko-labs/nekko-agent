@@ -34,8 +34,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=agent-image
+          cache-to: type=gha,mode=max,scope=agent-image
 
   relay-image:
     runs-on: ubuntu-latest
@@ -61,5 +61,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=relay-image
+          cache-to: type=gha,mode=max,scope=relay-image

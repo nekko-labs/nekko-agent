@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import type { PairingGrant, RemoteDevice, RemoteStatus } from '@nekko-agent/shared';
+import { relayUrlProblem, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
 import { Badge } from './primitives/index.js';
+import { Toggle } from './primitives/Toggle.js';
+import { useStore } from '../store.js';
 
 /**
  * Settings card for phone remote control: expose this machine over a relay,
@@ -13,6 +15,7 @@ import { Badge } from './primitives/index.js';
 /** Managed relay (free during beta; becomes a Nekko Agent Cloud perk). */
 export const MANAGED_RELAY_URL = 'wss://nekko-agent-relay.fly.dev';
 const SELF_HOST_DOCS = 'https://github.com/nekko-labs/nekko-agent/blob/main/docs/REMOTE.md';
+const TAILSCALE_DOWNLOAD = 'https://tailscale.com/download';
 
 export function RemoteAccess() {
   const [status, setStatus] = useState<RemoteStatus>({ enabled: false });
@@ -24,6 +27,7 @@ export function RemoteAccess() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
   const [link, setLink] = useState('');
+  const [urlProblem, setUrlProblem] = useState<string | undefined>();
   const editedUrl = useRef(false);
 
   const refresh = async () => {
@@ -76,9 +80,19 @@ export function RemoteAccess() {
 
   const enable = async () => {
     if (!relayUrl.trim()) return;
+    // The phone refuses plain ws:// to the open internet; refuse it here first.
+    const problem = relayUrlProblem(relayUrl);
+    setUrlProblem(problem);
+    if (problem) return;
     setBusy(true);
-    setStatus(await window.nekko.enableRemote(relayUrl.trim()));
-    setBusy(false);
+    try {
+      setStatus(await window.nekko.enableRemote(relayUrl.trim()));
+    } catch (e) {
+      // The computer applies the same rule (and any other refusal) and says why.
+      setUrlProblem(String((e as Error)?.message ?? e).replace(/^Error:\s*/, ''));
+    } finally {
+      setBusy(false);
+    }
   };
   const disable = async () => {
     setBusy(true);
@@ -140,6 +154,7 @@ export function RemoteAccess() {
               value={relayUrl}
               onChange={(e) => {
                 editedUrl.current = true;
+                setUrlProblem(undefined);
                 setRelayUrl(e.target.value);
               }}
             />
@@ -147,6 +162,11 @@ export function RemoteAccess() {
               {busy ? 'Connecting…' : 'Enable'}
             </button>
           </div>
+          {urlProblem && (
+            <p className="text-[12px]" style={{ color: 'var(--danger)' }}>
+              {urlProblem}
+            </p>
+          )}
           <p className="text-[11.5px] text-ink-faint">
             The default is the managed Nekko Agent relay (free during beta). Privacy purists can{' '}
             <a className="underline" href={SELF_HOST_DOCS} target="_blank" rel="noreferrer">
@@ -154,6 +174,13 @@ export function RemoteAccess() {
             </a>{' '}
             with one Docker command and paste its URL here.
           </p>
+          <LocalRelayCard
+            onUse={(url) => {
+              editedUrl.current = true;
+              setUrlProblem(undefined);
+              setRelayUrl(url);
+            }}
+          />
         </div>
       ) : (
         <div className="mt-3 space-y-4">
@@ -161,6 +188,9 @@ export function RemoteAccess() {
             <Field label="Relay" value={status.relayUrl!} />
             <Field label="Room" value={status.room!} mono />
           </div>
+          <LocalRelayCard inUse={status.relayUrl} />
+          <NetworkVisibilitySwitch />
+          <PhoneChangesSwitch />
 
           {/* Paired devices */}
           <div>
@@ -248,6 +278,113 @@ export function RemoteAccess() {
   );
 }
 
+/**
+ * Relay on this computer: the app runs the relay itself on this computer's
+ * Tailscale address, so phones on the same tailnet need no hosted relay.
+ * `onUse` fills the relay field (before remote access is on); `inUse` is the
+ * relay remote access is using (after), to say whether it is this one.
+ */
+export function LocalRelayCard({ onUse, inUse }: { onUse?: (url: string) => void; inUse?: string }) {
+  const [relay, setRelay] = useState<LocalRelayStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    const load = () => void window.nekko.localRelayStatus?.().then((s) => live && setRelay(s)).catch(() => {});
+    load();
+    // Tailscale coming up, or the relay starting on its own, shows without a click.
+    const t = setInterval(load, 5000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  if (!relay || relay.available === false) return null;
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const next = relay.enabled ? await window.nekko.localRelayStop() : await window.nekko.localRelayStart();
+      setRelay(next);
+      if (!relay.enabled && next.running && next.url) onUse?.(next.url);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <LocalRelayView relay={relay} busy={busy} onToggle={toggle} onUse={onUse} inUse={inUse} />;
+}
+
+export function LocalRelayView({
+  relay,
+  busy,
+  onToggle,
+  onUse,
+  inUse,
+}: {
+  relay: LocalRelayStatus;
+  busy?: boolean;
+  onToggle: () => void;
+  onUse?: (url: string) => void;
+  inUse?: string;
+}) {
+  const usedHere = !!inUse && !!relay.url && inUse === relay.url;
+  const where = relay.tailnetName ?? relay.tailnetIp;
+
+  return (
+    <div data-shot="local-relay" className="rounded-lg border border-line p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-[13px] font-medium">Relay on this computer</h3>
+        <Badge tone={relay.running ? 'success' : relay.tailnetIp ? 'neutral' : 'warning'} variant="soft">
+          {relay.running ? 'running' : relay.enabled ? 'waiting' : 'Tailscale'}
+        </Badge>
+        <button className={`btn ${relay.enabled ? 'btn-ghost' : 'btn-outline'} ml-auto py-1 text-[12px]`} onClick={onToggle} disabled={busy}>
+          {busy ? (relay.enabled ? 'Stopping…' : 'Starting…') : relay.enabled ? 'Stop' : 'Start relay'}
+        </button>
+      </div>
+      <p className="mt-1 text-[12px] text-ink-faint">
+        Phones on your Tailscale network connect straight to this computer over WireGuard, with no hosted relay in
+        between. Listens on the tailnet address only.
+      </p>
+      {relay.tailnetIp ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
+          <span className="h-2 w-2 rounded-full" style={{ background: 'var(--success)' }} aria-hidden />
+          <span className="text-ink-soft">
+            Tailscale connected: <span className="font-mono">{where}</span>
+          </span>
+        </div>
+      ) : (
+        <p className="mt-2 text-[12px] text-ink-soft">
+          Tailscale isn’t connected on this computer.{' '}
+          <a className="underline" href={TAILSCALE_DOWNLOAD} target="_blank" rel="noreferrer">
+            Get Tailscale
+          </a>
+          , sign in on this computer and your phone, and {relay.enabled ? 'the relay starts by itself.' : 'start the relay.'}
+        </p>
+      )}
+      {relay.running && relay.url && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <code className="rounded px-2 py-1 font-mono text-[11.5px]" style={{ background: 'var(--surface-2)' }}>
+            {relay.url}
+          </code>
+          {onUse ? (
+            <button className="btn btn-primary py-1 text-[12px]" onClick={() => onUse(relay.url!)}>
+              Use this relay
+            </button>
+          ) : usedHere ? (
+            <span className="text-[12px] text-ink-faint">Remote access is using this relay.</span>
+          ) : null}
+        </div>
+      )}
+      {relay.error && relay.tailnetIp && (
+        <p className="mt-2 text-[12px]" style={{ color: 'var(--danger)' }}>
+          {relay.error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function platformIcon(platform: string): string {
   switch (platform) {
     case 'ios':
@@ -279,6 +416,93 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
     <div className="flex items-center gap-2">
       <span className="text-ink-faint">{label}:</span>
       <span className={`truncate ${mono ? 'font-mono' : ''}`}>{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Whether paired phones may see the files the agent changed in a chat
+ * (`phoneChanges`, off unless set). Read only: a phone can never accept or
+ * revert changes, read other files or open terminals, and files that may hold
+ * secrets are counted, not shown.
+ */
+/**
+ * Visible on this network: the computer answers mDNS so phones on the same
+ * Wi-Fi can list it. Off by default. Pairing still takes the QR code or link.
+ */
+export function NetworkVisibilitySwitch() {
+  const [vis, setVis] = useState<NetworkVisibilityStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    const load = () => void window.nekko.networkVisibilityStatus?.().then((s) => live && setVis(s)).catch(() => {});
+    load();
+    // Joining a network, or a new address, shows without a click.
+    const t = setInterval(load, 5000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  if (!vis || vis.available === false) return null;
+  const set = async (on: boolean) => {
+    setBusy(true);
+    try {
+      setVis(on ? await window.nekko.networkVisibilityStart() : await window.nekko.networkVisibilityStop());
+    } catch (e) {
+      useStore.getState().pushToast('error', String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <NetworkVisibilityView vis={vis} busy={busy} onChange={(on) => void set(on)} />;
+}
+
+export function NetworkVisibilityView({ vis, busy, onChange }: { vis: NetworkVisibilityStatus; busy?: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div data-shot="network-visibility" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium">Visible on this network</div>
+        <p className="mt-0.5 text-[12px] text-ink-faint">
+          Phones on the same Wi-Fi can find this computer by name. Anyone on the network can see the name
+          {vis.relayUrl ? ' and this computer’s relay address' : ''}, nothing else. Pairing still takes this computer’s QR code or link.
+        </p>
+        {vis.enabled && vis.advertising && vis.name && (
+          <p className="mt-1 text-[12px] text-ink-soft">
+            Showing as <span className="font-medium">{vis.name}</span>
+            {vis.addresses?.length ? <span className="font-mono"> ({vis.addresses.join(', ')})</span> : null}
+          </p>
+        )}
+        {vis.enabled && vis.error && (
+          <p className="mt-1 text-[12px]" style={{ color: 'var(--danger)' }}>
+            {vis.error}
+          </p>
+        )}
+      </div>
+      <Toggle value={vis.enabled} onChange={onChange} disabled={busy} label="Visible on this network" />
+    </div>
+  );
+}
+
+export function PhoneChangesSwitch() {
+  const on = useStore((s) => s.settings?.phoneChanges === true);
+  const set = (v: boolean) => {
+    void window.nekko.updateSettings({ phoneChanges: v })
+      .then(() => useStore.getState().refreshSettings())
+      .catch((e) => useStore.getState().pushToast('error', String(e)));
+  };
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium">Let phones see changes</div>
+        <p className="mt-0.5 text-[12px] text-ink-faint">
+          Paired phones can read the diff of files the agent changed in a chat. Read only: phones can’t accept or
+          revert changes, open other files or terminals. Secret files like .env and keys are hidden.
+        </p>
+      </div>
+      <Toggle value={on} onChange={set} label="Let phones see changes" />
     </div>
   );
 }

@@ -26,6 +26,12 @@ pub struct Catalog {
     pub sandbox_instructions: String,
     pub ask_cancelled: String,
     pub ask_unattended: String,
+    /// `TOOL_CATEGORY_OF` (shared/tool-categories.ts): tool name to category.
+    pub tool_categories: serde_json::Map<String, Value>,
+    /// `OFFLINE_BLOCKED_AGENT_TOOLS`.
+    pub offline_blocked: Vec<String>,
+    /// `workModePrompts()` (shared/work-modes.ts): work mode id to the text it adds.
+    pub work_mode_prompts: serde_json::Map<String, Value>,
 }
 
 fn text(v: &Value, key: &str) -> String {
@@ -55,6 +61,12 @@ pub fn catalog() -> &'static Catalog {
             sandbox_instructions: text(&v, "sandboxInstructions"),
             ask_cancelled: text(&v, "askCancelled"),
             ask_unattended: text(&v, "askUnattended"),
+            tool_categories: v["toolCategories"].as_object().cloned().unwrap_or_default(),
+            offline_blocked: v["offlineBlockedTools"]
+                .as_array()
+                .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                .unwrap_or_default(),
+            work_mode_prompts: v["workModePrompts"].as_object().cloned().unwrap_or_default(),
         }
     })
 }
@@ -77,5 +89,7 @@ mod tests {
         assert_eq!(name(&c.decide), "decide");
         assert_eq!(c.strategies.len(), 3);
         assert!(!c.default_turn_wrapper.is_empty() && !c.ask_cancelled.is_empty());
+        assert_eq!(c.tool_categories.get("fetch_url").and_then(Value::as_str), Some("online"));
+        assert!(c.offline_blocked.iter().any(|t| t == "spawn_agent"));
     }
 }

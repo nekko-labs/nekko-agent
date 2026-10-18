@@ -27,6 +27,8 @@ const dark = { ...light, ...block("[data-theme='dark']") };
 const THEMES: Record<string, Record<string, string>> = {
   light,
   'light/solar': { ...light, ...block("[data-theme='light'][data-preset='solar']") },
+  'light/lilac': { ...light, ...block("[data-theme='light'][data-preset='lilac']") },
+  'light/lavender': { ...light, ...block("[data-theme='light'][data-preset='lavender']") },
   dark,
   'dark/nebula': { ...dark, ...block("[data-theme='dark'][data-preset='nebula']") },
   'dark/terminal': { ...dark, ...block("[data-theme='dark'][data-preset='terminal']") },
@@ -62,6 +64,38 @@ describe('contrast helper', () => {
   it('composites translucent colours over paper', () => {
     const half = composite(parseColor('rgba(0, 0, 0, 0.5)'), parseColor('#ffffff'));
     expect(Math.round(half.r)).toBe(128);
+  });
+});
+
+/** sRGB `color-mix(in srgb, a p%, b)` for opaque colours, as styles.css uses it. */
+function mix(a: string, p: number, b: string) {
+  const [x, y] = [parseColor(a), parseColor(b)];
+  const m = (u: number, v: number) => u * p + v * (1 - p);
+  return { r: m(x.r, y.r), g: m(x.g, y.g), b: m(x.b, y.b), a: 1 };
+}
+const toHex = (c: { r: number; g: number; b: number }) => '#' + [c.r, c.g, c.b].map((n) => Math.round(n).toString(16).padStart(2, '0')).join('');
+
+/** Each theme with the accent its preset applies (store.applyTheme). */
+const ACCENTS: Record<string, string> = {
+  light: '#6d5efc', 'light/solar': '#b45309', 'light/lilac': '#5b4ea7', 'light/lavender': '#3b2f86', dark: '#8b7dff',
+  'dark/nebula': '#9d8ce6', 'dark/terminal': '#3fb96a', 'dark/nord': '#88c0d0',
+};
+
+describe.each(Object.entries(THEMES))('artifact card colours in %s', (name, vars) => {
+  const accent = ACCENTS[name];
+  const surface = vars['--surface'];
+  it('title and filename stay readable on the strongest (hover) wash', () => {
+    const wash = mix(accent, 0.12, surface);
+    for (const token of ['--ink', '--ink-soft']) {
+      const ratio = contrastRatio(parseColor(vars[token]), wash);
+      expect(ratio, `${token} on artifact wash = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
+    }
+  });
+  it('the extension chip label is readable on the chip', () => {
+    const ink = mix(accent, 0.55, vars['--ink']);
+    const chip = mix(accent, 0.14, surface);
+    const ratio = contrastRatio(ink, chip);
+    expect(ratio, `chip ${toHex(ink)} on ${toHex(chip)} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
   });
 });
 

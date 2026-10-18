@@ -22,8 +22,40 @@ reference until this app reaches parity.
   that show the exact command; the agent's questions as choices with a free-text
   answer. Transcripts are re-read after each turn and after reconnecting.
 
+- **App lock:** fingerprint, face or the phone's screen lock every time the app
+  opens or comes back (on by default, *Settings → Security*). Locked means nothing
+  is shown or approvable, recents stay blank (`FLAG_SECURE`), and after a restart
+  the relay doesn't connect until the first unlock.
+
+- **New chat defaults:** *Settings → New chats* sets the computer to connect
+  to at start and a model per computer, on the phone only; a model the
+  computer no longer offers falls back to its default with a notice.
+- **Share to Nekko:** text or a link from another app's share menu opens New
+  chat with it, editable; it lands in the new chat's message box and is never
+  sent automatically. Memory only, text only (≤ 20,000 characters).
+- **Vibration:** a distinct buzz while the app is open when the agent needs an
+  approval or asks a question (on by default), and optionally when a reply
+  finishes or fails; never in silent mode or Do Not Disturb.
+
+- **The computer's settings:** *Settings → On <computer>* sets its default chat
+  mode (YOLO allowed after a confirmation), the long-press action (Complete or
+  Delete) and delete confirmation; a long-press on a chat runs that action.
+
+- **The + menu:** left of the message box, Send on the right. **Dictate**,
+  **Image from files** (system photo picker, no storage permission) and **Take
+  photo** (the camera app, no camera permission). Up to 4 photos, scaled to
+  1600 px JPEG in memory, go with the next message as `images`.
+- **Dictation:** **+ → Dictate**; the text goes in the box and
+  you press Send. Whisper on the computer (encrypted, up to 30 s) when its Nekko
+  Voice is on, else the phone's recognizer; *Settings → Dictation*.
+
+- **The computer's skills:** type `/` in the message box for the skills on the
+  computer (built-in, Marketplace, imported from Claude Code / Codex / Gemini),
+  re-read every time a chat opens. The computer adds each skill's instructions
+  itself; the phone only ever sees names and descriptions. No `/goal`.
+
 **Not yet:** models on the phone, push notifications, Markdown rendering,
-attachments, Play Store release. See `TASKS.md` → *Native Android app*.
+files other than photos, thumbnails of sent photos, Play Store release. See `TASKS.md` → *Native Android app*.
 
 ## Layout
 
@@ -45,6 +77,10 @@ apps/android/
 | Computers | `app/.../data/ComputersRepository.kt` | `apps/mobile/src/services/computers.ts` |
 
 ## Security notes
+
+- The app lock (`app/.../lock/`) is UI-only: it gates what the phone shows and
+  sends, it does not encrypt anything with the user's credential. A rooted or
+  compromised phone is out of scope; revoke the phone on the computer instead.
 
 - Pairing material (room, secret, PBKDF2-derived key, device id) is sealed with
   AES-256-GCM under a non-exportable **Android Keystore** key before it touches
@@ -94,7 +130,7 @@ cd apps/android && NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegra
    link and a one-time code):
    ```sh
    NEKKO_RELAY_PORT=4400 NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 node apps/relay/dist/index.js
-   NEKKO_RELAY_URL=ws://127.0.0.1:4400 NEKKO_ROOM=<16 hex> NEKKO_PAIR_KEY=<32 hex> node apps/server/dist/index.js
+   NEKKO_RELAY_URL=ws://127.0.0.1:4400 NEKKO_ROOM=<16 hex> NEKKO_PAIR_KEY=<32 hex> node apps/web-app-server/dist/index.js
    ```
    Or use the desktop app's **Settings → Remote access** with the managed relay.
 2. Install the debug APK: `adb install -r app/build/outputs/apk/debug/app-debug.apk`.

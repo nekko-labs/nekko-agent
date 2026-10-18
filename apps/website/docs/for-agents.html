@@ -47,7 +47,7 @@
       </nav>
     </header>
     <div class="shell">
-      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents" aria-current="page">Docs for AI agents</a></li></ul></section></aside>
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/browser-automation">Browser automation</a></li><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents" aria-current="page">Docs for AI agents</a></li></ul></section></aside>
       <main id="content">
         <article class="prose" id="top">
           <p class="kicker">For AI agents</p>
@@ -94,6 +94,7 @@
 <h2 id="editing-these-docs"><a class="anchor" href="#editing-these-docs" aria-hidden="true" tabindex="-1">#</a>Editing these docs</h2>
 <p>Each page is rendered from one Markdown file in the repo, listed in <code>docs/hub/nav.json</code>. Edit the Markdown, then regenerate the site:</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run docs</code></pre></div>
+<p>To look at the result before it ships, <code>npm run website</code> serves the site on <a href="http://127.0.0.1:8080" rel="noopener">http://127.0.0.1:8080</a> (set <code>PORT</code> to change it), with the same clean URLs as production.</p>
 <p>If you skip that step, the <strong>Docs site</strong> workflow rebuilds the pages on the pull request and commits them to its branch, but only when the output actually changed. A pull request that changes user-facing behaviour should also update the page that describes it.</p>
 
           <footer class="page-foot">
@@ -112,5 +113,6 @@
       <ul class="results" role="listbox" aria-label="Results"></ul>
     </dialog>
     <script src="/docs.js?v=docs-1" defer></script>
+    <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

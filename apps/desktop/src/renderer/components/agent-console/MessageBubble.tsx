@@ -7,7 +7,8 @@ import { ToolCard } from './ToolCard.js';
 import { fmtDateTime, fmtTime } from './transcript.js';
 import { useRowState } from './rowState.js';
 import { isRecoveryNotice, RecoveryNotice } from './RecoveryNotice.js';
-import { RobotIcon } from '../../icons.js';
+import { isWatchWake } from '../../agentWatches.js';
+import { WatchWakeRow } from './WatchRow.js';
 import { DoneRow } from './TurnStatsLine.js';
 
 /**
@@ -21,6 +22,8 @@ export const MessageBubble = memo(function MessageBubble({
   onReset,
   onCopyToComposer,
   onSplit,
+  onDelete,
+  onRestart,
   onImageClick,
   onImageContextMenu,
   chronological,
@@ -34,6 +37,10 @@ export const MessageBubble = memo(function MessageBubble({
   onCopyToComposer?: (id: string) => void;
   /** Start a new chat from the conversation before this message, with it in the new composer. */
   onSplit?: (id: string) => void;
+  /** Delete this message and the reply it got (offered on the latest user message only). */
+  onDelete?: (id: string) => void;
+  /** Keep the conversation up to this reply and drop what follows it. */
+  onRestart?: (id: string) => void;
   onImageClick?: (src: string) => void;
   onImageContextMenu?: (e: React.MouseEvent, src: string) => void;
   chronological?: boolean;
@@ -47,10 +54,13 @@ export const MessageBubble = memo(function MessageBubble({
   const [draft, setDraft] = useRowState('edit-draft', displayText);
   if (message.role === 'tool') return null;
   if (isRecoveryNotice(message)) return <RecoveryNotice />;
+  // A watch's wake-up is the agent continuing itself: a step, not your message.
+  if (isUser && !editing && isWatchWake(message.content)) return <WatchWakeRow content={message.content} createdAt={message.createdAt} />;
   // Animate only genuinely-new content (the optimistic user bubble and the live
   // stream). Persisted messages render statically, so the optimistic→saved and
   // live→saved swaps at the end of a turn don't replay the entrance.
-  const entering = message.id === 'tmp' || message.id === 'live';
+  // LiveTurn keys its text blocks `live_<n>`, one per narration block of the run.
+  const entering = message.id === 'tmp' || message.id === 'live' || message.id.startsWith('live_');
   const copy = () => {
     navigator.clipboard?.writeText(message.content).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); });
   };
@@ -88,11 +98,16 @@ export const MessageBubble = memo(function MessageBubble({
       parts.push(
         <div key="text" className={`group ${entering ? 'fade-in ' : ''}flex justify-start`}>
           <div className="msg-ai">
-            <Markdown basePath={basePath} text={message.content} />
+            <div data-chat-search-text><Markdown basePath={basePath} text={message.content} /></div>
             {!entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
             {displayText && message.content && (
               <div className="mt-1 flex gap-3 text-[11px] text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
                 <button onClick={copy} title="Copy message" className="inline-flex items-center gap-1 hover:text-ink">{copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}{copied ? 'Copied' : 'Copy'}</button>
+                {onRestart && (
+                  <button onClick={() => onRestart(message.id)} title="Keep the chat up to this reply and delete everything after it" className="hover:text-ink" data-message-restart>
+                    Restart from here
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -109,14 +124,26 @@ export const MessageBubble = memo(function MessageBubble({
   return (
     <div className={`group ${entering ? 'fade-in ' : ''}flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={isUser ? 'msg-user' : 'msg-ai'}>
-        {isUser && /^\[Agent watch [^\]\n]+\]\n/.test(message.content) && (
-          <div className="mb-2 flex items-center gap-1.5 border-l-2 border-accent/40 pl-2 text-[12px] font-medium text-accent" title="Automated watch continuation, not a subagent reply"><RobotIcon className="h-4 w-4" />Agent watch · automated wake-up</div>
-        )}
         {isUser && message.skill && (
           <span className="skill-pill mb-2 inline-flex text-[11px]">
             <span className="skill-pill-slash">/</span>{message.skill.name}
           </span>
         )}
+        {isUser && message.videos?.length ? (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {message.videos.map((video, i) => (
+              <video
+                key={`${video.slice(0, 24)}-${i}`}
+                src={video}
+                controls
+                playsInline
+                preload="metadata"
+                className="max-h-[220px] max-w-full rounded-lg bg-black"
+                title={`Attached video ${i + 1}`}
+              />
+            ))}
+          </div>
+        ) : null}
         {isUser && message.images?.length ? (
           <div className="mb-2 flex flex-wrap gap-1.5">
             {message.images.map((image, i) => (
@@ -137,16 +164,21 @@ export const MessageBubble = memo(function MessageBubble({
         )}
         {/* Your own messages render as markdown too: people type dashed lists and
             `code` in the composer and expect them to come out formatted. */}
-        {displayText && <Markdown basePath={basePath} text={isUser ? displayText : message.content} />}
+        {displayText && <div data-chat-search-text><Markdown basePath={basePath} text={isUser ? displayText : message.content} /></div>}
         {message.toolCalls?.map((c) => <ToolCard key={c.id} call={c} />)}
         {!isUser && !entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
-        {(displayText && message.content || (isUser && message.images?.length)) && (
+        {(displayText && message.content || (isUser && (message.images?.length || message.videos?.length))) && (
           <div className={`mt-1.5 flex items-center gap-3 text-[11px] text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 ${isUser ? 'justify-end' : ''}`}>
             {isUser && message.createdAt > 0 && (
               <span className="text-ink-faint/70" title={fmtDateTime(message.createdAt)}>{fmtTime(message.createdAt)}</span>
             )}
             <button onClick={copy} title="Copy prompt" className="inline-flex items-center gap-1 hover:text-ink">{copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}{copied ? 'Copied' : 'Copy'}</button>
             {onResend && <button onClick={() => { setDraft(displayText); setEditing(true); }} title="Edit & resend" className="hover:text-ink">Edit</button>}
+            {!isUser && onRestart && (
+              <button onClick={() => onRestart(message.id)} title="Keep the chat up to this reply and delete everything after it" className="hover:text-ink" data-message-restart>
+                Restart from here
+              </button>
+            )}
             {onReset && (
               <button
                 onClick={() => onReset(message.id, displayText)}
@@ -154,6 +186,16 @@ export const MessageBubble = memo(function MessageBubble({
                 className="hover:text-ink"
               >
                 Reset here
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(message.id)}
+                title="Delete this message and the reply it got, for example a picture this model cannot take"
+                className="hover:text-[var(--danger)]"
+                data-message-delete
+              >
+                Delete
               </button>
             )}
             {onSplit && (

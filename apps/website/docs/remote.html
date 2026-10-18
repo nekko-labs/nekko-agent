@@ -47,7 +47,7 @@
       </nav>
     </header>
     <div class="shell">
-      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote" aria-current="page">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
+      <aside class="sidebar" id="sidebar" aria-label="Docs"><section><h2>Introduction</h2><ul><li><a href="/docs">Getting started</a></li><li><a href="/docs/walkthrough">Walkthrough</a></li></ul></section><section><h2>Using Nekko Agent</h2><ul><li><a href="/docs/browser-automation">Browser automation</a></li><li><a href="/docs/local-models">Running models locally</a></li><li><a href="/docs/subscriptions">Subscription sign-in</a></li><li><a href="/docs/usage-limits">Usage limits and prices</a></li><li><a href="/docs/remote" aria-current="page">Phone remote control</a></li><li><a href="/docs/cli">CLI and MCP</a></li><li><a href="/docs/local-ci-runner">Local CI runner</a></li><li><a href="/docs/decision-models">Decision models</a></li><li><a href="/docs/benchmarks">Local inference benchmarks</a></li></ul></section><section><h2>Contributing</h2><ul><li><a href="/docs/contributing">Contributing</a></li><li><a href="/docs/architecture">Architecture</a></li><li><a href="/docs/release-signing">Release signing</a></li></ul></section><section><h2>For AI agents</h2><ul><li><a href="/docs/for-agents">Docs for AI agents</a></li></ul></section></aside>
       <main id="content">
         <article class="prose" id="top">
           <p class="kicker">Using Nekko Agent</p>
@@ -76,7 +76,8 @@ device registry</strong>: new devices enroll only through a <strong>single-use p
 paste your self-hosted relay URL), then <strong>Pair a device</strong>.</li>
 <li>On your phone: scan the QR in the Nekko Agent app (<strong>Computers → Pair a computer</strong>), or with the
 phone&#39;s camera app, which hands the <code>nekko-agent-pair:</code> link to the Nekko Agent app. Without the
-app, open the pairing link in a browser to get the full app over the relay.</li>
+app, the pairing link also opens the web app in a browser over the relay, but it is limited to
+what a phone may do (below), so most desktop screens there are unavailable.</li>
 <li>The phone shows up under <strong>Paired devices</strong>, with a live connection dot.</li>
 </ol>
 <h2 id="the-phone-app"><a class="anchor" href="#the-phone-app" aria-hidden="true" tabindex="-1">#</a>The phone app</h2>
@@ -92,6 +93,76 @@ for this (the <code>appearance:updated</code> event), never the rest of the comp
 <p>The Android app&#39;s <strong>Settings</strong> also has a <strong>Computers</strong> row, which opens the list of paired
 computers (rename, switch, forget, pair another), and an <strong>About</strong> section with the installed
 version and the open-source licenses of the app and the libraries it ships.</p>
+<p><strong>New chat defaults</strong> (Android): <strong>Settings → New chats</strong> picks the computer the app connects to
+when it starts (default: the one used last) and, for each computer, the model New chat opens with
+(default: the computer&#39;s own default model). They are saved on the phone; the computer&#39;s settings
+don&#39;t change. If that model is no longer offered, New chat says so and uses the computer&#39;s default.
+<strong>Share to Nekko</strong> (Android): in any app&#39;s share menu, pick <strong>Nekko Agent</strong> to start a new chat
+with the shared text or link. You can edit it on the New chat screen; after you start the chat it
+waits in the message box and you send it yourself. Nekko never sends shared text on its own, and
+it is kept only in memory until then. Text and links only for now, up to 20,000 characters.
+<strong>Vibration</strong> (Android): while the app is open, the phone vibrates when the agent needs your
+approval (two pulses) or asks you a question (one long pulse). In <strong>Settings → Vibration</strong> you can
+also turn on a short tap when a reply finishes and three taps when it fails, or switch any of them
+off. It never vibrates in silent mode or Do Not Disturb, or while the app is in the background.</p>
+<p><strong>Your computer&#39;s settings from the phone</strong> (Android): <strong>Settings → On <computer></strong> changes three
+of the computer&#39;s own settings: the chat mode for new chats (Ask, Guardrails or YOLO; YOLO asks once
+before switching), what a long-press on a chat does (Complete, which moves it to Completed, or
+Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
+its Settings. A long-press on a chat in the list then completes or deletes it on the computer.</p>
+<p><strong>All your chats, grouped like the desktop</strong> (Android): the chat list shows every chat on the
+computer, completed ones included, in the same groups as the desktop&#39;s agent sidebar: <strong>General</strong>
+first, then one group per project folder. Tap a group&#39;s name to fold it. Each group lists its
+active chats, then <strong>Show completed (N)</strong>, which opens the chats completed there (struck through,
+newest first). Tap a completed chat to read it; its message box is replaced by <strong>Restore</strong>, and a
+long-press on it offers Restore or Delete. Completing or restoring a chat on the computer shows up
+on the phone the next time the list refreshes: when a reply finishes, when you pull down, or when
+you come back to the app.</p>
+<p><strong>Photos and dictation</strong> (Android): the <strong>+</strong> on the left of a chat&#39;s message box opens <strong>Dictate</strong>,
+<strong>Image from files</strong> (the phone&#39;s photo picker; Nekko only sees the photos you pick) and <strong>Take
+photo</strong> (the phone&#39;s camera app). Up to 4 photos go with the next message, shown as thumbnails you
+can remove; they are scaled to 1600 px and sent end-to-end encrypted to the computer, which hands
+them to the chat&#39;s model like a photo pasted on the desktop. A text-only model doesn&#39;t see them.
+The photos stay in the message&#39;s bubble on the phone too, as small previews the computer makes
+(the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
+a plain tile, and the full-size original stays on the computer.</p>
+<p><strong>Dictation</strong> (Android): tap <strong>+ → Dictate</strong>, speak, and tap ■ (or stop
+at 30 seconds). The words go into the message box for you to check and send; nothing is sent by
+itself. By default the speech is turned into text by <strong>Nekko Voice on your computer</strong> (Whisper,
+end-to-end encrypted, the audio never reaches anyone else); install and switch it on there under
+<strong>Settings → Nekko Voice</strong>. When the computer can&#39;t, the phone&#39;s own speech recognizer is used,
+which on many phones sends the audio to Google. <strong>Settings → Dictation</strong> on the phone lets you use
+only the computer, only the phone, or turn the microphone off.</p>
+<p><strong>Skills</strong> (Android): type <code>/</code> at the start of a chat&#39;s message box to see the skills on your
+computer: the built-in ones, those you installed from the Marketplace for Nekko Agent, and the
+ones Nekko Agent found in your Claude Code, Codex or Gemini skill folders. Pick one, add details
+if you like, and send. Nothing is copied to the phone: the list is read from the computer each
+time you open a chat, so a skill you install or remove there shows up on the phone right away,
+and the computer adds the skill&#39;s instructions itself, so they never leave it. <code>/goal</code> is not
+offered on the phone, and skills are installed and removed on the computer.</p>
+<p><strong>Long chats on the phone</strong>: the phone gets the newest 300 messages of a chat, without the
+screenshots inside tool results and with long tool output shortened to 4,000 characters, so even
+a very long agent run opens in seconds. The chat says how many earlier messages, characters and
+images stayed on the computer; open it there for the full detail.</p>
+<p>The Android app is <strong>locked by default</strong>: every time you open it, or come back to it, it asks for
+your fingerprint, face or the phone&#39;s screen lock (PIN, pattern or password) before it shows
+anything. While it is locked nothing can be read or approved, and the recent-apps preview shows a
+plain cover instead of your chats. After a restart it doesn&#39;t connect to your computer until you unlock. Turn it off in
+<strong>Settings → Security → App lock</strong>; turning it off asks for the same check first. Screenshots and screen
+recording of the app work as usual, lock on or off; on Android 14 and later the screenshot toolbar
+some phones show afterwards (Samsung) no longer hides the app behind the cover. A phone with no screen lock can&#39;t be locked;
+Settings says so and links to the phone&#39;s security settings.</p>
+<p>The Android app <strong>reconnects by itself</strong> as soon as the phone changes network (Wi-Fi to mobile data,
+airplane mode off), instead of waiting out its retry delay. While a chat on your computer is running,
+<strong>Settings → Connection → Stay connected while a chat runs</strong> (on by default) keeps the app connected
+after you leave it, with a silent &quot;Staying connected · 1 chat running on Mac&quot; notification that goes
+away as soon as the reply is done. <strong>Notify me</strong> (on by default; Android 13+ asks for permission)
+sends a notification when a reply finishes or fails, or a chat waits for your approval or answer,
+while you&#39;re out of the app. Notifications say what happened and in which chat, never the reply, the
+command or the question; with the app lock on they don&#39;t name the chat either, and tapping one opens
+the chat through the lock. Without push (not built yet), these only arrive while the phone is still
+connected. If Android restricts Nekko in the background, Settings says so and opens the app&#39;s
+system page.</p>
 </blockquote>
 <p>The iOS and Android app (<code>apps/mobile</code>) is built for the phone rather than being the desktop on a
 small screen: your computer&#39;s chats with <strong>Working</strong> / <strong>Needs you</strong> badges, new chats on any of the
@@ -101,13 +172,52 @@ pair several computers and talks to one at a time.</p>
 <p>It also runs <strong>models on the phone itself</strong> (llama.cpp, curated small GGUF models from Hugging Face
 sized to the phone&#39;s memory), so you can keep chatting when the computer is off. Those chats never
 leave the phone and don&#39;t use the relay.</p>
+<p><strong>The native iPhone app</strong> (<code>apps/ios</code>, SwiftUI) does the same over the same encrypted relay, and
+adds what only iOS can: a <strong>Live Activity</strong> for each running chat on the Lock Screen and in the
+Dynamic Island, with <strong>Allow / Deny</strong> for a waiting tool and <strong>Stop</strong>; notifications with Allow /
+Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
+and dictation (Whisper on your computer when Nekko Voice is installed, else the iPhone&#39;s own
+speech recognition). Its pairing screen leads with Tailscale and shows whether Tailscale is on on
+the iPhone. If a Tailscale relay can&#39;t be reached, the app says which side is the problem:
+Tailscale is off on the phone, or the computer isn&#39;t answering. With the app lock on (Face ID or
+passcode, on by default), the Lock Screen and notifications never show chat titles or commands.</p>
 <p>On the phone, the pairing key and the derived encryption key live in the iOS Keychain / Android
 Keystore. The app drops any provider API keys your computer sends with its settings and never
 stores them.</p>
 <p>Manage devices from the same card: <strong>rename</strong> them, <strong>revoke</strong> one instantly (it&#39;s kicked live and
 denied from then on), or <strong>Rotate secret</strong> to cryptographically reset the room, which unpairs
-everything at once.</p>
+everything at once. A revoked phone can come back only the way a new one does: choose <strong>Pair a
+device</strong> on the computer and scan the new QR from the phone (the one-time code is the proof). Older
+computers refused a revoked phone even then; on those, <strong>Rotate secret</strong> first.</p>
 <p>Remote access survives restarts: if it was enabled, the agent reconnects when Nekko Agent starts.</p>
+<h2 id="what-a-paired-phone-can-do"><a class="anchor" href="#what-a-paired-phone-can-do" aria-hidden="true" tabindex="-1">#</a>What a paired phone can do</h2>
+<p>Your computer decides what a paired phone may ask for, whatever the phone app does: locking the
+phone app is not the boundary, your computer is. A phone can use your chats and nothing that
+changes how the computer itself is set up:</p>
+<ul>
+<li><strong>Allowed:</strong> list, open, start, complete and delete chats; send, queue and stop messages; answer
+approvals and the agent&#39;s questions; pick a model from the computer&#39;s providers and a folder from
+its list; voice status and transcription; and a few settings (below).</li>
+<li><strong>Never allowed from a phone:</strong> wiping data or resetting settings, remote access itself (pairing,
+revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes, adding or removing folders, installing
+or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
+servers and hooks. Everything not on the allowed list is refused too, with an error that starts
+<em>Not allowed from a paired phone</em>.</li>
+<li><strong>Settings a phone may change:</strong> the chat mode for new chats (Ask, Guardrails or YOLO), what the chat pane&#39;s top-right button does (Complete or Delete),
+whether deleting asks first, and voice on/off and its language. An update that touches any other
+setting is refused as a whole: nothing in it is applied.</li>
+<li><strong>Settings a phone can read:</strong> only the theme and accents, the default and starred models, and
+the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
+instructions never leave the computer this way; provider lists arrive as name and type only.</li>
+<li><strong>A chat&#39;s changes, read only, only if you allow it:</strong> with <em>Let phones see changes</em> on (off
+unless you turn it on, in Remote access on the computer), a phone can see a diff of the files the
+agent changed in a chat. Your computer works out the diff and sends only that: short paths, a
+capped number of lines, and files that may hold secrets (<code>.env</code>, keys, <code>.ssh</code>, <code>.aws</code>) counted but
+never shown. A phone still can&#39;t accept or revert changes or read any other file.</li>
+<li><strong>One chat&#39;s options:</strong> a phone can change a chat&#39;s model, title, pin and tags, complete it, and
+switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
+offline/incognito switches. Messages cannot attach files from the computer.</li>
+</ul>
 <h2 id="security-model-honestly-stated"><a class="anchor" href="#security-model-honestly-stated" aria-hidden="true" tabindex="-1">#</a>Security model, honestly stated</h2>
 <div class="table-wrap"><table>
 <thead>
@@ -130,11 +240,11 @@ everything at once.</p>
 </tr>
 <tr>
 <td>Lost/stolen phone</td>
-<td>Revoke it in Settings: kicked immediately, denied afterward, push token dropped</td>
+<td>The Android app asks for the phone&#39;s fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped</td>
 </tr>
 <tr>
 <td>Revoked device replays old creds</td>
-<td>The agent refuses its handshake and unicasts nothing to it; rotate the secret for a full cryptographic reset</td>
+<td>The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer&#39;s owner; rotate the secret for a full cryptographic reset</td>
 </tr>
 <tr>
 <td>Malicious relay withholding/reordering</td>
@@ -142,13 +252,14 @@ everything at once.</p>
 </tr>
 <tr>
 <td>Phone asks for something dangerous</td>
-<td>Tool calls run on your machine under your guardrails/sandbox and chat mode (Ask/Guardrails/YOLO)</td>
+<td>Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode</td>
 </tr>
 </tbody></table></div>
 <p>What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
 enable push, device push tokens plus the content-free fact &quot;a run finished&quot;. That&#39;s the whole list,
 and it&#39;s why relayed local-model use is inherently zero-data-retention for content.</p>
 <h2 id="choosing-a-relay"><a class="anchor" href="#choosing-a-relay" aria-hidden="true" tabindex="-1">#</a>Choosing a relay</h2>
+<p>How the Android and iOS apps each handle the connection (URL rules, pairing, reconnects, push, background) is compared in <a href="https://github.com/nekko-labs/nekko-agent/blob/main/docs/phone-connection.md" rel="noopener">phone-connection.md</a>.</p>
 <h3 id="managed-relay-default-wssnekko-agent-relayflydev"><a class="anchor" href="#managed-relay-default-wssnekko-agent-relayflydev" aria-hidden="true" tabindex="-1">#</a>Managed relay (default): <code>wss://nekko-agent-relay.fly.dev</code></h3>
 <p>Zero setup; free during beta with per-connection rate limits. When Nekko Agent Cloud launches, the
 managed relay becomes part of the paid plans (it already supports gating via
@@ -160,17 +271,42 @@ Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts
 (WireGuard), and the app&#39;s end-to-end layer still sits on top. This is how free remote-desktop
 tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
 network you already own.</p>
+<p><strong>In the desktop app:</strong> Settings → Remote access → <strong>Relay on this computer</strong> → <strong>Start relay</strong>.
+The app finds this computer&#39;s Tailscale address (any interface in <code>100.64.0.0/10</code>), starts the
+bundled relay bound to that address only, and shows the URL phones use. That is the MagicDNS name
+(for example <code>ws://gomi.tailfd6474.ts.net:4400</code>) when the Tailscale CLI reports one, else the
+<code>100.x.y.z</code> address. <strong>Use this relay</strong> fills it in; then Enable, <strong>Pair a device</strong>, and scan the QR
+from the phone with Tailscale switched on.</p>
+<ul>
+<li><strong>It stays on:</strong> once started it comes back with the app.</li>
+<li><strong>It waits for Tailscale:</strong> with Tailscale off it binds nowhere and waits, and starts when
+Tailscale connects.</li>
+<li><strong>It follows address changes:</strong> it moves when the tailnet address changes.</li>
+<li><strong>It says why it isn&#39;t running:</strong> for example Tailscale off, or the port (4400) already in use.</li>
+</ul>
+<p>It runs as its own process (<code>out/main/relay.js</code>, under the app&#39;s own runtime) and exits with the
+app. It has no push keys, so phones get no &quot;finished&quot; notifications through it; the in-app
+connection and Live Activities while the app is open work as usual.</p>
+<p><strong>Headless or without the desktop app</strong>, the scripts do the same by hand:</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run relay:tailscale        # Windows (PowerShell); or scripts/private-relay.sh on macOS/Linux</code></pre></div>
-<p>The script prints the URL to paste into <strong>Settings → Remote access</strong> (for example
-<code>ws://gomi.tailfd6474.ts.net:4400</code>; the MagicDNS name resolves on any device in the tailnet, the
-<code>100.x.y.z</code> address works too). Enable, <strong>Pair a device</strong>, scan the QR from the phone with
-Tailscale switched on. The relay only listens on the Tailscale interface, so
-<code>NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1</code> is safe here; never use that flag on a public bind.</p>
-<p>Plain <code>ws://</code> is fine on a tailnet: the transport is already encrypted end to end by WireGuard and
-the iOS app ships with Expo&#39;s default App Transport Security (arbitrary loads allowed). If you
-prefer <code>wss://</code>, enable <strong>HTTPS certificates</strong> in the tailnet&#39;s DNS settings and either put
-<code>tailscale serve --bg 4400</code> in front (needs Serve enabled once per tailnet) or terminate TLS with
-<code>tailscale cert</code> on your own proxy.</p>
+<p>The script prints the URL to paste into <strong>Settings → Remote access</strong>. Either way the relay only
+listens on the Tailscale interface, so agent enrollment without an access token
+(<code>NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1</code> in the script) is safe here; never use that flag on a public
+bind.</p>
+<p>The computer refuses a plain <code>ws://</code> relay on the open internet, whether you press Enable or start
+a headless agent with <code>NEKKO_RELAY_URL</code>. It uses the same rule as the phones, below.</p>
+<p>Plain <code>ws://</code> is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
+the app&#39;s own end-to-end encryption sits on top. The Expo iOS app ships with Expo&#39;s default App
+Transport Security (arbitrary loads allowed). <strong>The native iPhone app allows plain <code>ws://</code> only toward
+private networks</strong>: Tailscale (<code>*.ts.net</code> names and <code>100.x.y.z</code> addresses) and your local network.
+It refuses a <code>ws://</code> link to anything on the open internet before dialing; use <code>wss://</code> there. <strong>The Android app allows plain <code>ws://</code> only to Tailscale
+MagicDNS names (<code>*.ts.net</code>)</strong>, so use the name the script prints (<code>ws://gomi.tailfd6474.ts.net:4400</code>),
+not the <code>100.x.y.z</code> address: Android can&#39;t allow an IP range, and blocks the bare address. If you
+use an address the phone can&#39;t reach (a bare Tailscale IP, <code>localhost</code>, or any other plain <code>ws://</code>
+host), the Android app says so on its pairing screen and in the chat list instead of spinning on
+&quot;Connecting…&quot;. If you prefer <code>wss://</code>, enable <strong>HTTPS certificates</strong> in the tailnet&#39;s DNS settings
+and either put <code>tailscale serve --bg 4400</code> in front (needs Serve enabled once per tailnet) or
+terminate TLS with <code>tailscale cert</code> on your own proxy.</p>
 <p>Trade-offs: the computer must be awake and Tailscale running; push notifications need APNs/FCM
 keys on this relay like any other; Tailscale&#39;s free plan covers up to 100 devices and 3 users.</p>
 <h3 id="self-host-free-forever-one-command"><a class="anchor" href="#self-host-free-forever-one-command" aria-hidden="true" tabindex="-1">#</a>Self-host (free forever, one command)</h3>
@@ -241,7 +377,7 @@ registry as the desktop app.</p>
           </footer>
         </article>
       </main>
-      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Phone remote control</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d2"><a href="#pairing-a-phone">Pairing a phone</a></li><li class="d2"><a href="#the-phone-app">The phone app</a></li><li class="d2"><a href="#security-model-honestly-stated">Security model, honestly stated</a></li><li class="d2"><a href="#choosing-a-relay">Choosing a relay</a></li><li class="d3"><a href="#managed-relay-default-wssnekko-agent-relayflydev">Managed relay (default): wss://nekko-agent-relay.fly.dev</a></li><li class="d3"><a href="#private-relay-over-tailscale-free-no-account-nothing-hosted">Private relay over Tailscale (free, no account, nothing hosted)</a></li><li class="d3"><a href="#self-host-free-forever-one-command">Self-host (free forever, one command)</a></li><li class="d2"><a href="#headless-agents">Headless agents</a></li></ul></nav></aside>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Phone remote control</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d2"><a href="#pairing-a-phone">Pairing a phone</a></li><li class="d2"><a href="#the-phone-app">The phone app</a></li><li class="d2"><a href="#what-a-paired-phone-can-do">What a paired phone can do</a></li><li class="d2"><a href="#security-model-honestly-stated">Security model, honestly stated</a></li><li class="d2"><a href="#choosing-a-relay">Choosing a relay</a></li><li class="d3"><a href="#managed-relay-default-wssnekko-agent-relayflydev">Managed relay (default): wss://nekko-agent-relay.fly.dev</a></li><li class="d3"><a href="#private-relay-over-tailscale-free-no-account-nothing-hosted">Private relay over Tailscale (free, no account, nothing hosted)</a></li><li class="d3"><a href="#self-host-free-forever-one-command">Self-host (free forever, one command)</a></li><li class="d2"><a href="#headless-agents">Headless agents</a></li></ul></nav></aside>
     </div>
     <dialog class="search-dialog" aria-label="Search the docs">
       <form method="dialog" class="search-box">
@@ -251,5 +387,6 @@ registry as the desktop app.</p>
       <ul class="results" role="listbox" aria-label="Results"></ul>
     </dialog>
     <script src="/docs.js?v=docs-1" defer></script>
+    <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

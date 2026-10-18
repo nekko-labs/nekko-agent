@@ -1,0 +1,7 @@
+{
+  "version": "0.39.1",
+  "repository": "https://github.com/vercel-labs/agent-browser.git",
+  "revision": "1165952d74ceed98fdc2dd97190ad41f44dd0e24",
+  "license": "Apache-2.0",
+  "protocol": 1
+}

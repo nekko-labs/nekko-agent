@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { Markdown, MarkdownSandbox } from './Markdown.js';
 import { readFileSync } from 'node:fs';
+
+vi.mock('../store.js', () => ({ useStore: { getState: () => ({ openFilePane: vi.fn() }) } }));
 
 const source = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8');
 describe('sandbox renderer safety regressions', () => {
@@ -17,11 +22,12 @@ describe('sandbox renderer safety regressions', () => {
     expect(setup).toContain('Sandbox diff (read-only)');
   });
   it('keeps execution and permissions separate and persists the default', () => {
-    const controls = source('./ChatControls.tsx');
-    expect(controls).toContain('grid grid-cols-2');
-    expect(controls).toContain('getExecutionMode(session)');
-    expect(controls).toContain('defaultExecutionMode: executionMode');
-    expect(controls).toContain('(recommended)');
+    const panel = source('./ModePanel.tsx');
+    // Where it runs, Approvals and Work mode are separate controls in the Mode panel.
+    expect(panel).toContain('aria-label="Work mode"');
+    expect(panel).toContain("tiles<ChatMode>('Approvals'");
+    expect(panel).toContain('getExecutionMode(session)');
+    expect(panel).toContain('defaultExecutionMode: executionMode');
     expect(source('./WorktreeChip.tsx')).toContain('{ gitIsolation, executionMode }');
   });
   it('wires the exact shared sandbox channels in both transports', () => {
@@ -35,6 +41,22 @@ describe('sandbox renderer safety regressions', () => {
     expect(source('./SpecPanel.tsx')).toContain('HostSpecPanel');
     expect(source('./FilePane.tsx')).toContain('HostFilePane');
     expect(source('./ChatPane.tsx')).toContain('Configure Sandbox before executing.');
-    expect(source('./Markdown.tsx')).toContain('Host image previews are unavailable in Sandbox');
+  });
+  it.each([false, true])('blocks Markdown host image reads and source actions in Sandbox (doc=%s)', (doc) => {
+    const effects: Array<() => void | (() => void)> = [];
+    const effect = vi.spyOn(React, 'useEffect').mockImplementation(callback => { effects.push(callback); });
+    const readFile = vi.fn();
+    vi.stubGlobal('window', { nekko: { readFile } });
+    try {
+      const out = renderToStaticMarkup(<MarkdownSandbox.Provider value>
+        <Markdown doc={doc} basePath="/project" text="![SVG](a.svg) ![Raster](a.png)" />
+      </MarkdownSandbox.Provider>);
+      expect(effects).toHaveLength(2);
+      effects.forEach(callback => callback());
+      expect(readFile).not.toHaveBeenCalled();
+      expect(out).not.toContain('<img');
+      expect(out.match(/Host image previews are unavailable in Sandbox/g)).toHaveLength(2);
+      expect(out.match(/<button[^>]*disabled=""/g)).toHaveLength(2);
+    } finally { effect.mockRestore(); vi.unstubAllGlobals(); }
   });
 });

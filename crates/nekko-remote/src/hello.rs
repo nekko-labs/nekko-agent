@@ -123,17 +123,19 @@ pub fn verify_hello(devices: &[Value], hello: &Value, pairing: Option<&Grant>, n
         (Some("hello"), Some(id)) if !nekko_js::trim(id).is_empty() => id,
         _ => return Verdict::Deny { reason: "invalid" },
     };
-    if let Some(known) = devices.iter().find(|d| d.get("id").and_then(Value::as_str) == Some(device_id)) {
-        if truthy(known.get("revoked")) {
-            return Verdict::Deny { reason: "revoked" };
-        }
+    let known = devices.iter().find(|d| d.get("id").and_then(Value::as_str) == Some(device_id));
+    if let Some(known) = known
+        && !truthy(known.get("revoked"))
+    {
         // `{ ...known, lastSeenAt: now }`.
         let mut device = known.as_object().cloned().unwrap_or_default();
         device.insert("lastSeenAt".into(), nekko_num(now));
         return Verdict::Welcome { device: Value::Object(device), enrolled: false };
     }
+    // A revoked device with no code is told it was removed; one that brings a
+    // code is pairing again and is checked exactly like a new device.
     if !truthy(h.get("pair")) {
-        return Verdict::Deny { reason: "unknown-device" };
+        return Verdict::Deny { reason: if known.is_some() { "revoked" } else { "unknown-device" } };
     }
     let code_ok = pairing.is_some_and(|g| h.get("pair").and_then(Value::as_str) == Some(&g.code) && g.expires_at > now);
     if !code_ok {

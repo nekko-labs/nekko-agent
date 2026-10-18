@@ -30,7 +30,7 @@ export interface Vitals {
  * anywhere else it draws its own header.
  */
 export function InsightsBox({
-  budgetPanelPresent = false,
+  budgetMonitorPresent = false,
   prefs,
   onPrefs,
   usage,
@@ -39,7 +39,7 @@ export function InsightsBox({
   vitals,
   onOpenModels,
 }: {
-  budgetPanelPresent?: boolean;
+  budgetMonitorPresent?: boolean;
   prefs: InsightsPrefs;
   onPrefs: (next: InsightsPrefs) => void;
   usage: UsageSummary | null;
@@ -60,8 +60,8 @@ export function InsightsBox({
     return () => { window.removeEventListener('mousedown', onDown); window.removeEventListener('keydown', onKey); };
   }, [gearOpen]);
 
-  const on = (key: InsightPanel) => prefs.panels[key] && !(budgetPanelPresent && (key === 'cost' || key === 'optimize'));
-  const availablePanels = INSIGHT_PANELS.filter(p => !budgetPanelPresent || (p.key !== 'cost' && p.key !== 'optimize'));
+  const on = (key: InsightPanel) => prefs.panels[key] && !(budgetMonitorPresent && (key === 'cost' || key === 'optimize'));
+  const availablePanels = INSIGHT_PANELS.filter(p => !budgetMonitorPresent || (p.key !== 'cost' && p.key !== 'optimize'));
   const toggle = (key: InsightPanel) => onPrefs({ ...prefs, panels: { ...prefs.panels, [key]: !prefs.panels[key] } });
   const hasUsage = !!usage && (usage.totalInput + usage.totalOutput > 0 || !!usage.hasSubscriptionUsage);
   const shown = availablePanels.filter((p) => on(p.key)).length;
@@ -107,7 +107,7 @@ export function InsightsBox({
         </div>
       )}
 
-      {on('vitals') && <VitalsStrip vitals={vitals} hideCost={budgetPanelPresent} />}
+      {on('vitals') && <VitalsStrip vitals={vitals} hideCost={budgetMonitorPresent} />}
       {framed && shown === 0 && <p className="text-[12px] text-ink-faint">Nothing selected. Open the gear in this window's strip to pick stats and charts.</p>}
 
       {!hasUsage && shown > (on('vitals') ? 1 : 0) ? (
@@ -119,7 +119,7 @@ export function InsightsBox({
           {on('optimize') && hasUsage && <div style={{ gridColumn: '1 / -1' }}><OptimizePanel tips={tips} onOpenModels={onOpenModels} /></div>}
           {on('cost') && hasUsage && <CostPanel usage={usage} sessions={sessions} providers={providers} />}
           {on('tokens') && hasUsage && <TokensPanel usage={usage} />}
-          {on('models') && hasUsage && <ModelsPanel usage={usage} hideCost={budgetPanelPresent} />}
+          {on('models') && hasUsage && <ModelsPanel usage={usage} hideCost={budgetMonitorPresent} />}
           {on('replies') && hasUsage && <RepliesPanel usage={usage} sessions={sessions} />}
           {on('services') && <div style={{ gridColumn: '1 / -1' }}><ServicesPanel providers={providers} usage={usage} /></div>}
         </div>

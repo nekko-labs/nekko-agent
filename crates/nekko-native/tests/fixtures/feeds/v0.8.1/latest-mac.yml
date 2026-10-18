@@ -1,0 +1,11 @@
+version: 0.8.1
+files:
+  - url: NekkoAgent-0.8.1-arm64.zip
+    sha512: 5oOxyVsAOVDexTiMsp9ZTu769N49HgZGx9mvyZO/aQqmVsIKRuqooL0TTIS0nJloUPIqs1rm1PlPhsIMapaU+w==
+    size: 195472596
+  - url: NekkoAgent-0.8.1-arm64.dmg
+    sha512: xPqbG3FbkZfoFCwZ72DitWbJGK9ofbTf5m4u7PhLeEZcWAz4k0DnooGDo5zwhDuaAFoFGqa/BnUkDBooJQ8ZFQ==
+    size: 203005666
+path: NekkoAgent-0.8.1-arm64.zip
+sha512: 5oOxyVsAOVDexTiMsp9ZTu769N49HgZGx9mvyZO/aQqmVsIKRuqooL0TTIS0nJloUPIqs1rm1PlPhsIMapaU+w==
+releaseDate: '2026-10-12T16:11:49.160Z'

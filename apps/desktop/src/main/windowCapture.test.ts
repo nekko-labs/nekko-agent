@@ -1,12 +1,30 @@
 import { runInNewContext } from 'node:vm';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { REFUSAL, hwndFromSourceId, printWindowCapture } from './printWindowCapture.js';
 const fake = vi.hoisted(() => ({ sources: vi.fn(), execute: vi.fn(), grant: vi.fn(), destroy: vi.fn(), options: vi.fn() }));
 vi.mock('electron', () => ({ desktopCapturer: { getSources: fake.sources }, BrowserWindow: class {
   constructor(options: unknown) { fake.options(options); }
   webContents = { session: { setDisplayMediaRequestHandler: fake.grant }, executeJavaScript: fake.execute, loadURL: vi.fn() };
   loadURL = vi.fn(); isDestroyed = () => false; destroy = fake.destroy;
 } }));
-import { captureWindow } from './windowCapture.js';
+import { __setPrintWindow, captureWindow } from './windowCapture.js';
+
+describe('PrintWindow fallback helper', () => {
+  it('reads the HWND only from a desktopCapturer window id', () => {
+    expect(hwndFromSourceId('window:724476:0')).toBe('724476');
+    expect(hwndFromSourceId('screen:0:0')).toBeNull();
+    expect(hwndFromSourceId('window:0:0')).toBeNull();
+    expect(hwndFromSourceId('window:12;calc:0')).toBeNull();
+  });
+  it('maps the script reply to a frame or a named refusal, hidden and bounded', async () => {
+    if (process.platform !== 'win32') return;
+    const run = (reply: string) => vi.fn((_f: string, args: string[], opts: { windowsHide: boolean; timeout: number }, cb: (e: Error | null, out: string) => void) => { expect(opts.windowsHide).toBe(true); expect(opts.timeout).toBeLessThanOrEqual(15_000); expect(args.at(-1)).toMatch(/ 42$/); cb(null, reply); });
+    await expect(printWindowCapture('42', run('{"ok":true,"data":"cG5n","width":3,"height":2}'))).resolves.toEqual({ ok: true, data: 'cG5n', width: 3, height: 2 });
+    await expect(printWindowCapture('42', run('{"ok":false,"reason":"excluded"}'))).resolves.toMatchObject({ ok: false, reason: 'excluded' });
+    await expect(printWindowCapture('42', run('garbage'))).resolves.toMatchObject({ ok: false, reason: 'failed' });
+    await expect(printWindowCapture('42; rm', run('{}'))).resolves.toMatchObject({ ok: false, reason: 'failed' });
+  });
+});
 const source = { id: 'window:123:0', name: 'Actual app', thumbnail: { isEmpty: () => false, getSize: () => ({ width: 1000, height: 700 }), toPNG: () => Buffer.from('png') } };
 beforeEach(() => { fake.sources.mockReset(); fake.sources.mockResolvedValue([source]); fake.execute.mockReset(); fake.execute.mockResolvedValue({ width: 1000, height: 700, data: Buffer.from('png').toString('base64') }); fake.grant.mockClear(); fake.destroy.mockClear(); fake.options.mockClear(); });
 describe('actual desktop window capture', () => {
@@ -60,6 +78,40 @@ describe('actual desktop window capture', () => {
     await expect(captureWindow('retry', { action: 'screenshot', window_id: source.id }, 'http://127.0.0.1:1234')).rejects.toThrow('capture denied');
     await expect(captureWindow('retry', { action: 'screenshot', window_id: source.id }, 'http://127.0.0.1:1234')).resolves.toMatchObject({ mime: 'image/png' });
     expect(fake.destroy).toHaveBeenCalledTimes(2);
+  });
+  describe('Windows background fallback when the OS refuses capture', () => {
+    const platform = process.platform;
+    const refuse = () => fake.execute.mockRejectedValueOnce(new Error('NEKKO_CAPTURE_REFUSED'));
+    beforeEach(() => { Object.defineProperty(process, 'platform', { value: 'win32' }); });
+    afterEach(() => { Object.defineProperty(process, 'platform', { value: platform }); __setPrintWindow(async () => ({ ok: false, reason: 'failed', message: 'unused' })); });
+    it('renders a refused window with PrintWindow and says so', async () => {
+      const calls: string[] = [];
+      __setPrintWindow(async (hwnd) => { calls.push(hwnd); return { ok: true, data: 'cG5n', width: 800, height: 600 }; });
+      await captureWindow('fb', { action: 'list' }); refuse();
+      await expect(captureWindow('fb', { action: 'screenshot', window_id: source.id }, 'http://127.0.0.1:1234')).resolves.toMatchObject({ data: 'cG5n', width: 800, height: 600, source: 'native-window-printwindow', background: true, title: 'Actual app' });
+      expect(calls).toEqual(['123']);
+      expect(fake.destroy).toHaveBeenCalledOnce();
+    });
+    it('keeps deliberate refusals: excluded, minimized, elevated and blank frames all fail', async () => {
+      for (const [reason, text] of [['excluded', 'asks Windows not to be captured'], ['minimized', 'not restored'], ['denied', 'elevated'], ['blank', 'empty frame']] as const) {
+        __setPrintWindow(async () => ({ ok: false, reason, message: REFUSAL[reason] }));
+        await captureWindow('deny', { action: 'list' }); refuse();
+        await expect(captureWindow('deny', { action: 'screenshot', window_id: source.id }, 'http://127.0.0.1:1234')).rejects.toThrow(text);
+      }
+    });
+    it('does not fall back for recordings, other errors, or other platforms', async () => {
+      const spy = vi.fn(async () => ({ ok: true as const, data: 'x', width: 1, height: 1 }));
+      __setPrintWindow(spy);
+      await captureWindow('nofb', { action: 'list' });
+      refuse();
+      await expect(captureWindow('nofb', { action: 'record', window_id: source.id, seconds: 2 }, 'http://127.0.0.1:1234')).rejects.toThrow('Recording has no background fallback');
+      fake.execute.mockRejectedValueOnce(new Error('Selected window did not produce a frame within 5 seconds'));
+      await expect(captureWindow('nofb', { action: 'screenshot', window_id: source.id }, 'http://127.0.0.1:1234')).rejects.toThrow('did not produce a frame');
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      refuse();
+      await expect(captureWindow('nofb', { action: 'screenshot', window_id: source.id }, 'http://127.0.0.1:1234')).rejects.toThrow('may be elevated, protected or closed');
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
   it('validates recording duration before creating a recorder', async () => {
     await captureWindow('record', { action: 'list' });

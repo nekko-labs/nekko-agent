@@ -1,12 +1,11 @@
-import { app, BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import type { Page } from 'playwright-core';
+import type { AgentPage as Page } from './agentPage.js';
 import { validateBrowserInput } from '@nekko-agent/shared';
 import { captureWindow } from './windowCapture.js';
-import { AgentCdpTransport, isAllowedNavigation } from './agentCdpTransport.js';
+import { nativeDriver } from './agentNativeDriver.js';
+import { isAllowedNavigation } from './agentCdpTransport.js';
 import { describeLogs, runPageAction, watchPage, type PageLogEntry } from './agentBrowserActions.js';
 
 /** A hidden browser nobody has touched for this long is closed. Each one is a
@@ -17,48 +16,28 @@ const MAX_TABS = 8;
 /** Screenshot pixels above this size are not attached to the model. */
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
 
-/** Playwright's view of one chat's windows. The default drives real Playwright
- *  through the in-process CDP transport; tests substitute a fake. */
+/** One chat's owned native pages; tests may substitute a fake. */
 export interface BrowserDriver {
-  /** Hand a fresh about:blank window to Playwright and get its Page. */
+  /** Adopt a fresh about:blank owned window. */
   adopt(win: BrowserWindow): Promise<Page>;
-  /** Tell Playwright a window went away without it (reaper, crash). */
+  /** Release a window after reaper, crash or tab close. */
   forget(win: BrowserWindow): void;
   close(): Promise<void>;
 }
 export type BrowserDriverFactory = () => Promise<BrowserDriver>;
 
-/** Connect playwright-core to this chat's windows only, with no debugging port. */
-export const playwrightDriver: BrowserDriverFactory = async () => {
-  // A plain require: the main bundle is CommonJS and playwright-core stays an
-  // external dependency (see bundleExternals.test.ts). Loaded on first use only.
-  const { chromium } = require('playwright-core') as typeof import('playwright-core');
-  const transport = new AgentCdpTransport({
-    product: `Chrome/${process.versions.chrome}`,
-    userAgent: app.userAgentFallback,
-    // Tabs are opened by the bridge (tab_new), never by Playwright itself.
-    createTarget: async () => { throw new Error('Open tabs with the tab_new action.'); },
-    closeTarget: (target) => (target as unknown as BrowserWindow).destroy(),
-  });
-  // A fixed artifacts folder instead of a fresh temp folder per chat that a
-  // hard exit would leave behind. Downloads are denied, so it stays empty.
-  const artifactsDir = join(app.getPath('userData'), 'agent-browser');
-  mkdirSync(artifactsDir, { recursive: true });
-  const browser = await chromium.connectOverCDP(transport, { timeout: 15_000, artifactsDir });
-  const context = browser.contexts()[0];
-  if (!context) throw new Error('Agent browser context did not start.');
-  return {
-    async adopt(win) {
-      const next = context.waitForEvent('page', { timeout: 15_000 });
-      await transport.add(win);
-      return next;
-    },
-    forget: (win) => transport.forget(win),
-    // Closing the transport first detaches every debugger; Playwright then
-    // sees the disconnect, so browser.close() cannot wait on a dead window.
-    close: async () => { transport.close(); await browser.close().catch(() => {}); },
-  };
-};
+/** The dialogs the daemon may ask main to draw (`{ tool: 'dialog', kind }`). */
+export const SHELL_DIALOGS = new Set(['openFiles', 'pickFolder', 'saveFile', 'message']);
+export type ShellDialog = 'openFiles' | 'pickFolder' | 'saveFile' | 'message';
+
+/** What the window shell answers for the engine daemon (see `shellBridge` in ipc.ts). */
+export interface ShellBridge {
+  /** The app window's native handle as a decimal string (HWND, X11 id, NSView pointer), or null. */
+  nativeWindow(): string | null;
+  dialog(kind: ShellDialog, options: Record<string, unknown>): Promise<unknown>;
+  quitForUpdate(): void;
+}
+
 
 interface Tab { win: BrowserWindow; page: Page; log: PageLogEntry[] }
 
@@ -73,8 +52,20 @@ export function errorLine(error: unknown): string {
 interface ChatBrowser { tabs: Tab[]; active: number; driver: BrowserDriver; lastUsed: number; queue: Promise<unknown> }
 
 /** Private tool bridge. Only the backend receives its capability token, never page content. */
-export async function startAgentBrowser(options: { driver?: BrowserDriverFactory } = {}): Promise<{ url: string; token: string; close: () => void }> {
-  const createDriver = options.driver ?? playwrightDriver;
+export async function startAgentBrowser(options: {
+  driver?: BrowserDriverFactory;
+  /** An older daemon's `workspace:add` asks for the native folder picker here (`{ tool: 'pickFolder' }`). */
+  pickFolder?: () => Promise<string | null>;
+  /**
+   * What the engine daemon asks of the window shell now that it answers the
+   * native channels itself (crates/nekkod/src/native.rs): the app window's
+   * native handle to own its dialogs (`nativeWindow`), a dialog drawn here
+   * where the daemon cannot draw one (`dialog`: macOS), and quitting so a
+   * downloaded update can install (`quitForUpdate`).
+   */
+  shell?: ShellBridge;
+} = {}): Promise<{ url: string; token: string; close: () => void }> {
+  const createDriver = options.driver ?? nativeDriver;
   const token = randomBytes(32).toString('hex');
   const chats = new Map<string, ChatBrowser>();
   const starting = new Map<string, Promise<ChatBrowser>>();
@@ -210,9 +201,8 @@ export async function startAgentBrowser(options: { driver?: BrowserDriverFactory
       if (action === 'tabs') return { output: describeTabs(chat) };
       if (action === 'logs') { const text = describeLogs(tab.log); tab.log.length = 0; return { output: text }; }
       if (action === 'screenshot') {
-        // Playwright asks the renderer for a fresh frame. capturePage on a
-        // hidden window can return the last composited frame instead, which
-        // went stale after a scroll in the smoke run.
+        // The native page waits for rendering before capturing its owned hidden
+        // compositor, preserving real scrollbars without changing page layout.
         const png = await tab.page.screenshot({ type: 'png', timeout: 10_000 });
         if (png.length > MAX_SCREENSHOT_BYTES) throw new Error('The screenshot is larger than 5 MB; use the capture tool to save it to a file instead.');
         if (png.length < 24 || png.toString('ascii', 12, 16) !== 'IHDR') throw new Error('The page did not produce a frame; retry after it finishes rendering.');
@@ -250,6 +240,18 @@ export async function startAgentBrowser(options: { driver?: BrowserDriverFactory
         chunks.push(chunk);
       }
       const input = JSON.parse(Buffer.concat(chunks).toString());
+      // Not a chat's: the daemon's `workspace:add` (crates/nekkod/src/small_services.rs).
+      if (input.tool === 'pickFolder') {
+        if (!options.pickFolder) throw new Error('No folder picker here.');
+        reply(200, { path: await options.pickFolder() }); return;
+      }
+      if (input.tool === 'nativeWindow' || input.tool === 'dialog' || input.tool === 'quitForUpdate') {
+        if (!options.shell) throw new Error('No window shell here.');
+        if (input.tool === 'nativeWindow') { reply(200, { handle: options.shell.nativeWindow() }); return; }
+        if (input.tool === 'quitForUpdate') { options.shell.quitForUpdate(); reply(200, { ok: true }); return; }
+        if (!SHELL_DIALOGS.has(input.kind)) throw new Error('Unknown dialog.');
+        reply(200, { result: await options.shell.dialog(input.kind, input.options ?? {}) }); return;
+      }
       const { sessionId } = input;
       if (typeof sessionId !== 'string' || !sessionId || sessionId.length > 200) throw new Error(input.tool === 'capture' ? 'Invalid capture session' : 'Invalid browser request.');
       if (input.tool === 'capture') {
