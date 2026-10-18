@@ -469,6 +469,8 @@ export function CommandWall({
       if (at && allPanes(next).some((p) => p.id === at.paneId) && canSplit(next, at.paneId, at.dir)) return splitPane(next, at.paneId, at.dir, pane);
       return addPane(next, pane, aspect);
     });
+    // A chat just made is the one you mean to talk to next.
+    if (kind === 'chat') onSelect(refId);
   };
 
   // What the windows' handlers need, read when they run: a window that skipped

@@ -333,13 +333,14 @@ export function CommandCenterView() {
   useEffect(() => {
     if (!focusRequest || !listsReady) return;
     useStore.setState({ focusRequest: null });
-    const chat = sessions.find((s) => s.id === focusRequest);
+    const { sessionId, keepLayout } = focusRequest;
+    const chat = sessions.find((s) => s.id === sessionId);
     if (!chat) { useStore.getState().pushToast('error', 'That chat no longer exists.'); return; }
     if (chat.archivedAt) { setCompletedId(chat.id); return; }
     setCompletedId(null);
     setWall((w) => {
       const opened = openWallPane(w, 'chat', chat.id, aspectRef.current);
-      return opened.layout.mode === 'focus' ? opened : { ...opened, layout: { ...opened.layout, mode: 'focus' } };
+      return keepLayout || opened.layout.mode === 'focus' ? opened : { ...opened, layout: { ...opened.layout, mode: 'focus' } };
     });
     setSelected(chat.id);
   }, [focusRequest, listsReady, sessions, setWall]);
