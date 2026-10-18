@@ -1,0 +1,91 @@
+name: Installers
+
+# Builds the real Windows and macOS installers, unsigned, and installs them,
+# whenever a change touches how they are packaged. release.yml only runs on a
+# tag, so without this a broken installer config would first show up as a
+# broken release.
+on:
+  pull_request:
+    paths:
+      - apps/desktop/electron-builder.yml
+      - apps/desktop/build/**
+      - apps/desktop/scripts/after-pack.cjs
+      - apps/desktop/scripts/gen-dmg-art.mjs
+      - .github/workflows/installers.yml
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - run: npm run build
+      - name: Package (unsigned, not published)
+        shell: bash
+        run: npm run dist -w @nekko-agent/desktop -- --publish never
+
+      # One-click NSIS: a silent install must land per-user with no elevation,
+      # create the shortcuts, and uninstall cleanly.
+      - name: Install and uninstall the Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-ChildItem apps/desktop/release -Filter 'NekkoAgent-*-x64.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'No installer was built.' }
+          "Installing $($installer.Name)"
+          Start-Process $installer.FullName -ArgumentList '/S' -Wait
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\@nekko-agentdesktop'
+          if (-not (Test-Path $dir)) { $dir = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Programs') -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'NekkoAgent.exe') } | Select-Object -First 1 -ExpandProperty FullName }
+          if (-not $dir -or -not (Test-Path (Join-Path $dir 'NekkoAgent.exe'))) { throw 'NekkoAgent.exe was not installed under %LOCALAPPDATA%\Programs.' }
+          "Installed to $dir"
+          $startMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
+          $desktop = [Environment]::GetFolderPath('Desktop')
+          $shortcuts = @(Get-ChildItem $startMenu -Recurse -Filter 'Nekko Agent.lnk') + @(Get-ChildItem $desktop -Filter 'Nekko Agent.lnk' -ErrorAction SilentlyContinue)
+          $shortcuts | ForEach-Object { "Shortcut: $($_.FullName)" }
+          if ($shortcuts.Count -lt 2) { throw 'Expected a Start Menu and a desktop shortcut.' }
+          # runAfterFinish starts the app after a silent install too; stop it so
+          # the uninstaller is not blocked by a running process.
+          Get-Process NekkoAgent -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 2
+          $uninstaller = Get-ChildItem $dir -Filter 'Uninstall*.exe' | Select-Object -First 1
+          Start-Process $uninstaller.FullName -ArgumentList '/S' -Wait
+          Start-Sleep -Seconds 5
+          if (Test-Path (Join-Path $dir 'NekkoAgent.exe')) { throw 'Uninstall left NekkoAgent.exe behind.' }
+          'Install and uninstall OK.'
+
+      # The drag-to-install window: the background, the Finder layout and the
+      # Applications link all have to make it into the image.
+      - name: Check the macOS disk image layout
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg=$(find apps/desktop/release -maxdepth 1 -name 'NekkoAgent-*.dmg' -print -quit)
+          mnt=$(hdiutil attach -nobrowse -readonly "$dmg" | tail -1 | awk -F'\t' '{print $NF}')
+          trap 'hdiutil detach "$mnt" -quiet || true' EXIT
+          ls -la "$mnt"
+          [ "$(basename "$mnt")" = 'Nekko Agent' ] || { echo "Volume is named '$(basename "$mnt")', expected 'Nekko Agent'." >&2; exit 1; }
+          [ -f "$mnt/.background.tiff" ] || { echo 'No background image in the disk image.' >&2; exit 1; }
+          [ -f "$mnt/.DS_Store" ] || { echo 'No Finder layout (.DS_Store) in the disk image.' >&2; exit 1; }
+          [ "$(readlink "$mnt/Applications")" = '/Applications' ] || { echo 'No Applications link.' >&2; exit 1; }
+          # HiDPI: the tiff must carry both the 1x and the 2x image.
+          tiffutil -info "$mnt/.background.tiff" | tee /dev/stderr | grep -c 'Image Width' | grep -q 2
+          ls -d "$mnt"/*.app

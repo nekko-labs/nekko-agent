@@ -48,18 +48,25 @@ win:
     - nsis
   artifactName: NekkoAgent-${version}-${arch}.${ext}
 nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
-  installerSidebar: build/installerSidebar.bmp
-  installerHeader: build/installerHeader.bmp
+  # One click: double-click the .exe, a short branded progress window, and the
+  # app opens. Per-user into %LOCALAPPDATA%\Programs, so there is no UAC prompt
+  # and no wizard pages to read. electron-updater runs the same installer
+  # silently for updates.
+  oneClick: true
+  perMachine: false
+  runAfterFinish: true
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
-  # Add/Remove Programs + Start Menu uninstall entry, with a Start Menu folder.
+  # Start Menu folder + desktop shortcut, and the Add/Remove Programs entry.
   menuCategory: true
   createStartMenuShortcut: true
+  createDesktopShortcut: always
+  shortcutName: Nekko Agent
   uninstallDisplayName: Nekko Agent
   # Custom uninstall hook lives at build/installer.nsh, electron-builder picks
   # it up automatically (its customUnInstall macro offers to remove user data).
+  # installerSidebar.bmp / installerHeader.bmp in build/ are only shown by the
+  # assisted (oneClick: false) wizard.
 msi:
   oneClick: false
 mac:
@@ -91,6 +98,25 @@ mac:
     # Required for the QR pairing scanner (QrScanner.tsx → getUserMedia).
     # Without it macOS kills the process instead of prompting.
     NSCameraUsageDescription: Nekko Agent uses the camera to scan the pairing QR code shown by the Nekko Agent mobile app.
+# The drag-to-install window: a pixel Nekko leaping from the app to the
+# Applications folder. The art comes from scripts/gen-dmg-art.mjs, whose
+# APP_X / APPS_X / ICON_Y match the two icon positions here; the labels sit on
+# the ledges drawn under them. background@2x.png beside it makes it HiDPI.
+dmg:
+  title: Nekko Agent
+  background: build/background.png
+  iconSize: 100
+  window:
+    width: 640
+    height: 400
+  contents:
+    - x: 160
+      y: 200
+      type: file
+    - x: 480
+      y: 200
+      type: link
+      path: /Applications
 linux:
   target:
     - AppImage

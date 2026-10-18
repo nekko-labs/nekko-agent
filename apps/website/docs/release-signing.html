@@ -57,8 +57,8 @@
             <a href="/docs/release-signing.md">View as Markdown</a>
             <a href="/llms.txt">llms.txt</a>
           </p>
-<p>How Nekko Agent&#39;s macOS builds get signed and notarized, what is wired, and what
-needs a human with an Apple account.</p>
+<p>How Nekko Agent&#39;s macOS and Windows builds get signed (and, on macOS,
+notarized), what is wired, and what needs a human with an Apple or Azure account.</p>
 <p>Everything here is <strong>secret-gated</strong>. With no signing secrets configured the
 release still builds and publishes, just unsigned, so nothing below can block a
 release. A <em>partially</em> configured set fails the job before building, because a
@@ -82,9 +82,9 @@ worked.</p>
 </tr>
 <tr>
 <td>Windows</td>
-<td>Authenticode</td>
+<td>Authenticode via Azure Artifact Signing</td>
 <td>✅ secret-gated</td>
-<td>the org secrets being set</td>
+<td>Azure identity validation + the secrets below</td>
 </tr>
 <tr>
 <td>Linux</td>
@@ -177,14 +177,21 @@ the process instead of prompting when the QR scanner opens.</p>
 <td>ASC issuer id (a UUID)</td>
 </tr>
 <tr>
-<td><code>WINDOWS_SIGNING_CERTS_P12</code></td>
-<td>base64 of the Authenticode <code>.p12</code> certificate</td>
+<td><code>AZURE_SIGNING_TENANT_ID</code></td>
+<td>Entra tenant of the signing service principal</td>
 </tr>
 <tr>
-<td><code>WINDOWS_CERT_PASSWORD</code></td>
-<td>password for that <code>.p12</code></td>
+<td><code>AZURE_SIGNING_CLIENT_ID</code></td>
+<td>its application (client) id; the Windows gate</td>
+</tr>
+<tr>
+<td><code>AZURE_SIGNING_CLIENT_SECRET</code></td>
+<td>its client secret</td>
 </tr>
 </tbody></table></div>
+<p>Plus four non-secret <strong>organization variables</strong> (<code>gh variable set --org</code>), also
+read by the Windows leg: <code>AZURE_SIGNING_ENDPOINT</code>, <code>AZURE_SIGNING_ACCOUNT</code>,
+<code>AZURE_SIGNING_PROFILE</code>, <code>AZURE_SIGNING_PUBLISHER</code>. See <a href="#windows">Windows</a>.</p>
 <p>Certificate: <code>Developer ID Application: Nekko Labs LLC (3HM5598S99)</code>.</p>
 <h3 id="uploading-them"><a class="anchor" href="#uploading-them" aria-hidden="true" tabindex="-1">#</a>Uploading them</h3>
 <p>Run on a Mac that has the Developer ID certificate <strong>and its private key</strong> in
@@ -244,23 +251,95 @@ gh secret set APPLE_API_KEY_ID --org nekko-labs --visibility all --body XXXXXXXX
 <p>The secrets are organization-wide, so one rotation also repairs hypergate and
 lightwrite.</p>
 <h2 id="windows"><a class="anchor" href="#windows" aria-hidden="true" tabindex="-1">#</a>Windows</h2>
-<p>The release workflow passes <code>WINDOWS_SIGNING_CERTS_P12</code> and
-<code>WINDOWS_CERT_PASSWORD</code> to electron-builder as <code>WIN_CSC_LINK</code> and
-<code>WIN_CSC_KEY_PASSWORD</code>. electron-builder 26.16.1 still supports the legacy
-PKCS#12/signtool path through these Windows-specific environment variables;
-Azure Trusted Signing is an alternative, not a requirement for this setup.
-With both secrets present, the NSIS installer is Authenticode-signed. If no
-certificate is configured, the workflow deliberately builds an unsigned
-installer so releases remain available; SmartScreen will show an
-unknown-publisher warning. A certificate without its password is a
-configuration error and fails the Windows job before packaging.</p>
-<p>The certificate should contain the private key and be exported as a base64
-PKCS#12 file:</p>
-<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">base64 -w0 /path/to/windows-signing.p12 | \
-  gh secret set WINDOWS_SIGNING_CERTS_P12 --org nekko-labs --visibility all
-gh secret set WINDOWS_CERT_PASSWORD --org nekko-labs --visibility all</code></pre></div>
+<p>Windows installers are signed with <strong>Azure Artifact Signing</strong> (Microsoft&#39;s
+managed code signing, formerly Trusted Signing). A <code>.p12</code> is no longer an
+option: since June 2023 the CA/B Forum requires every new code-signing key to
+live in a hardware module, so no new Authenticode certificate can be exported
+to a file for CI. Artifact Signing holds the key, issues short-lived
+certificates in the validated organization&#39;s name, and costs about $10 a month
+on the Basic tier.</p>
+<p>electron-builder 26 signs through it natively (<code>win.azureSignOptions</code>, which
+runs the <code>TrustedSigning</code> PowerShell module on the runner). The release
+workflow passes the options as <code>-c</code> flags only when <code>AZURE_SIGNING_CLIENT_ID</code>
+is set, so a local <code>npm run dist</code> never tries to reach Azure. It signs the app
+<code>.exe</code>, the uninstaller and the NSIS installer, and then &quot;Verify the signed
+installer&quot; fails the job unless each one has a <code>Valid</code> signature from
+<code>CN=&lt;AZURE_SIGNING_PUBLISHER&gt;</code> with a timestamp. With no client id the build is
+unsigned (SmartScreen shows &quot;unknown publisher&quot;) and the release still ships;
+a client id without the rest fails before packaging.</p>
+<p><code>AZURE_SIGNING_PUBLISHER</code> is also written into <code>app-update.yml</code>, and
+electron-updater refuses an update not signed by that publisher. Set it to the
+certificate&#39;s common name exactly (the validated legal name, e.g.
+<code>Nekko Labs LLC</code>) and never change it casually: installs on the old name would
+stop accepting updates.</p>
+<h3 id="one-time-setup-needs-philip-azure-owner--company-documents"><a class="anchor" href="#one-time-setup-needs-philip-azure-owner--company-documents" aria-hidden="true" tabindex="-1">#</a>One-time setup (needs Philip: Azure owner + company documents)</h3>
+<ol>
+<li>In the Azure portal, register the <code>Microsoft.CodeSigning</code> resource provider
+on the subscription, then create an <strong>Artifact Signing account</strong> (Basic)
+in a supported region, e.g. East US (<code>https://eus.codesigning.azure.net</code>).</li>
+<li><strong>Identity validation → Public Trust → Organization</strong> for Nekko Labs LLC.
+This is the slow, human step: Microsoft verifies the business (registration
+documents, a domain email) and usually answers in a few business days. Only
+a validated identity can back a public certificate.</li>
+<li>Create a <strong>certificate profile</strong> (type <em>Public Trust</em>) on that identity.</li>
+<li>Create the CI identity and give it signing rights on the account only:</li>
+</ol>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">az ad sp create-for-rbac --name nekko-agent-release-signing
+# note appId (client id), password (client secret), tenant
+az role assignment create --assignee &lt;appId&gt; \
+  --role &quot;Trusted Signing Certificate Profile Signer&quot; \
+  --scope &lt;the signing account&#39;s resource id&gt;</code></pre></div>
+<p>   (Newer tenants may list it as &quot;Artifact Signing Certificate Profile
+   Signer&quot; after the rename; it is the same role.)</p>
+<ol start="5">
+<li>Store them on the org. Set the client secret interactively, one command at
+a time (see the stdin warning under macOS):</li>
+</ol>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">gh secret set AZURE_SIGNING_TENANT_ID --org nekko-labs --visibility all --body &lt;tenant&gt;
+gh secret set AZURE_SIGNING_CLIENT_ID --org nekko-labs --visibility all --body &lt;appId&gt;
+read -rs &quot;P?client secret: &quot; &amp;&amp; gh secret set AZURE_SIGNING_CLIENT_SECRET --org nekko-labs --visibility all --body &quot;$P&quot; &amp;&amp; unset P
+gh variable set AZURE_SIGNING_ENDPOINT --org nekko-labs --visibility all --body https://eus.codesigning.azure.net
+gh variable set AZURE_SIGNING_ACCOUNT --org nekko-labs --visibility all --body &lt;account name&gt;
+gh variable set AZURE_SIGNING_PROFILE --org nekko-labs --visibility all --body &lt;certificate profile name&gt;
+gh variable set AZURE_SIGNING_PUBLISHER --org nekko-labs --visibility all --body &quot;Nekko Labs LLC&quot;</code></pre></div>
+<ol start="6">
+<li>Re-run the release at the latest tag
+(<code>gh workflow run release.yml --repo nekko-labs/nekko-agent --ref vX.Y.Z</code>)
+and check the &quot;Verify the signed installer&quot; step.</li>
+</ol>
+<p>The client secret expires (two years by default with <code>create-for-rbac</code>); when
+it does, the Windows leg fails in the signing step with an Entra <code>AADSTS7000222</code>
+error. Rotate with <code>az ad sp credential reset --id &lt;appId&gt;</code> and re-set
+<code>AZURE_SIGNING_CLIENT_SECRET</code>.</p>
+<p>SmartScreen reputation: Artifact Signing certificates carry the validated
+organization name, and reputation accrues to that identity rather than to one
+certificate, so warnings fade as installs accumulate instead of resetting with
+every short-lived certificate.</p>
+<h3 id="the-installer-itself"><a class="anchor" href="#the-installer-itself" aria-hidden="true" tabindex="-1">#</a>The installer itself</h3>
+<p>The NSIS installer is <strong>one click</strong>: double-clicking it shows a short branded
+progress window, installs per user into <code>%LOCALAPPDATA%\Programs</code>, adds Start
+Menu and desktop shortcuts and the Add/Remove Programs entry, and opens the
+app. There is no UAC prompt and no wizard page. Uninstalling still asks whether
+to remove chats and settings (<code>build/installer.nsh</code>); a silent uninstall,
+including the one electron-updater runs, keeps them.</p>
 <p>Certificates expire (Developer ID is 5 years). When it rolls, re-export and
 re-run the two <code>MACOS_*</code> commands; nothing in this repo changes.</p>
+<h2 id="the-macos-drag-to-install-window"><a class="anchor" href="#the-macos-drag-to-install-window" aria-hidden="true" tabindex="-1">#</a>The macOS drag-to-install window</h2>
+<p>The <code>.dmg</code> opens to a Finder window with the app on the left, the Applications
+folder on the right, and a pixel Nekko leaping between them under &quot;Drag the cat
+into Applications&quot;. The art is generated, not drawn by hand:</p>
+<div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">node apps/desktop/scripts/gen-dmg-art.mjs</code></pre></div>
+<p>writes <code>build/background.png</code> (640x400) and <code>build/background@2x.png</code>, which
+dmg-builder merges into a HiDPI <code>.background.tiff</code>. The icon positions in the
+<code>dmg</code> section of <code>electron-builder.yml</code> must match <code>APP_X</code> / <code>APPS_X</code> / <code>ICON_Y</code>
+in the script. Two Finder facts shaped the layout: icon labels are drawn
+<strong>black</strong> even in dark mode, so they sit on light sage ledges, and a user who
+shows Finder&#39;s path and status bars loses the bottom ~50px of the window, so
+the copy is at the top.</p>
+<p>The <code>Installers</code> workflow (<code>.github/workflows/installers.yml</code>) builds both
+installers unsigned on any PR that touches their config, installs and
+uninstalls the Windows one silently, and checks the disk image has its
+background, layout and Applications link.</p>
 <h2 id="npm-publishing"><a class="anchor" href="#npm-publishing" aria-hidden="true" tabindex="-1">#</a>npm publishing</h2>
 <p>The <code>publish-cli</code> job uses npm Trusted Publishing as its primary authentication
 path. npm&#39;s documented requirements are Node <code>22.14.0</code> or newer and npm
@@ -373,7 +452,7 @@ build machine still accepts it because the machine trusts the developer.</p>
           </footer>
         </article>
       </main>
-      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Release signing</a></li><li class="d2"><a href="#status-at-a-glance">Status at a glance</a></li><li class="d2"><a href="#macos">macOS</a></li><li class="d3"><a href="#the-entitlements-and-why-each-one-is-there">The entitlements, and why each one is there</a></li><li class="d2"><a href="#secrets">Secrets</a></li><li class="d3"><a href="#uploading-them">Uploading them</a></li><li class="d3"><a href="#when-the-app-store-connect-key-rotates">When the App Store Connect key rotates</a></li><li class="d2"><a href="#windows">Windows</a></li><li class="d2"><a href="#npm-publishing">npm publishing</a></li><li class="d3"><a href="#first-publish-bootstrap">First publish bootstrap</a></li><li class="d2"><a href="#verifying-a-release">Verifying a release</a></li><li class="d2"><a href="#installer-and-updater-targets">Installer and updater targets</a></li><li class="d2"><a href="#building-signed-locally">Building signed locally</a></li></ul></nav></aside>
+      <aside class="toc-col"><nav class="toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#top">Release signing</a></li><li class="d2"><a href="#status-at-a-glance">Status at a glance</a></li><li class="d2"><a href="#macos">macOS</a></li><li class="d3"><a href="#the-entitlements-and-why-each-one-is-there">The entitlements, and why each one is there</a></li><li class="d2"><a href="#secrets">Secrets</a></li><li class="d3"><a href="#uploading-them">Uploading them</a></li><li class="d3"><a href="#when-the-app-store-connect-key-rotates">When the App Store Connect key rotates</a></li><li class="d2"><a href="#windows">Windows</a></li><li class="d3"><a href="#one-time-setup-needs-philip-azure-owner--company-documents">One-time setup (needs Philip: Azure owner + company documents)</a></li><li class="d3"><a href="#the-installer-itself">The installer itself</a></li><li class="d2"><a href="#the-macos-drag-to-install-window">The macOS drag-to-install window</a></li><li class="d2"><a href="#npm-publishing">npm publishing</a></li><li class="d3"><a href="#first-publish-bootstrap">First publish bootstrap</a></li><li class="d2"><a href="#verifying-a-release">Verifying a release</a></li><li class="d2"><a href="#installer-and-updater-targets">Installer and updater targets</a></li><li class="d2"><a href="#building-signed-locally">Building signed locally</a></li></ul></nav></aside>
     </div>
     <dialog class="search-dialog" aria-label="Search the docs">
       <form method="dialog" class="search-box">
