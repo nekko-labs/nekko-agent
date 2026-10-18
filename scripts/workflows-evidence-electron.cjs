@@ -6,10 +6,12 @@ const profile = fs.mkdtempSync(path.join(dir, 'profile-'));
 app.setPath('userData', profile);
 app.setPath('sessionData', profile);
 const report = { kind, captures: [], errors: [] };
+// JSON.stringify leaves <, >, / and U+2028/2029 raw; escape them before splicing into evaluated code.
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // DOM clicks only, never OS input. Each returns whether it found its target.
-const clickText = (selector, text) => `(() => { const b = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => x.textContent.trim().startsWith(${JSON.stringify(text)})); if (!b) return false; b.click(); return true; })()`;
-const EXPAND = (name) => `(() => { const b = [...document.querySelectorAll('button[aria-expanded]')].find((x) => x.textContent.includes(${JSON.stringify(name)})); if (!b) return false; b.click(); return true; })()`;
+const clickText = (selector, text) => `(() => { const b = [...document.querySelectorAll(${js(selector)})].find((x) => x.textContent.trim().startsWith(${js(text)})); if (!b) return false; b.click(); return true; })()`;
+const EXPAND = (name) => `(() => { const b = [...document.querySelectorAll('button[aria-expanded]')].find((x) => x.textContent.includes(${js(name)})); if (!b) return false; b.click(); return true; })()`;
 const LAYOUT = `(() => {
   const problems = [];
   for (const el of document.querySelectorAll('main *, [role=dialog] *')) {
@@ -55,7 +57,7 @@ app.whenReady().then(async () => {
       for (const [i, scene] of SCENES.entries()) {
         // A fresh page per scene: the query differs every time, so nothing carries over.
         await win.loadFile(path.join(dir, 'index.html'), { query: { data: scene.data, n: `${theme}-${i}` } });
-        await run(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+        await run(`document.documentElement.dataset.theme=${js(theme)}`);
         await run('document.fonts.ready');
         await sleep(400);
         const clicked = [];
