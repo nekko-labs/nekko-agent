@@ -66,6 +66,8 @@ export const PHONE_ALWAYS_DENIED = {
     'dir:list',
     'file:read',
     'file:write',
+    // Makes this computer fetch an arbitrary URL; a phone shows remote images itself.
+    'image:fetch',
     'providers:importCliAuth',
     'providers:remove',
     'providers:save',

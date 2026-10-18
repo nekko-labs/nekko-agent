@@ -2049,6 +2049,14 @@
   background: color-mix(in srgb, var(--accent) 14%, var(--surface));
   color: color-mix(in srgb, var(--accent) 55%, var(--ink));
 }
+/* A remote photo that is still loading: a quiet shimmer in the card's own tint. */
+.remote-image-skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 0%, color-mix(in srgb, var(--accent) 7%, var(--surface-2)) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: remote-image-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes remote-image-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .remote-image-skeleton { animation: none; } }
 .artifact-card-open { color: color-mix(in srgb, var(--accent) 40%, var(--ink-faint)); }
 .artifact-card:hover:not(:disabled) .artifact-card-open { color: var(--accent); }
 .pr-deck-slot { transform-origin: bottom center; animation: pr-deck-pop 240ms ease-out both; }

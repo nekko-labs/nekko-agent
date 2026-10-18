@@ -20,6 +20,20 @@ export interface FileContent {
   binary: boolean;
 }
 
+/**
+ * A remote photo fetched by the host for the chat (`image:fetch`): only public
+ * http(s) addresses, size-capped, and the bytes sniffed to a raster type, so
+ * the renderer only ever mounts an inert data URL.
+ */
+export interface RemoteImage {
+  /** `data:image/<png|jpeg|gif|webp|avif>;base64,...` */
+  dataUrl: string;
+  mime: string;
+  bytes: number;
+  /** Where the image actually came from, after redirects. */
+  finalUrl: string;
+}
+
 /** A file the agent changed this session, original vs current, for diff/approve. */
 export interface FileChange {
   path: string;

@@ -480,6 +480,7 @@ function makeWebClient(): NekkoApi {
     readFile: (path) => call(IpcChannels.fileRead, path),
     writeFile: (path, content) => call(IpcChannels.fileWrite, path, content),
     listDir: (path) => call(IpcChannels.dirList, path),
+    fetchRemoteImage: (url) => call(IpcChannels.imageFetch, url),
 
     listChanges: (sessionId) => call(IpcChannels.changesList, sessionId),
     acceptChange: (sessionId, path) => call(IpcChannels.changeAccept, sessionId, path),

@@ -33,6 +33,7 @@ import type {
   GitStatus,
   ChatWorktreeInfo,
   DirEntry,
+  RemoteImage,
   FileContent,
   FileChange,
   PrInfo,
@@ -116,6 +117,7 @@ import * as memory from './memory.js';
 import { usageSummary, clearUsage } from './usage.js';
 import { indexWorkspace, getIndexStatus, searchWorkspace, listIndexedFiles } from './workspace.js';
 import { readFile, writeFile, listDir, importAttachment } from './files.js';
+import { fetchRemoteImage } from './remote-image.js';
 import { getGitStatus } from './git.js';
 import { listChanges, acceptChange, acceptAllChanges, notifyChanges, setChangeNotifier } from './changes.js';
 import { listSessionPrs, getPrDiff, prAction, fetchPrInfo, branchPrHead } from './pr.js';
@@ -466,6 +468,8 @@ export interface Host {
   listDir(path: string): DirEntry[];
   /** Save pasted bytes under the data dir as an attachable file; returns its path. */
   importAttachment(sessionId: string, name: string, dataUrl: string): string;
+  /** A remote photo for the chat, fetched under the public-only rules in remote-image.ts. */
+  fetchRemoteImage(url: string): Promise<RemoteImage>;
 
   /** Files the agent changed this session (for diff/approve). */
   listChanges(sessionId: string): Promise<FileChange[]>;
@@ -1274,6 +1278,7 @@ export function createHost(opts: {
     writeFile,
     listDir,
     importAttachment: (sessionId, name, dataUrl) => importAttachment(dataDir(), sessionId, name, dataUrl),
+    fetchRemoteImage: (url) => fetchRemoteImage(url),
     listChanges,
     acceptChange,
     acceptAllChanges,
