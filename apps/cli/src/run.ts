@@ -13,6 +13,18 @@ import { runMcpServer } from './mcp.js';
 import { migrateCommand } from './migrate.js';
 import { resolveInstall } from './skills.js';
 import { VERSION } from './version.js';
+import {
+  downloadModel,
+  listLocalModels,
+  loadModel,
+  localModelStatus,
+  searchCatalog,
+  startRuntime,
+  stopRuntime,
+  summarizeDownload,
+  unloadModel,
+  waitForDownload,
+} from './local-models.js';
 import { cliCommand, normalizeInstallTarget, triggerLabel } from '@nekko-agent/shared';
 import type { AgentEvent, NewTask } from '@nekko-agent/shared';
 
@@ -59,6 +71,7 @@ Usage:
   nekko-agent prompts|tasks|skills|tools|models [opts]
   nekko-agent workflow list|run <name>|trigger <command>|runs [--json]
   nekko-agent train start|status|hint|stop [opts]
+  nekko-agent local status|list|search|download|downloads|cancel|load|unload|start|stop
   nekko-agent mcp
   nekko-agent migrate [--dry-run] [--yes] [--keep-old]   Merge data from earlier installs
   nekko-agent --help | --version
@@ -79,6 +92,15 @@ chat:
   --stream ndjson                Typed event per line
   --timeout <seconds>            Abort after this many seconds
   --quiet                        Suppress human progress output
+
+local (models on this machine; --provider <id> targets Ollama/LM Studio/vLLM, default the built-in engine):
+  local status                   Engine + local runtimes: running, loaded models, memory
+  local list                     Downloaded models in the engine library
+  local search [query]           Hugging Face GGUF models to download
+  local download <owner/repo> [--quant Q4_K_M]
+  local downloads [--active]     Download progress · local cancel <jobId>
+  local load <model> [--ctx N] [--gpu-layers N] [--ttl S]   Run a model (starts the engine)
+  local unload <model> · local start · local stop [--force]
 
 Exit codes:
   0 success · 2 usage · 3 nothing configured · 4 guardrail blocked
@@ -184,7 +206,7 @@ export async function runCli(argv: string[]): Promise<void> {
   if (cmd === 'mcp') return runMcpServer({ url: value(flags, 'url'), token: value(flags, 'token') });
   // Before getClient: building a client opens the data root, which refuses to start while an earlier profile is unmerged.
   if (cmd === 'migrate') { process.exitCode = await migrateCommand(flags); return; }
-  if (!['status', 'sessions', 'chat', 'watch', 'workspace', 'prompts', 'tasks', 'workflow', 'workflows', 'skills', 'tools', 'models', 'train'].includes(cmd)) throw new CliError(`Unknown command: ${cmd}`, EXIT_CODES.usage);
+  if (!['status', 'sessions', 'chat', 'watch', 'workspace', 'prompts', 'tasks', 'workflow', 'workflows', 'skills', 'tools', 'models', 'local', 'train'].includes(cmd)) throw new CliError(`Unknown command: ${cmd}`, EXIT_CODES.usage);
   const client = getClient({ url: value(flags, 'url'), token: value(flags, 'token') });
   const json = isMachine(flags);
   try {
@@ -425,6 +447,72 @@ export async function runCli(argv: string[]): Promise<void> {
       const provider = value(flags, 'provider') ?? _[1] ?? settings.defaultProviderId ?? settings.providers[0]?.id;
       if (!provider) throw new CliError('No provider configured.', EXIT_CODES.notConfigured);
       return void print(await client.listModels(provider), json);
+    }
+    if (cmd === 'local') {
+      const sub = _[1] ?? 'status';
+      const provider = value(flags, 'provider');
+      const num = (name: string) => (value(flags, name) !== undefined ? Number(value(flags, name)) : undefined);
+      if (sub === 'status') return void print(await localModelStatus(client), json);
+      if (sub === 'list') return void print(await listLocalModels(client), json);
+      if (sub === 'search') return void print(await searchCatalog(client, value(flags, 'query') ?? _.slice(2).join(' ')), json);
+      if (sub === 'download') {
+        const id = value(flags, 'id') ?? _[2];
+        if (!id) throw new CliError('Usage: nekko-agent local download <owner/repo> [--quant Q4_K_M]', EXIT_CODES.usage);
+        const started = await downloadModel(client, id, value(flags, 'quant'));
+        // Against the app, the download carries on there. In-process, it only
+        // runs while this command does, so stay until it lands.
+        if (!client.isLocal) return void print(started, json);
+        const final = await waitForDownload(client, started.jobId, (line) => {
+          if (!json && !flags.quiet) process.stderr.write(`\r${line}`);
+        });
+        if (!json && !flags.quiet) process.stderr.write('\n');
+        print({ ...started, state: final?.state, message: final?.message ?? started.message }, json);
+        if (final?.state !== 'done') throw new CliError(`Download ${final?.state ?? 'vanished'}${final?.message ? `: ${final.message}` : ''}`, EXIT_CODES.providerFailure);
+        return;
+      }
+      if (sub === 'downloads') {
+        const jobs = (await client.engineDownloads()).map(summarizeDownload);
+        const active = ['queued', 'downloading', 'verifying'];
+        return void print(flags.active ? jobs.filter((j) => active.includes(j.state)) : jobs, json);
+      }
+      if (sub === 'cancel') {
+        const id = value(flags, 'id') ?? _[2];
+        if (!id) throw new CliError('Usage: nekko-agent local cancel <jobId>', EXIT_CODES.usage);
+        await client.engineCancelDownload(id);
+        return void print({ ok: true, jobId: id }, json);
+      }
+      // With no app serving, this command is the host: a model it loads (or an
+      // engine it starts) would live only as long as this process. Say so
+      // rather than hang holding it, or exit and silently take it down.
+      if ((sub === 'load' || sub === 'start') && client.isLocal) {
+        throw new CliError(
+          `nekko-agent local ${sub} needs the Nekko Agent app running: without it the model would stop as soon as this command exits. Open the app (it serves the CLI automatically), or use the MCP server (nekko-agent mcp), which keeps models loaded for its session.`,
+          EXIT_CODES.notConfigured,
+        );
+      }
+      if (sub === 'load' || sub === 'unload') {
+        const modelId = value(flags, 'model') ?? _[2];
+        if (!modelId) throw new CliError(`Usage: nekko-agent local ${sub} <model> [--provider <id>]`, EXIT_CODES.usage);
+        if (sub === 'unload') return void print(await unloadModel(client, { modelId, providerId: provider }), json);
+        return void print(
+          await loadModel(client, {
+            modelId,
+            providerId: provider,
+            contextTokens: num('ctx'),
+            gpuLayers: num('gpu-layers'),
+            ttlSeconds: num('ttl'),
+          }),
+          json,
+        );
+      }
+      if (sub === 'start') return void print(await startRuntime(client, provider), json);
+      if (sub === 'stop') {
+        const res = await stopRuntime(client, provider, flags.force === true);
+        print(res, json);
+        if (!res.ok) throw new CliError(res.message, EXIT_CODES.usage);
+        return;
+      }
+      throw new CliError('Usage: nekko-agent local status|list|search|download|downloads|cancel|load|unload|start|stop', EXIT_CODES.usage);
     }
     if (cmd === 'train') {
       const sub = _[1];

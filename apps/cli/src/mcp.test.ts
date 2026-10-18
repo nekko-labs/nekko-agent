@@ -31,6 +31,16 @@ const toolCases = [
   ['train_status', 'listTrainingRuns', {}],
   ['train_hint', 'addTrainingHint', { runId: 'run', text: 'hello' }],
   ['train_stop', 'stopTrainingRun', { runId: 'run' }],
+  ['local_status', 'engineStatus', {}],
+  ['local_models', 'engineModels', {}],
+  ['model_search', 'engineCatalog', { query: 'qwen' }],
+  ['model_download', 'engineDownloadModel', { modelId: 'unsloth/Qwen3-4B-GGUF' }],
+  ['downloads', 'engineDownloads', {}],
+  ['download_cancel', 'engineCancelDownload', { jobId: 'job' }],
+  ['model_load', 'runtimeLoad', { modelId: 'qwen3-4b' }],
+  ['model_unload', 'unloadModel', { modelId: 'qwen3-4b' }],
+  ['runtime_start', 'runtimeStart', {}],
+  ['runtime_stop', 'runtimeStop', {}],
   ['status', 'remoteStatus', {}],
 ] as const;
 
@@ -45,7 +55,19 @@ describe('MCP tool identity and legacy dispatch', () => {
   beforeEach(() => {
     messages = [];
     client = Object.fromEntries(toolCases.map(([, method]) => [method, vi.fn().mockResolvedValue([])]));
-    client.getSettings.mockResolvedValue({ providers: [], workspaces: [], prompts: [] });
+    client.getSettings.mockResolvedValue({
+      providers: [{ id: 'nekko-engine', kind: 'llamacpp', label: 'Engine', baseUrl: 'http://127.0.0.1:1/v1', enabled: true }],
+      workspaces: [],
+      prompts: [],
+    });
+    client.engineStatus.mockResolvedValue({ install: { binPath: '/bin/llama-server' }, running: false, resident: [], log: [], port: 1, settings: {} });
+    client.engineCatalogModel = vi.fn().mockResolvedValue({ id: 'unsloth/Qwen3-4B-GGUF', name: 'Qwen3 4B', owner: 'unsloth', tags: [], quants: [{ label: 'Q8_0', file: 'a' }, { label: 'Q4_K_M', file: 'b', sizeBytes: 2.5 * 1024 ** 3 }] });
+    client.engineDownloadModel.mockResolvedValue({ ok: true, message: 'Downloading', jobId: 'job' });
+    client.runtimeLoad.mockResolvedValue({ ok: true });
+    client.unloadModel.mockResolvedValue({ ok: true });
+    client.runtimeStart.mockResolvedValue({ kind: 'llamacpp', running: true, owned: true, baseUrl: 'http://127.0.0.1:1/v1', resident: [] });
+    client.runtimeStop.mockResolvedValue({ ok: true, message: 'Stopped' });
+    client.runtimeStatus = vi.fn().mockResolvedValue(null);
     client.getSession.mockResolvedValue({ id: 'session', messages: [] });
     client.createSession.mockResolvedValue({ id: 'session' });
     client.createTrainingRun.mockResolvedValue({ id: 'run', sessionId: 'session' });
@@ -94,6 +116,12 @@ describe('MCP tool identity and legacy dispatch', () => {
           { type: 'text', text: 'reply' },
           { type: 'text', text: JSON.stringify({ sessionId: 'session', provider: 'provider', model: 'model', toolCalls: [], blocked: [], durationMs: 1 }) },
         ]);
+      }
+      if (suffix === 'model_download') {
+        expect(client.engineDownloadModel).toHaveBeenCalledWith('unsloth/Qwen3-4B-GGUF', 'Q4_K_M');
+      }
+      if (suffix === 'model_load') {
+        expect(client.runtimeLoad).toHaveBeenCalledWith('nekko-engine', 'qwen3-4b', {});
       }
       if (suffix === 'skill_install') {
         expect(client.installSkill).toHaveBeenCalledWith('skill', 'nekko-agent', undefined);

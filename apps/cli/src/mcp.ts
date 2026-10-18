@@ -1,6 +1,17 @@
 import { INSTALL_TARGETS, normalizeInstallTarget } from '@nekko-agent/shared';
 import { getClient, resolveModel, runChat, approvalPolicy, type Client } from './lib.js';
 import { resolveInstall } from './skills.js';
+import {
+  downloadModel,
+  listLocalModels,
+  loadModel,
+  localModelStatus,
+  searchCatalog,
+  startRuntime,
+  stopRuntime,
+  summarizeDownload,
+  unloadModel,
+} from './local-models.js';
 import { VERSION } from './version.js';
 
 /**
@@ -24,8 +35,8 @@ const TOOLS = [
         prompt: { type: 'string', description: 'What to ask / tell the agent.' },
         sessionId: { type: 'string', description: 'Continue an existing chat (optional).' },
         workspaceId: { type: 'string', description: 'Workspace/project to scope a new chat to (optional).' },
-        provider: { type: 'string', description: 'Provider id override (optional).' },
-        model: { type: 'string', description: 'Model id override (optional).' },
+        provider: { type: 'string', description: 'Provider id override (optional). For a local model, the providerId nekko-agent_model_load returned.' },
+        model: { type: 'string', description: 'Model id override (optional). For a local model, its id from nekko-agent_local_models.' },
         approve: { type: 'string', enum: ['guardrails', 'yolo', 'ask'], description: 'Tool approval policy (default guardrails).' },
       },
       required: ['prompt'],
@@ -173,6 +184,83 @@ const TOOLS = [
     name: 'nekko-agent_train_stop',
     description: 'Stop a training run (the in-flight iteration finishes, then the run ends).',
     inputSchema: { type: 'object', properties: { runId: { type: 'string' } }, required: ['runId'] },
+  },
+  {
+    name: 'nekko-agent_local_status',
+    description:
+      "State of this machine's local model serving: the built-in engine (installed, running, which models are loaded, memory budget) and any other local runtime (Ollama, LM Studio, vLLM). Call this first before loading or downloading a model.",
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'nekko-agent_local_models',
+    description:
+      'Models already downloaded to this machine\'s engine library: id, size, quantization, whether loaded, and whether it fits in GPU memory (fit: full|partial|cpu|wont). Use an id from here with nekko-agent_model_load.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'nekko-agent_model_search',
+    description:
+      'Search Hugging Face for GGUF models the engine can download (omit query for the curated starter list). Returns ids (owner/repo) and the quantizations each publishes with sizes.',
+    inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'e.g. "qwen3 4b" or "gemma coder".' } } },
+  },
+  {
+    name: 'nekko-agent_model_download',
+    description:
+      'Start downloading a model into the engine library. Returns immediately with a job id; poll nekko-agent_downloads for progress. Check the size against nekko-agent_local_status memory first; models are often several GB.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        modelId: { type: 'string', description: 'Hugging Face repo id from nekko-agent_model_search, e.g. "unsloth/Qwen3-4B-GGUF".' },
+        quant: { type: 'string', description: 'Quantization label, e.g. "Q4_K_M" (optional; defaults to Q4_K_M or the closest available).' },
+      },
+      required: ['modelId'],
+    },
+  },
+  {
+    name: 'nekko-agent_downloads',
+    description: 'Progress of model downloads: state (queued|downloading|verifying|done|failed|cancelled), percent, size and ETA.',
+    inputSchema: { type: 'object', properties: { active: { type: 'boolean', description: 'Only downloads still in progress (default false).' } } },
+  },
+  {
+    name: 'nekko-agent_download_cancel',
+    description: 'Cancel a model download by job id.',
+    inputSchema: { type: 'object', properties: { jobId: { type: 'string' } }, required: ['jobId'] },
+  },
+  {
+    name: 'nekko-agent_model_load',
+    description:
+      "Run a local model: load it into the built-in engine (starting the engine if needed) or into another local runtime via providerId. Afterwards, send it work with nekko-agent_chat using the returned provider and model.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        modelId: { type: 'string', description: 'Model id from nekko-agent_local_models (or the runtime\'s own model name for Ollama/LM Studio).' },
+        providerId: { type: 'string', description: 'Local runtime provider (optional; default the built-in engine).' },
+        contextTokens: { type: 'number', description: 'Context window to allocate (optional; leave unset for the engine default). A nekko-agent_chat turn carries the agent\'s system prompt and tools, several thousand tokens, so do not go below ~8192 if you will chat with it.' },
+        gpuLayers: { type: 'number', description: 'Layers to offload to the GPU (optional).' },
+        ttlSeconds: { type: 'number', description: 'Unload after this many idle seconds; 0 keeps it loaded (optional).' },
+      },
+      required: ['modelId'],
+    },
+  },
+  {
+    name: 'nekko-agent_model_unload',
+    description: 'Unload a model from a local runtime to free memory.',
+    inputSchema: {
+      type: 'object',
+      properties: { modelId: { type: 'string' }, providerId: { type: 'string', description: 'Default the built-in engine.' } },
+      required: ['modelId'],
+    },
+  },
+  {
+    name: 'nekko-agent_runtime_start',
+    description: 'Start a local model server (the built-in engine by default, or Ollama/LM Studio via providerId).',
+    inputSchema: { type: 'object', properties: { providerId: { type: 'string' } } },
+  },
+  {
+    name: 'nekko-agent_runtime_stop',
+    description:
+      'Stop a local model server. A server Nekko Agent did not start is refused with needsConfirmation; ask the user before retrying with force: true.',
+    inputSchema: { type: 'object', properties: { providerId: { type: 'string' }, force: { type: 'boolean' } } },
   },
   {
     name: 'nekko-agent_status',
@@ -338,6 +426,52 @@ async function callTool(client: Client, name: string, args: Record<string, any>)
       await client.stopTrainingRun(String(args.runId));
       return `Run ${args.runId} stopping.`;
     }
+    case 'nekko-agent_local_status':
+      return JSON.stringify(await localModelStatus(client), null, 2);
+    case 'nekko-agent_local_models':
+      return JSON.stringify(await listLocalModels(client), null, 2);
+    case 'nekko-agent_model_search': {
+      const query = typeof args.query === 'string' ? args.query : undefined;
+      const hits = await searchCatalog(client, query);
+      // An empty page is also what an unreachable Hugging Face looks like, so
+      // say so rather than let the caller conclude the model does not exist.
+      if (!hits.length) {
+        return JSON.stringify({
+          results: [],
+          note: 'No GGUF repos matched. The Hugging Face search may also be slow or unreachable right now; if you know the exact repo id (owner/repo), pass it to nekko-agent_model_download directly.',
+        });
+      }
+      return JSON.stringify(hits, null, 2);
+    }
+    case 'nekko-agent_model_download':
+      if (typeof args.modelId !== 'string' || !args.modelId) throw new Error('modelId is required.');
+      return JSON.stringify(await downloadModel(client, args.modelId, typeof args.quant === 'string' ? args.quant : undefined));
+    case 'nekko-agent_downloads': {
+      const jobs = (await client.engineDownloads()).map(summarizeDownload);
+      const active = ['queued', 'downloading', 'verifying'];
+      return JSON.stringify(args.active === true ? jobs.filter((j) => active.includes(j.state)) : jobs, null, 2);
+    }
+    case 'nekko-agent_download_cancel':
+      await client.engineCancelDownload(String(args.jobId));
+      return JSON.stringify({ ok: true, jobId: args.jobId });
+    case 'nekko-agent_model_load':
+      if (typeof args.modelId !== 'string' || !args.modelId) throw new Error('modelId is required.');
+      return JSON.stringify(
+        await loadModel(client, {
+          modelId: args.modelId,
+          providerId: args.providerId,
+          contextTokens: Number(args.contextTokens) || undefined,
+          gpuLayers: typeof args.gpuLayers === 'number' ? args.gpuLayers : undefined,
+          ttlSeconds: typeof args.ttlSeconds === 'number' ? args.ttlSeconds : undefined,
+        }),
+      );
+    case 'nekko-agent_model_unload':
+      if (typeof args.modelId !== 'string' || !args.modelId) throw new Error('modelId is required.');
+      return JSON.stringify(await unloadModel(client, { modelId: args.modelId, providerId: args.providerId }));
+    case 'nekko-agent_runtime_start':
+      return JSON.stringify(await startRuntime(client, args.providerId));
+    case 'nekko-agent_runtime_stop':
+      return JSON.stringify(await stopRuntime(client, args.providerId, args.force === true));
     case 'nekko-agent_status': {
       const [s, sessions, remote] = await Promise.all([client.getSettings(), client.listSessions(), client.remoteStatus()]);
       return JSON.stringify(
@@ -360,7 +494,7 @@ async function callTool(client: Client, name: string, args: Record<string, any>)
 export function runMcpServer(opts: { url?: string; token?: string } = {}): void {
   // Protect the stdout protocol stream: route any stray logs to stderr.
   console.log = (...a: unknown[]) => console.error(...a);
-  const client = getClient(opts);
+  const client = getClient({ ...opts, longLived: true });
   let buffer = '';
 
   const send = (msg: unknown) => process.stdout.write(JSON.stringify(msg) + '\n');
@@ -430,5 +564,34 @@ export function runMcpServer(opts: { url?: string; token?: string } = {}): void 
     }
   }
 
+  // The client closing stdin (or signalling us) is how an MCP session ends.
+  // With an in-process host, models this server loaded run as llama-server
+  // children of this process; leave them behind and they hold memory with
+  // nobody to unload them. A remote client's engine belongs to the app.
+  let ending = false;
+  const end = (code: number) => {
+    if (ending) return;
+    ending = true;
+    void stopLocalEngine(client).finally(() => process.exit(code));
+  };
+  process.stdin.on('end', () => end(0));
+  process.once('SIGTERM', () => end(0));
+  process.once('SIGINT', () => end(0));
+  process.once('SIGHUP', () => end(0));
+
   console.error('[Nekko Agent] MCP server ready on stdio');
+}
+
+/** Stop the in-process engine if this server started it, bounded so exit never hangs. */
+async function stopLocalEngine(client: Client): Promise<void> {
+  if (!client.isLocal) return;
+  try {
+    const status = await Promise.race([client.engineStatus(), new Promise<null>((r) => setTimeout(() => r(null), 2000))]);
+    if (!status?.running) return;
+    const engine = (await client.getSettings()).providers.find((p) => p.kind === 'llamacpp');
+    if (!engine) return;
+    await Promise.race([client.runtimeStop(engine.id), new Promise((r) => setTimeout(r, 5000))]);
+  } catch {
+    /* best effort: exiting anyway */
+  }
 }
