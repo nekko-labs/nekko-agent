@@ -3,8 +3,9 @@
 //! `stacks`), wiping the user's data (`data:wipe`), the app's version
 //! (`app:info`), the folder picker (`workspace:add`), and the catalog
 //! refresh checks (`updates:check` and their scheduler, a port of
-//! `packages/host/src/update-checks.ts`). `session:watches` is in
-//! `watches.rs`.
+//! `packages/host/src/update-checks.ts`), and the MCP entries other agent
+//! tools hold (`integrations:*`, `nekko-workspace`'s `integrations`).
+//! `session:watches` is in `watches.rs`.
 //!
 //! Served only with a data directory (the desktop app and the web edition);
 //! the backend learns it must not run its own update-check scheduler from
@@ -12,6 +13,7 @@
 
 use crate::routes::Ctx;
 use futures_util::future::BoxFuture;
+use nekko_workspace::integrations;
 use nekko_workspace::stacks::{self, StackHost};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -22,8 +24,20 @@ use std::time::Duration;
 pub const OWNS: &str = "update-checks";
 
 /// The channels served here when the daemon knows the data directory.
-pub const CHANNELS: &[&str] =
-    &["pr:continueStack", "pr:linkStack", "data:wipe", "app:info", "updates:check", "workspace:add"];
+pub const CHANNELS: &[&str] = &[
+    "pr:continueStack",
+    "pr:linkStack",
+    "data:wipe",
+    "app:info",
+    "updates:check",
+    "workspace:add",
+    "integrations:detect",
+    "integrations:install",
+    "integrations:snippet",
+    // Internal: the desktop backend re-points the entries this app wrote
+    // when its server's address or token changes.
+    "integrations:refresh",
+];
 
 /// How often scheduled checks run (`INTERVAL_MS`).
 const INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
@@ -59,8 +73,65 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             Ok(Value::Null)
         }
         "workspace:add" => add_folder(ctx).await,
+        "integrations:detect" => {
+            let home = home_dir();
+            blocking(move || Ok(integrations::detect(&home))).await
+        }
+        "integrations:install" | "integrations:snippet" | "integrations:refresh" => {
+            // `integrations:refresh` takes only the target.
+            let at = usize::from(channel != "integrations:refresh");
+            let (home, tool, target) = (home_dir(), arg(args, 0).clone(), subagent_target(ctx, arg(args, at)).await);
+            match channel {
+                "integrations:install" => blocking(move || integrations::install(&home, &tool, &target)).await,
+                "integrations:snippet" => Ok(integrations::snippet(&tool, &target)),
+                _ => blocking(move || refresh_all(&home, &target)).await,
+            }
+        }
         other => Err(format!("{other} is not a small-service channel")),
     }
+}
+
+// ---- integrations:* ----
+
+/// `os.homedir()`.
+fn home_dir() -> String {
+    std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default()
+}
+
+async fn blocking(f: impl FnOnce() -> Result<Value, String> + Send + 'static) -> Result<Value, String> {
+    tokio::task::spawn_blocking(f).await.map_err(|e| format!("integrations call failed: {e}"))?
+}
+
+/// How a written MCP entry should reach this app. The caller's target when it
+/// gives one; otherwise the desktop backend's (`integrations:target`: the
+/// local server's address and token and the CLI launcher, which the renderer
+/// never holds), and the portable `npx` form where there is none (the web
+/// edition, a backend that is down).
+async fn subagent_target(ctx: &Ctx, given: &Value) -> Value {
+    if given.is_object() {
+        return given.clone();
+    }
+    match tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("integrations:target", json!([]))).await {
+        Ok(Ok(t)) if t.is_object() => t,
+        _ => json!({}),
+    }
+}
+
+/// `refreshLocalAccess`'s loop: every tool that already carries an entry,
+/// re-pointed when this app wrote it. A config someone else broke is skipped,
+/// as the TS loop's `catch` skipped it. The ids rewritten.
+fn refresh_all(home: &str, target: &Value) -> Result<Value, String> {
+    let tools = integrations::detect(home);
+    let mut done = Vec::new();
+    for tool in tools.as_array().into_iter().flatten() {
+        if tool["installed"] != json!(true) {
+            continue;
+        }
+        if let Ok(true) = integrations::refresh(home, &tool["id"], target) {
+            done.push(tool["id"].clone());
+        }
+    }
+    Ok(Value::Array(done))
 }
 
 // ---- app:info ----

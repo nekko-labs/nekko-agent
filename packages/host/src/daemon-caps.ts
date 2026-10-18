@@ -1,6 +1,7 @@
 import { getExecutionMode } from '@nekko-agent/shared';
 import { appendAgentTerminal } from './terminal.js';
 import { getSession } from './sessions.js';
+import { daemonCall } from './engine/daemon.js';
 
 /**
  * What the engine daemon serves itself (its `daemon:info` `owned` list), asked
@@ -19,6 +20,17 @@ export async function daemonOwns(call: Call, channel: string): Promise<boolean> 
       return [];
     });
   return (await owned).includes(channel);
+}
+
+/**
+ * Run `channel` on the engine daemon when it serves it, and `local` here
+ * otherwise (no daemon, or one that predates the channel). For callers that
+ * are not the dispatcher, such as the desktop backend's own channels.
+ */
+export async function onDaemonOr<T>(channel: string, args: unknown[], local: () => T): Promise<T> {
+  const daemon = daemonCall();
+  if (daemon && (await daemonOwns(daemon, channel))) return daemon<T>(channel, ...args);
+  return local();
 }
 
 /**

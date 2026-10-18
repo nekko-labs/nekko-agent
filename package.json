@@ -29,7 +29,7 @@
     "test:cli-package": "node scripts/smoke-cli-pack.mjs",
     "perf": "node scripts/perf/run.mjs",
     "perf:strict": "node scripts/perf/run.mjs --strict",
-    "test": "node --test scripts/serve-website.test.mjs scripts/clean-builds.test.mjs scripts/ci-cache.test.mjs scripts/ci-scope.test.mjs scripts/perf/provenance.test.mjs scripts/pr-media.test.mjs scripts/electron-downloader.test.mjs scripts/update-runtime-releases.test.mjs scripts/build-commands.test.mjs scripts/build-docs.test.mjs scripts/vc-runtime.test.mjs && npm run test:node -w @nekko-agent/desktop && vitest run",
+    "test": "node --test scripts/serve-website.test.mjs scripts/clean-builds.test.mjs scripts/ci-cache.test.mjs scripts/ci-scope.test.mjs scripts/perf/provenance.test.mjs scripts/pr-media.test.mjs scripts/electron-downloader.test.mjs scripts/update-runtime-releases.test.mjs scripts/build-commands.test.mjs scripts/build-docs.test.mjs scripts/vc-runtime.test.mjs scripts/agent-browser-flow.test.mjs && npm run test:node -w @nekko-agent/desktop && vitest run",
     "typecheck": "npm run build:core && npm run typecheck -w @nekko-agent/shared && npm run typecheck -w @nekko-agent/core && npm run typecheck -w @nekko-agent/host && npm run build --workspace=apps/cli && npm run typecheck --workspace=apps/cli && npm run typecheck -w @nekko-agent/desktop && npm run typecheck -w @nekko-agent/server && npm run typecheck -w @nekko-agent/relay && npm run typecheck -w @nekko-agent/cloud",
     "relay": "npm run build -w @nekko-agent/relay && npm run start -w @nekko-agent/relay",
     "relay:tailscale": "pwsh -File scripts/private-relay.ps1",

@@ -116,14 +116,14 @@ const FETCHES: FetchCase[] = [
 
 const POLLS: PollCase[] = [
   { kind: 'github', token: 'gh', settings: {}, cursor: CURSOR, replies: [{ json: [
-    { id: '1', type: 'PushEvent', created_at: iso(CURSOR + 1000), repo: { name: 'o/r' }, payload: { ref: 'main' } },
+    { id: '1', type: 'PushEvent', created_at: iso(CURSOR + 1000), repo: { name: 'o/r' }, actor: { login: 'octo' }, payload: { ref: 'main' } },
     { id: '2', type: 'PullRequestEvent', created_at: iso(CURSOR - 1000), payload: { number: 3, action: 'opened' } },
-    { id: '3', type: 'PullRequestEvent', created_at: iso(CURSOR + 5000), payload: { number: 4, action: 'closed' } },
+    { id: '3', type: 'PullRequestEvent', created_at: iso(CURSOR + 5000), actor: { login: '' }, payload: { number: 4, action: 'closed' } },
     { id: '4', created_at: 'garbage' },
   ] }] },
   { kind: 'github', token: 'gh', settings: { repo: ' o/r ', event: 'pullrequest', filter: 'CLOSED' }, cursor: CURSOR, replies: [{ json: [
-    { id: '3', type: 'PullRequestEvent', created_at: iso(CURSOR + 5000), payload: { number: 4, action: 'closed' } },
-    { id: '5', type: 'PullRequestEvent', created_at: iso(CURSOR + 6000), payload: { number: 5, action: 'opened' } },
+    { id: '3', type: 'PullRequestEvent', created_at: iso(CURSOR + 5000), actor: { login: 'octo' }, payload: { number: 4, action: 'closed' } },
+    { id: '5', type: 'PullRequestEvent', created_at: iso(CURSOR + 6000), actor: { login: 'octo' }, payload: { number: 5, action: 'opened' } },
     { id: '6', type: 'IssuesEvent', created_at: iso(CURSOR + 7000), payload: { action: 'closed' } },
   ] }] },
   { kind: 'github', token: 'gh', settings: {}, cursor: CURSOR, replies: [{ json: [] }] },

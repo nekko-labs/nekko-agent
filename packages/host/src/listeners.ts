@@ -129,6 +129,7 @@ async function pollTrigger(
       channel: t.channel,
       text: ev.text,
       payload: ev.payload,
+      actor: ev.actor,
     };
     // Repo-scoped connectors: surface the repo so `{{trigger.repo}}` and the
     // status/comment action fallbacks resolve without a step param. The

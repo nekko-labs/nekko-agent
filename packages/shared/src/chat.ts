@@ -537,6 +537,11 @@ export interface SendOptions {
    * history to the model each turn. Omitted for normal chats (full history).
    */
   maxHistoryTurns?: number;
+  /**
+   * Offer no tool that acts (only `update_plan`): a workflow step that reads
+   * untrusted text.
+   */
+  noTools?: boolean;
 }
 
 /**

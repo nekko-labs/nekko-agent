@@ -1,0 +1,2501 @@
+{
+ "home": {
+  ".keep": ""
+ },
+ "ops": [
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "snippet",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "snippet",
+   "claude"
+  ],
+  [
+   "snippet",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "snippet",
+   "codex"
+  ],
+  [
+   "snippet",
+   "cursor",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "snippet",
+   "cursor"
+  ],
+  [
+   "snippet",
+   "windsurf",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "snippet",
+   "windsurf"
+  ],
+  [
+   "snippet",
+   "vim",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "snippet",
+   "vim"
+  ],
+  [
+   "snippet",
+   "codex",
+   {
+    "command": "C:\\Users\\me\\AppData\\Local\\Programs\\nekko-agent.cmd"
+   }
+  ],
+  [
+   "snippet",
+   "claude",
+   {
+    "url": "http://x\"y",
+    "token": "a\b"
+   }
+  ],
+  [
+   "snippet",
+   "codex",
+   {
+    "url": "http://x\"y",
+    "token": "a\b"
+   }
+  ],
+  [
+   "snippet",
+   "cursor",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "install",
+   "vim",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "install",
+   7,
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "refresh",
+   "vim",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "mkdir",
+   ".claude"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "install",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "install",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "ls",
+   ""
+  ],
+  [
+   "install",
+   "claude"
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"z\":1,\"10\":2,\"2\":3,\"mcpServers\":{\"other\":{\"command\":\"x\"},\"5\":{}},\"big\":12345678901234567890,\"f\":1.50,\"e\":1e21,\"neg\":-0,\"u\":\"\\u00e9\\ud83d\\udc31\",\"esc\":\"a\\u0001b\\u2028\"}"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "[1,2]"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "null"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "\"text\""
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "5"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\":\"ab\"}"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\":null}"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\":[{\"a\":1}]}"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   ""
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "  \n"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "﻿{}"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "﻿"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{bad json"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"a\":1,\"a\":2,\"mcpServers\":{}}"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\":{\"nekko-agent\":{\"command\":\"npx\",\"args\":[\"-y\",\"nekko-agent\",\"mcp\"]}}}"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\":{\"nekko-agent\":{\"args\":[\"-y\",\"nekko-agent\",\"mcp\"],\"command\":\"npx\"}}}"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\":{\"nekko-agent\":false}}"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\n    \"mcpServers\": {\n        \"nekko-agent\": {\"command\": \"node\", \"args\": [\"x\"]}\n    },\n    \"tail\": true\n}\n"
+  ],
+  [
+   "rm",
+   ".claude.json.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {}
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "read",
+   ".claude.json.bak"
+  ],
+  [
+   "rm",
+   ".claude"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\":{\"nekko-agent\":{\"command\":\"npx\"}}}"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "mkdir",
+   ".claude"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"npx\", \"args\": [\"-y\", \"nekko-agent\", \"mcp\"]}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"npx\", \"args\": [\"-y\", \"other\"]}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"node\", \"args\": [\"dist/index.js\", \"mcp\"]}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"C:\\\\nekko\\\\Nekko-Agent.CMD\", \"args\": [\"mcp\"]}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"/usr/local/bin/nekko-agent\", \"args\": [\"mcp\"], \"env\": {\"NEKKO_URL\": \"old\"}}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "command": "C:\\Users\\me\\AppData\\Local\\Programs\\nekko-agent.cmd"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"/usr/local/bin/nekko-agent-dev\", \"args\": [\"mcp\"]}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"command\": 5}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"\"}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"args\": \"nope\"}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"npx\", \"args\": \"nekko-agent\"}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": true}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": \"npx\"}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{\"mcpServers\": {\"nekko-agent\": {\"command\": \"/opt/nekko/bin/nekko-agent\", \"args\": [\"mcp\"], \"env\": {\"NEKKO_URL\": \"http://127.0.0.1:1439\", \"NEKKO_TOKEN\": \"tok-1\"}}}}"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".claude.json"
+  ],
+  [
+   "rm",
+   ".claude.json"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "write",
+   ".claude.json",
+   "{nope"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "write",
+   ".claude.json",
+   "null"
+  ],
+  [
+   "refresh",
+   "claude",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "mkdir",
+   ".cursor"
+  ],
+  [
+   "install",
+   "cursor",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".cursor/mcp.json"
+  ],
+  [
+   "mkdir",
+   ".windsurf"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "windsurf",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codeium/windsurf/mcp_config.json"
+  ],
+  [
+   "rm",
+   ".windsurf"
+  ],
+  [
+   "rm",
+   ".codeium"
+  ],
+  [
+   "mkdir",
+   ".codeium/windsurf"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "install",
+   "windsurf",
+   {
+    "command": "C:\\Users\\me\\AppData\\Local\\Programs\\nekko-agent.cmd"
+   }
+  ],
+  [
+   "read",
+   ".codeium/windsurf/mcp_config.json"
+  ],
+  [
+   "ls",
+   ".codeium/windsurf"
+  ],
+  [
+   "mkdir",
+   ".codex"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "command": "C:\\Users\\me\\AppData\\Local\\Programs\\nekko-agent.cmd"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://x\"y",
+    "token": "a\b"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "ls",
+   ".codex"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "model = \"o3\"\n\n[mcp_servers.other]\ncommand = \"x\"\n\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n\n[profiles.fast]\nmodel = \"o4\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "model = \"o3\"\n\n[mcp_servers.other]\ncommand = \"x\"\n\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n\n[profiles.fast]\nmodel = \"o4\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "model = \"o3\"\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n\n\n   \n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "model = \"o3\"\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n\n\n   \n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "\n\n[mcp_servers.nekko-agent]\n\n\n[next]\na = 1\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "\n\n[mcp_servers.nekko-agent]\n\n\n[next]\na = 1\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "  [ mcp_servers . \"nekko-agent\" ]  \ncommand = \"npx\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "  [ mcp_servers . \"nekko-agent\" ]  \ncommand = \"npx\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[mcp_servers.\"nekko-agent\"]\ncommand = \"npx\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[mcp_servers.\"nekko-agent\"]\ncommand = \"npx\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "title = \"[mcp_servers.nekko-agent]\"\n# [mcp_servers.nekko-agent]\nx = 1\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "title = \"[mcp_servers.nekko-agent]\"\n# [mcp_servers.nekko-agent]\nx = 1\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "doc = \"\"\"\n[mcp_servers.nekko-agent]\nstill a string\n\"\"\"\nlit = '''\n[x]\n'''\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "doc = \"\"\"\n[mcp_servers.nekko-agent]\nstill a string\n\"\"\"\nlit = '''\n[x]\n'''\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "path = 'C:\\no\\escape'\nq = \"he said \\\"[x]\\\"\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "path = 'C:\\no\\escape'\nq = \"he said \\\"[x]\\\"\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a = \"unterminated\nb = 1\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a = \"unterminated\nb = 1\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a = \"\"\"never closed\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a = \"\"\"never closed\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "this is not toml\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "this is not toml\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "args = [\n  \"a\",\n  \"b\",\n]\nt = { x = 1, y = [1, 2] }\n[[servers]]\nname = \"a\"\n[[servers]]\nname = \"b\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "args = [\n  \"a\",\n  \"b\",\n]\nt = { x = 1, y = [1, 2] }\n[[servers]]\nname = \"a\"\n[[servers]]\nname = \"b\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "name = \"猫 🐱\"\n\"é\" = 1\n# コメント 🐱\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n[après]\nv = \"ü\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "name = \"猫 🐱\"\n\"é\" = 1\n# コメント 🐱\n[mcp_servers.nekko-agent]\ncommand = \"npx\"\nargs = [\"-y\", \"nekko-agent\", \"mcp\"]\n[après]\nv = \"ü\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a = 1\r\n[mcp_servers.nekko-agent]\r\ncommand = \"npx\"\r\nargs = [\"nekko-agent\"]\r\n\r\n[b]\r\nc = 2\r\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a = 1\r\n[mcp_servers.nekko-agent]\r\ncommand = \"npx\"\r\nargs = [\"nekko-agent\"]\r\n\r\n[b]\r\nc = 2\r\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "\n\n  \n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "\n\n  \n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   ""
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   ""
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a = ]\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a = ]\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a = [1\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a = [1\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[bad header\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[bad header\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a.b . c = 1\nbad key = 2\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "a.b . c = 1\nbad key = 2\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "\"quoted key\" = 1\n'lit key' = 2\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "\"quoted key\" = 1\n'lit key' = 2\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "s = \"a\\\nb\"\nm = \"\"\"x\\\n  y\"\"\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "s = \"a\\\nb\"\nm = \"\"\"x\\\n  y\"\"\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "x = 1 # comment with \"quote\n[t] # tail\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "x = 1 # comment with \"quote\n[t] # tail\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "﻿a = 1\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "﻿a = 1\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[mcp_servers.nekko-agent]\ncommand = \"C:\\\\nekko\\\\nekko-agent.cmd\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"old\" }\n[other]\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[mcp_servers.nekko-agent]\ncommand = \"C:\\\\nekko\\\\nekko-agent.cmd\"\nargs = [\"mcp\"]\nenv = { NEKKO_URL = \"old\" }\n[other]\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[mcp_servers.nekko-agent]\ncommand = \"node\"\nargs = [\"dist/index.js\", \"mcp\"]\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[mcp_servers.nekko-agent]\ncommand = \"node\"\nargs = [\"dist/index.js\", \"mcp\"]\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[mcp_servers.nekko-agent]\nargs = [ \"-y\" , \"nekko-agent\" ]\ncommand = \"npx\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "detect"
+  ],
+  [
+   "refresh",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1440",
+    "token": "tok-2"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "write",
+   ".codex/config.toml",
+   "[mcp_servers.nekko-agent]\nargs = [ \"-y\" , \"nekko-agent\" ]\ncommand = \"npx\"\n"
+  ],
+  [
+   "rm",
+   ".codex/config.toml.bak"
+  ],
+  [
+   "install",
+   "codex",
+   {
+    "url": "http://127.0.0.1:1439",
+    "token": "tok-1",
+    "command": "/opt/nekko/bin/nekko-agent"
+   }
+  ],
+  [
+   "read",
+   ".codex/config.toml"
+  ],
+  [
+   "read",
+   ".codex/config.toml.bak"
+  ]
+ ]
+}

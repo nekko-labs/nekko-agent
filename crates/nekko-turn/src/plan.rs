@@ -29,10 +29,14 @@ pub fn turn_can_ask(session: &Value) -> bool {
 
 /// `turnTools(input)`: the tools a (non-sandbox) turn offers, in order. `input`
 /// is the TS `TurnToolInput`: `session`, `offline`, `orchestration`,
-/// `allowBrowserControl`, `mcpTools`, `decide`.
+/// `allowBrowserControl`, `mcpTools`, `decide`, `noTools`.
 pub fn turn_tools(input: &Value) -> Vec<Value> {
     let offline = truthy(input, "offline");
     let c = catalog();
+    // A tools-off turn reads untrusted text: nothing that acts is offered.
+    if truthy(input, "noTools") {
+        return vec![c.update_plan.clone()];
+    }
     let session = input.get("session").unwrap_or(&Value::Null);
     let allow_spawn = allows_spawn(input.get("orchestration"));
     let can_ask = turn_can_ask(session);

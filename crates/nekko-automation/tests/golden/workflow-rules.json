@@ -1913,6 +1913,25 @@
    "updatedAt": 1
   },
   {
+   "id": "mine",
+   "name": "W",
+   "category": "C",
+   "enabled": true,
+   "steps": [],
+   "triggers": [
+    {
+     "id": "a",
+     "kind": "connector",
+     "connector": "github",
+     "event": "PullRequestEvent",
+     "action": " opened ",
+     "actor": " Octo "
+    }
+   ],
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  {
    "id": "hook",
    "name": "W",
    "category": "C",
@@ -2009,6 +2028,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      true
     ],
@@ -2031,6 +2053,9 @@
    "accepts": [
     [
      true,
+     false
+    ],
+    [
      false
     ],
     [
@@ -2089,6 +2114,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      false
     ],
@@ -2109,6 +2137,9 @@
    "accepts": [
     [
      false,
+     false
+    ],
+    [
      false
     ],
     [
@@ -2166,6 +2197,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      false
     ],
@@ -2205,6 +2239,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      false
     ],
@@ -2225,6 +2262,9 @@
    "accepts": [
     [
      false,
+     false
+    ],
+    [
      false
     ],
     [
@@ -2285,6 +2325,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      false
     ],
@@ -2316,6 +2359,9 @@
     ],
     [
      true
+    ],
+    [
+     false
     ],
     [
      false
@@ -2367,6 +2413,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      false
     ],
@@ -2388,6 +2437,9 @@
    "accepts": [
     [
      false,
+     false
+    ],
+    [
      false
     ],
     [
@@ -2447,6 +2499,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      false
     ],
@@ -2488,6 +2543,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      false
     ],
@@ -2509,6 +2567,9 @@
    "accepts": [
     [
      false,
+     false
+    ],
+    [
      false
     ],
     [
@@ -2569,6 +2630,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      false
     ],
@@ -2614,6 +2678,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      false
     ],
@@ -2636,6 +2703,240 @@
    "accepts": [
     [
      false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "connector",
+    "connector": "github",
+    "event": "PullRequestEvent",
+    "actor": "octo",
+    "payload": {
+     "action": "opened"
+    }
+   },
+   "matched": [
+    "mine"
+   ],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     true
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "connector",
+    "connector": "github",
+    "event": "PullRequestEvent",
+    "actor": "OCTO",
+    "payload": {
+     "action": "reopened"
+    }
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "connector",
+    "connector": "github",
+    "event": "PullRequestEvent",
+    "actor": "mallory",
+    "payload": {
+     "action": "opened"
+    }
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "connector",
+    "connector": "github",
+    "event": "PullRequestEvent",
+    "payload": {
+     "action": "opened"
+    }
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false
+    ],
+    [
+     false
+    ]
+   ]
+  },
+  {
+   "event": {
+    "kind": "connector",
+    "connector": "github",
+    "event": "PullRequestEvent",
+    "actor": "octo",
+    "payload": {
+     "action": 7
+    }
+   },
+   "matched": [],
+   "accepts": [
+    [
+     false,
+     false
+    ],
+    [
      false
     ],
     [
@@ -2691,6 +2992,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      true
     ],
     [
@@ -2714,6 +3018,9 @@
    "accepts": [
     [
      false,
+     false
+    ],
+    [
      false
     ],
     [
@@ -2771,6 +3078,9 @@
      false
     ],
     [
+     false
+    ],
+    [
      false,
      false
     ],
@@ -2792,6 +3102,9 @@
    "accepts": [
     [
      false,
+     false
+    ],
+    [
      false
     ],
     [

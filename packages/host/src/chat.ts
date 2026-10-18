@@ -922,7 +922,7 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
     else if (daemonMcp && settings.mcpServers?.some((s) => s.enabled)) void syncMcp(settings.mcpServers).catch(() => {});
     decideWith = sandbox || session.disabledTools?.includes(DECIDE_TOOL.name) ? null : await decisions?.available().catch(() => null) ?? null;
   }
-  let tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl, mcpTools: sandbox || offline ? [] : mcpToolSpecs(), decide: !!decideWith });
+  let tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl, mcpTools: sandbox || offline ? [] : mcpToolSpecs(), decide: !!decideWith, noTools: opts.noTools });
   if (sandbox) tools = tools.filter(t => SANDBOX_TOOLS.has(t.name));
   // Connector fetches and the workspace index stay in this process; the rest
   // of the context is read from disk by whichever route builds the prompt.
@@ -955,7 +955,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
     // The daemon would not take it: this process runs it, its MCP servers included.
     if (admitted.daemonMcp && !offline && settings.mcpServers?.some((s) => s.enabled)) {
       await syncMcp(settings.mcpServers);
-      tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl, mcpTools: mcpToolSpecs(), decide: !!decideWith });
+      tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl, mcpTools: mcpToolSpecs(), decide: !!decideWith, noTools: opts.noTools });
     }
   }
 
@@ -1524,7 +1524,7 @@ export async function adoptAdmittedTurn(
   const abort = joined?.abort ?? new AbortController();
   if (!joined) abortControllers.set(session.id, abort);
   const sandbox = getExecutionMode(session) === 'sandbox';
-  let tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl: payload.allowBrowserControl, mcpTools: offline || sandbox ? [] : mcpToolSpecs(), decide: !!payload.decideWith });
+  let tools = turnTools({ session, offline, orchestration: settings.orchestration, allowBrowserControl: payload.allowBrowserControl, mcpTools: offline || sandbox ? [] : mcpToolSpecs(), decide: !!payload.decideWith, noTools: payload.opts.noTools });
   if (sandbox) tools = tools.filter((t) => SANDBOX_TOOLS.has(t.name));
   const t: DaemonTurnInput = {
     settings, provider, session, sandbox, workspaces: payload.workspaces,

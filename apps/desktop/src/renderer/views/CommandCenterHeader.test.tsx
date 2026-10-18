@@ -16,7 +16,7 @@ import { TitleBar } from '../components/TitleBar.js';
 import { DEFAULT_WALL_STATE } from '../commandWall.js';
 import { LAYOUT_LABEL, WallToolbar } from './CommandCenterView.js';
 
-const toolbar = () => renderToStaticMarkup(<WallToolbar wall={DEFAULT_WALL_STATE} setWall={() => {}} onAutoArrange={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
+const toolbar = () => renderToStaticMarkup(<WallToolbar wall={DEFAULT_WALL_STATE} setWall={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
 
 describe('Agents header placement', () => {
   beforeEach(() => { state.chrome = true; state.mac = false; state.view = 'command'; });
@@ -53,7 +53,13 @@ describe('Agents header placement', () => {
     expect(html).not.toContain('on the wall');
     expect(html).not.toContain('0 agents');
     expect(html).not.toContain('0 terminals');
-    for (const label of ['Wall layout', 'Focused', 'Dynamic', 'Show', 'Auto-arrange', 'Monitors']) expect(html).toContain(label);
+    for (const label of ['Wall layout', 'Focused', 'Dynamic', 'Snap to grid']) expect(html).toContain(label);
+    // The All/Agents/Terminals filter and the Monitors button left the toolbar;
+    // the monitors panel shows and hides from its own corner.
+    expect(html).not.toContain('aria-label="Show"');
+    expect(html).not.toContain('>Terminals<');
+    expect(html).not.toContain('>Monitors<');
+    expect(html).not.toContain('Auto-arrange');
     expect(html).not.toContain('>Fixed<');
     // Adding lives in the toolbar's icon bar in every layout: agent, terminal,
     // without an overflow button. An agent's Changes/Files/Browser moved into
@@ -63,12 +69,24 @@ describe('Agents header placement', () => {
     // The add bar leads the controls, left of the layout switcher.
     expect(html.indexOf('aria-label="Add to the wall"')).toBeLessThan(html.indexOf('aria-label="Wall layout"'));
   });
-  it.each(['focus', 'grid', 'fixed'] as const)('only exposes magic in Dynamic (%s)', (mode) => {
-    const html = renderToStaticMarkup(<WallToolbar wall={{ ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode } }} setWall={() => {}} onAutoArrange={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
+  it.each(['focus', 'grid', 'fixed'] as const)('only exposes snap to grid in Dynamic (%s)', (mode) => {
+    const html = renderToStaticMarkup(<WallToolbar wall={{ ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode } }} setWall={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
     expect(html).toContain(`class="wall-auto-arrange" data-visible="${mode === 'grid'}"`);
     expect(html).toContain(`tabindex="${mode === 'grid' ? 0 : -1}"`);
+    // A magnet, not the old wand.
+    expect(html).toContain('M6 15V9a6 6 0 0 1 12 0v6');
+    expect(html).toContain('aria-label="Snap to grid"');
     // The agent panel's own controls moved into the panel; the title bar has none.
     expect(html).not.toContain('agent panel');
+  });
+  it('shows the magnet pressed while snap to grid is on, with its meaning in a tooltip', () => {
+    const off = toolbar();
+    expect(off).toContain('aria-pressed="false"');
+    expect(off).toContain('data-hover-tip="Snap to grid: keep windows evenly spaced"');
+    const on = renderToStaticMarkup(<WallToolbar wall={{ ...DEFAULT_WALL_STATE, snap: true }} setWall={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
+    expect(on).toMatch(/aria-label="Snap to grid" aria-pressed="true"/);
+    // The tip is a hover tooltip, not a native title that duplicates it.
+    expect(on).not.toContain('title="Snap');
   });
   it('names the saved layout modes Focus, Dynamic and Grid without migrating keys', () => {
     expect(LAYOUT_LABEL).toEqual({ focus: 'Focused', grid: 'Dynamic', fixed: 'Grid' });
@@ -81,7 +99,7 @@ describe('Agents header placement', () => {
   it('leaves the agent panel controls out of the title bar, open or closed', () => {
     const closed = { ...DEFAULT_WALL_STATE, agentPanel: { show: false, orientation: 'vertical' as const } };
     for (const wall of [closed, DEFAULT_WALL_STATE]) {
-      const html = renderToStaticMarkup(<WallToolbar wall={wall} setWall={() => {}} onAutoArrange={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
+      const html = renderToStaticMarkup(<WallToolbar wall={wall} setWall={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
       expect(html).not.toContain('Show the agent panel');
       expect(html).not.toContain('Hide the agent panel');
       expect(html).not.toContain('Show agents in a');

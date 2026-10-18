@@ -5,6 +5,8 @@ import { PanelList } from './primitives/index.js';
 import { TrashIcon } from '../icons.js';
 import { PaneMetadata } from './PaneFrame.js';
 import { AutomationsEmptyArt, EmptyArea } from './EmptyIllustrations.js';
+import { useStore } from '../store.js';
+import { setAutomationsPaused } from '../automationsPause.js';
 
 function relTime(ms: number): string {
   const s = Math.round(ms / 1000);
@@ -71,12 +73,23 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
   };
   const sorted = [...tasks].sort((a, b) => rank(a) - rank(b) || (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity) || b.createdAt - a.createdAt);
   const active = tasks.filter((t) => t.status === 'active').length;
+  const paused = useStore((s) => s.settings?.automationsPaused === true);
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-y-auto p-3">
       <PaneMetadata>
         <span className="chip shrink-0 text-[10px]">{tasks.length === 0 ? 'nothing scheduled' : `${active} active of ${tasks.length}`}</span>
       </PaneMetadata>
+      {paused && (
+        <div
+          className="mb-2 flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[11.5px]"
+          style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}
+          role="status"
+        >
+          <span className="min-w-0 flex-1">All automations are paused: nothing fires on its own. Run now still works.</span>
+          <button className="btn btn-ghost px-2 py-0.5 text-[11.5px]" onClick={() => void setAutomationsPaused(false).catch(() => {})}>Resume</button>
+        </div>
+      )}
       {sorted.length === 0 ? (
         <EmptyArea className="my-auto" art={<AutomationsEmptyArt />} title="Nothing scheduled">
           Open a chat and use its <span className="font-medium text-ink-soft">⚡ Automate</span> menu to run a prompt at a time, repeat it on a schedule, or keep an agent working in the background. They line up here.
