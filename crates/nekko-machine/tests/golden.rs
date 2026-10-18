@@ -72,6 +72,33 @@ fn cpu_features_and_backends_match() {
 }
 
 #[test]
+fn temperature_sensors_match() {
+    use nekko_machine::temps::{SensorKind, classify_sensor, fold};
+    let name = |k: Option<SensorKind>| match k {
+        Some(SensorKind::Cpu) => json!("cpu"),
+        Some(SensorKind::Memory) => json!("memory"),
+        Some(SensorKind::Gpu) => json!("gpu"),
+        None => Value::Null,
+    };
+    let g = golden();
+    for c in cases(&g, "sensors") {
+        let (chip, label) = (c["chip"].as_str().unwrap(), c["label"].as_str().unwrap());
+        assert_eq!(name(classify_sensor(chip, label)), c["kind"], "{chip} / {label}");
+    }
+    for c in cases(&g, "tempFolds") {
+        let readings = c["readings"].as_array().unwrap().iter().map(|r| {
+            let kind = match r[0].as_str().unwrap() {
+                "cpu" => SensorKind::Cpu,
+                "memory" => SensorKind::Memory,
+                _ => SensorKind::Gpu,
+            };
+            (kind, r[1].as_f64().unwrap())
+        });
+        assert_eq!(fold(readings).unwrap_or(Value::Null), c["temps"], "{c}");
+    }
+}
+
+#[test]
 fn readiness_matches() {
     let g = golden();
     for c in cases(&g, "readiness") {

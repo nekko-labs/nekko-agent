@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => ({}), { getState: () => ({}) }) }));
-vi.mock('../components/AgentWindowPicker.js', () => ({ AgentWindowPicker: () => null }));
+vi.mock('../components/AgentWindowPicker.js', () => ({ AgentWindowPicker: () => null, AgentWindowDropdown: () => null, defaultFolderIds: () => [] }));
 vi.mock('../components/InsightsBox.js', () => ({}));
 vi.mock('../components/CommandWall.js', () => ({ CommandWall: () => null, TerminalExcerpt: () => null }));
 vi.mock('../components/WallComposer.js', () => ({ WallComposer: () => null }));
@@ -13,6 +13,7 @@ vi.mock('react', async (original) => {
 });
 import { wallLayoutShortcut, WallToolbar } from './CommandCenterView.js';
 import { DEFAULT_WALL_STATE } from '../commandWall.js';
+import { AgentWindowDropdown } from '../components/AgentWindowPicker.js';
 import { readFileSync } from 'node:fs';
 
 it.each(['focus', 'grid', 'fixed'] as const)('direct creation replaces More without changing the %s layout', (mode) => {
@@ -36,9 +37,28 @@ it.each(['focus', 'grid', 'fixed'] as const)('direct creation replaces More with
 });
 
 it('hosts the detailed picker in the toolbar rather than a wall tile', () => {
-  const source = readFileSync(new URL('./CommandCenterView.tsx', import.meta.url), 'utf8');
-  expect(source).not.toContain('addContent=');
-  expect(source).toContain('<AgentWindowDropdown anchorRef={addButtonRef}');
+  vi.mocked(useState).mockReturnValueOnce([null, vi.fn()]);
+  const tree = WallToolbar({ wall: DEFAULT_WALL_STATE, setWall: vi.fn(), setAddOpen: vi.fn(), addOpen: true, onAdd: vi.fn(), onPick: vi.fn() });
+  const elements: React.ReactElement<Record<string, any>>[] = [];
+  const walk = (node: React.ReactNode) => React.Children.forEach(node, (child) => {
+    if (!React.isValidElement<Record<string, any>>(child)) return;
+    elements.push(child); walk(child.props.children);
+  });
+  walk(tree);
+  // Open, the picker hangs off the toolbar's New terminal button.
+  const picker = elements.find((e) => e.type === AgentWindowDropdown);
+  expect(picker).toBeDefined();
+  const terminal = elements.find((e) => e.props['aria-label'] === 'New terminal')!;
+  expect(picker!.props.anchorRef).toBe(terminal.props.ref ?? (terminal as unknown as { ref: unknown }).ref);
+  // That the page never hands the wall an add tile is rendered in newAgentSetup.test.ts.
+});
+
+// Source pin, pending the wall e2e journey: the title-bar slot is found by a
+// MutationObserver in an effect, which needs a DOM to run.
+it('watches only the title-bar slot\'s ancestors, never the whole body subtree (source pin)', () => {
+  const view = readFileSync(new URL('./CommandCenterView.tsx', import.meta.url), 'utf8');
+  expect(view).not.toMatch(/observer\.observe\(document\.body, \{ childList: true, subtree: true \}\)/);
+  expect(view).toMatch(/observer\.observe\(ancestor, \{ childList: true \}\)/);
 });
 
 const key = { code: 'Digit1', key: '!', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false, repeat: false, isComposing: false, defaultPrevented: false };

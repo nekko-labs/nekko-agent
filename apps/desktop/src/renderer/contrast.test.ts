@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { composite, contrastRatio, parseColor } from './contrast.js';
+import { rules, stylesheet } from './tests/css.js';
 
 /**
  * The merged-PR banner put fixed light-violet text on a gradient that is
@@ -10,15 +10,14 @@ import { composite, contrastRatio, parseColor } from './contrast.js';
  * darkest and lightest parts of what it sits on, in every theme and preset.
  */
 
-const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+const css = stylesheet('styles.css');
 
-/** The custom properties declared directly in the first block for `selector`. */
+/** The custom properties declared directly in the first block for `selector` (raw values, as parseColor reads them). */
 function block(selector: string): Record<string, string> {
-  const start = css.indexOf(`${selector} {`);
-  if (start < 0) throw new Error(`No ${selector} block in styles.css`);
-  const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('\n  }', start));
+  const rule = rules(css, selector)[0];
+  if (!rule) throw new Error(`No ${selector} block in styles.css`);
   const vars: Record<string, string> = {};
-  for (const m of body.matchAll(/(--[\w-]+):\s*([^;]+);/g)) vars[m[1]] = m[2].trim();
+  rule.each((node) => { if (node.type === 'decl' && node.prop.startsWith('--')) vars[node.prop] = node.value.trim(); });
   return vars;
 }
 

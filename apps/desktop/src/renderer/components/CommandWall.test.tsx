@@ -2,6 +2,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { cssRule, cssValue, stylesheet } from '../tests/css.js';
 import { DEFAULT_WALL_STATE, type CommandWallState } from '../commandWall.js';
 import { type WbPane, type WbSplit } from '../layout.js';
 import type { Workspace } from '../store.js';
@@ -243,34 +244,53 @@ describe('workspace companions and stable bodies', () => {
     } finally { fixture.workspaces = []; }
   });
 
-  it('keeps keyed bodies under one parent and preserves reduced-motion support', () => {
-    const source = readFileSync(new URL('./CommandWall.tsx', import.meta.url), 'utf8');
-    const css = readFileSync(new URL('./commandWallLayouts.css', import.meta.url), 'utf8');
-    expect(source).toContain('{allPanes(state.root).map(renderLeaf)}');
-    expect(source).toContain('key={pane.id}');
-    expect(source).toContain('key={companion.id}');
-    expect(source).toContain("surface={fullSurface ? 'full' : 'transcript'}");
-    expect(source).toContain('useStore.getState().closePane(companion.id)');
-    expect(source).not.toContain('inert={folded');
-    expect(css).toContain('transition: left var(--wall-push-ms) var(--wall-push-ease)');
-    expect(css).not.toContain('width var(--wall-push-ms)');
-    expect(css).not.toContain('height var(--wall-push-ms)');
-    expect(css).toContain('--wall-push-ms: 280ms; --wall-push-ease: cubic-bezier(.22, 1, .36, 1);');
-    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(css).toContain('.command-wall-window, .command-wall-add { transition: none; }');
-    expect(source).toContain("matches ? 'auto' : 'smooth'");
+  it('keeps every window body under one stage parent in every layout, so switching layout never remounts a chat', () => {
+    for (const mode of ['grid', 'fixed', 'focus'] as const) {
+      const html = renderToStaticMarkup(wall(state({ layout: layout(mode), hero: 'chat-a' })));
+      const stage = html.slice(html.indexOf('class="command-wall-pane-stage"'));
+      // All three windows are siblings in the stage, in tree order, whatever the mode.
+      expect([...stage.matchAll(/data-wall-pane="([^"]+)"/g)].map((m) => m[1]), mode).toEqual(['a', 'b', 't']);
+      expect(stage).toContain('draft:chat-a');
+      expect(stage).toContain('draft:chat-b');
+      expect(stage).toContain('data-terminal="term"');
+      // Only the Focus hero is the full chat; every other chat window shows its transcript.
+      expect(stage.match(/data-surface="full"/g)?.length ?? 0, mode).toBe(mode === 'focus' ? 1 : 0);
+    }
+  });
+
+  it('closes a companion through the store, and folding never makes a window inert', () => {
+    fixture.workspaces = [workspace];
+    try {
+      const html = renderToStaticMarkup(wall(state({ folded: { 'chat-a': true, 'chat-b': true } })));
+      // Only the absent-box and deck-card cases make content inert; folding is not one of them.
+      expect(html).not.toMatch(/class="command-wall-content"[^>]*inert/);
+      expect(html).toMatch(/aria-label="Close (?:Changes|Files|Browser)"/);
+    } finally { fixture.workspaces = []; }
+  });
+
+  it('slides windows by position only, in step with the push timing, and stops under reduced motion', () => {
+    const css = stylesheet('components/commandWallLayouts.css');
+    const move = cssRule(css, '.command-wall-window').transition;
+    expect(move).toBe(cssValue('left var(--wall-push-ms) var(--wall-push-ease), top var(--wall-push-ms) var(--wall-push-ease)'));
+    expect(move).not.toMatch(/width|height/);
+    expect(cssRule(css, '.command-wall-layout')).toMatchObject({ '--wall-push-ms': '280ms', '--wall-push-ease': cssValue('cubic-bezier(.22, 1, .36, 1)') });
+    for (const selector of ['.command-wall-window', '.command-wall-add']) {
+      expect(cssRule(css, selector, { media: 'prefers-reduced-motion: reduce' }).transition, selector).toBe('none');
+    }
   });
 });
 
 describe('click-only wall insertion and composer framing', () => {
-  it('does not reserve a card on hover or focus', () => {
-    const source = readFileSync(new URL('./CommandWall.tsx', import.meta.url), 'utf8');
-    expect(source).not.toContain('addPreview');
-    expect(source).not.toContain('onMouseEnter');
-    expect(source).toContain('new Set(), !!addContent');
-    expect(source).toContain('data-preview={!!addContent || undefined}');
+  it('reserves an Add card only when the add content is open, never on hover or focus', () => {
+    // Idle: no add tile, no preview slot, and no hover handlers anywhere on the wall.
+    const idle = renderToStaticMarkup(wall(state()));
+    expect(idle).not.toContain('command-wall-add');
+    expect(idle).not.toContain('data-preview');
+    const open = renderToStaticMarkup(wall(state(), <div>Pick a window</div>));
+    expect(open).toMatch(/<section class="command-wall-add command-wall-add-tile" data-preview="true"/);
     // Only an empty wall's call-to-action still opens Add from inside the wall.
-    expect(source).toContain('onClick={onAddWindow} aria-label="Add window"');
+    expect(idle).not.toContain('aria-label="Add window"');
+    expect(renderToStaticMarkup(wall(state({ root: null })))).toContain('aria-label="Add window"');
   });
   it('offers Add from an empty wall', () => {
     const html = renderToStaticMarkup(wall(state({ root: null })));
@@ -280,32 +300,13 @@ describe('click-only wall insertion and composer framing', () => {
     expect(html).toContain('wall-empty-art');
     expect(html).toContain('The wall is empty');
   });
-  it('removes duplicate desktop branding and the outer composer fill', () => {
-    const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
-    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
-    expect(app).toContain('{!hasAppChrome && <div className="mb-3');
-    // One fill only: the composer card paints the chat-window surface and the
-    // panel around it stays transparent, so no band shows below the composer.
-    expect(css).toContain('.wall-composer { position: relative; width: 75%; max-width: 100%; flex-shrink: 0; background: transparent; box-shadow: none; }');
-    expect(css).toContain('.wall-composer .composer { background: var(--win); }');
-    expect(css).toContain('.send-avatar { margin-right: 4px; }');
-  });
-});
-
-it('leaves shared composer sizing to CSS and reveals only focused carets', () => {
-  const source = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-  expect(source).toContain("if (!el || !pane || !section || surface === 'composer') return;");
-  expect(source).toContain('if (document.activeElement === el) revealEditorCaret(el);');
-  expect(source).toContain('if (!draft && composerH === null)');
-  expect(source).toContain("el.style.height = '';");
-});
-
-describe('Command Center header spacing', () => {
-  it('keeps compact insets beside the rail and window edges without changing toolbar wrapping', () => {
-    const source = readFileSync(new URL('../views/CommandCenterView.tsx', import.meta.url), 'utf8');
-    expect(source).toContain('gap-2 pb-1.5 pl-[3px] pr-px pt-1');
-    expect(source).toContain('flex flex-wrap items-center gap-x-4 gap-y-2');
-    expect(source).not.toContain('pb-4 pt-5');
+  it('paints one composer fill: the card takes the window surface and the panel around it stays clear', () => {
+    // The rail's own brand row (only without app chrome) is covered by the
+    // App render in boardRailSpacing.test.ts; the title bar carries it otherwise.
+    const css = stylesheet('styles.css');
+    expect(cssRule(css, '.wall-composer')).toMatchObject({ position: 'relative', width: '75%', 'max-width': '100%', 'flex-shrink': '0', background: 'transparent', 'box-shadow': 'none' });
+    expect(cssRule(css, '.wall-composer .composer').background).toBe('var(--win)');
+    expect(cssRule(css, '.send-avatar')['margin-right']).toBe('4px');
   });
 });
 
@@ -335,12 +336,12 @@ describe('focus full-height chat', () => {
     expect(parked).not.toContain('command-wall-deck-window');
     // Never drawn and never hit, and pointer-events stops at the window: it
     // inherits, so letting it reach the transcript restyles every element.
-    const css = readFileSync(new URL('./commandWallLayouts.css', import.meta.url), 'utf8');
-    expect(css).toContain('.command-wall-window[data-wall-parked] { content-visibility: hidden; pointer-events: none; transition: none; }');
-    expect(css).toContain(':where(.command-wall-window) > :where(*) { pointer-events: auto; }');
+    const css = stylesheet('components/commandWallLayouts.css');
+    expect(cssRule(css, '.command-wall-window[data-wall-parked]')).toMatchObject({ 'content-visibility': 'hidden', 'pointer-events': 'none', transition: 'none' });
+    expect(cssRule(css, ':where(.command-wall-window) > :where(*)')['pointer-events']).toBe('auto');
     // Leaving Focus they jump to their places: sliding a dozen full-size
     // windows down at once rastered them all whole.
-    expect(css).toContain('.command-wall-window[data-wall-snap] { transition: none; }');
+    expect(cssRule(css, '.command-wall-window[data-wall-snap]').transition).toBe('none');
   });
   it('keeps the composer of a recent hero while parked, for a bounded few', () => {
     expect(warmFront([], 'a')).toEqual(['a']);
@@ -357,17 +358,18 @@ describe('focus full-height chat', () => {
     expect(sameDeps([1], [1, 2])).toBe(false);
     expect(sameDeps([NaN], [NaN])).toBe(true);
   });
-  it('suppresses approvals on composer-only surfaces', () => {
+  // Source pin, pending the wall e2e journey: an approval arrives from the
+  // host (a promise or an agent event), which a server render never applies.
+  it('suppresses approvals on composer-only surfaces (source pin)', () => {
     const source = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-    expect(source).toContain("approval && surface !== 'composer' && <ApprovalBar");
+    expect(source).toMatch(/approval && surface !== 'composer' && <ApprovalBar\b/);
   });
 });
 
-
-it('keeps transcript-only surfaces from overwriting the shared composer draft', () => {
+// Source pin, pending the chat-switch e2e journey: the save and the flush are
+// effects (a timer and a layout cleanup) that a server render never runs.
+it('never saves or flushes a draft from a transcript surface (source pin)', () => {
   const source = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-  expect(source).toContain("if (readOnly || surface === 'transcript') return;");
-  expect(source).toContain("if (surface === 'transcript' || readOnly) return;");
-  expect(source).toContain('Layout cleanup flushes the outgoing composer before the incoming surface restores.');
-  expect(source).toContain('}, [sessionId, surface, readOnly]);');
+  expect(source).toMatch(/if \(readOnly \|\| surface === 'transcript'\) return;\s*const t = setTimeout\(\(\) => saveDraft\(/);
+  expect(source).toMatch(/if \(surface === 'transcript' \|\| readOnly\) return;[^]{0,400}const flush = \(\) => saveDraft\(/);
 });

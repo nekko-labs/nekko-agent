@@ -29,6 +29,10 @@ import {
   type TitleBarOverlayTheme,
   type WindowChromeBridge,
 } from '../windowChrome.js';
+import {
+  DISPLAY_ARG, DISPLAYS_CHANGED_EVENT, DISPLAYS_CLAIM_CHANNEL, DISPLAYS_LIST_CHANNEL, DISPLAYS_PLACED_EVENT,
+  DISPLAYS_PLACEMENT_CHANNEL, DISPLAYS_REPORT_CHANNEL, DISPLAYS_TOGGLE_CHANNEL, type DisplaysState,
+} from '../displayWindows.js';
 
 // Where each call goes: the engine's socket, main only for the native
 // channels when no daemon runs (see `routing.ts`).
@@ -432,6 +436,24 @@ const chrome: WindowChromeBridge = {
   platform: process.platform,
   titleBarHeight: TITLEBAR_HEIGHT,
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
+  displays: {
+    displayId: process.argv.find((a) => a.startsWith(DISPLAY_ARG))?.slice(DISPLAY_ARG.length) ?? null,
+    list: () => ipcRenderer.invoke(DISPLAYS_LIST_CHANNEL),
+    toggle: (id, on, reducedMotion) => ipcRenderer.invoke(DISPLAYS_TOGGLE_CHANNEL, id, on, reducedMotion),
+    setPlacement: (placement) => ipcRenderer.invoke(DISPLAYS_PLACEMENT_CHANNEL, placement),
+    report: (panes) => { if (process.isMainFrame) ipcRenderer.send(DISPLAYS_REPORT_CHANNEL, panes); },
+    claim: (sessionId, mode) => ipcRenderer.invoke(DISPLAYS_CLAIM_CHANNEL, sessionId, mode),
+    onChange: (cb) => {
+      const listener = (_: unknown, state: DisplaysState) => cb(state);
+      ipcRenderer.on(DISPLAYS_CHANGED_EVENT, listener);
+      return () => { ipcRenderer.removeListener(DISPLAYS_CHANGED_EVENT, listener); };
+    },
+    onPlaced: (cb) => {
+      const listener = (_: unknown, sessionId: string) => cb(sessionId);
+      ipcRenderer.on(DISPLAYS_PLACED_EVENT, listener);
+      return () => { ipcRenderer.removeListener(DISPLAYS_PLACED_EVENT, listener); };
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld('nekkoChrome', chrome);

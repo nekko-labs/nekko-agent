@@ -1,46 +1,65 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import '../tests/browserGlobals.js';
+import { cssRule, cssUtility, cssValue, hasSelector, stylesheet } from '../tests/css.js';
+import { liveStore } from '../tests/liveStore.js';
+import { withProvider } from '../tests/renderChatPane.js';
+import { renderWallComposer } from '../tests/renderWallComposer.js';
+
+vi.mock('../store.js', (original) => liveStore(original as never));
+vi.mock('../liveRuns.js', async (original) => ({ ...(await original<object>()), useLiveRun: () => undefined }));
+
+const styles = stylesheet('styles.css');
+const board = stylesheet('components/commandWallLayouts.css');
+beforeEach(() => withProvider());
 
 describe('wall edge stability and composer handles', () => {
   it('excludes dormant Add cards from scroll geometry and reserves the scrollbar gutter', () => {
-    const css = readFileSync(new URL('./commandWallLayouts.css', import.meta.url), 'utf8');
-    expect(css).toContain('scrollbar-gutter: stable');
-    expect(css).toContain('overflow-x: hidden');
-    expect(css).toContain('.command-wall-add:not([data-preview]) { display: none;');
+    expect(cssRule(board, '.command-wall-layout')).toMatchObject({ 'scrollbar-gutter': 'stable', 'overflow-x': 'hidden' });
+    expect(cssRule(board, '.command-wall-add:not([data-preview])').display).toBe('none');
     // Add window moved beside the composer: no edge rails remain on the wall.
-    expect(css).not.toContain('command-wall-add-rail');
+    expect(hasSelector(board, /command-wall-add-rail/)).toBe(false);
   });
+
   it('grows the composer panel by its attachment rows instead of shrinking the editor', () => {
-    const source = readFileSync(new URL('./WallComposer.tsx', import.meta.url), 'utf8');
-    expect(source).toContain('observeWallComposer(panel, height ?? null)');
-    expect(source).not.toContain('height: height == null');
-    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
-    // The shell stays natural-height with exactly one vertical scroll owner.
-    expect(css).toContain('.wall-composer > .wall-composer-body { display: flex; flex: 0 0 auto; min-height: 0; overflow: visible; }');
-    expect(css).toContain('.wall-composer .composer-editor-wrap > [contenteditable] { flex: 0 0 auto; min-height: 64px;');
-    expect(css).toContain('overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere;');
-    expect(css).not.toContain('height: 0 !important');
-    expect(css).not.toMatch(/\.wall-composer > \.wall-composer-body[^}]*overflow-y: auto/);
-    const chat = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-    expect(chat).toContain('data-composer-attachments');
-    expect(chat).toContain('data-composer-skill');
+    // The shell stays natural-height with exactly one vertical scroll owner: the editor.
+    expect(cssRule(styles, '.wall-composer > .wall-composer-body')).toMatchObject({ display: 'flex', flex: '0 0 auto', 'min-height': '0', overflow: 'visible' });
+    expect(cssRule(styles, '.wall-composer .composer-editor-wrap > [contenteditable]')).toMatchObject({ flex: '0 0 auto', 'min-height': '64px', 'overflow-y': 'auto', 'overflow-x': 'hidden', 'overflow-wrap': 'anywhere' });
+    // No fixed height on the panel from the dragged size: the observer sizes the editor instead.
+    const panel = renderWallComposer().match(/^<div[^>]*class="panel wall-composer [^>]*>/)?.[0];
+    expect(panel).toBeDefined();
+    expect(panel).not.toMatch(/style="[^"]*height/);
+    // Source pin: the observer is wired in a layout effect, which a server render never runs.
+    expect(readFileSync(new URL('./WallComposer.tsx', import.meta.url), 'utf8')).toMatch(/observeWallComposer\(panel, height \?\? null\)/);
   });
+
   it('keeps the focused wall composer to a single softened 1px border inside its clipped panel', () => {
-    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
-    expect(css).toContain('.wall-composer .composer, .wall-composer .composer:focus-within { box-shadow: none; }');
-    expect(css).not.toContain('.wall-composer .composer:focus-within { box-shadow: inset 0 0 0 1px var(--accent); }');
-    expect(css).toContain('border-color: color-mix(in srgb, var(--accent) 70%, var(--line));');
-    expect(css).toContain('.wall-composer .composer-beam-ring { inset: 0; }');
+    for (const selector of ['.wall-composer .composer', '.wall-composer .composer:focus-within']) {
+      expect(cssRule(styles, selector)['box-shadow'], selector).toBe('none');
+    }
+    expect(cssUtility(styles, 'composer', ':focus-within')['border-color']).toBe(cssValue('color-mix(in srgb, var(--accent) 70%, var(--line))'));
+    expect(cssRule(styles, '.wall-composer .composer-beam-ring').inset).toBe('0');
   });
-  it('keeps all resize handles on the composer and supports cancellation and reset', () => {
+
+  it('keeps all resize handles on the composer', () => {
+    const html = renderWallComposer({ resizeHandle: <div data-split-handle /> });
+    const panel = html.slice(0, html.indexOf('wall-composer-body'));
+    // The height grip given by the page, then a width grip on each side, all on the panel itself.
+    expect(panel).toContain('data-split-handle');
+    expect(panel.match(/class="wall-composer-side" data-edge="(left|right)" role="separator" tabindex="0"/g)).toHaveLength(2);
+    expect(panel).toContain('aria-label="Resize composer from left side"');
+    expect(panel).toContain('aria-label="Resize composer from right side"');
+  });
+
+  // Source pin, pending the composer e2e journey: dragging, pointer capture,
+  // double-click and keyboard reset are handlers that need a DOM to fire.
+  it('supports pointer capture, cancellation and reset (source pin)', () => {
     const source = readFileSync(new URL('./WallComposer.tsx', import.meta.url), 'utf8');
-    expect(source).toContain('{resizeHandle}');
-    expect(source).toContain("(['left', 'right'] as const).map");
-    expect(source).toContain('setPointerCapture(e.pointerId)');
-    expect(source).toContain('onLostPointerCapture');
-    expect(source).toContain("dock.align === 'center' ? 2 : 1");
-    expect(source).toContain('onDoubleClick={() => setWidth(null)}');
-    expect(source).toContain("e.key === 'Home'");
-    expect(source).toContain('Math.min(available, next)');
+    expect(source).toMatch(/setPointerCapture\(e\.pointerId\)/);
+    expect(source).toMatch(/onLostPointerCapture/);
+    expect(source).toMatch(/dock\.align === 'center' \? 2 : 1/);
+    expect(source).toMatch(/onDoubleClick=\{\(\) => setWidth\(null\)\}/);
+    expect(source).toMatch(/e\.key === 'Home'/);
+    expect(source).toMatch(/Math\.min\(available, next\)/);
   });
 });

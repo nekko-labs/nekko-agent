@@ -126,11 +126,23 @@ export function aggregate(source: GpuStats['source'], devices: GpuStats['devices
 }
 
 async function queryNvidiaSmi(): Promise<GpuStats | null> {
+  // Temperature rides on the same query; a driver too old to know the field
+  // fails the whole query, so it is asked again without it.
   const stdout = await run('nvidia-smi', [
+    '--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu',
+    '--format=csv,noheader,nounits',
+  ]) ?? await run('nvidia-smi', [
     '--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu',
     '--format=csv,noheader,nounits',
   ]);
   return stdout ? parseNvidiaSmi(stdout) : null;
+}
+
+/** A °C column: blank, `N/A` and `[N/A]` are no reading. */
+function smiTemperature(col: string | undefined): number | undefined {
+  if (col === undefined || col === '') return undefined;
+  const n = Number(col);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 /** `nvidia-smi --query-gpu=... --format=csv,noheader,nounits` output as stats (nekkod's `gpu:stats` ports this). */
@@ -141,13 +153,15 @@ export function parseNvidiaSmi(stdout: string): GpuStats | null {
     .map((line) => line.split(',').map((s) => s.trim()))
     .filter((cols) => cols.length >= 4)
     .map((cols) => {
-      const [name, total, used, free, util] = cols;
+      const [name, total, used, free, util, temp] = cols;
+      const temperatureC = smiTemperature(temp);
       return {
         name: name || 'GPU',
         memoryTotalMB: Number(total) || 0,
         memoryUsedMB: Number(used) || 0,
         memoryFreeMB: Number(free) || 0,
         utilizationPct: util !== undefined && util !== '' && util !== '[N/A]' ? Number(util) : undefined,
+        ...(temperatureC === undefined ? {} : { temperatureC }),
       };
     })
     .filter((d) => d.memoryTotalMB > 0);
