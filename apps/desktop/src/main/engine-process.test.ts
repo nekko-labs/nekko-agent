@@ -92,7 +92,7 @@ describe('finding the engine daemon', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('reports none rather than guessing, so the app falls back to the TS backend', () => {
+  it('reports none rather than guessing', () => {
     delete process.env.NEKKOD_PATH;
     expect(findDaemon(app())).toBeNull();
   });

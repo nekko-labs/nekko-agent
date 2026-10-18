@@ -21,7 +21,7 @@
     "build:web": "npm run build:core && npm run build -w @nekko-agent/host && npm run build --workspace=apps/cli && npm run build -w @nekko-agent/desktop && npm run build -w @nekko-agent/server && npm run build -w @nekko-agent/cloud",
     "cloud": "npm run build:core && npm run build -w @nekko-agent/host && npm run build -w @nekko-agent/desktop && npm run build -w @nekko-agent/cloud && npm run start -w @nekko-agent/cloud",
     "dev": "npm install --no-audit --no-fund && npm run build:dev && npm run dev -w @nekko-agent/desktop",
-    "local": "npm run build:core && npm run build -w @nekko-agent/host && npm run build -w @nekko-agent/desktop && node apps/desktop/scripts/stage-daemon.mjs --optional && npm run start -w @nekko-agent/desktop",
+    "local": "npm run build:core && npm run build -w @nekko-agent/host && npm run build -w @nekko-agent/desktop && node apps/desktop/scripts/stage-daemon.mjs --local && npm run start -w @nekko-agent/desktop",
     "web": "npm run build:web && npm run start -w @nekko-agent/server",
     "docs": "node scripts/build-docs.mjs",
     "website": "node scripts/serve-website.mjs",

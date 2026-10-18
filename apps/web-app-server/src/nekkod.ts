@@ -18,18 +18,10 @@ import { ENV_PREFIXES } from '@nekko-agent/shared';
  * runs us, since there is no Electron binary to borrow.
  */
 
-export type DaemonMode = 'auto' | 'nekkod' | 'ts';
-
-/** `NEKKO_DAEMON`: `auto` (default), `nekkod` (require the daemon) or `ts` (in-process host). */
-export function daemonMode(value: string | undefined): DaemonMode {
-  const v = (value ?? '').trim().toLowerCase();
-  if (v === 'nekkod' || v === 'on' || v === '1' || v === 'daemon') return 'nekkod';
-  if (v === 'ts' || v === 'off' || v === '0' || v === 'inprocess') return 'ts';
-  return 'auto';
-}
-
 /** The npm package that carries this platform's daemon (an optional dependency of the npx bundle). */
 export function nekkodPackageName(platform: string = process.platform, arch: string = process.arch): string {
+  // Windows on Arm runs the x64 build under emulation (its package lists both CPUs).
+  if (platform === 'win32' && arch === 'arm64') return '@nekko-agent/nekkod-win32-x64';
   return `@nekko-agent/nekkod-${platform}-${arch}`;
 }
 

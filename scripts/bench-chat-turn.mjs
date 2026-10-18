@@ -1,4 +1,4 @@
-// Chat-turn timings through the engine daemon, on either turn route (PF14).
+// Chat-turn timings through the engine daemon (PF14).
 //
 // Starts nekkod with the desktop TS backend (Electron as Node, so no window)
 // on an isolated temporary data dir, points a provider at a local
@@ -13,7 +13,7 @@
 //
 //   npm run build:app && cargo build -p nekkod --release
 //   node scripts/bench-chat-turn.mjs --model-url http://127.0.0.1:18431/v1 --model gemma \
-//     --route daemon|ts [--runs 3] [--load 8] [--json out.json]
+//     [--runs 3] [--load 8] [--json out.json]
 //
 // `--stats N` times N calls each of `gpu:stats`, `system:stats` and
 // `machine:readiness` under the same load, 1.1 s apart (past the GPU cache).
@@ -59,9 +59,8 @@
 // an older build measure the same way. Each subscribed socket must see its
 // own chat's whole reply, once.
 //
-// `--route ts` sets NEKKO_AGENT_LOOP=ts on the backend: every turn runs in
-// the TS host, the escape hatch. Nothing touches the user's data directory or
-// a running app; every spawned process is ended on exit.
+// Nothing touches the user's data directory or a running app; every spawned
+// process is ended on exit.
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { appendFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -76,7 +75,6 @@ const require = createRequire(join(root, 'apps', 'desktop', 'package.json'));
 const electron = args.electron ?? require('electron');
 const daemonExe = args.daemon ?? join(root, 'target', 'release', process.platform === 'win32' ? 'nekkod.exe' : 'nekkod');
 const backendJs = args.backend ?? join(root, 'apps', 'desktop', 'out', 'main', 'backend.js');
-const route = args.route ?? 'daemon';
 const runs = Number(args.runs ?? 3);
 const load = Number(args.load ?? 0);
 let modelUrl = args['model-url'] ?? 'http://127.0.0.1:18431/v1';
@@ -104,7 +102,7 @@ if (args.fake) {
     req.on('end', async () => {
       if (!req.url?.endsWith('/chat/completions')) { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data: [{ id: model }] })); return; }
       const request = JSON.parse(body);
-      // `--dump-requests <file>`: what the model was sent, to compare the routes' requests.
+      // `--dump-requests <file>`: what the model was sent.
       if (args['dump-requests']) appendFileSync(args['dump-requests'], `${JSON.stringify(request)}\n`);
       const messages = request.messages ?? [];
       const lastUser = [...messages].reverse().find((m) => m.role === 'user');
@@ -188,7 +186,6 @@ process.on('SIGINT', () => process.exit(130));
 const meterFile = join(data, 'wire-meter.json');
 function startDaemon() {
   const env = { ELECTRON_RUN_AS_NODE: '1', NEKKO_BACKEND_DATA_DIR: data, NEKKO_BACKEND_APP: '{}', NEKKO_BACKEND_ORIGINS: '["null"]', NEKKO_BENCH_LOAD: '1' };
-  if (route === 'ts') env.NEKKO_AGENT_LOOP = 'ts';
   if (args.fanout) env.NEKKO_BENCH_METER = meterFile;
   const backendArgs = args.fanout ? ['--require', join(root, 'scripts', 'bench-wire-meter.cjs'), backendJs] : [backendJs];
   // As the desktop app starts it (engine-process.ts): its host lets the agent drive a browser.
@@ -259,7 +256,7 @@ if (load > 0) {
   }
 }
 const info = await call('daemon:info');
-console.log(`route=${route} daemon owns chat:turn=${info.owned.includes('chat:turn')} load=${load}`);
+console.log(`daemon owns chat:turn=${info.owned.includes('chat:turn')} load=${load}`);
 
 // The host-side search keeps the host busy whoever serves `workspace:search`.
 const loadSearch = info.owned.includes('workspace:search') ? 'bench:hostLoad' : 'workspace:search';
@@ -423,7 +420,7 @@ async function fanout(n) {
   return out;
 }
 
-const results = { route, load, runs: [] };
+const results = { load, runs: [] };
 if (args.fanout) {
   try {
     results.fanout = await fanout(Number(args.fanout));

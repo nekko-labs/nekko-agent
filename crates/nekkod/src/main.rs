@@ -91,14 +91,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
 
     let hub = Hub::new();
     let terminals = Arc::new(Registry::new());
-    // `NEKKO_AGENT_LOOP=ts` (here or set for the backend) keeps every turn in the host.
-    let ts_loop = std::env::var("NEKKO_AGENT_LOOP").is_ok_and(|v| v == "ts")
-        || cfg.backend.as_ref().is_some_and(|b| b.env.get("NEKKO_AGENT_LOOP").is_some_and(|v| v == "ts"));
     let backend = match cfg.backend.clone() {
         Some(mut cmd) => {
             // What the backend must reach through the daemon rather than write itself.
             if cfg.data_dir.is_some() {
-                let mut owns = vec![
+                let owns = [
                     settings::OWNS,
                     voice::OWNS,
                     oauth::OWNS,
@@ -112,11 +109,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
                     installs::OWNS,
                     model_server::OWNS,
                     small_services::OWNS,
+                    // Compactions are the daemon's wherever it admits turns.
+                    compaction::OWNS,
                 ];
-                // Compactions are the daemon's wherever it admits turns.
-                if !ts_loop {
-                    owns.push(compaction::OWNS);
-                }
                 cmd.env.insert("NEKKOD_OWNS".into(), owns.join(","));
             }
             Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
@@ -152,7 +147,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let compactions = compaction::Compactions::new();
     let sandboxes = cfg.data_dir.clone().filter(|_| sessions.is_some()).map(|d| sandbox::Sandboxes::new(d.into()));
     let admission = (cfg.data_dir.is_some() && cfg.backend.is_some())
-        .then(|| admission::Admission::new(compactions.clone(), cfg.allow_browser_control, ts_loop));
+        .then(|| admission::Admission::new(compactions.clone(), cfg.allow_browser_control));
     let catalog = settings.as_deref().map(|s| catalog::new(s, cfg.hugging_face_url.clone()));
     let automation =
         Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), backend.clone(), hub.clone()));

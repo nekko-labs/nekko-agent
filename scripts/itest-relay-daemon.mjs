@@ -63,7 +63,6 @@ const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
     NEKKO_HOST: '127.0.0.1',
     NEKKO_DATA_DIR: dataDir,
     NEKKO_TOKEN: TOKEN,
-    NEKKO_DAEMON: 'nekkod',
     NEKKOD_PATH: nekkod,
     HOME: home,
     USERPROFILE: home,

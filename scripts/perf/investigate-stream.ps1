@@ -4,7 +4,6 @@ $root = Get-Location
 $evidence = Join-Path $root '.shots/perf-investigation/narrow-controls'
 New-Item -ItemType Directory -Force $evidence | Out-Null
 $env:PERF_BROWSER = Join-Path $root '.shots/perf-investigation/browsers/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe'
-$env:NEKKO_DAEMON = 'ts'
 $env:NEKKO_RENDERER_DIR = Join-Path $root '.shots/perf-investigation/current-renderer'
 $backend = 'C:/Users/phili/code/nekko-agent/apps/web-app-server/dist'
 function Save-BackendHashes($name) {

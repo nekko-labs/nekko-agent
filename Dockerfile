@@ -54,9 +54,7 @@ RUN apt-get update \
 ENV NODE_ENV=production \
     NEKKO_HOST=0.0.0.0 \
     NEKKO_PORT=1440 \
-    NEKKO_DATA_DIR=/data \
-    # The image always ships the daemon; a missing or broken one is an error, not a quiet fallback.
-    NEKKO_DAEMON=nekkod
+    NEKKO_DATA_DIR=/data
 
 # Copy the pruned install + build outputs, preserving the workspace layout the
 # server expects (apps/web-app-server/dist resolves ../../desktop/out/renderer).

@@ -4,8 +4,8 @@
 //! manifests and their runtime state. A sandbox turn the daemon drives
 //! (turns.rs) asks first and runs each call here itself ([`Sandboxes::run_tool`]),
 //! and its Stop stops the container ([`Sandboxes::abort`]); a turn the TS host
-//! still runs (`NEKKO_AGENT_LOOP=ts`) sends the call here (`sandbox:tool`) and
-//! its Stop as `sandbox:abort`. Stopping the container itself matters: a
+//! runs itself sends the call here (`sandbox:tool`) and its Stop as
+//! `sandbox:abort`. Stopping the container itself matters: a
 //! cancelled `docker exec` alone leaves its shell running.
 
 use crate::routes::Ctx;

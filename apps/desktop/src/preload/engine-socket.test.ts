@@ -32,7 +32,7 @@ describe('stopped service transport', () => {
       constructor() { sockets.push(this); }
     }
     vi.stubGlobal('WebSocket', Socket);
-    const api = createEngineSocket(async () => ({ url: 'http://127.0.0.1:1', token: 'test', mode: 'backend' }));
+    const api = createEngineSocket(async () => ({ url: 'http://127.0.0.1:1', token: 'test' }));
     await Promise.resolve();
     const call = expect(api.call('sessions:create', [])).rejects.toThrow('restarted');
     sockets[0].onclose(); await call;

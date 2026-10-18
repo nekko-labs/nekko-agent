@@ -18,9 +18,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub const CHANNELS: &[&str] = &["chat:suggest", "chat:fillPrompt"];
 
 /// Served here only when the daemon owns the chats, the settings and turn
-/// admission, and turns are not kept in the host (`NEKKO_AGENT_LOOP=ts`).
+/// admission.
 pub fn owned(ctx: &Ctx) -> bool {
-    ctx.sessions.is_some() && ctx.settings.is_some() && ctx.admission.as_ref().is_some_and(|a| !a.ts_loop)
+    ctx.sessions.is_some() && ctx.settings.is_some() && ctx.admission.is_some()
 }
 
 fn now_ms() -> u64 {
