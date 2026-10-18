@@ -54,6 +54,27 @@ it('sends all tool results immediately after interrupted delegation on an ordina
   expect(wire[1].content[2]).toEqual({ type: 'text', text: 'continue directly' });
 });
 
+it('never sends empty text blocks, so an image pasted without words cannot break the chat', async () => {
+  const messages: ChatMessage[] = [
+    { id: '1', role: 'user', content: 'hi', createdAt: 1 },
+    { id: '2', role: 'assistant', content: 'done', createdAt: 2 },
+    { id: '3', role: 'user', content: '', createdAt: 3, images: ['data:image/png;base64,iVBORw0KGgo='] },
+    { id: '4', role: 'user', content: '   ', createdAt: 4 },
+    { id: '5', role: 'user', content: '[Agent watch] PR changed', createdAt: 5 },
+    { id: '6', role: 'assistant', content: '', createdAt: 6 },
+  ];
+  const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('data: {"type":"message_stop"}\n\n'));
+  const provider = new AnthropicProvider({ id: 'p', kind: 'anthropic', label: 'Test', baseUrl: 'https://example.invalid', enabled: true });
+  for await (const _ of provider.chat({ model: 'claude-sonnet-4-6', messages })) { /* drain */ }
+  const wire = JSON.parse(fetch.mock.calls[0][1]!.body as string).messages;
+  expect(wire.map((m: any) => m.role)).toEqual(['user', 'assistant', 'user']);
+  for (const m of wire) {
+    if (typeof m.content === 'string') expect(m.content.trim()).not.toBe('');
+    else for (const b of m.content) if (b.type === 'text') expect(b.text.trim()).not.toBe('');
+  }
+  expect(wire[2].content.map((b: any) => b.type)).toEqual(['image', 'text']);
+});
+
 it('bounds portrait images but leaves small and unreadable bytes unchanged', async () => {
   const large = new Jimp({ width: 5, height: 2100 });
   const small = new Jimp({ width: 5, height: 10 });

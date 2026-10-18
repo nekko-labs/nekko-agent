@@ -1,14 +1,15 @@
 import React, { useLayoutEffect, useRef } from 'react';
 type AgentPanelOrientation = 'vertical' | 'horizontal';
 import { PanelLeftIcon, PanelSwapIcon } from '../icons.js';
+import { HoverTip } from './HoverTip.js';
 
 /**
  * The Agents panel's own show/hide and column/row controls. They stay in the
  * panel's corner whether the panel is open or collapsed, so the way back is
  * where the panel was rather than up in the title bar.
  *
- * Each is an icon pill that grows its label out to the left on hover or focus.
- * Switching orientation moves the buttons between a stack and a row; the move
+ * Each is an icon button; what it does shows in a hover tooltip, so the button
+ * never changes size under the pointer. Switching orientation moves the buttons between a stack and a row; the move
  * animates from where each button was (FLIP), so they slide into place
  * instead of jumping.
  */
@@ -47,29 +48,32 @@ export function AgentPanelControls({ show, orientation, onToggle, onOrientation,
     last.current = new Map(items.map((el) => [el, el.getBoundingClientRect()]));
   }, [stacked]);
 
+  const orientationLabel = horizontal ? 'Show agents in a column' : 'Show agents in a row';
+  // Stacked controls sit against the wall's left edge: their tips open to the right.
+  const tipSide = stacked ? 'right' : 'bottom';
   return (
     <div ref={ref} className="agent-panel-controls" data-stacked={stacked || undefined} data-collapsed={!show || undefined}>
-      <button
-        type="button"
-        className="agent-panel-pill"
-        aria-label={show ? 'Hide the agent panel' : 'Show the agent panel'}
-        aria-pressed={show}
-        title={show ? 'Hide the agent panel' : 'Show the agent panel'}
-        onClick={onToggle}
-      >
-        <span className="agent-panel-pill-label">{show ? 'Hide agents' : 'Show agents'}</span>
-        <PanelLeftIcon className="h-4 w-4 shrink-0" />
-      </button>
-      <button
-        type="button"
-        className="agent-panel-pill"
-        aria-label={horizontal ? 'Show agents in a column' : 'Show agents in a row'}
-        title={horizontal ? 'Move the agent panel to the left side' : 'Move the agent panel to the top'}
-        onClick={() => onOrientation(horizontal ? 'vertical' : 'horizontal')}
-      >
-        <span className="agent-panel-pill-label">{horizontal ? 'Column' : 'Row'}</span>
-        <PanelSwapIcon className="h-4 w-4 shrink-0" />
-      </button>
+      <HoverTip label={show ? 'Hide agents' : 'Show agents'} side={tipSide}>
+        <button
+          type="button"
+          className="agent-panel-pill"
+          aria-label={show ? 'Hide the agent panel' : 'Show the agent panel'}
+          aria-pressed={show}
+          onClick={onToggle}
+        >
+          <PanelLeftIcon className="h-4 w-4 shrink-0" />
+        </button>
+      </HoverTip>
+      <HoverTip label={orientationLabel} side={tipSide}>
+        <button
+          type="button"
+          className="agent-panel-pill"
+          aria-label={orientationLabel}
+          onClick={() => onOrientation(horizontal ? 'vertical' : 'horizontal')}
+        >
+          <PanelSwapIcon className="h-4 w-4 shrink-0" />
+        </button>
+      </HoverTip>
       {extra}
     </div>
   );
