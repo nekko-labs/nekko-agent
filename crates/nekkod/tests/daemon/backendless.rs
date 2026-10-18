@@ -43,7 +43,7 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
     assert_eq!(std::fs::read_to_string(workspace.join("note.txt")).unwrap(), "hi");
     let saved: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_solo.json")).unwrap()).unwrap();
-    assert_eq!(saved["messages"].as_array().unwrap().last().unwrap()["content"], "wrote it");
+    assert_eq!(saved["messages"].as_array().unwrap().last().unwrap()["content"], "wrote it", "{saved}");
 
     // The TurnEnd hook ran (nothing waits on it).
     wait_for("the TurnEnd hook", || workspace.join("turnend.txt").exists()).await;
@@ -84,6 +84,22 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
     let (status, steered) = post(d.port, "chat:steer", json!(["s_solo", "  and then tidy up  "]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{steered}");
     assert_eq!(steered["queue"], json!(["and then tidy up"]));
+    // Chats are made here with the settings' defaults, and their execution
+    // mode changes only while they are empty.
+    let (status, made) = post(d.port, "session:create", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{made}");
+    assert_eq!((made["workspaceId"].clone(), made["gitIsolation"].clone()), (json!("w1"), json!(true)));
+    let fresh = made["id"].as_str().unwrap().to_string();
+    let (status, unified) =
+        post(d.port, "session:setOptions", json!([fresh, { "executionMode": "unified" }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{unified}");
+    assert_eq!((unified["executionMode"].clone(), unified["gitIsolation"].clone()), (json!("unified"), json!(false)));
+    let (status, refused) =
+        post(d.port, "session:setOptions", json!(["s_solo", { "executionMode": "unified" }]), Some(TOKEN)).await;
+    assert_eq!(status, 400);
+    assert!(refused.to_string().contains("empty, idle chat"), "{refused}");
+    post(d.port, "session:delete", json!([fresh]), Some(TOKEN)).await;
+
     // A folder with no chat running in it can be removed.
     let (status, folders) = post(d.port, "workspace:remove", json!(["w1"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{folders}");

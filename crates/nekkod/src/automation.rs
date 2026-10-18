@@ -199,7 +199,11 @@ impl Engine {
         fields: Vec<(&'static str, Value)>,
     ) -> Result<String, String> {
         let ws = workspace_id.unwrap_or(Value::Null);
-        let created = self.backend.call("session:create", json!([ws])).await?;
+        // Through the router (the chat defaults are applied there), the host only before it is set.
+        let created = match self.dispatch.get() {
+            Some(d) => d("session:create".into(), vec![ws]).await?,
+            None => self.backend.call("session:create", json!([ws])).await?,
+        };
         let id = created.get("id").and_then(Value::as_str).ok_or("the host made no chat")?.to_string();
         let (store, sid) = (self.store.clone(), id.clone());
         tokio::task::spawn_blocking(move || store.assign(&sid, &fields)).await.map_err(|e| e.to_string())??;

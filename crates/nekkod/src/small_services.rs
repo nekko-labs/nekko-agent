@@ -313,8 +313,8 @@ impl StackHost for DaemonStacks<'_> {
     }
 
     fn create<'b>(&'b self, workspace_id: &'b str) -> BoxFuture<'b, Result<Value, String>> {
-        // The host makes it (its defaults: execution mode, Git isolation), as `session:create` does.
-        Box::pin(async move { self.ctx.backend.call("session:create", json!([workspace_id])).await })
+        // With the chat defaults (execution mode, Git isolation, saved mode), as `session:create` makes it.
+        Box::pin(async move { crate::routes::create_session(self.ctx, Some(workspace_id), None, None).await })
     }
 
     fn save<'b>(&'b self, session: &'b mut Value) -> BoxFuture<'b, Result<(), String>> {

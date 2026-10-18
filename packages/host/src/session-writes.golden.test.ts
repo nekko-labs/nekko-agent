@@ -47,8 +47,16 @@ describe('session writes golden set', () => {
         setDataDir(dir);
         mkdirSync(join(dir, 'sessions'), { recursive: true });
         copyFileSync(join(golden, 'sessions', `${c.fixture}.json`), join(dir, 'sessions', `${c.fixture}.json`));
-        for (const op of c.ops) apply(c.fixture, op);
+        const errors: string[] = [];
+        for (const op of c.ops) {
+          try {
+            apply(c.fixture, op);
+          } catch (e) {
+            errors.push((e as Error).message);
+          }
+        }
         actual[c.fixture] = normalize(readFileSync(join(dir, 'sessions', `${c.fixture}.json`), 'utf8'));
+        if (errors.length) actual[`${c.fixture}:errors`] = JSON.stringify(errors);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

@@ -120,12 +120,26 @@ fn is_agent(id: &str) -> bool {
 }
 
 pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, String> {
-    // Creation and execution-policy patches belong to the host, which owns defaults and setup.
-    if channel == "session:create"
-        || (channel == "session:setOptions"
-            && ["executionMode", "sandbox", "gitIsolation"].iter().any(|key| arg(&args, 1).get(*key).is_some()))
+    // With no data directory the host owns the chats, their defaults and their setup.
+    if ctx.sessions.is_none()
+        && (channel == "session:create"
+            || (channel == "session:setOptions"
+                && ["executionMode", "sandbox", "gitIsolation"].iter().any(|key| arg(&args, 1).get(*key).is_some())))
     {
         return ctx.backend.call(channel, Value::Array(args)).await;
+    }
+    if channel == "session:create" {
+        return create_session(ctx, arg(&args, 0).as_str(), None, None).await;
+    }
+    if channel == "session:setOptions"
+        && ["executionMode", "gitIsolation"].iter().any(|key| arg(&args, 1).get(*key).is_some())
+    {
+        let id = str_arg(&args, 0).unwrap_or_default();
+        let busy = ctx.turns.running_sessions().iter().any(|s| s == id)
+            || ctx.admission.as_ref().is_some_and(|a| a.is_admitting(id));
+        if busy {
+            return Err("Wait for the current reply to finish before changing this chat's Git isolation.".into());
+        }
     }
     if matches!(channel, "terminal:create" | "mcp:call") {
         if arg(&args, 0).get("executionMode").and_then(Value::as_str) == Some("sandbox") {
@@ -841,6 +855,33 @@ const SESSION_CHANNELS: &[&str] = &[
     "chat:dequeue",
 ];
 
+/// `createSession(workspaceId, parentSessionId, supportingWorkspaceIds)` with
+/// the host's check that the folder is one of the user's (`Workspace not
+/// found`): the settings' execution mode, Git management and default saved
+/// mode for a top-level chat, the parent's checkout for a sub-agent's.
+pub async fn create_session(
+    ctx: &Ctx,
+    workspace_id: Option<&str>,
+    parent_id: Option<&str>,
+    supporting: Option<Value>,
+) -> Result<Value, String> {
+    let store = ctx.sessions.clone().ok_or("session:create needs the data directory")?;
+    let settings = crate::settings::current(ctx).await;
+    if let Some(w) = workspace_id.filter(|w| !w.is_empty()) {
+        let known = settings
+            .get("workspaces")
+            .and_then(Value::as_array)
+            .is_some_and(|ws| ws.iter().any(|f| f.get("id").and_then(Value::as_str) == Some(w)));
+        if !known {
+            return Err("Workspace not found".into());
+        }
+    }
+    let (w, p) = (workspace_id.map(str::to_string), parent_id.map(str::to_string));
+    tokio::task::spawn_blocking(move || store.create_with(w.as_deref(), p.as_deref(), supporting.as_ref(), &settings))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// `deleteAgentLog` for a chat being removed, from a blocking caller: its
 /// log here, and the host's too while one runs (a host-run tool may have
 /// written to it). Without a data directory, the host's alone.
@@ -887,12 +928,8 @@ async fn session_op(
                 delete_log(id)?;
                 store.delete(id).map(|()| Value::Null)
             }
-            "session:setOptions" => {
-                if arg(&args, 1).get("executionMode").is_some() || arg(&args, 1).get("sandbox").is_some() {
-                    return Err("Execution mode changes require the host setup route".into());
-                }
-                or_null(store.set_options(id, arg(&args, 1)))
-            }
+            // The execution-mode rules and the sandbox refusal are the store's (`setSessionOptions`).
+            "session:setOptions" => or_null(store.set_options(id, arg(&args, 1))),
             "session:setWorkspace" => or_null(store.set_workspace(id, str_arg(&args, 1))),
             "session:setSupportingWorkspaces" => or_null(store.set_supporting(id, arg(&args, 1))),
             "session:setAttachments" => or_null(store.set_attachments(id, arg(&args, 1))),

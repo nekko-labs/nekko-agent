@@ -28,6 +28,7 @@ const OPTION_KEYS: &[&str] = &[
     "disabledConnectors",
     "offline",
     "incognito",
+    "executionMode",
     "gitIsolation",
     "autoModel",
     "autoQuality",
@@ -41,6 +42,91 @@ const OPTION_KEYS: &[&str] = &[
     "imageParams",
     "archivedAt",
 ];
+
+/// `STARTER_MODES` (packages/shared/src/saved-modes.ts): the saved modes until
+/// the user saves their own. The sessions golden test checks it is the TS list.
+pub const STARTER_MODES: &str = r#"[
+  { "id": "everyday", "name": "Everyday", "icon": "bolt", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default" } },
+  { "id": "deep-work", "name": "Deep work", "icon": "dial", "options": { "executionMode": "worktree", "mode": "yolo", "offline": false, "incognito": false, "disabledTools": [], "workMode": "best-output", "effort": "high" } },
+  { "id": "private", "name": "Private", "icon": "incognito", "options": { "executionMode": "worktree", "mode": "ask", "offline": false, "incognito": true, "disabledTools": [], "workMode": "default" } },
+  { "id": "untrusted-repo", "name": "Untrusted repo", "icon": "box", "options": { "executionMode": "sandbox", "mode": "ask", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default" } }
+]"#;
+
+/// `getExecutionMode(session)`: its own, else unified when Git isolation is off.
+pub fn execution_mode(session: Option<&Map<String, Value>>) -> Value {
+    match session.and_then(|s| s.get("executionMode")).filter(|v| !v.is_null()) {
+        Some(m) => m.clone(),
+        None if session.and_then(|s| s.get("gitIsolation")) == Some(&json!(false)) => json!("unified"),
+        None => json!("worktree"),
+    }
+}
+
+/// `defaultSavedMode(settings)`: the mode new chats start in, when the user picked one.
+fn default_saved_mode(settings: &Value) -> Option<Value> {
+    let id = settings.get("defaultSavedModeId").filter(|v| js::truthy(Some(v)))?;
+    let starter: Value = serde_json::from_str(STARTER_MODES).unwrap_or(json!([]));
+    let modes = match settings.get("savedModes") {
+        None | Some(Value::Null) => starter,
+        Some(m) => m.clone(),
+    };
+    modes.as_array()?.iter().find(|m| m.get("id") == Some(id)).cloned()
+}
+
+/// An object being built the way JavaScript builds one: a key set to
+/// `undefined` keeps its place (a later value lands there) but is left out
+/// when it is saved, as `JSON.stringify` leaves it out.
+struct JsObject {
+    map: Map<String, Value>,
+    undefined: std::collections::HashSet<String>,
+}
+
+impl JsObject {
+    fn new() -> Self {
+        Self { map: Map::new(), undefined: Default::default() }
+    }
+
+    /// `o[key] = value`, `value` `None` for `undefined`.
+    fn set(&mut self, key: &str, value: Option<Value>) {
+        match value {
+            Some(v) => {
+                self.undefined.remove(key);
+                self.map.insert(key.into(), v);
+            }
+            None => {
+                self.undefined.insert(key.into());
+                self.map.entry(key.to_string()).or_insert(Value::Null);
+            }
+        }
+    }
+
+    fn get(&self, key: &str) -> Option<&Value> {
+        if self.undefined.contains(key) { None } else { self.map.get(key) }
+    }
+
+    /// What `JSON.stringify` keeps.
+    fn into_map(mut self) -> Map<String, Value> {
+        self.map.retain(|k, _| !self.undefined.contains(k));
+        self.map
+    }
+}
+
+/// `Object.assign(s, sessionPatchForMode(options))`.
+fn apply_mode(s: &mut JsObject, options: &Value) {
+    let get = |k: &str| options.get(k).cloned();
+    let exec = get("executionMode");
+    s.set("executionMode", exec.clone());
+    s.set("gitIsolation", Some(json!(exec.as_ref().and_then(Value::as_str) == Some("worktree"))));
+    s.set("mode", get("mode"));
+    s.set("offline", get("offline"));
+    s.set("incognito", get("incognito"));
+    s.set("disabledTools", Some(get("disabledTools").filter(Value::is_array).unwrap_or(json!([]))));
+    s.set("workMode", get("workMode"));
+    for k in ["effort", "disabledMcpServers", "disabledConnectors"] {
+        if let Some(v) = get(k).filter(|v| js::truthy(Some(v))) {
+            s.set(k, Some(v));
+        }
+    }
+}
 
 /// What a running turn's save takes from disk rather than from memory
 /// (`USER_FIELDS` in sessions.ts): the user may change them mid-turn.
@@ -259,22 +345,68 @@ impl SessionStore {
     }
 
     /// `createSession(workspaceId)`.
+    /// A chat with no settings to read (tests, a store used alone).
     pub fn create(&self, workspace_id: Option<&str>) -> Result<Value, String> {
+        self.create_with(workspace_id, None, None, &json!({}))
+    }
+
+    /// `createSession(workspaceId, parentSessionId, supportingWorkspaceIds)`:
+    /// a top-level chat takes the settings' execution mode, Git management
+    /// and default saved mode; a sub-agent's chat inherits its parent's
+    /// checkout. Key order as the TS literal and `Object.assign` leave it.
+    pub fn create_with(
+        &self,
+        workspace_id: Option<&str>,
+        parent_id: Option<&str>,
+        supporting: Option<&Value>,
+        settings: &Value,
+    ) -> Result<Value, String> {
         let now = now_ms();
         let mut rand = [0u8; 6];
         getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
-        let mut s = Map::new();
-        s.insert("id".into(), json!(format!("s_{}_{}", base36(now), base64url(&rand))));
-        s.insert("title".into(), json!("New chat"));
-        // Provisioning lives in the host at first send, after project selection.
-        // Absent on existing chats, so their checkouts never change implicitly.
-        s.insert("gitIsolation".into(), json!(true));
-        if let Some(w) = workspace_id {
-            s.insert("workspaceId".into(), json!(w));
+        let parent = parent_id.and_then(|p| self.get(p)).and_then(|p| p.as_object().cloned());
+        let mut s = JsObject::new();
+        s.set("id", Some(json!(format!("s_{}_{}", base36(now), base64url(&rand)))));
+        s.set("title", Some(json!(if parent_id.is_some() { "Sub-agent" } else { "New chat" })));
+        s.set("workspaceId", workspace_id.map(|w| json!(w)));
+        s.set(
+            "executionMode",
+            if parent_id.is_some() {
+                Some(execution_mode(parent.as_ref()))
+            } else {
+                settings.get("defaultExecutionMode").cloned()
+            },
+        );
+        let isolation = if parent_id.is_some() {
+            parent
+                .as_ref()
+                .and_then(|p| p.get("gitIsolation"))
+                .filter(|v| !v.is_null())
+                .cloned()
+                .unwrap_or(json!(false))
+        } else {
+            json!(settings.pointer("/gitManagement/mode").and_then(Value::as_str) != Some("shared"))
+        };
+        s.set("gitIsolation", Some(isolation));
+        s.set(
+            "gitWorktrees",
+            if parent_id.is_some() { parent.as_ref().and_then(|p| p.get("gitWorktrees")).cloned() } else { None },
+        );
+        s.set("supportingWorkspaceIds", supporting.filter(|v| v.as_array().is_some_and(|a| !a.is_empty())).cloned());
+        s.set("parentSessionId", parent_id.map(|p| json!(p)));
+        s.set("messages", Some(json!([])));
+        s.set("createdAt", Some(json!(now)));
+        s.set("updatedAt", Some(json!(now)));
+        // A top-level chat starts in the user's default saved mode, when they set one.
+        if parent_id.is_none()
+            && let Some(start) = default_saved_mode(settings)
+        {
+            apply_mode(&mut s, start.get("options").unwrap_or(&Value::Null));
+            if s.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
+                s.set("mode", Some(json!("ask")));
+            }
         }
-        s.insert("messages".into(), json!([]));
-        s.insert("createdAt".into(), json!(now));
-        s.insert("updatedAt".into(), json!(now));
+        let mut s = s.into_map();
         let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
         self.save(&mut s)?;
         Ok(Value::Object(s))
@@ -527,22 +659,63 @@ impl SessionStore {
     }
 
     /// `setSessionOptions`.
+    /// `setSessionOptions(id, patch)`: the options it names, and the
+    /// execution mode only in an empty, idle chat (a sandbox chat always asks).
     pub fn set_options(&self, id: &str, patch: &Value) -> Result<Option<Value>, String> {
-        if patch.get("executionMode").is_some() || patch.get("sandbox").is_some() {
-            return Err("Execution mode and sandbox setup must be changed through the host".into());
-        }
         let patch = patch.as_object().cloned().unwrap_or_default();
-        self.patch(id, |s| {
+        if let Some(m) = patch.get("executionMode")
+            && !matches!(m.as_str(), Some("sandbox" | "worktree" | "unified"))
+        {
+            return Err("Invalid execution mode".into());
+        }
+        if patch.contains_key("sandbox") {
+            return Err("Sandbox setup requires the setup route".into());
+        }
+        self.update_if(id, |s| {
+            let current = execution_mode(Some(s));
+            let next = match patch.get("executionMode") {
+                Some(m) => m.clone(),
+                None if s.get("executionMode").and_then(Value::as_str) == Some("sandbox") => json!("sandbox"),
+                None => match patch.get("gitIsolation") {
+                    Some(g) => json!(if js::truthy(Some(g)) { "worktree" } else { "unified" }),
+                    None => current.clone(),
+                },
+            };
+            let busy = js::truthy(s.get("activeRun"))
+                || s.get("messages").and_then(Value::as_array).is_some_and(|m| !m.is_empty())
+                || js::truthy(s.get("sandbox"));
+            if next != current && busy {
+                return Err("Execution mode can only change in an empty, idle chat. Create a new chat.".into());
+            }
+            if next == "sandbox" {
+                s.insert("mode".into(), json!("ask"));
+                s.shift_remove("gitWorktrees");
+            }
+            let mode_patch = patch.contains_key("executionMode") || patch.contains_key("gitIsolation");
+            let set_mode = |s: &mut Map<String, Value>| {
+                s.insert("executionMode".into(), next.clone());
+                s.insert("gitIsolation".into(), json!(next == "worktree"));
+            };
+            if mode_patch {
+                set_mode(s);
+            }
+            // Only the options this signature names: the patch arrives over the wire.
             for (k, v) in &patch {
                 if OPTION_KEYS.contains(&k.as_str()) {
                     s.insert(k.clone(), v.clone());
                 }
             }
+            if mode_patch {
+                set_mode(s);
+            }
+            if execution_mode(Some(s)) == "sandbox" {
+                s.insert("mode".into(), json!("ask"));
+            }
             // A title the user typed is theirs; the auto-title pass may not overwrite it.
             if patch.contains_key("title") {
                 s.insert("titleAuto".into(), json!(false));
             }
-            true
+            Ok(true)
         })
     }
 

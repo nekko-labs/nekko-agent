@@ -57,10 +57,13 @@ async fn the_daemon_runs_tasks_and_fires_them_on_time() {
     let (status, list) = post(d.port, "task:create", json!([input]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{list}");
     assert_eq!(list[0]["title"], "Nightly");
-    assert_eq!(list[0]["lastSessionId"], "s_created");
-    // The host made the chat; the daemon named it after the task.
+    // The daemon made the chat (with its defaults) and named it after the task.
+    let made = list[0]["lastSessionId"].as_str().unwrap().to_string();
+    assert!(made.starts_with("s_") && made != "s_created", "{list}");
+    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!calls.as_array().unwrap().iter().any(|c| c[0] == "session:create"), "the host made no chat: {calls}");
     let chat: Value =
-        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_created.json")).unwrap()).unwrap();
+        serde_json::from_str(&std::fs::read_to_string(data.join(format!("sessions/{made}.json"))).unwrap()).unwrap();
     assert_eq!(chat["title"], "Nightly");
     assert_eq!(chat["taskId"], list[0]["id"]);
     // Due at once: fired without waiting for a tick, its turn admitted and run here.
@@ -69,7 +72,7 @@ async fn the_daemon_runs_tasks_and_fires_them_on_time() {
     })
     .await;
     let task = read_tasks(&data)[0].clone();
-    wait_for("the task's reply", || replies(&data, "s_created") == ["Nightly summary."]).await;
+    wait_for("the task's reply", || replies(&data, &made) == ["Nightly summary."]).await;
     let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
     assert!(!calls.as_array().unwrap().iter().any(|c| c[0] == "chat:send"), "the host ran no turn: {calls}");
     let asked = model.requests.lock().unwrap().iter().any(|r| {
@@ -180,9 +183,10 @@ async fn the_daemon_runs_training_and_goal_runs_and_their_tools_itself() {
     assert_eq!(status, 200, "{run}");
     assert_eq!(run["name"], "CSV importer");
     assert_eq!(run["status"], "draft");
-    assert_eq!(run["sessionId"], "s_created");
+    let run_chat = run["sessionId"].as_str().unwrap().to_string();
+    assert!(run_chat.starts_with("s_") && run_chat != "s_created", "the daemon made the run's chat: {run}");
     let id = run["id"].as_str().unwrap().to_string();
-    let chat = saved_session(&rig, "s_created");
+    let chat = saved_session(&rig, &run_chat);
     assert_eq!(chat["title"], "CSV importer");
     assert_eq!(chat["trainingRunId"], id.as_str());
     assert_eq!(chat["providerId"], "p1");
@@ -206,7 +210,7 @@ async fn the_daemon_runs_training_and_goal_runs_and_their_tools_itself() {
     assert!(log.contains(&"Run completed: Everything is verified.".to_string()), "{log:?}");
 
     // The chat: the turns' transcript and the run's plan mirrored onto it.
-    let chat = saved_session(&rig, "s_created");
+    let chat = saved_session(&rig, &run_chat);
     assert_eq!(chat["agentPlan"], run["plan"]);
     let messages = chat["messages"].as_array().unwrap();
     let tool_out = |id: &str| -> String {
@@ -245,13 +249,13 @@ async fn the_daemon_runs_training_and_goal_runs_and_their_tools_itself() {
     let (_, out) = post(
         rig.d.port,
         "training:tool",
-        json!(["s_created", "report_experiment", { "id": "exp_2", "status": "failed" }]),
+        json!([run_chat, "report_experiment", { "id": "exp_2", "status": "failed" }]),
         Some(TOKEN),
     )
     .await;
     assert_eq!(out["output"], "Recorded exp_2 (failed). Leader is exp_1 (Fast path) at 0.9.");
     let (_, out) =
-        post(rig.d.port, "training:tool", json!(["s_created", "update_plan", { "steps": [null] }]), Some(TOKEN)).await;
+        post(rig.d.port, "training:tool", json!([run_chat, "update_plan", { "steps": [null] }]), Some(TOKEN)).await;
     assert_eq!(out["error"], "Cannot read properties of null (reading 'title')");
 
     let (_, list) = post(rig.d.port, "training:stop", json!([id]), Some(TOKEN)).await;

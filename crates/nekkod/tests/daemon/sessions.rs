@@ -25,7 +25,18 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     assert_eq!(missing, Value::Null);
     let (_, images) = post(d.port, "session:images", json!(["s_one", 4]), Some(TOKEN)).await;
     assert_eq!(images, json!([{ "messageId": "a", "src": "data:x" }]));
-    // The UI's own writes are the daemon's too.
+    // The UI's own writes are the daemon's too, chat creation included: a
+    // folder that is not one of the user's is refused, as the host refused it.
+    let (status, refused) = post(d.port, "session:create", json!(["w1"]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "{refused}");
+    assert!(refused.to_string().contains("Workspace not found"), "{refused}");
+    post(
+        d.port,
+        "settings:update",
+        json!([{ "workspaces": [{ "id": "w1", "name": "w1", "path": data.to_string_lossy() }] }]),
+        Some(TOKEN),
+    )
+    .await;
     let (_, created) = post(d.port, "session:create", json!(["w1"]), Some(TOKEN)).await;
     let new_id = created["id"].as_str().unwrap().to_string();
     assert_eq!(created["workspaceId"], "w1");
@@ -47,8 +58,11 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     let (_, cleared) = post(d.port, "sessions:clear", json!(["all"]), Some(TOKEN)).await;
     assert_eq!(cleared, json!(1));
     assert!(!sessions.join("s_one.json").exists());
+    // The host's copy of each command log was dropped too (it may have written to one).
     let (_, callbacks) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert_eq!(callbacks, json!([[new_id], [fresh["id"]], ["s_one"]]));
+    let deletes: Vec<&Value> =
+        callbacks.as_array().unwrap().iter().filter(|c| c.as_array().is_some_and(|a| a.len() == 1)).collect();
+    assert_eq!(deletes, [&json!([new_id]), &json!([fresh["id"]]), &json!(["s_one"])], "{callbacks}");
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
