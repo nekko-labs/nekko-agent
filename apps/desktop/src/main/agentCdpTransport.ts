@@ -32,6 +32,8 @@ export interface AgentTarget {
 export interface AgentCdpHost {
   product: string;
   userAgent: string;
+  /** Native discovery is still limited to explicitly adopted windows. */
+  nativeDiscovery?: boolean;
   /** Open one more window for this chat, already showing about:blank. */
   createTarget(): Promise<AgentTarget>;
   closeTarget(target: AgentTarget): void;
@@ -135,6 +137,18 @@ export class AgentCdpTransport {
 
   private async browserCommand(method: string, params: any): Promise<unknown> {
     switch (method) {
+      case 'Target.setDiscoverTargets':
+        if (!this.host.nativeDiscovery) throw new Error('Discovery is not available.');
+        return {};
+      case 'Target.getTargets':
+        if (!this.host.nativeDiscovery) throw new Error('Discovery is not available.');
+        return { targetInfos: [...this.attached.values()].map((entry) => ({ targetId: entry.targetId, type: 'page', title: '', url: 'about:blank', attached: true, browserContextId: 'nekko-agent-context' })) };
+      case 'Target.attachToTarget': {
+        if (!this.host.nativeDiscovery || params?.flatten !== true) throw new Error('Attachment is not available.');
+        const entry = [...this.attached.values()].find((entry) => entry.targetId === params?.targetId);
+        if (!entry) throw new Error('No such owned page.');
+        return { sessionId: entry.sessionId };
+      }
       case 'Browser.getVersion':
         return { protocolVersion: '1.3', product: this.host.product, revision: '', userAgent: this.host.userAgent, jsVersion: process.versions.v8 };
       case 'Target.setAutoAttach':

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { useStore } from '../src/renderer/store';
-import { WorkspacesView } from '../src/renderer/views/WorkspacesView';
+import { useStore } from '../../src/renderer/store';
+import { WorkspacesView } from '../../src/renderer/views/WorkspacesView';
 import { summarizeSession } from '@nekko-agent/shared';
-import '../src/renderer/styles.css';
+import '../../src/renderer/styles.css';
 
 // Synthetic records only. This fixture never connects to a host or daemon.
 const DAY = 86_400_000;

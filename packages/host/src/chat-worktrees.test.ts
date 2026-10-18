@@ -1,23 +1,38 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'vitest';
 import type { AppSettings, Session } from '@nekko-agent/shared';
 import { chatWorkspaces, listChatWorktrees, prepareChatWorktrees, removeChatWorktree, removeMergedChatWorktrees, runWorktreeSetup, slugifyTitle, worktreeName } from './chat-worktrees.js';
 
+const execFileAsync = promisify(execFile);
 let root: string;
+let template: string;
 let settings: AppSettings;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true });
 const session = (id: string): Session => ({ id, title: 'New chat', workspaceId: 'repo', gitIsolation: true, messages: [], createdAt: 1, updatedAt: 1 });
+// One committed repository is built per file and copied for each test: every
+// test still gets its own independent repository, without re-running five git
+// processes to make it. Auto maintenance is off so the test's own commits do
+// not each spawn a `git maintenance run --auto`.
+beforeAll(() => {
+  template = mkdtempSync(join(tmpdir(), 'nekko-worktree-template-'));
+  const init = (...args: string[]) => execFileSync('git', args, { cwd: template, windowsHide: true });
+  init('init');
+  init('config', 'user.email', 'test@example.com');
+  init('config', 'user.name', 'Test');
+  init('config', 'maintenance.auto', 'false');
+  init('config', 'gc.auto', '0');
+  writeFileSync(join(template, 'file.txt'), 'committed\n');
+  init('add', '.');
+  init('commit', '-m', 'Initial');
+});
+afterAll(() => rmSync(template, { recursive: true, force: true }));
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'nekko-worktree-'));
-  git('init');
-  git('config', 'user.email', 'test@example.com');
-  git('config', 'user.name', 'Test');
-  writeFileSync(join(root, 'file.txt'), 'committed\n');
-  git('add', '.');
-  git('commit', '-m', 'Initial');
+  cpSync(template, root, { recursive: true });
   settings = { workspaces: [{ id: 'repo', name: 'Repo', path: root }] } as AppSettings;
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
@@ -137,20 +152,24 @@ it('removes the worktree and branch of a merged PR, and leaves everything else',
   const all4 = [merged, open, dirty, busy, reused, after];
   for (const s of all4) prepareChatWorktrees(s, settings);
   const at = (s: Session) => s.gitWorktrees!.repo;
-  const commit = (s: Session, name: string) => {
+  // Each worktree is its own checkout, so their commits run side by side.
+  const commit = async (s: Session, name: string) => {
+    const run = async (...args: string[]) => (await execFileAsync('git', args, { cwd: at(s).root, encoding: 'utf8', windowsHide: true })).stdout;
     writeFileSync(join(at(s).root, name), 'work\n');
-    execFileSync('git', ['add', '.'], { cwd: at(s).root });
-    execFileSync('git', ['commit', '-m', name], { cwd: at(s).root });
-    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: at(s).root, encoding: 'utf8' }).trim();
+    await run('add', '.');
+    await run('commit', '-m', name);
+    return (await run('rev-parse', 'HEAD')).trim();
   };
   // Squash-merged work: Git still sees the branch as unmerged. GitHub reports
   // the head commit each PR merged with.
   const heads = new Map<Session, string>();
-  for (const s of all4) heads.set(s, commit(s, `${s.id}.txt`));
+  await Promise.all(all4.map(async (s) => {
+    heads.set(s, await commit(s, `${s.id}.txt`));
+    // Work committed after the PR merged.
+    if (s === after) await commit(after, 'after-merge.txt');
+  }));
   // The merged PR was an older one of the same name: its head is not this tip.
   heads.set(reused, 'a'.repeat(40));
-  // Work committed after the PR merged.
-  commit(after, 'after-merge.txt');
   writeFileSync(join(at(dirty).root, 'file.txt'), 'not committed\n');
   const owner = (wt: string) => {
     const s = all4.find((x) => at(x).root === wt);
@@ -179,7 +198,7 @@ it('removes the worktree and branch of a merged PR, and leaves everything else',
   expect(await removeMergedChatWorktrees({ ...settings, gitManagement: { removeMerged: false } }, owner, all)).toEqual([]);
   expect(await removeMergedChatWorktrees(settings, owner, async () => { throw new Error('offline'); })).toEqual([]);
   expect(existsSync(at(open).root)).toBe(true);
-});
+}, 15_000); // ~70 real git processes; Windows process start alone nears the 5 s default under a full parallel run.
 it('runs setup commands and reports failures without throwing', async () => {
   let out = '';
   const ok = await runWorktreeSetup('echo setup-ran', root, (t) => { out += t; });

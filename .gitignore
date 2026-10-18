@@ -34,6 +34,8 @@ nekko-designs/
 # Rust build output (crates/, see Cargo.toml), and the daemon staged for packaging
 target/
 apps/desktop/resources/bin/
+# Rebuilt from the maintained pin by scripts/build-agent-browser.mjs
+apps/desktop/resources/agent-browser/
 
 # Speed-contract harness output (scripts/perf)
 perf-results/
