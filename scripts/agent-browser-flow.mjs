@@ -2,10 +2,15 @@
 // statistics. Pure: `post` sends one browser tool request and resolves to
 // { ok, body, bytes }, so this runs against a fake in unit tests.
 //
-// Strategy "selectors" is what an agent does with today's tool: it reads the
+// Strategy "selectors" is what an agent does without snapshots: it reads the
 // page text, has no selectors, so it lists form controls with evaluate, waits
 // and looks again when the form has not rendered yet, then fills, submits,
 // waits for the result and takes a screenshot.
+//
+// Strategy "snapshot" locates with the compact interactive snapshot instead
+// and acts on its refs (@e1); verify and capture are the same.
+// "snapshot-scoped" snapshots only the page's <main>, as an agent might once
+// it knows where the form lives.
 
 const LIST_CONTROLS = '[...document.querySelectorAll("input,select,textarea,button")].map((e) => ({ tag: e.tagName.toLowerCase(), id: e.id, name: e.name, type: e.type, label: (e.labels && e.labels[0] ? e.labels[0].innerText : e.innerText || "").trim() }))';
 
@@ -20,6 +25,8 @@ export async function runFlow(post, { url, strategy = 'selectors', name, email, 
     steps.push({
       step, action: input.action, ok: res.ok, ms: Math.round((performance.now() - t) * 1000) / 1000,
       replyBytes: res.bytes,
+      // What the model has to write for the call (its tool input).
+      requestBytes: Buffer.byteLength(JSON.stringify(input)),
       // What the model reads: the text of the reply or its error, and image data separately.
       textBytes: Buffer.byteLength(res.ok ? output : String(res.body.error ?? '')),
       imageBytes: res.body.image?.data ? Buffer.from(res.body.image.data, 'base64').length : 0,
@@ -34,12 +41,37 @@ export async function runFlow(post, { url, strategy = 'selectors', name, email, 
     textBytes: steps.reduce((n, s) => n + s.textBytes, 0),
     imageBytes: steps.reduce((n, s) => n + s.imageBytes, 0),
     replyBytes: steps.reduce((n, s) => n + s.replyBytes, 0),
+    requestBytes: steps.reduce((n, s) => n + s.requestBytes, 0),
     steps,
   });
-  if (strategy !== 'selectors') throw new Error(`Unknown strategy ${strategy}`);
+  if (!['selectors', 'snapshot', 'snapshot-scoped'].includes(strategy)) throw new Error(`Unknown strategy ${strategy}`);
 
   const nav = await call('navigate', { action: 'navigate', url });
   if (!nav.ok) return fail('navigate: ' + nav.body.error);
+  if (strategy !== 'selectors') return snapshotFlow(strategy === 'snapshot-scoped' ? 'main' : undefined);
+
+  async function snapshotFlow(scope) {
+    // Locate: a compact interactive snapshot (of `scope` when given); if the form is not there yet, wait and look again.
+    let refs;
+    for (let attempt = 0; ; attempt++) {
+      const snap = await call('locate', { action: 'snapshot', ...(scope ? { selector: scope } : {}) });
+      if (!snap.ok) return fail('locate: ' + snap.body.error);
+      refs = parseRefs(snap.body.output);
+      if (refs.textbox?.Email) break;
+      if (attempt >= maxRetries) return fail('locate: no form');
+      retries++;
+      await call('locate-wait', { action: 'wait', text: 'Subscribe', timeout_ms: 5000 });
+    }
+    const emailRef = refs.textbox?.Email, nameRef = refs.textbox?.Name, submitRef = refs.button?.Subscribe;
+    if (!emailRef || !nameRef || !submitRef) return fail('locate: fields not identified');
+    for (const [ref, value] of [[emailRef, email], [nameRef, name]]) {
+      const filled = await call('fill', { action: 'fill', selector: ref, value });
+      if (!filled.ok) return fail('fill: ' + filled.body.error);
+    }
+    const clicked = await call('submit', { action: 'click', selector: submitRef });
+    if (!clicked.ok) return fail('submit: ' + clicked.body.error);
+    return finish();
+  }
 
   // Locate: list the form's controls; if the form has not rendered, wait and look again.
   let controls = [];
@@ -63,7 +95,9 @@ export async function runFlow(post, { url, strategy = 'selectors', name, email, 
   }
   const clicked = await call('submit', { action: 'click', selector: 'button[type=submit]' });
   if (!clicked.ok) return fail('submit: ' + clicked.body.error);
+  return finish();
 
+  async function finish() {
   // Verify: the confirmation arrives after an API call.
   let verified = false;
   for (let attempt = 0; attempt <= maxRetries && !verified; attempt++) {
@@ -78,6 +112,14 @@ export async function runFlow(post, { url, strategy = 'selectors', name, email, 
   const shot = await call('capture', { action: 'screenshot' });
   if (!shot.ok || shot.body.image?.mime !== 'image/png') return fail('capture: ' + (shot.body.error ?? 'no image'));
   return { ...tally(), ok: true };
+  }
+}
+
+/** Refs by role and accessible name from a snapshot reply: `- textbox "Email" [ref=e1]` gives refs.textbox.Email = '@e1'. */
+export function parseRefs(text) {
+  const refs = {};
+  for (const m of String(text).matchAll(/^\s*- (\w+) "((?:[^"\\]|\\.)*)"[^\n]*?\bref=(e\d+)/gm)) (refs[m[1]] ??= {})[JSON.parse(`"${m[2]}"`)] ??= `@${m[3]}`;
+  return refs;
 }
 
 /** Nearest-rank percentile of numbers (p in 0..100). */
@@ -122,6 +164,7 @@ export function summarize(flows) {
       calls: stats(ok.map((f) => f.calls)),
       retries: { total: ok.reduce((n, f) => n + f.retries, 0), flowsWithRetry: ok.filter((f) => f.retries > 0).length },
       textBytes: stats(ok.map((f) => f.textBytes)),
+      requestBytes: stats(ok.map((f) => f.requestBytes)),
       imageBytes: stats(ok.map((f) => f.imageBytes)),
       fixtureRequests: stats(ok.map((f) => f.served?.total ?? 0)),
       cachedAssetRequests: stats(ok.map((f) => f.served?.assets ?? 0)),

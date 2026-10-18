@@ -1,5 +1,12 @@
 import type { BrowserWindow } from 'electron';
 import { AgentNativeClient } from './agentNativeClient.js';
+import { isElementRef } from './agentPage.js';
+
+/** Snapshot refs live in the native process and expire when the page changes. */
+const refHint = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return /unknown ref|is stale/i.test(message) ? new Error(`${message}. Take a new snapshot; refs expire when the page changes.`) : error;
+};
 
 /** Bounded page API used by the tool, intentionally not an arbitrary CLI adapter. */
 export class AgentNativePage {
@@ -51,7 +58,12 @@ export class AgentNativePage {
     type: async (text: string): Promise<void> => { await this.client.command('type', { selector: ':focus', text }); },
     press: async (key: string): Promise<void> => { await this.client.command('press', { key }); },
   };
-  locator(selector: string) { return this.target(selector); }
+  async snapshot(scope?: string): Promise<{ tree: string; refs: number }> {
+    if (isElementRef(scope)) throw new Error('A snapshot scope is a CSS selector, not a ref.');
+    const data = await this.client.command('snapshot', { interactive: true, compact: true, ...(scope ? { selector: scope } : {}) });
+    return { tree: String(data?.snapshot ?? ''), refs: Object.keys(data?.refs ?? {}).length };
+  }
+  locator(selector: string) { return isElementRef(selector) ? this.refTarget(selector) : this.target(selector); }
   getByText(text: string) { return this.target(undefined, text); }
   private target(selector?: string, text?: string) {
     const self = this;
@@ -66,6 +78,37 @@ export class AgentNativePage {
       innerText: async (_options?: unknown) => { await self.poll(selector, undefined, 'attached', 10_000); return self.evaluate((s) => (document.querySelector(s) as HTMLElement).innerText, selector!); },
     };
     return target;
+  }
+  /** A snapshot ref, resolved by the native process (its accessibility node), never by querySelector. */
+  private refTarget(ref: string) {
+    const self = this;
+    const run = async <T>(work: () => Promise<T>): Promise<T> => { try { return await work(); } catch (error) { throw refHint(error); } };
+    // The native `type` focuses the ref's element before typing; with no text it only focuses.
+    const focus = () => self.client.command('type', { selector: ref, text: '' });
+    const target = {
+      first: () => target,
+      click: (_options?: unknown) => run(() => self.client.command('click', { selector: ref })),
+      fill: (value: string, _options?: unknown) => run(() => self.client.command('fill', { selector: ref, value })),
+      pressSequentially: (value: string, _options?: unknown) => run(() => self.client.command('type', { selector: ref, text: value })),
+      press: (key: string, _options?: unknown) => run(async () => { await focus(); await self.keyboard.press(key); }),
+      waitFor: (options: { state: 'visible' | 'attached' | 'hidden' | 'detached'; timeout: number }) => self.pollRef(ref, options.state, options.timeout),
+      scrollIntoViewIfNeeded: async (_options?: unknown) => { throw new Error('Scroll into view takes a CSS selector; click, fill and type on a ref already scroll it into view.'); },
+      innerText: (_options?: unknown) => run(async () => String((await self.client.command('gettext', { selector: ref }))?.text ?? '')),
+    };
+    return target;
+  }
+  /** visible/hidden from the native visibility check; a ref that no longer resolves is detached. */
+  private async pollRef(ref: string, state: 'visible' | 'attached' | 'hidden' | 'detached', timeout: number): Promise<void> {
+    const deadline = Date.now() + timeout;
+    let last: unknown;
+    do {
+      let attached = true, visible = false;
+      try { visible = Boolean((await this.client.command('isvisible', { selector: ref }))?.visible); }
+      catch (error) { attached = false; last = error; }
+      if (state === 'attached' ? attached : state === 'detached' ? !attached : state === 'visible' ? visible : !visible) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } while (Date.now() < deadline);
+    throw refHint(last ?? new Error(`Timed out waiting for ${ref} to be ${state}.`));
   }
   private async poll(selector: string | undefined, text: string | undefined, state: 'visible' | 'attached' | 'hidden' | 'detached', timeout: number): Promise<void> {
     const deadline = Date.now() + timeout;
