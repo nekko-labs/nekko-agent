@@ -384,6 +384,20 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     }
     // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
     ctx.turns.harness.start_reaper();
+    // Claude Agent's approval bridge: the app's own CLI, else `nekko-agent` on PATH.
+    ctx.turns.harness.configure(harness::BridgeSetup {
+        wire_url: url.clone(),
+        command: cfg
+            .native
+            .as_ref()
+            .and_then(cli_install::bundled_cli)
+            .map(|(exe, cli)| harness::BridgeCommand::electron(&exe, &cli))
+            .or_else(|| harness::cli_on_path().map(|p| harness::BridgeCommand::launcher(&p.to_string_lossy()))),
+        dir: cfg
+            .data_dir
+            .as_ref()
+            .map_or_else(|| std::env::temp_dir().join("nekko-harness"), |d| std::path::Path::new(d).join("harness")),
+    });
     let after = ctx.clone();
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
     let router = wire::router(app);
