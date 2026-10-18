@@ -66,6 +66,23 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### Slowest TypeScript unit tests made faster without losing assertions (2026-10-18)
+Area: dev build
+Result: improvement (server.test.ts: no effect, left alone)
+Conditions: Windows, local, Node 24.1.0, Vitest 5.0.3, Git 2.51.0.windows.2. Per file: `npx vitest run <file> --reporter=json` from its package dir, 3 runs each, median of the file's start-to-end time from the JSON report. Whole package: one run each of `npx vitest run` in `packages/host` and `packages/core`, span from the JSON report. Base `origin/main` 75e8b29a vs this branch, same machine, back to back.
+
+| File (median of 3, s) | Before | After |
+|---|---|---|
+| host `chat-worktrees.test.ts` | 12.38 | 9.16 |
+| host `hooks.test.ts` | 10.43 | 2.93 |
+| core `agent/loop-retry.test.ts` | 6.00 | 0.01 |
+| host `workflows.test.ts` | 4.87 | 2.83 |
+| host `engine/server.test.ts` (unchanged) | 10.47 | 10.50 |
+| `packages/host` whole suite, 1 run | 19.2 | 15.9 |
+| `packages/core` whole suite, 1 run | 7.2 | 5.1 |
+
+Why: `loop-retry` waited out real 0.5 to 2 s backoffs; it now runs them on a fake `setTimeout` and still asserts the delays the loop reports. The hung hook slept 10 s against a 1 s limit; on Windows killing `cmd.exe` leaves the `node` grandchild holding the pipes, so the test lasted the full sleep. It now sleeps 2.5 s (the 1 s limit is the product's minimum and is unchanged). `chat-worktrees` builds one committed repository per file and copies it per test, turns off auto maintenance (44 `git maintenance run --auto` processes, 3.2 s in a trace2 profile), and commits in the merged-PR test's six worktrees in parallel. Workflow pass/fail steps are `exit 0`/`exit 1` instead of a `node -e` start. Under the full parallel host run, the merged-PR worktree test took 5548 ms (timed out at 5 s) before and 4721 ms after, so it keeps a 15 s timeout. `server.test.ts` is dominated by product constants (400 ms health poll, 800 ms progress sampling, a stub that listens after 2 s); changing them needs a product seam, so it is unchanged. Remaining question: the merged-PR test is still about 70 git processes, mostly in product code (`worktree add`, `status`). Source: this PR.
+
 ### CI gates recalibrated from 115 runner reports; #544 closed (2026-10-17)
 Area: perf harness
 Result: measurement fix
