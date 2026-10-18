@@ -22,6 +22,12 @@
       "title": "Using Nekko Agent",
       "pages": [
         {
+          "slug": "browser-automation",
+          "title": "Browser automation",
+          "source": "docs/browser-automation.md",
+          "description": "Chat-owned browser actions, security boundaries and native driver migration status."
+        },
+        {
           "slug": "local-models",
           "title": "Running models locally",
           "source": "docs/local-models.md",
