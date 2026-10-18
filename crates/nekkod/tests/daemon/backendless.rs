@@ -15,6 +15,7 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
     std::fs::write(data.join("sessions/s_solo.json"), chat.to_string()).unwrap();
     let model = scripted_model(vec![
         call_tool("c_w", "write_file", json!({ "path": "note.txt", "content": "hi" })),
+        call_tool("c_b", "bash", json!({ "command": "echo hello-agent-log" })),
         say_text("wrote it"),
     ])
     .await;
@@ -54,6 +55,16 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
     let (_, changes) = post(d.port, "changes:list", json!(["s_solo"]), Some(TOKEN)).await;
     assert_eq!(changes.as_array().map(Vec::len), Some(1), "{changes}");
 
+    // The command's output is in the chat's agent terminal, and saved beside the chat.
+    let (_, terminals) = post(d.port, "terminals:list", json!([]), Some(TOKEN)).await;
+    let agent = terminals.as_array().unwrap().iter().find(|t| t["id"] == "agent_s_solo").cloned();
+    let agent = agent.unwrap_or_else(|| panic!("agent terminal listed: {terminals}"));
+    assert_eq!((agent["shell"].clone(), agent["running"].clone()), (json!("agent"), json!(false)), "{agent}");
+    let (_, snap) = post(d.port, "terminal:snapshot", json!(["agent_s_solo"]), Some(TOKEN)).await;
+    assert!(snap["buffer"].as_str().unwrap().contains("hello-agent-log"), "{snap}");
+    let log = data.join("sessions/s_solo.commands.log");
+    assert!(std::fs::read_to_string(&log).unwrap().contains("hello-agent-log"));
+
     // Nothing is running, and nobody else could be: every check answers at once.
     let (_, running) = post(d.port, "chat:running", json!([]), Some(TOKEN)).await;
     assert_eq!(running, json!([]));
@@ -71,6 +82,10 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
     let (status, folders) = post(d.port, "workspace:remove", json!(["w1"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{folders}");
     assert_eq!(folders, json!([]));
+    // Deleting the chat deletes its command log first.
+    let (status, _) = post(d.port, "session:delete", json!(["s_solo"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert!(!log.exists() && !data.join("sessions/s_solo.json").exists());
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }

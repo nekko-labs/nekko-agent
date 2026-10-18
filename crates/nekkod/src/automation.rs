@@ -216,6 +216,11 @@ impl Engine {
     }
 
     async fn delete_session(&self, id: String) {
+        // Through the router: the chat's command log first, then the chat.
+        if let Some(d) = self.dispatch.get() {
+            let _ = d("session:delete".into(), vec![json!(id)]).await;
+            return;
+        }
         // As `session:delete` does: the host's command log first, then the chat.
         if self.backend.call("sessions:deleteAgentLog", json!([id])).await.is_ok() {
             let store = self.store.clone();

@@ -214,10 +214,10 @@ async fn wipe(ctx: &Ctx) -> Result<Value, String> {
     }
     ctx.turns.processes.kill_all();
     // Chats, each command log first (a failure there keeps that chat).
-    let backend = ctx.backend.clone();
+    let (backend, logs) = (ctx.backend.clone(), ctx.turns.agent_logs.clone());
     let runtime = tokio::runtime::Handle::current();
     let cleared = tokio::task::spawn_blocking(move || {
-        store.clear_with("all", |id| runtime.block_on(backend.call("sessions:deleteAgentLog", json!([id]))).map(|_| ()))
+        store.clear_with("all", |id| crate::routes::delete_agent_log(&runtime, logs.as_deref(), &backend, id))
     })
     .await
     .map_err(|e| e.to_string())?;

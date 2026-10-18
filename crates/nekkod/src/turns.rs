@@ -309,6 +309,8 @@ pub struct Turns {
     pub training: Option<Arc<nekko_automation::Training>>,
     /// Sandbox chats' containers (sandbox.rs): a sandbox turn's tools run there.
     pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
+    /// The chats' agent command logs (agent_logs.rs), with a data directory.
+    pub agent_logs: Option<Arc<crate::agent_logs::AgentLogs>>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
     pub pending: Pending,
     /// How each queued turn the daemon started as the next of a chain ends,
@@ -351,6 +353,7 @@ impl Turns {
             watches: None,
             training: None,
             sandboxes: None,
+            agent_logs: None,
             running: Mutex::default(),
             pending: Pending::default(),
             chained: Mutex::default(),
@@ -392,6 +395,21 @@ impl Turns {
     pub fn with_sandboxes(mut self, sandboxes: Option<Arc<crate::sandbox::Sandboxes>>) -> Self {
         self.sandboxes = sandboxes;
         self
+    }
+
+    pub fn with_agent_logs(mut self, logs: Option<Arc<crate::agent_logs::AgentLogs>>) -> Self {
+        self.agent_logs = logs;
+        self
+    }
+
+    /// A line of a chat's command output: its agent log here, else the host's (`loop:log`).
+    pub async fn command_output(&self, backend: &Backend, session_id: &str, workspace_id: &Value, text: &str) {
+        match &self.agent_logs {
+            Some(logs) => logs.append(session_id, workspace_id.as_str(), text),
+            None => {
+                let _ = backend.call("loop:log", json!([session_id, workspace_id, text])).await;
+            }
+        }
     }
 
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
@@ -560,6 +578,10 @@ impl Turns {
             lock(&me.running).remove(&turn_id);
             me.pending.release(&shared.session_id);
             let summary = me.after_turn(&backend, &hub, &store, &spec, &turn_id, summary).await;
+            // The chat's agent terminal stops showing a running command.
+            if let Some(logs) = &me.agent_logs {
+                logs.finish(&shared.session_id);
+            }
             let _ = backend.call("turn:end", json!([turn_id, summary.clone()])).await;
             let _ = ended_tx.send((summary, lock(&shared.last_error).clone()));
         });
@@ -1366,14 +1388,20 @@ fn native_context(
     ctx.session_id = Some(session_id.to_string());
     ctx.changes = Some(turns.changes.clone());
     ctx.processes = Some(turns.processes.clone());
-    let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
-    let b = backend.clone();
-    tokio::spawn(async move {
-        while let Some(line) = rx.recv().await {
-            let _ = b.call("loop:log", line).await;
+    ctx.command_log = match &turns.agent_logs {
+        Some(logs) => Some(logs.clone() as Arc<dyn CommandLog>),
+        // No data directory here: the host keeps the agent terminal.
+        None => {
+            let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
+            let b = backend.clone();
+            tokio::spawn(async move {
+                while let Some(line) = rx.recv().await {
+                    let _ = b.call("loop:log", line).await;
+                }
+            });
+            Some(Arc::new(HostLog(tx)))
         }
-    });
-    ctx.command_log = Some(Arc::new(HostLog(tx)));
+    };
     // Stop stops a running command too.
     let tools_cancel = ctx.cancel.clone();
     shared.cancel.on_cancel(move || tools_cancel.cancel());

@@ -167,12 +167,17 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         })),
         "terminals:list" => {
             let mut all = serde_json::to_value(ctx.terminals.list()).unwrap_or(json!([]));
-            // The agent command logs still live in the TS host.
-            // A starting backend must not hold the terminal list hostage.
-            let agent = tokio::time::timeout(AUX_WAIT, ctx.backend.call("terminals:list:agent", json!([]))).await;
-            if let Ok(Ok(Value::Array(agent))) = agent
-                && let Value::Array(list) = &mut all
-            {
+            let agent = match &ctx.turns.agent_logs {
+                Some(logs) => logs.list(),
+                // No data directory: the agent command logs live in the TS host.
+                // A starting backend must not hold the terminal list hostage.
+                None => match tokio::time::timeout(AUX_WAIT, ctx.backend.call("terminals:list:agent", json!([]))).await
+                {
+                    Ok(Ok(Value::Array(agent))) => agent,
+                    _ => Vec::new(),
+                },
+            };
+            if let Value::Array(list) = &mut all {
                 list.extend(agent);
             }
             Ok(all)
@@ -184,7 +189,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         | "terminal:signal" | "terminal:close" => {
             let id = str_arg(&args, 0).unwrap_or_default().to_string();
             if is_agent(&id) {
-                return ctx.backend.call(channel, Value::Array(args)).await;
+                return match &ctx.turns.agent_logs {
+                    Some(logs) => logs.route(channel, &id, &args).await,
+                    None => ctx.backend.call(channel, Value::Array(args)).await,
+                };
             }
             terminal_op(ctx, channel, &id, &args)
         }
@@ -437,7 +445,14 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             None => ctx.backend.call(channel, Value::Array(args)).await,
         },
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
-            session_op(ctx.sessions.clone().expect("checked"), ctx.backend.clone(), channel, args).await
+            session_op(
+                ctx.sessions.clone().expect("checked"),
+                ctx.backend.clone(),
+                ctx.turns.agent_logs.clone(),
+                channel,
+                args,
+            )
+            .await
         }
         _ => {
             if let Some(r) = crate::engine::route(&ctx.engine, channel, &args).await {
@@ -826,11 +841,31 @@ const SESSION_CHANNELS: &[&str] = &[
     "chat:dequeue",
 ];
 
+/// `deleteAgentLog` for a chat being removed, from a blocking caller: its
+/// log here, and the host's too while one runs (a host-run tool may have
+/// written to it). Without a data directory, the host's alone.
+pub fn delete_agent_log(
+    runtime: &tokio::runtime::Handle,
+    logs: Option<&crate::agent_logs::AgentLogs>,
+    backend: &Backend,
+    id: &str,
+) -> Result<(), String> {
+    let Some(logs) = logs else {
+        return runtime.block_on(backend.call("sessions:deleteAgentLog", json!([id]))).map(|_| ());
+    };
+    logs.delete_blocking(id)?;
+    if !backend.is_none() {
+        let _ = runtime.block_on(backend.call("sessions:deleteAgentLog", json!([id])));
+    }
+    Ok(())
+}
+
 /// Session reads and the UI's own writes, off the async threads: a listing
 /// reads every changed chat file, and one image chat can be tens of megabytes.
 async fn session_op(
     store: Arc<nekko_store::SessionStore>,
     backend: Arc<Backend>,
+    logs: Option<Arc<crate::agent_logs::AgentLogs>>,
     channel: &str,
     args: Vec<Value>,
 ) -> Result<Value, String> {
@@ -838,7 +873,7 @@ async fn session_op(
     let runtime = tokio::runtime::Handle::current();
     tokio::task::spawn_blocking(move || {
         let id = str_arg(&args, 0).unwrap_or_default();
-        let delete_log = |id: &str| runtime.block_on(backend.call("sessions:deleteAgentLog", json!([id]))).map(|_| ());
+        let delete_log = |id: &str| delete_agent_log(&runtime, logs.as_deref(), &backend, id);
         let or_null = |r: Result<Option<Value>, String>| r.map(|v| v.unwrap_or(Value::Null));
         match channel.as_str() {
             "sessions:summaries" => Ok(Value::Array(store.summaries())),

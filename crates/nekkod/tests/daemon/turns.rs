@@ -737,10 +737,7 @@ async fn stop_during_admission_cancels_setup_and_refuses_duplicate_send() {
     let send_opts = opts.clone();
     let port = rig.d.port;
     let sender = tokio::spawn(async move { post(port, "chat:send", json!([send_opts]), Some(TOKEN)).await });
-    until_host_call(port, "the setup command to start", Duration::from_secs(20), |c| {
-        c[0] == "loop:log" && c[1][2].as_str().is_some_and(|s| s.trim().starts_with("setup-begun"))
-    })
-    .await;
+    until_agent_log(port, "s_prepare_stop", "setup-begun", Duration::from_secs(20)).await;
     let (status, refused) = post(port, "chat:send", json!([opts.clone()]), Some(TOKEN)).await;
     assert_eq!(status, 400, "{refused}");
     assert!(refused.to_string().contains("already being prepared"));

@@ -6,6 +6,7 @@
 
 mod accounts;
 mod admission;
+mod agent_logs;
 mod automation;
 mod backend;
 mod catalog;
@@ -227,7 +228,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token)))
             .with_watches(agent_watches.clone())
             .with_training(automation.training.clone())
-            .with_sandboxes(sandboxes.clone()),
+            .with_sandboxes(sandboxes.clone())
+            .with_agent_logs(cfg.data_dir.as_ref().map(|d| {
+                let read = read_settings(&settings);
+                agent_logs::AgentLogs::new(std::path::Path::new(d), sessions.clone(), Arc::new(read), hub.clone())
+            })),
         ),
         mcp: mcp.clone(),
         accounts: accounts.clone(),

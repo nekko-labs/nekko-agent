@@ -726,20 +726,16 @@ async fn provision(
         set_notice(session, &format!("Running setup: {command}"));
         announce(session).await;
         emit(ctx, json!({ "type": "session_meta", "sessionId": id })).await;
-        let log = |text: String| {
-            let backend = ctx.backend.clone();
-            let args = json!([id, folder_id, text]);
-            async move {
-                let _ = backend.call("loop:log", args).await;
-            }
-        };
-        log(format!("\r\n$ {command}  (worktree setup in {path})\r\n")).await;
+        let folder = json!(folder_id);
+        ctx.turns
+            .command_output(&ctx.backend, &id, &folder, &format!("\r\n$ {command}  (worktree setup in {path})\r\n"))
+            .await;
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let writer = {
-            let (backend, id, folder_id) = (ctx.backend.clone(), id.clone(), folder_id.clone());
+            let (turns, backend, id, folder) = (ctx.turns.clone(), ctx.backend.clone(), id.clone(), folder.clone());
             tokio::spawn(async move {
                 while let Some(text) = rx.recv().await {
-                    let _ = backend.call("loop:log", json!([id, folder_id, text])).await;
+                    turns.command_output(&backend, &id, &folder, &text).await;
                 }
             })
         };

@@ -506,6 +506,19 @@ where
     }
 }
 
+/// A chat's agent command log (its `agent_<id>` terminal), once it shows `needle`.
+pub async fn until_agent_log(port: u16, session_id: &str, needle: &str, limit: Duration) -> String {
+    let id = format!("agent_{session_id}");
+    until(&format!("{needle:?} in {id}"), limit, || {
+        let id = id.clone();
+        async move {
+            let (_, snap) = post(port, "terminal:snapshot", json!([id]), Some(TOKEN)).await;
+            snap["buffer"].as_str().filter(|b| b.contains(needle)).map(str::to_string)
+        }
+    })
+    .await
+}
+
 /// The fake backend's record of every callback the daemon made, in order.
 pub async fn host_calls(port: u16) -> Vec<Value> {
     let (_, all) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
