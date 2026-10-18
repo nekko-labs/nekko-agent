@@ -95,6 +95,24 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### Agent browser: full-flow benchmark, startup phases, hidden-window frame wake (2026-10-18)
+Area: perf harness / browser driver
+Result: improvement (and a new measurement)
+Conditions: Windows 11 10.0.26300, Ryzen 9 9950X3D (32 threads), Electron 44.7.0 / Chromium 152.0.7977.130, native agent-browser 0.39.1 (pinned), hidden 1100x760 window, synthetic signup app (`scripts/agent-browser-flow-fixture.mjs`). Each flow is navigate, locate (list controls, wait and retry once because the form renders after a 120 ms API call), fill twice, click submit, wait and extract the confirmation, screenshot: 10 tool calls through the real bridge, no model. Before and after are the same build with the wake off and on (`wakeFrames`), alternated sample by sample: 12 fresh processes (6 first flows each), then 20 fresh-chat and 20 warm-session rounds in one process. Nearest-rank percentiles.
+
+| Metric (native) | Before | After |
+|---|---|---|
+| Whole flow p50 / p95, first flow in a new process | 3377.57 / 3418.12 ms | 484.72 / 612.5 ms |
+| Whole flow p50 / p95, fresh chat | 3321.87 / 3345.81 ms | 466.29 / 489.61 ms |
+| Whole flow p50 / p95, warm session | 3242.25 / 3260.74 ms | 388.44 / 404.39 ms |
+| Click p50 / p95, fresh chat | 1001.11 / 1005.73 ms | 10.86 / 13.5 ms |
+| Screenshot p50 / p95, fresh chat | 1905.49 / 1918.75 ms | 37.66 / 56.07 ms |
+| Tool calls / retries per flow | 10 / 1 | 10 / 1 |
+
+Startup on a fresh chat's first request, measured by the new `onTiming` phases (with wake, p50 / p95): window 35.54 / 37.22 ms, relay 1.01 / 1.18 ms, native spawn to ready 17.47 / 19.72 ms, CDP attach 6.45 / 7.82 ms, navigate 24.93 / 26.65 ms, summary 1.29 / 1.6 ms. Startup was never the problem. A warm session's navigate step was 17.14 ms p50 against 101.02 ms fresh (no window, relay, process or attach, and the HTTP cache served JS and CSS: 3 requests instead of 5); the rest of the flow cost the same either way.
+
+Why: once a hidden window goes idle it renders about one frame a second, measured in a bare `BrowserWindow` with no driver; `backgroundThrottling: false` and Chromium's background/occlusion switches did not change it. A click's input is acknowledged on the next frame (about 1 s) and the native screenshot waits two frames (about 2 s). A frame subscription held only for a click or screenshot on a hidden tab keeps frames coming; the window stays hidden. Playwright cross-check (4 launches, 10 rounds): without the wake 0 of 24 flows finished (`page.screenshot: Timeout 10000ms exceeded.` every time, clicks 1008 to 2010 ms); with it 24 of 24, fresh-chat flow 628.84 / 709.81 ms. Native smoke screenshots before and after differ in 21 pixels, a 1x21 caret column. Not measured: macOS, Linux. Tool calls and reply bytes did not change; that is the snapshot/refs work. Source: this PR, [report](../reports/agent-browser/flow-benchmark.md), [raw data](../reports/agent-browser/flow-benchmark.json).
+
 ### nekkod's real-binary tests split by domain, sleeps replaced by waits (2026-10-18)
 Area: dev build
 Result: no effect on wall time (the layout that would have split binaries: regression, not taken)

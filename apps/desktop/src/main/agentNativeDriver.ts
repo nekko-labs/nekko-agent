@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { AgentNativeClient } from './agentNativeClient.js';
 import { AgentNativePage } from './agentNativePage.js';
 import { startNativeRelay } from './agentNativeRelay.js';
+import { untimed, type PhaseMark } from './agentBrowserTiming.js';
 
 export const nativeDriver = () => createNativeDriver();
 
@@ -10,15 +11,16 @@ export const nativeDriver = () => createNativeDriver();
 export async function createNativeDriver(testBinary?: string) {
   const owned = new Map<BrowserWindow, { client: AgentNativeClient; relay: Awaited<ReturnType<typeof startNativeRelay>> }>();
   return {
-    async adopt(win: BrowserWindow): Promise<AgentNativePage> {
+    async adopt(win: BrowserWindow, mark: PhaseMark = untimed): Promise<AgentNativePage> {
       const binary = app.isPackaged
         ? join(process.resourcesPath, 'agent-browser', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'agent-browser.exe' : 'agent-browser')
         : join(app.getAppPath(), 'resources/agent-browser', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'agent-browser.exe' : 'agent-browser');
-      const relay = await startNativeRelay({ product: `Chrome/${process.versions.chrome}`, userAgent: app.userAgentFallback, createTarget: async () => { throw new Error('Use tab_new.'); }, closeTarget: () => { throw new Error('Use tab_close.'); } }, win);
+      const relay = await mark('relay', () => startNativeRelay({ product: `Chrome/${process.versions.chrome}`, userAgent: app.userAgentFallback, createTarget: async () => { throw new Error('Use tab_new.'); }, closeTarget: () => { throw new Error('Use tab_close.'); } }, win));
       const client = new AgentNativeClient(testBinary ?? binary);
       owned.set(win, { client, relay });
       try {
-        await client.command('launch', { cdpUrl: relay.endpoint });
+        await mark('spawn', () => client.ready);
+        await mark('attach', () => client.command('launch', { cdpUrl: relay.endpoint }));
         return new AgentNativePage(client, win);
       } catch (error) { owned.delete(win); client.close(); relay.close(); throw error; }
     },
