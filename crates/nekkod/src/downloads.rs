@@ -11,7 +11,6 @@
 //! model finishes, the daemon does what the host did: turn on `autoStart`
 //! and save a GPU-first preset for it.
 
-use crate::backend::Backend;
 use crate::hub::Hub;
 use crate::library::Library;
 use nekko_engine::BoxFuture;
@@ -51,7 +50,6 @@ pub struct ModelDownloads {
     queue: Downloads,
     library: Arc<Library>,
     catalog: Arc<Catalog>,
-    backend: Arc<Backend>,
     hub: Hub,
     /// The host's own jobs (runtime installs), as it last sent them.
     host_jobs: Mutex<Vec<Value>>,
@@ -68,13 +66,7 @@ fn landed(p: &str) -> bool {
 }
 
 impl ModelDownloads {
-    pub fn new(
-        fetch: Arc<dyn Fetch>,
-        library: Arc<Library>,
-        catalog: Arc<Catalog>,
-        backend: Arc<Backend>,
-        hub: Hub,
-    ) -> Arc<Self> {
+    pub fn new(fetch: Arc<dyn Fetch>, library: Arc<Library>, catalog: Arc<Catalog>, hub: Hub) -> Arc<Self> {
         Arc::new_cyclic(|me: &std::sync::Weak<ModelDownloads>| {
             let me = me.clone();
             let queue = Downloads::new(fetch, Arc::new(now), move |jobs| {
@@ -82,15 +74,7 @@ impl ModelDownloads {
                     me.changed(jobs);
                 }
             });
-            ModelDownloads {
-                queue,
-                library,
-                catalog,
-                backend,
-                hub,
-                host_jobs: Mutex::default(),
-                seen: Mutex::default(),
-            }
+            ModelDownloads { queue, library, catalog, hub, host_jobs: Mutex::default(), seen: Mutex::default() }
         })
     }
 
@@ -231,16 +215,6 @@ impl ModelDownloads {
         self.queue.clone()
     }
 
-    /// The host's own jobs, asked fresh (a restarted backend has none).
-    async fn refresh_host_jobs(&self) {
-        let asked =
-            tokio::time::timeout(crate::routes::AUX_WAIT, self.backend.call("engine:runtime", json!(["downloads"])))
-                .await;
-        if let Ok(Ok(Value::Array(jobs))) = asked {
-            *self.host_jobs.lock().unwrap() = jobs;
-        }
-    }
-
     fn ours(&self, id: &str) -> bool {
         self.queue.list().iter().any(|j| j.get("id").and_then(Value::as_str) == Some(id))
     }
@@ -252,22 +226,20 @@ impl ModelDownloads {
             "engine:downloadCompanions" => self.download_companions(&text(0)).await,
             "engine:imageCompanions" => self.image_companions(&text(0)).await,
             "engine:downloadImageCompanions" => self.download_image_companions(&text(0)).await,
-            "engine:downloads" => {
-                self.refresh_host_jobs().await;
-                Ok(Value::Array(self.merged(self.queue.list())))
-            }
+            // The host's jobs arrive pushed (`engine:hostDownloads`); with the
+            // runtimes here, its queue is empty.
+            "engine:downloads" => Ok(Value::Array(self.merged(self.queue.list()))),
             "engine:cancelDownload" | "engine:dismissDownload" => {
                 let id = text(0);
                 let cancel = channel == "engine:cancelDownload";
+                // A job that is not ours is unknown (the host's queue holds nothing
+                // since the runtime installs moved here): nothing to do, as before.
                 if self.ours(&id) {
                     if cancel {
                         self.queue.cancel(&id);
                     } else {
                         self.queue.dismiss(&id);
                     }
-                } else {
-                    let method = if cancel { "cancelDownload" } else { "dismissDownload" };
-                    self.backend.call("engine:runtime", json!([method, id])).await?;
                 }
                 Ok(Value::Null)
             }

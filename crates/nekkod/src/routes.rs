@@ -215,20 +215,24 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         // waits on it, otherwise by the host (an in-process turn's).
         "tool:approve" => {
             let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
-            if ctx.turns.pending.approve(sid, cid, arg(&args, 2) == &json!(true)) {
+            if ctx.turns.pending.approve(sid, cid, arg(&args, 2) == &json!(true)) || ctx.backend.is_none() {
                 return Ok(Value::Null);
             }
             ctx.backend.call(channel, Value::Array(args)).await
         }
         "chat:answer" => {
             let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
-            if ctx.turns.pending.answer(sid, cid, arg(&args, 2).clone()) {
+            if ctx.turns.pending.answer(sid, cid, arg(&args, 2).clone()) || ctx.backend.is_none() {
                 return Ok(Value::Null);
             }
             ctx.backend.call(channel, Value::Array(args)).await
         }
         "chat:pending" => {
-            let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:pending:host", json!([]))).await;
+            let host = if ctx.backend.is_none() {
+                Ok(Ok(json!({})))
+            } else {
+                tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:pending:host", json!([]))).await
+            };
             let host = match host {
                 Ok(Ok(v)) if v.is_object() => v,
                 _ => json!({}),
@@ -247,6 +251,20 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
                     .await
                     .map_err(|e| e.to_string());
+            }
+            if ctx.backend.is_none() {
+                // Nothing running to steer: the text waits for after the turn, as `steerChat` queued it.
+                let Some(store) = ctx.sessions.clone() else { return Ok(Value::Null) };
+                if content.is_empty() {
+                    return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
+                        .await
+                        .map_err(|e| e.to_string());
+                }
+                return tokio::task::spawn_blocking(move || {
+                    store.queue(&sid, &json!(content)).map(|s| s.unwrap_or(Value::Null))
+                })
+                .await
+                .map_err(|e| e.to_string())?;
             }
             ctx.backend.call(channel, Value::Array(args)).await
         }
@@ -288,11 +306,22 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
             let Some(info) = crate::hypergate::resolve(&base).await else { return Ok(Value::Null) };
             let info = Value::Object(info);
-            let servers = ctx.backend.call("mcp:hypergate:save", json!([info])).await?;
+            let servers = if ctx.settings.is_some() {
+                let configured =
+                    crate::settings::current(ctx).await.get("mcpServers").and_then(Value::as_array).cloned();
+                let list = crate::hypergate::with_hypergate(&configured.unwrap_or_default(), &info);
+                let saved = crate::settings::update(ctx, json!({ "mcpServers": list })).await?;
+                saved.get("mcpServers").cloned().unwrap_or(json!([]))
+            } else {
+                // No data directory here: the host keeps the settings.
+                ctx.backend.call("mcp:hypergate:save", json!([info])).await?
+            };
             ctx.mcp.sync(&servers).await;
             Ok(info)
         }
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
+        // Internal: one PR's live state, for an agent watch's snapshot (watches.rs).
+        "watch:prInfo" => Ok(crate::workspace::pr_info(ctx, str_arg(&args, 0).unwrap_or_default()).await),
         // `mcpStatus`: sync the configured servers here, then report them.
         "mcp:status" if ctx.settings.is_some() => {
             let settings = crate::settings::current(ctx).await;
@@ -430,12 +459,19 @@ pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
     ctx.turns.abort_session(session_id);
     // A dev server the agent started belongs to the work it was doing.
     ctx.turns.processes.kill_session(session_id);
+    if ctx.backend.is_none() {
+        return Ok(Value::Null);
+    }
     ctx.backend.call("chat:abort", json!([session_id])).await
 }
 
 /// The chats with a turn running, the host's and the daemon's.
 pub async fn running_chats(ctx: &Ctx) -> Vec<String> {
-    let host = tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:running", json!([]))).await;
+    let host = if ctx.backend.is_none() {
+        Ok(Ok(json!([])))
+    } else {
+        tokio::time::timeout(AUX_WAIT, ctx.backend.call("chat:running", json!([]))).await
+    };
     let mut ids: Vec<String> = match host {
         Ok(Ok(Value::Array(a))) => a.into_iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
         _ => Vec::new(),

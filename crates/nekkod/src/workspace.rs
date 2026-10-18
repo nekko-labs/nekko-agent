@@ -444,6 +444,9 @@ fn base36(mut n: u64) -> String {
 
 /// The chats the host or this daemon is running right now.
 async fn busy_chats(ctx: &Ctx) -> Result<Vec<String>, String> {
+    if ctx.backend.is_none() {
+        return Ok(ctx.turns.running_sessions());
+    }
     let host = tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("chats:busy", json!([]))).await;
     let mut ids: Vec<String> = match host {
         Ok(Ok(Value::Array(a))) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
@@ -543,7 +546,7 @@ async fn build_spec(ctx: &Ctx, args: Vec<Value>) -> Result<Value, String> {
         Ok(plan) => plan,
         Err(refusal) => return Ok(refusal),
     };
-    let resolved = match ctx.backend.call("provider:resolved", json!([plan.provider_id])).await {
+    let resolved = match resolved_provider(ctx, plan.provider_id.as_str().unwrap_or_default()).await {
         Ok(v) => v,
         Err(e) => return Ok(json!({ "ok": false, "message": e })),
     };
@@ -564,10 +567,46 @@ async fn build_spec(ctx: &Ctx, args: Vec<Value>) -> Result<Value, String> {
 
 /// `fetchPrInfo(url)`: one PR's live state, read now (gh, else the REST API
 /// with the GitHub token), `null` when it cannot be read. For agent watches.
-#[allow(dead_code, reason = "agent watches moving into the daemon call it")]
 pub async fn pr_info(ctx: &Ctx, url: &str) -> Value {
     let token = github_token(&settings(ctx).await);
     ctx.workspace.prs.fetch_info(url, token.as_deref()).await
+}
+
+/// `resolvedProvider(providerId)`: a saved provider, signed in (a subscription
+/// token refreshed) and ready for the Rust providers, with the prompt-caching
+/// setting. What a spec doc is built with.
+async fn resolved_provider(ctx: &Ctx, provider_id: &str) -> Result<Value, String> {
+    let settings = settings(ctx).await;
+    let known = settings
+        .get("providers")
+        .and_then(Value::as_array)
+        .is_some_and(|ps| ps.iter().any(|p| p.get("id").and_then(Value::as_str) == Some(provider_id)));
+    if !known {
+        return Err("Pick a provider and model, then chat first.".into());
+    }
+    let provider = crate::providers::resolve_provider(ctx, provider_id).await?;
+    Ok(json!({
+        "provider": crate::admission::host_provider_config(ctx, &provider),
+        "promptCaching": settings.get("promptCaching") != Some(&json!(false)),
+    }))
+}
+
+/// `designProvider()`: the default provider (resolved) and model a design is generated with.
+async fn design_provider(ctx: &Ctx) -> Result<Value, String> {
+    let settings = settings(ctx).await;
+    let missing = || "Set a default provider and model in Models first.".to_string();
+    let id = settings.get("defaultProviderId").and_then(Value::as_str).filter(|s| !s.is_empty()).ok_or_else(missing)?;
+    let model = settings.get("defaultModelId").and_then(Value::as_str).filter(|s| !s.is_empty()).ok_or_else(missing)?;
+    let known = settings
+        .get("providers")
+        .and_then(Value::as_array)
+        .is_some_and(|ps| ps.iter().any(|p| p.get("id").and_then(Value::as_str) == Some(id)));
+    if !known {
+        return Err(missing());
+    }
+    let mut out = resolved_provider(ctx, id).await?;
+    out["model"] = json!(model);
+    Ok(out)
 }
 
 /// `generateDesign(workspaceId, input)`: the checks and the prompt here, the
@@ -580,7 +619,7 @@ async fn generate_design(ctx: &Ctx, dir: PathBuf, args: Vec<Value>) -> Result<Va
         let (dir, workspace, input) = (dir.clone(), workspace.clone(), input.clone());
         blocking(move || design::plan(&dir, workspace.as_ref(), &input)).await??
     };
-    let chosen = ctx.backend.call("design:provider", json!([])).await?;
+    let chosen = design_provider(ctx).await?;
     let mut message =
         json!({ "id": "design", "role": "user", "content": plan.ask, "createdAt": nekko_workspace_now() });
     if let Some(images) = &plan.images {

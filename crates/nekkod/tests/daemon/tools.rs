@@ -135,7 +135,12 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let server = tokio::spawn(async move { axum::serve(listener, gate).await.unwrap() });
-    let d = start(true);
+    let data = std::env::temp_dir().join(format!("nekkod-hypergate-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    let mine = json!({ "id": "fs", "name": "Files", "command": "npx", "args": [], "enabled": false });
+    std::fs::write(data.join("settings.json"), json!({ "mcpServers": [mine] }).to_string()).unwrap();
+    let d = start_with(true, Some(&data));
     let (_, found) = post(d.port, "mcp:hypergate", json!([port]), Some(TOKEN)).await;
     assert_eq!(found["version"], "9.9");
     assert_eq!(found["port"], port);
@@ -143,14 +148,28 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
     let (_, connected) = post(d.port, "mcp:hypergate:connect", json!([port]), Some(TOKEN)).await;
     assert_eq!(connected["token"], "agent");
     assert_eq!(connected["agent"], "Nekko Agent");
+    // Saved here, beside the user's own servers, and nothing asked of the host.
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    let servers = saved["mcpServers"].as_array().unwrap();
+    assert_eq!(servers[0], mine);
+    assert_eq!(
+        (
+            servers[1]["id"].clone(),
+            servers[1]["name"].clone(),
+            servers[1]["token"].clone(),
+            servers[1]["enabled"].clone()
+        ),
+        (json!("hypergate"), json!("Hypergate"), json!("agent"), json!(true))
+    );
     let (_, all) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let save = all.as_array().unwrap().iter().find(|e| e[0] == "mcp:hypergate:save").expect("the host saved the entry");
-    assert_eq!(save[1][0]["token"], "agent");
+    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "mcp:hypergate:save"), "{all}");
     // Nothing listening: null, not an error.
     server.abort();
     let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
     let (status, none) = post(d.port, "mcp:hypergate", json!([free]), Some(TOKEN)).await;
     assert_eq!((status, none), (200, Value::Null));
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -555,3 +555,97 @@ impl Vaizer {
         Value::Null
     }
 }
+
+/// `marketSkillInstructions(m)`: a Vaizer skill's SKILL.md body, else the
+/// catalog `instructions`; empty when the template already says it all.
+pub fn market_skill_instructions(m: &Value) -> String {
+    let from_markdown = m
+        .get("markdown")
+        .filter(|v| js::truthy(Some(v)))
+        .and_then(Value::as_str)
+        .map(|md| parse_skill_markdown(md).2)
+        .unwrap_or_default();
+    let raw = if from_markdown.is_empty() {
+        m.get("instructions").map(js::display).filter(|_| !js::nullish(m.get("instructions"))).unwrap_or_default()
+    } else {
+        from_markdown
+    };
+    let body = js::trim(&raw).to_string();
+    let template = m.get("template").map(js::display).unwrap_or_default();
+    if body.is_empty() || template.contains(&body) {
+        return String::new();
+    }
+    body
+}
+
+/// `marketSkillPrompt(m)`: the template, with the skill's own instructions before it when it has any.
+pub fn market_skill_prompt(m: &Value) -> String {
+    let body = market_skill_instructions(m);
+    let template = m.get("template").map(js::display).unwrap_or_default();
+    if body.is_empty() {
+        return template;
+    }
+    [
+        format!("Use the \"{}\" skill. Its instructions:", show(m.get("name"))),
+        String::new(),
+        body,
+        String::new(),
+        "Task:".into(),
+        template,
+    ]
+    .join("\n")
+}
+
+/// `marketWorkflow(skill)`: its own workflow, else the generic trigger, context, agent, tools, output chain.
+pub fn market_workflow(m: &Value) -> Value {
+    if let Some(w) = m.get("workflow").filter(|v| js::truthy(Some(v))) {
+        return w.clone();
+    }
+    let tools: Vec<String> =
+        m.get("tools").and_then(Value::as_array).map(|t| t.iter().map(js::display).collect()).unwrap_or_default();
+    let description = m.get("description").map(js::display).unwrap_or_default();
+    let mut nodes = vec![
+        json!({ "id": "t", "kind": "trigger", "label": format!("/{}", show(m.get("name"))), "detail": "Skill invoked" }),
+        json!({ "id": "ctx", "kind": "context", "label": "Gather context", "detail": "Files, diff, inputs" }),
+        json!({ "id": "agent", "kind": "agent", "label": "Run instructions", "detail": js::slice16(&description, 48) }),
+    ];
+    if !tools.is_empty() {
+        nodes.push(json!({ "id": "tools", "kind": "tool", "label": "Use tools", "detail": tools.iter().take(3).cloned().collect::<Vec<_>>().join(", ") }));
+    }
+    nodes.push(json!({ "id": "out", "kind": "output", "label": "Deliverable" }));
+    let ids: Vec<&str> = nodes.iter().map(|n| n["id"].as_str().unwrap_or_default()).collect();
+    let edges: Vec<Value> = ids.windows(2).map(|w| json!({ "from": w[0], "to": w[1] })).collect();
+    json!({ "nodes": nodes, "edges": edges })
+}
+
+/// `marketToSkillDef(m)`: a marketplace skill as a runnable skill.
+pub fn skill_def(m: &Value) -> Value {
+    let mut out = Map::new();
+    for k in ["id", "name", "description"] {
+        if let Some(v) = m.get(k) {
+            out.insert(k.into(), v.clone());
+        }
+    }
+    out.insert("template".into(), json!(market_skill_prompt(m)));
+    for k in ["category", "tools"] {
+        if let Some(v) = m.get(k) {
+            out.insert(k.into(), v.clone());
+        }
+    }
+    out.insert("workflow".into(), market_workflow(m));
+    Value::Object(out)
+}
+
+/// `listInstalledSkillDefs()`: Nekko Agent-target installs as runnable skills
+/// (a Vaizer install carries its own snapshot; a catalog one resolves by id).
+pub fn installed_skill_defs(data_dir: &Path) -> Vec<Value> {
+    list_installed(data_dir)
+        .iter()
+        .filter(|r| normalize_target(r.get("target")) == "nekko-agent")
+        .filter_map(|r| match r.get("skill").filter(|v| !js::nullish(Some(v))) {
+            Some(s) => js::truthy(Some(s)).then(|| s.clone()),
+            None => r.get("skillId").and_then(market_skill),
+        })
+        .map(|m| skill_def(&m))
+        .collect()
+}

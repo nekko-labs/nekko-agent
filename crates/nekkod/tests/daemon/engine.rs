@@ -328,7 +328,8 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
     assert_eq!(std::fs::metadata(data.join("models/chat/acme_slow-GGUF/slow-Q4_K_M.gguf.part")).unwrap().len(), 4096);
     post(d.port, "engine:dismissDownload", json!([slow_id]), Some(TOKEN)).await;
 
-    // The host's runtime installs join the list; their controls go back to it.
+    // A job the host pushed joins the list. The host's queue holds nothing now
+    // (the runtime installs are here), so its controls are no-ops.
     let host_job = json!({ "id": "engine:llama:b9999-cuda", "kind": "engine", "label": "llama.cpp", "target": "b9999-cuda", "state": "downloading", "receivedBytes": 1, "startedAt": 9_999_999_999_999u64 });
     let (_, none) = post(d.port, "engine:hostDownloads", json!([[host_job]]), Some(TOKEN)).await;
     assert_eq!(none, Value::Null);
@@ -340,20 +341,16 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
     post(d.port, "engine:cancelDownload", json!(["engine:llama:b9999-cuda"]), Some(TOKEN)).await;
     post(d.port, "engine:dismissDownload", json!(["engine:llama:b9999-cuda"]), Some(TOKEN)).await;
     let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let runtime: Vec<&Value> = calls
+    let asked: Vec<&Value> = calls
         .as_array()
         .unwrap()
         .iter()
-        .filter(|c| c[0] == "engine:runtime" && c[1][0] != "loadState" && c[1][0] != "downloads")
+        .filter(|c| {
+            c[0] == "engine:runtime"
+                && ["downloads", "cancelDownload", "dismissDownload"].contains(&c[1][0].as_str().unwrap_or(""))
+        })
         .collect();
-    assert_eq!(
-        runtime,
-        [
-            &json!(["engine:runtime", ["cancelDownload", "engine:llama:b9999-cuda"]]),
-            &json!(["engine:runtime", ["dismissDownload", "engine:llama:b9999-cuda"]])
-        ],
-        "{calls}"
-    );
+    assert!(asked.is_empty(), "nothing about downloads asked of the host: {calls}");
     drop(events);
     drop(d);
     std::fs::remove_dir_all(root).ok();

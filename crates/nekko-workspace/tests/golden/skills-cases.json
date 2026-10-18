@@ -29,6 +29,8 @@
     ["install", "vaizer-y", "claude", { "id": "vaizer-y", "name": "bad name", "description": "d", "author": "A", "source": "vaizer", "category": "Automation", "template": "t", "instructions": "i" }],
     ["install", "vaizer-z", "claude", { "id": "other", "name": "z" }],
     ["install", "vaizer-alpha", "claude", { "id": "vaizer-alpha", "name": "alpha", "description": "d", "author": "A", "source": "vaizer", "category": "Automation", "template": "t", "instructions": "i" }],
+    ["install", "vaizer-n", "nekko-agent", {"id": "vaizer-n", "name": "vn", "description": "A Vaizer skill installed into Nekko Agent", "author": "A", "source": "vaizer", "category": "Automation", "template": "Run vn.", "instructions": "i", "markdown": "---\nname: vn\n---\n\nStep one.\nStep two.\n"}],
+    ["defs"],
     ["external"],
     ["skillFile", ".claude/skills/review-council"],
     ["skillFile", ".codex/skills/vx"],
@@ -39,7 +41,8 @@
     ["uninstall", "nekko-agent-review-council", "nekko-agent"],
     ["uninstall", "missing", "codex"],
     ["list"],
-    ["external"]
+    ["external"],
+    ["defs"]
   ],
   "parse": [
     "",
@@ -50,5 +53,13 @@
     "---\nNAME: Upper\nname: lower\n---\nb",
     "---\ndescription: >-\n  a\n\n  b\n---\nb",
     "---\nname: 'mis\"\n---\nb"
+  ],
+  "defsExtra": [
+    {"id": "md-skill", "name": "md-skill", "description": "A skill with its own SKILL.md and a long description that runs past forty-eight units", "template": "Do the md thing.", "markdown": "---\nname: md-skill\ndescription: x\n---\n\n# Steps\n\n1. Read.\n2. Write.\n", "tools": ["read_file", "edit_file", "bash", "grep"]},
+    {"id": "in-template", "name": "in-template", "description": "Instructions already in the template", "template": "Review it. Check tests.", "instructions": "Check tests."},
+    {"id": "empty", "name": "empty", "description": "No instructions", "template": "Just do it.", "instructions": "   ", "tools": []},
+    {"id": "own-flow", "name": "own-flow", "description": "Has a workflow", "template": "t", "category": "dev", "workflow": {"nodes": [{"id": "a", "kind": "trigger", "label": "/own"}], "edges": []}},
+    {"id": "unicode", "name": "ユニコード", "description": "猫のスキル: 説明がとても長いので四十八単位を超えるかどうかを確かめるためのテキストです。", "template": "テンプレート", "instructions": "手順: 読む、書く。"},
+    {"id": "md-empty-body", "name": "md-empty-body", "description": "Markdown with no body falls back to instructions", "template": "t2", "markdown": "---\nname: md-empty-body\n---\n", "instructions": "Fallback instructions."}
   ]
 }

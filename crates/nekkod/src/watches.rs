@@ -110,6 +110,9 @@ type BoxFut<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Sen
 pub struct HostSide {
     store: Arc<SessionStore>,
     backend: Arc<Backend>,
+    hub: crate::hub::Hub,
+    /// The router (`routes::route`), set once the context exists.
+    dispatch: Arc<std::sync::OnceLock<crate::automation::Dispatcher>>,
 }
 
 impl WatchHost for HostSide {
@@ -122,6 +125,10 @@ impl WatchHost for HostSide {
             if turns.is_some_and(|t| t.running_sessions().iter().any(|s| s == session_id)) {
                 return true;
             }
+            // No backend: no host turns, so this daemon's answer is the whole answer.
+            if self.backend.is_none() {
+                return false;
+            }
             match tokio::time::timeout(AUX_WAIT, self.backend.call("chat:running", json!([]))).await {
                 Ok(Ok(Value::Array(ids))) => ids.iter().any(|v| v.as_str() == Some(session_id)),
                 // Unknown: do not wake a chat that may be running.
@@ -130,18 +137,44 @@ impl WatchHost for HostSide {
         })
     }
 
+    /// The PR's state as the watch compares it (`snapshot` in host.ts): a
+    /// fresh read through gh or the REST API, as the host made it.
     fn snapshot<'a>(&'a self, url: &'a str) -> BoxFut<'a, Result<String, String>> {
         Box::pin(async move {
-            let v = self.backend.call("watch:snapshot", json!([url])).await?;
-            v.as_str().map(str::to_string).ok_or_else(|| "PR catalog unavailable".to_string())
+            let Some(d) = self.dispatch.get() else { return Err("Agent watch scheduler is unavailable".into()) };
+            let pr = d("watch:prInfo".into(), vec![json!(url)]).await?;
+            if !js::truthy(Some(&pr)) {
+                return Err("PR catalog unavailable: check GitHub authentication, repository access, or network".into());
+            }
+            let mut out = serde_json::Map::new();
+            for k in ["state", "checks", "reviewDecision", "isDraft", "updatedAt"] {
+                if let Some(v) = pr.get(k) {
+                    out.insert(k.into(), v.clone());
+                }
+            }
+            Ok(js::stringify(&Value::Object(out)))
         })
     }
 
+    /// Continue the chat (`resume` in host.ts): refused for a chat a watch may
+    /// not drive, else a normal turn through the router; its error is the failure.
     fn resume<'a>(&'a self, session_id: &'a str, text: &'a str) -> BoxFut<'a, Result<(), String>> {
         Box::pin(async move {
-            let r = self.backend.call("watch:resume", json!([session_id, text])).await?;
-            match r.get("error").filter(|e| !e.is_null()) {
-                Some(e) => Err(js::display(e)),
+            let s = self.store.get(session_id);
+            let Some(s) = s.filter(|s| !["archivedAt", "incognito", "offline"].iter().any(|k| js::truthy(s.get(*k))))
+            else {
+                return Err("Chat cannot be resumed by a watch".into());
+            };
+            let (provider, model) = (s.get("providerId").cloned(), s.get("modelId").cloned());
+            if !js::truthy(provider.as_ref()) || !js::truthy(model.as_ref()) {
+                return Err("Chat has no selected provider/model; no fallback was used".into());
+            }
+            let Some(d) = self.dispatch.get() else { return Err("Agent watch scheduler is unavailable".into()) };
+            let opts = json!({ "sessionId": session_id, "providerId": provider, "modelId": model, "text": text });
+            let send = d("chat:send".into(), vec![opts.clone()]);
+            match crate::automation::capture_turn_error(&self.hub, &opts, async move { send.await.map(|_| ()) }).await?
+            {
+                Some(failure) => Err(failure),
                 None => Ok(()),
             }
         })
@@ -149,6 +182,7 @@ impl WatchHost for HostSide {
 }
 
 pub struct Watches {
+    dispatch: Arc<std::sync::OnceLock<crate::automation::Dispatcher>>,
     path: PathBuf,
     host: Arc<dyn WatchHost>,
     now: Arc<dyn Fn() -> f64 + Send + Sync>,
@@ -158,12 +192,28 @@ pub struct Watches {
 }
 
 impl Watches {
-    pub fn new(data_dir: PathBuf, store: Arc<SessionStore>, backend: Arc<Backend>) -> Arc<Self> {
-        Self::with(data_dir.join("agent-watches.json"), Arc::new(HostSide { store, backend }), Arc::new(now_ms))
+    pub fn new(data_dir: PathBuf, store: Arc<SessionStore>, backend: Arc<Backend>, hub: crate::hub::Hub) -> Arc<Self> {
+        let dispatch: Arc<std::sync::OnceLock<crate::automation::Dispatcher>> = Arc::default();
+        let host = Arc::new(HostSide { store, backend, hub, dispatch: dispatch.clone() });
+        let mut me = Self::with(data_dir.join("agent-watches.json"), host, Arc::new(now_ms));
+        Arc::get_mut(&mut me).expect("just made").dispatch = dispatch;
+        me
     }
 
     pub fn with(path: PathBuf, host: Arc<dyn WatchHost>, now: Arc<dyn Fn() -> f64 + Send + Sync>) -> Arc<Self> {
-        Arc::new(Self { path, host, now, polling: AtomicBool::new(false), write: tokio::sync::Mutex::new(()) })
+        Arc::new(Self {
+            dispatch: Arc::default(),
+            path,
+            host,
+            now,
+            polling: AtomicBool::new(false),
+            write: tokio::sync::Mutex::new(()),
+        })
+    }
+
+    /// How a watch reads a PR and continues a chat: through the router, as the UI would.
+    pub fn set_dispatcher(&self, d: crate::automation::Dispatcher) {
+        let _ = self.dispatch.set(d);
     }
 
     /// `list(sessionId)`: corrupt state is an error, never silently replaced.

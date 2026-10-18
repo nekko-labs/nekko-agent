@@ -15,6 +15,7 @@ import {
   VAIZER_CATALOG_URL,
   VAIZER_REPO,
   VAIZER_SNAPSHOT,
+  marketToSkillDef,
   parseSkillMarkdown,
   skillToMarkdown,
 } from '@nekko-agent/shared';
@@ -91,6 +92,7 @@ describe('skills golden set', () => {
     const run = ([op, ...a]: [string, ...any[]]): unknown => {
       switch (op) {
         case 'targets': return skillTargets();
+        case 'defs': return listInstalledSkillDefs();
         case 'list': return listInstalledSkills();
         case 'install': return installSkill(a[0], a[1], a[2]);
         case 'uninstall': return uninstallSkill(a[0], a[1]);
@@ -117,6 +119,7 @@ describe('skills golden set', () => {
       ops,
       markdown: MARKET_SKILLS.map((m) => skillToMarkdown(m)),
       parse: c.parse.map((raw: string) => parseSkillMarkdown(raw)),
+      skillDefs: [...MARKET_SKILLS, ...c.defsExtra].map((m) => marketToSkillDef(m)),
     };
     const text = `${JSON.stringify(actual, null, 2)}\n`;
     const path = join(golden, 'skills.json');
