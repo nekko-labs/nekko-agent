@@ -39,6 +39,7 @@ jobs:
       daemon_os: ${{ steps.scope.outputs.daemon_os }}
       capture_os: ${{ steps.scope.outputs.capture_os }}
       perf: ${{ steps.scope.outputs.perf }}
+      itests: ${{ steps.scope.outputs.itests }}
       run: ${{ steps.fresh.outputs.run }}
     steps:
       - uses: actions/checkout@v7
@@ -244,6 +245,56 @@ jobs:
           retention-days: 14
           path: perf-results/
           if-no-files-found: ignore
+
+  # Loopback end-to-end checks: the web edition behind nekkod, with scripted
+  # models and fake services on 127.0.0.1 (a fake Telegram Bot API and GitHub, a
+  # local relay, a Hypergate daemon from its public repo). Each script makes its
+  # own temporary data dir and home and ends its process trees. Never on a PR,
+  # and `gate` does not need this job: it reports on what lands on main (every
+  # queue group, the schedule, a dispatch) without holding anything.
+  itests:
+    needs: scope
+    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.itests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: nekko-labs/hypergate
+          path: hypergate
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: npm run build:web
+      - run: npm run build -w @nekko-agent/relay
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # nekkod, and the stand-in sd-server the image turn runs on.
+      - run: cargo build -p nekkod --examples --bins --locked
+      - name: Hypergate (for the MCP HTTP transport)
+        working-directory: hypergate
+        run: npm ci && npm run build -w @hypergate/shared && npm run build -w @hypergate/core
+      # Each step runs whatever the one before left; `if: !cancelled()` so one
+      # failure still reports the others.
+      - name: Turn variants (compaction, cancel, interrupt queued, image turn)
+        run: node scripts/itest-turn-variants.mjs
+      - name: Phone relay through the daemon
+        if: ${{ !cancelled() }}
+        run: node scripts/itest-relay-daemon.mjs
+      - name: Telegram bridge through the daemon
+        if: ${{ !cancelled() }}
+        run: node scripts/itest-messaging-daemon.mjs
+      - name: Small services through the daemon
+        if: ${{ !cancelled() }}
+        run: node scripts/itest-small-services.mjs
+      - name: MCP streamable-HTTP transport through Hypergate
+        if: ${{ !cancelled() }}
+        run: node scripts/itest-mcp-http.mjs --spawn hypergate
 
   # The one required check. It passes when every job this run needed passed and
   # the skipped ones were skipped on purpose, so branch protection and the merge

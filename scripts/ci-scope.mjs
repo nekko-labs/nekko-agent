@@ -15,6 +15,12 @@
 //
 // Unknown changed files (none listed, or a list at the API's 3,000-file cap) and
 // changes to CI itself fall back to every job of the tier.
+//
+// `itests`, the loopback end-to-end scripts (web edition + nekkod + scripted
+// models), never run on a pull request, and `gate` does not wait for them, so
+// they report without holding a PR or the queue. They run on what lands on
+// main: every merge-queue group (ci.yml has no `push` trigger; the queue's
+// group is the commit main moves to), the 6-hourly schedule and a dispatch.
 
 const RUST = [/^crates\//, /^Cargo\.(toml|lock)$/, /^rust-toolchain\.toml$/, /^rustfmt\.toml$/];
 // The daemon job also runs the host's session-clear parity tests against nekkod.
@@ -32,7 +38,7 @@ const touches = (files, patterns) => files.some(file => patterns.some(pattern =>
 
 export function ciScope({ event, files = [], labels = [] }) {
   if (FULL.has(event)) {
-    return { daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true };
+    return { daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true };
   }
   const queue = event === 'merge_group';
   const all = files.length === 0 || files.length >= FILE_LIST_CAP || touches(files, EVERYTHING);
@@ -44,6 +50,7 @@ export function ciScope({ event, files = [], labels = [] }) {
     daemon_os: [...(daemon ? ['ubuntu-latest'] : []), ...(daemon && queue ? ['windows-latest'] : []), ...(macos ? ['macos-latest'] : [])],
     capture_os: [...(capture ? ['windows-latest'] : []), ...(macos ? ['macos-latest'] : [])],
     perf,
+    itests: queue,
   };
 }
 
@@ -53,7 +60,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const files = process.env.CI_CHANGED_FILES ? readFileSync(process.env.CI_CHANGED_FILES, 'utf8').split('\n').filter(Boolean) : [];
   const labels = JSON.parse(process.env.CI_LABELS || '[]') || [];
   const scope = ciScope({ event: process.env.GITHUB_EVENT_NAME, files, labels });
-  const lines = [`daemon_os=${JSON.stringify(scope.daemon_os)}`, `capture_os=${JSON.stringify(scope.capture_os)}`, `perf=${scope.perf}`];
+  const lines = [`daemon_os=${JSON.stringify(scope.daemon_os)}`, `capture_os=${JSON.stringify(scope.capture_os)}`, `perf=${scope.perf}`, `itests=${scope.itests}`];
   console.log(`${process.env.GITHUB_EVENT_NAME}: ${files.length} changed file(s), labels ${JSON.stringify(labels)}\n${lines.join('\n')}`);
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${lines.join('\n')}\n`);
 }

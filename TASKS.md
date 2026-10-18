@@ -16,7 +16,7 @@ See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17
 - [ ] Rewrite the 38 source-text tests (`readFileSync('ChatPane.tsx')` + `toContain`) as rendered assertions or journey steps.
 - [x] ✅ 2026-10-18 Speed: fake timers in `core/loop-retry` (6.00 to 0.01 s), a shorter hang in `host/hooks` (10.43 to 2.93 s; real spawns kept, so no fake timers there), a shared git fixture in `chat-worktrees` (12.38 to 9.16 s), builtin pass/fail steps in `workflows` (4.87 to 2.83 s). Median of 3, Windows; see `docs/perf-history.md`.
 - [ ] Speed: one root Vitest workspace, a shared CI build artifact.
-- [ ] Split `crates/nekkod/tests/daemon.rs` by domain with event waits instead of sleeps; promote 4 `itest-*.mjs` to a main-only job.
+- [x] ✅ 2026-10-18 Split `crates/nekkod/tests/daemon.rs` by domain with event waits instead of sleeps; promote 4 `itest-*.mjs` to a main-only job. One test binary, `tests/daemon/main.rs`, with 11 domain modules and `tests/common/mod.rs` (separate binaries ran serially: 32 s vs 19 s); the 68 test names are unchanged apart from the module prefix; 22 condition sleeps are `until`/`until_host_call`/`until_adopted` waits, 4 elapsed-time sleeps stay. `the_daemon_runs_the_telegram_bridge` raced the unawaited `turn:adopt` (fails 1 in 8 on `main`); it and 3 others now wait for it. CI job `itests` (Linux; queue, schedule, dispatch; not in `gate`) runs turn-variants, relay-daemon, messaging-daemon, small-services and mcp-http (`--spawn`, Hypergate from its public repo); `itest-relay-daemon` was red on `main` (calls the phone allowlist refuses) and is fixed; every script ends its process tree (`scripts/itest-procs.mjs`).
 
 ## Desktop end-to-end journeys, Playwright-Electron (added 2026-10-17)
 
