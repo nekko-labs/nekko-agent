@@ -223,6 +223,7 @@ const api: NekkoApi = {
   readFile: (path) => inv(IpcChannels.fileRead, path),
   writeFile: (path, content) => inv(IpcChannels.fileWrite, path, content),
   listDir: (path) => inv(IpcChannels.dirList, path),
+  fetchRemoteImage: (url) => inv(IpcChannels.imageFetch, url),
 
   listChanges: (sessionId) => inv(IpcChannels.changesList, sessionId),
   acceptChange: (sessionId, path) => inv(IpcChannels.changeAccept, sessionId, path),

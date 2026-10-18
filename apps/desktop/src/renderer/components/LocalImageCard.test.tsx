@@ -53,14 +53,22 @@ describe('local image cards', () => {
     expect(out).toContain('disabled');
     expect(out).toContain('unavailable in Sandbox');
   });
-  it('does not auto-fetch remote images or resolve network paths', async () => {
+  it('never reads remote images as files, never mounts a remote src, and leaves network paths alone', async () => {
     const readFile = vi.fn();
-    vi.stubGlobal('window', { nekko: { readFile } });
+    const fetchRemoteImage = vi.fn();
+    vi.stubGlobal('window', { nekko: { readFile, fetchRemoteImage } });
+    // This file's useState mock hands every hook the same value: false reads as
+    // "not clicked, not near the viewport, nothing loaded", a fresh card.
+    hooks.state = false;
     const out = renderToStaticMarkup(<Markdown text={'![Remote](https://example.com/a.svg) ![UNC](//server/a.png)'} />);
     await runEffects();
     expect(readFile).not.toHaveBeenCalled();
+    // Outside a chat (no ChatImages provider) a remote image is click-to-load.
+    expect(fetchRemoteImage).not.toHaveBeenCalled();
     expect(out).not.toContain('<img');
-    expect(out).toContain('href="https://example.com/a.svg"');
+    expect(out).not.toContain('src="https://');
+    expect(out).toContain('data-remote-image="https://example.com/a.svg"');
+    expect(out).toContain('Load image');
   });
   it('reports failures and ignores a read completed after unmount', async () => {
     const readFile = vi.fn().mockRejectedValue(new Error('denied'));
