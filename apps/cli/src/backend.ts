@@ -16,7 +16,7 @@ import { IpcEvents } from '@nekko-agent/shared';
 
 /**
  * The TS host backend nekkod runs (`--nekko-backend`), outside the desktop app:
- * the web edition's and the CLI's local engine's.
+ * the Local Web UI's and the CLI's local engine's.
  *
  * The same contract as the desktop backend (`apps/desktop/src/backend/index.ts`):
  * a loopback wire with `POST /api/:channel` and `/api/events`, guarded by the

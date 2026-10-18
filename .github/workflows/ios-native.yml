@@ -7,7 +7,9 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - 'apps/ios/**'
-      - 'apps/relay/src/**'
+      - 'apps/relay-server/src/**'
+      - 'crates/nekko-remote/**'
+      - 'crates/nekkod/src/remote.rs'
       - 'packages/shared/src/phone-access.ts'
       - '.github/workflows/ios-native.yml'
   schedule:
@@ -46,8 +48,14 @@ jobs:
           npm run build:core
           npm run build -w @nekko-agent/host
           npm run build --workspace=apps/cli
-          npm run build -w @nekko-agent/server
-          npm run build -w @nekko-agent/relay
+          npm run build -w @nekko-agent/local-web-ui
+          npm run build -w @nekko-agent/relay-server
+      # Relay-agent mode runs on nekkod (found in target/ beside the checkout).
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: phone-itest
+      - run: cargo build -p nekkod --locked
       - name: Phone ↔ relay ↔ computer over URLSessionTransport
         run: apps/ios/scripts/itest.sh
       - name: Install XcodeGen

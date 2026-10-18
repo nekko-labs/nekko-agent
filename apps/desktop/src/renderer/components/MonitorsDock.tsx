@@ -508,7 +508,7 @@ const LOCAL_MODELS_POLL_MS = 6000;
 
 /**
  * What the local engine holds in memory and where each model runs, with a jump
- * to that model's own settings on Nekko Server. Read-only by design: GPU offload,
+ * to that model's own settings on Model Server. Read-only by design: GPU offload,
  * context and KV cache are load-time settings with a reload behind them, and they
  * belong on the page that explains what changing them costs.
  */
@@ -556,7 +556,7 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
           </p>
         </div>;
       })}
-    <button type="button" className="monitors-dock__text-button" onClick={openServer}>{status?.install.binPath ? 'Open Nekko Server' : 'Set up a local model'}</button>
+    <button type="button" className="monitors-dock__text-button" onClick={openServer}>{status?.install.binPath ? 'Open Model Server' : 'Set up a local model'}</button>
   </div>;
 }
 

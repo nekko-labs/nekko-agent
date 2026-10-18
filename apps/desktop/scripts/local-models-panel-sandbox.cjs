@@ -55,7 +55,7 @@ app.whenReady().then(async () => {
       // The point of the feature: one click from the panel to that model's own settings.
       await run("integration.reset()"); await sleep(1500);
       await run("document.querySelector('[data-local-model-settings=\"gemma3-27b-q4\"]').click()"); await sleep(2500);
-      await check('click: navigates to Nekko Server', "integration.state().view==='modelserver'");
+      await check('click: navigates to Model Server', "integration.state().view==='modelserver'");
       await check('click: opens the clicked model drawer', "!!document.querySelector('[data-resident-row=\"gemma3-27b-q4\"] [data-engine-load-drawer]')");
       await check('click: other model stays folded', "!document.querySelector('[data-resident-row=\"qwen3-8b-q4\"] [data-engine-load-drawer]')");
       await check('click: drawer is scrolled into view', "(()=>{const r=document.querySelector('[data-resident-row=\"gemma3-27b-q4\"]').getBoundingClientRect();return r.top>=0&&r.top<innerHeight})()");

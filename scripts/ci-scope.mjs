@@ -16,7 +16,7 @@
 // Unknown changed files (none listed, or a list at the API's 3,000-file cap) and
 // changes to CI itself fall back to every job of the tier.
 //
-// `itests`, the loopback end-to-end scripts (web edition + nekkod + scripted
+// `itests`, the loopback end-to-end scripts (Local Web UI + nekkod + scripted
 // models), never run on a pull request, and `gate` does not wait for them, so
 // they report without holding a PR or the queue. They run on what lands on
 // main: every merge-queue group (ci.yml has no `push` trigger; the queue's
@@ -26,8 +26,8 @@ const RUST = [/^crates\//, /^Cargo\.(toml|lock)$/, /^rust-toolchain\.toml$/, /^r
 // The daemon job also runs the host's session-clear parity tests against nekkod.
 const DAEMON = [...RUST, /^packages\/(host|core|shared)\//];
 const CAPTURE = [/^apps\/desktop\//, /^packages\//];
-// The speed contract measures the web edition: renderer, engine, server, daemon.
-const PERF = [/^scripts\/perf\//, /^apps\/desktop\/src\/renderer\//, /^apps\/web-app-server\//, /^packages\//, ...RUST];
+// The speed contract measures the Local Web UI: renderer, engine, server, daemon.
+const PERF = [/^scripts\/perf\//, /^apps\/desktop\/src\/renderer\//, /^apps\/local-web-ui\//, /^packages\//, ...RUST];
 // Changes here can affect any job.
 const EVERYTHING = [/^\.github\/workflows\/ci\.yml$/, /^scripts\/ci-scope\.mjs$/, /^package(-lock)?\.json$/];
 

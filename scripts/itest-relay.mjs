@@ -5,7 +5,7 @@
 // and live revocation (kick + re-deny).
 //
 // Usage: node scripts/itest-relay.mjs [--relay=wss://nekko-agent-relay.fly.dev] [baseUrl] [model]
-// With no --relay, spawns a local relay from apps/relay/dist.
+// With no --relay, spawns a local relay from apps/relay-server/dist.
 import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -39,7 +39,7 @@ const check = (name, ok, detail = '') => {
 // 1. relay (skipped when testing a remote/managed relay)
 if (!relayArg) {
   procs.push(
-    spawn('node', ['apps/relay/dist/index.js'], {
+    spawn('node', ['apps/relay-server/dist/index.js'], {
       env: { ...process.env, NEKKO_RELAY_PORT: String(RELAY_PORT), NEKKO_RELAY_HOST: '127.0.0.1' },
       stdio: 'ignore',
     }),
@@ -49,7 +49,7 @@ if (!relayArg) {
 
 // 2. relay-agent (the "local machine"); capture its printed pairing code.
 let pairCode = null;
-const agent = spawn('node', ['apps/web-app-server/dist/index.js'], {
+const agent = spawn('node', ['apps/local-web-ui/dist/index.js'], {
   env: {
     ...process.env,
     NEKKO_RELAY_URL: RELAY_URL,

@@ -15,7 +15,9 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - 'apps/mobile/**'
-      - 'apps/relay/**'
+      - 'apps/relay-server/**'
+      - 'crates/nekko-remote/**'
+      - 'crates/nekkod/src/remote.rs'
       - 'packages/shared/src/e2e.ts'
       - 'packages/shared/src/remote.ts'
       - 'packages/shared/src/ipc.ts'
@@ -37,7 +39,13 @@ jobs:
           cache: npm
       - run: npm ci
       # The integration test drives a real relay and a headless agent.
-      - run: npm run build:core && npm run build -w @nekko-agent/host && npm run build --workspace=apps/cli && npm run build -w @nekko-agent/server && npm run build -w @nekko-agent/relay
+      - run: npm run build:core && npm run build -w @nekko-agent/host && npm run build --workspace=apps/cli && npm run build -w @nekko-agent/local-web-ui && npm run build -w @nekko-agent/relay-server
+      # Relay-agent mode runs on nekkod (found in target/ beside the checkout).
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: phone-itest
+      - run: cargo build -p nekkod --locked
       - name: Install app dependencies
         working-directory: apps/mobile
         run: npm ci --ignore-scripts

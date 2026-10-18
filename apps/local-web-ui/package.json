@@ -1,0 +1,27 @@
+{
+  "name": "@nekko-agent/local-web-ui",
+  "version": "0.8.1",
+  "private": true,
+  "type": "module",
+  "description": "Nekko Agent Local Web UI: the same engine and UI as the desktop app, served to a browser from your own machine.",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start": "node dist/index.js",
+    "bundle": "node scripts/bundle.mjs"
+  },
+  "dependencies": {
+    "@nekko-agent/host": "*",
+    "@nekko-agent/shared": "*",
+    "@fastify/rate-limit": "^11.2.1",
+    "@fastify/static": "^10.1.5",
+    "@fastify/websocket": "^11.3.3",
+    "nekko-agent": "*",
+    "fastify": "^5.12.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

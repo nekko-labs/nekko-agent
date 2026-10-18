@@ -595,7 +595,7 @@ Conditions: fake bench, 10 turns per route, host busy unless noted
 
 Source: [#442](https://github.com/nekko-labs/nekko-agent/pull/442).
 
-### #439 Web edition behind nekkod (2026-10-11)
+### #439 Local Web UI behind nekkod (2026-10-11)
 Area: engine daemon. Result: mixed
 
 | Metric | Before | After |

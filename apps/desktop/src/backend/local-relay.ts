@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { isTailscaleIPv4, LOCAL_RELAY_PORT, type LocalRelayStatus } from '@nekko-agent/shared';
 
 /**
- * "Relay on this computer" (TASKS.md PH4): the desktop runs `apps/relay`
+ * "Relay on this computer" (TASKS.md PH4): the desktop runs `apps/relay-server`
  * itself, bound to this computer's Tailscale address, so a phone on the same
  * tailnet reaches it over WireGuard with no hosted relay in between. It
  * replaces `scripts/private-relay.*`.

@@ -5,7 +5,7 @@
 import { spawn } from 'node:child_process';
 
 const PORT = 4456;
-const relay = spawn('node', ['apps/relay/dist/index.js'], {
+const relay = spawn('node', ['apps/relay-server/dist/index.js'], {
   env: { ...process.env, NEKKO_RELAY_PORT: String(PORT), APNS_KEY_P8: '', APNS_KEY_ID: '', APNS_TEAM_ID: '' },
 });
 let log = '';

@@ -11,7 +11,7 @@ import { ExternalIcon } from '../icons.js';
 /**
  * Only http(s) ever reaches the frame. Anything else typed with a scheme
  * (`javascript:`, `file:`, `data:`) would run in, or read from, the app's
- * own origin through the web edition's iframe, so it shows nothing; so does
+ * own origin through the Local Web UI's iframe, so it shows nothing; so does
  * the app's own origin, which the sandbox cannot contain.
  */
 function safeUrl(candidate: string): string {
@@ -37,7 +37,7 @@ export function normalizeUrl(input: string): string {
   return safeUrl(`https://duckduckgo.com/?q=${encodeURIComponent(s)}`);
 }
 
-/** Electron renders <webview>; a plain browser (the web edition) does not, so it gets an iframe. */
+/** Electron renders <webview>; a plain browser (the Local Web UI) does not, so it gets an iframe. */
 const HAS_WEBVIEW = typeof navigator !== 'undefined' && /Electron\//.test(navigator.userAgent);
 
 export function BrowserPane({ url: initial }: { url: string }) {

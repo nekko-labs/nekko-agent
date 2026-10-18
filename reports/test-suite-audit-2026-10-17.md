@@ -7,7 +7,7 @@ Scope: every test layer in `nekko-labs/nekko-agent` at `73028f66` (main). Read-o
 | Layer | Runner | Where | Size | Runs in CI? |
 |---|---|---|---|---|
 | Root script unit tests | `node --test` | `scripts/*.test.mjs` (10 listed in root `npm test`) | 14 files, ~40 cases | yes (`build`) |
-| TS unit/component | Vitest (no config files except mobile; package defaults) | `packages/{shared,core,host}`, `apps/{desktop,cli,cloud,relay,web-app-server,api,mobile}` | ~470 files, ~3,600 tests | yes (`build`; api/mobile in their own workflows) |
+| TS unit/component | Vitest (no config files except mobile; package defaults) | `packages/{shared,core,host}`, `apps/{desktop,cli,cloud,relay,local-web-ui,api,mobile}` | ~470 files, ~3,600 tests | yes (`build`; api/mobile in their own workflows) |
 | **Golden parity oracles** (TS→Rust) | Vitest writes JSON, `cargo test` replays it | 47 `*.golden.test.ts` → `crates/*/tests/golden/*.json` | 47 TS + ~30 Rust files | yes (both) |
 | Rust unit + crate integration | `cargo test --workspace` | 53 `crates/*/tests/*.rs` + inline | ~300 tests | yes, 3 OS (`daemon`) |
 | Real-binary daemon tests | cargo, spawns `nekkod` | `crates/nekkod/tests/daemon.rs` (5,283 lines, 68 tests) | 1 file | yes, 3 OS |
@@ -41,7 +41,7 @@ flowchart TB
 | packages/core | 8.8 s | 503 | 0 |
 | apps/desktop | 7.5 s | 1,355 | 3 |
 | apps/cli | 4.8 s | 118 | 0 |
-| apps/cloud / web-app-server / shared / relay | 2-3 s each | 681 | 0 |
+| apps/nekko-agent-api/cloud / local-web-ui / shared / relay | 2-3 s each | 681 | 0 |
 | **Total vitest** | **~53 s sequential** | 4,151* | 6 |
 
 \*Includes 358 duplicate runs (see F1). Summed per-file time is 157 s; the 47 golden files take 48 s of it (31%).

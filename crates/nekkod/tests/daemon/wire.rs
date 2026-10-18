@@ -56,7 +56,7 @@ async fn authenticated_chat_turn_http_body_exceeds_old_limit_without_truncation(
     // response. A larger reqwest upload can race the early 413 and fail with
     // BrokenPipe on Linux before reqwest exposes the response at all.
     use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
-    // Other calls are capped at 25 MiB, the web edition's public limit (wire.rs).
+    // Other calls are capped at 25 MiB, the Local Web UI's public limit (wire.rs).
     let limit = 25 * 1024 * 1024;
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", d.port)).await.unwrap();
     stream

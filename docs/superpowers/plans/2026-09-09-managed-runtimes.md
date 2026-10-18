@@ -1003,7 +1003,7 @@ git commit -am "feat(host): runtime control-plane IPC across desktop and web"
 - [ ] **Step 1: `AddressField.tsx`.** Monospace value, a copy button that swaps to a check for 1.2 s, and an inline edit (pencil, then an input with Save/Cancel) that calls `providersSave` with the new `baseUrl` and re-runs detection. Escape cancels, Enter saves.
 - [ ] **Step 2: `RuntimeCard.tsx`.** Header row: name, status dot (green running, amber starting, grey stopped, red error), version, uptime. Power toggle driven by `capabilities.canStart`: a working switch when true, and a "Connect only" chip with a tooltip when false. Under it, `AddressField`, then a VRAM bar for the card's device with resident models segmented in, then resident model rows. On a failed start, render the last log lines in a collapsible `<pre>`.
 - [ ] **Step 3: Wire into `ModelsView.tsx`.** In `ProviderCard`, when `isLocalProvider(provider.kind)`, render `RuntimeCard` above the existing model list. Cloud providers are untouched. Keep the existing 6 s poll and feed it `runtimeStatus`.
-- [ ] **Step 4: Verify over the web edition** (`npm run web`), then commit.
+- [ ] **Step 4: Verify over the Local Web UI** (`npm run web`), then commit.
 
 ---
 

@@ -1,6 +1,6 @@
 /**
  * The relay this computer runs for its own phones (Settings → Remote access →
- * Relay on this computer): `apps/relay`, bundled into the app as
+ * Relay on this computer): `apps/relay-server`, bundled into the app as
  * `out/main/relay.js` and started by `local-relay.ts` with the app's Electron
  * binary under `ELECTRON_RUN_AS_NODE=1`.
  *
@@ -14,8 +14,8 @@
  * `NEKKO_RELAY_READY {"port":N}` once listening; exits when stdin closes, so it
  * never outlives the backend that started it.
  */
-import { createPushSender } from '../../../relay/src/push.js';
-import { buildRelay } from '../../../relay/src/server.js';
+import { createPushSender } from '../../../relay-server/src/push.js';
+import { buildRelay } from '../../../relay-server/src/server.js';
 
 async function main(): Promise<void> {
   const host = process.env.NEKKO_RELAY_HOST;

@@ -65,7 +65,7 @@ export function ModelServerView() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
-        {!hasAppChrome && <h1 className="view-title">Nekko Server</h1>}
+        {!hasAppChrome && <h1 className="view-title">Model Server</h1>}
         <p className="mt-1 text-[13px] text-ink-faint">
           Run models on this machine, and let anything else on it drive Nekko Agent.
         </p>

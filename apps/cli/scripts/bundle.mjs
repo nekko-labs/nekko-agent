@@ -30,7 +30,7 @@ await Promise.all([
     entryPoints: [resolve(cliDir, 'src/run.ts')],
     outfile: resolve(dist, 'run.js'),
   }),
-  // The engine launcher and backend runner, for nekko-agent-web and other embedders.
+  // The engine launcher and backend runner, for nekko-agent-local-web-ui and other embedders.
   ...['engine', 'backend'].map((name) =>
     build({
       ...bundleOptions,

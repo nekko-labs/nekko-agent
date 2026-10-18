@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
-// The relay "Relay on this computer" ships is apps/relay bundled into
+// The relay "Relay on this computer" ships is apps/relay-server bundled into
 // out/main/relay.js (CI builds every workspace before npm test). Bundling once
 // turned ws's optional bufferutil into an empty stub, and the relay died on the
 // first masked frame a phone sent: run the real bundle and push frames through it.

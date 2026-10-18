@@ -94,7 +94,7 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       # Build every workspace first: the cloud test suite imports @nekko-agent/host,
-      # and @nekko-agent/server imports the CLI package, so their dists must exist
+      # and @nekko-agent/local-web-ui imports the CLI package, so their dists must exist
       # before `npm test` / typecheck run.
       - run: npm run build:web
       # The TypeScript build is OS-independent: `perf` downloads this one rather
@@ -214,7 +214,7 @@ jobs:
           if-no-files-found: error
 
   # The speed contract (SPEC.md, "Speed & responsiveness"): headless Chrome over
-  # the DevTools protocol against the web edition and a scripted model. Fails
+  # the DevTools protocol against the Local Web UI and a scripted model. Fails
   # when a p95 exceeds its budget; the report is uploaded either way so a
   # regression shows its numbers, not only a red cross. It runs in the merge
   # queue for changes it can measure, so a regression is stopped before main,
@@ -232,7 +232,7 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      # The web edition runs behind the engine daemon, as the desktop does; the
+      # The Local Web UI runs behind the engine daemon, as the desktop does; the
       # server finds this release build in target/ (so the terminal keypress
       # budget measures nekkod's pty and its /api/term socket).
       - uses: dtolnay/rust-toolchain@stable
@@ -296,7 +296,7 @@ jobs:
           path: perf-results/
           if-no-files-found: ignore
 
-  # Loopback end-to-end checks: the web edition behind nekkod, with scripted
+  # Loopback end-to-end checks: the Local Web UI behind nekkod, with scripted
   # models and fake services on 127.0.0.1 (a fake Telegram Bot API and GitHub, a
   # local relay, a Hypergate daemon from its public repo). Each script makes its
   # own temporary data dir and home and ends its process trees. Never on a PR,
@@ -321,7 +321,7 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: npm run build:web
-      - run: npm run build -w @nekko-agent/relay
+      - run: npm run build -w @nekko-agent/relay-server
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # nekkod, and the stand-in sd-server the image turn runs on.

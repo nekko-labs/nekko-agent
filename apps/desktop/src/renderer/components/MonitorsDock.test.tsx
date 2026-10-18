@@ -193,7 +193,7 @@ describe('Local models monitor', () => {
     expect(html).toContain('data-local-model-settings="qwen"');
     expect(html).toContain('data-local-model-settings="gemma"');
     expect(html).toContain('aria-label="Open Gemma 3 27B settings"');
-    expect(html).toContain('Open Nekko Server');
+    expect(html).toContain('Open Model Server');
   });
   it('falls back to the model id when the library has no entry for it', () => {
     const html = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'ghost' }] }), models: [] }} />);

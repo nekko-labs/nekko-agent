@@ -28,7 +28,7 @@ export default defineConfig({
         // `backend` is the engine's TS half, run by nekkod under
         // ELECTRON_RUN_AS_NODE (see src/backend/index.ts). It must never
         // import `electron`.
-        // `relay` is apps/relay, bundled for "Relay on this computer"; the
+        // `relay` is apps/relay-server, bundled for "Relay on this computer"; the
         // backend starts it the same way nekkod starts the backend.
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),

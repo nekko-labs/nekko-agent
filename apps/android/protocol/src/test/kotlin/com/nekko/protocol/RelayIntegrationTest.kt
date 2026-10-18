@@ -30,8 +30,8 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
- * The Android relay client against the real thing: the relay (apps/relay/dist),
- * a headless agent (apps/web-app-server/dist in relay-agent mode, TS loop) and a fake
+ * The Android relay client against the real thing: the relay (apps/relay-server/dist),
+ * a headless agent (apps/local-web-ui/dist in relay-agent mode, TS loop) and a fake
  * OpenAI-compatible model. Proves the phone path end to end: enrollment with
  * the one-time code, the host's channels, a streamed chat turn, a guarded tool
  * call approved from the phone, and denial of strangers and a spent code.
@@ -60,14 +60,14 @@ class RelayIntegrationTest {
 
         @BeforeClass @JvmStatic fun start() {
             assumeTrue("set NEKKO_ITEST=1 to run", System.getenv("NEKKO_ITEST") == "1")
-            assumeTrue("build apps/relay and apps/web-app-server first", File(root, "apps/relay/dist/index.js").exists() && File(root, "apps/web-app-server/dist/index.js").exists())
+            assumeTrue("build apps/relay-server and apps/local-web-ui first", File(root, "apps/relay-server/dist/index.js").exists() && File(root, "apps/local-web-ui/dist/index.js").exists())
             keyBytes = E2E.deriveKey(key, room)
             val relayPort = freePort()
             val modelPort = freePort()
             relayUrl = "ws://127.0.0.1:$relayPort"
 
             node("apps/android/scripts/fake-model.mjs", modelPort.toString()).drain()
-            node("apps/relay/dist/index.js", env = mapOf(
+            node("apps/relay-server/dist/index.js", env = mapOf(
                 "NEKKO_RELAY_PORT" to relayPort.toString(), "NEKKO_RELAY_HOST" to "127.0.0.1",
                 "NEKKO_RELAY_ALLOW_UNAUTHENTICATED" to "1",
             )).drain()
@@ -78,7 +78,7 @@ class RelayIntegrationTest {
                 {"providers":[{"id":"fake","kind":"openai-compat","label":"Fake","baseUrl":"http://127.0.0.1:$modelPort/v1","apiKey":"sk-should-never-reach-the-phone","enabled":true}],
                  "defaultProviderId":"fake","defaultModelId":"fake-model","phoneChanges":true}
             """.trimIndent())
-            val agent = node("apps/web-app-server/dist/index.js", env = mapOf(
+            val agent = node("apps/local-web-ui/dist/index.js", env = mapOf(
                 "NEKKO_RELAY_URL" to relayUrl, "NEKKO_ROOM" to room, "NEKKO_PAIR_KEY" to key,
                 "NEKKO_DATA_DIR" to data.absolutePath,
             ), dir = data) // so files the fake model writes land in the data dir, not the repo

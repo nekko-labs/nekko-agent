@@ -426,9 +426,9 @@ export function createEngineServer(deps: EngineServerDeps) {
     const bin = image ? await deps.diffusionBinPath?.() : mlx ? await deps.mlxBinPath?.() : await deps.binPath();
     if (!bin) {
       const message = image
-        ? 'Install stable-diffusion.cpp from Nekko Server to run this image-generation model.'
+        ? 'Install stable-diffusion.cpp from Model Server to run this image-generation model.'
         : mlx
-          ? (model.mlxRunnable ? 'Install MLX from Nekko Server to run this model.' : `${model.name} is an MLX model, which runs on Apple Silicon Macs only.`)
+          ? (model.mlxRunnable ? 'Install MLX from Model Server to run this model.' : `${model.name} is an MLX model, which runs on Apple Silicon Macs only.`)
           : 'No engine is installed.';
       lastLoadErrors.set(modelId, message);
       return { ok: false, message };

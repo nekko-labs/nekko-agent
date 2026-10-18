@@ -10,7 +10,7 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start", "-w", "@nekko-agent/server"],
+      "runtimeArgs": ["run", "start", "-w", "@nekko-agent/local-web-ui"],
       "port": 1440
     }
   ]

@@ -1,5 +1,5 @@
 // The phone path with the relay agent in the engine daemon (crates/nekko-remote):
-// a device on a local apps/relay reaches the web edition, which runs behind
+// a device on a local apps/relay-server reaches the Local Web UI, which runs behind
 // nekkod, whose agent dials the relay. Checks transport auth, the sealed HELLO,
 // one-time pairing, requests to the daemon and through it to the TS host,
 // host events fanned out to the phone, the phone channel allowlist, and live
@@ -9,7 +9,7 @@
 // its own relay on loopback.
 //
 // Usage: node scripts/itest-relay-daemon.mjs [path/to/nekkod]
-// Needs `npm run build:web`, `npm run build -w @nekko-agent/relay` and a cargo build of nekkod.
+// Needs `npm run build:web`, `npm run build -w @nekko-agent/relay-server` and a cargo build of nekkod.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -49,14 +49,14 @@ const check = (name, ok, detail = '') => {
 };
 
 procs.push(
-  spawn(process.execPath, ['apps/relay/dist/index.js'], {
+  spawn(process.execPath, ['apps/relay-server/dist/index.js'], {
     env: { ...process.env, NEKKO_RELAY_PORT: String(RELAY_PORT), NEKKO_RELAY_HOST: '127.0.0.1', NEKKO_RELAY_ALLOW_UNAUTHENTICATED: '1' },
     stdio: 'ignore',
     ...treeOptions,
   }),
 );
 let serverOut = '';
-const server = spawn(process.execPath, ['apps/web-app-server/dist/index.js'], {
+const server = spawn(process.execPath, ['apps/local-web-ui/dist/index.js'], {
   env: {
     ...process.env,
     NEKKO_PORT: String(SERVER_PORT),
@@ -91,7 +91,7 @@ try {
     info = await api('daemon:info').catch(() => null);
     if (!info) await sleep(250);
   }
-  check('the web edition runs behind nekkod', info?.app === 'nekkod', JSON.stringify(info?.backend));
+  check('the Local Web UI runs behind nekkod', info?.app === 'nekkod', JSON.stringify(info?.backend));
   check('the daemon owns remote access', info?.owned?.includes('remote:status'));
 
   const status = await api('remote:enable', RELAY_URL);

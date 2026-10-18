@@ -221,7 +221,7 @@ interface UiState {
    * opens that model's drawer, scrolls to it, and clears the request.
    */
   localModelFocus: string | null;
-  /** Go to Nekko Server with this resident model's settings open. */
+  /** Go to Model Server with this resident model's settings open. */
   openLocalModelSettings: (modelId: string) => void;
   clearLocalModelFocus: () => void;
 
@@ -1007,7 +1007,7 @@ export const useStore = create<UiState>((set, get) => ({
         hypergate: found && s.hypergate?.port === found.port ? { ...s.hypergate, ...found } : found,
       }));
     } catch {
-      // An older host (or the web edition talking to one) has no such channel;
+      // An older host (or the Local Web UI talking to one) has no such channel;
       // "no daemon" is the honest answer there, not an error worth showing.
       set({ hypergate: null });
     }

@@ -1,6 +1,6 @@
 /**
  * The phone's relay client against the real thing: a local relay
- * (apps/relay/dist), a headless agent (apps/web-app-server/dist in relay-agent mode)
+ * (apps/relay-server/dist), a headless agent (apps/local-web-ui/dist in relay-agent mode)
  * and a fake OpenAI-compatible model server that streams a reply. Proves the
  * whole phone path: enrollment with the one-time code, the host's channels,
  * a chat turn streamed back as `agent:event`s, and denial of a stranger.
@@ -75,7 +75,7 @@ describe.skipIf(!process.env.NEKKO_ITEST)('phone ↔ relay ↔ computer', () => 
   beforeAll(async () => {
     modelServer = await startFakeModel();
     procs.push(
-      spawn(process.execPath, [join(ROOT, 'apps/relay/dist/index.js')], {
+      spawn(process.execPath, [join(ROOT, 'apps/relay-server/dist/index.js')], {
         env: { ...process.env, NEKKO_RELAY_PORT: String(RELAY_PORT), NEKKO_RELAY_HOST: '127.0.0.1', NEKKO_RELAY_ALLOW_UNAUTHENTICATED: '1' },
         stdio: 'ignore',
       }),
@@ -90,7 +90,7 @@ describe.skipIf(!process.env.NEKKO_ITEST)('phone ↔ relay ↔ computer', () => 
         defaultModelId: 'fake-model',
       }),
     );
-    const agent = spawn(process.execPath, [join(ROOT, 'apps/web-app-server/dist/index.js')], {
+    const agent = spawn(process.execPath, [join(ROOT, 'apps/local-web-ui/dist/index.js')], {
       env: {
         ...process.env,
         NEKKO_RELAY_URL: RELAY_URL,

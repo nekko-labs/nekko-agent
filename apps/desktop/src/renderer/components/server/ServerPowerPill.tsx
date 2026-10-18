@@ -11,7 +11,7 @@ import { PowerIcon } from '../runtimes/RuntimeCard.js';
  * says "Serving" or "Stopped", and clicking it flips that.
  *
  * Shared by the model server and the agent server so the two power controls on
- * the Nekko Server page look and behave identically.
+ * the Model Server page look and behave identically.
  *
  * Running is filled with the success tone (the same green the old "Serving"
  * badge used); stopped is a neutral outline, so an off server reads as quiet

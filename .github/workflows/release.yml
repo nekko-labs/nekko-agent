@@ -369,13 +369,13 @@ jobs:
     name: Build nekkod for npm
     uses: ./.github/workflows/nekkod-npm.yml
 
-  # The self-hosted web edition (`npx nekko-agent-web`) and the per-platform
+  # The self-hosted Local Web UI (`npx nekko-agent-local-web-ui`) and the per-platform
   # engine daemons it installs as optional dependencies. Gated exactly like
   # publish-cli: an NPM_TOKEN secret, or npm Trusted Publishing over OIDC. The
   # owner must own the @nekko-agent scope on npm and register this workflow as
-  # a trusted publisher for nekko-agent-web and each @nekko-agent/nekkod-* package.
+  # a trusted publisher for nekko-agent-local-web-ui and each @nekko-agent/nekkod-* package.
   publish-web:
-    name: Publish web edition package
+    name: Publish Local Web UI package
     needs: [release, nekkod-npm]
     runs-on: ubuntu-latest
     permissions:
@@ -397,7 +397,7 @@ jobs:
           pattern: nekkod-*
           path: nekkod-bins
           merge-multiple: true
-      - name: Publish the nekkod packages, then nekko-agent-web
+      - name: Publish the nekkod packages, then nekko-agent-local-web-ui
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
@@ -423,16 +423,16 @@ jobs:
             }
           }
           # The platform packages first: the bundle pins them at this version.
-          node apps/web-app-server/scripts/nekkod-packages.mjs --bins nekkod-bins --out npm-nekkod --version "$version" --require-all
+          node apps/local-web-ui/scripts/nekkod-packages.mjs --bins nekkod-bins --out npm-nekkod --version "$version" --require-all
           for dir in npm-nekkod/*/; do
             publish "$dir" "$(node -p "require('./${dir}package.json').name")"
           done
-          npm pkg set "version=$version" --workspace=apps/web-app-server
+          npm pkg set "version=$version" --workspace=apps/local-web-ui
           npm install --package-lock-only --ignore-scripts
           npm ci
           npm run build:web
-          npm run bundle -w @nekko-agent/server
-          publish apps/web-app-server/cli-dist nekko-agent-web
+          npm run bundle -w @nekko-agent/local-web-ui
+          publish apps/local-web-ui/cli-dist nekko-agent-local-web-ui
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'

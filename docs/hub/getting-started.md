@@ -100,7 +100,7 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 | Command | What it does |
 | --- | --- |
 | `npm run web` | The same app in your browser at `http://localhost:1440` |
-| `docker compose up` | The web edition inside Docker, with your workspaces mounted as volumes |
+| `docker compose up` | The Local Web UI inside Docker, with your workspaces mounted as volumes |
 | `npm run build` | Build everything without launching |
 | `npm test` | Run the tests in every workspace |
 

@@ -54,7 +54,7 @@ pub struct Config {
     /// release's download URL); tests point it at a loopback server.
     pub decision_models_url: Option<String>,
     /// The app's version for `app:info` (the desktop app's); absent, the
-    /// web edition's `NEKKO_VERSION`, else `0.0.0`.
+    /// Local Web UI's `NEKKO_VERSION`, else `0.0.0`.
     pub app_version: Option<String>,
     /// `desktop` or `web` for `app:info`; absent means `web`.
     pub edition: Option<String>,
@@ -65,7 +65,7 @@ pub struct Config {
     pub telegram_api_url: Option<String>,
     /// The desktop app around the daemon, for the channels Electron main
     /// used to answer (native.rs): dialogs, opening paths, the microphone,
-    /// the updater. Absent (the web edition, Docker), they are not served.
+    /// the updater. Absent (the Local Web UI, Docker), they are not served.
     pub native: Option<NativeConfig>,
 }
 

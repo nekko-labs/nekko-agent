@@ -7,7 +7,9 @@ on:
   pull_request:
     paths:
       - 'apps/android/**'
-      - 'apps/relay/**'
+      - 'apps/relay-server/**'
+      - 'crates/nekko-remote/**'
+      - 'crates/nekkod/src/remote.rs'
       - 'packages/shared/src/e2e.ts'
       - 'packages/shared/src/remote.ts'
       - 'packages/shared/src/ipc.ts'
@@ -49,8 +51,14 @@ jobs:
           npm run build:core
           npm run build -w @nekko-agent/host
           npm run build --workspace=apps/cli
-          npm run build -w @nekko-agent/server
-          npm run build -w @nekko-agent/relay
+          npm run build -w @nekko-agent/local-web-ui
+          npm run build -w @nekko-agent/relay-server
+      # Relay-agent mode runs on nekkod (found in target/ beside the checkout).
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: phone-itest
+      - run: cargo build -p nekkod --locked
       - name: Unit, cross-language and integration tests
         working-directory: apps/android
         env:
@@ -107,8 +115,14 @@ jobs:
           npm run build:core
           npm run build -w @nekko-agent/host
           npm run build --workspace=apps/cli
-          npm run build -w @nekko-agent/server
-          npm run build -w @nekko-agent/relay
+          npm run build -w @nekko-agent/local-web-ui
+          npm run build -w @nekko-agent/relay-server
+      # Relay-agent mode runs on nekkod (found in target/ beside the checkout).
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: phone-itest
+      - run: cargo build -p nekkod --locked
       - name: Build the app and its UI tests
         working-directory: apps/android
         run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --console=plain

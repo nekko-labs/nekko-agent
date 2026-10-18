@@ -372,9 +372,9 @@ Nekko Agent starts in your system's light or dark mode. Leave the theme on
 light or dark preset to keep that look. The pixel Nekko in the desktop's top
 bar stays the same as you move between pages; the heading names the page.
 
-If Settings or Nekko Server cannot load, the page shows the problem and a
+If Settings or Model Server cannot load, the page shows the problem and a
 **Try again** button. On desktop, start a stopped service from the tray menu,
-then retry. In the web edition, check that the Nekko service is running.
+then retry. In the Local Web UI, check that the Nekko service is running.
 Existing content stays visible when a refresh fails.
 
 Agent shell commands are noninteractive: stdin closes immediately, so prompts

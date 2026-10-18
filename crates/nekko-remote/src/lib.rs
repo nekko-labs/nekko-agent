@@ -3,7 +3,7 @@
 //! `packages/host/src/relay.ts`, `remote.ts` and `packages/shared/src/remote.ts`
 //! / `e2e.ts`.
 //!
-//! The phone apps (Expo, iOS, Android) and `apps/relay` speak this protocol,
+//! The phone apps (Expo, iOS, Android) and `apps/relay-server` speak this protocol,
 //! so it is held to the TS code frame for frame by a golden set the TS writes
 //! (`packages/host/src/remote.golden.test.ts`): key derivation, sealed frames,
 //! HELLO verdicts, the `remote.json` written across a run of operations, and

@@ -7,7 +7,7 @@
 //! tools hold (`integrations:*`, `nekko-workspace`'s `integrations`).
 //! `session:watches` is in `watches.rs`.
 //!
-//! Served only with a data directory (the desktop app and the web edition);
+//! Served only with a data directory (the desktop app and the Local Web UI);
 //! the backend learns it must not run its own update-check scheduler from
 //! `NEKKOD_OWNS=update-checks`.
 
@@ -137,7 +137,7 @@ fn refresh_all(home: &str, target: &Value) -> Result<Value, String> {
 // ---- app:info ----
 
 /// The app facts `app:info` reports: the desktop app's version (its launch
-/// config) or the web edition's (`NEKKO_VERSION`), and which edition.
+/// config) or the Local Web UI's (`NEKKO_VERSION`), and which edition.
 #[derive(Clone, Debug, Default)]
 pub struct AppFacts {
     pub version: Option<String>,
@@ -145,7 +145,7 @@ pub struct AppFacts {
 }
 
 /// `appInfo()`: `{ version, platform, edition }`, as Electron main (desktop)
-/// or the web edition's host answered it.
+/// or the Local Web UI's host answered it.
 pub fn app_info(facts: &AppFacts) -> Value {
     let version =
         facts.version.clone().or_else(|| std::env::var("NEKKO_VERSION").ok()).unwrap_or_else(|| "0.0.0".into());

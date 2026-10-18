@@ -6,9 +6,9 @@ import { defineConfig } from 'vitest/config';
 // package as root, so include/exclude, tsconfig (desktop's JSX) and the
 // package's own vitest.config.ts (shared and cli exclude dist/) apply exactly
 // as under `npm test -w <pkg>`, which still works on its own.
-// apps/mobile and apps/api keep their own runners and are not part of root
+// apps/mobile and apps/nekko-agent-api keep their own runners and are not part of root
 // `npm test`.
-const packages = ['packages/shared', 'packages/core', 'apps/desktop', 'apps/cloud', 'packages/host', 'apps/web-app-server', 'apps/relay', 'apps/cli'];
+const packages = ['packages/shared', 'packages/core', 'apps/desktop', 'apps/nekko-agent-api/cloud', 'packages/host', 'apps/local-web-ui', 'apps/relay-server', 'apps/cli'];
 const withConfig = new Set(['packages/shared', 'apps/cli']);
 const cwdSetup = fileURLToPath(new URL('./scripts/vitest-project-cwd.ts', import.meta.url));
 

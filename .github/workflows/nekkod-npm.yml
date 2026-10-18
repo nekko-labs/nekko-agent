@@ -1,8 +1,8 @@
 name: nekkod npm binaries
 
-# Builds the engine daemon for each platform the web edition's npm package
+# Builds the engine daemon for each platform the Local Web UI's npm package
 # ships it to (`@nekko-agent/nekkod-<platform>-<arch>`, optional dependencies
-# of `nekko-agent-web`). Called by release.yml, which publishes them; runs on
+# of `nekko-agent-local-web-ui`). Called by release.yml, which publishes them; runs on
 # its own when this file or the packaging script changes, as a build check
 # that publishes nothing.
 on:
@@ -11,7 +11,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - .github/workflows/nekkod-npm.yml
-      - apps/web-app-server/scripts/nekkod-packages.mjs
+      - apps/local-web-ui/scripts/nekkod-packages.mjs
       - scripts/vc-runtime.mjs
       - crates/nekkod/build.rs
 

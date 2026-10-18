@@ -2,7 +2,7 @@
 
 Private coordinator: https://github.com/nekko-labs/nekko-agent-server
 
-Enable Settings > Experimental > Developer resource queue. Nekko Server then shows connection, registration and manual queue controls. A claim seeds a new chat; the user reviews the prompt and sends it with their selected model. No automatic pickup, inbound listener, or implicit local/cloud model selection. Return to Nekko Server to submit the final reply. Submission is untrusted and not verified success.
+Enable Settings > Experimental > Developer resource queue. Model Server then shows connection, registration and manual queue controls. A claim seeds a new chat; the user reviews the prompt and sends it with their selected model. No automatic pickup, inbound listener, or implicit local/cloud model selection. Return to Model Server to submit the final reply. Submission is untrusted and not verified success.
 
 ## Current restrictions and release gates
 

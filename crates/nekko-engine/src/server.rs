@@ -603,10 +603,10 @@ impl ModelServer {
             .await;
         let Some(bin) = bin else {
             let message = if image {
-                "Install stable-diffusion.cpp from Nekko Server to run this image-generation model.".to_string()
+                "Install stable-diffusion.cpp from Model Server to run this image-generation model.".to_string()
             } else if mlx {
                 if nekko_js::truthy(model.get("mlxRunnable")) {
-                    "Install MLX from Nekko Server to run this model.".to_string()
+                    "Install MLX from Model Server to run this model.".to_string()
                 } else {
                     format!("{} is an MLX model, which runs on Apple Silicon Macs only.", text(model.get("name")))
                 }

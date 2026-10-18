@@ -7,7 +7,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  * service layer stays free of any runtime-specific dependency.
  *
  * A single process normally serves one data dir (`_dir`, set via `setDataDir`).
- * Nekko Agent Cloud runs many accounts in one process, so it wraps each authenticated
+ * Nekko Cloud runs many accounts in one process, so it wraps each authenticated
  * request in `withDataDir(accountDir, …)`; `dataDir()` then prefers the
  * request-scoped dir over the global default. Editions that never call
  * `withDataDir` (Electron, the self-hosted server, the CLI) are unaffected.
@@ -28,7 +28,7 @@ export function dataDir(): string {
 }
 
 /**
- * Run `fn` with a request-scoped data dir. Used by Nekko Agent Cloud to isolate each
+ * Run `fn` with a request-scoped data dir. Used by Nekko Cloud to isolate each
  * account's data within a single process; the scope propagates across awaits.
  */
 export function withDataDir<T>(dir: string, fn: () => T): T {

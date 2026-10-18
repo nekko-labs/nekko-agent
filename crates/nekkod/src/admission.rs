@@ -42,7 +42,7 @@ pub struct Admission {
     /// The chats whose queued prompt is being started at once (`chat:interruptQueued`).
     interrupting: Arc<Mutex<HashSet<String>>>,
     compactions: Arc<crate::compaction::Compactions>,
-    /// The desktop app's host lets the agent drive a browser; the web edition's does not.
+    /// The desktop app's host lets the agent drive a browser; the Local Web UI's does not.
     pub allow_browser_control: bool,
 }
 

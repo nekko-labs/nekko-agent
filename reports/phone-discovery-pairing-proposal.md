@@ -45,7 +45,7 @@ The TXT record may carry only `name`, `relay` (URL), `pair=1` and `v`. It can't 
 ## Where the code would go
 
 - **Shared** (`packages/shared/src/pair-lobby.ts`): the transcript hash, the comparison code and the lobby frames, with golden vectors for Swift and Kotlin.
-- **Relay** (`apps/relay`): a `lobby` room type. One agent and one client, a 2-minute TTL, frames of at most 1 KB, and no push.
+- **Relay** (`apps/relay-server`): a `lobby` room type. One agent and one client, a 2-minute TTL, frames of at most 1 KB, and no push.
 - **Desktop and TS host:**
   - the mDNS responder (PH2, `dgram`) and the lobby client;
   - the approve sheet with the code;

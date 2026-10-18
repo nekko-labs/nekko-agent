@@ -9,7 +9,7 @@
 //! file format are `nekko-oauth`'s (held to oauth.ts by a golden set); this is
 //! the stateful half of oauth.ts: pending sessions and their expiry, the
 //! listeners, one renewal at a time per token. Owned while the daemon knows
-//! the data directory. In the web edition (`signIn: false`) the channels give
+//! the data directory. In the Local Web UI (`signIn: false`) the channels give
 //! the same refusal the web backend gave.
 
 use crate::hub::Hub;
@@ -33,7 +33,7 @@ pub const CHANNELS: &[&str] = &[
 /// What the backend is told the daemon owns (`NEKKOD_OWNS`).
 pub const OWNS: &str = "tokens";
 
-/// The web edition's answer to the sign-in channels (web-channels.ts).
+/// The Local Web UI's answer to the sign-in channels (web-channels.ts).
 const UNSUPPORTED: &str = "OAuth sign-in is only available in the desktop app.";
 
 /// Reads one CLI's credential file into a token set.

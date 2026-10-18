@@ -1,5 +1,5 @@
 /**
- * A scratch data directory for the web edition: one provider (the mock), and
+ * A scratch data directory for the Local Web UI: one provider (the mock), and
  * a set of seeded chats. Never the user's real data dir.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';

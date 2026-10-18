@@ -1,6 +1,6 @@
 //! The loopback wire.
 //!
-//! - `POST /api/{channel}` with `{ "args": [...] }`: the web edition's request
+//! - `POST /api/{channel}` with `{ "args": [...] }`: the Local Web UI's request
 //!   shape, for the CLI, the TS backend and anything else that speaks it.
 //! - `GET /api/events`: every event as a `{ channel, payload }` text frame
 //!   (`?only=<channel>` for one channel, `?sessions=a,b` for those chats'
@@ -95,7 +95,7 @@ async fn health() -> impl IntoResponse {
 
 // An inline image expands to base64 in a transcript. The full transcript is
 // needed to save checkpoints, even if the model later uses a smaller window.
-// Other calls match the web edition's public limit (apps/web-app-server, 25 MB): it
+// Other calls match the Local Web UI's public limit (apps/local-web-ui, 25 MB): it
 // forwards every channel here, image attachments included.
 const CALL_BODY_LIMIT: usize = 25 * 1024 * 1024;
 const TURN_BODY_LIMIT: usize = 64 * 1024 * 1024;
@@ -182,7 +182,7 @@ async fn events(
                 msg = stream.next() => match msg {
                     Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
                     // The one request this read-only socket takes: `daemon:subscribe`
-                    // (the web edition's page narrows its stream this way).
+                    // (the Local Web UI's page narrows its stream this way).
                     Some(Ok(Message::Text(text))) => {
                         let Ok(req) = serde_json::from_str::<Value>(text.as_str()) else { continue };
                         if req.get("channel").and_then(Value::as_str) != Some(SUBSCRIBE) { continue }

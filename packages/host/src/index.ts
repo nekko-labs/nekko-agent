@@ -1,7 +1,7 @@
 /**
  * @nekko-agent/host, the transport-agnostic host. Bundles every service (settings,
  * sessions, chat orchestration, sandboxed tools, workspace index, memory, usage,
- * connectors) behind `createHost()`. Electron, the web server, and Nekko Agent Cloud
+ * connectors) behind `createHost()`. Electron, the web server, and Nekko Cloud
  * all wrap the same Host so they run identical behavior.
  */
 export { createHost, type Host } from './host.js';

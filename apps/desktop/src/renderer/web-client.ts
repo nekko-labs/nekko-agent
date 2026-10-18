@@ -581,7 +581,7 @@ function makeWebClient(): NekkoApi {
     renameRemoteDevice: (deviceId, name) => call(IpcChannels.remoteRename, deviceId, name),
     rotateRemoteSecret: () => call(IpcChannels.remoteRotate),
     // The web and self-hosted editions run on a server: the relay that ships beside
-    // them is apps/relay itself, so there is nothing for this page to start.
+    // them is apps/relay-server itself, so there is nothing for this page to start.
     localRelayStatus: async () => webLocalRelay,
     localRelayStart: async () => webLocalRelay,
     localRelayStop: async () => webLocalRelay,
@@ -589,7 +589,7 @@ function makeWebClient(): NekkoApi {
     networkVisibilityStart: async () => webVisibility,
     networkVisibilityStop: async () => webVisibility,
 
-    // Web edition: "update" = the server got a newer build since this tab
+    // Local Web UI: "update" = the server got a newer build since this tab
     // loaded; we just suggest a refresh (no installer to run in the browser).
     getAppInfo: () => call(IpcChannels.appInfo) as Promise<AppInfo>,
     getMcpStatus: () => call(IpcChannels.mcpStatus),

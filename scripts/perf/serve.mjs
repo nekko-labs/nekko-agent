@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * The perf harness's world, left running for a person to poke at: the mock
- * model, a scratch data dir with the seeded chats, and the web edition on top.
+ * model, a scratch data dir with the seeded chats, and the Local Web UI on top.
  *
  *   node scripts/perf/serve.mjs [--port 4392] [--mock-port 4391]
  *
@@ -27,7 +27,7 @@ const mockPort = Number(opt('mock-port', 4391));
 
 const mock = await startMockProvider({ port: mockPort, tokensPerSecond: 300, replyTokens: 7000 });
 const { dir } = seedDataDir({ mockPort, chats: [1000, ...Array(12).fill(400)] });
-const server = spawn(process.execPath, [join(ROOT, 'apps/web-app-server/dist/index.js')], {
+const server = spawn(process.execPath, [join(ROOT, 'apps/local-web-ui/dist/index.js')], {
   cwd: ROOT,
   env: { ...process.env, NEKKO_DATA_DIR: dir, NEKKO_PORT: String(port), NEKKO_HOST: '127.0.0.1' },
   stdio: 'inherit',

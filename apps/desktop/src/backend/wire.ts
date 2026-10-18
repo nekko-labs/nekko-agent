@@ -25,7 +25,7 @@ export interface Wire {
   close(): void;
 }
 
-// The same limits as the daemon (crates/nekkod/src/wire.rs): the web edition's
+// The same limits as the daemon (crates/nekkod/src/wire.rs): the Local Web UI's
 // public 25 MB for every call, and 64 MB for `chat:turn`, whose send options
 // carry the user's attached images inline.
 const CALL_BODY_LIMIT = 25 * 1024 * 1024;

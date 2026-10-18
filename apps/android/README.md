@@ -119,8 +119,8 @@ model (build the TS side first, from the repo root):
 
 ```sh
 npm ci && npm run build:core && npm run build -w @nekko-agent/host \
-  && npm run build --workspace=apps/cli && npm run build -w @nekko-agent/server \
-  && npm run build -w @nekko-agent/relay
+  && npm run build --workspace=apps/cli && npm run build -w @nekko-agent/local-web-ui \
+  && npm run build -w @nekko-agent/relay-server
 cd apps/android && NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegrationTest*'
 ```
 
@@ -129,8 +129,8 @@ cd apps/android && NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegra
 1. Start a local relay and agent from the repo root (the agent prints a pairing
    link and a one-time code):
    ```sh
-   NEKKO_RELAY_PORT=4400 NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 node apps/relay/dist/index.js
-   NEKKO_RELAY_URL=ws://127.0.0.1:4400 NEKKO_ROOM=<16 hex> NEKKO_PAIR_KEY=<32 hex> node apps/web-app-server/dist/index.js
+   NEKKO_RELAY_PORT=4400 NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 node apps/relay-server/dist/index.js
+   NEKKO_RELAY_URL=ws://127.0.0.1:4400 NEKKO_ROOM=<16 hex> NEKKO_PAIR_KEY=<32 hex> node apps/local-web-ui/dist/index.js
    ```
    Or use the desktop app's **Settings → Remote access** with the managed relay.
 2. Install the debug APK: `adb install -r app/build/outputs/apk/debug/app-debug.apk`.

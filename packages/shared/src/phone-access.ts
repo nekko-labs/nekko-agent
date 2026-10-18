@@ -190,7 +190,7 @@ export const PHONE_SESSION_VIEW = { messages: 300, textChars: 4000, images: 40, 
 
 /**
  * The largest sealed reply frame the agent sends a phone. The relay drops
- * frames over 10 MB (`maxFrameBytes`, apps/relay/src/server.ts) without a word,
+ * frames over 10 MB (`maxFrameBytes`, apps/relay-server/src/server.ts) without a word,
  * so a reply above this is replaced by an error the phone can show at once.
  * Under 10 MB to leave room for the relay envelope.
  */

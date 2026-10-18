@@ -2,7 +2,7 @@
 /**
  * The speed contract, measured.
  *
- * Drives the web edition (built with `npm run build:web`) in headless Chromium
+ * Drives the Local Web UI (built with `npm run build:web`) in headless Chromium
  * over the DevTools protocol, against a scripted model and a scratch data dir
  * seeded with a 1,000-message chat and a dozen others, and checks the p95 of
  * each interaction against the budgets in SPEC.md ("Speed & responsiveness").
@@ -26,7 +26,7 @@
  * --timeline     only the main-thread traces of --profile (no CPU profiler overhead)
  * --no-frame-pump measure latency without FRAME_PUMP (to show the 60 Hz idle wake it removes)
  * --debug        forward the page's console to this one
- * --app <dir>    measure the web edition built in another checkout (before/after)
+ * --app <dir>    measure the Local Web UI built in another checkout (before/after)
  * --extra-css <f> add a stylesheet on top of the app (try a change, or prove a gate fails)
  * PERF_BROWSER   path to a Chromium binary, when auto-detection picks wrong
  *
@@ -70,7 +70,7 @@ const opt = (name, fallback) => {
 
 const QUICK = flag('quick');
 const OUT = resolve(opt('out', join(ROOT, 'perf-results')));
-// The checkout whose web edition is measured: this one, or another (a base
+// The checkout whose Local Web UI is measured: this one, or another (a base
 // branch built alongside, for before/after numbers).
 const APP_ROOT = resolve(opt('app', ROOT));
 const CFG = {
@@ -112,7 +112,7 @@ process.on('SIGINT', async () => { await cleanup(); process.exit(130); });
  * chat onto it before the page loads and opens them from there.
  */
 let WALL_IDS = [];
-/** Which engine the web edition runs on ('nekkod' or 'ts'), for the terminal note. */
+/** Which engine the Local Web UI runs on ('nekkod' or 'ts'), for the terminal note. */
 let ENGINE = 'ts';
 /** The wall as `commandWall.ts` saves it: a column of rows of four chat windows, no panels, auto-add off. */
 const wallState = (ids) => {
@@ -717,7 +717,7 @@ function resultsOf(latency, frames) {
         ? { skipped: latency.term.skipped }
         : {
           samples: latency.term.samples,
-          note: `the web edition's terminal: ${ENGINE === 'nekkod' ? "nekkod's pty, output over its /api/term socket" : "the TS host's pty, output over the event bus"}, drawn by the pane's xterm; the echo itself reached the page at p50 ${summarize(latency.term.echo ?? []).p50 ?? '-'} ms`,
+          note: `the Local Web UI's terminal: ${ENGINE === 'nekkod' ? "nekkod's pty, output over its /api/term socket" : "the TS host's pty, output over the event bus"}, drawn by the pane's xterm; the echo itself reached the page at p50 ${summarize(latency.term.echo ?? []).p50 ?? '-'} ms`,
         },
     stream_frame_work: frames
       ? { samples: frames.work, note: `${frames.frames} frames over ${CFG.traceSeconds}s at ${CFG.tokensPerSecond} tok/s, main thread ${Math.round(frames.busyFraction * 100)}% busy (${frames.source})${frames.tracedWhileStreaming ? '' : '; WARNING: the reply finished mid-trace'}` }
@@ -738,7 +738,7 @@ async function main() {
   cleanups.push(() => rmSync(dataDir, { recursive: true, force: true }));
   log(`scratch data dir ${dataDir}`);
 
-  const server = spawn(process.execPath, [join(APP_ROOT, 'apps/web-app-server/dist/index.js')], {
+  const server = spawn(process.execPath, [join(APP_ROOT, 'apps/local-web-ui/dist/index.js')], {
     cwd: APP_ROOT,
     env: { ...process.env, NEKKO_DATA_DIR: dataDir, NEKKO_PORT: String(CFG.appPort), NEKKO_HOST: '127.0.0.1' },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -758,7 +758,7 @@ async function main() {
     try { up = (await api('settings:get')).ok; } catch { /* starting */ }
     if (!up) await sleep(250);
   }
-  if (!up) throw new Error(`web edition did not start:\n${serverLog.slice(-2000)}`);
+  if (!up) throw new Error(`Local Web UI did not start:\n${serverLog.slice(-2000)}`);
   // The server runs behind nekkod when it finds one (a cargo build in this checkout).
   ENGINE = await api('web:capabilities').then((r) => (r.ok ? r.json() : null)).then((c) => c?.engine ?? 'ts', () => 'ts');
   log(`engine: ${ENGINE}`);

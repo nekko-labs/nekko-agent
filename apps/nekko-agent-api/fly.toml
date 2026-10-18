@@ -1,0 +1,43 @@
+# Fly.io config for the Nekko Agent API (beta signups).
+# Deploy from apps/nekko-agent-api:
+#   fly apps create nekko-agent-api --org <org>          (first time)
+#   fly secrets set DATABASE_URL='<Neon pooled connection string>'
+#   fly deploy --ha=false
+#
+# Fly has no spending cap, so the cost ceiling is set here: one small machine,
+# stopped when idle, no autoscaling, no volume, no dedicated IPv4. Worst case,
+# always on, is about $2/month plus bandwidth.
+
+app = "nekko-agent-api"
+primary_region = "iad"   # next to Neon's aws-us-east-1
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  ALLOWED_ORIGINS = "https://nekkoagent.com,https://www.nekkoagent.com"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Stop when idle and wake on the next request (about a second). The signup
+  # page calls /healthz on load so the wake happens before anyone presses Join.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 100
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

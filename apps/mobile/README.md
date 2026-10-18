@@ -70,4 +70,4 @@ The iOS build needs Apple credentials once: either sign in with the Apple ID whe
 point the CLI at the team's App Store Connect API key (`EXPO_ASC_API_KEY_PATH`, `EXPO_ASC_KEY_ID`,
 `EXPO_ASC_ISSUER_ID`, `EXPO_APPLE_TEAM_ID`, `EXPO_APPLE_TEAM_TYPE=COMPANY_OR_ORGANIZATION`) so it
 runs non-interactively. Push needs an APNs key and FCM service account on the relay (see
-`apps/relay/README.md`); the app works without push.
+`apps/relay-server/README.md`); the app works without push.
