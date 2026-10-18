@@ -160,6 +160,20 @@ Conditions: Windows, local, Node 24.1.0, Vitest 5.0.3, Git 2.51.0.windows.2. Per
 
 Why: `loop-retry` waited out real 0.5 to 2 s backoffs; it now runs them on a fake `setTimeout` and still asserts the delays the loop reports. The hung hook slept 10 s against a 1 s limit; on Windows killing `cmd.exe` leaves the `node` grandchild holding the pipes, so the test lasted the full sleep. It now sleeps 2.5 s (the 1 s limit is the product's minimum and is unchanged). `chat-worktrees` builds one committed repository per file and copies it per test, turns off auto maintenance (44 `git maintenance run --auto` processes, 3.2 s in a trace2 profile), and commits in the merged-PR test's six worktrees in parallel. Workflow pass/fail steps are `exit 0`/`exit 1` instead of a `node -e` start. Under the full parallel host run, the merged-PR worktree test took 5548 ms (timed out at 5 s) before and 4721 ms after, so it keeps a 15 s timeout. `server.test.ts` is dominated by product constants (400 ms health poll, 800 ms progress sampling, a stub that listens after 2 s); changing them needs a product seam, so it is unchanged. Remaining question: the merged-PR test is still about 70 git processes, mostly in product code (`worktree add`, `status`). Source: this PR.
 
+### Root `npm test`: one Vitest run over the eight workspaces (2026-10-17)
+Area: dev build
+Result: improvement
+Conditions: Windows 11, 32 logical CPUs, Node 24.1.0, Vitest 5.0.3, warm (dists prebuilt, same worktree, back-to-back), 4 runs each with run 1 counted as warm-up. Measured twice: against base `origin/main` a47aa4c9, then again after rebasing onto ba6c006a (#758's faster unit tests, the entry above). Every segment of the old chain was run even when one failed (the known local env failures below would otherwise short-circuit `&&`).
+
+| Metric | Before | After |
+|---|---|---|
+| Root `npm test` wall time, runs 2-4, base ba6c006a | 40.4 s / 40.5 s / 40.7 s | 24.7 s / 24.7 s / 25.0 s |
+| Run 1 (warm-up), base ba6c006a | 40.5 s | 24.7 s |
+| Root `npm test` wall time, runs 2-4, base a47aa4c9 | 45.5 s / 44.7 s / 45.5 s | 26.7 s / 26.9 s / 26.8 s |
+| Vitest test files / passed / failed / skipped (both bases) | 441 / 3289 / 11 / 3 (sum of 8 runs) | 441 / 3289 / 11 / 3 (one run) |
+
+Before, per segment (base ba6c006a, run 2): `node --test` 0.4 s, shared 1.5 s, core 5.7 s, desktop 6.7 s, cloud 2.6 s, host 15.4 s, server 2.5 s, relay 1.7 s, cli 3.8 s. Host's 18 s is mostly a handful of slow files, which the separate run left a mostly idle machine behind; in one pool the other seven packages fill the remaining workers. The 11 failures are the same files in both (host `session-clear.daemon` needs a built nekkod; desktop `bundleExternals` and `relay-bundle` need an electron-vite `out/`). On CI (`ubuntu-latest`, 4 vCPU), the `build` job's `npm test` step took 52 s and 77 s on this PR's two runs (39089216574, 39089690050; the second differs only in this docs file), against 68 s in merge-group run 39088658410, whose head 1846258f already includes #758. Shared-runner noise dominates at this sample size, so CI shows no clear win yet; the local result above is the measured one. In both PR runs, `perf` found `build`'s `web-dist` artifact (5.9 MB) in 1-2 s and downloaded it in 1-2 s instead of running `build:web` (30 s in full run 39087429992). Why: eight sequential `vitest run` processes (each starting Vite, transforming shared deps and spinning up its own pool) became one, with a root `vitest.config.ts` whose `test.projects` are the packages. Source: this PR.
+
 ### CI gates recalibrated from 115 runner reports; #544 closed (2026-10-17)
 Area: perf harness
 Result: measurement fix

@@ -64,6 +64,19 @@ test('required build restores a dedicated Rust cache before compiling', () => {
   }
 });
 
+test('perf reuses the build job\'s web build without waiting for build to finish', () => {
+  const ci = read('../.github/workflows/ci.yml');
+  const build = ci.split('\n  build:')[1].split('\n  daemon:')[0];
+  const perf = ci.split('\n  perf:')[1].split('\n  gate:')[0];
+  assert.ok(build.indexOf('npm run build:web') < build.indexOf('name: web-dist'));
+  assert.ok(build.indexOf('name: web-dist') < build.indexOf('- run: npm test'));
+  // A job-level `needs: build` would serialise perf behind build's tests.
+  assert.ok(perf.includes('needs: scope\n'));
+  assert.ok(perf.includes('name: web-dist'));
+  // The artifact is a shortcut, never a requirement: perf still builds when it is missing.
+  assert.ok(perf.includes("if: steps.dist.outputs.ready != 'true'\n        run: npm run build:web"));
+});
+
 test('Docker images cannot overwrite each other\'s BuildKit cache scope', () => {
   const docker = read('../.github/workflows/docker.yml');
   for (const scope of ['agent-image', 'relay-image']) {
