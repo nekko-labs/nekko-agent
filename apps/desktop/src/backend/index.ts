@@ -1,6 +1,11 @@
 /**
  * The desktop app's TS backend: the host, run as its own process.
  *
+ * No longer started by the app (PF14 step 5 prep, part 6): nekkod serves
+ * every channel itself, the desktop-only features below included
+ * (crates/nekkod/src/desktop.rs). Kept, unstarted, for
+ * scripts/bench-chat-turn.mjs until the TS engine is deleted (step 5).
+ *
  * `nekkod` starts this with the app's Electron binary under
  * `ELECTRON_RUN_AS_NODE=1` (plain Node, so no second runtime ships) and reads
  * the `NEKKO_BACKEND_READY {"port":N}` line it prints once it is listening.
