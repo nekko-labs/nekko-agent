@@ -445,6 +445,12 @@ export class AnthropicProvider implements Provider {
     // Two user turns in a row (tool results, then a message the user sent
     // while the tools ran) are one turn to the API.
     const push = (msg: any) => {
+      const content = nonEmptyContent(msg.content);
+      // The API rejects empty text, and a saved turn is resent on every retry
+      // and every later turn: one image pasted without words, or an empty
+      // reply, would otherwise break the chat for good.
+      if (content === null) return;
+      msg = { ...msg, content };
       const last = out[out.length - 1];
       if (last && last.role === 'user' && msg.role === 'user') {
         const blocks = (v: any) => (typeof v === 'string' ? [{ type: 'text', text: v }] : v);
@@ -490,6 +496,17 @@ export class AnthropicProvider implements Provider {
     }
     return out;
   }
+}
+
+/**
+ * A turn's content without the text the API refuses (empty or whitespace-only
+ * text blocks), or null when nothing is left to send.
+ */
+export function nonEmptyContent(content: unknown): string | any[] | null {
+  if (typeof content === 'string') return content.trim() ? content : null;
+  if (!Array.isArray(content)) return null;
+  const kept = content.filter((b) => b?.type !== 'text' || (typeof b.text === 'string' && b.text.trim()));
+  return kept.length ? kept : null;
 }
 
 function safeParse(s: string): Record<string, unknown> {

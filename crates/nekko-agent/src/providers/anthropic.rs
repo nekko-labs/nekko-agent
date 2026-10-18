@@ -335,7 +335,14 @@ fn to_anthropic_messages(req: &ChatRequest) -> Vec<Value> {
     let mut normalized_images: HashMap<String, Option<String>> = HashMap::new();
     // Two user turns in a row (tool results, then a message the user sent
     // while the tools ran) are one turn to the API.
-    fn push(out: &mut Vec<Value>, msg: Value) {
+    fn push(out: &mut Vec<Value>, mut msg: Value) {
+        // The API rejects empty text, and a saved turn is resent on every
+        // retry and every later turn: one image pasted without words, or an
+        // empty reply, would otherwise break the chat for good.
+        match non_empty_content(&msg["content"]) {
+            Some(content) => msg["content"] = content,
+            None => return,
+        }
         if let Some(last) = out.last_mut()
             && last["role"] == "user"
             && msg["role"] == "user"
@@ -390,6 +397,23 @@ fn to_anthropic_messages(req: &ChatRequest) -> Vec<Value> {
         }
     }
     out
+}
+
+/// A turn's content without the text the API refuses (empty or
+/// whitespace-only text blocks), or `None` when nothing is left to send.
+fn non_empty_content(content: &Value) -> Option<Value> {
+    match content {
+        Value::String(text) => (!text.trim().is_empty()).then(|| content.clone()),
+        Value::Array(blocks) => {
+            let kept: Vec<Value> = blocks
+                .iter()
+                .filter(|b| b["type"] != "text" || b["text"].as_str().is_some_and(|t| !t.trim().is_empty()))
+                .cloned()
+                .collect();
+            (!kept.is_empty()).then_some(Value::Array(kept))
+        }
+        _ => None,
+    }
 }
 
 #[cfg(test)]

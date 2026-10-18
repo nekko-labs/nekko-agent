@@ -360,9 +360,14 @@ interface UiState {
    * A chat the Agents wall should show in its Focused layout the next time it
    * mounts (the Artifacts tab's "Open chat"). Consumed once by the wall.
    */
-  focusRequest: string | null;
-  /** Go to the Agents wall with this chat as the Focused window. */
-  focusChatOnWall: (sessionId: string) => void;
+  focusRequest: { sessionId: string; keepLayout?: boolean } | null;
+  /**
+   * Go to the Agents wall with this chat as the selected window: Focused, or
+   * with `keepLayout` added to the current layout (a chat just created).
+   */
+  focusChatOnWall: (sessionId: string, opts?: { keepLayout?: boolean }) => void;
+  /** Bring a chat just created into focus: its Chat tab, or its window on the wall. */
+  showNewChat: (sessionId: string) => void;
   /**
    * Text and images to drop into a chat's composer when it next mounts (Copy
    * to composer, Split to a new chat). Consumed once by that chat's pane.
@@ -615,7 +620,18 @@ export const useStore = create<UiState>((set, get) => ({
   composerSeed: null,
   findSeed: null,
 
-  focusChatOnWall: (sessionId) => set({ focusRequest: sessionId, view: 'command' }),
+  focusChatOnWall: (sessionId, opts) => set({ focusRequest: { sessionId, keepLayout: opts?.keepLayout }, view: 'command' }),
+  showNewChat: (sessionId) => {
+    // With the Chat tab off, the wall is where chats live: a new chat must be
+    // the selected window there, not one auto-added behind the current one.
+    if (viewEnabled('chat', get().settings)) {
+      set({ activeSessionId: sessionId, view: 'chat' });
+      get().openChatPane(sessionId);
+    } else {
+      set({ activeSessionId: sessionId });
+      get().focusChatOnWall(sessionId, { keepLayout: true });
+    }
+  },
 
   setActiveProject: (id) => {
     try { localStorage.setItem(LAST_FOLDER_KEY, JSON.stringify(id)); } catch { /* private mode */ }
@@ -652,15 +668,13 @@ export const useStore = create<UiState>((set, get) => ({
     // so its first frame has the session and brain, without a round-trip.
     putCachedSession(s);
     addCreatedSession(s);
-    set({ activeSessionId: s.id, view: 'chat' });
-    get().openChatPane(s.id);
+    get().showNewChat(s.id);
   },
   continuePrStack: async (sessionId, url) => {
     const s = await window.nekko.continuePrStack(sessionId, url);
     putCachedSession(s);
     addCreatedSession(s);
-    set({ activeSessionId: s.id, view: 'chat' });
-    get().openChatPane(s.id);
+    get().showNewChat(s.id);
     get().pushToast('success', 'New chat starts from this PR in its own worktree.');
   },
   newImageChat: async (modelId, defaults) => {
@@ -671,8 +685,7 @@ export const useStore = create<UiState>((set, get) => ({
     })) ?? created;
     putCachedSession(s);
     addCreatedSession(s);
-    set({ activeSessionId: s.id, view: 'chat' });
-    get().openChatPane(s.id);
+    get().showNewChat(s.id);
   },
   setMascotMood: (m) => set({ mascotMood: m }),
   // A destination that's been hidden can't be navigated to: land on the
