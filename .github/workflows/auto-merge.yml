@@ -55,9 +55,25 @@ jobs:
       # into a queue entry when `gate` goes green (#756 sat 25 minutes like
       # that). So wait for `gate` here and enqueue explicitly once it passes;
       # an enqueue of a PR already in the queue is a no-op.
+      #
+      # The enqueue uses the repo's GitHub App, not GITHUB_TOKEN: a merge group
+      # created by GITHUB_TOKEN starts no `merge_group` workflow runs (the same
+      # recursion guard as bot pushes), so `gate` never reports and the entry
+      # times out (#756's first group had zero runs). The App is installed only
+      # on this repository (see runtime-updates.yml).
+      - name: Create repository-scoped App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.RUNTIME_UPDATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RUNTIME_UPDATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
       - name: Enqueue once gate passes
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_ID: ${{ github.event.pull_request.node_id }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
