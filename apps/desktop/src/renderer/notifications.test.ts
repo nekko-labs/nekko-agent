@@ -74,10 +74,13 @@ describe('notification transport', () => {
     const { startDesktopNotifications } = await import('./notifications.js');
     const off = vi.fn();
     const onAgentEvent = vi.fn(() => off);
+    const offRuns = vi.fn();
+    const onWorkflowsUpdated = vi.fn(() => offRuns);
     vi.stubGlobal('Notification', vi.fn());
-    vi.stubGlobal('window', { nekko: { onAgentEvent } });
+    vi.stubGlobal('window', { nekko: { onAgentEvent, onWorkflowsUpdated } });
     const dispose = startDesktopNotifications();
     expect(onAgentEvent).toHaveBeenCalledOnce();
-    dispose(); expect(off).toHaveBeenCalledOnce();
+    expect(onWorkflowsUpdated).toHaveBeenCalledOnce();
+    dispose(); expect(off).toHaveBeenCalledOnce(); expect(offRuns).toHaveBeenCalledOnce();
   });
 });

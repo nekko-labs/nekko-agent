@@ -9,32 +9,38 @@ describe('monitor order', () => {
       expect(normalizeMonitorOrder(raw)).toEqual(defaults);
     }
     expect(normalizeMonitorOrder(['hardware', 'alien', 'hardware', null, 'budget']))
-      .toEqual(['hardware', 'budget', 'utilization', 'automations', 'insights']);
+      .toEqual(['hardware', 'budget', 'localModels', 'utilization', 'automations', 'insights']);
     expect(sanitizeMonitorsDock({}).monitorOrder).toEqual(defaults);
     // The retired Vitals panel drops out of a saved order; Hardware leads by default.
-    expect(normalizeMonitorOrder(['vitals', 'budget'])).toEqual(['budget', 'hardware', 'utilization', 'automations', 'insights']);
+    expect(normalizeMonitorOrder(['vitals', 'budget'])).toEqual(['budget', 'hardware', 'localModels', 'utilization', 'automations', 'insights']);
     expect(defaults[0]).toBe('hardware');
+    expect(defaults[1]).toBe('localModels');
+    // A dock saved before Local models existed keeps its order; the new monitor joins at the end, switched on.
+    const legacy = sanitizeMonitorsDock({ monitorOrder: ['budget', 'hardware', 'utilization', 'automations', 'insights'], monitors: { hardware: true, utilization: true, budget: true, automations: true, insights: false } });
+    expect(legacy.monitorOrder).toEqual(['budget', 'hardware', 'utilization', 'automations', 'insights', 'localModels']);
+    expect(legacy.monitors.localModels).toBe(true);
+    expect(legacy.minimized.localModels).toBe(false);
   });
 
   it('moves in either direction, keeps all panels, and does not mutate input', () => {
     const original = [...defaults];
     expect(reorderMonitor(original, 'insights', 'budget'))
-      .toEqual(['hardware', 'utilization', 'insights', 'budget', 'automations']);
+      .toEqual(['hardware', 'localModels', 'utilization', 'insights', 'budget', 'automations']);
     expect(reorderMonitor(original, 'hardware', 'automations'))
-      .toEqual(['utilization', 'budget', 'automations', 'hardware', 'insights']);
+      .toEqual(['localModels', 'utilization', 'budget', 'automations', 'hardware', 'insights']);
     expect(reorderMonitor(original, 'budget', 'budget')).toEqual(original);
     expect(original).toEqual(defaults);
-    expect(new Set(reorderMonitor(['hardware', 'hardware'], 'hardware', 'insights')).size).toBe(5);
+    expect(new Set(reorderMonitor(['hardware', 'hardware'], 'hardware', 'insights')).size).toBe(defaults.length);
   });
 
   it('places a dropped panel before or after the landing zone anchor', () => {
     const original = [...defaults];
     expect(placeMonitor(original, 'insights', 'budget', 'before'))
-      .toEqual(['hardware', 'utilization', 'insights', 'budget', 'automations']);
+      .toEqual(['hardware', 'localModels', 'utilization', 'insights', 'budget', 'automations']);
     expect(placeMonitor(original, 'utilization', 'insights', 'after'))
-      .toEqual(['hardware', 'budget', 'automations', 'insights', 'utilization']);
+      .toEqual(['hardware', 'localModels', 'budget', 'automations', 'insights', 'utilization']);
     expect(placeMonitor(original, 'insights', 'hardware', 'before'))
-      .toEqual(['insights', 'hardware', 'utilization', 'budget', 'automations']);
+      .toEqual(['insights', 'hardware', 'localModels', 'utilization', 'budget', 'automations']);
     expect(placeMonitor(original, 'budget', 'budget', 'after')).toEqual(original);
     expect(original).toEqual(defaults);
   });

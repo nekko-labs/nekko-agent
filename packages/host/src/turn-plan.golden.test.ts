@@ -103,6 +103,11 @@ function toolCases() {
       out.push({ input, output: turnTools(input as never).map((t) => t.name) });
     }
   }
+  // A tools-off turn (a workflow step reading untrusted text) offers nothing that acts.
+  for (const session of [{}, { trainingRunId: 'r1' }]) {
+    const off = { session, offline: false, orchestration: { ...DEFAULT_ORCHESTRATION, strategy: 'swarm' }, allowBrowserControl: true, mcpTools: mcp, decide: true, noTools: true };
+    out.push({ input: off, output: turnTools(off as never).map((t) => t.name) });
+  }
   return out;
 }
 

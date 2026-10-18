@@ -16,6 +16,7 @@ pub mod design;
 pub mod files;
 pub mod git;
 pub mod index;
+pub mod integrations;
 pub mod memory;
 pub mod outline;
 pub mod pr;

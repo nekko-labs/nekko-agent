@@ -24,8 +24,11 @@ import {
   WALL_KINDS,
   addPane,
   addPanes,
+  evenTree,
   filterTree,
   leafRects,
+  snapFraction,
+  splitBoundary,
   wallAgents,
   wallPane,
   type CommandWallState,
@@ -469,6 +472,8 @@ export function CommandWall({
       if (at && allPanes(next).some((p) => p.id === at.paneId) && canSplit(next, at.paneId, at.dir)) return splitPane(next, at.paneId, at.dir, pane);
       return addPane(next, pane, aspect);
     });
+    // A chat just made is the one you mean to talk to next.
+    if (kind === 'chat') onSelect(refId);
   };
 
   // What the windows' handlers need, read when they run: a window that skipped
@@ -719,7 +724,11 @@ export function CommandWall({
           '--wall-divider-width': `${node.dir === 'row' ? 8 : r.width}px`,
           '--wall-divider-height': `${node.dir === 'col' ? 8 : r.height}px`,
         } as React.CSSProperties}>
-          <Divider splitId={node.id} index={i - 1} dir={node.dir} onResize={(id, index, value) => update((root) => resizeCompanionSplit(root, expanded, id, index, value))} />
+          <Divider splitId={node.id} index={i - 1} dir={node.dir} snapped={!!state.snap && Math.abs((splitBoundary(companionTree(state.root, expanded), node.id, i - 1) ?? -1) - (splitBoundary(companionTree(evenTree(state.root), expanded), node.id, i - 1) ?? -2)) < 1e-6} onResize={(id, index, value) => update((root) => {
+            // Snap to grid: even spacing is a snap point the divider pulls onto when near it.
+            const target = state.snap ? splitBoundary(companionTree(evenTree(root), expanded), id, index) : null;
+            return resizeCompanionSplit(root, expanded, id, index, snapFraction(value, target));
+          })} />
         </div>}
         {renderDividers(child, childRect)}
       </React.Fragment>;

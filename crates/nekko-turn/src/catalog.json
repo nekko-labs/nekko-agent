@@ -223,7 +223,7 @@
    },
    {
     "name": "browser",
-    "description": "Control a local Chromium browser. Dedicated mode (use this by default) drives an isolated, hidden in-app Nekko browser with Playwright; it never takes focus. Set visible=true only when the user needs to see the window; it shows without activation. Existing mode attaches only to an explicitly started localhost CDP port and supports navigate, inspect, click, fill and close. Each action requires approval unless the user has enabled allow-all (YOLO) for this chat. Start with navigate or inspect, then use CSS selectors. Dedicated-only actions: wait (selector or text to reach a state), type (keyboard text, into selector or the focused element), press (a key such as Enter or Control+A), scroll (direction and amount, or a selector into view), extract (what=text of a selector, or what=links), evaluate (a JavaScript expression in the page; the JSON result is returned, keep it read-only), screenshot (attaches the page pixels to this chat, requires vision support), tabs, tab_new, tab_switch, tab_close, and logs (console messages, page errors and failed requests since the last logs call). Only HTTP(S) pages; downloads, popups, dialogs and device permissions are blocked. No cloud browser is used.",
+    "description": "Control a local Chromium browser. Dedicated mode (use this by default) drives an isolated, hidden in-app Nekko browser with Playwright; it never takes focus. Set visible=true only when the user needs to see the window; it shows without activation. Existing mode attaches only to an explicitly started localhost CDP port and supports navigate, inspect, click, fill and close. Each action requires approval unless the user has enabled allow-all (YOLO) for this chat. Start with navigate or inspect, then use CSS selectors. Dedicated-only actions: wait (selector or text to reach a state), type (keyboard text, into selector or the focused element), press (a key such as Enter or Control+A), scroll (direction and amount, or a selector into view), extract (what=text of a selector, or what=links), evaluate (a JavaScript expression in the page; the JSON result is returned, keep it read-only), screenshot (attaches the page pixels to this chat, requires vision support), tabs, tab_new, tab_switch, tab_close, logs (console messages, page errors and failed requests since the last logs call), and snapshot (a compact list of the page's interactive elements, each with a ref such as @e1; optional selector to snapshot part of the page). A ref works as the selector for click, fill, type, press, wait and extract, and is usually the quickest way to act on a page you have not seen: snapshot, then act on refs. Refs expire when the page changes; take a new snapshot. Only HTTP(S) pages; downloads, popups, dialogs and device permissions are blocked. No cloud browser is used.",
     "parameters": {
      "type": "object",
      "properties": {
@@ -253,7 +253,8 @@
         "tab_new",
         "tab_switch",
         "tab_close",
-        "logs"
+        "logs",
+        "snapshot"
        ]
       },
       "url": {
@@ -266,7 +267,7 @@
       },
       "selector": {
        "type": "string",
-       "description": "CSS or Playwright selector (the first match is used) for click, fill, wait, type, press, scroll and extract."
+       "description": "CSS selector (the first match is used) for click, fill, wait, type, press, scroll, extract and snapshot, or a ref from snapshot such as @e3 (not for scroll or snapshot)."
       },
       "value": {
        "type": "string",

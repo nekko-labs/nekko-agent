@@ -18,7 +18,7 @@ export function createNativeNotificationPoster(adapter: NativeNotificationAdapte
   return {
     post(notice: Notice) {
       if (disposed || !adapter.isSupported()) return;
-      const notification = adapter.create({ title: notice.title, body: notice.body, silent: notice.kind === 'finished', icon });
+      const notification = adapter.create({ title: notice.title, body: notice.body, silent: notice.kind === 'finished' || notice.kind === 'run-finished', icon });
       if (retained.size >= 8) {
         const oldest = retained.values().next().value;
         oldest?.close();
@@ -26,7 +26,7 @@ export function createNativeNotificationPoster(adapter: NativeNotificationAdapte
       }
       retained.add(notification);
       notification.once('click', () => {
-        if (!disposed) deliverLink(notificationLink(notice.sessionId));
+        if (!disposed) deliverLink(notice.link ?? notificationLink(notice.sessionId));
         notification.close();
       });
       notification.once('close', () => retained.delete(notification));

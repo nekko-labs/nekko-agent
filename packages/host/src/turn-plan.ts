@@ -58,6 +58,11 @@ export interface TurnToolInput {
   mcpTools: ToolSpec[];
   /** Whether a decision provider is available for `decide` (already false in a sandbox or when disabled). */
   decide: boolean;
+  /**
+   * A turn that reads untrusted text (a workflow's tools-off step): nothing
+   * that acts is offered, only `update_plan`.
+   */
+  noTools?: boolean;
 }
 
 /** Nobody reads a sub-agent, an automation, or a goal run, so none of them may ask. */
@@ -68,6 +73,7 @@ export function turnCanAsk(session: Pick<Session, 'parentSessionId' | 'taskId' |
 /** The tools a (non-sandbox) turn offers, in the order the model sees them. */
 export function turnTools(input: TurnToolInput): ToolSpec[] {
   const { session } = input;
+  if (input.noTools) return [UPDATE_PLAN_TOOL];
   const allowSpawn = getStrategy((input.orchestration ?? DEFAULT_ORCHESTRATION).strategy).allowsSpawn;
   const canAsk = turnCanAsk(session);
   const disabled = new Set(session.disabledTools ?? []);

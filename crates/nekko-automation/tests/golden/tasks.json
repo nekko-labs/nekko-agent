@@ -2314,6 +2314,23 @@
   {
    "op": "tick",
    "args": [],
+   "now": 1760003650000,
+   "settings": {
+    "defaultProviderId": "p-default",
+    "defaultModelId": "m-default",
+    "automationsPaused": true
+   },
+   "replies": [],
+   "deleteSession": null,
+   "result": null,
+   "file": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"title\": \"Nightly report\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"Summarize the day\",\n    \"workspaceId\": \"w1\",\n    \"intervalMs\": 3600000,\n    \"status\": \"active\",\n    \"createdAt\": 1760000000000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_1\",\n    \"lastRunAt\": 1760000010000,\n    \"lastResult\": \"Report: all fine 🐱\",\n    \"nextRunAt\": 1760003610000\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000002\",\n    \"title\": \"Untitled task\",\n    \"kind\": \"scheduled\",\n    \"prompt\": \"Ping\",\n    \"providerId\": \"p1\",\n    \"modelId\": \"m1\",\n    \"runAt\": 1760000120000,\n    \"status\": \"done\",\n    \"createdAt\": 1760000001000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_5\",\n    \"lastRunAt\": 1760000130000,\n    \"lastResult\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000003\",\n    \"title\": \"Watch CI\",\n    \"kind\": \"background\",\n    \"prompt\": \"Check CI\",\n    \"intervalMs\": 30000,\n    \"keepAlive\": \"until\",\n    \"condition\": \"all green\",\n    \"status\": \"done\",\n    \"createdAt\": 1760000002000,\n    \"runCount\": 2,\n    \"lastSessionId\": \"s_3\",\n    \"lastRunAt\": 1760000030000,\n    \"lastResult\": \"Fixed it. ⟦DONE⟧\"\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000004\",\n    \"title\": \"Renamed\",\n    \"kind\": \"background\",\n    \"prompt\": \"Tend\",\n    \"keepAlive\": \"forever\",\n    \"status\": \"active\",\n    \"createdAt\": 1760000003000,\n    \"runCount\": 1,\n    \"lastSessionId\": \"s_4\",\n    \"lastRunAt\": 1760000040000,\n    \"lastResult\": \"Run failed: provider offline\",\n    \"nextRunAt\": 1760000041000,\n    \"extra\": {\n      \"x\": 1\n    }\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000005\",\n    \"title\": \"No model\",\n    \"kind\": \"recurring\",\n    \"prompt\": \"p\",\n    \"intervalMs\": 10,\n    \"status\": \"active\",\n    \"createdAt\": 1760000140000,\n    \"runCount\": 0,\n    \"lastSessionId\": \"s_6\",\n    \"nextRunAt\": 1760000000001,\n    \"lastResult\": \"No model configured, set a default provider/model in Models.\"\n  }\n]",
+   "notices": [],
+   "sessions": [],
+   "turns": []
+  },
+  {
+   "op": "tick",
+   "args": [],
    "now": 1760003700000,
    "settings": {
     "defaultProviderId": "p-default",

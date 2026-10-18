@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { notificationWindowContext, visibleNotificationSession, trustedNotificationReporter } from './notificationVisibility.js';
+import { notificationWindowContext, visibleNotificationSession, visibleNotificationView, trustedNotificationReporter } from './notificationVisibility.js';
 
 describe('native notification visibility', () => {
   it('rejects guest windows, subframes and missing frames', () => {
@@ -17,10 +17,14 @@ describe('native notification visibility', () => {
   });
   it('requires the actual window to be focused, visible, unminimized and alive', () => {
     const window = { isDestroyed: () => false, isVisible: () => true, isMinimized: () => false, isFocused: () => true };
-    expect(notificationWindowContext(window, 'a')).toEqual({ windowHidden: false, visibleSessionId: 'a' });
+    expect(notificationWindowContext(window, 'a', 'chat')).toEqual({ windowHidden: false, visibleSessionId: 'a', visibleView: 'chat' });
     expect(notificationWindowContext(null, 'a').windowHidden).toBe(true);
     for (const [method, value] of [['isDestroyed', true], ['isVisible', false], ['isMinimized', true], ['isFocused', false]] as const) {
       expect(notificationWindowContext({ ...window, [method]: () => value }, 'a').windowHidden).toBe(true);
     }
+  });
+  it('reports the view for whole-view notices', () => {
+    expect(visibleNotificationView({ view: 'workflows', activeSessionId: null })).toBe('workflows');
+    for (const report of [null, {}, { view: '' }, { view: 3 }]) expect(visibleNotificationView(report)).toBeNull();
   });
 });
