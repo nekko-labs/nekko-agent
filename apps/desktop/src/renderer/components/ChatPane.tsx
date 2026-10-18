@@ -2469,7 +2469,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             onGrowWhileUnpinned={onGrowWhileUnpinned}
             header={welcomeState.welcome ? (
 
-              <div className="fade-in mt-16 flex flex-col items-center gap-3 text-center">
+              // On the wall the window's own reveal is the entrance; a second
+              // fade here played inside it as a separate animation.
+              <div className={`${commandCenter ? '' : 'fade-in '}mt-16 flex flex-col items-center gap-3 text-center`} data-chat-welcome>
                 {!hasProvider ? <SetupIllustration /> : <div className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={30} /></div>}
                 <div>
                   <h2 className="text-[15px] font-semibold">
