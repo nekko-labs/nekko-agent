@@ -18,16 +18,16 @@ try {
   }
   let script = readFileSync(join(root, 'scripts/agent-browser-benchmark.mjs'), 'utf8');
   script = script.replace(';\\nimport { startAgentBrowser }', ';\nimport { startAgentBrowser }');
-  script = script.replace("const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');", `const root = ${JSON.stringify(root)}; const sourceRoot = ${JSON.stringify(sourceRoot)};`);
+  script = script.replace("const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');", () => `const root = ${JSON.stringify(root)}; const sourceRoot = ${JSON.stringify(sourceRoot)};`);
   // Archived base owns its original bridge, actions and adapter. Native uses the current bridge.
   script = script.replaceAll("join(root, 'apps/desktop/src/main/", "join(sourceRoot, 'apps/desktop/src/main/");
-  script = script.replace("external: ['electron'],", `external: ['electron'], nodePaths: [${JSON.stringify(join(root, 'node_modules'))}],`);
+  script = script.replace("external: ['electron'],", () => `external: ['electron'], nodePaths: [${JSON.stringify(join(root, 'node_modules'))}],`);
   if (kind === 'baseline') script = script.replace('agentPlaywrightDriver.ts', 'agentBrowser.ts');
   if (kind === 'native') {
     script = script.replace("import { playwrightDriver }", "import { createNativeDriver } from ${JSON.stringify(join(root, 'apps/desktop/src/main/agentNativeDriver.ts'))};\nimport { playwrightDriver }");
-    script = script.replace('driver: playwrightDriver', `driver: () => createNativeDriver(${JSON.stringify(join(root, 'apps/desktop/resources/agent-browser', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'agent-browser.exe' : 'agent-browser'))})`);
+    script = script.replace('driver: playwrightDriver', () => `driver: () => createNativeDriver(${JSON.stringify(join(root, 'apps/desktop/resources/agent-browser', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'agent-browser.exe' : 'agent-browser'))})`);
   }
-  script = script.replace("driver: process.env.NEKKO_BENCH_DRIVER || 'playwright-baseline', revision: '4fc3cc5c'", `driver: '${kind}', revision: '${kind === 'baseline' ? '4fc3cc5c' : execFileSync('git', ['rev-parse', 'HEAD'], {cwd:root,encoding:'utf8'}).trim()}'`);
+  script = script.replace("driver: process.env.NEKKO_BENCH_DRIVER || 'playwright-baseline', revision: '4fc3cc5c'", () => `driver: '${kind}', revision: '${kind === 'baseline' ? '4fc3cc5c' : execFileSync('git', ['rev-parse', 'HEAD'], {cwd:root,encoding:'utf8'}).trim()}'`);
   // This is not a benchmark rerun. Existing benchmark samples remain authoritative.
   script = script.replaceAll('i<20', 'i<0');
   const start = script.indexOf("    const shot = await step('screenshot'");
