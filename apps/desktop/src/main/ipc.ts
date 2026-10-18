@@ -1,9 +1,8 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, systemPreferences } from 'electron';
-import { type EngineStatus, IpcChannels, IpcEvents } from '@nekko-agent/shared';
-import { initUpdater, checkForUpdates, downloadUpdate, quitAndInstall } from './update.js';
+import { BrowserWindow, dialog, ipcMain } from 'electron';
+import { type EngineStatus, IpcChannels } from '@nekko-agent/shared';
 import type { EngineProcess } from './engine-process.js';
 import type { ShellBridge, ShellDialog } from './agentBrowser.js';
-import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL, type ServiceAction } from '../engineChannels.js';
+import { ENGINE_ENDPOINT_CHANNEL, SERVICE_CONTROL_CHANNEL, type ServiceAction } from '../engineChannels.js';
 
 /** The window a dialog belongs to: the focused app window, else any. */
 function appWindow(): BrowserWindow | undefined {
@@ -12,8 +11,8 @@ function appWindow(): BrowserWindow | undefined {
 
 /**
  * The native folder picker: the chosen folder, or null when cancelled. Drawn
- * here only without the engine daemon (`mode: 'backend'`) or where the daemon
- * asks main to draw it (macOS); otherwise nekkod draws it itself.
+ * here only where the daemon asks main to draw it (macOS, through the browser
+ * bridge); otherwise nekkod draws it itself.
  */
 export async function pickFolderDialog(): Promise<string | null> {
   const win = appWindow();
@@ -65,30 +64,11 @@ export function shellBridge(quit: () => void): ShellBridge {
   };
 }
 
-function broadcast(channel: string, payload: unknown): void {
-  for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
-}
-
 /**
- * The channels main answers itself only when the engine runs without nekkod
- * (`mode: 'backend'`, a checkout with no daemon build, being deleted soon).
- * With the daemon, the preload sends them to it like every other channel.
- */
-export const BACKEND_ONLY_CHANNELS = [
-  IpcChannels.voicePermission,
-  IpcChannels.dialogOpenFiles,
-  IpcChannels.openPath,
-  IpcChannels.updateCheck,
-  IpcChannels.updateDownload,
-  IpcChannels.updateInstall,
-] as const;
-
-/**
- * What only the Electron main process can answer: where the engine is, its
- * start and stop (the tray's service controls), and, for the no-daemon path
- * only, the native channels nekkod now serves. Window management (windows,
- * menus, the tray, the in-app browser and capture bridge) stays in main by
- * nature and has no channel here.
+ * What only the Electron main process can answer: where the engine is, and
+ * its start and stop (the tray's service controls). Window management
+ * (windows, menus, the tray, the in-app browser and capture bridge) stays in
+ * main by nature and has no channel here; every other channel is nekkod's.
  */
 export function registerIpc(engine: EngineProcess): void {
   ipcMain.handle(ENGINE_ENDPOINT_CHANNEL, async (event, operation = 'connection retry') => {
@@ -127,45 +107,4 @@ export function registerIpc(engine: EngineProcess): void {
     return { agentRunning: engine.running, modelRunning: model?.running ?? false,
       modelAvailable: Boolean(model?.install.binPath || model?.diffusionInstall?.binPath || model?.mlxInstall?.binPath) };
   });
-
-  // ---- The no-daemon path only (`mode: 'backend'`). ----
-
-  ipcMain.handle(IpcChannels.voicePermission, async (_event, action = 'status') => {
-    if (!['status', 'request', 'settings'].includes(action)) throw new Error('Unknown microphone permission action');
-    if (action === 'request' && process.platform === 'darwin') await systemPreferences.askForMediaAccess('microphone');
-    if (action === 'settings') {
-      if (process.platform === 'win32') await shell.openExternal('ms-settings:privacy-microphone');
-      else if (process.platform === 'darwin') await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
-    }
-    return { platform: process.platform, status: process.platform === 'win32' || process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('microphone') : 'unknown' };
-  });
-
-  // Native folder picker. The preload adds the chosen path through the engine.
-  ipcMain.handle(PICK_FOLDER_CHANNEL, () => pickFolderDialog());
-
-  // Native multi-file picker → absolute paths.
-  ipcMain.handle(IpcChannels.dialogOpenFiles, async () => {
-    const win = appWindow();
-    const res = await dialog.showOpenDialog(win!, { properties: ['openFile', 'multiSelections'] });
-    return res.canceled ? [] : res.filePaths;
-  });
-
-  // Reveal/open a path or URL with the OS.
-  ipcMain.handle(IpcChannels.openPath, async (_e, target: string) => {
-    if (/^https?:\/\//i.test(target)) await shell.openExternal(target);
-    else await shell.openPath(target);
-  });
-
-  // App info (real Electron version + desktop edition), when the TS backend runs alone.
-  ipcMain.handle(IpcChannels.appInfo, () => ({
-    version: app.getVersion(),
-    platform: process.platform,
-    edition: 'desktop' as const,
-  }));
-
-  // Auto-update controls (electron-updater), without the daemon.
-  initUpdater((u) => broadcast(IpcEvents.updateEvent, u));
-  ipcMain.handle(IpcChannels.updateCheck, () => checkForUpdates());
-  ipcMain.handle(IpcChannels.updateDownload, () => downloadUpdate());
-  ipcMain.handle(IpcChannels.updateInstall, () => quitAndInstall());
 }

@@ -97,8 +97,6 @@ describe.skipIf(!process.env.NEKKO_ITEST)('phone ↔ relay ↔ computer', () => 
         NEKKO_ROOM: ROOM,
         NEKKO_PAIR_KEY: KEY,
         NEKKO_DATA_DIR: dataDir,
-        // The TS loop: this test is about the phone path, not the Rust daemon.
-        NEKKO_AGENT_LOOP: 'ts',
       },
       stdio: ['ignore', 'pipe', 'inherit'],
     });

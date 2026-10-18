@@ -10,7 +10,6 @@ import { existsSync, readFileSync } from 'fs';
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/host/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
-import { checkForUpdates } from './update.js';
 import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
@@ -61,7 +60,7 @@ import {
 if (process.env.ELECTRON_RUN_AS_NODE) {
   // electron-vite spawns the binary with the caller's env, and this var turns
   // it into plain Node: no `app`, no BrowserWindow, and the first real API
-  // call dies with a confusing stack (electron-updater's lazy getter). Say so
+  // call dies with a confusing stack. Say so
   // plainly instead.
   console.error('ELECTRON_RUN_AS_NODE is set: Nekko Agent must run as Electron, not Node. Unset it and retry.');
   process.exit(1);
@@ -570,16 +569,6 @@ app.whenReady().then(async () => {
   void engine.call<ApiServerStatus>(IpcChannels.apiServerStatus)
     .then((s) => reportDevReady({ version: app.getVersion(), api: s ? { url: s.clientUrl, enabled: s.settings.enabled } : null, dataDir }))
     .catch(() => reportDevReady({ version: app.getVersion(), api: null, dataDir }));
-
-  // Auto-check for updates a few seconds after launch, if the user opted in.
-  // nekkod does this itself (crates/nekkod/src/native.rs); only the no-daemon
-  // path still needs main to.
-  const started = engine;
-  void started.endpoint().then(async (e) => {
-    if (e.mode === 'daemon') return;
-    const settings = await started.call<AppSettings>('settings:get');
-    if (settings?.updates?.app ?? settings?.autoUpdate) setTimeout(() => { void checkForUpdates(); }, 4000);
-  }).catch(() => {});
 
   app.on('activate', () => {
     showWindow();

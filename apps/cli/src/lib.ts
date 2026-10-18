@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createHost, defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/host';
-import { brandEnv, CLI_LINK_FILE, isCliLink, IpcEvents, unsupportedPlatformReason, type CliLink } from '@nekko-agent/shared';
+import { brandEnv, CLI_LINK_FILE, isCliLink, IpcChannels, IpcEvents, unsupportedPlatformReason, type CliLink } from '@nekko-agent/shared';
 import type {
   AppSettings,
   Session,
@@ -26,6 +26,15 @@ import type {
   MarketplaceSkill,
   UsageSummary,
   VaizerCatalog,
+  EngineStatus,
+  LocalModel,
+  GpuFit,
+  CatalogModel,
+  DownloadJob,
+  RuntimeStatus,
+  StopResult,
+  LoadParams,
+  LoadResult,
 } from '@nekko-agent/shared';
 
 /** The data dir for the in-process (local) client. NEKKO_DATA_DIR wins, then ~/.nekko. */
@@ -89,6 +98,8 @@ function appAlive(pid: number | undefined): boolean {
  * either an in-process host (local data dir) or a running server over HTTP+WS.
  */
 export interface Client {
+  /** In-process host on the data dir (true), or a running server over HTTP (false). */
+  readonly isLocal?: boolean;
   ready(): Promise<void>;
   getSettings(): Promise<AppSettings>;
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
@@ -130,15 +141,35 @@ export interface Client {
   listWorkflows(): Promise<WorkflowsSnapshot>;
   runWorkflow(id: string): Promise<WorkflowRun | undefined>;
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
+  // Local models: the built-in engine (library, catalog, downloads) and any
+  // local runtime provider (start, stop, load, unload).
+  engineStatus(): Promise<EngineStatus>;
+  engineModels(): Promise<Array<LocalModel & { loaded: boolean; gpuFit?: GpuFit }>>;
+  engineCatalog(query?: string): Promise<CatalogModel[]>;
+  engineCatalogModel(id: string): Promise<CatalogModel | null>;
+  engineDownloadModel(modelId: string, quantLabel: string): Promise<{ ok: boolean; message: string; jobId?: string }>;
+  engineDownloads(): Promise<DownloadJob[]>;
+  engineCancelDownload(id: string): Promise<void>;
+  engineDeleteModel(id: string): Promise<{ ok: boolean; message: string }>;
+  runtimeStatus(providerId: string): Promise<RuntimeStatus | null>;
+  runtimeStart(providerId: string): Promise<RuntimeStatus | { error: string }>;
+  runtimeStop(providerId: string, force?: boolean): Promise<StopResult>;
+  runtimeLoad(providerId: string, modelId: string, params: LoadParams): Promise<LoadResult>;
+  unloadModel(providerId: string, modelId: string): Promise<{ ok: boolean; message?: string }>;
 }
 
-/** In-process client backed by createHost on the data dir. */
-function localClient(): Client {
+/**
+ * In-process client backed by createHost on the data dir. `longLived` is the
+ * MCP server, which may bring the engine up as the app would; a one-shot
+ * command must not, or its listening socket keeps the process from exiting.
+ */
+function localClient(longLived = false): Client {
   // A remote client (--url) still works from an Intel Mac; a local engine does not.
   const unsupported = unsupportedPlatformReason(process.platform, process.arch);
   if (unsupported) throw new Error(unsupported);
-  const host = createHost({ dataDir: prepareUserDataRoot() });
+  const host = createHost({ dataDir: prepareUserDataRoot(), autoStartEngine: longLived });
   return {
+    isLocal: true,
     ready: async () => {},
     getSettings: async () => host.getSettings(),
     updateSettings: async (patch) => host.updateSettings(patch),
@@ -179,6 +210,19 @@ function localClient(): Client {
     listWorkflows: async () => host.listWorkflows(),
     runWorkflow: (id) => host.runWorkflow(id),
     dispatchWorkflowEvent: (event) => host.dispatchWorkflowEvent(event),
+    engineStatus: () => host.engineStatus(),
+    engineModels: () => host.engineModels(),
+    engineCatalog: (query) => host.engineCatalog(query),
+    engineCatalogModel: (id) => host.engineCatalogModel(id),
+    engineDownloadModel: (id, quant) => host.engineDownloadModel(id, quant),
+    engineDownloads: () => host.engineDownloads(),
+    engineCancelDownload: (id) => host.engineCancelDownload(id),
+    engineDeleteModel: (id) => host.engineDeleteModel(id),
+    runtimeStatus: (id) => host.runtimeStatus(id),
+    runtimeStart: (id) => host.runtimeStart(id),
+    runtimeStop: (id, force) => host.runtimeStop(id, force),
+    runtimeLoad: (id, model, params) => host.runtimeLoad(id, model, params),
+    unloadModel: (id, model) => host.unloadModel(id, model),
   };
 }
 
@@ -257,6 +301,19 @@ function httpClient(url: string, token?: string): Client {
     listWorkflows: () => call('workflows:list'),
     runWorkflow: (id) => call('workflow:run', id),
     dispatchWorkflowEvent: (event) => call('workflow:event', event),
+    engineStatus: () => call(IpcChannels.engineStatus),
+    engineModels: () => call(IpcChannels.engineModels),
+    engineCatalog: (query) => call(IpcChannels.engineCatalog, query),
+    engineCatalogModel: (id) => call(IpcChannels.engineCatalogModel, id),
+    engineDownloadModel: (id, quant) => call(IpcChannels.engineDownloadModel, id, quant),
+    engineDownloads: () => call(IpcChannels.engineDownloads),
+    engineCancelDownload: (id) => call(IpcChannels.engineCancelDownload, id).then(() => undefined),
+    engineDeleteModel: (id) => call(IpcChannels.engineDeleteModel, id),
+    runtimeStatus: (id) => call(IpcChannels.runtimeStatus, id),
+    runtimeStart: (id) => call(IpcChannels.runtimeStart, id),
+    runtimeStop: (id, force) => call(IpcChannels.runtimeStop, id, force),
+    runtimeLoad: (id, model, params) => call(IpcChannels.runtimeLoad, id, model, params),
+    unloadModel: (id, model) => call(IpcChannels.modelUnload, id, model),
   };
 }
 
@@ -264,9 +321,9 @@ function httpClient(url: string, token?: string): Client {
  * Build a client: `--url`, else NEKKO_URL, else the running app's link file,
  * else an in-process host on the local data directory.
  */
-export function getClient(opts: { url?: string; token?: string } = {}): Client {
+export function getClient(opts: { url?: string; token?: string; longLived?: boolean } = {}): Client {
   const target = resolveTarget(opts);
-  return target.url ? httpClient(target.url, target.token) : localClient();
+  return target.url ? httpClient(target.url, target.token) : localClient(opts.longLived);
 }
 
 /** Resolve provider + model from flags, the session, then saved defaults. */

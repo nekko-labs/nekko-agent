@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { childEnv, daemonMode, DaemonProcess, findNekkod, nekkodPackageName } from './nekkod.js';
+import { childEnv, DaemonProcess, findNekkod, nekkodPackageName } from './nekkod.js';
 import { forwardCall, isSocketRoute, upgradeAllowed, upstreamPath } from './proxy.js';
 
 const dirs: string[] = [];
@@ -22,14 +22,10 @@ const touch = (p: string, mtime?: number) => {
   if (mtime) utimesSync(p, mtime, mtime);
 };
 
-describe('daemonMode', () => {
-  it('defaults to auto and accepts the force values', () => {
-    expect(daemonMode(undefined)).toBe('auto');
-    expect(daemonMode('')).toBe('auto');
-    expect(daemonMode('nekkod')).toBe('nekkod');
-    expect(daemonMode('ON')).toBe('nekkod');
-    expect(daemonMode('ts')).toBe('ts');
-    expect(daemonMode('off')).toBe('ts');
+describe('nekkodPackageName', () => {
+  it("names this platform's package, and the x64 one on Windows on Arm", () => {
+    expect(nekkodPackageName('linux', 'arm64')).toBe('@nekko-agent/nekkod-linux-arm64');
+    expect(nekkodPackageName('win32', 'arm64')).toBe('@nekko-agent/nekkod-win32-x64');
   });
 });
 

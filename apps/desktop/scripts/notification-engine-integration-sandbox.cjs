@@ -26,8 +26,9 @@ async function main() {
   engine = new api.EngineProcess({ dataDir: path.join(isolated, 'data'), mainDir: out, origins: ['null'], app: { isPackaged: false, appPath: path.resolve(__dirname, '..'), userData: path.join(isolated, 'profile'), version: '0.0.0-integration' } });
   engine.start();
   const endpoint = await engine.endpoint();
-  results.mode = endpoint.mode;
-  check('Real engine matches explicitly requested mode (no silent fallback)', () => assert.equal(endpoint.mode, process.env.NEKKO_NOTIFICATION_INTEGRATION_MODE || 'backend'));
+  const info = await engine.call('daemon:info');
+  results.mode = 'daemon';
+  check('Real engine is nekkod', () => assert.ok(Array.isArray(info?.owned) && endpoint.url.startsWith('http://127.0.0.1:')));
   const settings = await engine.call(C.settingsGet);
   check('Backend reads isolated settings with optional services disabled', () => {
     assert.equal(settings.apiServer.enabled, false);

@@ -619,7 +619,16 @@ function chatOwner(worktreeRoot: string): { id: string; title: string; running: 
   return session ? { id: session.id, title: session.title, running: isChatRunning(session.id) } : null;
 }
 
-export function createHost(opts: { dataDir: string; allowBrowserControl?: boolean }): Host {
+export function createHost(opts: {
+  dataDir: string;
+  allowBrowserControl?: boolean;
+  /**
+   * Honour `engine.autoStart` (default true). A one-shot CLI command passes
+   * false: a listening engine keeps the process alive, so the command would
+   * never exit, and nothing it does needs the engine already up.
+   */
+  autoStartEngine?: boolean;
+}): Host {
   setDataDir(opts.dataDir);
   // Under nekkod, settings.json is the daemon's to write (crates/nekkod/src/settings.rs).
   const call = daemonOwns('settings') ? daemonCall() : undefined;
@@ -832,7 +841,7 @@ export function createHost(opts: { dataDir: string; allowBrowserControl?: boolea
   // Opt-in only, and never fatal: a port taken by something else should leave a
   // line in the engine's log for the Models tab to show, not stop the app from
   // starting.
-  if (getSettings().engine?.autoStart) {
+  if (getSettings().engine?.autoStart && opts.autoStartEngine !== false) {
     void engine.start().catch(() => {});
   }
 

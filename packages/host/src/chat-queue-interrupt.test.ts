@@ -37,7 +37,7 @@ const { getSession } = await import('./sessions.js');
 const { IpcChannels } = await import('@nekko-agent/shared');
 const { createDispatcher } = await import('./dispatch.js');
 
-beforeEach(() => { calls = 0; started = undefined; process.env.NEKKO_AGENT_LOOP = 'ts'; });
+beforeEach(() => { calls = 0; started = undefined; });
 
 describe('session options', () => {
   it('rejects git isolation switches while a chat is running', async () => {

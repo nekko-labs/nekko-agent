@@ -327,20 +327,6 @@ describe('a daemon-driven turn', () => {
     expect(getSession(s.id)!.messages.at(-1)!.content).toBe('in process');
   });
 
-  it('keeps every turn in process with NEKKO_AGENT_LOOP=ts', async () => {
-    const s = named();
-    saveSettings({ defaultChatMode: 'yolo' });
-    const { calls } = fakeDaemon(async () => {});
-    rounds = [[{ type: 'text', delta: 'escape hatch' }, { type: 'done' }]];
-    process.env.NEKKO_AGENT_LOOP = 'ts';
-    try {
-      await sendChat({ sessionId: s.id, providerId: 'p1', modelId: 'm', text: 'hi' }, () => {});
-    } finally {
-      delete process.env.NEKKO_AGENT_LOOP;
-    }
-    expect(calls.some(([c]) => c === 'chat:turn')).toBe(false);
-    expect(getSession(s.id)!.messages.at(-1)!.content).toBe('escape hatch');
-  });
 });
 
 describe('after a daemon turn', () => {

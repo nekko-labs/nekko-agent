@@ -6,8 +6,8 @@ import { daemonCall, daemonOwns } from './engine/daemon.js';
  * owns the service's files and timers, so this host must neither write them
  * nor run the service beside it: calls made inside this process (the local API
  * server, the CLI) go to the daemon, and the service's own loop does not start
- * here. Without a daemon (the CLI's in-process host, the cloud,
- * `NEKKO_DAEMON=ts`) everything stays local.
+ * here. Without a daemon (the CLI's in-process host, the cloud) everything
+ * stays local.
  */
 
 /** Run `channel` on the daemon when it owns `what`, else `local()`. */
