@@ -33,10 +33,9 @@ An agent changing Nekko Agent should read these files in the repo first:
 
 ## Editing these docs
 
-Each page is rendered from one Markdown file in the repo, listed in `docs/hub/nav.json`. Edit the Markdown; the generated site is not committed, Vercel builds it on every deploy. To look at the result before it ships, build it and serve it. `npm run website` serves the site on [http://127.0.0.1:8080](http://127.0.0.1:8080) (set `PORT` to change it), with the same clean URLs as production.
+Each page is rendered from one Markdown file in the repo, listed in `docs/hub/nav.json`. Edit the Markdown; the generated site is not committed, Vercel builds it on every deploy. To look at the result before it ships, `npm run website` builds the docs and serves the site on [http://127.0.0.1:8080](http://127.0.0.1:8080) (set `PORT` to change it), with the same clean URLs as production.
 
 ```bash
-npm run docs
 npm run website
 ```
 

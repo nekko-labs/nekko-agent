@@ -64,10 +64,9 @@ with `npx vitest run --project packages/core`, or run one package as before with
 
 The docs at [nekkoagent.com/docs](https://nekkoagent.com/docs) are rendered from Markdown in this repo. `docs/hub/nav.json` lists the pages and the file each comes from. The generated pages are not committed: Vercel builds them on every deploy, so a docs change is just the Markdown edit. When a pull request changes what users see or do, update the page that describes it in the same PR.
 
-To look at the result before it ships, build it and serve it. `npm run website` serves the site on [http://127.0.0.1:8080](http://127.0.0.1:8080) (set `PORT` to change it), with the same clean URLs as production.
+To look at the result before it ships, `npm run website` builds the docs and serves the site on [http://127.0.0.1:8080](http://127.0.0.1:8080) (set `PORT` to change it), with the same clean URLs as production.
 
 ```bash
-npm run docs
 npm run website
 ```
 

@@ -24,7 +24,7 @@
     "local": "npm run build:core && npm run build -w @nekko-agent/host && npm run build -w @nekko-agent/desktop && node apps/desktop/scripts/stage-daemon.mjs --local && npm run start -w @nekko-agent/desktop",
     "web": "npm run build:web && npm run start -w @nekko-agent/server",
     "docs": "node scripts/build-docs.mjs",
-    "website": "node scripts/serve-website.mjs",
+    "website": "node scripts/build-docs.mjs && node scripts/serve-website.mjs",
     "bundle:web": "npm run build:web && npm run bundle -w @nekko-agent/server",
     "test:cli-package": "node scripts/smoke-cli-pack.mjs",
     "perf": "node scripts/perf/run.mjs",

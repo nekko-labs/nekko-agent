@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
 import { createWebsiteServer } from './serve-website.mjs';
+import { write } from './build-docs.mjs';
 
 test('marketing preview serves only static website files and read requests', async (t) => {
+  write(); // the docs pages are gitignored build output
   const server = createWebsiteServer();
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));

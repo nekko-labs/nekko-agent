@@ -403,22 +403,28 @@ export function stale(files = build()) {
   return problems;
 }
 
+// Write the output into apps/website, replacing whatever docs/ held before.
+export function write(files = build()) {
+  rmSync(outDir, { recursive: true, force: true });
+  for (const [path, content] of files) {
+    const file = join(site, path);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, content);
+  }
+  return files;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const files = build();
   if (process.argv.includes('--check')) {
     const problems = stale(files);
     if (problems.length) {
-      console.error(`The docs site is out of date with its Markdown. Run \`npm run docs\`.\n  ${problems.join('\n  ')}`);
+      console.error(`${COMMITTED.join(' and ')} are out of date with docs/hub/nav.json. Run \`npm run docs\`.\n  ${problems.join('\n  ')}`);
       process.exit(1);
     }
     console.log(`${COMMITTED.join(' and ')} up to date`);
   } else {
-    rmSync(outDir, { recursive: true, force: true });
-    for (const [path, content] of files) {
-      const file = join(site, path);
-      mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, content);
-    }
+    write(files);
     console.log(`wrote ${files.size} files to apps/website`);
   }
 }

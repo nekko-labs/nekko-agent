@@ -235,7 +235,7 @@ For every request that adds a feature, changes user-visible behavior, or settles
 
 ## Keep the docs current
 
-The docs at nekkoagent.com/docs render from Markdown in this repo (`docs/hub/nav.json` maps each page to its file). When a PR adds or changes something users see or do, update the page that describes it in the same PR, and add a page to `nav.json` for a new feature that needs one. Never commit the generated site (`apps/website/docs/`, `llms-full.txt`): it is gitignored and Vercel builds it on deploy. `npm run docs` builds it locally for `npm run website`, and updates the committed `llms.txt` and `sitemap.xml` when `nav.json` changes (the Docs site workflow commits those on the PR if you forget).
+The docs at nekkoagent.com/docs render from Markdown in this repo (`docs/hub/nav.json` maps each page to its file). When a PR adds or changes something users see or do, update the page that describes it in the same PR, and add a page to `nav.json` for a new feature that needs one. Never commit the generated site (`apps/website/docs/`, `llms-full.txt`): it is gitignored and Vercel builds it on deploy. `npm run website` builds it and serves it locally; `npm run docs` (part of that) also updates the committed `llms.txt` and `sitemap.xml` when `nav.json` changes (the Docs site workflow commits those on the PR if you forget).
 
 ## Record performance changes
 
