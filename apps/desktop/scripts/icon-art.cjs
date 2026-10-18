@@ -1,7 +1,8 @@
 /**
  * The Nekko Agent mark, as vector art: an outline cat head (two ears, a soft
  * curve of forehead between them, a round jaw, nothing inside) in one thin
- * stroke with sharp corners, on a deep tile, plus the installer banners that
+ * stroke with sharp corners, in white on the brand's indigo-to-lavender
+ * gradient tile, plus the installer banners that
  * reuse it. Pure
  * string-building with no renderer behind it, so anything that needs the mark
  * -- the desktop icon pipeline, the phone app's icons, the marketing site's
@@ -13,10 +14,19 @@
 /* ── the mark ─────────────────────────────────────────────────────────────── */
 
 const VIEWBOX = 512;
-const INK = '#f2f1e9';
-const RIM = '#a7c8ac';
-/** The tile behind the mark, and what the installer panels are painted in. */
-const TILE = '#101714';
+const INK = '#ffffff';
+/**
+ * The brand gradient, left to right: deep indigo to lavender. The tile behind
+ * the mark is painted in it. `TILE` is its deep end, for anything that needs a
+ * single flat colour (the phone splash, Android's adaptive-icon background
+ * colour); `RIM` is its light end, used for the installer banner's edge stripe.
+ */
+const TILE = '#453A92';
+const TILE_END = '#9D8CE6';
+const RIM = TILE_END;
+/** A horizontal linear gradient across whatever it fills, as an SVG <defs> entry. */
+const tileGradient = (id) =>
+  `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${TILE}"/><stop offset="1" stop-color="${TILE_END}"/></linearGradient>`;
 
 /**
  * The head: two ears, a forehead that dips between them in a soft curve
@@ -60,29 +70,26 @@ function markGroup(size, box, span, color = INK) {
 }
 
 /**
- * The app icon: the mark on a squircle tile with a rim light. Everything is
- * expressed in a 512 viewBox and scaled by the renderer, so the only
- * size-dependent decisions are how much detail survives.
+ * The app icon: the white mark on a squircle tile painted in the brand
+ * gradient. The tile is bright enough to hold its own edge on a dark taskbar,
+ * so it needs no rim light. Everything is expressed in a 512 viewBox and
+ * scaled by the renderer, so the only size-dependent decisions are how much
+ * detail survives.
  */
 function iconSvg(size, px = size) {
-  const rimWidth = size >= 48 ? 6 : 10;
   const corner = 114; // 22.3% of 512, the platform squircle radius
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${VIEWBOX} ${VIEWBOX}">
   <defs>
     <clipPath id="squircle">
       <rect x="0" y="0" width="512" height="512" rx="${corner}" ry="${corner}"/>
     </clipPath>
+    ${tileGradient('tile')}
   </defs>
 
   <g clip-path="url(#squircle)">
-    <rect width="512" height="512" fill="${TILE}"/>
+    <rect width="512" height="512" fill="url(#tile)"/>
     ${markGroup(size, VIEWBOX, SPAN)}
   </g>
-
-  <!-- Rim light. A dark tile on a dark taskbar loses its own edge; a hairline of
-       the accent gives it back without lightening the art. -->
-  <rect x="3" y="3" width="506" height="506" rx="${corner - 3}" ry="${corner - 3}"
-        fill="none" stroke="${RIM}" stroke-opacity="0.72" stroke-width="${rimWidth}"/>
 </svg>`;
 }
 
@@ -98,18 +105,42 @@ function iconSvg(size, px = size) {
  */
 const BARE_SIZE = 17.2 / 16;
 
+/** `background: 'gradient'` paints the brand gradient; any other value but 'none' is a flat fill. */
 function bareMarkSvg(px, { color = INK, inset = 0.72, background = 'none' } = {}) {
+  const ground =
+    background === 'none'
+      ? ''
+      : background === 'gradient'
+        ? `<defs>${tileGradient('ground')}</defs><rect width="512" height="512" fill="url(#ground)"/>`
+        : `<rect width="512" height="512" fill="${background}"/>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${VIEWBOX} ${VIEWBOX}">
-  ${background === 'none' ? '' : `<rect width="512" height="512" fill="${background}"/>`}
+  ${ground}
   ${markGroup(px, VIEWBOX, Math.round(VIEWBOX * inset * BARE_SIZE), color)}
 </svg>`;
+}
+
+/**
+ * The mark with no tile, painted in the brand gradient, for the marketing
+ * site's header and footer: the page's own colour is the ground there, so the
+ * tile belongs only to the app icon and the favicon. The viewBox hugs the ink
+ * (with a little room for the thickening stroke) so the mark lines up with the
+ * wordmark beside it instead of floating in a square.
+ */
+function logoSvg() {
+  const pad = 0.6;
+  const vb = [ART.x - pad, ART.y - pad, ART.w + pad * 2, ART.h + pad * 2].map((n) => +n.toFixed(3));
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(' ')}">
+  <defs><linearGradient id="mark" gradientUnits="userSpaceOnUse" x1="${ART.x}" y1="0" x2="${(ART.x + ART.w).toFixed(3)}" y2="0"><stop offset="0" stop-color="${TILE}"/><stop offset="1" stop-color="${TILE_END}"/></linearGradient></defs>
+  <path d="${HEAD}" fill="url(#mark)" fill-rule="evenodd" stroke="url(#mark)" stroke-width="0.5" stroke-linejoin="miter" stroke-miterlimit="8"/>
+</svg>
+`;
 }
 
 /* ── the NSIS installer art ───────────────────────────────────────────────── */
 
 /**
- * The Windows installer's header strip and sidebar panel. Same deep tile, same
- * mark, and the product's actual name.
+ * The Windows installer's header strip and sidebar panel. Same gradient, same
+ * mark, and the product's actual name in white.
  */
 function bannerSvg(w, h, opts, pw = w, ph = h) {
   const { markSize, markX, markY, title, titleSize, layout } = opts;
@@ -119,18 +150,19 @@ function bannerSvg(w, h, opts, pw = w, ph = h) {
   const column = layout === 'column';
   const tagline = column ? 'AI on your computer' : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${pw}" height="${ph}" viewBox="0 0 ${w} ${h}">
-  <rect width="${w}" height="${h}" fill="${TILE}"/>
+  <defs>${tileGradient('panel')}</defs>
+  <rect width="${w}" height="${h}" fill="url(#panel)"/>
   <rect width="${column ? 3 : 2}" height="${h}" fill="${RIM}"/>
   <g transform="translate(${markX} ${markY}) scale(${markSize / 512})">${inner}</g>
   <text x="${column ? w / 2 : markX + markSize + 14}" y="${column ? markY + markSize + 46 : h / 2 + titleSize * 0.36}"
-        text-anchor="${column ? 'middle' : 'start'}" fill="${RIM}"
+        text-anchor="${column ? 'middle' : 'start'}" fill="${INK}"
         font-family="Segoe UI, system-ui, sans-serif" font-size="${titleSize}" font-weight="600"
         letter-spacing="${(titleSize * 0.06).toFixed(2)}">${title}</text>
   ${tagline
-      ? `<text x="${w / 2}" y="${markY + markSize + 76}" text-anchor="middle" fill="${RIM}"
+      ? `<text x="${w / 2}" y="${markY + markSize + 76}" text-anchor="middle" fill="${INK}"
         font-family="Segoe UI, system-ui, sans-serif" font-size="13">${tagline}</text>`
       : ''}
 </svg>`;
 }
 
-module.exports = { iconSvg, bareMarkSvg, bannerSvg, TILE, INK, HEAD, ART };
+module.exports = { iconSvg, bareMarkSvg, logoSvg, bannerSvg, TILE, TILE_END, INK, HEAD, ART };
