@@ -14,7 +14,8 @@ const workspacePackages = ['@nekko-agent/core', '@nekko-agent/host', '@nekko-age
 export default defineConfig({
   main: {
     build: {
-      externalizeDeps: { exclude: workspacePackages },
+      // Keep ws bundled as before; native optional helpers remain external below.
+      externalizeDeps: { exclude: [...workspacePackages, 'ws'] },
       rollupOptions: {
         // electron-updater is CJS with node-only internals, and @lydell/node-pty
         // ships a native .node binary, require both at runtime from node_modules

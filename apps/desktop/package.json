@@ -11,7 +11,7 @@
   "desktopName": "Nekko Agent",
   "main": "./out/main/index.js",
   "scripts": {
-    "predev": "node scripts/ensure-electron.mjs",
+    "predev": "node scripts/ensure-electron.mjs && npm run build:native-browser",
     "dev": "node scripts/dev-launch.mjs dev",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -23,10 +23,12 @@
     "test:repo-actions": "node scripts/agent-sidebar-integration.cjs",
     "test:e2e": "playwright test -c e2e/playwright.config.ts",
     "test:command-center": "node scripts/command-center-integration.cjs",
-    "prestart": "node scripts/ensure-electron.mjs",
+    "prestart": "node scripts/ensure-electron.mjs && npm run build:native-browser",
     "start": "node scripts/dev-launch.mjs preview",
-    "dist": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && electron-builder",
-    "release": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && electron-builder --publish always"
+    "dist": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder",
+    "release": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder --publish always",
+    "build:native-browser": "node ../../scripts/build-agent-browser.mjs",
+    "test:browser": "node ../../scripts/build-agent-browser.mjs && node --test ../../scripts/agent-browser-native.test.mjs && node scripts/browser-automation-smoke.mjs"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.2.0-beta.15",
@@ -41,7 +43,8 @@
     "ghostty-web": "^0.4.0",
     "mermaid": "^12.1.0",
     "playwright-core": "1.63.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@capacitor/core": "^8.5.3",
@@ -52,6 +55,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "44.7.0",
     "electron-builder": "26.17.0",
