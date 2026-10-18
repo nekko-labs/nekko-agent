@@ -1,15 +1,22 @@
-// Live check for the AN9b machine-readiness advisor on real hardware: gathers
-// MachineFacts through the host probes and evaluates this machine against the
-// curated offline-stack catalog. Usage: node scripts/itest-readiness.mjs
-import { createHost } from '@nekko-agent/host';
-import { mkdtempSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+// Live check for the AN9b machine-readiness advisor on real hardware: a real
+// nekkod (no TS backend, scratch data dir and home) gathers MachineFacts
+// through its probes and evaluates this machine against the curated
+// offline-stack catalog (`machine:readiness`). The device checks expect the
+// RTX 5090 Windows box. Usage: node scripts/itest-readiness.mjs [path/to/nekkod]
+import { startNekkod } from './itest-nekkod.mjs';
 
 const GB = (b) => (b == null ? '?' : `${(b / 1e9).toFixed(1)} GB`);
-const host = createHost({ dataDir: mkdtempSync(join(tmpdir(), 'nekko-ready-')) });
+const daemon = await startNekkod({ nekkod: process.argv[2], label: 'ready' });
+const finish = async (code) => {
+  await daemon.stop();
+  process.exit(code);
+};
+process.on('unhandledRejection', async (e) => {
+  console.error(e);
+  await finish(1);
+});
 
-const report = await host.machineReadiness();
+const report = await daemon.call('machine:readiness');
 
 let failures = 0;
 const check = (name, cond, detail = '') => {
@@ -38,9 +45,9 @@ check('cuda runtime selected', runtime?.pick?.id === 'llama-server-cuda', runtim
 check('intent pick is a GPU-resident model', intent?.pick != null && intent.pick.memoryBytes > 1e9, intent?.pick?.id);
 
 // Language filtering exercises the catalog live.
-const ja = await host.machineReadiness('ja');
+const ja = await daemon.call('machine:readiness', 'ja');
 const jaStt = ja.roles.find((a) => a.role === 'stt');
 check('ja STT pick covers Japanese', jaStt?.pick?.id === 'whisper-small-multi' || jaStt?.pick?.id === 'parakeet-tdt-v3', jaStt?.pick?.id);
 
 console.log(`\n${failures === 0 ? 'READINESS PASS ✅' : `READINESS FAIL ❌ (${failures})`}`);
-process.exit(failures === 0 ? 0 : 1);
+await finish(failures === 0 ? 0 : 1);

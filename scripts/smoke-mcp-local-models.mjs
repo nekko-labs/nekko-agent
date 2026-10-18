@@ -3,18 +3,21 @@
 // GGUF, load it into the built-in engine, chat with it through
 // `nekko-agent_chat`, unload it and stop the engine.
 //
-// Isolation: the CLI runs on a fresh temporary data dir with NEKKO_URL cleared
-// and the app link ignored, the engine listens on its own port, and models land
-// in the temporary dir. The only thing borrowed is a llama-server binary
-// (read-only), passed with --llama-server or found in the default install.
-// Needs network for the ~90 MB download.
+// Isolation: the CLI runs on a fresh temporary data dir and home with
+// NEKKO_URL cleared and the app link ignored, its engine is the nekkod this
+// checkout built (NEKKOD_PATH), the model server listens on its own port, and
+// models land in the temporary dir. The only thing borrowed is a llama-server
+// binary (read-only), passed with --llama-server or found in the default
+// install. Needs network for the ~90 MB download.
 //
-//   npm run build:core && npm run build -w @nekko-agent/host && npm run build --workspace=apps/cli
+//   cargo build -p nekkod && npm run build:core && npm run build --workspace=apps/cli
 //   node scripts/smoke-mcp-local-models.mjs [--llama-server /path/to/llama-server] [--keep]
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { nekkodPath } from './itest-nekkod.mjs';
+import { killTree, treeOptions } from './itest-procs.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const cli = join(root, 'apps/cli/dist/index.js');
@@ -33,6 +36,8 @@ function findLlamaServer() {
   if (!existsSync(base)) return undefined;
   for (const backend of readdirSync(base)) {
     const dir = join(base, backend);
+    const flat = join(dir, process.platform === 'win32' ? 'llama-server.exe' : 'llama-server');
+    if (existsSync(flat)) return flat;
     try {
       for (const build of readdirSync(dir)) {
         const bin = join(dir, build, process.platform === 'win32' ? 'llama-server.exe' : 'llama-server');
@@ -52,9 +57,19 @@ if (!llamaServer) {
 
 // --data-dir reuses a kept run's directory (and its downloaded model).
 const dataDir = flag('data-dir') ?? mkdtempSync(join(tmpdir(), 'nekko-mcp-local-'));
+const home = mkdtempSync(join(tmpdir(), 'nekko-mcp-local-home-'));
 /** llama-server processes serving a model from this run's data dir. */
 const leftovers = () => {
   try {
+    if (process.platform === 'win32') {
+      // The data dir as Windows prints it in a command line, quotes doubled for PowerShell.
+      const needle = dataDir.replace(/'/g, "''");
+      const script = `Get-CimInstance Win32_Process -Filter "Name like 'llama-server%'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${needle}') } | ForEach-Object { $_.ProcessId }`;
+      return execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8', windowsHide: true })
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+    }
     return execFileSync('ps', ['-eo', 'pid,command'], { encoding: 'utf8' })
       .split('\n')
       .filter((l) => l.includes('llama-server') && l.includes(dataDir))
@@ -71,8 +86,9 @@ if (!flag('data-dir')) writeFileSync(
 console.log(`data dir ${dataDir}\nengine   ${llamaServer} on :${PORT}\n`);
 
 const child = spawn(process.execPath, [cli, 'mcp'], {
-  env: { ...process.env, NEKKO_URL: '', NEKKO_TOKEN: '', NEKKO_DATA_DIR: dataDir },
+  env: { ...process.env, NEKKO_URL: '', NEKKO_TOKEN: '', NEKKO_DATA_DIR: dataDir, NEKKOD_PATH: nekkodPath(), HOME: home, USERPROFILE: home },
   stdio: ['pipe', 'pipe', 'pipe'],
+  ...treeOptions,
 });
 let stderr = '';
 child.stderr.on('data', (c) => (stderr += c));
@@ -191,12 +207,18 @@ try {
 } catch (e) {
   check('smoke run', false, e.message);
 } finally {
-  child.kill();
-  await sleep(500);
-  await sleep(2000);
+  // Closing stdin ends the MCP server and, through its engine's stdin, nekkod;
+  // whatever is still left of the tree after that is ended with it.
+  child.stdin.end();
+  await sleep(2500);
   const after = leftovers();
   if (after.length) console.log(`      leftover after the MCP server exited: ${after.join(',')}`);
-  if (!argv.includes('--keep') && !flag('data-dir')) rmSync(dataDir, { recursive: true, force: true });
+  killTree(child);
+  await sleep(500);
+  if (!argv.includes('--keep') && !flag('data-dir')) {
+    try { rmSync(dataDir, { recursive: true, force: true }); } catch { /* a child may still hold a file */ }
+  }
+  try { rmSync(home, { recursive: true, force: true }); } catch { /* as above */ }
 }
 const failed = checks.filter((c) => !c.ok).length;
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
