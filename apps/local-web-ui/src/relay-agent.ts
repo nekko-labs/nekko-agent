@@ -15,6 +15,14 @@ export async function runRelayAgent(opts: { relayUrl: string; room: string; key:
   process.once('SIGTERM', stop);
   try {
     await daemonRequest(daemon, 'remote:attach', { relayUrl: opts.relayUrl, room: opts.room, secret: opts.key });
+    // A printed code is a promise that the agent is in the room: wait for the
+    // relay connection, so a device that connects at once is answered.
+    for (let i = 0; i < 100; i++) {
+      const status = await daemonRequest<{ online?: boolean; error?: string }>(daemon, 'remote:status');
+      if (status.online) break;
+      if (i === 99) console.warn(`[nekko-agent] relay not reachable yet${status.error ? ` (${status.error})` : ''}; still trying in the background.`);
+      await new Promise((r) => setTimeout(r, 100));
+    }
     const grant = await daemonRequest<{ code: string }>(daemon, 'remote:pair');
     console.log(`\nNekko Agent relay-agent → ${opts.relayUrl}`);
     console.log(`   room=${opts.room}  key=${opts.key}`);
