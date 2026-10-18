@@ -62,15 +62,15 @@ with `npx vitest run --project packages/core`, or run one package as before with
 
 ## Documentation
 
-The docs at [nekkoagent.com/docs](https://nekkoagent.com/docs) are rendered from Markdown in this repo. `docs/hub/nav.json` lists the pages and the file each comes from. After editing one of those files, regenerate the site and commit the result with your change. When a pull request changes what users see or do, update the page that describes it in the same PR.
+The docs at [nekkoagent.com/docs](https://nekkoagent.com/docs) are rendered from Markdown in this repo. `docs/hub/nav.json` lists the pages and the file each comes from. The generated pages are not committed: Vercel builds them on every deploy, so a docs change is just the Markdown edit. When a pull request changes what users see or do, update the page that describes it in the same PR.
+
+To look at the result before it ships, `npm run website` builds the docs and serves the site on [http://127.0.0.1:8080](http://127.0.0.1:8080) (set `PORT` to change it), with the same clean URLs as production.
 
 ```bash
-npm run docs
+npm run website
 ```
 
-To look at the result before it ships, `npm run website` serves the site on [http://127.0.0.1:8080](http://127.0.0.1:8080) (set `PORT` to change it), with the same clean URLs as production.
-
-If you forget, the **Docs site** workflow regenerates the pages on your pull request and pushes them to its branch. It only commits when something actually changed.
+Adding, removing or renaming a page in `nav.json` also changes the docs list in `apps/website/llms.txt` and the docs URLs in `apps/website/sitemap.xml`, which are committed. `npm run docs` updates them; if you forget, the **Docs site** workflow does it on your pull request and pushes the result to its branch.
 
 ## Commit messages
 

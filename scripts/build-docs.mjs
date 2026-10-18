@@ -1,19 +1,23 @@
 // Build the docs hub at nekkoagent.com/docs from the Markdown in this repo.
 //
-// docs/hub/nav.json lists the pages; each renders from one Markdown file. The
-// website has no build step on Vercel, so the output is committed:
+// docs/hub/nav.json lists the pages; each renders from one Markdown file.
+// Vercel runs this as the website's build command (vercel.json), so these are
+// generated at deploy time and gitignored:
 //   apps/website/docs/<slug>.html   the page (cleanUrls serves it at /docs/<slug>)
 //   apps/website/docs/<slug>.md     the same page as Markdown, for agents
 //   apps/website/docs/search.json   the client-side search index
 //   apps/website/docs/media/        images the pages use
 //   apps/website/llms-full.txt      every page in one file
-// plus a generated docs section in llms.txt and the docs URLs in sitemap.xml.
+// (Committed, they made every docs PR conflict with every other one in the
+// merge queue.) It also rewrites the generated docs section in llms.txt and the
+// docs URLs in sitemap.xml. Those two are committed: they change only with
+// nav.json, and the Docs site workflow commits them when they do.
 //
 //   node scripts/build-docs.mjs          write the output
-//   node scripts/build-docs.mjs --check  exit 1 if the committed output is stale
+//   node scripts/build-docs.mjs --check  exit 1 if llms.txt or sitemap.xml is stale
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, extname, join, posix, relative, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
 
@@ -381,37 +385,33 @@ export function build() {
   return files;
 }
 
-// Every file the build owns under docs/, so a removed page's output is noticed.
-function existingOutput() {
-  const found = [];
-  const walk = (dir) => {
-    if (!existsSync(dir)) return;
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const path = join(dir, entry.name);
-      if (entry.isDirectory()) walk(path);
-      else found.push(relative(site, path).split('\\').join('/'));
-    }
-  };
-  walk(outDir);
-  return found;
-}
+// The outputs that stay in git. Everything else the build writes is gitignored.
+export const COMMITTED = ['llms.txt', 'sitemap.xml'];
 
 const hash = (data) => createHash('sha256').update(data).digest('hex');
 
 export function stale(files = build()) {
   const problems = [];
-  for (const [path, content] of files) {
+  for (const path of COMMITTED) {
     const file = join(site, path);
     if (!existsSync(file)) problems.push(`missing ${path}`);
     else {
-      const current = readFileSync(file);
-      const expected = typeof content === 'string' ? Buffer.from(content) : content;
-      const normal = (b) => (extname(path).match(/\.(png|jpe?g|gif|webp)$/) ? b : Buffer.from(b.toString('utf8').replace(/\r\n/g, '\n')));
-      if (hash(normal(current)) !== hash(normal(expected))) problems.push(`out of date ${path}`);
+      const normal = (b) => Buffer.from(b.toString('utf8').replace(/\r\n/g, '\n'));
+      if (hash(normal(readFileSync(file))) !== hash(normal(Buffer.from(files.get(path))))) problems.push(`out of date ${path}`);
     }
   }
-  for (const path of existingOutput()) if (!files.has(path)) problems.push(`left over ${path}`);
   return problems;
+}
+
+// Write the output into apps/website, replacing whatever docs/ held before.
+export function write(files = build()) {
+  rmSync(outDir, { recursive: true, force: true });
+  for (const [path, content] of files) {
+    const file = join(site, path);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, content);
+  }
+  return files;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -419,17 +419,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (process.argv.includes('--check')) {
     const problems = stale(files);
     if (problems.length) {
-      console.error(`The docs site is out of date with its Markdown. Run \`npm run docs\`.\n  ${problems.join('\n  ')}`);
+      console.error(`${COMMITTED.join(' and ')} are out of date with docs/hub/nav.json. Run \`npm run docs\`.\n  ${problems.join('\n  ')}`);
       process.exit(1);
     }
-    console.log(`docs site up to date (${files.size} files)`);
+    console.log(`${COMMITTED.join(' and ')} up to date`);
   } else {
-    rmSync(outDir, { recursive: true, force: true });
-    for (const [path, content] of files) {
-      const file = join(site, path);
-      mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, content);
-    }
+    write(files);
     console.log(`wrote ${files.size} files to apps/website`);
   }
 }
