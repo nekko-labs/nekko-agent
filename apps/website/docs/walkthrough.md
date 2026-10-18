@@ -248,6 +248,27 @@ returns to the chat. The assistant is asked to reach for a diagram when it
 explains a flow or a structure, a table when it compares, and a code block for
 anything you might copy.
 
+### Photos from the web
+
+When the agent finds a picture while searching or browsing ("what does the
+HAMILeX MH-853 look like?"), it can show it in the reply. Several photos in a row
+appear as a gallery. Photos load as you scroll to them, a few at a time.
+
+Click a photo (or any image in the chat) to open the **photo viewer**: the
+picture as large as the window, with **Copy**, **Save…** and **Close**, and for a
+gallery the **‹ ›** buttons or the arrow keys to step through. Right-click a
+photo for **Copy image**, **Save image…**, **Copy image address** and **Open
+original in browser**.
+
+How it stays safe: the chat never loads a web address itself. Nekko fetches the
+picture for it, only from public websites (never this computer or your home
+network), only real image files (PNG, JPEG, GIF, WebP, AVIF) up to 10 MB, and
+without your cookies or logins. A photo loads by itself only when its address came
+from a search, a page or your own message in this chat. If the agent wrote an
+address out of nowhere, the photo shows a **Load image** button naming the site
+it would contact, so a made-up link cannot quietly send anything from your chat
+to someone else's server.
+
 ### Plan and capacity at a glance
 
 The plan icon in an agent window opens or closes only that chat's plan, sub-agents and queue panel. Each chat remembers its own choice locally. Narrow windows fold the panel automatically without changing that choice.
@@ -395,7 +416,7 @@ Changes is the leftmost header control. When the agent edits files it uses a mut
 
 Local document links in assistant replies appear as artifact cards beneath the response. The descriptive report title appears above its filename, so a README can still be recognizable. Select a card or document link to open it in the originating chat—not another chat that happens to have the file open.
 
-Local SVG, PNG, JPEG, GIF and WebP image markdown and image links also count as artifacts. Image markdown previews in the message; ordinary image links get a preview card below it. The same image does not get a second response card if it is already shown in image markdown. Cards fill the available width up to 768 px, contain images within 640 px height, and retain **Open source** to open the file in the originating chat. Local images load automatically outside Sandbox; unreadable, oversized or unsupported images show a fallback. SVG runs only as an inert image, with no scripts or external subresource requests. Remote images remain links and never auto-load, and network shares and unsafe URL schemes are not previewed.
+Local SVG, PNG, JPEG, GIF and WebP image markdown and image links also count as artifacts. Image markdown previews in the message; ordinary image links get a preview card below it. The same image does not get a second response card if it is already shown in image markdown. Cards fill the available width up to 768 px, contain images within 640 px height, and retain **Open source** to open the file in the originating chat. Local images load automatically outside Sandbox; unreadable, oversized or unsupported images show a fallback. SVG runs only as an inert image, with no scripts or external subresource requests. Web photos are shown through Nekko's safe fetch (see *Photos from the web*) and are not listed as artifacts; network shares and unsafe URL schemes are not previewed.
 
 The desktop navigation rail stays 52px wide at rest. Hover a destination or Tab into it to reveal the labels in a 198px body; the extra 10px is right-side breathing room, not narrower buttons. Its subtle background extends equally above and below the menu along the left edge. At full available height, each straight shoulder runs from 40px wide at 95px beyond the nearest button to the 198px-wide body at that button, with slowly narrowing tails rather than curved, outward-flaring wings. Header clearance lets the upper tip extend beside the mascot. Short windows shorten both tails equally and keep the destinations scrollable. The decorative tails do not intercept clicks, and phones continue to use bottom navigation. Implementation is geometry-tested; matched visual and interaction verification is pending with the parent task.
 
