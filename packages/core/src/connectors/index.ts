@@ -14,6 +14,8 @@ export interface ConnectorPollEvent {
   source?: string;
   /** Free-form payload for templates and context. */
   payload?: Record<string, unknown>;
+  /** Who caused it (GitHub `actor.login`), for triggers that only accept one person. */
+  actor?: string;
 }
 
 export interface ConnectorPollResult {
@@ -101,6 +103,7 @@ export const githubConnector: Connector = {
         text,
         source: ev.repo?.name ?? repo,
         payload: ev.payload ?? {},
+        ...(typeof ev.actor?.login === 'string' && ev.actor.login ? { actor: ev.actor.login } : {}),
       });
     }
     const nextCursor = events.length ? Math.max(...events.map((e) => e.cursor)) : cursor;

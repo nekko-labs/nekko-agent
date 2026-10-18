@@ -8,7 +8,7 @@ on the PR when it fails. It saves hosted-runner minutes by burning your own hard
 ## What it is - and what it is not
 
 A "Local CI runner" is a **workflow template**, not a new subsystem. Create it from
-**Workflows → New workflow → Local CI runner** (it's also one of the cards on the empty state).
+**Workflows → New workflow → Local CI runner** (under *Build your own*).
 Behind the scenes it is ordinary workflow pieces you already have:
 
 - a **trigger** that fires on repo events (see [Getting events in](#getting-events-in)),

@@ -305,6 +305,11 @@ export interface AppSettings {
    */
   desktopNotifications?: boolean;
   /**
+   * "Pause all automations": schedules, events and connector polls start no
+   * workflow run and no scheduled task fires. Run buttons and the CLI still work.
+   */
+  automationsPaused?: boolean;
+  /**
    * Lifecycle hooks: your own commands run around the agent's actions, with
    * the event as JSON on stdin (see packages/host/src/hooks.ts).
    */

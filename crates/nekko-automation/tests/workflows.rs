@@ -275,6 +275,14 @@ async fn the_engine_leaves_the_same_files_and_side_effects() {
                 engine.reconcile();
                 Value::Null
             }
+            "settings" => {
+                if let (Value::Object(s), Value::Object(patch)) = (&mut *fake.settings.lock().unwrap(), &args[0]) {
+                    for (k, v) in patch {
+                        s.insert(k.clone(), v.clone());
+                    }
+                }
+                Value::Null
+            }
             "file" => {
                 let f = op["file"].as_array().unwrap();
                 std::fs::write(dir.join(f[0].as_str().unwrap()), f[1].as_str().unwrap()).unwrap();
