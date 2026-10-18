@@ -1,5 +1,19 @@
 @import 'tailwindcss';
 
+/* Lilac / Lavender: the website's drifting pixel-dot field. It sits BEHIND
+   the app (z-index -1, above only the page background), so it shows in the
+   field around the floating panels while chat windows and every other panel,
+   which paint their own solid surface, cover it and keep text clear. Never
+   intercepts input. */
+.pixel-wave-background {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+}
+
 /* Faint seasonal decoration; never intercepts app input. */
 .autumn-background {
   position: fixed;
@@ -1311,6 +1325,42 @@
     /* Warmer, darker paper and a browner ink-soft: a lighter wash keeps the
      title on the banner's purple end above 4.5:1. */
     --merged-wash: rgba(147, 51, 234, 0.16);
+  }
+
+  /* Lilac and Lavender: the marketing site's two looks (nekkoagent.com).
+     Lilac is its white version: lavender-white paper, white panels, the
+     logo's indigo-to-lavender gradient as the accent. Lavender is its
+     colourful version: the whole ground is the logo's #9D8CE6, text stays dark
+     ink and panels are frosted white, never a dark or black surface. Both
+     add the site's drifting pixel-dot field (PixelWaveBackground). */
+  [data-theme='light'][data-preset='lilac'] {
+    --paper: #fbfaff;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f1edff;
+    --ink: #17151f;
+    --ink-soft: #5d5970;
+    --ink-faint: #8f8aa3;
+    --line: #e6e1f5;
+  }
+
+  [data-theme='light'][data-preset='lavender'] {
+    /* Panels are the website's frosted card (white at 72% over the lavender),
+       an off-white that keeps Lavender apart from Lilac's pure white. */
+    --paper: #9d8ce6;
+    --win: #e9e4fa;
+    --surface: #e4dff8;
+    --surface-2: #d9d2f5;
+    --ink: #17151f;
+    --ink-soft: #2c2640;
+    --ink-faint: #4a4366;
+    --line: #c4b8ee;
+    /* On a lavender ground the merged-PR violet would vanish: lighten the
+       washes with white and take the label to the deepest violet. */
+    --merged-ink: #2e1065;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
   }
 
   /* Belt-and-suspenders for the native <select> popup list. The OS draws that
