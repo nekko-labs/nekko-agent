@@ -41,6 +41,8 @@ test('capture builds the verified native browser even on cache hits', () => {
   const build = read('./build-agent-browser.mjs');
   assert.ok(build.includes("['build', '--locked', '--release'"));
   assert.ok(build.includes('Build source differs from maintained patch'));
+  assert.ok(build.includes("'core.autocrlf=false', '-c', 'core.eol=lf'"));
+  assert.ok(read('../.gitattributes').includes('/vendor/agent-browser/* text eol=lf'));
   const smoke = read('../apps/desktop/scripts/capture-smoke.mjs');
   assert.ok(smoke.includes("app.setAppPath(${JSON.stringify(join(root, 'apps/desktop'))})"));
 });

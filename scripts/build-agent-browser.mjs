@@ -8,7 +8,7 @@ const vendor = join(root, 'vendor/agent-browser');
 const pin = JSON.parse(readFileSync(join(vendor, 'pin.json'), 'utf8'));
 const upstream = join(root, '.scratch/agent-browser-upstream');
 const source = join(root, '.scratch/agent-browser-native');
-function git(args, cwd = root) { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
+function git(args, cwd = root) { return execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
 if (!existsSync(upstream)) {
   mkdirSync(dirname(upstream), { recursive: true });
   git(['init', upstream]);
@@ -22,7 +22,7 @@ if (!existsSync(source)) git(['clone', '--no-hardlinks', upstream, source]);
 if (git(['rev-parse', 'HEAD'], source) !== pin.revision) throw new Error('Unexpected build checkout revision');
 // Never reset a dirty checkout. A repeated build accepts only our exact maintained patch.
 const patch = join(vendor, 'stdio.patch');
-const reverse = spawnSync('git', ['apply', '--reverse', '--check', patch], { cwd: source });
+const reverse = spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'apply', '--reverse', '--check', patch], { cwd: source });
 if (reverse.status !== 0) {
   if (git(['status', '--porcelain', '--untracked-files=all'], source)) throw new Error('Build checkout contains unknown changes');
   git(['apply', '--check', patch], source);
