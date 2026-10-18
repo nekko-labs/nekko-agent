@@ -58,6 +58,12 @@
           "description": "Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor."
         },
         {
+          "slug": "automations",
+          "title": "Automations",
+          "source": "docs/automations.md",
+          "description": "Ready-made automations, run results and notifications, and pausing them all."
+        },
+        {
           "slug": "local-ci-runner",
           "title": "Local CI runner",
           "source": "docs/git-runner.md",

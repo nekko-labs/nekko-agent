@@ -454,3 +454,73 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn writes_other_agent_tools_mcp_entries_itself() {
+    let root = std::env::temp_dir().join(format!("nekkod-integrations-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let (data, home) = (root.join("data"), root.join("home"));
+    for d in [".claude", ".codex", ".cursor"] {
+        std::fs::create_dir_all(home.join(d)).unwrap();
+    }
+    // Someone else's entry, which a refresh must leave alone.
+    let hand = json!({ "mcpServers": { "nekko-agent": { "command": "node", "args": ["dist/index.js", "mcp"] } } });
+    std::fs::write(home.join(".cursor/mcp.json"), hand.to_string()).unwrap();
+    let h = home.to_string_lossy().to_string();
+    let d = start_with_env(true, Some(&data), json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
+
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in ["integrations:detect", "integrations:install", "integrations:snippet", "integrations:refresh"] {
+        assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} is owned: {info}");
+    }
+    let (_, tools) = post(d.port, "integrations:detect", json!([]), Some(TOKEN)).await;
+    let ids: Vec<_> = tools
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| (t["id"].clone(), t["detected"].clone(), t["installed"].clone()))
+        .collect();
+    assert_eq!(
+        ids,
+        vec![
+            (json!("claude"), json!(true), json!(false)),
+            (json!("codex"), json!(true), json!(false)),
+            (json!("cursor"), json!(true), json!(true)),
+            (json!("windsurf"), json!(false), json!(false)),
+        ]
+    );
+
+    // No target from the renderer: the backend's (the desktop's local server).
+    let (status, res) = post(d.port, "integrations:install", json!(["claude"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{res}");
+    assert_eq!(res["ok"], json!(true));
+    let written: Value = serde_json::from_str(&std::fs::read_to_string(home.join(".claude.json")).unwrap()).unwrap();
+    assert_eq!(
+        written["mcpServers"]["nekko-agent"],
+        json!({ "command": "/opt/nekko/nekko-agent", "args": ["mcp"], "env": { "NEKKO_URL": "http://127.0.0.1:1439", "NEKKO_TOKEN": "tok-desk" } })
+    );
+    // A target given is used as given.
+    let (_, res) = post(
+        d.port,
+        "integrations:install",
+        json!(["codex", { "url": "http://127.0.0.1:9", "token": "t9" }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(res["ok"], json!(true));
+    let toml = std::fs::read_to_string(home.join(".codex/config.toml")).unwrap();
+    assert!(toml.contains("NEKKO_TOKEN = \"t9\"") && toml.contains("command = \"npx\""), "{toml}");
+    let (_, snip) = post(d.port, "integrations:snippet", json!(["cursor", null]), Some(TOKEN)).await;
+    assert!(snip["snippet"].as_str().unwrap().contains("tok-desk"), "{snip}");
+
+    // A rolled token re-points the entries this app wrote, not the hand-written one.
+    let target = json!({ "url": "http://127.0.0.1:1440", "token": "tok-new" });
+    let (_, done) = post(d.port, "integrations:refresh", json!([target]), Some(TOKEN)).await;
+    assert_eq!(done, json!(["claude", "codex"]));
+    assert!(std::fs::read_to_string(home.join(".claude.json")).unwrap().contains("tok-new"));
+    assert!(std::fs::read_to_string(home.join(".codex/config.toml")).unwrap().contains("tok-new"));
+    let cursor: Value = serde_json::from_str(&std::fs::read_to_string(home.join(".cursor/mcp.json")).unwrap()).unwrap();
+    assert_eq!(cursor, hand);
+    drop(d);
+    let _ = std::fs::remove_dir_all(&root);
+}

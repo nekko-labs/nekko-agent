@@ -1,5 +1,6 @@
 import type { AgentPage as Page } from './agentPage.js';
 import { BROWSER_MAX_WAIT_MS } from '@nekko-agent/shared';
+import { untimed, type PhaseMark } from './agentBrowserTiming.js';
 
 /** Text returned to the model is capped so one page cannot flood the context. */
 export const PAGE_TEXT_LIMIT = 6_000;
@@ -52,18 +53,19 @@ export function formatEvaluated(value: unknown): string {
  * Run one validated page-level action. Tab handling, visibility, screenshots
  * and logs live with the window bookkeeping in agentBrowser.ts.
  */
-export async function runPageAction(page: Page, input: Record<string, unknown>): Promise<string> {
+export async function runPageAction(page: Page, input: Record<string, unknown>, mark: PhaseMark = untimed): Promise<string> {
+  const summary = () => mark('summary', () => pageSummary(page));
   const selector = typeof input.selector === 'string' && input.selector ? input.selector : undefined;
   switch (input.action) {
     case 'navigate':
-      await page.goto(String(input.url), { waitUntil: 'load', timeout: 25_000 });
-      return pageSummary(page);
+      await mark('navigate', () => page.goto(String(input.url), { waitUntil: 'load', timeout: 25_000 }));
+      return summary();
     case 'inspect':
-      return pageSummary(page);
+      return summary();
     case 'click':
       // The first match, as document.querySelector picked before Playwright.
-      await page.locator(selector!).first().click({ timeout: ACTION_TIMEOUT_MS });
-      return pageSummary(page);
+      await mark('click', () => page.locator(selector!).first().click({ timeout: ACTION_TIMEOUT_MS }));
+      return summary();
     case 'fill':
       await page.locator(selector!).first().fill(String(input.value ?? ''), { timeout: ACTION_TIMEOUT_MS });
       return 'Field filled.';

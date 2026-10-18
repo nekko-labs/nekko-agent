@@ -134,6 +134,8 @@ export interface CommandWallSetting {
   watermark: number;
   /** Where the wall's one composer sits, and the size it was dragged to (CSS pixels; absent means default). */
   composer?: { side: 'top' | 'bottom'; align: 'left' | 'center' | 'right'; width?: number; height?: number };
+  /** Snap to grid: the wall keeps its windows evenly spaced. Absent means off. */
+  snap?: boolean;
 }
 
 /**
@@ -302,6 +304,11 @@ export interface AppSettings {
    * stops for an answer or an approval (default on; `false` switches off).
    */
   desktopNotifications?: boolean;
+  /**
+   * "Pause all automations": schedules, events and connector polls start no
+   * workflow run and no scheduled task fires. Run buttons and the CLI still work.
+   */
+  automationsPaused?: boolean;
   /**
    * Lifecycle hooks: your own commands run around the agent's actions, with
    * the event as JSON on stdin (see packages/host/src/hooks.ts).

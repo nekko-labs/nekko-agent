@@ -16,12 +16,17 @@ The unmodified upstream Windows command daemon is unsafe for this boundary: it a
 
 Build the exact patch with `node scripts/build-agent-browser.mjs` (Rust toolchain and native linker required). Dist/release call this builder and package the native binary, license and pin outside asar. Source/dependency pinning is verified, not bit-identical output across toolchains. Windows x64 has been tested; installer/signing and macOS/Linux/arm64 remain unverified.
 
+## Speed (2026-10-18)
+
+A hidden window that has gone idle renders only about one frame a second, so clicks used to wait about a second and screenshots about two. The browser now keeps the hidden window's frames coming for just the duration of a click or screenshot; the window stays hidden. On a sample signup task (open the page, find the form, fill it, submit, check the result, take a screenshot) a new chat's browser finished in about half a second instead of about three and a third, on Windows. Opening the browser itself takes about 60 ms. A chat that keeps its browser open skips that and reuses the page cache. See [performance history](perf-history.md) and the [benchmark report](../reports/agent-browser/flow-benchmark.md).
+
 ## Checks and evidence
 
 - `node --test scripts/agent-browser-native.test.mjs`: native framing/auth/argv/no-listener security.
 - `node scripts/agent-browser-native-smoke.mjs [outDir]`: isolated hidden Electron native action/security fixture plus 20 cold-chat and 20 warm-inspect samples. Set `NEKKO_SMOKE_ELECTRON` to a matching owned Electron executable when needed.
 - `apps/desktop/src/main/agentNativeRelay.test.ts`: wrong/missing auth, Origin, second-client and owned-target negative checks.
 - `apps/desktop/src/main/agentCdpTransport.test.ts`, `agentBrowserActions.test.ts`, `agentBrowser.test.ts`: transport/page/bridge behavior.
+- `node scripts/agent-browser-flow-benchmark.mjs [out.json] [--rounds 20] [--launches 12] [--drivers native,native-nowake,playwright]`: whole-task benchmark (navigate, locate, fill, submit, verify, screenshot) through the real bridge in hidden Electron, with first-in-process, fresh-chat and warm-session scenarios, tool calls, retries, reply bytes and startup phase timings. A `-nowake` driver runs without the hidden-frame wake.
 - `scripts/agent-browser-benchmark.mjs`: explicit Playwright baseline-only helper; not the production default.
 - `scripts/perf/lib/browser.mjs`: existing separate renderer-performance helper, not yet migrated by this task.
 

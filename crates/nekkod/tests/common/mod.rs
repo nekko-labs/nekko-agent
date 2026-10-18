@@ -86,6 +86,11 @@ pub fn fake_backend() {
                                 axum::Json(json!({ "result": { "toolCallId": body.0["args"][1]["id"], "output": "host tool ran" } })),
                             ),
                             "chats:busy" => (axum::http::StatusCode::OK, axum::Json(json!(["s_busy"]))),
+                            // The desktop's local server, for MCP entries written with no target.
+                            "integrations:target" => (
+                                axum::http::StatusCode::OK,
+                                axum::Json(json!({ "url": "http://127.0.0.1:1439", "token": "tok-desk", "command": "/opt/nekko/nekko-agent" })),
+                            ),
                             // The engine's model server, for the daemon's `engine:models`.
                             "engine:runtime" => {
                                 recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));

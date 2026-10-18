@@ -3969,6 +3969,84 @@
     "set_chat_title",
     "ask_user"
    ]
+  },
+  {
+   "input": {
+    "session": {},
+    "offline": false,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": true,
+    "noTools": true
+   },
+   "output": [
+    "update_plan"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "trainingRunId": "r1"
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": true,
+    "noTools": true
+   },
+   "output": [
+    "update_plan"
+   ]
   }
  ],
  "prompts": [
