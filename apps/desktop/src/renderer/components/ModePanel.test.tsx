@@ -40,8 +40,22 @@ describe('Mode panel markup', () => {
   it('marks the matching saved mode and the planned settings', () => {
     const out = html();
     expect(out).toMatch(/aria-checked="true"[^>]*data-saved-mode="everyday"/);
-    expect(out.match(/Coming soon/g)).toHaveLength(4);
+    expect(out.match(/Coming soon/g)).toHaveLength(3);
     expect(out).toMatch(/data-chat-mode="guardrails"|aria-checked="true"[^>]*data-chat-mode="guardrails"/);
+  });
+  it('counts MCP servers and connectors this chat sees', () => {
+    store.settings = { ...store.settings, mcpServers: [{ id: 'web', name: 'web', enabled: true }, { id: 'files', name: 'files', enabled: true }, { id: 'off', name: 'off', enabled: false }], connectors: [{ kind: 'github', connected: true }, { kind: 'slack', connected: true }, { kind: 'linear', connected: false }] };
+    session = { ...base, disabledMcpServers: ['web'], disabledConnectors: ['slack'] };
+    const out = html();
+    expect(out).toContain('1 of 3 on');
+    expect(out).toContain('1 of 2 on');
+    store.settings = { ...store.settings, mcpServers: [], connectors: [] };
+  });
+  it('follows the chat effort over the app default', () => {
+    session = { ...base, effort: 'low' } as Session;
+    const out = html();
+    expect(out).toMatch(/aria-checked="true" data-effort="low"/);
+    expect(out).toContain('Use the app default');
   });
   it('locks internet on for a cloud model and approvals in a sandbox', () => {
     expect(renderToStaticMarkup(<ModePanel {...deps({ isCloudModel: true })} />)).toMatch(/aria-checked="true" aria-label="Internet access" class="mode-switch" disabled/);
@@ -77,6 +91,23 @@ describe('Mode panel writes', () => {
     expect(window.nekko.setSessionOptions).toHaveBeenCalledExactlyOnceWith('chat', { workMode: 'better-review' });
     expect(window.nekko.updateSettings).not.toHaveBeenCalled();
   });
+  it('sets effort on this chat, and clears it back to the app default', async () => {
+    await modePanelActions(deps()).setEffort('max');
+    expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { effort: 'max' });
+    await modePanelActions(deps()).setEffort(null);
+    expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { effort: null });
+    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
+  });
+  it('switches MCP servers and connectors for this chat only', async () => {
+    session = { ...base, disabledMcpServers: ['web'], disabledConnectors: ['slack'] };
+    await modePanelActions(deps()).setMcpServer('files', false);
+    expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { disabledMcpServers: ['files', 'web'] });
+    await modePanelActions(deps()).setMcpServer('web', true);
+    expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { disabledMcpServers: [] });
+    await modePanelActions(deps()).setConnector('github', false);
+    expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { disabledConnectors: ['github', 'slack'] });
+    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
+  });
   it('never takes a cloud model offline', async () => {
     await modePanelActions(deps({ isCloudModel: true })).toggle('offline');
     expect(window.nekko.setSessionOptions).not.toHaveBeenCalled();
@@ -84,11 +115,11 @@ describe('Mode panel writes', () => {
 });
 
 describe('saved modes', () => {
-  it('applies every setting in one write, then the effort it pins', async () => {
+  it('applies every setting, effort included, in one per-chat write', async () => {
     const d = deps();
     await modePanelActions(d).applyMode(STARTER_MODES[1]);
-    expect(window.nekko.setSessionOptions).toHaveBeenCalledExactlyOnceWith('chat', { executionMode: 'worktree', gitIsolation: true, mode: 'yolo', offline: false, incognito: false, disabledTools: [], workMode: 'best-output' });
-    expect(window.nekko.updateSettings).toHaveBeenCalledWith({ effort: 'high' });
+    expect(window.nekko.setSessionOptions).toHaveBeenCalledExactlyOnceWith('chat', { executionMode: 'worktree', gitIsolation: true, mode: 'yolo', offline: false, incognito: false, disabledTools: [], workMode: 'best-output', effort: 'high' });
+    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
     expect(d.onChange).toHaveBeenCalledWith(expect.objectContaining({ mode: 'yolo' }));
   });
   it('opens sandbox setup instead of moving a chat into a sandbox unasked', async () => {

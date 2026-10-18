@@ -58,7 +58,10 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
         disabled.insert("browser".into());
         disabled.insert("capture".into());
     }
-    let mcp = input.get("mcpTools").and_then(Value::as_array).cloned().unwrap_or_default();
+    let mcp = crate::scope::chat_mcp_tools(
+        input.get("mcpTools").and_then(Value::as_array).cloned().unwrap_or_default(),
+        session,
+    );
     let watch = (!incognito && !training).then(|| c.agent_watch.clone());
     // Blocking the internet keeps the local tools and drops those that reach a
     // network (`toolAllowedOffline`, shared/tool-categories.ts).

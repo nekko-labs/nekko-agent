@@ -3,7 +3,7 @@
     "id": "s_fork_middle", "title": "Plan the release", "workspaceId": "w1", "supportingWorkspaceIds": ["w2", "w3"],
     "executionMode": "worktree", "gitIsolation": true, "gitWorktrees": [{ "workspaceId": "w1", "path": "/tmp/wt" }],
     "providerId": "p1", "modelId": "m1", "autoModel": false, "autoQuality": "balanced", "mode": "guardrails", "thinking": "high",
-    "attachedPaths": ["C:/src/a.ts"], "disabledTools": ["bash"], "pinned": true, "tags": ["x"], "queue": ["later"],
+    "attachedPaths": ["C:/src/a.ts"], "disabledTools": ["bash"], "effort": "max", "disabledMcpServers": ["web"], "disabledConnectors": ["slack"], "pinned": true, "tags": ["x"], "queue": ["later"],
     "titleAuto": true, "specLinked": true,
     "messages": [
       { "id": "u1", "role": "user", "content": "hello \ud83d\ude3a", "createdAt": 1 },

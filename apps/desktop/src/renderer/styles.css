@@ -2548,6 +2548,8 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .mode-meta { max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 .mode-chev { width: 14px !important; height: 14px !important; color: var(--ink-faint); transition: transform .15s; }
 .mode-link { margin: 0 10px 4px 36px; font-size: 11.5px; color: var(--accent); }
+.mode-link.is-inline { margin: 0; font-size: inherit; }
+.mode-fly .mode-link, .mode-inline-fly .mode-link { margin: 6px 10px 2px; text-align: left; }
 
 .mode-switch { position: relative; width: 34px; height: 20px; flex: none; margin-top: 1px; border-radius: 999px; background: color-mix(in srgb, var(--ink-faint) 40%, transparent); transition: background .15s; }
 .mode-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform .15s; }

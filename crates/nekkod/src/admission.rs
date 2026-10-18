@@ -511,7 +511,7 @@ async fn admit(
     let connector_snippets = if offline || !connected || sandbox {
         json!([])
     } else {
-        Value::Array(crate::connectors::snippets(ctx, Some(&text)).await)
+        Value::Array(crate::connectors::snippets(ctx, Some(&text), &session).await)
     };
     let has_worktrees = session.get("gitWorktrees").and_then(Value::as_object).is_some_and(|m| !m.is_empty());
     let ids = crate::worktrees::session_workspace_ids(&session);
@@ -532,8 +532,10 @@ async fn admit(
         Err(e) => (None, Some(e)),
     };
     let model_id = s(&opts, "modelId");
+    // The chat's own effort wins over the app-wide one (`chatEffort`).
+    let effort = nekko_turn::chat_effort(&session, settings.get("effort"));
     let effort_setting: Option<nekko_agent::EffortLevel> =
-        settings.get("effort").and_then(|e| serde_json::from_value(e.clone()).ok());
+        effort.as_ref().and_then(|e| serde_json::from_value(e.clone()).ok());
     let stats_effort = nekko_agent::claude::effective_effort(effort_setting, model_id);
     let kind = s(&provider, "kind");
 
@@ -559,7 +561,7 @@ async fn admit(
     facts.insert("indexSnippets".into(), index_snippets);
     facts.insert("platform".into(), json!(platform()));
     facts.insert("temperature".into(), json!(effort_temperature(stats_effort)));
-    facts.insert("effort".into(), settings.get("effort").filter(|e| !e.is_null()).cloned().unwrap_or(json!("normal")));
+    facts.insert("effort".into(), effort.unwrap_or(json!("normal")));
     facts.insert("statsEffort".into(), json!(effort_name(stats_effort)));
     if is_local(kind) {
         facts.insert(

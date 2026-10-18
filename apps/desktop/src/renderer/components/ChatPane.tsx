@@ -2395,7 +2395,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           .catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
     />
-    <EffortSlider onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />
+    <EffortSlider session={session} onSessionChange={setSession} onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />
     </div>
   );
 

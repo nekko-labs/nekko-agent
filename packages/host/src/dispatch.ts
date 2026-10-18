@@ -172,7 +172,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     'turn:notify': (args) => host.turnCallback('turn:notify', args),
     // A chat:send the daemon admitted itself (crates/nekkod/src/admission.rs).
     'turn:adopt': ([payload]) => host.adoptTurn(payload as never),
-    'chat:connectorSnippets': ([text]) => host.admissionSnippets('connector', [typeof text === 'string' ? text : undefined]),
+    'chat:connectorSnippets': ([text, sessionId]) => host.admissionSnippets('connector', [typeof text === 'string' ? text : undefined, typeof sessionId === 'string' ? sessionId : undefined]),
     'chat:indexSnippets': ([ids, text]) => host.admissionSnippets('index', [Array.isArray(ids) ? ids.map(String) : [], String(text ?? '')]),
     // The daemon merges its own pending input with this process's.
     'chat:pending:host': () => host.hostPendingInput(),

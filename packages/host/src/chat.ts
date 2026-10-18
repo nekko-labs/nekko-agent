@@ -4,7 +4,7 @@ import { canResumeChildFailure, childInterruptedMessage, MAX_CHILD_RESUMES, subA
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { AgentEvent, AskAnswer, ChatMessage, ChatMode, WorkspaceFolder, ContextBundle, PendingInput, ProviderConfig, QueuedPrompt, ReplySuggestions, SendOptions, Session, ToolCall, ToolResult, TurnStats } from '@nekko-agent/shared';
-import { ASK_CANCELLED, ASK_UNATTENDED, EFFORT_TEMPERATURE, applyPlanUpdate, effectiveEffort, guessContextWindow, DEFAULT_ORCHESTRATION, clampMaxOutputTokens, formatAskAnswers, getSessionWorkspaceIds, getStrategy, isChatModel, isLocalProvider, sinceCompaction, parseAskRequest, parseReplySuggestions, planEcho, TurnStatsAccumulator, attachTurnStats } from '@nekko-agent/shared';
+import { ASK_CANCELLED, ASK_UNATTENDED, EFFORT_TEMPERATURE, applyPlanUpdate, chatConnectors, chatEffort, effectiveEffort, guessContextWindow, DEFAULT_ORCHESTRATION, clampMaxOutputTokens, formatAskAnswers, getSessionWorkspaceIds, getStrategy, isChatModel, isLocalProvider, sinceCompaction, parseAskRequest, parseReplySuggestions, planEcho, TurnStatsAccumulator, attachTurnStats } from '@nekko-agent/shared';
 import {
   runAgent,
   buildSystemPrompt,
@@ -446,9 +446,11 @@ export function collectAttached(paths: string[]): Array<{ path: string; content:
  */
 async function collectConnectorSnippets(
   query?: string,
+  session?: Pick<Session, 'disabledConnectors'> | null,
   timeoutMs = 2500,
 ): Promise<Array<{ label: string; origin: string; body: string }>> {
-  const connectors = getSettings().connectors.filter((c) => c.connected && c.token);
+  // The chat's switched-off connectors are never asked.
+  const connectors = chatConnectors(getSettings().connectors, session).filter((c) => c.connected && c.token);
   if (connectors.length === 0) return [];
 
   const fetches = connectors.map(async (c) => {
@@ -494,7 +496,7 @@ export async function previewContext(sessionId: string, attachedPaths: string[])
       ...listMemory('global'),
       ...((session ? getSessionWorkspaceIds(session) : []).flatMap((id) => listMemory('workspace', id))),
     ],
-    connectorSnippets: sandbox || !session || session.offline ? [] : await collectConnectorSnippets(),
+    connectorSnippets: sandbox || !session || session.offline ? [] : await collectConnectorSnippets(undefined, session),
     indexSnippets: [],
     // The whole message, not just its text: reasoning and tool traffic are
     // replayed to the model too, and on a long run they are most of the window.
@@ -655,6 +657,10 @@ async function prepareSubAgent(
   child.modelId = targetModelId;
   child.mode = parent?.mode; // inherit the parent's tool-execution policy
   child.disabledTools = parent.disabledTools ? [...parent.disabledTools] : undefined;
+  // A sub-agent reaches no server or connector its parent chat switched off.
+  child.disabledMcpServers = parent.disabledMcpServers ? [...parent.disabledMcpServers] : undefined;
+  child.disabledConnectors = parent.disabledConnectors ? [...parent.disabledConnectors] : undefined;
+  child.effort = parent.effort;
   child.offline = parent.offline;
   child.incognito = parent.incognito;
   saveSession(child);
@@ -927,7 +933,7 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   // Connector fetches and the workspace index stay in this process; the rest
   // of the context is read from disk by whichever route builds the prompt.
   // Offline mode skips internet connectors.
-  const connectorSnippets = sandbox || offline ? [] : await collectConnectorSnippets(opts.text);
+  const connectorSnippets = sandbox || offline ? [] : await collectConnectorSnippets(opts.text, session);
   const indexSnippets = sandbox ? [] : session.gitWorktrees && Object.keys(session.gitWorktrees).length ? [] : await indexSnippetsFor(getSessionWorkspaceIds(session), opts.text);
 
   return { settings, provider, session, sandbox, workspaces, toolSettings, mode, offline, incognito, abort, allowSpawn, decideWith, tools, connectorSnippets, indexSnippets, daemonMcp };
@@ -1031,7 +1037,7 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
   const turnFrom = session.messages.length;
   const replyStartedAt = Date.now();
   const turnStats = new TurnStatsAccumulator(
-    { providerId: opts.providerId, modelId: opts.modelId, effort: effectiveEffort(getSettings().effort, opts.modelId) },
+    { providerId: opts.providerId, modelId: opts.modelId, effort: effectiveEffort(chatEffort(session, getSettings().effort), opts.modelId) },
     replyStartedAt,
   );
   while (attempts < 2 && !abort.signal.aborted) {
@@ -1105,8 +1111,8 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
         // call so a hook added mid-run applies to the next tool.
         executeTool: (call: ToolCall): Promise<ToolResult> =>
           sandbox ? runHostTool(hostTools, call) : withToolHooks(opts.sessionId, defaultCwd, call, () => runHostTool(hostTools, call)),
-        temperature: EFFORT_TEMPERATURE[effectiveEffort(settings.effort, opts.modelId)],
-        effort: settings.effort ?? 'normal',
+        temperature: EFFORT_TEMPERATURE[effectiveEffort(chatEffort(session, settings.effort), opts.modelId)],
+        effort: chatEffort(session, settings.effort) ?? 'normal',
         // The output cap is a safeguard for local servers, where a looping
         // model streams until its context fills. Cloud providers run to their
         // own ceilings; a cap of 8k there cut long replies off mid-sentence.
@@ -1347,9 +1353,9 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
       connectorSnippets: t.connectorSnippets,
       indexSnippets: t.indexSnippets,
       platform: process.platform,
-      temperature: EFFORT_TEMPERATURE[effectiveEffort(settings.effort, opts.modelId)],
-      effort: settings.effort ?? 'normal',
-      statsEffort: effectiveEffort(settings.effort, opts.modelId),
+      temperature: EFFORT_TEMPERATURE[effectiveEffort(chatEffort(t.session, settings.effort), opts.modelId)],
+      effort: chatEffort(t.session, settings.effort) ?? 'normal',
+      statsEffort: effectiveEffort(chatEffort(t.session, settings.effort), opts.modelId),
       maxOutputTokens: isLocalProvider(provider.kind) ? clampMaxOutputTokens(settings.maxOutputTokens) : undefined,
       promptCaching: promptCachingForHost(),
       // The loaded window, for the daemon's loop to keep the run inside (fit.rs).
@@ -1545,8 +1551,8 @@ export async function adoptAdmittedTurn(
 }
 
 /** `chat:connectorSnippets`: the connector context for a turn the daemon admits. */
-export function connectorSnippetsFor(text?: string): Promise<Array<{ label: string; origin: string; body: string }>> {
-  return collectConnectorSnippets(text);
+export function connectorSnippetsFor(text?: string, sessionId?: string): Promise<Array<{ label: string; origin: string; body: string }>> {
+  return collectConnectorSnippets(text, sessionId ? getSession(sessionId) : undefined);
 }
 
 /** `chat:indexSnippets`: the workspace-index context for a turn the daemon admits. */

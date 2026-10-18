@@ -120,7 +120,7 @@ function writeAtomic(file: string, text: string): void {
  * The UI changes these while a turn is running, through the engine daemon or
  * this host; a turn's save must not put back the values it read at its start.
  */
-const USER_FIELDS = ['pinned', 'tags', 'order', 'mode', 'disabledTools', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'sandbox', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'workMode', 'thinking', 'chatType', 'imageParams', 'workspaceId', 'supportingWorkspaceIds', 'attachedPaths', 'specLinked', 'queue', 'archivedAt'] as const;
+const USER_FIELDS = ['pinned', 'tags', 'order', 'mode', 'disabledTools', 'effort', 'disabledMcpServers', 'disabledConnectors', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'sandbox', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'workMode', 'thinking', 'chatType', 'imageParams', 'workspaceId', 'supportingWorkspaceIds', 'attachedPaths', 'specLinked', 'queue', 'archivedAt'] as const;
 
 /**
  * Save a chat a running turn has held in memory, keeping whatever the user
@@ -249,7 +249,7 @@ export function forkSession(id: string, beforeMessageId?: string): Session | nul
   fork.title = `${src.title} (split)`;
   fork.titleAuto = false;
   fork.messages = structuredClone(idx >= 0 ? src.messages.slice(0, idx) : src.messages);
-  for (const key of ['providerId', 'modelId', 'autoModel', 'autoQuality', 'mode', 'thinking', 'chatType', 'imageParams', 'attachedPaths', 'disabledTools'] as const) {
+  for (const key of ['providerId', 'modelId', 'autoModel', 'autoQuality', 'mode', 'thinking', 'chatType', 'imageParams', 'attachedPaths', 'disabledTools', 'effort', 'disabledMcpServers', 'disabledConnectors'] as const) {
     if (src[key] !== undefined) (fork as unknown as Record<string, unknown>)[key] = structuredClone(src[key]);
   }
   if (getExecutionMode(fork) === 'sandbox') fork.mode = 'ask';
@@ -293,12 +293,12 @@ export function clearSessions(scope: 'today' | 'month' | 'all'): number {
 }
 
 /** The fields `setSessionOptions` may change (crates/nekko-store/src/write.rs keeps the same list). */
-const OPTION_KEYS = ['title', 'pinned', 'tags', 'order', 'mode', 'disabledTools', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'workMode', 'thinking', 'providerId', 'modelId', 'plan', 'chatType', 'imageParams', 'archivedAt'] as const;
+const OPTION_KEYS = ['title', 'pinned', 'tags', 'order', 'mode', 'disabledTools', 'effort', 'disabledMcpServers', 'disabledConnectors', 'offline', 'incognito', 'executionMode', 'gitIsolation', 'autoModel', 'autoQuality', 'autoProviderSwitch', 'workMode', 'thinking', 'providerId', 'modelId', 'plan', 'chatType', 'imageParams', 'archivedAt'] as const;
 
-/** Patch per-chat options (title, pin, mode, disabled tools, offline, incognito, brain, archive). */
+/** Patch per-chat options (title, pin, mode, disabled tools, effort, MCP servers, connectors, offline, incognito, brain, archive). */
 export function setSessionOptions(
   id: string,
-  patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
+  patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
 ): Session | null {
   const s = getSession(id);
   if (!s) return null;

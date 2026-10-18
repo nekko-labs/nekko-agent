@@ -2,13 +2,13 @@ import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import type { ChatMode, EffortLevel, ExecutionMode, SavedMode, SavedModeIcon, Session, WorkModeId } from '@nekko-agent/shared';
 import {
-  WORK_MODES, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
+  CONNECTOR_CATALOG, WORK_MODES, chatEffort, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
   savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { addFolderToChat, applyFolderSelection, withExcluded } from '../sessionFolders.js';
 import { EFFORT_LABEL, effortRungs } from './ChatMetrics.js';
-import { McpServerList, ToolsList, toolCounts, useChatTools } from './ChatControls.js';
+import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
   BoltIcon, BrainIcon, CapIcon, CheckIcon, ChevronIcon, CloseIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
   ExternalIcon, FolderIcon, GaugeIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
@@ -42,8 +42,8 @@ const toastError = (e: unknown) => useStore.getState().pushToast('error', String
 
 /**
  * Everything the panel writes, kept out of the component so each write can be
- * tested on its own. Per-chat settings go through setSessionOptions; saved
- * modes and effort are app settings.
+ * tested on its own. Per-chat settings (effort, MCP servers and connectors
+ * included) go through setSessionOptions; saved modes are app settings.
  */
 export function modePanelActions({ session, isCloudModel, onChange, onSandboxSetup }: Deps) {
   const settings = () => useStore.getState().settings;
@@ -79,10 +79,23 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
     async setWorkMode(workMode: WorkModeId) {
       try { await patchChat({ workMode }); } catch (e) { toastError(e); }
     },
-    async setEffort(effort: EffortLevel) {
-      try { await saveSettings({ effort }); } catch (e) { toastError(e); }
+    /** This chat's effort; `null` goes back to the app-wide one. */
+    async setEffort(effort: EffortLevel | null) {
+      try { await patchChat({ effort: effort as EffortLevel }); } catch (e) { toastError(e); }
     },
-    /** Put this chat in a saved mode: one per-chat write, then effort, then the sandbox dialog if it needs one. */
+    /** Offer or withhold one MCP server's tools in this chat. It keeps running for other chats. */
+    async setMcpServer(id: string, on: boolean) {
+      const off = new Set(session.disabledMcpServers ?? []);
+      if (on) off.delete(id); else off.add(id);
+      try { await patchChat({ disabledMcpServers: [...off].sort() }); } catch (e) { toastError(e); }
+    },
+    /** Read or skip one connector's context in this chat. */
+    async setConnector(kind: string, on: boolean) {
+      const off = new Set(session.disabledConnectors ?? []);
+      if (on) off.delete(kind); else off.add(kind);
+      try { await patchChat({ disabledConnectors: [...off].sort() }); } catch (e) { toastError(e); }
+    },
+    /** Put this chat in a saved mode: one per-chat write, then the sandbox dialog if it needs one. */
     async applyMode(mode: SavedMode) {
       const patch = sessionPatchForMode(mode.options, { cloudModel: isCloudModel });
       const intoSandbox = mode.options.executionMode === 'sandbox' && getExecutionMode(session) !== 'sandbox';
@@ -90,7 +103,6 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
       try {
         await patchChat(patch);
         lastApplied.set(session.id, mode.id);
-        if (mode.options.effort && mode.options.effort !== settings()?.effort) await saveSettings({ effort: mode.options.effort });
         if (intoSandbox) onSandboxSetup();
       } catch (e) { toastError(e); }
     },
@@ -126,12 +138,12 @@ export function chatModeState(session: Session, settings: Parameters<typeof save
   return { modes, current, active, edited: active ? undefined : last };
 }
 
-type Fly = 'tools' | 'mcp' | 'skills';
+type Fly = 'tools' | 'mcp' | 'connectors' | 'skills';
 
 /**
  * The composer's Mode panel: saved modes down a rail on the left, then every
  * per-chat setting in three columns (Environment and Model, Privacy,
- * Approach). Tools, MCP servers and Skills open a list out the side.
+ * Approach). Tools, MCP servers, Connectors and Skills open a list out the side.
  */
 export function ModePanel({
   session, isCloudModel, modelId, onChange, onSandboxSetup, style, panelRef,
@@ -178,14 +190,42 @@ export function ModePanel({
   const mcpServers = settings?.mcpServers ?? [];
   const workspaces = settings?.workspaces ?? [];
   const folders = getSessionWorkspaceIds(session).map((id) => ({ id, folder: workspaces.find((w) => w.id === id) }));
-  const rungs = effortRungs(settings?.effort ?? 'normal', modelId);
+  const rungs = effortRungs(chatEffort(session, settings?.effort) ?? 'normal', modelId);
+  const mcpOff = new Set(session.disabledMcpServers ?? []);
+  const mcpOn = mcpServers.filter((s) => s.enabled && !mcpOff.has(s.id)).length;
+  const connected = (settings?.connectors ?? []).filter((c) => c.connected);
+  const connectorsOff = new Set(session.disabledConnectors ?? []);
+  const connectorsOn = connected.filter((c) => !connectorsOff.has(c.kind)).length;
+  const goTo = (view: 'settings' | 'connectors') => { setFly(null); useStore.getState().setView(view); };
+  /** One per-chat switch row in a flyout. */
+  const flyItem = (key: string, title: string, sub: string, on: boolean, set: (on: boolean) => void, disabled = false, data: Record<string, string> = {}) => (
+    <div key={key} className={`mode-row ${disabled ? 'is-disabled' : ''}`} {...data}>
+      <span className="min-w-0 flex-1"><span className="mode-t">{title}</span><span className="mode-s">{sub}</span></span>
+      {sw(on && !disabled, () => set(!on), `${title} in this chat`, disabled)}
+    </div>
+  );
 
   const flyBody = (f: Fly) => f === 'tools'
     ? <ToolsList session={session} onChange={onChange} tools={tools} />
     : f === 'mcp'
       ? <>
-          <p className="mode-note">MCP servers are shared by every chat; switching one here changes it everywhere.</p>
-          {sandbox ? <p className="mode-note">MCP is unavailable in Sandbox.</p> : <McpServerList />}
+          {sandbox ? <p className="mode-note">MCP is unavailable in Sandbox.</p>
+            : session.offline ? <p className="mode-note">Internet is blocked for this chat, so MCP servers are off.</p>
+            : <p className="mode-note">Which servers' tools this chat sees. A server switched off here keeps running for other chats.</p>}
+          {mcpServers.length === 0 && <p className="mode-note">No MCP servers yet.</p>}
+          {mcpServers.map((m) => flyItem(m.id, m.name, !m.enabled ? 'Off in Settings for every chat' : m.url != null ? 'http' : 'stdio', !mcpOff.has(m.id),
+            (on) => void actions.setMcpServer(m.id, on), sandbox || !!session.offline || !m.enabled, { 'data-chat-mcp': m.id }))}
+          <button className="mode-link" onClick={() => goTo('settings')}>Add or turn off servers for every chat in Settings</button>
+        </>
+      : f === 'connectors'
+        ? <>
+          {sandbox ? <p className="mode-note">Connectors are off in Sandbox.</p>
+            : session.offline ? <p className="mode-note">Internet is blocked for this chat, so connectors are off.</p>
+            : <p className="mode-note">Connected services add a few recent items to this chat's context. Switch off the ones this chat should not read.</p>}
+          {connected.length === 0 && <p className="mode-note">No connectors connected yet.</p>}
+          {connected.map((c) => flyItem(c.kind, CONNECTOR_CATALOG.find((m) => m.kind === c.kind)?.label ?? c.kind, 'Connected', !connectorsOff.has(c.kind),
+            (on) => void actions.setConnector(c.kind, on), sandbox || !!session.offline, { 'data-chat-connector': c.kind }))}
+          <button className="mode-link" onClick={() => goTo('connectors')}>Connect or disconnect services</button>
         </>
       : <div role="radiogroup" aria-label="Work mode">
           <p className="mode-group">Work mode</p>
@@ -202,7 +242,7 @@ export function ModePanel({
           <p className="mode-note">Picking skills one by one, per chat, is coming.</p>
         </div>;
 
-  const FLY_TITLE: Record<Fly, [string, ReactNode]> = { tools: ['Tools', <WrenchIcon />], mcp: ['MCP servers', <ServerIcon />], skills: ['Skills', <SparkleIcon />] };
+  const FLY_TITLE: Record<Fly, [string, ReactNode]> = { tools: ['Tools', <WrenchIcon />], mcp: ['MCP servers', <ServerIcon />], connectors: ['Connectors', <PlugIcon />], skills: ['Skills', <SparkleIcon />] };
   const flyRow = (f: Fly, icon: ReactNode, title: string, meta: string) => (<>
     <button ref={(el) => { anchors.current[f] = el; }} className={`mode-row mode-row-btn ${fly === f ? 'is-open' : ''}`} aria-expanded={fly === f} aria-haspopup="dialog" data-mode-fly={f} onClick={() => toggleFly(f)}>
       <span className="mode-ic">{icon}</span>
@@ -295,7 +335,7 @@ export function ModePanel({
             {soon(<RouteIcon />, 'Model router', 'Picks the model for each turn from what the task needs.')}
             <div className="mode-row is-stacked">
               <span className="mode-ic"><GaugeIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Effort</span><span className="mode-s">How long the model thinks before acting. Shared by every chat for now.</span></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Effort</span><span className="mode-s">How long the model thinks before acting, in this chat. {session.effort ? <button className="mode-link is-inline" onClick={() => void actions.setEffort(null)}>Use the app default</button> : 'Follows the app default until you pick one.'}</span></span>
               {tiles<EffortLevel>('Effort', rungs.options[rungs.index], rungs.options.map((o, i) => [o, o === 'normal' ? 'Default' : o === 'xhigh' ? 'X-high' : EFFORT_LABEL[o], <EffortBarsIcon level={Math.max(1, Math.round(((i + 1) / rungs.options.length) * 4))} />, { 'data-effort': o }]),
                 (v) => void actions.setEffort(v))}
             </div>
@@ -335,8 +375,8 @@ export function ModePanel({
                 (v) => void (!sandbox && actions.setApprovals(v)))}
             </div>
             {flyRow('tools', <WrenchIcon />, 'Tools', `${toolsOn} of ${toolsUsable} on`)}
-            {flyRow('mcp', <ServerIcon />, 'MCP servers', sandbox ? 'Off in Sandbox' : `${mcpServers.filter((s) => s.enabled).length} of ${mcpServers.length} on`)}
-            {soon(<PlugIcon />, 'Connectors', 'Choosing connectors per chat is coming. Today every connected one is available.')}
+            {flyRow('mcp', <ServerIcon />, 'MCP servers', sandbox ? 'Off in Sandbox' : session.offline ? 'Off while offline' : `${mcpOn} of ${mcpServers.length} on`)}
+            {flyRow('connectors', <PlugIcon />, 'Connectors', sandbox ? 'Off in Sandbox' : session.offline ? 'Off while offline' : `${connectorsOn} of ${connected.length} on`)}
           </section>
 
           <section className="mode-col" aria-label="Approach">

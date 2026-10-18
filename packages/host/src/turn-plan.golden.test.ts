@@ -13,6 +13,8 @@ import {
   TurnStatsAccumulator,
   applyPlanUpdate,
   attachTurnStats,
+  chatConnectors,
+  chatEffort,
   formatAskAnswers,
   parseAskRequest,
   planEcho,
@@ -94,10 +96,38 @@ function toolCases() {
       out.push({ input: offline, output: turnTools(offline as never).map((t) => t.name) });
     }
   }
+  // MCP servers switched off for the chat: their tools go, every other stays.
+  for (const session of [{ disabledMcpServers: ['web'] }, { disabledMcpServers: ['files', 'web'] }, { disabledMcpServers: ['fil', 'nope'] }, { disabledMcpServers: [] }, { disabledMcpServers: ['web'], disabledTools: ['mcp__files__read'] }]) {
+    for (const offline of [false, true]) {
+      const input = { session, offline, orchestration: { ...DEFAULT_ORCHESTRATION, strategy: 'swarm' }, allowBrowserControl: false, mcpTools: mcp, decide: false };
+      out.push({ input, output: turnTools(input as never).map((t) => t.name) });
+    }
+  }
   // A tools-off turn (a workflow step reading untrusted text) offers nothing that acts.
   for (const session of [{}, { trainingRunId: 'r1' }]) {
     const off = { session, offline: false, orchestration: { ...DEFAULT_ORCHESTRATION, strategy: 'swarm' }, allowBrowserControl: true, mcpTools: mcp, decide: true, noTools: true };
     out.push({ input: off, output: turnTools(off as never).map((t) => t.name) });
+  }
+  return out;
+}
+
+/** Per-chat effort and connectors (shared/chat-scope.ts, crates/nekko-turn/src/scope.rs). */
+function scopeCases() {
+  const connectors = [{ kind: 'github', connected: true, token: 't' }, { kind: 'slack', connected: true, token: 't' }, { kind: 'linear', connected: false }];
+  const sessions: Array<Record<string, unknown>> = [
+    {},
+    { effort: 'max' },
+    { effort: null },
+    { disabledConnectors: ['slack'] },
+    { disabledConnectors: ['github', 'slack', 'linear'] },
+    { disabledConnectors: [], effort: 'low' },
+  ];
+  const out: Array<{ input: unknown; output: unknown }> = [];
+  for (const session of sessions) {
+    for (const appEffort of [undefined, null, 'high']) {
+      const input = { session, appEffort, connectors };
+      out.push({ input, output: { effort: chatEffort(session as never, appEffort as never) ?? null, connectors: chatConnectors(connectors, session as never).map((c) => c.kind) } });
+    }
   }
   return out;
 }
@@ -299,6 +329,7 @@ describe('turn plan golden set', () => {
       plans: planCases(),
       stats: statsCases(),
       approvals: approvalCases(),
+      scopes: scopeCases(),
     });
   });
 });

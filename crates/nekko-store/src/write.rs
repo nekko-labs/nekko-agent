@@ -23,6 +23,9 @@ const OPTION_KEYS: &[&str] = &[
     "order",
     "mode",
     "disabledTools",
+    "effort",
+    "disabledMcpServers",
+    "disabledConnectors",
     "offline",
     "incognito",
     "gitIsolation",
@@ -47,6 +50,9 @@ const USER_FIELDS: &[&str] = &[
     "order",
     "mode",
     "disabledTools",
+    "effort",
+    "disabledMcpServers",
+    "disabledConnectors",
     "offline",
     "incognito",
     "executionMode",
@@ -505,6 +511,9 @@ impl SessionStore {
             "imageParams",
             "attachedPaths",
             "disabledTools",
+            "effort",
+            "disabledMcpServers",
+            "disabledConnectors",
         ] {
             if let Some(v) = src.get(key) {
                 s.insert(key.into(), v.clone());

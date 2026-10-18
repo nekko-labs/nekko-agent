@@ -19,6 +19,7 @@ export * from './decisions.js';
 export * from './api-server.js';
 export * from './cli-link.js';
 export * from './chat.js';
+export * from './chat-scope.js';
 export * from './ask.js';
 export * from './session-board.js';
 export * from './session-summary.js';
