@@ -186,11 +186,9 @@ async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
         say_text("parent done"),
     ])
     .await;
-    let spec = turn_spec(&rig, &model, "turn_p", "s_turn_p", json!({}));
-    // The child's turn is admitted by the host from this template.
-    let (status, _) = post(rig.d.port, "test:prepareTemplate", json!([spec.clone()]), Some(TOKEN)).await;
-    assert_eq!(status, 200);
-    let mut spec = spec;
+    // The child's chat is made and its turn admitted here, from these settings.
+    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    let mut spec = turn_spec(&rig, &model, "turn_p", "s_turn_p", json!({}));
     spec["facts"]["spawn"] = json!(true);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
@@ -199,13 +197,13 @@ async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
 
     let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
     let all = all.as_array().unwrap().clone();
-    let prepare = all.iter().find(|e| e[0] == "spawn:prepare").expect("the host was asked to make the child");
-    assert_eq!(prepare[1][0], "turn_p");
-    assert_eq!(prepare[1][2], 0, "first attempt");
+    assert!(!all.iter().any(|e| e[0] == "spawn:prepare"), "the host was not asked to make the child: {all:?}");
     assert!(!all.iter().any(|e| e[0] == "turn:tool"), "spawn_agent never ran in the host");
-    assert!(all.iter().any(|e| e[0] == "turn:end" && e[1][0] == "turn_child"), "the child ran as its own daemon turn");
 
-    let child = saved_session(&rig, "s_child");
+    // The child: made here, named after its task, inheriting the parent's provider and model.
+    let child = child_of(&rig, "s_turn_p").expect("the child chat");
+    assert_eq!(child["title"], "count the files");
+    assert_eq!((child["providerId"].clone(), child["modelId"].clone()), (json!("p1"), json!("synthetic")));
     assert_eq!(child["messages"][0]["content"], "count the files");
     assert_eq!(child["messages"].as_array().unwrap().last().unwrap()["content"], "there are 2 files");
     let parent = saved_session(&rig, "s_turn_p");
@@ -229,23 +227,27 @@ async fn stopping_the_parent_stops_its_sub_agent() {
     let model =
         scripted_model(vec![call_tool("c_spawn", "spawn_agent", json!({ "task": "wait forever" })), HANG.to_string()])
             .await;
-    let spec = turn_spec(&rig, &model, "turn_ps", "s_turn_ps", json!({}));
-    post(rig.d.port, "test:prepareTemplate", json!([spec.clone()]), Some(TOKEN)).await;
-    let mut spec = spec;
+    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    let mut spec = turn_spec(&rig, &model, "turn_ps", "s_turn_ps", json!({}));
     spec["facts"]["spawn"] = json!(true);
     post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     // Wait for the child to be running, then stop the parent.
-    until("the child to start", Duration::from_secs(30), || async {
-        let (_, alive) = post(rig.d.port, "turn:alive", json!(["turn_child"]), Some(TOKEN)).await;
-        (alive == json!(true)).then_some(())
+    let child = until("the child to start", Duration::from_secs(30), || async {
+        let child = child_of(&rig, "s_turn_ps")?;
+        let id = child["id"].as_str()?.to_string();
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        running.as_array()?.iter().any(|r| r == &json!(id)).then_some(id)
     })
     .await;
     let (_, stopped) = post(rig.d.port, "turn:abort", json!(["turn_ps"]), Some(TOKEN)).await;
     assert_eq!(stopped, json!(true));
     let (_, end) = turn_record(rig.d.port, "turn_ps").await;
     assert_eq!(end["aborted"], true, "{end}");
-    let (_, child_alive) = post(rig.d.port, "turn:alive", json!(["turn_child"]), Some(TOKEN)).await;
-    assert_eq!(child_alive, json!(false), "the child stopped with its parent");
+    until("the child to stop with its parent", Duration::from_secs(10), || async {
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        (!running.as_array()?.iter().any(|r| r == &json!(child))).then_some(())
+    })
+    .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -281,6 +283,35 @@ async fn a_daemon_turn_runs_the_local_decide_tool_itself() {
     // No model is loaded in this daemon: the daemon's own answer, not the host's.
     assert_eq!(out("c_run")["output"], "decide failed: No decision model is loaded. Load one with decide:load.");
     assert_eq!(out("c_run")["isError"], true);
+    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
+    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "decide never ran in the host");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_turn_runs_the_typesafe_decide_tool_through_its_decision_service() {
+    // A real key would send this to the hosted Jev; the keyless answer proves the route.
+    if std::env::var("TYPESAFE_API_KEY").is_ok_and(|k| !k.is_empty()) {
+        return;
+    }
+    let session = json!({
+        "id": "s_turn_dt", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("decide-typesafe", session);
+    let model = scripted_model(vec![
+        call_tool("c_ts", "decide", json!({ "state": "a refund after 40 days", "questions": [{ "id": "refund", "type": "choice", "instructions": "Grant it?", "options": ["yes", "no"] }] })),
+        say_text("decided"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_dt", "s_turn_dt", json!({}));
+    spec["facts"]["decide"] = json!(true);
+    spec["facts"]["decideWith"] = json!("typesafe");
+    post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    let (_, end) = turn_record(rig.d.port, "turn_dt").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let saved = saved_session(&rig, "s_turn_dt");
+    let out = saved["messages"].as_array().unwrap().iter().find(|m| m["role"] == "tool").unwrap()["toolResult"].clone();
+    assert_eq!(out["output"], "decide failed: Add a TypeSafe API key to use Jev.");
+    assert_eq!(out["isError"], true);
     let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
     assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "decide never ran in the host");
 }

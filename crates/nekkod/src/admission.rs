@@ -288,6 +288,21 @@ async fn ended(ctx: &Ctx, session_id: &str, message: &str) -> Result<Admit, Stri
     Ok(Admit::Ended)
 }
 
+/// A `spawn_agent` child's turn (`admitTurn` then `buildDaemonTurn`, in the
+/// parent's `spawn` callback): admitted like any chat's, never with the
+/// browser. `None` when it cannot start; its chat was told why.
+pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String> {
+    let adm = ctx.admission.clone().ok_or("Sub-agents need the daemon to admit turns.")?;
+    let pending = adm.begin(s(&opts, "sessionId"))?;
+    match admit(ctx, &adm, opts, None, false, &pending.cancel).await? {
+        Admit::Spec(mut spec) => {
+            spec["allowBrowserControl"] = json!(false);
+            Ok(Some(spec))
+        }
+        Admit::Host | Admit::Ended => Ok(None),
+    }
+}
+
 /// `chat:send`.
 pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<Value, String> {
     let opts = args.first().cloned().unwrap_or(Value::Null);

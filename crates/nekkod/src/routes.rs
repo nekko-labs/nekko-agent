@@ -342,6 +342,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Ok(info)
         }
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
+        // Internal: a `spawn_agent` call checked, its child made and its turn admitted (spawn.rs).
+        "turn:spawnPrepare" if ctx.sessions.is_some() => Ok(crate::spawn::prepare(ctx, arg(&args, 0)).await),
         // Internal: one PR's live state, for an agent watch's snapshot (watches.rs).
         "watch:prInfo" => Ok(crate::workspace::pr_info(ctx, str_arg(&args, 0).unwrap_or_default()).await),
         // `mcpStatus`: sync the configured servers here, then report them.

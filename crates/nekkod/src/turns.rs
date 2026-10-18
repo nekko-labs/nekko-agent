@@ -980,7 +980,9 @@ impl Turns {
             allow_browser: spec.get("allowBrowserControl") == Some(&Value::Bool(true)),
             training: js::truthy(lock(&session).get("trainingRunId")),
             provider_id: spec["opts"].get("providerId").cloned().unwrap_or(Value::Null),
+            model_id: spec["opts"].get("modelId").cloned().unwrap_or(Value::Null),
             allow_spawn: turn::plan::allows_spawn(settings.get("orchestration")),
+            decide_with: facts.get("decideWith").and_then(Value::as_str).map(str::to_string),
             settings: settings.clone(),
             unattended_ms: (settings.get("unattendedQuestionMinutes").and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
                 * 60_000.0) as u64,
@@ -1496,10 +1498,14 @@ struct TurnTools {
     incognito: bool,
     training: bool,
     unattended_ms: u64,
-    /// The turn's provider (`opts.providerId`), the default `delegation_targets` lists.
+    /// The turn's provider and model (`opts`): the default `delegation_targets`
+    /// lists, and what a `spawn_agent` child inherits.
     provider_id: Value,
+    model_id: Value,
     /// The orchestration strategy offers sub-agents (`allowSpawn`).
     allow_spawn: bool,
+    /// Which decision runner `decide` uses (`facts.decideWith`): `local`, `typesafe`, or none.
+    decide_with: Option<String>,
     /// The settings at the turn's start, when no store holds fresher ones.
     settings: Value,
 }
@@ -1625,6 +1631,25 @@ impl TurnTools {
             && let Some(service) = &self.decide
         {
             return Ok(decide_tool(service, id, &input).await);
+        }
+        // TypeSafe's hosted Jev, through the daemon's decision service (`decisions:run`).
+        if name == "decide"
+            && self.decide_with.as_deref() == Some("typesafe")
+            && let Some(d) = self.turns.dispatch.get()
+        {
+            let request = turn::decide::decide_request_from_tool(&input);
+            return Ok(match d("decisions:run".into(), vec![json!("typesafe"), request]).await {
+                Ok(res) => {
+                    let mut out = Map::new();
+                    for k in ["model", "provider", "answers"] {
+                        if let Some(v) = res.get(k) {
+                            out.insert(k.into(), v.clone());
+                        }
+                    }
+                    result(id, js::stringify(&Value::Object(out)))
+                }
+                Err(e) => error(id, format!("decide failed: {e}")),
+            });
         }
         if self.spawn && name == "spawn_agent" {
             return Ok(self.spawn_agent(call).await);
@@ -1910,8 +1935,20 @@ impl TurnTools {
         let mut failure: Option<String> = None;
         for attempt in 0..=MAX_CHILD_RESUMES {
             failure = None;
-            let args = json!([self.shared.turn_id, call, attempt, child]);
-            let prepared = match self.backend.call("spawn:prepare", args).await {
+            let prepared = match self.turns.dispatch.get().filter(|_| self.turns.store.is_some()) {
+                // Checked, made and admitted here (spawn.rs); the parent's own mode is the child's.
+                Some(d) => {
+                    let mut parent = lock(&self.session).clone();
+                    parent["mode"] = json!(self.mode);
+                    let req = json!({
+                        "parent": parent, "providerId": self.provider_id, "modelId": self.model_id,
+                        "input": call.get("input").cloned().unwrap_or(Value::Null), "attempt": attempt, "childId": child,
+                    });
+                    d("turn:spawnPrepare".into(), vec![req]).await
+                }
+                None => self.backend.call("spawn:prepare", json!([self.shared.turn_id, call, attempt, child])).await,
+            };
+            let prepared = match prepared {
                 Ok(v) => v,
                 Err(e) => return sub_agent_failure(&id, &e),
             };

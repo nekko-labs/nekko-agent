@@ -173,3 +173,60 @@ async fn delegation_targets_lists_exact_chat_models_without_the_host() {
     server.abort();
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn spawn_agent_refuses_what_prepare_sub_agent_refuses() {
+    let data = std::env::temp_dir().join(format!("nekkod-spawn-refusals-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let workspace = data.join("project");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat =
+        json!({ "id": "s_sp", "title": "Sp", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_sp.json"), chat.to_string()).unwrap();
+    let model = scripted_model(vec![
+        call_tool("c1", "spawn_agent", json!({ "task": "   " })),
+        call_tool("c2", "spawn_agent", json!({ "task": "x", "provider_id": "p2" })),
+        call_tool("c3", "spawn_agent", json!({ "task": "x", "model_id": " m " })),
+        call_tool("c4", "spawn_agent", json!({ "task": "x", "provider_id": "p1", "model_id": "nope" })),
+        call_tool("c5", "spawn_agent", json!({ "task": "x", "title": 5 })),
+        say_text("refused"),
+    ])
+    .await;
+    let settings = json!({
+        "providers": [{ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }],
+        "workspaces": [{ "id": "w1", "name": "project", "path": workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+        "orchestration": { "strategy": "swarm" },
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with(false, Some(&data));
+    let opts = json!({ "sessionId": "s_sp", "providerId": "p1", "modelId": "synthetic", "text": "delegate" });
+    let (status, body) = post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_sp.json")).unwrap()).unwrap();
+    let out = |id: &str| -> String {
+        saved["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id)
+            .map(|m| m["toolResult"]["output"].as_str().unwrap_or_default().to_string())
+            .unwrap_or_else(|| panic!("no result for {id}: {saved}"))
+    };
+    assert!(out("c1").contains("A nonblank task is required"), "{}", out("c1"));
+    assert!(out("c2").contains("Changing provider requires an explicit model_id"), "{}", out("c2"));
+    assert!(out("c3").contains("model_id must be a nonblank exact ID"), "{}", out("c3"));
+    // The scripted model lists no models: the exact id cannot be checked, so no child.
+    assert!(out("c4").contains("Could not verify the target provider model list"), "{}", out("c4"));
+    assert!(out("c5").contains("Sub-agent title must be a string"), "{}", out("c5"));
+    let children = std::fs::read_dir(data.join("sessions"))
+        .unwrap()
+        .flatten()
+        .filter(|e| std::fs::read_to_string(e.path()).unwrap_or_default().contains("\"parentSessionId\""))
+        .count();
+    assert_eq!(children, 0, "no child chat was made");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}

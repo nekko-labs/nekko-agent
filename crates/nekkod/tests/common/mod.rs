@@ -613,6 +613,15 @@ pub fn free_port() -> u16 {
         .expect("a free port below the ephemeral range")
 }
 
+/// The chat whose parent is `parent_id` (a `spawn_agent` child), once it exists.
+pub fn child_of(rig: &TurnRig, parent_id: &str) -> Option<Value> {
+    std::fs::read_dir(rig.data.join("sessions")).ok()?.flatten().find_map(|e| {
+        let text = std::fs::read_to_string(e.path()).ok()?;
+        let s: Value = serde_json::from_str(&text).ok()?;
+        (s["parentSessionId"] == parent_id).then_some(s)
+    })
+}
+
 pub fn scripted_settings(rig: &TurnRig, model: &ScriptedModel) -> Value {
     json!({
         "providers": [{

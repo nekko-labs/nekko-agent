@@ -40,6 +40,7 @@ mod settings;
 mod side;
 mod sideband;
 mod small_services;
+mod spawn;
 mod tooling;
 mod turns;
 mod voice;
