@@ -191,17 +191,6 @@ pub(crate) fn offline_provider_allowed(provider: &Value) -> bool {
     (is_local(kind) || kind == "openai-compat") && (host == "localhost" || host == "[::1]" || loop_v4)
 }
 
-/// `hasToolHooks`.
-fn has_tool_hooks(settings: &Value) -> bool {
-    settings.get("hooks").and_then(Value::as_array).is_some_and(|hooks| {
-        hooks.iter().any(|h| {
-            h.get("enabled") != Some(&json!(false))
-                && !nekko_js::trim(s(h, "command")).is_empty()
-                && matches!(s(h, "event"), "PreToolUse" | "PostToolUse")
-        })
-    })
-}
-
 /// `clampMaxOutputTokens`.
 fn clamp_max_output_tokens(n: Option<&Value>) -> f64 {
     match n.and_then(Value::as_f64) {
@@ -554,7 +543,12 @@ async fn admit(
     );
     facts.insert("decide".into(), json!(!decide_with.is_null()));
     facts.insert("decideWith".into(), decide_with.clone());
-    facts.insert("hooks".into(), json!(!sandbox && has_tool_hooks(&settings)));
+    // Tool hooks run here (turns.rs, nekko-tools `hooks`), never through the host;
+    // a sandbox chat runs none.
+    facts.insert("hooks".into(), json!(false));
+    if !sandbox {
+        facts.insert("hookRules".into(), settings.get("hooks").filter(|h| h.is_array()).cloned().unwrap_or(json!([])));
+    }
     // The turn runs its tools in this daemon's container for the chat (turns.rs).
     facts.insert("sandbox".into(), json!(sandbox));
     facts.insert("connectorSnippets".into(), connector_snippets);

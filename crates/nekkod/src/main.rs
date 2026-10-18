@@ -298,6 +298,14 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }));
     }
     {
+        // A turn's tool that asks another service (delegation_targets), through the router.
+        let c = ctx.clone();
+        ctx.turns.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
+            let c = c.clone();
+            Box::pin(async move { routes::route(&c, &channel, args).await })
+        }));
+    }
+    {
         // A workflow stops a chat through the router, as the UI would.
         let ctx = ctx.clone();
         automation.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {

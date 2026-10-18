@@ -320,6 +320,9 @@ pub struct Turns {
     watched: Mutex<HashMap<String, usize>>,
     /// Set once at startup when the daemon admits `chat:send`.
     preparer: OnceLock<Preparer>,
+    /// The router (`routes::route`), for a tool that asks another service
+    /// (`delegation_targets` lists a provider's models).
+    dispatch: OnceLock<crate::automation::Dispatcher>,
 }
 
 /// Admits the next queued prompt of a chain the daemon admitted itself
@@ -359,7 +362,13 @@ impl Turns {
             chained: Mutex::default(),
             watched: Mutex::default(),
             preparer: OnceLock::new(),
+            dispatch: OnceLock::new(),
         }
+    }
+
+    /// The router, set once the context exists.
+    pub fn set_dispatcher(&self, d: crate::automation::Dispatcher) {
+        let _ = self.dispatch.set(d);
     }
 
     /// Who admits the queued prompts of chains the daemon admitted.
@@ -582,6 +591,10 @@ impl Turns {
             if let Some(logs) = &me.agent_logs {
                 logs.finish(&shared.session_id);
             }
+            // With no host to adopt the turn, what follows it runs here.
+            if backend.is_none() {
+                me.after_turn_hooks(&store, &spec, &summary);
+            }
             let _ = backend.call("turn:end", json!([turn_id, summary.clone()])).await;
             let _ = ended_tx.send((summary, lock(&shared.last_error).clone()));
         });
@@ -593,6 +606,45 @@ impl Turns {
     /// as the next turn of the chain (`summary.next`) once the host has
     /// admitted it (`turn:prepare`), or handed back to the host to run
     /// (`summary.drain`). A turn that never started has nothing after it.
+    /// `afterTurnHooks`: the TurnEnd hooks (how the reply ended; nothing waits
+    /// on them) and the linked spec kept in sync with the chat. A sandbox turn
+    /// runs neither. Here only when no host adopted the turn.
+    fn after_turn_hooks(self: &Arc<Self>, store: &Arc<SessionStore>, spec: &Value, summary: &Value) {
+        if spec.pointer("/facts/sandbox") == Some(&Value::Bool(true)) {
+            return;
+        }
+        let session_id = str_at(&spec["opts"], "sessionId").unwrap_or_default().to_string();
+        let stop = if summary.get("aborted") == Some(&Value::Bool(true)) {
+            "stopped".to_string()
+        } else {
+            str_at(summary, "stop").unwrap_or("complete").to_string()
+        };
+        let cwd =
+            spec.pointer("/facts/workspaces/0/path").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| {
+                std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
+            });
+        let hooks = self.settings.as_ref().map(|s| s.get()).and_then(|s| s.get("hooks").cloned()).unwrap_or(json!([]));
+        let rules = nekko_tools::hooks::rules(&hooks);
+        for rule in nekko_tools::hooks::matching_hooks(&rules, "TurnEnd", None) {
+            let rule = rule.clone();
+            let payload = json!({ "sessionId": session_id, "cwd": cwd, "stop": stop, "event": "TurnEnd" });
+            let (sid, cwd) = (session_id.clone(), cwd.clone());
+            tokio::spawn(async move {
+                nekko_tools::hooks::run_hook(&rule, "TurnEnd", &sid, None, &cwd, &payload).await;
+            });
+        }
+        let fresh = store.get(&session_id);
+        let linked = fresh.as_ref().is_some_and(|s| {
+            js::truthy(s.get("specLinked")) && !js::truthy(s.get("incognito")) && !js::truthy(s.get("offline"))
+        });
+        if linked && let Some(d) = self.dispatch.get() {
+            let build = d("spec:build".into(), vec![json!(session_id)]);
+            tokio::spawn(async move {
+                let _ = build.await;
+            });
+        }
+    }
+
     async fn after_turn(
         self: &Arc<Self>,
         backend: &Arc<Backend>,
@@ -927,6 +979,9 @@ impl Turns {
             incognito,
             allow_browser: spec.get("allowBrowserControl") == Some(&Value::Bool(true)),
             training: js::truthy(lock(&session).get("trainingRunId")),
+            provider_id: spec["opts"].get("providerId").cloned().unwrap_or(Value::Null),
+            allow_spawn: turn::plan::allows_spawn(settings.get("orchestration")),
+            settings: settings.clone(),
             unattended_ms: (settings.get("unattendedQuestionMinutes").and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
                 * 60_000.0) as u64,
         };
@@ -1441,6 +1496,12 @@ struct TurnTools {
     incognito: bool,
     training: bool,
     unattended_ms: u64,
+    /// The turn's provider (`opts.providerId`), the default `delegation_targets` lists.
+    provider_id: Value,
+    /// The orchestration strategy offers sub-agents (`allowSpawn`).
+    allow_spawn: bool,
+    /// The settings at the turn's start, when no store holds fresher ones.
+    settings: Value,
 }
 
 fn result(id: &str, output: impl Into<String>) -> Value {
@@ -1567,6 +1628,9 @@ impl TurnTools {
         }
         if self.spawn && name == "spawn_agent" {
             return Ok(self.spawn_agent(call).await);
+        }
+        if name == "delegation_targets" && self.turns.dispatch.get().is_some() {
+            return Ok(self.delegation_targets(id, &input).await);
         }
         if let Some(mcp) = &self.mcp
             && name.starts_with("mcp__")
@@ -1752,6 +1816,86 @@ impl TurnTools {
     /// so; the host checks the call and makes the child; this daemon drives
     /// the child's turn, resumes it once after a recoverable failure, and
     /// answers with its last written message. Stopping the parent stops it.
+    /// `delegation_targets`: the exact chat-model ids on a provider, for an
+    /// explicit `spawn_agent` route (`runHostTool`'s branch). Never guesses:
+    /// any doubt is a coded failure the model can report.
+    async fn delegation_targets(&self, id: &str, input: &Value) -> Value {
+        let failure = |code: &str, message: &str| {
+            let output = json!({ "ok": false, "code": code, "message": message, "fallbackUsed": false });
+            json!({ "toolCallId": id, "output": js::stringify(&output), "isError": true })
+        };
+        let session = lock(&self.session).clone();
+        let spawn_off = session
+            .get("disabledTools")
+            .and_then(Value::as_array)
+            .is_some_and(|d| d.iter().any(|t| t.as_str() == Some("spawn_agent")));
+        if js::truthy(session.get("incognito")) || js::truthy(session.get("offline")) || !self.allow_spawn || spawn_off
+        {
+            return failure("delegation_unavailable", "Delegation discovery is unavailable in this chat.");
+        }
+        let Some(input) = input.as_object() else { return failure("invalid_input", "Expected an object.") };
+        let provider_id = match input.get("provider_id") {
+            None | Some(Value::Null) => self.provider_id.clone(),
+            Some(v) => v.clone(),
+        };
+        let Some(pid) = provider_id.as_str().filter(|p| !js::trim(p).is_empty() && js::trim(p) == *p) else {
+            return failure("invalid_provider_id", "Use an exact nonblank provider ID.");
+        };
+        let settings = self.turns.settings.as_ref().map(|s| s.get()).unwrap_or_else(|| self.settings.clone());
+        let provider = settings.get("providers").and_then(Value::as_array).and_then(|ps| {
+            ps.iter()
+                .find(|p| p.get("id").and_then(Value::as_str) == Some(pid) && js::truthy(p.get("enabled")))
+                .cloned()
+        });
+        let Some(provider) = provider else {
+            return failure(
+                "provider_unavailable",
+                "Provider is unknown or disabled. Enable the intended provider in Models.",
+            );
+        };
+        if crate::admission::provider_endpoint(&provider).is_none() {
+            return failure("invalid_endpoint", "Configure a valid HTTP(S) endpoint for the intended provider.");
+        }
+        if self.shared.cancel.is_cancelled() {
+            return failure("cancelled", "Discovery cancelled.");
+        }
+        let unavailable = || {
+            failure(
+                "model_list_unavailable",
+                "Could not verify the intended provider model list. Check service availability and credentials in Models, then refresh. No fallback was used.",
+            )
+        };
+        let Some(d) = self.turns.dispatch.get() else { return unavailable() };
+        let listed = match d("models:listStatus".into(), vec![json!(pid)]).await {
+            Ok(v) if v.get("error").is_none_or(Value::is_null) => v,
+            _ => return unavailable(),
+        };
+        if self.shared.cancel.is_cancelled() {
+            return failure("cancelled", "Discovery cancelled.");
+        }
+        let targets: Vec<Value> = listed
+            .get("models")
+            .and_then(Value::as_array)
+            .map(|ms| {
+                ms.iter()
+                    .filter(|m| {
+                        m.get("providerId").and_then(Value::as_str) == Some(pid)
+                            && nekko_messaging::auto::is_chat_model(m)
+                    })
+                    .map(|m| json!({ "modelId": m.get("id").cloned().unwrap_or(Value::Null) }))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let message = if targets.is_empty() {
+            "No chat models available. Load or install a model on this provider, then refresh."
+        } else {
+            "Use an exact modelId with spawn_agent."
+        };
+        let output =
+            json!({ "ok": true, "providerId": pid, "models": targets, "message": message, "fallbackUsed": false });
+        json!({ "toolCallId": id, "output": js::stringify(&output) })
+    }
+
     async fn spawn_agent(&self, call: &Value) -> Value {
         use turn::delegate::{
             MAX_CHILD_RESUMES, can_resume_child_failure, child_interrupted_message, sub_agent_answer, sub_agent_failure,

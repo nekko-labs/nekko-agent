@@ -401,7 +401,10 @@ async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
     };
     assert!(tool_out("c_ask").contains("Q: Which bug?\nA: Login"), "{}", tool_out("c_ask"));
     assert!(tool_out("c_read").contains("pineapple"));
-    assert_eq!(tool_out("c_host"), "host tool ran");
+    // delegation_targets runs here now, never through the host: a coded answer, never a guess.
+    let delegation: Value = serde_json::from_str(&tool_out("c_host")).unwrap();
+    assert_eq!(delegation["fallbackUsed"], false, "{delegation}");
+    assert!(!host_calls(rig.d.port).await.iter().any(|c| c[0] == "turn:tool"), "no tool went through the host");
     let last = messages.last().unwrap();
     assert_eq!(last["content"], "all done");
     assert_eq!(last["turnStats"]["calls"], 1);

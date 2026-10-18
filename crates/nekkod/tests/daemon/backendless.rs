@@ -23,6 +23,8 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
         "providers": [{ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }],
         "workspaces": [{ "id": "w1", "name": "project", "path": workspace.to_string_lossy() }],
         "defaultChatMode": "yolo", "defaultProviderId": "p1", "defaultModelId": "synthetic",
+        // A TurnEnd hook: run here once the turn is over, in the chat's folder.
+        "hooks": [{ "id": "h1", "event": "TurnEnd", "command": "echo turn-ended> turnend.txt" }],
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
     let d = start_with(false, Some(&data));
@@ -42,6 +44,10 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
     let saved: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_solo.json")).unwrap()).unwrap();
     assert_eq!(saved["messages"].as_array().unwrap().last().unwrap()["content"], "wrote it");
+
+    // The TurnEnd hook ran (nothing waits on it).
+    wait_for("the TurnEnd hook", || workspace.join("turnend.txt").exists()).await;
+    assert!(std::fs::read_to_string(workspace.join("turnend.txt")).unwrap().contains("turn-ended"));
 
     // The UI hears that the chat's changes moved, from this daemon.
     let mut heard = false;
@@ -87,5 +93,67 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
     assert_eq!(status, 200);
     assert!(!log.exists() && !data.join("sessions/s_solo.json").exists());
     drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn delegation_targets_lists_exact_chat_models_without_the_host() {
+    use axum::routing::get;
+    // A second provider whose server lists models (one is not a chat model).
+    let catalog = axum::Router::new().route(
+        "/v1/models",
+        get(|| async { axum::Json(json!({ "data": [{ "id": "big-chat" }, { "id": "text-embedding-3-small" }] })) }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let other = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move { axum::serve(listener, catalog).await.unwrap() });
+
+    let data = std::env::temp_dir().join(format!("nekkod-delegation-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let workspace = data.join("project");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat =
+        json!({ "id": "s_del", "title": "Del", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_del.json"), chat.to_string()).unwrap();
+    let model = scripted_model(vec![
+        call_tool("c1", "delegation_targets", json!({ "provider_id": "p2" })),
+        call_tool("c2", "delegation_targets", json!({ "provider_id": " p2 " })),
+        call_tool("c3", "delegation_targets", json!({ "provider_id": "nope" })),
+        say_text("listed"),
+    ])
+    .await;
+    let settings = json!({
+        "providers": [
+            { "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) },
+            { "id": "p2", "kind": "openai-compat", "label": "Other", "enabled": true, "baseUrl": format!("http://127.0.0.1:{other}/v1") },
+        ],
+        "workspaces": [{ "id": "w1", "name": "project", "path": workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with(false, Some(&data));
+    let opts =
+        json!({ "sessionId": "s_del", "providerId": "p1", "modelId": "synthetic", "text": "who can I delegate to" });
+    let (status, body) = post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_del.json")).unwrap()).unwrap();
+    let outputs: Vec<Value> = saved["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["role"] == "tool")
+        .filter_map(|m| m["toolResult"]["output"].as_str().and_then(|c| serde_json::from_str(c).ok()))
+        .collect();
+    assert_eq!(outputs.len(), 3, "{saved}");
+    assert_eq!(
+        outputs[0],
+        json!({ "ok": true, "providerId": "p2", "models": [{ "modelId": "big-chat" }], "message": "Use an exact modelId with spawn_agent.", "fallbackUsed": false })
+    );
+    assert_eq!(outputs[1]["code"], "invalid_provider_id");
+    assert_eq!(outputs[2]["code"], "provider_unavailable");
+    drop(d);
+    server.abort();
     let _ = std::fs::remove_dir_all(&data);
 }
