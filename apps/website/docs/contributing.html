@@ -103,8 +103,12 @@ cd apps/web-app-server/cli-dist &amp;&amp; npm publish</code></pre></div>
 <h2 id="before-you-open-a-pr"><a class="anchor" href="#before-you-open-a-pr" aria-hidden="true" tabindex="-1">#</a>Before you open a PR</h2>
 <p>Keep the build green and the suite passing:</p>
 <div class="code"><span class="code-lang">bash</span><button class="copy" type="button" aria-label="Copy code">Copy</button><pre><code class="language-bash">npm run build       # Rust daemon (nekkod), then shared → core → host → cli → desktop
-npm test            # tests in every workspace
+npm test            # tests in every workspace (one Vitest run over all of them)
 npm run typecheck   # every TypeScript workspace</code></pre></div>
+<p><code>npm test</code> runs the root <code>node --test</code> scripts, desktop&#39;s <code>test:node</code>, then a single
+<code>vitest run</code> whose projects (root <code>vitest.config.ts</code>) are the eight workspaces. Narrow it
+with <code>npx vitest run --project packages/core</code>, or run one package as before with
+<code>npm test -w @nekko-agent/core</code>.</p>
 <ul>
 <li>Add tests in <code>packages/core</code> for new engine behavior (providers, guardrails, agent loop, context).</li>
 <li>Desktop UI flows: add a step to a journey in <code>apps/desktop/e2e/</code> (<code>npm run test:e2e -w @nekko-agent/desktop</code>, hidden windows only; see its README) rather than a new one-off script.</li>

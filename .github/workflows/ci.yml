@@ -96,6 +96,20 @@ jobs:
       # and @nekko-agent/server imports the CLI package, so their dists must exist
       # before `npm test` / typecheck run.
       - run: npm run build:web
+      # The TypeScript build is OS-independent: `perf` downloads this one rather
+      # than rebuilding it. Uploaded only when perf runs, so the PR tier pays
+      # nothing for it. (nekkod is per-OS and per-profile; each job builds its own.)
+      - name: Upload the web build for perf
+        if: needs.scope.outputs.perf == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          retention-days: 1
+          path: |
+            packages/*/dist/
+            apps/*/dist/
+            apps/desktop/out/
+          if-no-files-found: error
       - uses: dtolnay/rust-toolchain@stable
       # Pinned to the v2 tag's commit (v2.9.2): the required job must not pick up
       # a moved tag unreviewed.
@@ -137,6 +151,7 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      # build:core takes 1-2 s here; waiting on another job's artifact would cost more.
       - run: npm run build:core
       - name: Session clearing and command-log callback parity
         run: npm run test -w @nekko-agent/host -- src/session-clear.golden.test.ts src/session-clear.timezone.test.ts src/session-log-callback.test.ts src/session-clear.daemon.test.ts
@@ -156,6 +171,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # shared + core + host take 2-4 s here; waiting on another job's artifact would cost more.
       - run: npm run build:core
       - run: npm run build -w @nekko-agent/host
       - name: Grid model selection and mode-menu regressions
@@ -203,13 +219,39 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      - run: npm run build:web
       # The web edition runs behind the engine daemon, as the desktop does; the
       # server finds this release build in target/ (so the terminal keypress
       # budget measures nekkod's pty and its /api/term socket).
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build -p nekkod --release --locked
+      # The web build comes from the `build` job (uploaded right after its
+      # build:web, long before this release cargo build finishes). It is fetched
+      # without a job-level `needs: build`, which would hold this job until all of
+      # build's tests finished and lengthen the queue's critical path. If build
+      # ends without uploading it, this job builds its own.
+      - name: Wait for the build job's web build
+        id: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          api="repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          for _ in $(seq 1 120); do
+            if [ "$(gh api "$api/artifacts?name=web-dist" --jq '.total_count' || echo 0)" != 0 ]; then
+              echo ready=true >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            state=$(gh api "$api/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" --jq '.jobs[] | select(.name == "build") | .status' || true)
+            if [ "$state" = completed ]; then break; fi
+            sleep 5
+          done
+          echo 'No web-dist artifact from the build job; building here.'
+          echo ready=false >> "$GITHUB_OUTPUT"
+      - if: steps.dist.outputs.ready == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: web-dist
+      - if: steps.dist.outputs.ready != 'true'
+        run: npm run build:web
       - name: Speed contract
         # Judged against the 2x regression gate in budgets.mjs; a missed budget is
         # measured once more before it fails the job (noisy shared runners). The
