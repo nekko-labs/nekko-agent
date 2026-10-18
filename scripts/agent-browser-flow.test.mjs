@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { percentile, runFlow, summarize } from './agent-browser-flow.mjs';
+import { parseRefs, percentile, runFlow, summarize } from './agent-browser-flow.mjs';
 
 const CONTROLS = JSON.stringify([
   { tag: 'input', id: 'email', name: 'email', type: 'email', label: 'Email' },
@@ -8,6 +8,7 @@ const CONTROLS = JSON.stringify([
   { tag: 'button', id: '', name: '', type: 'submit', label: 'Subscribe' },
 ]);
 const PNG = Buffer.alloc(100, 1).toString('base64');
+const SNAPSHOT = 'Signup fixture\n- link "Article 0" [ref=e1]\n- textbox "Email" [required, ref=e41]\n- textbox "Name" [ref=e42]\n- checkbox "Weekly digest" [checked=true, ref=e43]\n- button "Subscribe" [ref=e45]';
 
 /** A fake bridge: the form appears after `formAfter` looks, the result after `resultAfter` waits. */
 function fakeBridge({ formAfter = 0, resultAfter = 0 } = {}) {
@@ -26,6 +27,7 @@ function fakeBridge({ formAfter = 0, resultAfter = 0 } = {}) {
       case 'click': return reply({ output: 'Signup fixture\nSubscribing...' });
       case 'extract': return reply({ output: 'Thanks, Ann! Check ann@x.test.' });
       case 'screenshot': return reply({ output: 'Screenshot', image: { data: PNG, mime: 'image/png' } });
+      case 'snapshot': return reply({ output: looks++ < formAfter ? 'Signup fixture\nNo interactive elements.' : SNAPSHOT });
       default: return reply({ error: 'unexpected' }, false);
     }
   };
@@ -60,6 +62,31 @@ test('a form that never renders fails after the retry limit', async () => {
   assert.equal(row.ok, false);
   assert.match(row.error, /no form/);
   assert.equal(row.retries, 2);
+});
+
+test('the snapshot flow locates by snapshot and acts on refs', async () => {
+  const { post, calls } = fakeBridge({ formAfter: 1 });
+  const row = await runFlow(post, { url: 'http://x/', strategy: 'snapshot', name: 'Ann', email: 'ann@x.test' });
+  assert.equal(row.ok, true);
+  assert.equal(row.retries, 1);
+  assert.deepEqual(calls.map((c) => c.action), ['navigate', 'snapshot', 'wait', 'snapshot', 'fill', 'fill', 'click', 'wait', 'extract', 'screenshot']);
+  assert.deepEqual(calls.filter((c) => c.action === 'fill' || c.action === 'click').map((c) => c.selector), ['@e41', '@e42', '@e45']);
+});
+
+test('the scoped snapshot flow passes its scope, and request bytes count what the model writes', async () => {
+  const { post, calls } = fakeBridge();
+  const scoped = await runFlow(post, { url: 'http://x/', strategy: 'snapshot-scoped', name: 'Ann', email: 'ann@x.test' });
+  assert.equal(scoped.ok, true);
+  assert.deepEqual(calls.find((c) => c.action === 'snapshot'), { action: 'snapshot', selector: 'main' });
+  const selectors = await runFlow(fakeBridge().post, { url: 'http://x/', name: 'Ann', email: 'ann@x.test' });
+  assert.ok(selectors.requestBytes > scoped.requestBytes, 'listing controls means writing a script');
+  assert.equal(scoped.requestBytes, scoped.steps.reduce((n, s) => n + s.requestBytes, 0));
+});
+
+test('parseRefs reads role, quoted name and ref from snapshot lines', () => {
+  assert.deepEqual(parseRefs(SNAPSHOT), { link: { 'Article 0': '@e1' }, textbox: { Email: '@e41', Name: '@e42' }, checkbox: { 'Weekly digest': '@e43' }, button: { Subscribe: '@e45' } });
+  assert.deepEqual(parseRefs('- button "Say \\"hi\\"" [ref=e2]\n- button "Say \\"hi\\"" [ref=e3]'), { button: { 'Say "hi"': '@e2' } });
+  assert.deepEqual(parseRefs('No interactive elements.'), {});
 });
 
 test('percentile is nearest-rank', () => {

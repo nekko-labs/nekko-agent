@@ -7,9 +7,13 @@
 //
 // A driver name may end in -nowake to run the bridge without the hidden-window
 // frame wake (wakeFrames: false), for before/after in the same process.
+// --strategy selectors,snapshot compares how the agent locates the form: by
+// listing controls with evaluate, or by the compact snapshot and its refs.
+// Each driver and strategy pair is an arm; arms alternate sample by sample.
+//
 // Three scenarios, reported separately:
 //   process-first  the first flow in a brand-new Electron process and profile
-//                  (one per launch; drivers alternate which goes first)
+//                  (one per launch; arms take turns going first)
 //   fresh-chat     a new chat in a running app: new driver, window, partition
 //                  and empty HTTP cache, closed after the flow
 //   warm-session   the same chat again: browser open, HTTP cache populated
@@ -88,20 +92,22 @@ app.whenReady().then(async () => {
       result.flows.push({ driver, scenario, strategy, sessionId, ...extra, ...row, served: { total: served.total - before.total, assets: served.assets - before.assets }, timings });
     };
     const close = (driver, sessionId) => fetch(bridges[driver].url, { method: 'POST', headers: { Authorization: 'Bearer ' + bridges[driver].token }, body: JSON.stringify({ sessionId, action: 'close' }) });
-    const order = (i) => (i % 2 ? [...config.drivers].reverse() : config.drivers);
+    // Every (driver, strategy) pair is one arm; arms alternate sample by
+    // sample, reversing order every other round.
+    const arms = config.drivers.flatMap((d) => config.strategies.map((s) => ({ d, s, id: d + '-' + s })));
+    const order = (i) => (i % 2 ? [...arms].reverse() : arms);
 
     if (config.mode === 'process-first') {
-      const ds = config.firstDriver === config.drivers[0] ? config.drivers : [...config.drivers].reverse();
-      for (const [k, d] of ds.entries()) { await flow(d, 'first-' + d, 'process-first', config.strategies[0], { firstInProcess: k === 0, launch: config.launch }); await close(d, 'first-' + d); }
+      const first = arms.findIndex((a) => a.id === config.firstArm);
+      const as = [...arms.slice(first), ...arms.slice(0, first)];
+      for (const [k, a] of as.entries()) { await flow(a.d, 'first-' + a.id, 'process-first', a.s, { firstInProcess: k === 0, launch: config.launch }); await close(a.d, 'first-' + a.id); }
     } else {
-      // Warm up each driver once so fresh-chat excludes one-off module loading.
-      for (const d of config.drivers) { await flow(d, 'warmup-' + d, 'warmup', config.strategies[0], {}); await close(d, 'warmup-' + d); }
-      for (const strategy of config.strategies) {
-        for (let i = 0; i < config.rounds; i++) for (const d of order(i)) { const id = 'fresh-' + strategy + '-' + d + '-' + i; await flow(d, id, 'fresh-chat', strategy, { round: i }); await close(d, id); }
-        for (const d of config.drivers) await flow(d, 'warm-' + strategy + '-' + d, 'warm-open', strategy, {});
-        for (let i = 0; i < config.rounds; i++) for (const d of order(i)) await flow(d, 'warm-' + strategy + '-' + d, 'warm-session', strategy, { round: i });
-        for (const d of config.drivers) await close(d, 'warm-' + strategy + '-' + d);
-      }
+      // Warm up each arm once so fresh-chat excludes one-off module loading.
+      for (const a of arms) { await flow(a.d, 'warmup-' + a.id, 'warmup', a.s, {}); await close(a.d, 'warmup-' + a.id); }
+      for (let i = 0; i < config.rounds; i++) for (const a of order(i)) { const id = 'fresh-' + a.id + '-' + i; await flow(a.d, id, 'fresh-chat', a.s, { round: i }); await close(a.d, id); }
+      for (const a of arms) await flow(a.d, 'warm-' + a.id, 'warm-open', a.s, {});
+      for (let i = 0; i < config.rounds; i++) for (const a of order(i)) await flow(a.d, 'warm-' + a.id, 'warm-session', a.s, { round: i });
+      for (const a of arms) await close(a.d, 'warm-' + a.id);
     }
     result.passed = result.flows.every((f) => f.ok);
     if (!result.passed) process.exitCode = 1;
@@ -153,7 +159,8 @@ const report = {
 try {
   // A failed flow is recorded, not fatal: a timeout is itself a measurement.
   for (let i = 0; i < launches; i++) {
-    const r = await launch({ label: `first-${i}`, mode: 'process-first', firstDriver: drivers[i % drivers.length], launch: i, rounds });
+    const arms = drivers.flatMap((d) => strategies.map((s) => `${d}-${s}`));
+    const r = await launch({ label: `first-${i}`, mode: 'process-first', firstArm: arms[i % arms.length], launch: i, rounds });
     report.launches.push(r);
     console.error(`process-first ${i + 1}/${launches}: ${r.passed ? 'ok' : r.error ?? 'failed'}`);
   }
