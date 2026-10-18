@@ -24,7 +24,7 @@
     "android": {
       "package": "dev.nekkolabs.nekkoagent",
       "adaptiveIcon": {
-        "backgroundColor": "#101714",
+        "backgroundColor": "#453A92",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -47,7 +47,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#101714",
+          "backgroundColor": "#453A92",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 120
         }

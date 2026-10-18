@@ -11,9 +11,9 @@ vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
 const resources = vi.hoisted(() => ({ gpu: null as import('@nekko-agent/shared').GpuStats | null }));
 vi.mock('./ResourceMonitor.js', () => ({ useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: resources.gpu }) }));
-import { MonitorsDock, MonitorsToggle } from './MonitorsDock.js';
+import { LocalModels, MonitorsDock, MonitorsToggle } from './MonitorsDock.js';
 function render(minimized = false) {
-  const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: false, insights: false, hardware: true }, minimized: { ...DEFAULT_WALL_STATE.dock.minimized, hardware: minimized } } };
+  const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: false, insights: false, hardware: true, localModels: false }, minimized: { ...DEFAULT_WALL_STATE.dock.minimized, hardware: minimized } } };
   return renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
 }
 describe('monitors panel show and hide', () => {
@@ -60,7 +60,7 @@ describe('wall dock presentation', () => {
   });
   it('clarifies stale quota without claiming an active refresh', () => {
     quota.byToken.plan = { updatedAt: 1000, staleAfterMs: 1000, windows: [] };
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false } } };
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
     const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={5000} sessions={[]} providers={[{ id: 'plan', kind: 'chatgpt', label: 'Plan', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'plan' }]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(html).toContain('monitors-dock__utilization');
     expect(html).toContain('Refresh provider quota');
@@ -71,7 +71,7 @@ describe('wall dock presentation', () => {
   });
   it.each([[17, 83, 'var(--success)'], [83, 17, 'var(--danger)'], [0, 100, 'var(--success)'], [100, 0, 'var(--danger)']])('shows ChatGPT %i used as %i left with usage-based warnings', (used, left, tone) => {
     quota.byToken = { synthetic: { windows: [{ label: '7-day', usedPercent: used, resetAt: 0 }], updatedAt: 0, staleAfterMs: 60000 } };
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false } } };
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
     const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'chatgpt', baseUrl: '', kind: 'openai', auth: 'subscription', tokenKey: 'synthetic', enabled: true, label: 'ChatGPT' }]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(html).toContain(`${left}% left`);
     expect(html).toContain(`aria-valuenow="${left}"`);
@@ -81,7 +81,7 @@ describe('wall dock presentation', () => {
   it.each(['auth_expired', 'signed_out'] as const)('offers Sign in again right in the panel for %s', (kind) => {
     quota.byToken = {};
     (quota as any).problems = { claude: { kind, at: 0 } };
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false } } };
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
     const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'claude-sub', kind: 'anthropic', label: 'Claude', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'claude' }]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(html).toContain('data-dock-signin');
     expect(html).toContain('>Sign in again</button>');
@@ -94,7 +94,7 @@ describe('wall dock presentation', () => {
     (quota as any).problems = {};
     emails.byToken = { 'claude:a': 'davide@example.com', 'claude:b': 'davide@work.example' };
     try {
-      const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false } } };
+      const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
       const providers = [
         { id: 'p1', kind: 'anthropic' as const, label: 'Anthropic (Claude)', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'claude:a' },
         { id: 'p2', kind: 'anthropic' as const, label: 'Anthropic (Claude)', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'claude:b' },
@@ -108,7 +108,7 @@ describe('wall dock presentation', () => {
     } finally { emails.byToken = {}; }
   });
   it('exposes both savings separately and never asks for a monthly budget', () => {
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, insights: false, hardware: false } } };
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, insights: false, hardware: false, localModels: false } } };
     const usage = { totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, bySession: {}, byProvider: {}, bySessionCost: {}, daily: [{ date: '1970-01-01', input: 0, output: 0, cost: 0, avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } }], avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } };
     const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={usage} vitals={{ working: 3, waiting: 1, automations: 2, terminals: 1, tokensToday: 212000, spend: 'Included in plan', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     // The Vitals panel is gone from the dock.
@@ -122,7 +122,7 @@ describe('wall dock presentation', () => {
     expect(html).not.toContain('Monthly budget (USD)');
   });
   it('filters Budget spend and tokens with the Insights time ranges', () => {
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, insights: false, hardware: false } } };
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, insights: false, hardware: false, localModels: false } } };
     const now = Date.parse('2026-10-08T12:00:00Z');
     const usage: import('@nekko-agent/shared').UsageSummary = { avoidedCosts: { subscription: 2200, local: 0, benchmarkTokens: 0, unpricedTokens: 0 }, totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, bySession: {}, byProvider: {}, bySessionCost: {}, daily: [
       { date: '2026-10-08', input: 100, output: 50, cost: 1, bySessionCost: { recent: 1 }, localTokens: 42, modelIds: ['recent-local'], avoidedCosts: { local: 2.34, subscription: 5.67, benchmarkTokens: 42, unpricedTokens: 7 } },
@@ -163,5 +163,49 @@ describe('wall dock presentation', () => {
     expect(html).toContain('aria-label="Expand Hardware monitor"');
     expect(html).not.toContain('aria-label="Hardware monitor"');
     expect(html).not.toContain('role="meter"');
+  });
+});
+
+describe('Local models monitor', () => {
+  const GB = 1024 ** 3;
+  const install = { binPath: '/x/llama-server', available: [] };
+  const settings = { port: 11500, bind: 'local', autoStart: false, jitLoad: true, idleTtlSeconds: 900, maxLoaded: 2 };
+  const status = (over: Record<string, unknown> = {}) => ({ install, running: true, resident: [], log: [], port: 11500, settings, ...over }) as any;
+  const models = [{ id: 'qwen', name: 'Qwen3 8B', path: '/m/qwen.gguf', sizeBytes: 5 * GB }, { id: 'gemma', name: 'Gemma 3 27B', path: '/m/gemma.gguf', sizeBytes: 16 * GB }] as any;
+  it('is offered in Configure and on by default, under Hardware', () => {
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { ...DEFAULT_WALL_STATE.dock.monitors, utilization: false, budget: false, automations: false } } };
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    expect(DEFAULT_WALL_STATE.dock.monitors.localModels).toBe(true);
+    expect(html).toContain('aria-label="Local models monitor"');
+    expect(html.indexOf('aria-label="Hardware monitor"')).toBeLessThan(html.indexOf('aria-label="Local models monitor"'));
+  });
+  it('lists each resident model with where it runs and a settings jump', () => {
+    const resident = [
+      { id: 'qwen', loadedOn: 'gpu', gpuLayers: 36, totalLayers: 36, contextLength: 32768, vramBytes: 6 * GB },
+      { id: 'gemma', loadedOn: 'gpu+cpu', gpuLayers: 38, totalLayers: 62, contextLength: 16384, sizeBytes: 16 * GB },
+    ];
+    const html = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident }), models }} />);
+    expect(html).toContain('Qwen3 8B');
+    expect(html).toContain('on GPU · 36/36 layers');
+    expect(html).toContain('32k context · 6.0 GB');
+    expect(html).toContain('Gemma 3 27B');
+    expect(html).toContain('GPU + CPU · 38/62 layers');
+    expect(html).toContain('data-local-model-settings="qwen"');
+    expect(html).toContain('data-local-model-settings="gemma"');
+    expect(html).toContain('aria-label="Open Gemma 3 27B settings"');
+    expect(html).toContain('Open Nekko Server');
+  });
+  it('falls back to the model id when the library has no entry for it', () => {
+    const html = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'ghost' }] }), models: [] }} />);
+    expect(html).toContain('ghost');
+    expect(html).toContain('data-local-model-settings="ghost"');
+  });
+  it('says plainly when nothing is loaded, the server is stopped, or there is no engine', () => {
+    expect(renderToStaticMarkup(<LocalModels initial={{ status: status(), models }} />)).toContain('No local model is loaded.');
+    expect(renderToStaticMarkup(<LocalModels initial={{ status: status({ running: false }), models }} />)).toContain('The model server is stopped.');
+    const none = renderToStaticMarkup(<LocalModels initial={{ status: status({ install: { available: [] } }), models }} />);
+    expect(none).toContain('No local engine installed.');
+    expect(none).toContain('Set up a local model');
+    expect(none).not.toContain('data-local-model-settings');
   });
 });

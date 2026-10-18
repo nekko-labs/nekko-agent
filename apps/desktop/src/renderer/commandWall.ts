@@ -41,6 +41,7 @@ export type { WallLayout, WallLayoutMode, MonitorsDock, MonitorsSide, MonitorKey
 export { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK };
 export const MONITORS: Array<{ key: MonitorKey; label: string; blurb: string }> = [
   { key: 'hardware', label: 'Hardware', blurb: 'Local resource monitors' },
+  { key: 'localModels', label: 'Local models', blurb: 'Models loaded on this machine and where they run' },
   { key: 'utilization', label: 'Utilization', blurb: 'Tokens and model usage' },
   { key: 'budget', label: 'Budget', blurb: 'Monthly spend against your advisory budget' },
   { key: 'automations', label: 'Automations', blurb: 'Scheduled and running automations' },

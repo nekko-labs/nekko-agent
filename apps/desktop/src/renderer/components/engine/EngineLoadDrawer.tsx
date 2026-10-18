@@ -41,6 +41,7 @@ export function EngineLoadDrawer({
   onFetchCompanions,
   onDone,
   onClose,
+  initialSurface = 'simple',
 }: {
   providerId: string;
   model: LocalModel & { loaded: boolean };
@@ -51,9 +52,11 @@ export function EngineLoadDrawer({
   onFetchCompanions?: () => void;
   onDone: () => void;
   onClose: () => void;
+  /** Which surface it opens on; a jump from "where does it run" lands on Advanced. */
+  initialSurface?: Surface;
 }) {
   const pushToast = useStore((s) => s.pushToast);
-  const [surface, setSurface] = useState<Surface>('simple');
+  const [surface, setSurface] = useState<Surface>(initialSurface);
   const [budget, setBudget] = useState(model.preset?.budgetFraction ?? 0.75);
   const [params, setParams] = useState<LoadParams>(() => fromPreset(model.preset));
   const [plan, setPlan] = useState<FitPlan | null>(null);
@@ -150,7 +153,7 @@ export function EngineLoadDrawer({
   const ctxIndex = Math.max(0, stops.indexOf(nearest(stops, params.contextTokens ?? 8192)));
 
   return (
-    <div className="mt-2 rounded-xl border p-3" style={{ borderColor: 'var(--line)' }}>
+    <div className="mt-2 rounded-xl border p-3" style={{ borderColor: 'var(--line)' }} data-engine-load-drawer={surface}>
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0">
           <p className="truncate text-[13px]">{model.name}</p>

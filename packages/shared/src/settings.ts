@@ -90,7 +90,7 @@ export const ONBOARDING_VERSION = 1;
 export type WallLayoutMode = 'grid' | 'focus' | 'fixed';
 export interface WallLayout { mode: WallLayoutMode; cols: number; rows: number }
 export type MonitorsSide = 'right' | 'left' | 'top' | 'bottom';
-export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware';
+export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware' | 'localModels';
 export interface MonitorsDock {
   side: MonitorsSide;
   show: boolean;
@@ -104,10 +104,11 @@ export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2 
 export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
   side: 'right', show: true,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13
-  // (sanitizeMonitorsDock drops it from saved docks).
-  monitorOrder: ['hardware', 'utilization', 'budget', 'automations', 'insights'],
-  minimized: { hardware: false, utilization: false, budget: false, automations: false, insights: false },
-  monitors: { hardware: true, utilization: true, budget: true, automations: true, insights: false },
+  // (sanitizeMonitorsDock drops it from saved docks). Local models sits under
+  // Hardware: which model holds the GPU explains what the meters above report.
+  monitorOrder: ['hardware', 'localModels', 'utilization', 'budget', 'automations', 'insights'],
+  minimized: { hardware: false, localModels: false, utilization: false, budget: false, automations: false, insights: false },
+  monitors: { hardware: true, localModels: true, utilization: true, budget: true, automations: true, insights: false },
 };
 
 /** Advisory USD budget only, not an enforced spending limit. Invalid/unset means no budget. */
