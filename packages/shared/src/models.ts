@@ -14,7 +14,11 @@ export type ProviderKind =
   | 'llamacpp'
   | 'openai-compat'
   /** Claude in Amazon Bedrock: the Messages API on the user's own Bedrock bearer token. */
-  | 'bedrock';
+  | 'bedrock'
+  /** Claude on Google Cloud Vertex AI, on the user's own Google credentials. */
+  | 'vertex'
+  /** Claude in Microsoft Foundry, on the Foundry resource's key. */
+  | 'foundry';
 
 /** A configured connection to a model server / provider. */
 export interface ProviderConfig {
@@ -178,6 +182,11 @@ export const PROVIDER_DEFAULTS: Record<ProviderKind, { baseUrl: string; needsKey
   'openai-compat': { baseUrl: 'http://localhost:8080/v1', needsKey: false, label: 'OpenAI-compatible' },
   // The region is part of the host: edit it to match the Bedrock region you use.
   bedrock: { baseUrl: 'https://bedrock-mantle.us-east-1.api.aws/anthropic', needsKey: true, label: 'Claude in Amazon Bedrock' },
+  // Replace YOUR_PROJECT; `global` is the recommended location. The token comes from
+  // the user's own Google Application Default Credentials, so there is no key.
+  vertex: { baseUrl: 'https://aiplatform.googleapis.com/v1/projects/YOUR_PROJECT/locations/global', needsKey: false, label: 'Claude on Vertex AI' },
+  // Replace YOUR_RESOURCE with the Foundry resource name.
+  foundry: { baseUrl: 'https://YOUR_RESOURCE.services.ai.azure.com/anthropic', needsKey: true, label: 'Claude in Microsoft Foundry' },
 };
 
 /** Ports we probe when auto-discovering local servers. */

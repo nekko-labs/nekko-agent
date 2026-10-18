@@ -146,6 +146,13 @@ async fn save(ctx: &Ctx, list: Vec<Value>) -> Result<Value, String> {
 /// token store (a subscription, or OpenRouter's signed-in key) with a fresh
 /// token as its `apiKey`, and the account id backfilled from the stored token.
 pub async fn resolve(ctx: &Ctx, config: &Value) -> Result<Value, String> {
+    // Claude on Vertex AI authenticates with the user's own Google Cloud
+    // credentials: a short-lived access token, fetched fresh for each use.
+    if config.get("kind").and_then(Value::as_str) == Some("vertex") {
+        let mut out = config.as_object().cloned().unwrap_or_default();
+        out.insert("apiKey".into(), Value::String(crate::gcp::access_token().await?));
+        return Ok(Value::Object(out));
+    }
     let subscription = config.get("auth").and_then(Value::as_str) == Some("subscription");
     let key = config.get("tokenKey").filter(|k| nekko_js::truthy(Some(k)));
     if !subscription && key.is_none() {

@@ -22,6 +22,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod gcp;
 mod hub;
 mod hypergate;
 mod image_turns;
