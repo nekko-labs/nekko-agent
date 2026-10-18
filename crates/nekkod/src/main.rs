@@ -300,7 +300,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             .map(|n| native::Native::new(n, cfg.app_version.clone())),
         desktop: match (&cfg.native, &cfg.data_dir, &settings) {
             // A desktop backend, while one runs, still serves these itself.
-            (Some(n), Some(d), Some(_)) if cfg.backend.is_none() => Some(desktop::Desktop::new(n, std::path::Path::new(d))),
+            (Some(n), Some(d), Some(_)) if cfg.backend.is_none() => {
+                Some(desktop::Desktop::new(n, std::path::Path::new(d)))
+            }
             _ => None,
         },
     };

@@ -210,7 +210,14 @@ fn run_with_timeout(mut cmd: std::process::Command, limit: std::time::Duration) 
     }
 }
 
-fn status(installed: bool, on_path: bool, bin_path: Option<String>, bin_dir: String, command: String, message: Option<String>) -> Value {
+fn status(
+    installed: bool,
+    on_path: bool,
+    bin_path: Option<String>,
+    bin_dir: String,
+    command: String,
+    message: Option<String>,
+) -> Value {
     let mut out = serde_json::Map::new();
     out.insert("available".into(), json!(true));
     out.insert("installed".into(), json!(installed));
@@ -399,7 +406,10 @@ mod tests {
     fn the_link_file_is_written_as_the_ts_wrote_it() {
         let dir = std::env::temp_dir().join(format!("nekkod-cli-link-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        write_cli_link(&dir, &json!({ "url": "http://127.0.0.1:1439", "token": "t", "enabled": true, "updatedAt": 5, "pid": 9 }));
+        write_cli_link(
+            &dir,
+            &json!({ "url": "http://127.0.0.1:1439", "token": "t", "enabled": true, "updatedAt": 5, "pid": 9 }),
+        );
         let text = std::fs::read_to_string(dir.join(CLI_LINK_FILE)).unwrap();
         assert_eq!(
             text,

@@ -126,7 +126,7 @@ impl Desktop {
     /// port that just closed. (A crash skips this; the pid in the link covers it.)
     pub async fn shutdown(&self, ctx: &Ctx) {
         self.webhooks.close();
-        self.api.stop();
+        self.api.stop().await;
         let s = api_settings(ctx).await;
         let link = json!({
             "url": api_server::client_url(&s, &lan()),

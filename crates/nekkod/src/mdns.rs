@@ -298,10 +298,8 @@ fn strip_local(raw: &str) -> &str {
 /// bytes. As UTF-8: the TS trims a UTF-16 unit at a time, so an emoji at the
 /// cut can leave half a surrogate pair, which goes out as U+FFFD.
 pub fn service_label(raw: &str) -> String {
-    let replaced: String = strip_local(raw)
-        .chars()
-        .map(|c| if c <= '\u{1f}' || c == '\u{7f}' || c == '.' { ' ' } else { c })
-        .collect();
+    let replaced: String =
+        strip_local(raw).chars().map(|c| if c <= '\u{1f}' || c == '\u{7f}' || c == '.' { ' ' } else { c }).collect();
     let mut clean = String::new();
     let mut space = false;
     for c in replaced.chars() {
@@ -387,7 +385,13 @@ pub fn records_for(ad: &Advertisement, ttl_scale: u32) -> Vec<Record> {
     let instance = format!("{}.{SERVICE_TYPE}", ad.name);
     let host = format!("{}.local", ad.host);
     let mut out = vec![
-        Record { name: SERVICE_TYPE.into(), kind: TYPE_PTR, ttl: TTL_OTHER * ttl_scale, unique: None, data: Data::Text(instance.clone()) },
+        Record {
+            name: SERVICE_TYPE.into(),
+            kind: TYPE_PTR,
+            ttl: TTL_OTHER * ttl_scale,
+            unique: None,
+            data: Data::Text(instance.clone()),
+        },
         Record {
             name: instance.clone(),
             kind: TYPE_SRV,
@@ -739,8 +743,9 @@ impl NetworkVisibility {
                         let mut live = lock(&me.live);
                         live.socket = None;
                         live.stop = None;
-                        live.error =
-                            Some("Advertising stopped after a network error. It retries on its own while this is on.".into());
+                        live.error = Some(
+                            "Advertising stopped after a network error. It retries on its own while this is on.".into(),
+                        );
                         return;
                     }
                 }
@@ -871,7 +876,10 @@ pub mod tests {
             assert_eq!(hex(&encode_packet(&legacy)), case["legacy"].as_str().unwrap());
         }
         let query: Vec<Question> = m["answers"][1]["questions"].as_array().unwrap().iter().map(question_of).collect();
-        assert_eq!(hex(&encode_packet(&Packet { questions: query, ..Packet::default() })), m["query"].as_str().unwrap());
+        assert_eq!(
+            hex(&encode_packet(&Packet { questions: query, ..Packet::default() })),
+            m["query"].as_str().unwrap()
+        );
         for case in m["decode"].as_array().unwrap() {
             let got = decode_packet(&unhex(case["hex"].as_str().unwrap()));
             assert_eq!(serde_json::to_value(got).unwrap(), case["packet"], "{}", case["name"]);
@@ -898,9 +906,11 @@ pub mod tests {
             port: 4400,
         };
         let answers = records_for(&ad, 1);
-        let back = decode_packet(&encode_packet(&Packet { response: true, answers: answers.clone(), ..Packet::default() }))
-            .unwrap();
-        let expected: Vec<Record> = answers.into_iter().map(|r| Record { unique: Some(r.unique == Some(true)), ..r }).collect();
+        let back =
+            decode_packet(&encode_packet(&Packet { response: true, answers: answers.clone(), ..Packet::default() }))
+                .unwrap();
+        let expected: Vec<Record> =
+            answers.into_iter().map(|r| Record { unique: Some(r.unique == Some(true)), ..r }).collect();
         assert_eq!(back.answers, expected);
     }
 }

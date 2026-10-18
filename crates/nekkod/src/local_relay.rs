@@ -31,8 +31,11 @@ const START_TIMEOUT: Duration = Duration::from_secs(10);
 const GRACE: Duration = Duration::from_secs(2);
 const NO_TAILSCALE: &str =
     "Tailscale isn't connected on this computer. Install Tailscale and sign in, and the relay starts.";
-const TAILSCALE_CLIS: [&str; 3] =
-    ["tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale", "C:\\Program Files\\Tailscale\\tailscale.exe"];
+const TAILSCALE_CLIS: [&str; 3] = [
+    "tailscale",
+    "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+    "C:\\Program Files\\Tailscale\\tailscale.exe",
+];
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -69,9 +72,13 @@ pub fn relay_failure(stderr: &str, port: u16) -> String {
         .and_then(|v| v.get("code").and_then(Value::as_str).map(str::to_string));
     match code.as_deref() {
         Some("EADDRINUSE") => {
-            format!("Port {port} is already in use on this computer. Close whatever is using it (another relay?) and try again.")
+            format!(
+                "Port {port} is already in use on this computer. Close whatever is using it (another relay?) and try again."
+            )
         }
-        Some("EADDRNOTAVAIL") => "The Tailscale address went away while the relay was starting. It retries on its own.".into(),
+        Some("EADDRNOTAVAIL") => {
+            "The Tailscale address went away while the relay was starting. It retries on its own.".into()
+        }
         _ => "The relay could not start.".into(),
     }
 }
@@ -80,7 +87,11 @@ pub fn relay_failure(stderr: &str, port: u16) -> String {
 async fn magic_dns_name() -> Option<String> {
     for cli in TAILSCALE_CLIS {
         let mut cmd = Command::new(cli);
-        cmd.args(["status", "--json"]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
+        cmd.args(["status", "--json"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
         #[cfg(windows)]
         cmd.creation_flags(0x0800_0000);
         let out = match tokio::time::timeout(Duration::from_secs(3), cmd.output()).await {
@@ -132,7 +143,10 @@ impl LocalRelay {
         let (enabled, port) = match &saved {
             Some(s) => (
                 s.get("enabled") == Some(&Value::Bool(true)),
-                s.get("port").and_then(Value::as_u64).filter(|p| *p <= u16::MAX as u64).map_or(LOCAL_RELAY_PORT, |p| p as u16),
+                s.get("port")
+                    .and_then(Value::as_u64)
+                    .filter(|p| *p <= u16::MAX as u64)
+                    .map_or(LOCAL_RELAY_PORT, |p| p as u16),
             ),
             None => (false, LOCAL_RELAY_PORT),
         };
@@ -156,7 +170,8 @@ impl LocalRelay {
     /// The relay phones would dial while it runs: `(url, port)`.
     pub fn running_at(&self) -> Option<(String, u16)> {
         let s = self.status();
-        (s["running"] == true).then(|| (s["url"].as_str().unwrap_or_default().to_string(), s["port"].as_u64().unwrap_or(0) as u16))
+        (s["running"] == true)
+            .then(|| (s["url"].as_str().unwrap_or_default().to_string(), s["port"].as_u64().unwrap_or(0) as u16))
     }
 
     pub fn status(&self) -> Value {
@@ -317,8 +332,9 @@ impl LocalRelay {
                     let mut s = lock(&me.state);
                     if s.running.as_ref().is_some_and(|r| r.id == id) {
                         s.running = None;
-                        s.error =
-                            Some("The relay stopped unexpectedly. It restarts on its own while this is switched on.".into());
+                        s.error = Some(
+                            "The relay stopped unexpectedly. It restarts on its own while this is switched on.".into(),
+                        );
                     }
                 }
             });
@@ -326,17 +342,17 @@ impl LocalRelay {
         tokio::select! {
             r = ready_rx => if r.is_ok() {
                 lock(&self.state).running = Some(Running { ip: ip.to_string(), id, stop, exited });
-                return None;
+                None
             } else {
                 // stdout closed without the line: wait for the exit to read why.
                 let _ = tokio::time::timeout(Duration::from_secs(1), exit_rx).await;
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 stop.notify_one();
-                return Some(relay_failure(&lock(&err_buf), port));
+                Some(relay_failure(&lock(&err_buf), port))
             },
             _ = tokio::time::sleep(START_TIMEOUT) => {
                 stop.notify_one();
-                return Some("The relay did not start in time.".into());
+                Some("The relay did not start in time.".into())
             }
         }
     }
@@ -391,7 +407,11 @@ mod tests {
             assert_eq!(json!(tailnet_address(&nics)), case["address"], "{}", case["ifaces"]);
         }
         for case in g["relay"]["urls"].as_array().unwrap() {
-            let url = local_relay_url(case["name"].as_str(), case["ip"].as_str().unwrap(), case["port"].as_u64().unwrap() as u16);
+            let url = local_relay_url(
+                case["name"].as_str(),
+                case["ip"].as_str().unwrap(),
+                case["port"].as_u64().unwrap() as u16,
+            );
             assert_eq!(url, case["url"].as_str().unwrap());
         }
         for case in g["relay"]["failures"].as_array().unwrap() {

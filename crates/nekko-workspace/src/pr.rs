@@ -632,8 +632,9 @@ impl Prs {
         if self.gh_missing.load(Ordering::SeqCst) || self.cooling() {
             return None;
         }
-        let res =
-            self.gh_read(&["pr", "view", branch, "--json", "state,mergedAt,headRefOid"], Duration::from_secs(10), Some(cwd)).await;
+        let res = self
+            .gh_read(&["pr", "view", branch, "--json", "state,mergedAt,headRefOid"], Duration::from_secs(10), Some(cwd))
+            .await;
         if res.missing {
             self.gh_missing.store(true, Ordering::SeqCst);
             return None;

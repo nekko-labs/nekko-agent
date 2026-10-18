@@ -168,6 +168,8 @@ struct Counters {
 struct Running {
     /// `true` stops the listener and closes every event socket.
     stop: watch::Sender<bool>,
+    /// The serve task, done once the port is free again.
+    served: tokio::task::JoinHandle<()>,
 }
 
 #[derive(Default)]
@@ -222,7 +224,7 @@ impl ApiServer {
                 return;
             }
         }
-        self.stop();
+        self.stop().await;
         if enabled {
             self.start(ctx, settings).await;
         } else {
@@ -256,22 +258,26 @@ impl ApiServer {
             counters: counters.clone(),
             stop: stopped.clone(),
         };
-        serve(listener, app, stopped);
+        let served = serve(listener, app, stopped);
         let mut live = lock(&self.live);
-        live.running = Some(Running { stop });
+        live.running = Some(Running { stop, served });
         live.applied = Some(applied_of(settings));
         live.last_error = None;
         live.counters = counters;
     }
 
-    /// Stop listening and close every event socket.
-    pub fn stop(&self) {
-        let mut live = lock(&self.live);
-        if let Some(r) = live.running.take() {
+    /// Stop listening and close every event socket; returns once the port is free.
+    pub async fn stop(&self) {
+        let running = {
+            let mut live = lock(&self.live);
+            live.applied = None;
+            live.counters.clients.store(0, Ordering::SeqCst);
+            live.running.take()
+        };
+        if let Some(r) = running {
             let _ = r.stop.send(true);
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(5), r.served).await;
         }
-        live.applied = None;
-        live.counters.clients.store(0, Ordering::SeqCst);
     }
 
     /// Everything the server card needs (`apiServerStatus`).
@@ -303,7 +309,7 @@ impl ApiServer {
 /// Serve until `stop` turns true. A plain function, not `async`: the router
 /// reaches `apiServer:save`, which starts a server again, and an `async`
 /// start would have to name its own future's type.
-fn serve(listener: tokio::net::TcpListener, app: App, mut stop: watch::Receiver<bool>) {
+fn serve(listener: tokio::net::TcpListener, app: App, mut stop: watch::Receiver<bool>) -> tokio::task::JoinHandle<()> {
     let router = Router::new().fallback(handle).with_state(app);
     tokio::spawn(async move {
         let _ = axum::serve(listener, router)
@@ -311,7 +317,7 @@ fn serve(listener: tokio::net::TcpListener, app: App, mut stop: watch::Receiver<
                 let _ = stop.wait_for(|s| *s).await;
             })
             .await;
-    });
+    })
 }
 
 fn send(status: StatusCode, body: Value) -> Response {

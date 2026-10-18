@@ -103,10 +103,10 @@ async fn blocking(f: impl FnOnce() -> Result<Value, String> + Send + 'static) ->
 }
 
 /// How a written MCP entry should reach this app. The caller's target when it
-/// gives one; otherwise the desktop backend's (`integrations:target`: the
-/// local server's address and token and the CLI launcher, which the renderer
-/// never holds), and the portable `npx` form where there is none (the web
-/// edition, a backend that is down).
+/// gives one; otherwise the desktop app's (desktop.rs, or a desktop backend's
+/// `integrations:target`: the local server's address and token and the CLI
+/// launcher, which the renderer never holds), and the portable `npx` form
+/// where there is none (the web edition, a backend that is down).
 async fn subagent_target(ctx: &Ctx, given: &Value) -> Value {
     if given.is_object() {
         return given.clone();
