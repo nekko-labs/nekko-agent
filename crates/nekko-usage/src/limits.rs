@@ -235,6 +235,65 @@ pub fn parse_anthropic_headers(pairs: &[(String, String)], now: f64) -> Value {
     snapshot(sort_windows(windows), Map::new(), now, HEADER_STALE_MS)
 }
 
+/// The Messages API's per-key rate limits: (header family, window id, label).
+/// `tokens` is the most restrictive token limit in force, so it only counts
+/// when the response carries neither of the split token limits.
+const API_RATE_LIMITS: &[(&str, &str, &str)] = &[
+    ("requests", "rpm", "Requests per minute"),
+    ("input-tokens", "itpm", "Input tokens per minute"),
+    ("output-tokens", "otpm", "Output tokens per minute"),
+    ("tokens", "tpm", "Tokens per minute"),
+];
+
+/// Used share at which an API rate-limit window reads as a warning.
+const API_WARNING_PERCENT: f64 = 80.0;
+
+/// The standard `anthropic-ratelimit-<family>-{limit,remaining,reset}` headers
+/// an API-key response carries, as one short window per family. These are the
+/// key's own limits, not a subscription plan's: a plan's windows come from the
+/// `-unified-` headers instead. The reset is an RFC 3339 time.
+pub fn parse_anthropic_api_headers(pairs: &[(String, String)], now: f64) -> Value {
+    let header = |name: &str| {
+        pairs
+            .iter()
+            .rev()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+            .filter(|v| !v.is_empty())
+    };
+    let split_tokens =
+        ["input-tokens", "output-tokens"].iter().any(|f| header(&format!("anthropic-ratelimit-{f}-limit")).is_some());
+    let mut windows = Vec::new();
+    for (family, id, label) in API_RATE_LIMITS {
+        if *family == "tokens" && split_tokens {
+            continue;
+        }
+        let limit = header(&format!("anthropic-ratelimit-{family}-limit")).map_or(f64::NAN, parse_float);
+        let remaining = header(&format!("anthropic-ratelimit-{family}-remaining")).map_or(f64::NAN, parse_float);
+        if !(limit.is_finite() && limit > 0.0 && remaining.is_finite()) {
+            continue;
+        }
+        let used = clamp_percent((limit - remaining) / limit * 100.0);
+        let reset_at = header(&format!("anthropic-ratelimit-{family}-reset"))
+            .map(crate::date::parse)
+            .filter(|t| t.is_finite())
+            .unwrap_or(0.0);
+        let status = if remaining <= 0.0 {
+            "rate_limited"
+        } else if used >= API_WARNING_PERCENT {
+            "warning"
+        } else {
+            "allowed"
+        };
+        let mut desc = Map::new();
+        desc.insert("id".into(), json!(id));
+        desc.insert("label".into(), json!(label));
+        desc.insert("scope".into(), json!("session"));
+        windows.push(window(desc, used, reset_at, status));
+    }
+    snapshot(windows, Map::new(), now, HEADER_STALE_MS)
+}
+
 /// `String(x ?? '')` then `parseFloat`, for a number the provider may send as text.
 fn loose_number(v: Option<&Value>) -> f64 {
     match v {
@@ -448,4 +507,70 @@ pub fn parse_openrouter_key(body: Option<&Value>, status: u16, now: f64) -> Resu
     }
     extra.insert("creditsState".into(), json!(if limit.is_none() { "unlimited" } else { "balance" }));
     Ok(snapshot(windows, extra, now, POLL_STALE_MS))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
+        list.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn api_headers_become_per_minute_windows() {
+        let got = parse_anthropic_api_headers(
+            &pairs(&[
+                ("Anthropic-Ratelimit-Requests-Limit", "50"),
+                ("anthropic-ratelimit-requests-remaining", "49"),
+                ("anthropic-ratelimit-requests-reset", "2026-10-19T12:00:30Z"),
+                ("anthropic-ratelimit-input-tokens-limit", "30000"),
+                ("anthropic-ratelimit-input-tokens-remaining", "3000"),
+                ("anthropic-ratelimit-output-tokens-limit", "8000"),
+                ("anthropic-ratelimit-output-tokens-remaining", "0"),
+                ("anthropic-ratelimit-tokens-limit", "38000"),
+                ("anthropic-ratelimit-tokens-remaining", "3000"),
+            ]),
+            1.0,
+        );
+        let windows = got["windows"].as_array().unwrap();
+        let ids: Vec<&str> = windows.iter().map(|w| w["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["rpm", "itpm", "otpm"], "the combined tokens limit is skipped when split limits exist");
+        assert_eq!(windows[0]["usedPercent"], num(2.0));
+        assert_eq!(windows[0]["status"], "allowed");
+        assert_eq!(windows[0]["resetAt"], num(crate::date::parse("2026-10-19T12:00:30Z")));
+        assert_eq!(windows[1]["status"], "warning");
+        assert_eq!(windows[2]["status"], "rate_limited");
+        assert_eq!(windows[2]["resetAt"], num(0.0));
+        assert_eq!(got["staleAfterMs"], num(HEADER_STALE_MS));
+    }
+
+    #[test]
+    fn combined_tokens_limit_counts_alone_and_bad_values_are_dropped() {
+        let got = parse_anthropic_api_headers(
+            &pairs(&[
+                ("anthropic-ratelimit-tokens-limit", "1000"),
+                ("anthropic-ratelimit-tokens-remaining", "250"),
+                ("anthropic-ratelimit-requests-limit", "0"),
+                ("anthropic-ratelimit-requests-remaining", "0"),
+            ]),
+            1.0,
+        );
+        let windows = got["windows"].as_array().unwrap();
+        assert_eq!(windows.len(), 1);
+        assert_eq!(windows[0]["id"], "tpm");
+        assert_eq!(windows[0]["usedPercent"], num(75.0));
+    }
+
+    #[test]
+    fn unified_plan_headers_are_not_api_limits() {
+        let got = parse_anthropic_api_headers(
+            &pairs(&[
+                ("anthropic-ratelimit-unified-5h-utilization", "0.5"),
+                ("anthropic-ratelimit-unified-5h-reset", "1"),
+            ]),
+            1.0,
+        );
+        assert_eq!(got["windows"], json!([]));
+    }
 }

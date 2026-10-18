@@ -335,6 +335,19 @@ impl Accounts {
         Some(limits)
     }
 
+    /// An Anthropic API-key response's own rate limits, stored under the
+    /// provider's `provider:<id>` key. Each response reports every window, so
+    /// the snapshot is replaced rather than merged.
+    pub fn record_api_headers(&self, key: &str, pairs: &[(String, String)]) -> Option<Value> {
+        let parsed = nekko_usage::parse_anthropic_api_headers(pairs, now_ms());
+        if parsed.get("windows").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+            return self.get(key);
+        }
+        lock(&self.state).store.insert(key.to_string(), parsed.clone());
+        self.notify(key, &parsed);
+        Some(parsed)
+    }
+
     /// `getLimits(tokenKey, refresh)`: the snapshot while fresh, else a poll,
     /// and nothing rather than a stale snapshot.
     pub async fn get_limits(self: &Arc<Self>, key: &str, refresh: bool) -> Option<Value> {
@@ -597,6 +610,39 @@ mod tests {
 
     fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
         list.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[tokio::test]
+    async fn api_key_headers_replace_the_provider_snapshot() {
+        let dir = temp_dir("api-headers");
+        let a = accounts(&dir);
+        let key = "provider:anthropic-1";
+        assert_eq!(a.record_api_headers(key, &pairs(&[("x", "y")])), None, "no rate-limit headers, nothing stored");
+        let first = a
+            .record_api_headers(
+                key,
+                &pairs(&[
+                    ("anthropic-ratelimit-requests-limit", "50"),
+                    ("anthropic-ratelimit-requests-remaining", "10"),
+                    ("anthropic-ratelimit-input-tokens-limit", "1000"),
+                    ("anthropic-ratelimit-input-tokens-remaining", "900"),
+                ]),
+            )
+            .unwrap();
+        assert_eq!(first["windows"].as_array().unwrap().len(), 2);
+        let second = a
+            .record_api_headers(
+                key,
+                &pairs(&[
+                    ("anthropic-ratelimit-requests-limit", "50"),
+                    ("anthropic-ratelimit-requests-remaining", "49"),
+                ]),
+            )
+            .unwrap();
+        let ids: Vec<&str> = second["windows"].as_array().unwrap().iter().map(|w| w["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["rpm"], "each response reports every window, so nothing is carried forward");
+        assert_eq!(a.get_limits(key, false).await, Some(second));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]

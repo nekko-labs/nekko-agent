@@ -587,6 +587,9 @@ describe('LimitsService API-key provider read', () => {
     expect(limitsKeyFor({ ...base, id: 'a', kind: 'openai', apiKey: 'sk' })).toBeNull();
     expect(limitsKeyFor({ ...base, id: 'b', kind: 'openrouter', apiKey: 'sk-or' })).toBe('provider:b');
     expect(limitsKeyFor({ ...base, id: 'c', kind: 'openrouter' })).toBeNull();
+    // Anthropic API keys report their own rate limits on each response.
+    expect(limitsKeyFor({ ...base, id: 'f', kind: 'anthropic', apiKey: 'sk-ant' })).toBe('provider:f');
+    expect(limitsKeyFor({ ...base, id: 'g', kind: 'anthropic' })).toBeNull();
     expect(limitsKeyFor({ ...base, id: 'd', kind: 'openai', auth: 'subscription', tokenKey: 'chatgpt:1' }))
       .toBe('chatgpt:1');
     expect(limitsKeyFor({ ...base, id: 'e', kind: 'openai', auth: 'subscription' })).toBeNull();

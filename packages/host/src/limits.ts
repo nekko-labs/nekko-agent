@@ -442,7 +442,9 @@ function providerFromLimitsKey(key: string): ProviderConfig | undefined {
 /**
  * The documented usage read for an API-key provider's inference key.
  * Kinds without one are unreachable here because `limitsKeyFor` never assigns
- * them a key; returning undefined keeps them honest rather than guessed.
+ * them a key; returning undefined keeps them honest rather than guessed. An
+ * Anthropic key has a key but nothing to poll: nekkod records its limits from
+ * each response's headers.
  */
 async function pollApiKeyProvider(provider: ProviderConfig): Promise<SubscriptionLimits | undefined> {
   if (!provider.apiKey) return undefined;
