@@ -12,13 +12,20 @@ import {
   matchWorkflows,
   nextCronRun,
   nextScheduledRun,
+  dailyCron,
+  pausedBlocks,
+  runOutcome,
   slugify,
+  templateInputProblem,
+  templateInputValues,
+  templateReadiness,
+  weekdayCron,
   triggerAccepts,
   triggerLabel,
   unreachableSteps,
   workflowEdges,
 } from '@nekko-agent/shared';
-import type { Workflow, WorkflowStep, WorkflowTrigger } from '@nekko-agent/shared';
+import type { ConnectorKind, Workflow, WorkflowEvent, WorkflowStep, WorkflowTrigger } from '@nekko-agent/shared';
 
 function step(id: string, over: Partial<WorkflowStep> = {}): WorkflowStep {
   return { id, name: id, kind: 'prompt', run: `do ${id}`, ...over };
@@ -327,5 +334,115 @@ describe('templates', () => {
     expect(test.onFailure).toEqual({ goto: 'step', stepId: failStep.id });
     const okStep = steps.find((s) => s.name.toLowerCase().includes('success'))!;
     expect(okStep.onSuccess).toEqual({ goto: 'end' });
+  });
+});
+
+describe('gallery templates', () => {
+  const byId = (id: string) => WORKFLOW_TEMPLATES.find((t) => t.id === id)!;
+  const env = { connectors: [], defaultProviderId: 'p', defaultModelId: 'm' };
+
+  it('build from their inputs, with valid schedules', () => {
+    for (const t of WORKFLOW_TEMPLATES.filter((x) => x.featured)) {
+      const { steps, triggers } = t.build(templateInputValues(t, { repo: 'o/r' }));
+      expect(steps.length, t.id).toBeGreaterThan(0);
+      expect(t.summary, t.id).toBeTruthy();
+      for (const trig of triggers.filter((x) => x.kind === 'schedule')) expect(isValidCron(trig.cron!), t.id).toBe(true);
+    }
+  });
+
+  it('turns a time input into the schedule', () => {
+    expect(weekdayCron('08:30')).toBe('30 8 * * 1-5');
+    expect(dailyCron('3:05')).toBe('5 3 * * *');
+    expect(weekdayCron('25:00')).toBeUndefined();
+    expect(byId('github-notifications').build({ time: '07:15' }).triggers[0].cron).toBe('15 7 * * 1-5');
+  });
+
+  it('keeps the PR watcher disarmed until it has a repo and an author', () => {
+    const t = byId('review-my-prs');
+    expect(t.build({}).triggers[0].enabled).toBe(false);
+    expect(t.build({ repo: 'o/r' }).triggers[0].enabled).toBe(false);
+    expect(t.build({ author: 'octo' }).triggers[0].enabled).toBe(false);
+    const armed = t.build({ repo: 'o/r', author: ' octo ' });
+    expect(armed.triggers[0]).toMatchObject({ kind: 'connector', connector: 'github', repo: 'o/r', action: 'opened', actor: 'octo', enabled: true });
+    expect(armed.triggers[0].filter).toBeUndefined();
+  });
+
+  it('starts the PR review only for PRs the author opens', () => {
+    const reviewer = wf({ id: 'r', ...byId('review-my-prs').build({ repo: 'o/r', author: 'octo' }) });
+    const opened: WorkflowEvent = { kind: 'connector', connector: 'github', event: 'PullRequestEvent', actor: 'Octo', payload: { action: 'opened', number: 1 } };
+    expect(matchWorkflows([reviewer], opened).map((w) => w.id)).toEqual(['r']);
+    expect(matchWorkflows([reviewer], { ...opened, payload: { action: 'reopened' } })).toEqual([]);
+    expect(matchWorkflows([reviewer], { ...opened, payload: { action: 'closed', title: 'opened' } })).toEqual([]);
+    expect(matchWorkflows([reviewer], { ...opened, actor: 'mallory' })).toEqual([]);
+    expect(matchWorkflows([reviewer], { ...opened, actor: undefined })).toEqual([]);
+  });
+
+  it('checks inputs', () => {
+    const [repo, author] = byId('review-my-prs').inputs!;
+    expect(templateInputProblem(repo, '')).toMatch(/required/);
+    expect(templateInputProblem(repo, 'nope')).toMatch(/owner\/name/);
+    expect(templateInputProblem(repo, 'o/r')).toBeUndefined();
+    expect(templateInputProblem(author, '')).toMatch(/required/);
+    expect(templateInputProblem(byId('github-notifications').inputs![0], '9am')).toMatch(/time/);
+  });
+
+  it('reports each requirement and whether it is met', () => {
+    expect(templateReadiness(byId('github-notifications'), env).map((n) => [n.id, n.ok])).toEqual([
+      ['connector:github', false],
+      ['model', true],
+    ]);
+    const either = { ...byId('github-notifications'), requires: { anyConnector: ['linear', 'jira'] as ConnectorKind[] } };
+    const digest = templateReadiness(either, { ...env, connectors: [{ kind: 'jira', connected: true }] });
+    expect(digest[0]).toMatchObject({ label: 'Linear or Jira connected', ok: true, fix: 'connectors' });
+    const nightly = templateReadiness(byId('nightly-dependency-check'), { connectors: [] });
+    expect(nightly.map((n) => [n.id, n.ok])).toEqual([['workspace', false], ['model', false]]);
+  });
+
+  it('never hands text someone else wrote to an agent with tools', () => {
+    expect(WORKFLOW_TEMPLATES.find((t) => t.id === 'ticket-digest')).toBeUndefined();
+    for (const id of ['github-notifications', 'nightly-dependency-check']) {
+      const { steps } = byId(id).build(templateInputValues(byId(id), {}));
+      const agents = steps.filter((s) => s.kind === 'prompt' || s.kind === 'skill');
+      // One agent step, last, tools off, quoting the earlier fetch steps' output.
+      expect(agents.map((s) => s.id), id).toEqual([steps[steps.length - 1].id]);
+      expect(agents[0].tools, id).toBe('none');
+      for (const fetch of steps.slice(0, -1)) {
+        expect(fetch.kind, id).toBe('shell');
+        expect(agents[0].run, id).toContain(`{{steps.${fetch.id}.output}}`);
+      }
+    }
+  });
+});
+
+describe('pause all automations', () => {
+  it('holds back what nobody started by hand', () => {
+    for (const kind of ['schedule', 'git', 'slack', 'connector', 'webhook'] as const) expect(pausedBlocks(kind, true), kind).toBe(true);
+    expect(pausedBlocks('manual', true)).toBe(false);
+    expect(pausedBlocks('cli', true)).toBe(false);
+    expect(pausedBlocks('schedule', false)).toBe(false);
+    expect(pausedBlocks('schedule', undefined)).toBe(false);
+  });
+});
+
+describe('run outcomes', () => {
+  const steps = [step('a', { name: 'Check' }), step('b', { kind: 'shell', name: 'Lint' }), step('c', { name: 'Write up' })];
+  const run = (status: 'success' | 'failure' | 'cancelled', attempts: Array<Record<string, unknown>>) =>
+    ({ id: 'r', workflowId: 'w', status, triggerKind: 'manual', startedAt: 1, steps: attempts }) as never;
+
+  it('names the step that failed and why', () => {
+    const out = runOutcome(run('failure', [
+      { stepId: 'a', status: 'failure', attempt: 1, startedAt: 1, error: 'first' },
+      { stepId: 'b', status: 'failure', attempt: 1, startedAt: 2, error: 'exit 1', sessionId: 's' },
+    ]), steps);
+    expect(out).toEqual({ failed: { stepId: 'b', name: 'Lint', text: 'exit 1', sessionId: 's' } });
+  });
+
+  it('gives the last agent answer of a pass, without the outcome token', () => {
+    const out = runOutcome(run('success', [
+      { stepId: 'c', status: 'success', attempt: 1, startedAt: 1, output: 'Three PRs wait on you. ⟦PASS⟧', sessionId: 's1' },
+      { stepId: 'b', status: 'success', attempt: 1, startedAt: 2, output: 'lint ok' },
+    ]), steps);
+    expect(out.result).toEqual({ stepId: 'c', name: 'Write up', text: 'Three PRs wait on you.', sessionId: 's1' });
+    expect(runOutcome(run('cancelled', []), steps)).toEqual({});
   });
 });

@@ -4,9 +4,9 @@
  * listens for notification clicks that select a session.
  */
 
-import type { AgentEvent } from '@nekko-agent/shared';
-import { decideNotification, type NotificationContext, type Notice } from '../notificationPolicy.js';
-export { decideNotification, type NotificationContext, type Notice } from '../notificationPolicy.js';
+import type { AgentEvent, WorkflowsSnapshot } from '@nekko-agent/shared';
+import { decideNotification, decideRunNotice, parseWorkflowRunLink, type NotificationContext, type Notice } from '../notificationPolicy.js';
+export { decideNotification, parseWorkflowRunLink, type NotificationContext, type Notice } from '../notificationPolicy.js';
 import { useStore } from './store.js';
 
 /** The same notice is not repeated within this window (a retry storm, a double event). */
@@ -28,6 +28,11 @@ export function startDesktopNotifications(): () => void {
       if (state.view !== previous.view || state.activeSessionId !== previous.activeSessionId) report();
     });
     const offLink = window.nekko.onDeepLink((url) => {
+      const run = parseWorkflowRunLink(url);
+      if (run) {
+        openWorkflowRun(run);
+        return;
+      }
       const sessionId = notificationSessionId(url);
       if (!sessionId) return;
       const s = useStore.getState();
@@ -60,11 +65,15 @@ export function startDesktopNotifications(): () => void {
       const n = new Notification(notice.title, { body: notice.body, tag: key, silent: notice.kind === 'finished' });
       n.onclick = () => {
         window.focus();
-        const s = useStore.getState();
-        s.setActiveSession(notice.sessionId);
-        s.setView('chat');
-        // Focus the session's workspace pane (or create one if it was closed).
-        s.openChatPane(notice.sessionId);
+        const run = notice.link ? parseWorkflowRunLink(notice.link) : null;
+        if (run) openWorkflowRun(run);
+        else {
+          const s = useStore.getState();
+          s.setActiveSession(notice.sessionId);
+          s.setView('chat');
+          // Focus the session's workspace pane (or create one if it was closed).
+          s.openChatPane(notice.sessionId);
+        }
         n.close();
       };
       shown = [...shown.filter((x) => x !== n).slice(-7), n];
@@ -72,16 +81,33 @@ export function startDesktopNotifications(): () => void {
       /* the platform refused; the pane still shows it */
     }
   };
-  const off = window.nekko.onAgentEvent((event: AgentEvent) => {
-    const notice = decideNotification(event, context());
-    if (!notice) return;
+  const deliver = (notice: Notice) => {
     if (Notification.permission === 'granted') post(notice);
     else if (Notification.permission === 'default') {
       Notification.requestPermission().then((p) => { if (p === 'granted') post(notice); }).catch(() => {});
     }
+  };
+  const off = window.nekko.onAgentEvent((event: AgentEvent) => {
+    const notice = decideNotification(event, context());
+    if (notice) deliver(notice);
+  });
+  // Finished workflow runs: each one once, and only runs that end from now on.
+  const since = Date.now();
+  const toldRuns = new Set<string>();
+  const offRuns = window.nekko.onWorkflowsUpdated((snapshot: WorkflowsSnapshot) => {
+    const { enabled, windowHidden } = context();
+    const workflowsVisible = !windowHidden && useStore.getState().view === 'workflows';
+    for (const run of snapshot.runs) {
+      if ((run.status !== 'success' && run.status !== 'failure') || (run.endedAt ?? 0) < since || toldRuns.has(run.id)) continue;
+      toldRuns.add(run.id);
+      const wf = snapshot.workflows.find((w) => w.id === run.workflowId);
+      const notice = wf && decideRunNotice(run, wf, { enabled, workflowsVisible });
+      if (notice) deliver(notice);
+    }
   });
   return () => {
     off();
+    offRuns();
     for (const n of shown) n.close();
     shown = [];
   };
@@ -95,3 +121,10 @@ export function notificationSessionId(raw: string): string | null {
     return url.searchParams.get('id') || null;
   } catch { return null; }
 }
+
+/** Show a workflow run: the Workflows view opens with that run selected. */
+export function openWorkflowRun(run: { workflowId: string; runId: string }): void {
+  useStore.setState({ workflowFocus: run });
+  useStore.getState().setView('workflows');
+}
+

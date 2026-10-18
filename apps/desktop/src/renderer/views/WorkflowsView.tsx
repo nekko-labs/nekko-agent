@@ -5,14 +5,12 @@ import type {
   WorkflowGrouping,
   WorkflowRun,
   WorkflowRunStatus,
-  WorkflowStep,
-  WorkflowTrigger,
+  WorkflowTemplate,
   WorkflowTriggerKind,
   WorkflowsSnapshot,
 } from '@nekko-agent/shared';
 import {
   UNCATEGORIZED,
-  WORKFLOW_TEMPLATES,
   WORKFLOW_TRIGGER_KINDS,
   cliCommand,
   filterWorkflows,
@@ -21,13 +19,16 @@ import {
   listenerKeys,
   listenerLabel,
   runDurationMs,
+  runOutcome,
   stepSummary,
   triggerLabel,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
-import { Badge, EmptyHint, Modal, StatusDot } from '../components/primitives/index.js';
+import { Badge, EmptyHint, StatusDot, Toggle } from '../components/primitives/index.js';
 import { WorkflowCanvas } from '../components/WorkflowCanvas.js';
-import { WorkflowEditor } from '../components/WorkflowEditor.js';
+import { WorkflowEditor, type WorkflowSeed } from '../components/WorkflowEditor.js';
+import { TemplateCards, TemplateGallery, TemplateSetup, templateSeed } from '../components/TemplateGallery.js';
+import { setAutomationsPaused } from '../automationsPause.js';
 import { PlusIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
 import { hasAppChrome } from '../chrome.js';
@@ -83,14 +84,45 @@ export function WorkflowsView() {
   const [grouping, setGrouping] = useState<WorkflowGrouping>('category');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<Workflow | null>(null);
-  const [creating, setCreating] = useState<{ seed?: ReturnType<typeof seedFromTemplate> } | null>(null);
+  const [creating, setCreating] = useState<{ seed?: WorkflowSeed } | null>(null);
   const [picking, setPicking] = useState(false);
+  const [setup, setSetup] = useState<WorkflowTemplate | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const paused = useStore((s) => s.settings?.automationsPaused === true);
+  const workflowFocus = useStore((s) => s.workflowFocus);
+  /** A run a notification asked to show; its row opens on that run. */
+  const [focusRun, setFocusRun] = useState<{ workflowId: string; runId: string } | null>(null);
 
   useEffect(() => {
     void window.nekko.listWorkflows().then(setSnapshot).catch(() => {});
     return window.nekko.onWorkflowsUpdated(setSnapshot);
   }, []);
+
+  useEffect(() => {
+    if (!workflowFocus) return;
+    setFocusRun(workflowFocus);
+    setExpanded(workflowFocus.workflowId);
+    setFilter({});
+    useStore.setState({ workflowFocus: null });
+  }, [workflowFocus]);
+
+  // Scroll once, when the row exists (the snapshot may still be loading), then let go.
+  useEffect(() => {
+    if (!focusRun) return;
+    const row = document.querySelector(`[data-workflow-row="${CSS.escape(focusRun.workflowId)}"]`);
+    if (!row) return;
+    row.scrollIntoView({ block: 'nearest' });
+    setFocusRun(null);
+  }, [focusRun, snapshot]);
+
+  const togglePaused = async (next: boolean) => {
+    try {
+      await setAutomationsPaused(next);
+      pushToast('info', next ? 'Automations paused. Running ones were stopped.' : 'Automations resumed.');
+    } catch (e) {
+      pushToast('error', `Could not ${next ? 'pause' : 'resume'} automations: ${(e as Error).message}`);
+    }
+  };
 
   const { workflows, runs } = snapshot;
   const visible = useMemo(() => filterWorkflows(workflows, filter), [workflows, filter]);
@@ -242,7 +274,14 @@ export function WorkflowsView() {
                 ? `${workflows.length} total`
                 : `${visible.length} of ${workflows.length}`}
             </span>
-            <button className="btn btn-primary ml-auto py-1.5!" onClick={() => setPicking(true)}>
+            <label
+              className="ml-auto flex items-center gap-2 text-[12px] text-ink-soft"
+              title="Stops schedules, events and polls from starting runs, and stops what is running now. Run buttons still work."
+            >
+              Pause all automations
+              <Toggle value={paused} onChange={(v) => void togglePaused(v)} label="Pause all automations" />
+            </label>
+            <button className="btn btn-primary py-1.5!" onClick={() => setPicking(true)}>
               <PlusIcon className="h-3.5 w-3.5" /> New workflow
             </button>
           </div>
@@ -250,6 +289,21 @@ export function WorkflowsView() {
             A workflow is a small automation: named steps run in order and can loop back. A trigger is what starts it —
             by hand, on a schedule, or when something happens.
           </p>
+
+          {paused && (
+            <div
+              className="mt-2 flex items-center gap-3 rounded-xl border px-3 py-2 text-[12.5px]"
+              style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}
+              role="status"
+              data-automations-paused
+            >
+              <span className="min-w-0 flex-1">
+                <strong className="font-semibold">Automations are paused.</strong> Schedules, events and polls won't start runs, and
+                scheduled tasks wait. Run still works.
+              </span>
+              <button className="btn btn-outline py-1! text-[12px]" onClick={() => void togglePaused(false)}>Resume</button>
+            </div>
+          )}
 
           <details className="mt-2 rounded-xl border px-3 py-2 text-[12px] text-ink-soft" style={{ borderColor: 'var(--line)' }} open={workflows.length === 0}>
             <summary className="cursor-pointer font-medium text-ink-faint">How workflows work</summary>
@@ -296,30 +350,11 @@ export function WorkflowsView() {
           {workflows.length === 0 && (
             <div className="mt-4">
               <EmptyHint>
-                Nothing here yet. Start from scratch with a blank automation, or pick an example below — each one is a
-                working starting point you edit, not something you run as-is.
+                Nothing here yet. Pick a ready-made automation below, or{' '}
+                <button className="underline" onClick={() => setPicking(true)}>build your own</button>.
               </EmptyHint>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <button
-                  className="card border-dashed px-3 py-2.5 text-left transition hover:bg-(--surface-2)"
-                  onClick={() => setCreating({ seed: seedFromTemplate('blank') })}
-                >
-                  <div className="text-[12.5px] font-semibold">Blank workflow</div>
-                  <p className="mt-1 text-[11px] leading-snug text-ink-faint">
-                    One empty step, run by hand. Add your own steps and triggers.
-                  </p>
-                </button>
-                {WORKFLOW_TEMPLATES.filter((t) => t.id !== 'blank').map((t) => (
-                  <button
-                    key={t.id}
-                    className="card px-3 py-2.5 text-left transition hover:bg-(--surface-2)"
-                    title={`Example · ${t.category}`}
-                    onClick={() => setCreating({ seed: seedFromTemplate(t.id) })}
-                  >
-                    <div className="text-[12.5px] font-semibold">{t.name}</div>
-                    <p className="mt-1 text-[11px] leading-snug text-ink-faint">{t.description}</p>
-                  </button>
-                ))}
+              <div className="mt-3">
+                <TemplateCards onPick={setSetup} />
               </div>
             </div>
           )}
@@ -347,6 +382,7 @@ export function WorkflowsView() {
                 onDuplicate={duplicate}
                 onDelete={remove}
                 onToggle={toggleEnabled}
+                focusRun={focusRun}
               />
             ))}
           </div>
@@ -354,12 +390,28 @@ export function WorkflowsView() {
       </div>
 
       {picking && (
-        <TemplatePicker
-          onPick={(id) => {
-            setPicking(false);
-            setCreating({ seed: seedFromTemplate(id) });
-          }}
+        <TemplateGallery
+          onSetup={(t) => { setPicking(false); setSetup(t); }}
+          onCustomize={(t) => { setPicking(false); setCreating({ seed: templateSeed(t) }); }}
           onClose={() => setPicking(false)}
+        />
+      )}
+
+      {setup && (
+        <TemplateSetup
+          template={setup}
+          onClose={() => setSetup(null)}
+          onCustomize={(seed) => { setSetup(null); setCreating({ seed }); }}
+          onTurnOn={async (input) => {
+            const created = await window.nekko.createWorkflow(input);
+            setSetup(null);
+            if (!created) return;
+            setExpanded(created.id);
+            const fresh = await window.nekko.listWorkflows();
+            setSnapshot(fresh);
+            const next = fresh.workflows.find((w) => w.id === created.id)?.nextRunAt;
+            pushToast('success', `"${created.name}" is on.${next ? ` First run ${relative(next)}.` : ''}`);
+          }}
         />
       )}
 
@@ -384,19 +436,6 @@ export function WorkflowsView() {
   );
 }
 
-/** Steps + triggers from a template id, for a new workflow's starting state. */
-function seedFromTemplate(id: string) {
-  const template = WORKFLOW_TEMPLATES.find((t) => t.id === id) ?? WORKFLOW_TEMPLATES[WORKFLOW_TEMPLATES.length - 1];
-  const { steps, triggers } = template.build();
-  return {
-    name: template.id === 'blank' ? '' : template.name,
-    description: template.id === 'blank' ? '' : template.description,
-    category: template.category,
-    steps,
-    triggers,
-  } as { name: string; description: string; category: string; steps: WorkflowStep[]; triggers: WorkflowTrigger[] };
-}
-
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mt-4">
@@ -419,7 +458,7 @@ function CategoryRow({ label, count, active, onClick }: { label: string; count: 
 }
 
 function WorkflowGroupBlock({
-  label, workflows, runsByWorkflow, grouping, expanded, busyId, onExpand, onRun, onEdit, onDuplicate, onDelete, onToggle,
+  label, workflows, runsByWorkflow, grouping, expanded, busyId, onExpand, onRun, onEdit, onDuplicate, onDelete, onToggle, focusRun,
 }: {
   label: string;
   workflows: Workflow[];
@@ -433,6 +472,7 @@ function WorkflowGroupBlock({
   onDuplicate: (wf: Workflow) => void;
   onDelete: (wf: Workflow) => void;
   onToggle: (wf: Workflow) => void;
+  focusRun: { workflowId: string; runId: string } | null;
 }) {
   const [open, setOpen] = useState(true);
   const [showAll, setShowAll] = useState(false);
@@ -462,6 +502,7 @@ function WorkflowGroupBlock({
               onDuplicate={() => onDuplicate(wf)}
               onDelete={() => onDelete(wf)}
               onToggle={() => onToggle(wf)}
+              focusRunId={focusRun?.workflowId === wf.id ? focusRun.runId : undefined}
             />
           ))}
           {hidden > 0 && (
@@ -476,7 +517,7 @@ function WorkflowGroupBlock({
 }
 
 function WorkflowRow({
-  wf, runs, grouping, expanded, busy, onExpand, onRun, onEdit, onDuplicate, onDelete, onToggle,
+  wf, runs, grouping, expanded, busy, onExpand, onRun, onEdit, onDuplicate, onDelete, onToggle, focusRunId,
 }: {
   wf: Workflow;
   runs: WorkflowRun[];
@@ -489,13 +530,14 @@ function WorkflowRow({
   onDuplicate: () => void;
   onDelete: () => void;
   onToggle: () => void;
+  focusRunId?: string;
 }) {
   const live = runs.find((r) => r.status === 'running');
   const last = runs[0];
   const tone = live ? STATUS_TONE.running : wf.lastStatus ? STATUS_TONE[wf.lastStatus] : undefined;
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-hidden" data-workflow-row={wf.id}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3.5 py-2.5">
         <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onExpand} aria-expanded={expanded}>
           <span className="w-3 shrink-0 text-[10px] text-ink-faint">{expanded ? '▾' : '▸'}</span>
@@ -552,16 +594,29 @@ function WorkflowRow({
         </span>
       </div>
 
-      {expanded && <WorkflowDetail wf={wf} runs={runs} live={live} />}
+      {expanded && <WorkflowDetail wf={wf} runs={runs} live={live} focusRunId={focusRunId} />}
     </div>
   );
 }
 
-function WorkflowDetail({ wf, runs, live }: { wf: Workflow; runs: WorkflowRun[]; live?: WorkflowRun }) {
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const shownRun = live ?? runs.find((r) => r.id === selectedRunId) ?? runs[0];
+function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: WorkflowRun[]; live?: WorkflowRun; focusRunId?: string }) {
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(focusRunId ?? null);
+  useEffect(() => { if (focusRunId) setSelectedRunId(focusRunId); }, [focusRunId]);
+  // A run picked from the history (or a notification) wins over the live one.
+  const shownRun = runs.find((r) => r.id === selectedRunId) ?? live ?? runs[0];
+  const outcome = shownRun ? runOutcome(shownRun, wf.steps) : {};
   const openChat = useStore((s) => s.openChatPane);
   const setView = useStore((s) => s.setView);
+  const transcript = (sessionId?: string) =>
+    sessionId && (
+      <button
+        className="btn btn-ghost shrink-0 px-1.5! py-0.5! text-[11px] text-ink-soft"
+        title="Open this step's transcript"
+        onClick={() => { openChat(sessionId); setView('chat'); }}
+      >
+        Transcript
+      </button>
+    );
 
   return (
     <div className="border-t border-line bg-(--surface-2) px-3.5 py-3">
@@ -596,8 +651,37 @@ function WorkflowDetail({ wf, runs, live }: { wf: Workflow; runs: WorkflowRun[];
       {shownRun && (
         <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_220px]">
           <div>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">This run</p>
-            {shownRun.message && (
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+              This run · {STATUS_TONE[shownRun.status].label}
+              {shownRun.status !== 'running' && ` in ${formatDuration(runDurationMs(shownRun))}`} · {relative(shownRun.startedAt)}
+            </p>
+            {outcome.failed && (
+              <div className="mb-2 rounded-lg border px-2.5 py-2" style={{ borderColor: STATUS.danger }} data-run-failure>
+                <div className="flex items-start gap-2">
+                  <span className="min-w-0 flex-1 text-[12px]">
+                    <span className="font-semibold" style={{ color: STATUS.danger }}>Failed at "{outcome.failed.name}"</span>
+                    {outcome.failed.text && (
+                      <span className="mt-0.5 block max-h-24 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] text-ink-soft">
+                        {outcome.failed.text.slice(-600)}
+                      </span>
+                    )}
+                  </span>
+                  {transcript(outcome.failed.sessionId)}
+                </div>
+              </div>
+            )}
+            {outcome.result && (
+              <div className="mb-2 rounded-lg border border-line bg-(--surface) px-2.5 py-2" data-run-result>
+                <div className="flex items-start gap-2">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint">Result</span>
+                    <span className="mt-0.5 block max-h-48 overflow-y-auto whitespace-pre-wrap text-[12px] leading-snug">{outcome.result.text}</span>
+                  </span>
+                  {transcript(outcome.result.sessionId)}
+                </div>
+              </div>
+            )}
+            {shownRun.message && shownRun.message !== outcome.failed?.text && (
               <p className="mb-1.5 text-[11.5px]" style={{ color: shownRun.status === 'failure' ? STATUS.danger : 'var(--ink-soft)' }}>
                 {shownRun.message}
               </p>
@@ -620,15 +704,7 @@ function WorkflowDetail({ wf, runs, live }: { wf: Workflow; runs: WorkflowRun[];
                         </span>
                       )}
                     </span>
-                    {entry.sessionId && (
-                      <button
-                        className="btn btn-ghost shrink-0 px-1.5! py-0.5! text-[11px] text-ink-soft"
-                        title="Open this step's transcript"
-                        onClick={() => { openChat(entry.sessionId!); setView('chat'); }}
-                      >
-                        Transcript
-                      </button>
-                    )}
+                    {transcript(entry.sessionId)}
                   </div>
                 );
               })}
@@ -639,70 +715,35 @@ function WorkflowDetail({ wf, runs, live }: { wf: Workflow; runs: WorkflowRun[];
           <div>
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">History</p>
             <div className="space-y-0.5">
-              {runs.slice(0, 10).map((r) => (
-                <button
-                  key={r.id}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11.5px] transition hover:bg-(--surface) ${r.id === shownRun.id ? 'bg-(--surface)' : ''}`}
-                  onClick={() => setSelectedRunId(r.id)}
-                >
-                  <StatusDot color={STATUS_TONE[r.status].color} pulse={r.status === 'running'} />
-                  <span className="min-w-0 flex-1 truncate">{r.triggerLabel || r.triggerKind}</span>
-                  {isRunnerRun(r) && <Badge tone="info" title="Fired by an external event">runner</Badge>}
-                  <span className="shrink-0 font-mono text-[10px] text-ink-faint">{relative(r.startedAt)}</span>
-                </button>
-              ))}
+              {runs.slice(0, 10).map((r) => {
+                const failedAt = runOutcome(r, wf.steps).failed?.name;
+                return (
+                  <button
+                    key={r.id}
+                    className={`flex w-full items-start gap-2 rounded-lg px-2 py-1 text-left text-[11.5px] transition hover:bg-(--surface) ${r.id === shownRun.id ? 'bg-(--surface)' : ''}`}
+                    onClick={() => setSelectedRunId(r.id)}
+                    data-run-id={r.id}
+                  >
+                    <StatusDot color={STATUS_TONE[r.status].color} pulse={r.status === 'running'} className="mt-1" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{r.triggerLabel || r.triggerKind}</span>
+                      <span className="block truncate text-[10.5px] text-ink-faint">
+                        {isRunnerRun(r) && <span title="Fired by an external event">runner · </span>}
+                        {STATUS_TONE[r.status].label}
+                        {r.status !== 'running' && ` · ${formatDuration(runDurationMs(r))}`}
+                        {failedAt && ` · at ${failedAt}`}
+                      </span>
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px] text-ink-faint">{relative(r.startedAt)}</span>
+                  </button>
+                );
+              })}
               {runs.length === 0 && <p className="text-[11.5px] text-ink-faint">No runs yet.</p>}
             </div>
           </div>
         </div>
       )}
     </div>
-  );
-}
-
-function TemplatePicker({ onPick, onClose }: { onPick: (id: string) => void; onClose: () => void }) {
-  const blank = WORKFLOW_TEMPLATES.find((t) => t.id === 'blank');
-  const examples = WORKFLOW_TEMPLATES.filter((t) => t.id !== 'blank');
-  return (
-    <Modal title="New workflow" onClose={onClose} align="top" className="w-full max-w-xl px-4">
-      <div className="card p-5">
-        <h2 className="text-[15px] font-semibold">Start from scratch</h2>
-        <p className="mt-0.5 text-[12px] text-ink-faint">One empty step you build up yourself.</p>
-        {blank && (
-          <button
-            className="card mt-2 w-full border-dashed px-3.5 py-3 text-left transition hover:bg-(--surface-2)"
-            onClick={() => onPick(blank.id)}
-          >
-            <span className="text-[13px] font-semibold">Blank workflow</span>
-            <p className="mt-1 text-[11.5px] leading-snug text-ink-faint">{blank.description}</p>
-          </button>
-        )}
-
-        <h2 className="mt-5 text-[15px] font-semibold">Start from an example</h2>
-        <p className="mt-0.5 text-[12px] text-ink-faint">
-          A pre-filled workflow showing a real pattern. Everything is editable once created — treat it as a starting
-          point, not a finished job.
-        </p>
-        <div className="mt-3 space-y-2">
-          {examples.map((t) => (
-            <button
-              key={t.id}
-              className="card w-full px-3.5 py-3 text-left transition hover:bg-(--surface-2)"
-              onClick={() => onPick(t.id)}
-            >
-              <div className="flex items-baseline gap-2">
-                <span className="text-[13px] font-semibold">{t.name}</span>
-                <Badge tone="info">{t.category}</Badge>
-              </div>
-              <p className="mt-1 text-[11.5px] leading-snug text-ink-faint">{t.description}</p>
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 flex justify-end">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-        </div>
-      </div>
-    </Modal>
   );
 }
 
