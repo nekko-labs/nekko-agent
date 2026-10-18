@@ -55,7 +55,7 @@ export function parseWebhookPayload(raw: string): Record<string, unknown> {
   return { __raw: raw };
 }
 
-/** What the route starts runs on: the in-process host, or nekkod's backend through a channel. */
+/** What the route starts runs on: nekkod's `workflow:webhook`. */
 export interface WebhookTarget {
   dispatchWebhook(slug: string, secret: string, payload: Record<string, unknown>): Promise<{ length: number }>;
 }

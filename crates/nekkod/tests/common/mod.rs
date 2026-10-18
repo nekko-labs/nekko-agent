@@ -377,6 +377,11 @@ pub fn call_tool(id: &str, name: &str, args: Value) -> String {
 
 pub const HANG: &str = "hang";
 
+/// A step that fails the request with this status and an OpenAI-style error body.
+pub fn http_error(status: u16, message: &str) -> String {
+    format!("status:{status}\n{}", json!({ "error": { "message": message } }))
+}
+
 pub async fn scripted_model(script: Vec<String>) -> ScriptedModel {
     scripted_model_with_titles(script, None).await
 }
@@ -410,6 +415,14 @@ pub async fn scripted_model_with_titles(
                 } else {
                     script.lock().unwrap().pop_front().unwrap_or_else(|| say_text("(script ended)"))
                 };
+                if let Some(rest) = next.strip_prefix("status:") {
+                    let (code, body) = rest.split_once('\n').unwrap_or((rest, ""));
+                    return axum::response::Response::builder()
+                        .status(code.parse::<u16>().unwrap())
+                        .header("content-type", "application/json")
+                        .body(axum::body::Body::from(body.to_string()))
+                        .unwrap();
+                }
                 let body = if next == HANG {
                     let first = futures_util::stream::once(async {
                         Ok::<_, std::io::Error>(bytes::Bytes::from_static(b": waiting\n\n"))

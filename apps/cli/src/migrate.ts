@@ -1,16 +1,14 @@
 import { createInterface } from 'node:readline/promises';
 import {
-  cleanupLegacy,
-  consolidateLegacy,
-  describeLegacyItem,
+  cleanup as cleanupLegacy,
+  consolidate as consolidateLegacy,
+  describeItem as describeLegacyItem,
   detectLegacy,
-  findRunningApp,
   legacyEnv,
-  startApp,
-  stopApp,
-  summarizeLegacy,
+  summarize as summarizeLegacy,
   type LegacyItem,
-} from '@nekko-agent/host';
+} from '@nekko-agent/host/legacy-profiles';
+import { findRunningApp, startApp, stopApp } from '@nekko-agent/host/app-control';
 
 export const MIGRATE_HELP = `nekko-agent migrate, bring data from earlier installs into the current data folder.
 

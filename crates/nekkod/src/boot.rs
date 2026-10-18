@@ -8,7 +8,9 @@
 //!   (`ensureEngineProvider`), since the Models tab addresses the engine
 //!   through it, and the server starts when `engine.autoStart` says so;
 //! - chat worktrees whose PR merged are removed, a minute after launch and
-//!   hourly (`removeMergedChatWorktrees`).
+//!   hourly (`removeMergedChatWorktrees`);
+//! - a chat that runs out of context with nobody watching is compacted and
+//!   carried on (`startAutoContinue`, auto_continue.rs).
 //!
 //! While a backend runs beside the daemon it still does all of these itself.
 
@@ -26,7 +28,8 @@ fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
-pub fn start(ctx: &Ctx) {
+/// `auto_start_engine` off (a one-shot CLI command): the model server is left as it is.
+pub fn start(ctx: &Ctx, auto_start_engine: bool) {
     if let Some(store) = ctx.sessions.clone() {
         let marked = reconcile_interrupted(&store);
         if marked > 0 {
@@ -35,9 +38,10 @@ pub fn start(ctx: &Ctx) {
     }
     if ctx.server.is_some() && ctx.settings.is_some() {
         let ctx = ctx.clone();
-        tokio::spawn(async move { start_engine(&ctx).await });
+        tokio::spawn(async move { start_engine(&ctx, auto_start_engine).await });
     }
     if ctx.sessions.is_some() && ctx.settings.is_some() {
+        crate::auto_continue::start(ctx);
         let ctx = ctx.clone();
         tokio::spawn(async move {
             tokio::time::sleep(SWEEP_FIRST).await;
@@ -98,7 +102,7 @@ fn interrupted_reply() -> Value {
 }
 
 /// `ensureEngineProvider` at launch, then `engine.start()` when `engine.autoStart` is on.
-async fn start_engine(ctx: &Ctx) {
+async fn start_engine(ctx: &Ctx, auto_start: bool) {
     let settings = crate::settings::current(ctx).await;
     let engine = crate::library::engine_settings(&settings);
     let base_url = format!("http://127.0.0.1:{}/v1", nekko_js::display(engine.get("port").unwrap_or(&json!(11500))));
@@ -107,7 +111,7 @@ async fn start_engine(ctx: &Ctx) {
     }
     // Opt-in only, and never fatal: a port taken by something else leaves a
     // line in the engine's log for the Models tab, not a failed launch.
-    if nekko_js::truthy(engine.get("autoStart")) {
+    if auto_start && nekko_js::truthy(engine.get("autoStart")) {
         let _ = crate::routes::route(ctx, "engine:start", vec![]).await;
     }
 }
