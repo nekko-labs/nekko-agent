@@ -47,7 +47,8 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     assert_eq!(queued["queue"], json!(["later"]));
     // A phone's queue editor: an edit lands only on the text it showed.
     let (_, edited) =
-        post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "later", "text": " sooner " }]), Some(TOKEN)).await;
+        post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "later", "text": " sooner " }]), Some(TOKEN))
+            .await;
     assert_eq!(edited["queue"], json!(["sooner"]));
     let (status, stale) =
         post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "later", "text": "x" }]), Some(TOKEN)).await;
