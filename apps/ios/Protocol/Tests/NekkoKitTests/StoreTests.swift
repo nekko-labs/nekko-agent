@@ -45,6 +45,7 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     func nudge() {}
     func reconnect() {}
     func networkChanged(_ path: NetworkPath) { lock.lock(); paths.append(path); lock.unlock() }
+    func setNetworkPath(_ path: NetworkPath) { lock.lock(); paths.append(path); lock.unlock() }
     func registerPush(token: String) async throws { lock.lock(); pushTokens.append(token); lock.unlock() }
     var activities: [(String, String)] = []
     func registerActivity(tag: String, token: String) async throws { lock.lock(); activities.append((tag, token)); lock.unlock() }

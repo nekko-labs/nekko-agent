@@ -196,6 +196,16 @@ public final class RelayClient: @unchecked Sendable {
         reconnect()
     }
 
+    /// Where the phone is, without having moved (the first network report, or
+    /// before connecting): dial again only if that changes the route.
+    public func setNetworkPath(_ path: NetworkPath) {
+        let moved: Bool = locked {
+            guard path != routes.path else { return false }
+            return routes.pathChanged(path, now: now()) && !stopped
+        }
+        if moved { reconnect() }
+    }
+
     public func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)? = nil,
                             onEvent: (@Sendable (String, JSONValue) -> Void)? = nil,
                             onWelcome: (@Sendable (WelcomedDevice) -> Void)? = nil) {

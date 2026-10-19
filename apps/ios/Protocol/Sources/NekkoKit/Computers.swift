@@ -31,11 +31,14 @@ public protocol RemoteConnection: Caller {
     func registerActivity(tag: String, token: String) async throws
     /// The phone moved to another network (`RelayClient.networkChanged`).
     func networkChanged(_ path: NetworkPath)
+    /// The network the phone is on, without moving (`RelayClient.setNetworkPath`).
+    func setNetworkPath(_ path: NetworkPath)
 }
 
 extension RemoteConnection {
     /// A connection with one route only has to dial again.
     public func networkChanged(_ path: NetworkPath) { reconnect() }
+    public func setNetworkPath(_ path: NetworkPath) {}
 }
 
 extension RelayClient: RemoteConnection {}
@@ -321,7 +324,7 @@ public final class ComputersStore {
         config.requestTimeout = 120
         config.app = app
         let c = makeConnection(config)
-        if networkPath != .unknown { c.networkChanged(networkPath) }
+        if networkPath != .unknown { c.setNetworkPath(networkPath) }
         generation += 1
         let gen = generation
         client = c
@@ -414,6 +417,14 @@ public final class ComputersStore {
         client?.networkChanged(path)
     }
 
+    /// The first network the phone reports: not a move, so the socket stays
+    /// unless the route it should use is another one (a LAN route on cellular).
+    public func networkKnown(_ path: NetworkPath) {
+        networkPath = path
+        guard !suspended else { return }
+        client?.setNetworkPath(path)
+    }
+
     // MARK: Background grace (TASKS.md IO-20)
 
     /// The app went to the background. A healthy socket is kept for `grace`
@@ -450,7 +461,7 @@ public final class ComputersStore {
         graceTask = nil
         guard suspended, let c = client else { return }
         suspended = false
-        if networkPath != .unknown { c.networkChanged(networkPath) }
+        if networkPath != .unknown { c.setNetworkPath(networkPath) }
         c.connect()
     }
 
