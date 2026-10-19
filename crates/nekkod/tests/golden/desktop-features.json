@@ -143,6 +143,52 @@
           "IPv6"
         ]
       ]
+    },
+    "winVirtual": {
+      "vEthernet (WSL (Hyper-V firewall))": [
+        [
+          "192.168.0.1",
+          false
+        ]
+      ],
+      "Ethernet": [
+        [
+          "192.168.50.100",
+          false
+        ]
+      ],
+      "Tailscale": [
+        [
+          "100.114.173.86",
+          false
+        ]
+      ]
+    },
+    "linuxBridges": {
+      "docker0": [
+        [
+          "172.17.0.1",
+          false
+        ]
+      ],
+      "br-1a2b3c": [
+        [
+          "172.18.0.1",
+          false
+        ]
+      ],
+      "eth0": [
+        [
+          "10.0.0.7",
+          false
+        ]
+      ],
+      "virbr0": [
+        [
+          "192.168.122.1",
+          false
+        ]
+      ]
     }
   },
   "apiServer": [
@@ -732,6 +778,14 @@
       {
         "ifaces": "lanEdges",
         "address": null
+      },
+      {
+        "ifaces": "winVirtual",
+        "address": "100.114.173.86"
+      },
+      {
+        "ifaces": "linuxBridges",
+        "address": null
       }
     ],
     "urls": [
@@ -797,6 +851,92 @@
           "192.168.1.20",
           "172.31.0.1"
         ]
+      },
+      {
+        "ifaces": "winVirtual",
+        "addresses": [
+          "192.168.50.100"
+        ]
+      },
+      {
+        "ifaces": "linuxBridges",
+        "addresses": [
+          "10.0.0.7"
+        ]
+      }
+    ],
+    "adapters": [
+      {
+        "name": "en0",
+        "virtual": false
+      },
+      {
+        "name": "Ethernet",
+        "virtual": false
+      },
+      {
+        "name": "Wi-Fi",
+        "virtual": false
+      },
+      {
+        "name": "wlan0",
+        "virtual": false
+      },
+      {
+        "name": "eth0",
+        "virtual": false
+      },
+      {
+        "name": "vEthernet (Default Switch)",
+        "virtual": true
+      },
+      {
+        "name": "docker0",
+        "virtual": true
+      },
+      {
+        "name": "br-1a2b3c",
+        "virtual": true
+      },
+      {
+        "name": "veth12ab",
+        "virtual": true
+      },
+      {
+        "name": "virbr0",
+        "virtual": true
+      },
+      {
+        "name": "vmnet8",
+        "virtual": true
+      },
+      {
+        "name": "vboxnet0",
+        "virtual": true
+      },
+      {
+        "name": "VirtualBox Host-Only Network",
+        "virtual": true
+      },
+      {
+        "name": "VMware Network Adapter VMnet1",
+        "virtual": true
+      },
+      {
+        "name": "utun3",
+        "virtual": true
+      },
+      {
+        "name": "Tailscale",
+        "virtual": true
+      },
+      {
+        "name": "zt7nnig26",
+        "virtual": true
+      },
+      {
+        "name": "bridge0",
+        "virtual": false
       }
     ],
     "ready": [
@@ -1042,6 +1182,22 @@
           "192.168.1.20",
           "192.168.1.20",
           "172.31.0.1"
+        ]
+      },
+      {
+        "ifaces": "winVirtual",
+        "addresses": [
+          "192.168.0.1",
+          "192.168.50.100"
+        ]
+      },
+      {
+        "ifaces": "linuxBridges",
+        "addresses": [
+          "172.17.0.1",
+          "172.18.0.1",
+          "10.0.0.7",
+          "192.168.122.1"
         ]
       }
     ],

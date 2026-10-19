@@ -12,7 +12,7 @@ import {
 } from '@nekko-agent/shared';
 import { launcherScript } from '../main/cli-install.js';
 import { parseWebhookPayload } from '../main/workflow-listener.js';
-import { localRelayUrl, readyLine, relayFailure, relayLanAddresses, tailnetAddress } from './local-relay.js';
+import { isVirtualAdapter, localRelayUrl, readyLine, relayFailure, relayLanAddresses, tailnetAddress } from './local-relay.js';
 import {
   answersFor,
   decodePacket,
@@ -59,6 +59,9 @@ const IFACES: Record<string, Record<string, [string, boolean, string?][]>> = {
     en0: [['169.254.1.1', false], ['172.32.0.1', false], ['8.8.8.8', false], ['10.255.255.255', false], ['192.168.1.20', false]],
     en1: [['192.168.1.20', false], ['10.0.0.1', true], ['172.31.0.1', false], ['fd12::5', false, 'IPv6']],
   },
+  // VMs and containers: their private addresses are not the phone's Wi-Fi.
+  winVirtual: { 'vEthernet (WSL (Hyper-V firewall))': [['192.168.0.1', false]], Ethernet: [['192.168.50.100', false]], Tailscale: [['100.114.173.86', false]] },
+  linuxBridges: { docker0: [['172.17.0.1', false]], 'br-1a2b3c': [['172.18.0.1', false]], eth0: [['10.0.0.7', false]], virbr0: [['192.168.122.1', false]] },
 };
 
 function ifaces(name: string): NodeJS.Dict<NetworkInterfaceInfo[]> {
@@ -147,6 +150,7 @@ function relay() {
     ].map(([name, ip, port]) => ({ name: name ?? null, ip, port, url: localRelayUrl(name as string | undefined, ip as string, port as number) })),
     // Where it listens besides the tailnet (TASKS.md IO-20): RFC 1918 only.
     lan: Object.keys(IFACES).map((name) => ({ ifaces: name, addresses: relayLanAddresses(ifaces(name)) })),
+    adapters: ['en0', 'Ethernet', 'Wi-Fi', 'wlan0', 'eth0', 'vEthernet (Default Switch)', 'docker0', 'br-1a2b3c', 'veth12ab', 'virbr0', 'vmnet8', 'vboxnet0', 'VirtualBox Host-Only Network', 'VMware Network Adapter VMnet1', 'utun3', 'Tailscale', 'zt7nnig26', 'bridge0'].map((name) => ({ name, virtual: isVirtualAdapter(name) })),
     ready: RELAY_READY.map((out) => {
       const r = readyLine(out);
       return { out, ready: r ? { port: r.port ?? null, lan: r.lan } : null };

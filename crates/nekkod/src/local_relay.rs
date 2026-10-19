@@ -75,11 +75,42 @@ pub fn is_rfc1918_ipv4(h: &str) -> bool {
 pub fn relay_lan_addresses(nics: &[Nic]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for n in nics {
-        if n.ipv4 && !n.internal && is_rfc1918_ipv4(&n.address) && !out.contains(&n.address) {
+        if !is_virtual_adapter(&n.name)
+            && n.ipv4
+            && !n.internal
+            && is_rfc1918_ipv4(&n.address)
+            && !out.contains(&n.address)
+        {
             out.push(n.address.clone());
         }
     }
     out
+}
+
+const VIRTUAL_PREFIXES: [&str; 14] = [
+    "docker",
+    "br-",
+    "veth",
+    "virbr",
+    "vmnet",
+    "vboxnet",
+    "utun",
+    "lxc",
+    "lxdbr",
+    "cni",
+    "flannel",
+    "podman",
+    "zt",
+    "tailscale",
+];
+const VIRTUAL_PARTS: [&str; 6] = ["vethernet", "wsl", "hyper-v", "virtualbox", "vmware", "docker"];
+
+/// `isVirtualAdapter`: an adapter only this computer's VMs and containers sit
+/// behind (WSL, Hyper-V, Docker, VirtualBox, VMware, bridges). Its private
+/// address isn't the Wi-Fi a phone is on.
+pub fn is_virtual_adapter(name: &str) -> bool {
+    let n = name.to_lowercase();
+    VIRTUAL_PREFIXES.iter().any(|p| n.starts_with(p)) || VIRTUAL_PARTS.iter().any(|p| n.contains(p))
 }
 
 /// `NEKKO_RELAY_READY {"port":N,"lan":[…]}`: the port and LAN addresses the
@@ -536,6 +567,9 @@ mod tests {
         for case in g["relay"]["lan"].as_array().unwrap() {
             let nics = crate::mdns::tests::nics_of(&g["ifaces"][case["ifaces"].as_str().unwrap()]);
             assert_eq!(json!(relay_lan_addresses(&nics)), case["addresses"], "{}", case["ifaces"]);
+        }
+        for case in g["relay"]["adapters"].as_array().unwrap() {
+            assert_eq!(json!(is_virtual_adapter(case["name"].as_str().unwrap())), case["virtual"], "{}", case["name"]);
         }
         for case in g["relay"]["ready"].as_array().unwrap() {
             let got = ready_line(case["out"].as_str().unwrap())

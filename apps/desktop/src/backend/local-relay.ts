@@ -56,12 +56,26 @@ export function tailnetAddress(ifaces: NodeJS.Dict<NetworkInterfaceInfo[]>): str
  */
 export function relayLanAddresses(ifaces: NodeJS.Dict<NetworkInterfaceInfo[]>): string[] {
   const out: string[] = [];
-  for (const list of Object.values(ifaces)) {
+  for (const [name, list] of Object.entries(ifaces)) {
+    if (isVirtualAdapter(name)) continue;
     for (const i of list ?? []) {
       if (i.family === 'IPv4' && !i.internal && isRfc1918IPv4(i.address) && !out.includes(i.address)) out.push(i.address);
     }
   }
   return out;
+}
+
+const VIRTUAL_PREFIXES = ['docker', 'br-', 'veth', 'virbr', 'vmnet', 'vboxnet', 'utun', 'lxc', 'lxdbr', 'cni', 'flannel', 'podman', 'zt', 'tailscale'];
+const VIRTUAL_PARTS = ['vethernet', 'wsl', 'hyper-v', 'virtualbox', 'vmware', 'docker'];
+
+/**
+ * An adapter only this computer's VMs and containers sit behind (WSL,
+ * Hyper-V, Docker, VirtualBox, VMware, bridges): its private address isn't
+ * the Wi-Fi a phone is on, so offering it would only slow the phone down.
+ */
+export function isVirtualAdapter(name: string): boolean {
+  const n = name.toLowerCase();
+  return VIRTUAL_PREFIXES.some((p) => n.startsWith(p)) || VIRTUAL_PARTS.some((p) => n.includes(p));
 }
 
 /** The address phones dial: the MagicDNS name when known (Android needs one), else the tailnet IP. */
